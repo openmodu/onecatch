@@ -12,6 +12,7 @@ import (
 	"github.com/openmodu/oneshot/internal/repo/agents"
 	"github.com/openmodu/oneshot/internal/repo/billing"
 	"github.com/openmodu/oneshot/internal/repo/orders"
+	"github.com/openmodu/oneshot/internal/repo/users"
 	"github.com/openmodu/oneshot/internal/service"
 	"github.com/openmodu/oneshot/internal/usecase"
 	agents2 "github.com/openmodu/oneshot/internal/usecase/agents"
@@ -23,7 +24,6 @@ import (
 // Injectors from wire.go:
 
 func initializeServices(cfg config.Config) (*service.Services, func(), error) {
-	authUsecase := auth.NewUsecase()
 	mySQLDSN := provideMySQLDSN(cfg)
 	dataData, cleanup, err := data.ProvideData(mySQLDSN)
 	if err != nil {
@@ -33,9 +33,12 @@ func initializeServices(cfg config.Config) (*service.Services, func(), error) {
 	agentsRepo := agents.NewAgentsRepo(sql)
 	billingRepo := billing.NewBillingRepo(sql)
 	ordersRepo := orders.NewOrdersRepo(sql)
-	oneShotRepo := data.NewOneShotRepo(agentsRepo, billingRepo, ordersRepo)
-	repository := usecase.ProvideAgentRepository(oneShotRepo)
-	agentsUsecase := agents2.NewUsecase(repository)
+	usersRepo := users.NewUsersRepo(sql)
+	oneShotRepo := data.NewOneShotRepo(agentsRepo, billingRepo, ordersRepo, usersRepo)
+	repository := usecase.ProvideAuthRepository(oneShotRepo)
+	authUsecase := auth.NewUsecase(repository)
+	agentsRepository := usecase.ProvideAgentRepository(oneShotRepo)
+	agentsUsecase := agents2.NewUsecase(agentsRepository)
 	billingRepository := usecase.ProvideBillingRepository(oneShotRepo)
 	billingUsecase := billing2.NewUsecase(billingRepository)
 	agentRepository := usecase.ProvideOrderAgentRepository(oneShotRepo)

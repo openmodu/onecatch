@@ -7,11 +7,12 @@ import (
 
 	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
 	"github.com/openmodu/oneshot/internal/domain/users"
+	repousers "github.com/openmodu/oneshot/internal/repo/users"
 )
 
 func TestUsecaseSessionLifecycle(t *testing.T) {
 	ctx := context.Background()
-	usecase := NewUsecase()
+	usecase := NewUsecase(repousers.NewUsersRepo(nil))
 
 	if _, err := usecase.CurrentUser(ctx); !errors.Is(err, domainauth.ErrUnauthenticated) {
 		t.Fatalf("CurrentUser() err = %v, want ErrUnauthenticated", err)
@@ -49,7 +50,7 @@ func TestUsecaseSessionLifecycle(t *testing.T) {
 
 func TestUsecaseWechatLogin(t *testing.T) {
 	ctx := context.Background()
-	usecase := NewUsecase()
+	usecase := NewUsecase(repousers.NewUsersRepo(nil))
 
 	session, err := usecase.StartWechat(ctx)
 	if err != nil {
@@ -69,5 +70,16 @@ func TestUsecaseWechatLogin(t *testing.T) {
 	}
 	if session.Provider != "wechat" {
 		t.Fatalf("provider = %q, want wechat", session.Provider)
+	}
+	if session.User.ID != users.DevUserID {
+		t.Fatalf("user id = %q, want %q", session.User.ID, users.DevUserID)
+	}
+
+	repeated, err := usecase.LoginWithWechat(ctx)
+	if err != nil {
+		t.Fatalf("LoginWithWechat() repeat error = %v", err)
+	}
+	if repeated.User.ID != session.User.ID {
+		t.Fatalf("repeat login user id = %q, want %q", repeated.User.ID, session.User.ID)
 	}
 }

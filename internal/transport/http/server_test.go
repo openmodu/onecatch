@@ -10,6 +10,7 @@ import (
 	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
 	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
 	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
+	repousers "github.com/openmodu/oneshot/internal/repo/users"
 	"github.com/openmodu/oneshot/internal/service"
 	usecaseagents "github.com/openmodu/oneshot/internal/usecase/agents"
 	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
@@ -84,10 +85,11 @@ func newTestHandler() http.Handler {
 	agentRepo := repoagents.NewAgentsRepo(nil)
 	billingRepo := repobilling.NewBillingRepo(nil)
 	orderRepo := repoorders.NewOrdersRepo(nil)
+	userRepo := repousers.NewUsersRepo(nil)
 	billingUsecase := usecasebilling.NewUsecase(billingRepo)
 
 	return NewServer(service.NewServices(
-		usecaseauth.NewUsecase(),
+		usecaseauth.NewUsecase(userRepo),
 		usecaseagents.NewUsecase(agentRepo),
 		billingUsecase,
 		usecaseorders.NewUsecase(agentRepo, orderRepo, billingUsecase),

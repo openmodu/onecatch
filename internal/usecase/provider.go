@@ -11,6 +11,7 @@ import (
 
 var ProviderSet = wire.NewSet(
 	ProvideAgentRepository,
+	ProvideAuthRepository,
 	ProvideBillingRepository,
 	ProvideOrderAgentRepository,
 	ProvideOrderRepository,
@@ -22,6 +23,10 @@ var ProviderSet = wire.NewSet(
 
 func ProvideAgentRepository(repos *data.OneShotRepo) usecaseagents.Repository {
 	return repos.Agents
+}
+
+func ProvideAuthRepository(repos *data.OneShotRepo) usecaseauth.Repository {
+	return repos.Users
 }
 
 func ProvideBillingRepository(repos *data.OneShotRepo) usecasebilling.Repository {

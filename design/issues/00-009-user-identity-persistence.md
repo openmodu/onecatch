@@ -1,6 +1,6 @@
 # Issue 00-009: 用户与身份持久化
 
-状态：待开发
+状态：已完成
 
 ## 来源
 
@@ -51,27 +51,36 @@
   - `users.email` 可为空；非空唯一是否启用需结合微信无邮箱场景确认。
 - `internal/data` 只负责组合 repo，不写用户查询逻辑。
 - Wire 组装 users repo 并注入 auth usecase。
+- 实际实现保留开发降级：未配置 MySQL 时 `internal/repo/users` 使用内存映射；配置 MySQL 时通过 GORM 写入 `users` 和 `auth_identities`。
+- auth usecase 不再直接持有固定 dev user 作为唯一来源，而是按 provider 身份 profile 调用 users repo 查找或创建用户。
+- 当前仍使用开发 provider subject；真实 provider subject 获取归入 `00-010`。
 
 ## 验收标准
 
-- [ ] MySQL schema 包含 `users` 表。
-- [ ] MySQL schema 包含 `auth_identities` 表。
-- [ ] 重复微信登录返回同一个用户 ID。
-- [ ] 重复 Google 登录返回同一个用户 ID。
-- [ ] 微信和 Google 身份可以分别映射到用户。
-- [ ] `GET /api/me` 返回持久化用户。
-- [ ] 未登录 `GET /api/me` 仍返回 401。
-- [ ] repo 层不依赖 `internal/data`。
+- [x] MySQL schema 包含 `users` 表。
+- [x] MySQL schema 包含 `auth_identities` 表。
+- [x] 重复微信登录返回同一个用户 ID。
+- [x] 重复 Google 登录返回同一个用户 ID。
+- [x] 微信和 Google 身份可以分别映射到用户。
+- [x] `GET /api/me` 返回持久化用户。
+- [x] 未登录 `GET /api/me` 仍返回 401。
+- [x] repo 层不依赖 `internal/data`。
 
 ## 测试计划
 
-- users repo 单元测试或集成测试。
-- auth usecase 身份查找和首次创建测试。
-- HTTP 登录 callback + `/api/me` 测试。
-- MySQL schema 集成测试。
-- 手动联调微信/Google 开发回调与桌面账号区状态。
+- 已新增 users repo 单元测试，覆盖重复 provider subject、微信/Google 映射到同一开发用户、缺少 provider subject 的错误路径。
+- 已新增 users repo MySQL schema 集成测试，使用 `ONESHOT_MYSQL_TEST_DSN` 时验证 `users` 和 `auth_identities` 表；本地未配置 DSN 时跳过。
+- 已更新 auth usecase 测试，覆盖 repo-backed 登录、logout 和重复微信登录同用户 ID。
+- 已更新 HTTP handler 测试，覆盖登录 callback、`/api/me`、logout、未登录创建订单 401。
+- 已运行 `env GOCACHE=/private/tmp/oneshot-go-build go test ./...`，通过。
+- 已运行 `go run github.com/google/wire/cmd/wire ./cmd/oneshot-server` 重新生成 server wire。
 
 ## 交付记录
 
 - 当前 `00-002` 只实现开发用内存会话和固定本地用户。
 - 本 issue 补齐用户表、身份映射表和持久化 repo。
+- 已新增 `internal/domain/users.AuthIdentity` 和用户状态/时间字段。
+- 已新增 `internal/repo/users`，接口定义在 repo 包内，支持无 MySQL 时内存映射、配置 MySQL 时 GORM 自动迁移并写入 `users` 与 `auth_identities`。
+- 已将 auth usecase 改为依赖 users repo 接口，通过 provider 身份查找或创建用户后再建立会话。
+- 已将 server wire、`internal/data.OneShotRepo` 和桌面本地 client 接入 users repo。
+- 当前 provider subject 仍是开发固定值；真实微信/Google subject 获取仍属于 `00-010`。

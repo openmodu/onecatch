@@ -9,6 +9,7 @@ import (
 	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
 	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
 	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
+	repousers "github.com/openmodu/oneshot/internal/repo/users"
 	pkgsql "github.com/openmodu/oneshot/pkg/sql"
 )
 
@@ -20,6 +21,7 @@ var ProviderSet = wire.NewSet(
 	repoagents.NewAgentsRepo,
 	repobilling.NewBillingRepo,
 	repoorders.NewOrdersRepo,
+	repousers.NewUsersRepo,
 	NewOneShotRepo,
 )
 

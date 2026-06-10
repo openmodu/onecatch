@@ -8,20 +8,18 @@ import (
 	"github.com/openmodu/oneshot/internal/domain/users"
 )
 
+type Repository interface {
+	FindOrCreateByIdentity(context.Context, users.AuthIdentity) (users.User, error)
+}
+
 type Usecase struct {
 	mu      sync.RWMutex
-	devUser users.User
+	repo    Repository
 	session *domainauth.Session
 }
 
-func NewUsecase() *Usecase {
-	return &Usecase{
-		devUser: users.User{
-			ID:          users.DevUserID,
-			DisplayName: "Local Developer",
-			Email:       "dev@oneshot.local",
-		},
-	}
+func NewUsecase(repo Repository) *Usecase {
+	return &Usecase{repo: repo}
 }
 
 func (s *Usecase) CurrentUser(context.Context) (users.User, error) {
@@ -34,16 +32,22 @@ func (s *Usecase) CurrentUser(context.Context) (users.User, error) {
 	return s.session.User, nil
 }
 
-func (s *Usecase) StartWechat(context.Context) (domainauth.Session, error) {
-	return s.login("wechat"), nil
+func (s *Usecase) StartWechat(ctx context.Context) (domainauth.Session, error) {
+	return s.login(ctx, devIdentity("wechat"))
 }
 
-func (s *Usecase) LoginWithWechat(context.Context) (domainauth.Session, error) {
-	return s.login("wechat"), nil
+func (s *Usecase) LoginWithWechat(ctx context.Context) (domainauth.Session, error) {
+	return s.login(ctx, devIdentity("wechat"))
 }
 
-func (s *Usecase) LoginWithGoogle(context.Context) (domainauth.Session, error) {
-	return s.login("google"), nil
+func (s *Usecase) LoginWithGoogle(ctx context.Context) (domainauth.Session, error) {
+	return s.login(ctx, users.AuthIdentity{
+		UserID:          users.DevUserID,
+		Provider:        "google",
+		ProviderSubject: "local-dev",
+		DisplayName:     "Local Developer",
+		Email:           "dev@oneshot.local",
+	})
 }
 
 func (s *Usecase) Logout(context.Context) error {
@@ -54,15 +58,29 @@ func (s *Usecase) Logout(context.Context) error {
 	return nil
 }
 
-func (s *Usecase) login(provider string) domainauth.Session {
+func (s *Usecase) login(ctx context.Context, identity users.AuthIdentity) (domainauth.Session, error) {
+	user, err := s.repo.FindOrCreateByIdentity(ctx, identity)
+	if err != nil {
+		return domainauth.Session{}, err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	session := domainauth.Session{
-		Token:    "dev-" + provider + "-token",
-		Provider: provider,
-		User:     s.devUser,
+		Token:    "dev-" + identity.Provider + "-token",
+		Provider: identity.Provider,
+		User:     user,
 	}
 	s.session = &session
-	return session
+	return session, nil
+}
+
+func devIdentity(provider string) users.AuthIdentity {
+	return users.AuthIdentity{
+		UserID:          users.DevUserID,
+		Provider:        provider,
+		ProviderSubject: "local-dev",
+		DisplayName:     "Local Developer",
+	}
 }
