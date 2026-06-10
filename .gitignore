@@ -2,6 +2,7 @@
 /design/prototype/dist/
 /design/prototype/.npm-cache/
 /desktop/oneshot/frontend/node_modules/
+/desktop/oneshot/frontend/.node_modules/
 /desktop/oneshot/bin/
 /desktop/oneshot/.task/
 /config/oneshot-server.yaml

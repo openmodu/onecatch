@@ -15,6 +15,12 @@ tasks:
       - node_modules
     cmds:
       - npm install
+      - |
+        if [ -d node_modules ] && [ ! -L node_modules ]; then
+          rm -rf .node_modules
+          mv node_modules .node_modules
+          ln -s .node_modules node_modules
+        fi
 
   generate:bindings:
     deps:
@@ -30,18 +36,15 @@ tasks:
 
   build:frontend:
     dir: frontend
-    deps:
-      - task: install:frontend:deps
+    cmds:
       - task: generate:bindings
         vars:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
-    cmds:
+      - task: install:frontend:deps
       - npm run {{if eq .DEV "true"}}build:dev{{else}}build{{end}} -q
 
   dev:frontend:
     dir: frontend
-    deps:
-      - task: install:frontend:deps
     cmds:
       - npm run dev -- --port {{.VITE_PORT}} --strictPort
