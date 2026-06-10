@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"time"
 
 	oneshot "github.com/openmodu/oneshot/clients/oneshot"
 	domainagents "github.com/openmodu/oneshot/internal/domain/agents"
@@ -21,6 +22,7 @@ import (
 	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
 	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
 	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
+	usecaseexecution "github.com/openmodu/oneshot/internal/usecase/execution"
 	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
 )
 
@@ -39,15 +41,20 @@ func newDesktopClient() oneshot.Client {
 	orderRepo := repoorders.NewOrdersRepo(nil)
 	userRepo := repousers.NewUsersRepo(nil)
 	billingUsecase := usecasebilling.NewUsecase(billingRepo)
+	artifactsUsecase := usecaseartifacts.NewUsecase(artifactRepo, orderRepo)
+	executionUsecase := usecaseexecution.NewUsecase(orderRepo, artifactsUsecase)
+	services := service.NewServices(
+		usecaseauth.NewUsecase(userRepo),
+		usecaseagents.NewUsecase(agentRepo),
+		artifactsUsecase,
+		billingUsecase,
+		executionUsecase,
+		usecaseorders.NewUsecase(agentRepo, orderRepo, billingUsecase),
+	)
+	executionUsecase.Start(context.Background(), 750*time.Millisecond)
 
 	return &localClient{
-		services: service.NewServices(
-			usecaseauth.NewUsecase(userRepo),
-			usecaseagents.NewUsecase(agentRepo),
-			usecaseartifacts.NewUsecase(artifactRepo, orderRepo),
-			billingUsecase,
-			usecaseorders.NewUsecase(agentRepo, orderRepo, billingUsecase),
-		),
+		services: services,
 	}
 }
 
@@ -108,12 +115,16 @@ func (c *localClient) CurrentUser(ctx context.Context) (oneshot.User, error) {
 	return toClientUser(user), nil
 }
 
-func (c *localClient) StartWechat(ctx context.Context) (oneshot.Session, error) {
-	session, err := c.services.Auth.StartWechat(ctx)
+func (c *localClient) StartWechat(ctx context.Context) (oneshot.OAuthStart, error) {
+	start, err := c.services.Auth.StartWechat(ctx)
 	if err != nil {
-		return oneshot.Session{}, err
+		return oneshot.OAuthStart{}, err
 	}
-	return toClientSession(session), nil
+	return oneshot.OAuthStart{
+		Provider: start.Provider,
+		AuthURL:  start.AuthURL,
+		State:    start.State,
+	}, nil
 }
 
 func (c *localClient) LoginWithWechat(ctx context.Context) (oneshot.Session, error) {
@@ -260,9 +271,10 @@ func (c *localClient) CancelOrder(ctx context.Context, orderID string) (oneshot.
 
 func toClientSession(session domainauth.Session) oneshot.Session {
 	return oneshot.Session{
-		Token:    session.Token,
-		Provider: session.Provider,
-		User:     toClientUser(session.User),
+		Token:     session.Token,
+		Provider:  session.Provider,
+		User:      toClientUser(session.User),
+		ExpiresAt: session.ExpiresAt,
 	}
 }
 

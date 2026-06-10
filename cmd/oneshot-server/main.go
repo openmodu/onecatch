@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/openmodu/oneshot/internal/app/config"
 	httptransport "github.com/openmodu/oneshot/internal/transport/http"
@@ -28,6 +29,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer cleanup()
+
+	workerCtx, stopWorker := context.WithCancel(context.Background())
+	defer stopWorker()
+	services.Execution.Start(workerCtx, time.Second)
 
 	if err := server.Run(context.Background(), log, server.Config{
 		Addr: cfg.HTTPAddr,

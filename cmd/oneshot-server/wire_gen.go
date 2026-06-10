@@ -20,6 +20,7 @@ import (
 	artifacts2 "github.com/openmodu/oneshot/internal/usecase/artifacts"
 	"github.com/openmodu/oneshot/internal/usecase/auth"
 	billing2 "github.com/openmodu/oneshot/internal/usecase/billing"
+	"github.com/openmodu/oneshot/internal/usecase/execution"
 	orders2 "github.com/openmodu/oneshot/internal/usecase/orders"
 )
 
@@ -47,10 +48,12 @@ func initializeServices(cfg config.Config) (*service.Services, func(), error) {
 	artifactsUsecase := artifacts2.NewUsecase(artifactsRepository, orderRepository)
 	billingRepository := usecase.ProvideBillingRepository(oneShotRepo)
 	billingUsecase := billing2.NewUsecase(billingRepository)
+	executionOrderRepository := usecase.ProvideExecutionOrderRepository(oneShotRepo)
+	executionUsecase := execution.NewUsecase(executionOrderRepository, artifactsUsecase)
 	agentRepository := usecase.ProvideOrderAgentRepository(oneShotRepo)
 	ordersRepository := usecase.ProvideOrderRepository(oneShotRepo)
 	ordersUsecase := orders2.NewUsecase(agentRepository, ordersRepository, billingUsecase)
-	services := service.NewServices(authUsecase, agentsUsecase, artifactsUsecase, billingUsecase, ordersUsecase)
+	services := service.NewServices(authUsecase, agentsUsecase, artifactsUsecase, billingUsecase, executionUsecase, ordersUsecase)
 	return services, func() {
 		cleanup()
 	}, nil

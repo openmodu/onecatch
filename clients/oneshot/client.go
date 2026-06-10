@@ -17,7 +17,7 @@ import (
 
 type Client interface {
 	CurrentUser(context.Context) (User, error)
-	StartWechat(context.Context) (Session, error)
+	StartWechat(context.Context) (OAuthStart, error)
 	LoginWithWechat(context.Context) (Session, error)
 	LoginWithGoogle(context.Context) (Session, error)
 	Logout(context.Context) error
@@ -38,6 +38,7 @@ type Client interface {
 type HTTPClient struct {
 	baseURL    *url.URL
 	httpClient *http.Client
+	token      string
 }
 
 func NewHTTPClient(baseURL string) *HTTPClient {
@@ -46,12 +47,14 @@ func NewHTTPClient(baseURL string) *HTTPClient {
 		parsed, _ = url.Parse("http://127.0.0.1:8080")
 	}
 
-	return &HTTPClient{
+	client := &HTTPClient{
 		baseURL: parsed,
 		httpClient: &http.Client{
 			Timeout: 15 * time.Second,
 		},
 	}
+	client.token, _ = loadSessionToken()
+	return client
 }
 
 func (c *HTTPClient) CurrentUser(ctx context.Context) (User, error) {
@@ -60,8 +63,8 @@ func (c *HTTPClient) CurrentUser(ctx context.Context) (User, error) {
 	return out, err
 }
 
-func (c *HTTPClient) StartWechat(ctx context.Context) (Session, error) {
-	var out Session
+func (c *HTTPClient) StartWechat(ctx context.Context) (OAuthStart, error) {
+	var out OAuthStart
 	err := c.do(ctx, http.MethodPost, "/api/auth/wechat/start", nil, &out)
 	return out, err
 }
@@ -69,17 +72,27 @@ func (c *HTTPClient) StartWechat(ctx context.Context) (Session, error) {
 func (c *HTTPClient) LoginWithWechat(ctx context.Context) (Session, error) {
 	var out Session
 	err := c.do(ctx, http.MethodPost, "/api/auth/wechat/callback", nil, &out)
+	if err == nil {
+		c.setToken(out.Token)
+	}
 	return out, err
 }
 
 func (c *HTTPClient) LoginWithGoogle(ctx context.Context) (Session, error) {
 	var out Session
 	err := c.do(ctx, http.MethodPost, "/api/auth/google/callback", nil, &out)
+	if err == nil {
+		c.setToken(out.Token)
+	}
 	return out, err
 }
 
 func (c *HTTPClient) Logout(ctx context.Context) error {
-	return c.do(ctx, http.MethodPost, "/api/auth/logout", nil, nil)
+	err := c.do(ctx, http.MethodPost, "/api/auth/logout", nil, nil)
+	if err == nil {
+		c.setToken("")
+	}
+	return err
 }
 
 func (c *HTTPClient) ListAgents(ctx context.Context) ([]Agent, error) {
@@ -148,6 +161,9 @@ func (c *HTTPClient) DownloadArtifact(ctx context.Context, artifactID string) (A
 	if err != nil {
 		return ArtifactDownload{}, err
 	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		return ArtifactDownload{}, err
@@ -205,6 +221,9 @@ func (c *HTTPClient) do(ctx context.Context, method string, path string, input a
 	if input != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
@@ -238,6 +257,48 @@ func SaveDownload(fileName string, content []byte) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+func (c *HTTPClient) setToken(token string) {
+	c.token = token
+	_ = saveSessionToken(token)
+}
+
+func sessionTokenPath() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "oneshot", "session.token"), nil
+}
+
+func loadSessionToken() (string, error) {
+	path, err := sessionTokenPath()
+	if err != nil {
+		return "", err
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(content)), nil
+}
+
+func saveSessionToken(token string) error {
+	path, err := sessionTokenPath()
+	if err != nil {
+		return err
+	}
+	if token == "" {
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(token), 0o600)
 }
 
 func downloadFileName(disposition string, fallback string) string {

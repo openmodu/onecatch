@@ -3,10 +3,13 @@ package httptransport
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/openmodu/oneshot/internal/api"
 	"github.com/openmodu/oneshot/internal/domain/orders"
+	"github.com/openmodu/oneshot/internal/domain/users"
 	"github.com/openmodu/oneshot/internal/service"
+	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
 	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
 	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
 	"github.com/openmodu/oneshot/pkg/httpx"
@@ -51,7 +54,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) currentUser(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -69,7 +72,12 @@ func (s *Server) startWechat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) loginWithWechat(w http.ResponseWriter, r *http.Request) {
-	session, err := s.services.Auth.LoginWithWechat(r.Context())
+	input, err := decodeOAuthCallback(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	session, err := s.services.Auth.LoginWithWechatCallback(r.Context(), input)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -78,7 +86,12 @@ func (s *Server) loginWithWechat(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) loginWithGoogle(w http.ResponseWriter, r *http.Request) {
-	session, err := s.services.Auth.LoginWithGoogle(r.Context())
+	input, err := decodeOAuthCallback(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	session, err := s.services.Auth.LoginWithGoogleCallback(r.Context(), input)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -87,6 +100,14 @@ func (s *Server) loginWithGoogle(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if token := bearerToken(r); token != "" {
+		if err := s.services.Auth.LogoutToken(r.Context(), token); err != nil {
+			writeError(w, err)
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
 	if err := s.services.Auth.Logout(r.Context()); err != nil {
 		writeError(w, err)
 		return
@@ -114,7 +135,7 @@ func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getBalance(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -129,7 +150,7 @@ func (s *Server) getBalance(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listLedger(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -144,7 +165,7 @@ func (s *Server) listLedger(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) startPurchase(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -172,7 +193,7 @@ func (s *Server) startPurchase(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -200,7 +221,7 @@ func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listOrders(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -218,7 +239,7 @@ func (s *Server) listOrders(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -234,7 +255,7 @@ func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -250,7 +271,7 @@ func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listArtifacts(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -266,7 +287,7 @@ func (s *Server) listArtifacts(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) downloadArtifact(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -285,7 +306,7 @@ func (s *Server) downloadArtifact(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) shareArtifact(w http.ResponseWriter, r *http.Request) {
-	user, err := s.services.Auth.CurrentUser(r.Context())
+	user, err := s.currentUserFromRequest(r)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -298,4 +319,34 @@ func (s *Server) shareArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, share)
+}
+
+func (s *Server) currentUserFromRequest(r *http.Request) (users.User, error) {
+	if token := bearerToken(r); token != "" {
+		return s.services.Auth.CurrentUserByToken(r.Context(), token)
+	}
+	return s.services.Auth.CurrentUser(r.Context())
+}
+
+func bearerToken(r *http.Request) string {
+	value := r.Header.Get("Authorization")
+	if value == "" {
+		return ""
+	}
+	prefix := "Bearer "
+	if !strings.HasPrefix(value, prefix) {
+		return ""
+	}
+	return strings.TrimSpace(strings.TrimPrefix(value, prefix))
+}
+
+func decodeOAuthCallback(r *http.Request) (usecaseauth.OAuthCallbackInput, error) {
+	if r.Body == nil || r.ContentLength == 0 {
+		return usecaseauth.OAuthCallbackInput{}, nil
+	}
+	var input usecaseauth.OAuthCallbackInput
+	if err := httpx.DecodeJSON(r, &input); err != nil {
+		return usecaseauth.OAuthCallbackInput{}, err
+	}
+	return input, nil
 }

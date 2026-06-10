@@ -7,6 +7,7 @@ import (
 	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
 	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
 	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
+	usecaseexecution "github.com/openmodu/oneshot/internal/usecase/execution"
 	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
 )
 
@@ -16,12 +17,14 @@ var ProviderSet = wire.NewSet(
 	ProvideArtifactRepository,
 	ProvideAuthRepository,
 	ProvideBillingRepository,
+	ProvideExecutionOrderRepository,
 	ProvideOrderAgentRepository,
 	ProvideOrderRepository,
 	usecaseauth.NewUsecase,
 	usecaseagents.NewUsecase,
 	usecaseartifacts.NewUsecase,
 	usecasebilling.NewUsecase,
+	usecaseexecution.NewUsecase,
 	usecaseorders.NewUsecase,
 )
 
@@ -43,6 +46,10 @@ func ProvideAuthRepository(repos *data.OneShotRepo) usecaseauth.Repository {
 
 func ProvideBillingRepository(repos *data.OneShotRepo) usecasebilling.Repository {
 	return repos.Billing
+}
+
+func ProvideExecutionOrderRepository(repos *data.OneShotRepo) usecaseexecution.OrderRepository {
+	return repos.Orders
 }
 
 func ProvideOrderAgentRepository(repos *data.OneShotRepo) usecaseorders.AgentRepository {

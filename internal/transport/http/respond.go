@@ -17,7 +17,7 @@ func writeError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, domainagents.ErrNotFound), errors.Is(err, domainorders.ErrNotFound):
 		status = http.StatusNotFound
-	case errors.Is(err, domainauth.ErrUnauthenticated):
+	case errors.Is(err, domainauth.ErrUnauthenticated), errors.Is(err, domainauth.ErrInvalidOAuthState):
 		status = http.StatusUnauthorized
 	case errors.Is(err, domainbilling.ErrInsufficientBalance):
 		status = http.StatusPaymentRequired

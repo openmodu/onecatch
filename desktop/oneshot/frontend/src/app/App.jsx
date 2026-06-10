@@ -148,10 +148,12 @@ export default function App() {
       setUserOrders([]);
       setSelectedOrderId("");
       setArtifacts([]);
-      return;
+      return undefined;
     }
     refreshBilling();
     refreshOrders();
+    const timer = window.setInterval(refreshOrders, 2000);
+    return () => window.clearInterval(timer);
   }, [currentUser?.id]);
 
   useEffect(() => {

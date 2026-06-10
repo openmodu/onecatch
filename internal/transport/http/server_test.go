@@ -21,6 +21,7 @@ import (
 	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
 	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
 	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
+	usecaseexecution "github.com/openmodu/oneshot/internal/usecase/execution"
 	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
 )
 
@@ -284,6 +285,7 @@ func newTestFixture() testFixture {
 	userRepo := repousers.NewUsersRepo(nil)
 	billingUsecase := usecasebilling.NewUsecase(billingRepo)
 	artifactsUsecase := usecaseartifacts.NewUsecase(artifactRepo, orderRepo)
+	executionUsecase := usecaseexecution.NewUsecase(orderRepo, artifactsUsecase)
 
 	return testFixture{
 		handler: NewServer(service.NewServices(
@@ -291,6 +293,7 @@ func newTestFixture() testFixture {
 			usecaseagents.NewUsecase(agentRepo),
 			artifactsUsecase,
 			billingUsecase,
+			executionUsecase,
 			usecaseorders.NewUsecase(agentRepo, orderRepo, billingUsecase),
 		)),
 		orders: orderRepo,

@@ -52,34 +52,50 @@ func TestUsecaseWechatLogin(t *testing.T) {
 	ctx := context.Background()
 	usecase := NewUsecase(repousers.NewUsersRepo(nil))
 
-	session, err := usecase.StartWechat(ctx)
+	start, err := usecase.StartWechat(ctx)
 	if err != nil {
 		t.Fatalf("StartWechat() error = %v", err)
 	}
+	if start.Provider != "wechat" || start.State == "" || start.AuthURL == "" {
+		t.Fatalf("unexpected oauth start = %+v", start)
+	}
+
+	session, err := usecase.LoginWithWechatCallback(ctx, OAuthCallbackInput{
+		State:           start.State,
+		Code:            "wechat-code",
+		ProviderSubject: "wechat-openid-1",
+		DisplayName:     "Wechat User",
+	})
+	if err != nil {
+		t.Fatalf("LoginWithWechatCallback() error = %v", err)
+	}
 	if session.Provider != "wechat" {
 		t.Fatalf("provider = %q, want wechat", session.Provider)
 	}
-
-	if err := usecase.Logout(ctx); err != nil {
-		t.Fatalf("Logout() error = %v", err)
+	if session.User.ID == "" || session.User.ID == users.DevUserID {
+		t.Fatalf("user id = %q, want provider-derived user", session.User.ID)
 	}
 
-	session, err = usecase.LoginWithWechat(ctx)
+	repeated, err := usecase.LoginWithWechatCallback(ctx, OAuthCallbackInput{
+		ProviderSubject: "wechat-openid-1",
+		DisplayName:     "Wechat User",
+	})
 	if err != nil {
-		t.Fatalf("LoginWithWechat() error = %v", err)
-	}
-	if session.Provider != "wechat" {
-		t.Fatalf("provider = %q, want wechat", session.Provider)
-	}
-	if session.User.ID != users.DevUserID {
-		t.Fatalf("user id = %q, want %q", session.User.ID, users.DevUserID)
-	}
-
-	repeated, err := usecase.LoginWithWechat(ctx)
-	if err != nil {
-		t.Fatalf("LoginWithWechat() repeat error = %v", err)
+		t.Fatalf("LoginWithWechatCallback() repeat error = %v", err)
 	}
 	if repeated.User.ID != session.User.ID {
 		t.Fatalf("repeat login user id = %q, want %q", repeated.User.ID, session.User.ID)
+	}
+}
+
+func TestOAuthStateRejectsInvalidCallback(t *testing.T) {
+	ctx := context.Background()
+	usecase := NewUsecase(repousers.NewUsersRepo(nil))
+
+	if _, err := usecase.LoginWithGoogleCallback(ctx, OAuthCallbackInput{
+		State: "missing",
+		Code:  "google-code",
+	}); !errors.Is(err, domainauth.ErrInvalidOAuthState) {
+		t.Fatalf("LoginWithGoogleCallback() err = %v, want ErrInvalidOAuthState", err)
 	}
 }

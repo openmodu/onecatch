@@ -18,6 +18,7 @@ type Repository interface {
 	NextOrderID(context.Context) (string, error)
 	SaveOrder(context.Context, orders.Order) error
 	ListOrders(context.Context, string) ([]orders.Order, error)
+	ListOrdersByStatus(context.Context, orders.Status, int) ([]orders.Order, error)
 	GetOrder(context.Context, string, string) (orders.Order, error)
 }
 

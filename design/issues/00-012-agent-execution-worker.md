@@ -1,6 +1,6 @@
 # Issue 00-012: Agent 执行 Worker 与订单推进
 
-状态：待开发
+状态：已完成
 
 ## 来源
 
@@ -49,26 +49,33 @@
 - worker 不直接依赖 `internal/transport`。
 - worker 启动位置在 server 或 service 组合层明确管理生命周期。
 - 执行进度需要可由 API 查询，前端基于订单详情展示。
+- `internal/usecase/execution` 提供 `RunOnce` 和 `Start`。
+- server main 启动后台 worker，桌面 local client 也启动同一 worker。
+- worker 轮询 running 订单，推进到 delivering，再推进到 delivered 并生成交付物。
+- 执行失败时写入 failed 状态和 failure reason。
+- 桌面端登录后轮询订单列表以展示最新进度。
 
 ## 验收标准
 
-- [ ] 创建订单后 worker 可自动推进状态。
-- [ ] 成功执行会生成交付物元数据。
-- [ ] 失败执行会记录失败状态和原因。
-- [ ] 订单详情 API 返回最新状态和进度。
-- [ ] 前端能看到订单状态变化。
-- [ ] worker 停止时服务可优雅退出。
-- [ ] `go test ./...` 通过。
+- [x] 创建订单后 worker 可自动推进状态。
+- [x] 成功执行会生成交付物元数据。
+- [x] 失败执行会记录失败状态和原因。
+- [x] 订单详情 API 返回最新状态和进度。
+- [x] 前端能看到订单状态变化。
+- [x] worker 停止时服务可优雅退出。
+- [x] `go test ./...` 通过。
 
 ## 测试计划
 
-- worker 单元测试。
-- usecase 状态机测试。
-- repo 状态更新测试。
-- HTTP 订单详情测试。
-- 前端订单进度联调。
+- worker 单元测试：`TestRunOnceDeliversRunningOrder` 覆盖 running -> delivered 和交付物生成。
+- usecase 状态机测试：worker 测试覆盖状态推进，订单进度由 `BuildProgress` 生成。
+- repo 状态更新测试：orders repo 内存路径由 worker 测试覆盖，SQL 路径由编译和 GORM schema 覆盖。
+- HTTP 订单详情测试：既有 HTTP 测试继续通过。
+- 前端订单进度联调：`npm run build` 和 `wails3 build DEV=true` 通过。
 
 ## 交付记录
 
-- 当前 `00-005` 只定义订单生命周期能力。
-- 当前还没有生产级后台执行 worker。
+- 已新增 `internal/usecase/execution` worker。
+- 已在 server 和桌面 local client 启动 worker。
+- 已让桌面端登录后轮询订单列表展示状态变化。
+- 验证：`go test ./...`、`npm run build`、`wails3 build DEV=true` 通过。

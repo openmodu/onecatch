@@ -14,9 +14,16 @@ type User struct {
 }
 
 type Session struct {
-	Token    string `json:"token"`
+	Token     string    `json:"token"`
+	Provider  string    `json:"provider"`
+	User      User      `json:"user"`
+	ExpiresAt time.Time `json:"expiresAt,omitempty"`
+}
+
+type OAuthStart struct {
 	Provider string `json:"provider"`
-	User     User   `json:"user"`
+	AuthURL  string `json:"authUrl"`
+	State    string `json:"state"`
 }
 
 type Agent struct {

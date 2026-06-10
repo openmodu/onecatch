@@ -750,6 +750,13 @@ export class Session {
              */
             this["user"] = (new User());
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["expiresAt"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
