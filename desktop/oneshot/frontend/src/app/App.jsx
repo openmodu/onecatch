@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { AuthBinding } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
+import {
+  AgentBinding,
+  AuthBinding,
+} from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 
 const categories = [
   { id: "all", label: "全部 Agent", icon: "A" },
@@ -12,57 +15,6 @@ const categories = [
   { id: "research", label: "行业研究", icon: "R" },
 ];
 
-const agents = [
-  {
-    id: "research-analyst",
-    category: "research",
-    name: "行业研究分析师",
-    tag: "专家",
-    price: 19.9,
-    rating: "4.9",
-    deals: "1,268",
-    eta: "2-4 小时",
-    summary: "深度行业研究与竞品洞察，输出结构化分析报告。",
-    deliverable: "市场规模、竞争格局、趋势洞察、机会清单",
-  },
-  {
-    id: "content-growth",
-    category: "content",
-    name: "内容增长写手",
-    tag: "热门",
-    price: 8.8,
-    rating: "4.8",
-    deals: "3,420",
-    eta: "30-60 分钟",
-    summary: "生成公众号、朋友圈、短视频脚本与产品文案。",
-    deliverable: "标题方向、正文、分发建议",
-  },
-  {
-    id: "business-data",
-    category: "data",
-    name: "经营数据分析师",
-    tag: "企业",
-    price: 15.6,
-    rating: "4.7",
-    deals: "986",
-    eta: "1-2 小时",
-    summary: "处理经营数据，定位异常波动并输出业务建议。",
-    deliverable: "指标拆解、异常解释、改进建议",
-  },
-  {
-    id: "launch-planner",
-    category: "marketing",
-    name: "新品上市策划",
-    tag: "增长",
-    price: 12.9,
-    rating: "4.8",
-    deals: "2,104",
-    eta: "1 小时",
-    summary: "为新品制定目标客群、渠道节奏与首轮推广方案。",
-    deliverable: "人群画像、卖点主张、投放节奏",
-  },
-];
-
 const orders = [
   {
     id: "ORD20260610001029",
@@ -73,7 +25,7 @@ const orders = [
     createdAt: "2026-06-10 10:30",
     eta: "2026-06-10 12:30",
     debit: 1,
-    amount: 19.9,
+    amount: 1990,
   },
   {
     id: "ORD20260609000988",
@@ -84,7 +36,7 @@ const orders = [
     createdAt: "2026-06-09 16:24",
     eta: "2026-06-09 17:36",
     debit: 1,
-    amount: 15.6,
+    amount: 1560,
   },
   {
     id: "ORD20260608000877",
@@ -95,7 +47,7 @@ const orders = [
     createdAt: "2026-06-08 09:12",
     eta: "待确认",
     debit: 0,
-    amount: 19.9,
+    amount: 1990,
   },
 ];
 
@@ -108,8 +60,12 @@ const orderFilters = [
 
 const steps = ["Agent 详情", "需求填写", "扣次确认", "执行中", "交付物"];
 
-function formatMoney(value) {
-  return `¥ ${value.toFixed(2)}`;
+function formatMoney(cents) {
+  return `¥ ${(Number(cents || 0) / 100).toFixed(2)}`;
+}
+
+function formatDealCount(value) {
+  return Number(value || 0).toLocaleString("zh-CN");
 }
 
 function NavIcon({ children }) {
@@ -121,12 +77,14 @@ function NavIcon({ children }) {
 }
 
 export default function App() {
+  const [agents, setAgents] = useState([]);
+  const [agentStatus, setAgentStatus] = useState("loading");
   const [currentUser, setCurrentUser] = useState(null);
   const [authProvider, setAuthProvider] = useState("");
   const [authStatus, setAuthStatus] = useState("checking");
   const [toast, setToast] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
-  const [selectedAgentId, setSelectedAgentId] = useState(agents[0].id);
+  const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedStep, setSelectedStep] = useState("扣次确认");
   const [selectedOrderId, setSelectedOrderId] = useState(orders[0].id);
   const [orderFilter, setOrderFilter] = useState("all");
@@ -138,7 +96,7 @@ export default function App() {
   const visibleAgents = useMemo(() => {
     if (activeCategory === "all") return agents;
     return agents.filter((agent) => agent.category === activeCategory);
-  }, [activeCategory]);
+  }, [activeCategory, agents]);
 
   const visibleOrders = useMemo(() => {
     if (orderFilter === "all") return orders;
@@ -146,10 +104,36 @@ export default function App() {
   }, [orderFilter]);
 
   const selectedAgent =
-    agents.find((agent) => agent.id === selectedAgentId) ?? agents[0];
+    visibleAgents.find((agent) => agent.id === selectedAgentId) ??
+    visibleAgents[0] ??
+    null;
   const selectedOrder =
     orders.find((order) => order.id === selectedOrderId) ?? orders[0];
   const authProviderLabel = authProvider === "google" ? "Google 邮箱" : "微信";
+
+  useEffect(() => {
+    let alive = true;
+    AgentBinding.ListAgents()
+      .then((items) => {
+        if (!alive) return;
+        const catalog = Array.isArray(items) ? items : [];
+        setAgents(catalog);
+        setSelectedAgentId((current) =>
+          catalog.some((agent) => agent.id === current) ? current : catalog[0]?.id || "",
+        );
+        setAgentStatus("ready");
+      })
+      .catch((error) => {
+        if (!alive) return;
+        setAgents([]);
+        setSelectedAgentId("");
+        setAgentStatus("failed");
+        showToast(error?.message || "Agent 目录加载失败");
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -183,9 +167,7 @@ export default function App() {
       categoryId === "all"
         ? agents[0]
         : agents.find((agent) => agent.category === categoryId);
-    if (nextAgent) {
-      setSelectedAgentId(nextAgent.id);
-    }
+    setSelectedAgentId(nextAgent?.id || "");
   }
 
   function showToast(message) {
@@ -226,6 +208,10 @@ export default function App() {
   }
 
   function confirmCheckout() {
+    if (!selectedAgent) {
+      showToast("请先选择可用 Agent");
+      return;
+    }
     if (!currentUser) {
       showToast("请先登录后再创建订单");
       return;
@@ -358,44 +344,53 @@ export default function App() {
           <section className="main-pane" aria-label="Agent 工作区">
             <section className="agent-summary">
               <div className="agent-avatar" aria-hidden="true">
-                {selectedAgent.name.slice(0, 1)}
+                {selectedAgent?.name?.slice(0, 1) || "A"}
               </div>
               <div className="agent-heading">
                 <div className="title-row">
-                  <h1>{selectedAgent.name}</h1>
-                  <span>{selectedAgent.tag}</span>
+                  <h1>{selectedAgent?.name || "暂无 Agent"}</h1>
+                  <span>{selectedAgent?.tags?.[0] || "待补充"}</span>
                 </div>
-                <p>{selectedAgent.summary}</p>
+                <p>
+                  {selectedAgent?.description ||
+                    (agentStatus === "loading" ? "正在加载 Agent 目录" : "该分类暂无可用 Agent")}
+                </p>
                 <div className="metric-row">
-                  <strong>评分 {selectedAgent.rating}</strong>
-                  <span>成交 {selectedAgent.deals} 次</span>
-                  <span>平均交付 {selectedAgent.eta}</span>
+                  <strong>评分 {selectedAgent?.rating || "-"}</strong>
+                  <span>成交 {formatDealCount(selectedAgent?.dealCount)} 次</span>
+                  <span>平均交付 {selectedAgent?.estimatedDuration || "待确认"}</span>
                 </div>
               </div>
               <div className="price-panel">
                 <span>单次价格</span>
-                <strong>{formatMoney(selectedAgent.price)}</strong>
+                <strong>{formatMoney(selectedAgent?.priceCents)}</strong>
                 <small>/ 次</small>
               </div>
             </section>
 
             <section className="agent-strip" aria-label="可选 Agent">
-              {visibleAgents.map((agent) => (
-                <button
-                  className={`agent-chip ${
-                    selectedAgentId === agent.id ? "is-selected" : ""
-                  }`}
-                  key={agent.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedAgentId(agent.id);
-                    setSelectedStep("Agent 详情");
-                  }}
-                >
-                  <span>{agent.name}</span>
-                  <strong>{formatMoney(agent.price)}</strong>
-                </button>
-              ))}
+              {visibleAgents.length > 0 ? (
+                visibleAgents.map((agent) => (
+                  <button
+                    className={`agent-chip ${
+                      selectedAgentId === agent.id ? "is-selected" : ""
+                    }`}
+                    key={agent.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedAgentId(agent.id);
+                      setSelectedStep("Agent 详情");
+                    }}
+                  >
+                    <span>{agent.name}</span>
+                    <strong>{formatMoney(agent.priceCents)}</strong>
+                  </button>
+                ))
+              ) : (
+                <div className="empty-strip">
+                  {agentStatus === "loading" ? "正在加载 Agent" : "该分类暂无 Agent"}
+                </div>
+              )}
             </section>
 
             <nav className="step-tabs" aria-label="任务流程">
@@ -432,7 +427,7 @@ export default function App() {
                 <h2>交付物说明</h2>
                 <ul className="check-list">
                   <li>本次执行将扣减 1 次</li>
-                  <li>{selectedAgent.deliverable}</li>
+                  <li>{selectedAgent?.deliverable || "请选择一个可用 Agent"}</li>
                   <li>开始执行后进入订单进度流转</li>
                 </ul>
               </section>
@@ -456,11 +451,11 @@ export default function App() {
               </div>
               <div>
                 <span>单次价格</span>
-                <strong>{formatMoney(selectedAgent.price)}</strong>
+                <strong>{formatMoney(selectedAgent?.priceCents)}</strong>
               </div>
               <div>
                 <span>应付金额</span>
-                <strong>{formatMoney(selectedAgent.price)}</strong>
+                <strong>{formatMoney(selectedAgent?.priceCents)}</strong>
               </div>
               <button className="primary-button" type="button" onClick={confirmCheckout}>
                 确认并支付
@@ -472,7 +467,7 @@ export default function App() {
               {[
                 ["done", "需求已提交", "2026-06-10 10:30"],
                 ["current", "扣次确认中", "等待确认并扣减 1 次"],
-                ["next", "执行中", `预计 ${selectedAgent.eta}`],
+                ["next", "执行中", `预计 ${selectedAgent?.estimatedDuration || "待确认"}`],
                 ["next", "交付物生成中", "报告生成并校验中"],
                 ["next", "已交付", "交付物可查看、下载和分享"],
               ].map(([state, title, time]) => (
@@ -509,7 +504,7 @@ export default function App() {
                   </div>
                   <div>
                     <span>本次价格</span>
-                    <strong>{formatMoney(selectedAgent.price)}</strong>
+                    <strong>{formatMoney(selectedAgent?.priceCents)}</strong>
                   </div>
                 </div>
               </section>

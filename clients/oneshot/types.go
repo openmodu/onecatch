@@ -23,9 +23,14 @@ type Agent struct {
 	ID                string   `json:"id"`
 	Name              string   `json:"name"`
 	Category          string   `json:"category"`
+	Tags              []string `json:"tags"`
 	Description       string   `json:"description"`
 	PriceUses         int      `json:"priceUses"`
+	PriceCents        int      `json:"priceCents"`
+	Rating            string   `json:"rating"`
+	DealCount         int      `json:"dealCount"`
 	EstimatedDuration string   `json:"estimatedDuration"`
+	Deliverable       string   `json:"deliverable"`
 	ArtifactTypes     []string `json:"artifactTypes"`
 }
 

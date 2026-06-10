@@ -210,9 +210,14 @@ func toClientAgent(agent domainagents.Agent) oneshot.Agent {
 		ID:                agent.ID,
 		Name:              agent.Name,
 		Category:          agent.Category,
+		Tags:              agent.Tags,
 		Description:       agent.Description,
 		PriceUses:         agent.PriceUses,
+		PriceCents:        agent.PriceCents,
+		Rating:            agent.Rating,
+		DealCount:         agent.DealCount,
 		EstimatedDuration: agent.EstimatedDuration,
+		Deliverable:       agent.Deliverable,
 		ArtifactTypes:     agent.ArtifactTypes,
 	}
 }

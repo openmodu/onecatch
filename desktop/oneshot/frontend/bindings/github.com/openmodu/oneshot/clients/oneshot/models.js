@@ -37,6 +37,13 @@ export class Agent {
              */
             this["category"] = "";
         }
+        if (!("tags" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["tags"] = [];
+        }
         if (!("description" in $$source)) {
             /**
              * @member
@@ -51,12 +58,40 @@ export class Agent {
              */
             this["priceUses"] = 0;
         }
+        if (!("priceCents" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["priceCents"] = 0;
+        }
+        if (!("rating" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["rating"] = "";
+        }
+        if (!("dealCount" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["dealCount"] = 0;
+        }
         if (!("estimatedDuration" in $$source)) {
             /**
              * @member
              * @type {string}
              */
             this["estimatedDuration"] = "";
+        }
+        if (!("deliverable" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["deliverable"] = "";
         }
         if (!("artifactTypes" in $$source)) {
             /**
@@ -75,10 +110,14 @@ export class Agent {
      * @returns {Agent}
      */
     static createFrom($$source = {}) {
-        const $$createField6_0 = $$createType0;
+        const $$createField3_0 = $$createType0;
+        const $$createField11_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("tags" in $$parsedSource) {
+            $$parsedSource["tags"] = $$createField3_0($$parsedSource["tags"]);
+        }
         if ("artifactTypes" in $$parsedSource) {
-            $$parsedSource["artifactTypes"] = $$createField6_0($$parsedSource["artifactTypes"]);
+            $$parsedSource["artifactTypes"] = $$createField11_0($$parsedSource["artifactTypes"]);
         }
         return new Agent(/** @type {Partial<Agent>} */($$parsedSource));
     }
