@@ -1,21 +1,21 @@
 :root {
   color-scheme: light;
-  --bg: #eef2f5;
-  --sidebar: #f8fafc;
+  --bg: #f3f4f4;
+  --sidebar: #fbfbfa;
   --surface: #ffffff;
-  --surface-alt: #f5f8fb;
-  --line: #d8e0e8;
-  --line-strong: #b9c5d1;
-  --ink: #18202a;
-  --muted: #667381;
-  --subtle: #8b98a8;
-  --blue: #2563a8;
-  --blue-soft: #e4eef8;
-  --green: #18795f;
-  --green-soft: #e2f3ed;
-  --amber: #a35b12;
-  --amber-soft: #f7ead8;
-  --danger: #b33434;
+  --surface-alt: #f6f6f4;
+  --line: #dedede;
+  --line-strong: #c7c8c8;
+  --ink: #1d2127;
+  --muted: #69717d;
+  --subtle: #8b929b;
+  --blue: #2b3440;
+  --blue-soft: #eceef0;
+  --green: #51645b;
+  --green-soft: #edf1ee;
+  --amber: #8a643d;
+  --amber-soft: #f1e8dc;
+  --danger: #9d423d;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -61,7 +61,7 @@ button:disabled {
 
 button:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgba(37, 99, 168, 0.34);
+  outline: 2px solid rgba(43, 52, 64, 0.28);
   outline-offset: 2px;
 }
 
@@ -131,11 +131,16 @@ textarea:focus-visible {
 .nav-item.is-active,
 .nav-item.is-selected {
   background: var(--blue-soft);
-  color: var(--blue);
+  color: var(--ink);
 }
 
 .nav-item.is-active {
   font-weight: 720;
+}
+
+.nav-item.is-active,
+.nav-item.is-selected {
+  box-shadow: inset 3px 0 0 var(--blue);
 }
 
 .nav-icon {
@@ -146,7 +151,7 @@ textarea:focus-visible {
   place-items: center;
   border: 1px solid var(--line);
   border-radius: 6px;
-  color: var(--blue);
+  color: var(--muted);
   background: var(--surface);
   font-size: 11px;
   font-weight: 760;
@@ -171,10 +176,10 @@ textarea:focus-visible {
 .account-button {
   min-height: 32px;
   padding: 6px 10px;
-  border: 1px solid var(--green);
+  border: 1px solid var(--blue);
   border-radius: 7px;
   color: #ffffff;
-  background: var(--green);
+  background: var(--blue);
 }
 
 .account-button.secondary {
@@ -242,7 +247,7 @@ textarea:focus-visible {
 }
 
 .text-button:hover {
-  color: var(--blue);
+  color: var(--ink);
 }
 
 .round-button {
@@ -252,7 +257,7 @@ textarea:focus-visible {
   place-items: center;
   border: 1px solid var(--line);
   border-radius: 50%;
-  color: var(--blue);
+  color: var(--ink);
   background: var(--surface);
   font-size: 11px;
   font-weight: 780;
@@ -288,7 +293,7 @@ textarea:focus-visible {
 .inspector {
   padding: 14px;
   border-left: 1px solid var(--line);
-  background: #f4f7fa;
+  background: #f4f4f3;
 }
 
 .agent-summary,
@@ -317,7 +322,7 @@ textarea:focus-visible {
   place-items: center;
   border-radius: 50%;
   color: #ffffff;
-  background: linear-gradient(135deg, var(--blue), var(--green));
+  background: var(--blue);
   font-size: 20px;
   font-weight: 760;
 }
@@ -348,8 +353,8 @@ textarea:focus-visible {
   flex: 0 0 auto;
   padding: 3px 8px;
   border-radius: 999px;
-  color: var(--amber);
-  background: var(--amber-soft);
+  color: var(--blue);
+  background: var(--blue-soft);
   font-size: 12px;
 }
 
@@ -368,7 +373,7 @@ textarea:focus-visible {
 }
 
 .metric-row strong {
-  color: var(--green);
+  color: var(--ink);
   font-weight: 720;
 }
 
@@ -386,7 +391,7 @@ textarea:focus-visible {
 .price-panel strong {
   display: inline-block;
   margin: 6px 4px 0 0;
-  color: var(--blue);
+  color: var(--ink);
   font-size: 22px;
   line-height: 1;
 }
@@ -422,7 +427,7 @@ textarea:focus-visible {
 
 .agent-chip strong {
   flex: 0 0 auto;
-  color: var(--blue);
+  color: var(--ink);
   font-size: 13px;
 }
 
@@ -430,6 +435,10 @@ textarea:focus-visible {
 .agent-chip.is-selected {
   border-color: var(--blue);
   background: var(--blue-soft);
+}
+
+.agent-chip.is-selected {
+  box-shadow: inset 0 -2px 0 var(--blue);
 }
 
 .empty-strip {
@@ -519,7 +528,7 @@ textarea:focus-visible {
   padding: 5px 8px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  color: var(--blue);
+  color: var(--ink);
   background: var(--surface-alt);
 }
 
@@ -563,7 +572,7 @@ textarea:not([readonly]) {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--green);
+  background: var(--blue);
   content: "";
 }
 
@@ -663,8 +672,8 @@ textarea:not([readonly]) {
 }
 
 .timeline-row.done .timeline-dot {
-  border-color: var(--green);
-  background: var(--green);
+  border-color: var(--blue);
+  background: var(--blue);
 }
 
 .timeline-row.current .timeline-dot {
@@ -688,7 +697,7 @@ textarea:not([readonly]) {
   padding: 7px 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
-  color: var(--blue);
+  color: var(--ink);
   background: var(--surface);
 }
 
@@ -706,8 +715,8 @@ textarea:not([readonly]) {
   height: 100%;
   padding: 18px 8px;
   border-left: 1px solid var(--line);
-  color: var(--blue);
-  background: #f4f7fa;
+  color: var(--ink);
+  background: #f4f4f3;
 }
 
 .inspector-peek span {
@@ -753,7 +762,7 @@ textarea:not([readonly]) {
 .usage-grid strong {
   display: inline-block;
   margin-top: 6px;
-  color: var(--green);
+  color: var(--ink);
   font-size: 22px;
   line-height: 1;
 }
@@ -837,8 +846,8 @@ textarea:not([readonly]) {
   border: 1px solid var(--line);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(37, 99, 168, 0.12), transparent 52%),
-    linear-gradient(45deg, rgba(24, 121, 95, 0.12), transparent 54%),
+    linear-gradient(135deg, rgba(43, 52, 64, 0.08), transparent 52%),
+    linear-gradient(45deg, rgba(138, 100, 61, 0.1), transparent 54%),
     var(--surface-alt);
 }
 
