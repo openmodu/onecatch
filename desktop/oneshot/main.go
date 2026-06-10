@@ -25,6 +25,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(bindings.NewAuthBinding(apiClient)),
 			application.NewService(bindings.NewAgentBinding(apiClient)),
+			application.NewService(bindings.NewArtifactBinding(apiClient)),
 			application.NewService(bindings.NewBillingBinding(apiClient)),
 			application.NewService(bindings.NewOrderBinding(apiClient)),
 		},

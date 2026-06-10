@@ -7,6 +7,7 @@ import (
 
 	"github.com/google/wire"
 	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
+	repoartifacts "github.com/openmodu/oneshot/internal/repo/artifacts"
 	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
 	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
 	repousers "github.com/openmodu/oneshot/internal/repo/users"
@@ -19,6 +20,7 @@ var ProviderSet = wire.NewSet(
 	ProvideData,
 	ProvideSQL,
 	repoagents.NewAgentsRepo,
+	repoartifacts.NewArtifactsRepo,
 	repobilling.NewBillingRepo,
 	repoorders.NewOrdersRepo,
 	repousers.NewUsersRepo,

@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -22,10 +25,14 @@ type Client interface {
 	GetAgent(context.Context, string) (Agent, error)
 	GetBalance(context.Context) (Balance, error)
 	ListLedger(context.Context) ([]LedgerEntry, error)
+	StartPurchase(context.Context, StartPurchaseRequest) (Purchase, error)
 	CreateOrder(context.Context, CreateOrderRequest) (Order, error)
 	ListOrders(context.Context) ([]Order, error)
 	GetOrder(context.Context, string) (Order, error)
 	CancelOrder(context.Context, string) (Order, error)
+	ListArtifacts(context.Context, string) ([]Artifact, error)
+	DownloadArtifact(context.Context, string) (ArtifactDownload, error)
+	ShareArtifact(context.Context, string) (ArtifactShare, error)
 }
 
 type HTTPClient struct {
@@ -99,6 +106,12 @@ func (c *HTTPClient) ListLedger(ctx context.Context) ([]LedgerEntry, error) {
 	return out, err
 }
 
+func (c *HTTPClient) StartPurchase(ctx context.Context, input StartPurchaseRequest) (Purchase, error) {
+	var out Purchase
+	err := c.do(ctx, http.MethodPost, "/api/billing/purchases", input, &out)
+	return out, err
+}
+
 func (c *HTTPClient) CreateOrder(ctx context.Context, input CreateOrderRequest) (Order, error) {
 	var out Order
 	err := c.do(ctx, http.MethodPost, "/api/orders", input, &out)
@@ -120,6 +133,53 @@ func (c *HTTPClient) GetOrder(ctx context.Context, orderID string) (Order, error
 func (c *HTTPClient) CancelOrder(ctx context.Context, orderID string) (Order, error) {
 	var out Order
 	err := c.do(ctx, http.MethodPost, "/api/orders/"+url.PathEscape(orderID)+"/cancel", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) ListArtifacts(ctx context.Context, orderID string) ([]Artifact, error) {
+	var out []Artifact
+	err := c.do(ctx, http.MethodGet, "/api/orders/"+url.PathEscape(orderID)+"/artifacts", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) DownloadArtifact(ctx context.Context, artifactID string) (ArtifactDownload, error) {
+	endpoint := c.baseURL.ResolveReference(&url.URL{Path: "/api/artifacts/" + url.PathEscape(artifactID) + "/download"})
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+	if err != nil {
+		return ArtifactDownload{}, err
+	}
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return ArtifactDownload{}, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var apiErr ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil && apiErr.Error != "" {
+			return ArtifactDownload{}, errors.New(apiErr.Error)
+		}
+		return ArtifactDownload{}, fmt.Errorf("oneshot api request failed: %s", resp.Status)
+	}
+	content, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ArtifactDownload{}, err
+	}
+	fileName := downloadFileName(resp.Header.Get("Content-Disposition"), artifactID+".pdf")
+	path, err := SaveDownload(fileName, content)
+	if err != nil {
+		return ArtifactDownload{}, err
+	}
+	return ArtifactDownload{
+		ArtifactID:  artifactID,
+		FileName:    fileName,
+		FilePath:    path,
+		ContentType: resp.Header.Get("Content-Type"),
+	}, nil
+}
+
+func (c *HTTPClient) ShareArtifact(ctx context.Context, artifactID string) (ArtifactShare, error) {
+	var out ArtifactShare
+	err := c.do(ctx, http.MethodPost, "/api/artifacts/"+url.PathEscape(artifactID)+"/share", nil, &out)
 	return out, err
 }
 
@@ -163,4 +223,29 @@ func (c *HTTPClient) do(ctx context.Context, method string, path string, input a
 		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(output)
+}
+
+func SaveDownload(fileName string, content []byte) (string, error) {
+	if strings.TrimSpace(fileName) == "" {
+		fileName = "oneshot-report.pdf"
+	}
+	dir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "Downloads", filepath.Base(fileName))
+	if err := os.WriteFile(path, content, 0o644); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+func downloadFileName(disposition string, fallback string) string {
+	for _, part := range strings.Split(disposition, ";") {
+		part = strings.TrimSpace(part)
+		if strings.HasPrefix(strings.ToLower(part), "filename=") {
+			return strings.Trim(strings.TrimPrefix(part, "filename="), `"`)
+		}
+	}
+	return fallback
 }

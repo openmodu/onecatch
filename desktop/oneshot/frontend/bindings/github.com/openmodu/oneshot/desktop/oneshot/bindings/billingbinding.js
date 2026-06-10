@@ -28,7 +28,18 @@ export function ListLedger() {
     }));
 }
 
+/**
+ * @param {oneshot$0.StartPurchaseRequest} input
+ * @returns {$CancellablePromise<oneshot$0.Purchase>}
+ */
+export function StartPurchase(input) {
+    return $Call.ByID(2406075408, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
+}
+
 // Private type creation functions
 const $$createType0 = oneshot$0.Balance.createFrom;
 const $$createType1 = oneshot$0.LedgerEntry.createFrom;
 const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = oneshot$0.Purchase.createFrom;

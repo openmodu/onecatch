@@ -4,11 +4,17 @@
 
 export {
     Agent,
+    Artifact,
+    ArtifactDownload,
+    ArtifactShare,
     Balance,
     CreateOrderRequest,
     LedgerEntry,
     Order,
+    ProgressStep,
+    Purchase,
     Requirement,
     Session,
+    StartPurchaseRequest,
     User
 } from "./models.js";

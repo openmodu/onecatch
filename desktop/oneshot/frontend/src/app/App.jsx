@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   AgentBinding,
+  ArtifactBinding,
   AuthBinding,
+  BillingBinding,
+  OrderBinding,
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 
 const categories = [
@@ -15,45 +18,9 @@ const categories = [
   { id: "research", label: "行业研究", icon: "R" },
 ];
 
-const orders = [
-  {
-    id: "ORD20260610001029",
-    title: "本次任务",
-    agent: "行业研究分析师",
-    status: "running",
-    statusLabel: "执行中",
-    createdAt: "2026-06-10 10:30",
-    eta: "2026-06-10 12:30",
-    debit: 1,
-    amount: 1990,
-  },
-  {
-    id: "ORD20260609000988",
-    title: "竞品分析报告",
-    agent: "经营数据分析师",
-    status: "delivered",
-    statusLabel: "已交付",
-    createdAt: "2026-06-09 16:24",
-    eta: "2026-06-09 17:36",
-    debit: 1,
-    amount: 1560,
-  },
-  {
-    id: "ORD20260608000877",
-    title: "市场规模研究",
-    agent: "行业研究分析师",
-    status: "pending",
-    statusLabel: "待支付",
-    createdAt: "2026-06-08 09:12",
-    eta: "待确认",
-    debit: 0,
-    amount: 1990,
-  },
-];
-
 const orderFilters = [
   { id: "all", label: "全部订单" },
-  { id: "pending", label: "待支付" },
+  { id: "pending_payment", label: "待支付" },
   { id: "running", label: "执行中" },
   { id: "delivered", label: "已交付" },
 ];
@@ -68,6 +35,32 @@ function formatDealCount(value) {
   return Number(value || 0).toLocaleString("zh-CN");
 }
 
+function formatDateTime(value) {
+  if (!value) return "待确认";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "待确认";
+  return date.toLocaleString("zh-CN", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function statusLabel(status) {
+  const labels = {
+    draft: "草稿",
+    pending_payment: "待支付",
+    paid: "已支付",
+    running: "执行中",
+    delivering: "交付生成中",
+    delivered: "已交付",
+    failed: "失败",
+    cancelled: "已取消",
+  };
+  return labels[status] || "待确认";
+}
+
 function NavIcon({ children }) {
   return (
     <span className="nav-icon" aria-hidden="true">
@@ -78,6 +71,9 @@ function NavIcon({ children }) {
 
 export default function App() {
   const [agents, setAgents] = useState([]);
+  const [balance, setBalance] = useState(null);
+  const [userOrders, setUserOrders] = useState([]);
+  const [artifacts, setArtifacts] = useState([]);
   const [agentStatus, setAgentStatus] = useState("loading");
   const [currentUser, setCurrentUser] = useState(null);
   const [authProvider, setAuthProvider] = useState("");
@@ -86,7 +82,7 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState("all");
   const [selectedAgentId, setSelectedAgentId] = useState("");
   const [selectedStep, setSelectedStep] = useState("扣次确认");
-  const [selectedOrderId, setSelectedOrderId] = useState(orders[0].id);
+  const [selectedOrderId, setSelectedOrderId] = useState("");
   const [orderFilter, setOrderFilter] = useState("all");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [requirement, setRequirement] = useState(
@@ -99,17 +95,28 @@ export default function App() {
   }, [activeCategory, agents]);
 
   const visibleOrders = useMemo(() => {
-    if (orderFilter === "all") return orders;
-    return orders.filter((order) => order.status === orderFilter);
-  }, [orderFilter]);
+    if (orderFilter === "all") return userOrders;
+    return userOrders.filter((order) => order.status === orderFilter);
+  }, [orderFilter, userOrders]);
 
   const selectedAgent =
     visibleAgents.find((agent) => agent.id === selectedAgentId) ??
     visibleAgents[0] ??
     null;
   const selectedOrder =
-    orders.find((order) => order.id === selectedOrderId) ?? orders[0];
+    userOrders.find((order) => order.id === selectedOrderId) ?? userOrders[0] ?? null;
   const authProviderLabel = authProvider === "google" ? "Google 邮箱" : "微信";
+  const currentBalance = balance?.remaining ?? 0;
+  const currentTimeline =
+    selectedOrder?.progress?.length > 0
+      ? selectedOrder.progress
+      : [
+          { state: "done", label: "需求已提交", timestamp: null },
+          { state: "current", label: "扣次确认中", timestamp: null },
+          { state: "next", label: "执行中", timestamp: null },
+          { state: "next", label: "交付物生成中", timestamp: null },
+          { state: "next", label: "已交付", timestamp: null },
+        ];
 
   useEffect(() => {
     let alive = true;
@@ -134,6 +141,38 @@ export default function App() {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      setBalance(null);
+      setUserOrders([]);
+      setSelectedOrderId("");
+      setArtifacts([]);
+      return;
+    }
+    refreshBilling();
+    refreshOrders();
+  }, [currentUser?.id]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!selectedOrder?.id || selectedOrder.status !== "delivered") {
+      setArtifacts([]);
+      return undefined;
+    }
+    ArtifactBinding.ListArtifacts(selectedOrder.id)
+      .then((items) => {
+        if (!alive) return;
+        setArtifacts(Array.isArray(items) ? items : []);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setArtifacts([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [selectedOrder?.id, selectedOrder?.status]);
 
   useEffect(() => {
     let alive = true;
@@ -176,6 +215,32 @@ export default function App() {
     showToast.timer = window.setTimeout(() => setToast(""), 2200);
   }
 
+  async function refreshBilling() {
+    try {
+      const [nextBalance, nextLedger] = await Promise.all([
+        BillingBinding.GetBalance(),
+        BillingBinding.ListLedger(),
+      ]);
+      setBalance(nextBalance);
+      void nextLedger;
+    } catch (error) {
+      showToast(error?.message || "用量信息加载失败");
+    }
+  }
+
+  async function refreshOrders() {
+    try {
+      const items = await OrderBinding.ListOrders();
+      const nextOrders = Array.isArray(items) ? items : [];
+      setUserOrders(nextOrders);
+      setSelectedOrderId((current) =>
+        nextOrders.some((order) => order.id === current) ? current : nextOrders[0]?.id || "",
+      );
+    } catch (error) {
+      showToast(error?.message || "订单列表加载失败");
+    }
+  }
+
   async function login(provider) {
     setAuthStatus("checking");
     try {
@@ -187,6 +252,7 @@ export default function App() {
       setAuthProvider(session.provider || provider);
       window.localStorage.setItem("oneshot.authProvider", session.provider || provider);
       setAuthStatus("signed-in");
+      await Promise.all([refreshBilling(), refreshOrders()]);
       showToast(`已通过${provider === "google" ? " Google 邮箱" : "微信"}登录`);
     } catch (error) {
       setAuthStatus("signed-out");
@@ -207,7 +273,21 @@ export default function App() {
     }
   }
 
-  function confirmCheckout() {
+  async function buyUses() {
+    if (!currentUser) {
+      showToast("请先登录后再购买次数");
+      return;
+    }
+    try {
+      await BillingBinding.StartPurchase({ planId: "uses_10" });
+      await refreshBilling();
+      showToast("已购买 10 次");
+    } catch (error) {
+      showToast(error?.message || "购买次数失败");
+    }
+  }
+
+  async function confirmCheckout() {
     if (!selectedAgent) {
       showToast("请先选择可用 Agent");
       return;
@@ -216,8 +296,45 @@ export default function App() {
       showToast("请先登录后再创建订单");
       return;
     }
-    setSelectedStep("执行中");
-    showToast("已确认扣次，订单开始执行");
+    if (!requirement.trim()) {
+      showToast("请先填写任务需求");
+      setSelectedStep("需求填写");
+      return;
+    }
+    try {
+      const order = await OrderBinding.CreateOrder({
+        agentId: selectedAgent.id,
+        requirement: { prompt: requirement },
+      });
+      setSelectedOrderId(order.id);
+      await Promise.all([refreshBilling(), refreshOrders()]);
+      setSelectedStep("执行中");
+      showToast("已扣减次数，订单开始执行");
+    } catch (error) {
+      showToast(error?.message || "创建订单失败");
+    }
+  }
+
+  async function downloadArtifact(artifactId) {
+    try {
+      const download = await ArtifactBinding.DownloadArtifact(artifactId);
+      if (download.filePath) {
+        await ArtifactBinding.ShowInFolder(download.filePath);
+      }
+      showToast(`已下载到 ${download.filePath}`);
+    } catch (error) {
+      showToast(error?.message || "下载失败");
+    }
+  }
+
+  async function shareArtifact(artifactId) {
+    try {
+      const share = await ArtifactBinding.ShareArtifact(artifactId);
+      await navigator.clipboard?.writeText?.(share.url);
+      showToast("分享链接已生成");
+    } catch (error) {
+      showToast(error?.message || "分享失败");
+    }
   }
 
   return (
@@ -258,7 +375,7 @@ export default function App() {
             <NavIcon>U</NavIcon>
             用量总览
           </button>
-          <button className="nav-item" type="button">
+          <button className="nav-item" type="button" onClick={buyUses}>
             <NavIcon>B</NavIcon>
             购买次数
           </button>
@@ -435,10 +552,10 @@ export default function App() {
               <section className="panel balance-panel">
                 <h2>当前余额</h2>
                 <div className="balance-number">
-                  <strong>12</strong>
+                  <strong>{currentBalance}</strong>
                   <span>次</span>
                 </div>
-                <button className="outline-button" type="button">
+                <button className="outline-button" type="button" onClick={buyUses}>
                   购买次数
                 </button>
               </section>
@@ -464,17 +581,17 @@ export default function App() {
 
             <section className="timeline-panel">
               <h2>执行进度</h2>
-              {[
-                ["done", "需求已提交", "2026-06-10 10:30"],
-                ["current", "扣次确认中", "等待确认并扣减 1 次"],
-                ["next", "执行中", `预计 ${selectedAgent?.estimatedDuration || "待确认"}`],
-                ["next", "交付物生成中", "报告生成并校验中"],
-                ["next", "已交付", "交付物可查看、下载和分享"],
-              ].map(([state, title, time]) => (
-                <div className={`timeline-row ${state}`} key={title}>
+              {currentTimeline.map((step) => (
+                <div className={`timeline-row ${step.state}`} key={step.key || step.label}>
                   <span className="timeline-dot" />
-                  <strong>{title}</strong>
-                  <time>{time}</time>
+                  <strong>{step.label}</strong>
+                  <time>
+                    {step.timestamp
+                      ? formatDateTime(step.timestamp)
+                      : step.state === "next"
+                        ? "待推进"
+                        : selectedAgent?.estimatedDuration || "待确认"}
+                  </time>
                 </div>
               ))}
             </section>
@@ -494,12 +611,12 @@ export default function App() {
               <section className="inspector-card usage-card">
                 <div className="card-title">
                   <h2>用量与计费</h2>
-                  <button type="button">购买次数</button>
+                  <button type="button" onClick={buyUses}>购买次数</button>
                 </div>
                 <div className="usage-grid">
                   <div>
                     <span>剩余次数</span>
-                    <strong>12</strong>
+                    <strong>{currentBalance}</strong>
                     <small>次</small>
                   </div>
                   <div>
@@ -515,7 +632,7 @@ export default function App() {
                   <button type="button">查看全部</button>
                 </div>
                 <div className="record-list">
-                  {visibleOrders.map((order) => (
+                  {visibleOrders.length > 0 ? visibleOrders.map((order) => (
                     <button
                       className={selectedOrderId === order.id ? "is-selected" : ""}
                       key={order.id}
@@ -523,12 +640,14 @@ export default function App() {
                       onClick={() => setSelectedOrderId(order.id)}
                     >
                       <span>
-                        <strong>{order.title}</strong>
+                        <strong>{order.requirement?.prompt || "本次任务"}</strong>
                         <small>{order.id}</small>
                       </span>
-                      <em>{order.debit ? `-${order.debit} 次` : "待扣次"}</em>
+                      <em>{order.usageCost ? `-${order.usageCost} 次` : "待扣次"}</em>
                     </button>
-                  ))}
+                  )) : (
+                    <div className="empty-strip">暂无订单</div>
+                  )}
                 </div>
               </section>
 
@@ -540,23 +659,23 @@ export default function App() {
                 <dl className="order-info">
                   <div>
                     <dt>订单号</dt>
-                    <dd>{selectedOrder.id}</dd>
+                    <dd>{selectedOrder?.id || "暂无订单"}</dd>
                   </div>
                   <div>
                     <dt>关联 Agent</dt>
-                    <dd>{selectedOrder.agent}</dd>
+                    <dd>{selectedOrder?.agentName || selectedAgent?.name || "待选择"}</dd>
                   </div>
                   <div>
                     <dt>订单状态</dt>
-                    <dd>{selectedOrder.statusLabel}</dd>
+                    <dd>{statusLabel(selectedOrder?.status)}</dd>
                   </div>
                   <div>
                     <dt>预计完成</dt>
-                    <dd>{selectedOrder.eta}</dd>
+                    <dd>{formatDateTime(selectedOrder?.estimatedCompletionAt)}</dd>
                   </div>
                   <div>
                     <dt>总金额</dt>
-                    <dd>{formatMoney(selectedOrder.amount)}</dd>
+                    <dd>{formatMoney(selectedOrder?.amountCents)}</dd>
                   </div>
                 </dl>
               </section>
@@ -564,12 +683,29 @@ export default function App() {
               <section className="inspector-card delivery-card">
                 <div className="card-title">
                   <h2>交付物预览</h2>
-                  <button type="button">预览</button>
+                  <button
+                    type="button"
+                    disabled={!artifacts[0]}
+                    onClick={() => artifacts[0] && shareArtifact(artifacts[0].id)}
+                  >
+                    分享
+                  </button>
                 </div>
-                <div className="file-preview">
-                  <strong>AI Agent 服务市场研究报告.pdf</strong>
-                  <small>2.4 MB · PDF</small>
-                </div>
+                {artifacts[0] ? (
+                  <button
+                    className="file-preview"
+                    type="button"
+                    onClick={() => downloadArtifact(artifacts[0].id)}
+                  >
+                    <strong>{artifacts[0].fileName}</strong>
+                    <small>{Math.max(1, Math.round((artifacts[0].sizeBytes || 0) / 1024))} KB · {artifacts[0].fileType}</small>
+                  </button>
+                ) : (
+                  <div className="file-preview">
+                    <strong>{selectedOrder?.status === "delivered" ? "暂无交付物" : "订单交付后可下载"}</strong>
+                    <small>PDF 报告</small>
+                  </div>
+                )}
               </section>
             </aside>
           ) : (
@@ -580,7 +716,7 @@ export default function App() {
               onClick={() => setInspectorOpen(true)}
             >
               <span>Inspector</span>
-              <small>12 次</small>
+              <small>{currentBalance} 次</small>
             </button>
           )}
         </div>

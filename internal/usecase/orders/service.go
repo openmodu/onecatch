@@ -34,6 +34,11 @@ type CreateInput struct {
 	Requirement orders.Requirement `json:"requirement"`
 }
 
+type ListInput struct {
+	UserID string        `json:"userId"`
+	Status orders.Status `json:"status,omitempty"`
+}
+
 func NewUsecase(agentRepo AgentRepository, orderRepo Repository, billing *usecasebilling.Usecase) *Usecase {
 	return &Usecase{
 		agents:  agentRepo,
@@ -49,6 +54,9 @@ func (s *Usecase) Create(ctx context.Context, input CreateInput) (orders.Order, 
 	}
 	if input.AgentID == "" {
 		return orders.Order{}, fmt.Errorf("agent id is required")
+	}
+	if err := orders.ValidateRequirement(input.Requirement); err != nil {
+		return orders.Order{}, err
 	}
 
 	agent, err := s.agents.GetAgent(ctx, input.AgentID)
@@ -66,25 +74,46 @@ func (s *Usecase) Create(ctx context.Context, input CreateInput) (orders.Order, 
 	}
 
 	now := s.now()
+	estimated := now.Add(parseDuration(agent.EstimatedDuration))
 	order := orders.Order{
-		ID:          id,
-		UserID:      input.UserID,
-		AgentID:     input.AgentID,
-		Requirement: input.Requirement,
-		Status:      orders.StatusRunning,
-		UsageCost:   agent.PriceUses,
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:                    id,
+		UserID:                input.UserID,
+		AgentID:               input.AgentID,
+		AgentName:             agent.Name,
+		Requirement:           input.Requirement,
+		Status:                orders.StatusRunning,
+		UsageCost:             agent.PriceUses,
+		AmountCents:           agent.PriceCents,
+		EstimatedCompletionAt: estimated,
+		CreatedAt:             now,
+		UpdatedAt:             now,
 	}
+	order.Progress = orders.BuildProgress(order)
 	return order, s.orders.SaveOrder(ctx, order)
 }
 
-func (s *Usecase) List(ctx context.Context, userID string) ([]orders.Order, error) {
-	return s.orders.ListOrders(ctx, userID)
+func (s *Usecase) List(ctx context.Context, input ListInput) ([]orders.Order, error) {
+	items, err := s.orders.ListOrders(ctx, input.UserID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]orders.Order, 0, len(items))
+	for _, order := range items {
+		if input.Status == "" || order.Status == input.Status {
+			order.Progress = orders.BuildProgress(order)
+			out = append(out, order)
+		}
+	}
+	return out, nil
 }
 
 func (s *Usecase) Get(ctx context.Context, userID string, orderID string) (orders.Order, error) {
-	return s.orders.GetOrder(ctx, userID, orderID)
+	order, err := s.orders.GetOrder(ctx, userID, orderID)
+	if err != nil {
+		return orders.Order{}, err
+	}
+	order.Progress = orders.BuildProgress(order)
+	return order, nil
 }
 
 func (s *Usecase) Cancel(ctx context.Context, userID string, orderID string) (orders.Order, error) {
@@ -98,5 +127,21 @@ func (s *Usecase) Cancel(ctx context.Context, userID string, orderID string) (or
 
 	order.Status = orders.StatusCancelled
 	order.UpdatedAt = s.now()
+	order.Progress = orders.BuildProgress(order)
 	return order, s.orders.SaveOrder(ctx, order)
+}
+
+func parseDuration(value string) time.Duration {
+	switch value {
+	case "30-60 分钟":
+		return time.Hour
+	case "1 小时":
+		return time.Hour
+	case "1-2 小时":
+		return 2 * time.Hour
+	case "2-4 小时":
+		return 4 * time.Hour
+	default:
+		return time.Hour
+	}
 }

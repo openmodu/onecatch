@@ -10,12 +10,14 @@ import (
 	"github.com/openmodu/oneshot/internal/app/config"
 	"github.com/openmodu/oneshot/internal/data"
 	"github.com/openmodu/oneshot/internal/repo/agents"
+	"github.com/openmodu/oneshot/internal/repo/artifacts"
 	"github.com/openmodu/oneshot/internal/repo/billing"
 	"github.com/openmodu/oneshot/internal/repo/orders"
 	"github.com/openmodu/oneshot/internal/repo/users"
 	"github.com/openmodu/oneshot/internal/service"
 	"github.com/openmodu/oneshot/internal/usecase"
 	agents2 "github.com/openmodu/oneshot/internal/usecase/agents"
+	artifacts2 "github.com/openmodu/oneshot/internal/usecase/artifacts"
 	"github.com/openmodu/oneshot/internal/usecase/auth"
 	billing2 "github.com/openmodu/oneshot/internal/usecase/billing"
 	orders2 "github.com/openmodu/oneshot/internal/usecase/orders"
@@ -31,20 +33,24 @@ func initializeServices(cfg config.Config) (*service.Services, func(), error) {
 	}
 	sql := data.ProvideSQL(dataData)
 	agentsRepo := agents.NewAgentsRepo(sql)
+	artifactsRepo := artifacts.NewArtifactsRepo(sql)
 	billingRepo := billing.NewBillingRepo(sql)
 	ordersRepo := orders.NewOrdersRepo(sql)
 	usersRepo := users.NewUsersRepo(sql)
-	oneShotRepo := data.NewOneShotRepo(agentsRepo, billingRepo, ordersRepo, usersRepo)
+	oneShotRepo := data.NewOneShotRepo(agentsRepo, artifactsRepo, billingRepo, ordersRepo, usersRepo)
 	repository := usecase.ProvideAuthRepository(oneShotRepo)
 	authUsecase := auth.NewUsecase(repository)
 	agentsRepository := usecase.ProvideAgentRepository(oneShotRepo)
 	agentsUsecase := agents2.NewUsecase(agentsRepository)
+	artifactsRepository := usecase.ProvideArtifactRepository(oneShotRepo)
+	orderRepository := usecase.ProvideArtifactOrderRepository(oneShotRepo)
+	artifactsUsecase := artifacts2.NewUsecase(artifactsRepository, orderRepository)
 	billingRepository := usecase.ProvideBillingRepository(oneShotRepo)
 	billingUsecase := billing2.NewUsecase(billingRepository)
 	agentRepository := usecase.ProvideOrderAgentRepository(oneShotRepo)
 	ordersRepository := usecase.ProvideOrderRepository(oneShotRepo)
 	ordersUsecase := orders2.NewUsecase(agentRepository, ordersRepository, billingUsecase)
-	services := service.NewServices(authUsecase, agentsUsecase, billingUsecase, ordersUsecase)
+	services := service.NewServices(authUsecase, agentsUsecase, artifactsUsecase, billingUsecase, ordersUsecase)
 	return services, func() {
 		cleanup()
 	}, nil

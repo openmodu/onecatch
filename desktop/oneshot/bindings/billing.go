@@ -21,3 +21,7 @@ func (b *BillingBinding) GetBalance() (oneshot.Balance, error) {
 func (b *BillingBinding) ListLedger() ([]oneshot.LedgerEntry, error) {
 	return b.client.ListLedger(context.Background())
 }
+
+func (b *BillingBinding) StartPurchase(input oneshot.StartPurchaseRequest) (oneshot.Purchase, error) {
+	return b.client.StartPurchase(context.Background(), input)
+}

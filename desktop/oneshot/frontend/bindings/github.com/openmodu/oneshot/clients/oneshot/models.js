@@ -123,6 +123,181 @@ export class Agent {
     }
 }
 
+export class Artifact {
+    /**
+     * Creates a new Artifact instance.
+     * @param {Partial<Artifact>} [$$source = {}] - The source object to create the Artifact.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("orderId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["orderId"] = "";
+        }
+        if (!("userId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["userId"] = "";
+        }
+        if (!("fileName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["fileName"] = "";
+        }
+        if (!("fileType" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["fileType"] = "";
+        }
+        if (!("sizeBytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["sizeBytes"] = 0;
+        }
+        if (!("preview" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["preview"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Artifact instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Artifact}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Artifact(/** @type {Partial<Artifact>} */($$parsedSource));
+    }
+}
+
+export class ArtifactDownload {
+    /**
+     * Creates a new ArtifactDownload instance.
+     * @param {Partial<ArtifactDownload>} [$$source = {}] - The source object to create the ArtifactDownload.
+     */
+    constructor($$source = {}) {
+        if (!("artifactId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["artifactId"] = "";
+        }
+        if (!("fileName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["fileName"] = "";
+        }
+        if (!("filePath" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["filePath"] = "";
+        }
+        if (!("contentType" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["contentType"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ArtifactDownload instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ArtifactDownload}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ArtifactDownload(/** @type {Partial<ArtifactDownload>} */($$parsedSource));
+    }
+}
+
+export class ArtifactShare {
+    /**
+     * Creates a new ArtifactShare instance.
+     * @param {Partial<ArtifactShare>} [$$source = {}] - The source object to create the ArtifactShare.
+     */
+    constructor($$source = {}) {
+        if (!("artifactId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["artifactId"] = "";
+        }
+        if (!("token" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["token"] = "";
+        }
+        if (!("url" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["url"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ArtifactShare instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ArtifactShare}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ArtifactShare(/** @type {Partial<ArtifactShare>} */($$parsedSource));
+    }
+}
+
 export class Balance {
     /**
      * Creates a new Balance instance.
@@ -231,6 +406,13 @@ export class LedgerEntry {
              */
             this["orderId"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["paymentId"] = undefined;
+        }
         if (!("delta" in $$source)) {
             /**
              * @member
@@ -294,6 +476,13 @@ export class Order {
              */
             this["agentId"] = "";
         }
+        if (!("agentName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["agentName"] = "";
+        }
         if (!("requirement" in $$source)) {
             /**
              * @member
@@ -314,6 +503,34 @@ export class Order {
              * @type {number}
              */
             this["usageCost"] = 0;
+        }
+        if (!("amountCents" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["amountCents"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["estimatedCompletionAt"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["failureReason"] = undefined;
+        }
+        if (!("progress" in $$source)) {
+            /**
+             * @member
+             * @type {ProgressStep[]}
+             */
+            this["progress"] = [];
         }
         if (!("createdAt" in $$source)) {
             /**
@@ -339,12 +556,142 @@ export class Order {
      * @returns {Order}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType1;
+        const $$createField4_0 = $$createType1;
+        const $$createField10_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("requirement" in $$parsedSource) {
-            $$parsedSource["requirement"] = $$createField3_0($$parsedSource["requirement"]);
+            $$parsedSource["requirement"] = $$createField4_0($$parsedSource["requirement"]);
+        }
+        if ("progress" in $$parsedSource) {
+            $$parsedSource["progress"] = $$createField10_0($$parsedSource["progress"]);
         }
         return new Order(/** @type {Partial<Order>} */($$parsedSource));
+    }
+}
+
+export class ProgressStep {
+    /**
+     * Creates a new ProgressStep instance.
+     * @param {Partial<ProgressStep>} [$$source = {}] - The source object to create the ProgressStep.
+     */
+    constructor($$source = {}) {
+        if (!("key" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["key"] = "";
+        }
+        if (!("label" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["label"] = "";
+        }
+        if (!("state" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["state"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["timestamp"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProgressStep instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ProgressStep}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProgressStep(/** @type {Partial<ProgressStep>} */($$parsedSource));
+    }
+}
+
+export class Purchase {
+    /**
+     * Creates a new Purchase instance.
+     * @param {Partial<Purchase>} [$$source = {}] - The source object to create the Purchase.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("userId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["userId"] = "";
+        }
+        if (!("planId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["planId"] = "";
+        }
+        if (!("paymentId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["paymentId"] = "";
+        }
+        if (!("uses" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["uses"] = 0;
+        }
+        if (!("amountCents" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["amountCents"] = 0;
+        }
+        if (!("balanceAfter" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["balanceAfter"] = 0;
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Purchase instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Purchase}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Purchase(/** @type {Partial<Purchase>} */($$parsedSource));
     }
 }
 
@@ -413,12 +760,47 @@ export class Session {
      * @returns {Session}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType2;
+        const $$createField2_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("user" in $$parsedSource) {
             $$parsedSource["user"] = $$createField2_0($$parsedSource["user"]);
         }
         return new Session(/** @type {Partial<Session>} */($$parsedSource));
+    }
+}
+
+export class StartPurchaseRequest {
+    /**
+     * Creates a new StartPurchaseRequest instance.
+     * @param {Partial<StartPurchaseRequest>} [$$source = {}] - The source object to create the StartPurchaseRequest.
+     */
+    constructor($$source = {}) {
+        if (!("planId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["planId"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["paymentId"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StartPurchaseRequest instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {StartPurchaseRequest}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new StartPurchaseRequest(/** @type {Partial<StartPurchaseRequest>} */($$parsedSource));
     }
 }
 
@@ -474,4 +856,6 @@ export class User {
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = Requirement.createFrom;
-const $$createType2 = User.createFrom;
+const $$createType2 = ProgressStep.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = User.createFrom;

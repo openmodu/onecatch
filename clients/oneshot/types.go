@@ -44,9 +44,26 @@ type LedgerEntry struct {
 	UserID       string    `json:"userId"`
 	Type         string    `json:"type"`
 	OrderID      string    `json:"orderId,omitempty"`
+	PaymentID    string    `json:"paymentId,omitempty"`
 	Delta        int       `json:"delta"`
 	BalanceAfter int       `json:"balanceAfter"`
 	CreatedAt    time.Time `json:"createdAt"`
+}
+
+type Purchase struct {
+	ID           string    `json:"id"`
+	UserID       string    `json:"userId"`
+	PlanID       string    `json:"planId"`
+	PaymentID    string    `json:"paymentId"`
+	Uses         int       `json:"uses"`
+	AmountCents  int       `json:"amountCents"`
+	BalanceAfter int       `json:"balanceAfter"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+type StartPurchaseRequest struct {
+	PlanID    string `json:"planId"`
+	PaymentID string `json:"paymentId,omitempty"`
 }
 
 type Requirement struct {
@@ -54,17 +71,54 @@ type Requirement struct {
 }
 
 type Order struct {
-	ID          string      `json:"id"`
-	UserID      string      `json:"userId"`
-	AgentID     string      `json:"agentId"`
-	Requirement Requirement `json:"requirement"`
-	Status      string      `json:"status"`
-	UsageCost   int         `json:"usageCost"`
-	CreatedAt   time.Time   `json:"createdAt"`
-	UpdatedAt   time.Time   `json:"updatedAt"`
+	ID                    string         `json:"id"`
+	UserID                string         `json:"userId"`
+	AgentID               string         `json:"agentId"`
+	AgentName             string         `json:"agentName"`
+	Requirement           Requirement    `json:"requirement"`
+	Status                string         `json:"status"`
+	UsageCost             int            `json:"usageCost"`
+	AmountCents           int            `json:"amountCents"`
+	EstimatedCompletionAt time.Time      `json:"estimatedCompletionAt,omitempty"`
+	FailureReason         string         `json:"failureReason,omitempty"`
+	Progress              []ProgressStep `json:"progress"`
+	CreatedAt             time.Time      `json:"createdAt"`
+	UpdatedAt             time.Time      `json:"updatedAt"`
+}
+
+type ProgressStep struct {
+	Key       string    `json:"key"`
+	Label     string    `json:"label"`
+	State     string    `json:"state"`
+	Timestamp time.Time `json:"timestamp,omitempty"`
 }
 
 type CreateOrderRequest struct {
 	AgentID     string      `json:"agentId"`
 	Requirement Requirement `json:"requirement"`
+}
+
+type Artifact struct {
+	ID        string    `json:"id"`
+	OrderID   string    `json:"orderId"`
+	UserID    string    `json:"userId"`
+	FileName  string    `json:"fileName"`
+	FileType  string    `json:"fileType"`
+	SizeBytes int64     `json:"sizeBytes"`
+	Preview   string    `json:"preview"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type ArtifactDownload struct {
+	ArtifactID  string `json:"artifactId"`
+	FileName    string `json:"fileName"`
+	FilePath    string `json:"filePath"`
+	ContentType string `json:"contentType"`
+}
+
+type ArtifactShare struct {
+	ArtifactID string    `json:"artifactId"`
+	Token      string    `json:"token"`
+	URL        string    `json:"url"`
+	CreatedAt  time.Time `json:"createdAt"`
 }

@@ -1,11 +1,13 @@
 package httptransport
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/openmodu/oneshot/internal/api"
 	"github.com/openmodu/oneshot/internal/domain/orders"
 	"github.com/openmodu/oneshot/internal/service"
+	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
 	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
 	"github.com/openmodu/oneshot/pkg/httpx"
 )
@@ -31,10 +33,14 @@ func NewServer(services *service.Services) http.Handler {
 		router.Get("/agents/{agentID}", server.getAgent)
 		router.Get("/billing/balance", server.getBalance)
 		router.Get("/billing/ledger", server.listLedger)
+		router.Post("/billing/purchases", server.startPurchase)
 		router.Post("/orders", server.createOrder)
 		router.Get("/orders", server.listOrders)
+		router.Get("/orders/{orderID}/artifacts", server.listArtifacts)
 		router.Get("/orders/{orderID}", server.getOrder)
 		router.Post("/orders/{orderID}/cancel", server.cancelOrder)
+		router.Get("/artifacts/{artifactID}/download", server.downloadArtifact)
+		router.Post("/artifacts/{artifactID}/share", server.shareArtifact)
 	})
 
 	return router.Handler()
@@ -137,6 +143,34 @@ func (s *Server) listLedger(w http.ResponseWriter, r *http.Request) {
 	httpx.WriteJSON(w, http.StatusOK, ledger)
 }
 
+func (s *Server) startPurchase(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	var input struct {
+		PlanID    string `json:"planId"`
+		PaymentID string `json:"paymentId"`
+	}
+	if err := httpx.DecodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	purchase, err := s.services.Billing.StartPurchase(r.Context(), usecasebilling.PurchaseInput{
+		UserID:    user.ID,
+		PlanID:    input.PlanID,
+		PaymentID: input.PaymentID,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, purchase)
+}
+
 func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
 	user, err := s.services.Auth.CurrentUser(r.Context())
 	if err != nil {
@@ -172,7 +206,10 @@ func (s *Server) listOrders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	items, err := s.services.Orders.List(r.Context(), user.ID)
+	items, err := s.services.Orders.List(r.Context(), usecaseorders.ListInput{
+		UserID: user.ID,
+		Status: orders.Status(r.URL.Query().Get("status")),
+	})
 	if err != nil {
 		writeError(w, err)
 		return
@@ -210,4 +247,55 @@ func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, order)
+}
+
+func (s *Server) listArtifacts(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	orderID := api.URLParam(r, "orderID")
+	artifacts, err := s.services.Artifacts.ListForOrder(r.Context(), user.ID, orderID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, artifacts)
+}
+
+func (s *Server) downloadArtifact(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	artifactID := api.URLParam(r, "artifactID")
+	download, err := s.services.Artifacts.Download(r.Context(), user.ID, artifactID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", download.ContentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, download.Artifact.FileName))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(download.Content)
+}
+
+func (s *Server) shareArtifact(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	artifactID := api.URLParam(r, "artifactID")
+	share, err := s.services.Artifacts.Share(r.Context(), user.ID, artifactID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, share)
 }
