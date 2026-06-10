@@ -1,6 +1,16 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import wails from "@wailsio/runtime/plugins/vite";
+import { writeFileSync } from "node:fs";
+
+function keepDistDirectory() {
+  return {
+    name: "keep-dist-directory",
+    closeBundle() {
+      writeFileSync("dist/.gitkeep", "\n");
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -10,7 +20,7 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    emptyOutDir: false,
+    emptyOutDir: true,
   },
-  plugins: [react(), wails("./bindings")],
+  plugins: [react(), wails("./bindings"), keepDistDirectory()],
 });
