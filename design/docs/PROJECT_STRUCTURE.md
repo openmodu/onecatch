@@ -6,6 +6,9 @@ Oneshot 是一个包含 Go 后端和 Wails v3 桌面端的 monorepo。后端负�
 
 ```text
 oneshot/
+  config/
+    oneshot-server.example.yaml
+
   cmd/
     oneshot-server/        # 后端 API 入口，main.go 和 wire.go 同级
 
@@ -26,7 +29,6 @@ oneshot/
     api/                   # API 层抽象，目前封装 chi router
     app/
       config/              # 配置
-      logger/              # 日志
     domain/                # 领域对象和值对象
     data/                  # 数据连接和生命周期管理
     repo/                  # 业务数据封装
@@ -36,6 +38,7 @@ oneshot/
       http/                # HTTP handler 和路由挂载
 
   pkg/
+    logger/                # Zap 日志基础封装和文件轮转
     sql/                   # MySQL/GORM 基础封装
     httpx/                 # HTTP JSON 请求/响应基础封装
     server/                # HTTP server 启动和优雅退出
@@ -174,7 +177,9 @@ desktop/oneshot/bindings
 ## 当前约束
 
 - 不提前创建纯占位目录；需要接数据库、支付、对象存储、后台任务时再新增对应目录。
+- 服务端本地配置示例放在 `config/oneshot-server.example.yaml`，真实 `config/oneshot-server.yaml` 不提交。
 - `pkg/` 只放真正通用、可被其他模块复用的基础库。
+- Zap 日志基础封装放在 `pkg/logger`，应用入口统一使用该包创建 logger。
 - MySQL/GORM 基础连接封装放在 `pkg/sql`，业务 SQL 操作仍然放在 `internal/repo`。
 - Oneshot API SDK 放在根目录 `clients/`，不放 `pkg/sdk`。
 - 桌面端通过 `clients/oneshot` 调后端 API。

@@ -2,17 +2,21 @@ package main
 
 import (
 	"embed"
-	"log"
 
 	"github.com/openmodu/oneshot/desktop/oneshot/app"
 	"github.com/openmodu/oneshot/desktop/oneshot/bindings"
+	"github.com/openmodu/oneshot/pkg/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"go.uber.org/zap"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
 
 func main() {
+	log := logger.MustNew(logger.Config{Service: "oneshot-desktop"})
+	defer logger.Sync(log)
+
 	apiClient := initializeClient()
 
 	wailsApp := application.New(application.Options{
@@ -48,6 +52,6 @@ func main() {
 	})
 
 	if err := wailsApp.Run(); err != nil {
-		log.Fatal(err)
+		log.Fatal("wails app failed", zap.Error(err))
 	}
 }

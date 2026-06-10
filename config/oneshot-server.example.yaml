@@ -1,0 +1,21 @@
+http:
+  addr: ":8080"
+
+mysql:
+  addr: "192.168.5.250:43029"
+  user: "root"
+  password: "<password>"
+  database: ""
+  # dsn: "root:<password>@tcp(192.168.5.250:43029)/oneshot?charset=utf8mb4&parseTime=true&loc=Local"
+
+logger:
+  service: "oneshot-server"
+  level: "info"
+  format: "console"
+  file: "logs/oneshot-server.log"
+  max_size_mb: 100
+  max_backups: 7
+  max_age_days: 30
+  compress: true
+  development: false
+  disable_stdout: false

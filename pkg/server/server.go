@@ -3,11 +3,12 @@ package server
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 type Config struct {
@@ -16,7 +17,7 @@ type Config struct {
 	ShutdownTimeout   time.Duration
 }
 
-func Run(ctx context.Context, log *slog.Logger, cfg Config, handler http.Handler) error {
+func Run(ctx context.Context, log *zap.Logger, cfg Config, handler http.Handler) error {
 	if cfg.ReadHeaderTimeout == 0 {
 		cfg.ReadHeaderTimeout = 5 * time.Second
 	}
@@ -32,7 +33,7 @@ func Run(ctx context.Context, log *slog.Logger, cfg Config, handler http.Handler
 
 	errCh := make(chan error, 1)
 	go func() {
-		log.Info("server listening", "addr", cfg.Addr)
+		log.Info("server listening", zap.String("addr", cfg.Addr))
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 			return
