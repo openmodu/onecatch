@@ -35,7 +35,7 @@ oneshot/
     storage/             # DB、对象存储、事务封装
   desktop/
     oneshot/             # Wails v3 桌面工程
-  prototype/             # 当前原型
+  design/prototype/             # 当前原型
 ```
 
 ## 关键领域模型

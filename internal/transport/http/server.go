@@ -1,0 +1,193 @@
+package httptransport
+
+import (
+	"net/http"
+
+	"github.com/openmodu/oneshot/internal/api"
+	"github.com/openmodu/oneshot/internal/domain/orders"
+	"github.com/openmodu/oneshot/internal/service"
+	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
+	"github.com/openmodu/oneshot/pkg/httpx"
+)
+
+type Server struct {
+	services *service.Services
+}
+
+func NewServer(services *service.Services) http.Handler {
+	server := &Server{services: services}
+	router := api.NewRouter()
+
+	router.Use(api.DefaultMiddlewares()...)
+
+	router.Get("/healthz", server.health)
+	router.Group("/api", func(router api.Router) {
+		router.Get("/me", server.currentUser)
+		router.Post("/auth/google/callback", server.loginWithGoogle)
+		router.Post("/auth/logout", server.logout)
+		router.Get("/agents", server.listAgents)
+		router.Get("/agents/{agentID}", server.getAgent)
+		router.Get("/billing/balance", server.getBalance)
+		router.Get("/billing/ledger", server.listLedger)
+		router.Post("/orders", server.createOrder)
+		router.Get("/orders", server.listOrders)
+		router.Get("/orders/{orderID}", server.getOrder)
+		router.Post("/orders/{orderID}/cancel", server.cancelOrder)
+	})
+
+	return router.Handler()
+}
+
+func (s *Server) health(w http.ResponseWriter, r *http.Request) {
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (s *Server) currentUser(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, user)
+}
+
+func (s *Server) loginWithGoogle(w http.ResponseWriter, r *http.Request) {
+	session, err := s.services.Auth.LoginWithGoogle(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, session)
+}
+
+func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
+	if err := s.services.Auth.Logout(r.Context()); err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) {
+	agents, err := s.services.Agents.List(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, agents)
+}
+
+func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) {
+	id := api.URLParam(r, "agentID")
+	agent, err := s.services.Agents.Get(r.Context(), id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, agent)
+}
+
+func (s *Server) getBalance(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	balance, err := s.services.Billing.GetBalance(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, balance)
+}
+
+func (s *Server) listLedger(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	ledger, err := s.services.Billing.ListLedger(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, ledger)
+}
+
+func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	var input struct {
+		AgentID     string             `json:"agentId"`
+		Requirement orders.Requirement `json:"requirement"`
+	}
+	if err := httpx.DecodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	order, err := s.services.Orders.Create(r.Context(), usecaseorders.CreateInput{
+		UserID:      user.ID,
+		AgentID:     input.AgentID,
+		Requirement: input.Requirement,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, order)
+}
+
+func (s *Server) listOrders(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	items, err := s.services.Orders.List(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, items)
+}
+
+func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	id := api.URLParam(r, "orderID")
+	order, err := s.services.Orders.Get(r.Context(), user.ID, id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, order)
+}
+
+func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {
+	user, err := s.services.Auth.CurrentUser(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	id := api.URLParam(r, "orderID")
+	order, err := s.services.Orders.Cancel(r.Context(), user.ID, id)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, order)
+}

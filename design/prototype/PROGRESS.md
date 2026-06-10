@@ -12,5 +12,5 @@
 - Adjustment: made the right inspector pane collapsible. Expanded state shows billing/order/delivery details; collapsed state keeps a narrow clickable detail rail.
 - Adjustment: moved authentication to the lower-left sidebar account area. The prototype now supports simulated WeChat authorization login and Google email login, with logout state handling.
 - Adjustment: made the overall visual treatment more desktop-app-like: flatter pane backgrounds, tighter toolbar, denser navigation, reduced card elevation, compact panels, and tighter workbench spacing.
-- Migration: moved prototype from `modu/docs/agent_marketplace_web` to `oneshot/prototype`.
+- Migration: moved prototype from `modu/docs/agent_marketplace_web` to `oneshot/design/prototype`.
 - Documentation: added prototype README, development rules, and Go server + Wails v3 implementation notes.

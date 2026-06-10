@@ -1,0 +1,152 @@
+package oneshot
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+)
+
+type Client interface {
+	CurrentUser(context.Context) (User, error)
+	LoginWithGoogle(context.Context) (Session, error)
+	Logout(context.Context) error
+	ListAgents(context.Context) ([]Agent, error)
+	GetAgent(context.Context, string) (Agent, error)
+	GetBalance(context.Context) (Balance, error)
+	ListLedger(context.Context) ([]LedgerEntry, error)
+	CreateOrder(context.Context, CreateOrderRequest) (Order, error)
+	ListOrders(context.Context) ([]Order, error)
+	GetOrder(context.Context, string) (Order, error)
+	CancelOrder(context.Context, string) (Order, error)
+}
+
+type HTTPClient struct {
+	baseURL    *url.URL
+	httpClient *http.Client
+}
+
+func NewHTTPClient(baseURL string) *HTTPClient {
+	parsed, err := url.Parse(strings.TrimRight(baseURL, "/"))
+	if err != nil {
+		parsed, _ = url.Parse("http://127.0.0.1:8080")
+	}
+
+	return &HTTPClient{
+		baseURL: parsed,
+		httpClient: &http.Client{
+			Timeout: 15 * time.Second,
+		},
+	}
+}
+
+func (c *HTTPClient) CurrentUser(ctx context.Context) (User, error) {
+	var out User
+	err := c.do(ctx, http.MethodGet, "/api/me", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) LoginWithGoogle(ctx context.Context) (Session, error) {
+	var out Session
+	err := c.do(ctx, http.MethodPost, "/api/auth/google/callback", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) Logout(ctx context.Context) error {
+	return c.do(ctx, http.MethodPost, "/api/auth/logout", nil, nil)
+}
+
+func (c *HTTPClient) ListAgents(ctx context.Context) ([]Agent, error) {
+	var out []Agent
+	err := c.do(ctx, http.MethodGet, "/api/agents", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) GetAgent(ctx context.Context, agentID string) (Agent, error) {
+	var out Agent
+	err := c.do(ctx, http.MethodGet, "/api/agents/"+url.PathEscape(agentID), nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) GetBalance(ctx context.Context) (Balance, error) {
+	var out Balance
+	err := c.do(ctx, http.MethodGet, "/api/billing/balance", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) ListLedger(ctx context.Context) ([]LedgerEntry, error) {
+	var out []LedgerEntry
+	err := c.do(ctx, http.MethodGet, "/api/billing/ledger", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) CreateOrder(ctx context.Context, input CreateOrderRequest) (Order, error) {
+	var out Order
+	err := c.do(ctx, http.MethodPost, "/api/orders", input, &out)
+	return out, err
+}
+
+func (c *HTTPClient) ListOrders(ctx context.Context) ([]Order, error) {
+	var out []Order
+	err := c.do(ctx, http.MethodGet, "/api/orders", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) GetOrder(ctx context.Context, orderID string) (Order, error) {
+	var out Order
+	err := c.do(ctx, http.MethodGet, "/api/orders/"+url.PathEscape(orderID), nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) CancelOrder(ctx context.Context, orderID string) (Order, error) {
+	var out Order
+	err := c.do(ctx, http.MethodPost, "/api/orders/"+url.PathEscape(orderID)+"/cancel", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) do(ctx context.Context, method string, path string, input any, output any) error {
+	endpoint := c.baseURL.ResolveReference(&url.URL{Path: path})
+
+	var body *bytes.Reader
+	if input == nil {
+		body = bytes.NewReader(nil)
+	} else {
+		payload, err := json.Marshal(input)
+		if err != nil {
+			return err
+		}
+		body = bytes.NewReader(payload)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, method, endpoint.String(), body)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Accept", "application/json")
+	if input != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		var apiErr ErrorResponse
+		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil && apiErr.Error != "" {
+			return errors.New(apiErr.Error)
+		}
+		return fmt.Errorf("oneshot api request failed: %s", resp.Status)
+	}
+	if output == nil || resp.StatusCode == http.StatusNoContent {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(output)
+}

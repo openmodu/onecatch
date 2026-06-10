@@ -33,7 +33,7 @@ npm run build
 ## 目录说明
 
 ```text
-prototype/
+design/prototype/
   src/
     App.jsx              # 单页交互原型
     styles.css           # 桌面化三段式视觉样式

@@ -1,1 +1,7 @@
-/prototype/node_modules/
+/design/prototype/node_modules/
+/design/prototype/dist/
+/design/prototype/.npm-cache/
+/desktop/oneshot/frontend/node_modules/
+/desktop/oneshot/bin/
+/desktop/oneshot/.task/
+.DS_Store

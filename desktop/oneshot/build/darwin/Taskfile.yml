@@ -1,0 +1,31 @@
+version: '3'
+
+includes:
+  common: ../Taskfile.yml
+
+tasks:
+  build:
+    deps:
+      - task: common:build:frontend
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          DEV:
+            ref: .DEV
+    cmds:
+      - go build {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"
+    vars:
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
+      OUTPUT: '{{.OUTPUT | default (printf "%s/%s" .BIN_DIR .APP_NAME)}}'
+    env:
+      GOOS: darwin
+      CGO_ENABLED: 1
+      MACOSX_DEPLOYMENT_TARGET: "12.0"
+
+  run:
+    deps:
+      - task: build
+        vars:
+          DEV: "true"
+    cmds:
+      - ./{{.BIN_DIR}}/{{.APP_NAME}}

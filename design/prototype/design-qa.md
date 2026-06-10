@@ -1,4 +1,4 @@
-source visual truth path: /Users/ityike/Code/go/src/github.com/openmodu/oneshot/prototype/src/assets/source-design-option-3.png
+source visual truth path: /Users/ityike/Code/go/src/github.com/openmodu/oneshot/design/prototype/src/assets/source-design-option-3.png
 implementation screenshot path: unavailable
 viewport: intended desktop 1440 x 1024; mobile responsive breakpoint pending capture
 state: logged-in usage-count checkout workspace
