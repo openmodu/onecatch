@@ -54,6 +54,11 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
 button:focus-visible,
 textarea:focus-visible {
   outline: 2px solid rgba(37, 99, 168, 0.34);
@@ -176,6 +181,32 @@ textarea:focus-visible {
   border-color: var(--line-strong);
   color: var(--ink);
   background: var(--surface-alt);
+}
+
+.account-user {
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface-alt);
+}
+
+.account-user strong,
+.account-user small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-user strong {
+  font-size: 13px;
+}
+
+.account-user small {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .workspace {
@@ -808,6 +839,20 @@ textarea:not([readonly]) {
 
 .file-preview small {
   color: var(--muted);
+}
+
+.toast {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 20;
+  max-width: min(360px, calc(100vw - 36px));
+  padding: 10px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(24, 32, 42, 0.14);
 }
 
 @media (max-width: 1120px) {

@@ -14,8 +14,9 @@ type User struct {
 }
 
 type Session struct {
-	Token string `json:"token"`
-	User  User   `json:"user"`
+	Token    string `json:"token"`
+	Provider string `json:"provider"`
+	User     User   `json:"user"`
 }
 
 type Agent struct {

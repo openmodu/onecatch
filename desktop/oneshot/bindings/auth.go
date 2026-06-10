@@ -2,8 +2,10 @@ package bindings
 
 import (
 	"context"
+	"errors"
 
 	oneshot "github.com/openmodu/oneshot/clients/oneshot"
+	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
 )
 
 type AuthBinding struct {
@@ -15,7 +17,15 @@ func NewAuthBinding(client oneshot.Client) *AuthBinding {
 }
 
 func (b *AuthBinding) CurrentUser() (oneshot.User, error) {
-	return b.client.CurrentUser(context.Background())
+	user, err := b.client.CurrentUser(context.Background())
+	if errors.Is(err, domainauth.ErrUnauthenticated) {
+		return oneshot.User{}, nil
+	}
+	return user, err
+}
+
+func (b *AuthBinding) LoginWithWechat() (oneshot.Session, error) {
+	return b.client.LoginWithWechat(context.Background())
 }
 
 func (b *AuthBinding) LoginWithGoogle() (oneshot.Session, error) {

@@ -29,6 +29,15 @@ export function LoginWithGoogle() {
 }
 
 /**
+ * @returns {$CancellablePromise<oneshot$0.Session>}
+ */
+export function LoginWithWechat() {
+    return $Call.ByID(2126137437).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * @returns {$CancellablePromise<void>}
  */
 export function Logout() {

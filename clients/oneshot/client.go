@@ -14,6 +14,8 @@ import (
 
 type Client interface {
 	CurrentUser(context.Context) (User, error)
+	StartWechat(context.Context) (Session, error)
+	LoginWithWechat(context.Context) (Session, error)
 	LoginWithGoogle(context.Context) (Session, error)
 	Logout(context.Context) error
 	ListAgents(context.Context) ([]Agent, error)
@@ -48,6 +50,18 @@ func NewHTTPClient(baseURL string) *HTTPClient {
 func (c *HTTPClient) CurrentUser(ctx context.Context) (User, error) {
 	var out User
 	err := c.do(ctx, http.MethodGet, "/api/me", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) StartWechat(ctx context.Context) (Session, error) {
+	var out Session
+	err := c.do(ctx, http.MethodPost, "/api/auth/wechat/start", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) LoginWithWechat(ctx context.Context) (Session, error) {
+	var out Session
+	err := c.do(ctx, http.MethodPost, "/api/auth/wechat/callback", nil, &out)
 	return out, err
 }
 

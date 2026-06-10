@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { AuthBinding } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 
 const categories = [
   { id: "all", label: "全部 Agent", icon: "A" },
@@ -120,6 +121,10 @@ function NavIcon({ children }) {
 }
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authProvider, setAuthProvider] = useState("");
+  const [authStatus, setAuthStatus] = useState("checking");
+  const [toast, setToast] = useState("");
   const [activeCategory, setActiveCategory] = useState("all");
   const [selectedAgentId, setSelectedAgentId] = useState(agents[0].id);
   const [selectedStep, setSelectedStep] = useState("扣次确认");
@@ -144,6 +149,33 @@ export default function App() {
     agents.find((agent) => agent.id === selectedAgentId) ?? agents[0];
   const selectedOrder =
     orders.find((order) => order.id === selectedOrderId) ?? orders[0];
+  const authProviderLabel = authProvider === "google" ? "Google 邮箱" : "微信";
+
+  useEffect(() => {
+    let alive = true;
+    AuthBinding.CurrentUser()
+      .then((user) => {
+        if (!alive) return;
+        if (user?.id) {
+          setCurrentUser(user);
+          setAuthProvider(window.localStorage.getItem("oneshot.authProvider") || "wechat");
+          setAuthStatus("signed-in");
+          return;
+        }
+        setCurrentUser(null);
+        setAuthProvider("");
+        setAuthStatus("signed-out");
+      })
+      .catch(() => {
+        if (!alive) return;
+        setCurrentUser(null);
+        setAuthProvider("");
+        setAuthStatus("signed-out");
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   function selectCategory(categoryId) {
     setActiveCategory(categoryId);
@@ -154,6 +186,52 @@ export default function App() {
     if (nextAgent) {
       setSelectedAgentId(nextAgent.id);
     }
+  }
+
+  function showToast(message) {
+    setToast(message);
+    window.clearTimeout(showToast.timer);
+    showToast.timer = window.setTimeout(() => setToast(""), 2200);
+  }
+
+  async function login(provider) {
+    setAuthStatus("checking");
+    try {
+      const session =
+        provider === "google"
+          ? await AuthBinding.LoginWithGoogle()
+          : await AuthBinding.LoginWithWechat();
+      setCurrentUser(session.user);
+      setAuthProvider(session.provider || provider);
+      window.localStorage.setItem("oneshot.authProvider", session.provider || provider);
+      setAuthStatus("signed-in");
+      showToast(`已通过${provider === "google" ? " Google 邮箱" : "微信"}登录`);
+    } catch (error) {
+      setAuthStatus("signed-out");
+      showToast(error?.message || "登录失败，请稍后重试");
+    }
+  }
+
+  async function logout() {
+    try {
+      await AuthBinding.Logout();
+      setCurrentUser(null);
+      setAuthProvider("");
+      window.localStorage.removeItem("oneshot.authProvider");
+      setAuthStatus("signed-out");
+      showToast("已退出登录");
+    } catch (error) {
+      showToast(error?.message || "退出登录失败");
+    }
+  }
+
+  function confirmCheckout() {
+    if (!currentUser) {
+      showToast("请先登录后再创建订单");
+      return;
+    }
+    setSelectedStep("执行中");
+    showToast("已确认扣次，订单开始执行");
   }
 
   return (
@@ -222,13 +300,38 @@ export default function App() {
         </nav>
 
         <section className="account-panel" aria-label="账号区">
-          <p>账号</p>
-          <button className="account-button" type="button">
-            微信授权登录
-          </button>
-          <button className="account-button secondary" type="button">
-            Google 邮箱登录
-          </button>
+          {currentUser ? (
+            <>
+              <p>已登录</p>
+              <div className="account-user">
+                <strong>{currentUser.displayName || currentUser.email}</strong>
+                <small>{authProviderLabel}授权已连接</small>
+              </div>
+              <button className="account-button secondary" type="button" onClick={logout}>
+                退出登录
+              </button>
+            </>
+          ) : (
+            <>
+              <p>{authStatus === "checking" ? "正在检查账号" : "登录账号"}</p>
+              <button
+                className="account-button"
+                type="button"
+                disabled={authStatus === "checking"}
+                onClick={() => login("wechat")}
+              >
+                微信授权登录
+              </button>
+              <button
+                className="account-button secondary"
+                type="button"
+                disabled={authStatus === "checking"}
+                onClick={() => login("google")}
+              >
+                Google 邮箱登录
+              </button>
+            </>
+          )}
         </section>
       </aside>
 
@@ -359,7 +462,7 @@ export default function App() {
                 <span>应付金额</span>
                 <strong>{formatMoney(selectedAgent.price)}</strong>
               </div>
-              <button className="primary-button" type="button">
+              <button className="primary-button" type="button" onClick={confirmCheckout}>
                 确认并支付
               </button>
             </section>
@@ -487,6 +590,11 @@ export default function App() {
           )}
         </div>
       </section>
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
     </main>
   );
 }

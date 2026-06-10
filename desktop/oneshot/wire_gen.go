@@ -6,14 +6,11 @@
 
 package main
 
-import (
-	"github.com/openmodu/oneshot/clients/oneshot"
-)
+import "github.com/openmodu/oneshot/clients/oneshot"
 
 // Injectors from wire.go:
 
 func initializeClient() oneshot.Client {
-	string2 := apiBaseURL()
-	httpClient := oneshot.NewHTTPClient(string2)
-	return httpClient
+	client := newDesktopClient()
+	return client
 }

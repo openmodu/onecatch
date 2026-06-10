@@ -350,6 +350,13 @@ export class Session {
              */
             this["token"] = "";
         }
+        if (!("provider" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["provider"] = "";
+        }
         if (!("user" in $$source)) {
             /**
              * @member
@@ -367,10 +374,10 @@ export class Session {
      * @returns {Session}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType2;
+        const $$createField2_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("user" in $$parsedSource) {
-            $$parsedSource["user"] = $$createField1_0($$parsedSource["user"]);
+            $$parsedSource["user"] = $$createField2_0($$parsedSource["user"]);
         }
         return new Session(/** @type {Partial<Session>} */($$parsedSource));
     }

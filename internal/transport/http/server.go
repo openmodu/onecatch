@@ -23,6 +23,8 @@ func NewServer(services *service.Services) http.Handler {
 	router.Get("/healthz", server.health)
 	router.Group("/api", func(router api.Router) {
 		router.Get("/me", server.currentUser)
+		router.Post("/auth/wechat/start", server.startWechat)
+		router.Post("/auth/wechat/callback", server.loginWithWechat)
 		router.Post("/auth/google/callback", server.loginWithGoogle)
 		router.Post("/auth/logout", server.logout)
 		router.Get("/agents", server.listAgents)
@@ -49,6 +51,24 @@ func (s *Server) currentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, user)
+}
+
+func (s *Server) startWechat(w http.ResponseWriter, r *http.Request) {
+	session, err := s.services.Auth.StartWechat(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, session)
+}
+
+func (s *Server) loginWithWechat(w http.ResponseWriter, r *http.Request) {
+	session, err := s.services.Auth.LoginWithWechat(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, session)
 }
 
 func (s *Server) loginWithGoogle(w http.ResponseWriter, r *http.Request) {

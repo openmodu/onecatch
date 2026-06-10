@@ -9,9 +9,7 @@ import (
 
 func initializeClient() oneshot.Client {
 	wire.Build(
-		apiBaseURL,
-		oneshot.NewHTTPClient,
-		wire.Bind(new(oneshot.Client), new(*oneshot.HTTPClient)),
+		newDesktopClient,
 	)
 	return nil
 }
