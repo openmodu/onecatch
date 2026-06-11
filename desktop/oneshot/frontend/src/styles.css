@@ -1,21 +1,23 @@
 :root {
   color-scheme: light;
-  --bg: #f3f4f4;
-  --sidebar: #fbfbfa;
-  --surface: #ffffff;
-  --surface-alt: #f6f6f4;
-  --line: #dedede;
-  --line-strong: #c7c8c8;
-  --ink: #1d2127;
-  --muted: #69717d;
-  --subtle: #8b929b;
-  --blue: #2b3440;
-  --blue-soft: #eceef0;
-  --green: #51645b;
-  --green-soft: #edf1ee;
-  --amber: #8a643d;
-  --amber-soft: #f1e8dc;
-  --danger: #9d423d;
+  --bg: #f7f3ea;
+  --sidebar: #eee7dc;
+  --surface: #fbf8f1;
+  --surface-alt: #f2ece2;
+  --surface-raised: #fffdf8;
+  --line: #ddd0bf;
+  --line-strong: #c8b8a4;
+  --ink: #26231e;
+  --muted: #6f665b;
+  --subtle: #948878;
+  --accent: #c45f3d;
+  --accent-strong: #9f4b31;
+  --accent-soft: #f3dfd4;
+  --olive: #6f7351;
+  --olive-soft: #e7e4d1;
+  --amber: #9a6a3d;
+  --amber-soft: #efe1c9;
+  --danger: #a14435;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
     "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
@@ -61,7 +63,7 @@ button:disabled {
 
 button:focus-visible,
 textarea:focus-visible {
-  outline: 2px solid rgba(43, 52, 64, 0.28);
+  outline: 2px solid rgba(196, 95, 61, 0.3);
   outline-offset: 2px;
 }
 
@@ -93,6 +95,7 @@ textarea:focus-visible {
   font-size: 17px;
   font-weight: 760;
   letter-spacing: 0;
+  color: var(--ink);
 }
 
 .brand span {
@@ -130,7 +133,7 @@ textarea:focus-visible {
 .nav-item:hover,
 .nav-item.is-active,
 .nav-item.is-selected {
-  background: var(--blue-soft);
+  background: rgba(251, 248, 241, 0.74);
   color: var(--ink);
 }
 
@@ -140,7 +143,7 @@ textarea:focus-visible {
 
 .nav-item.is-active,
 .nav-item.is-selected {
-  box-shadow: inset 3px 0 0 var(--blue);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .nav-icon {
@@ -152,7 +155,7 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   border-radius: 6px;
   color: var(--muted);
-  background: var(--surface);
+  background: rgba(255, 253, 248, 0.72);
   font-size: 11px;
   font-weight: 760;
 }
@@ -164,7 +167,7 @@ textarea:focus-visible {
   padding: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: rgba(255, 253, 248, 0.7);
 }
 
 .account-panel p {
@@ -176,10 +179,10 @@ textarea:focus-visible {
 .account-button {
   min-height: 32px;
   padding: 6px 10px;
-  border: 1px solid var(--blue);
+  border: 1px solid var(--accent-strong);
   border-radius: 7px;
   color: #ffffff;
-  background: var(--blue);
+  background: var(--accent);
 }
 
 .account-button.secondary {
@@ -230,7 +233,7 @@ textarea:focus-visible {
   height: 46px;
   padding: 0 16px;
   border-bottom: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(251, 248, 241, 0.82);
   backdrop-filter: blur(12px);
 }
 
@@ -258,7 +261,7 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   border-radius: 50%;
   color: var(--ink);
-  background: var(--surface);
+  background: var(--surface-raised);
   font-size: 11px;
   font-weight: 780;
 }
@@ -293,7 +296,7 @@ textarea:focus-visible {
 .inspector {
   padding: 14px;
   border-left: 1px solid var(--line);
-  background: #f4f4f3;
+  background: #f1ebe1;
 }
 
 .agent-summary,
@@ -303,7 +306,7 @@ textarea:focus-visible {
 .inspector-card {
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--surface-raised);
 }
 
 .agent-summary {
@@ -321,8 +324,8 @@ textarea:focus-visible {
   height: 52px;
   place-items: center;
   border-radius: 50%;
-  color: #ffffff;
-  background: var(--blue);
+  color: #fffaf1;
+  background: linear-gradient(145deg, var(--accent), #7b5f42);
   font-size: 20px;
   font-weight: 760;
 }
@@ -353,8 +356,8 @@ textarea:focus-visible {
   flex: 0 0 auto;
   padding: 3px 8px;
   border-radius: 999px;
-  color: var(--blue);
-  background: var(--blue-soft);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
   font-size: 12px;
 }
 
@@ -415,7 +418,7 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   border-radius: 8px;
   color: var(--ink);
-  background: var(--surface);
+  background: var(--surface-raised);
   text-align: left;
 }
 
@@ -433,12 +436,12 @@ textarea:focus-visible {
 
 .agent-chip:hover,
 .agent-chip.is-selected {
-  border-color: var(--blue);
-  background: var(--blue-soft);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .agent-chip.is-selected {
-  box-shadow: inset 0 -2px 0 var(--blue);
+  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .empty-strip {
@@ -460,7 +463,7 @@ textarea:focus-visible {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--surface-raised);
 }
 
 .step-tabs button {
@@ -489,8 +492,8 @@ textarea:focus-visible {
 }
 
 .step-tabs button.is-selected {
-  color: var(--blue);
-  border-bottom-color: var(--blue);
+  color: var(--accent-strong);
+  border-bottom-color: var(--accent);
   font-weight: 720;
 }
 
@@ -529,7 +532,7 @@ textarea:focus-visible {
   border: 1px solid var(--line);
   border-radius: 7px;
   color: var(--ink);
-  background: var(--surface-alt);
+  background: rgba(242, 236, 226, 0.82);
 }
 
 textarea {
@@ -572,7 +575,7 @@ textarea:not([readonly]) {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: var(--blue);
+  background: var(--olive);
   content: "";
 }
 
@@ -595,10 +598,10 @@ textarea:not([readonly]) {
 .outline-button {
   min-height: 32px;
   padding: 6px 12px;
-  border: 1px solid var(--blue);
+  border: 1px solid var(--accent);
   border-radius: 7px;
-  color: var(--blue);
-  background: var(--surface);
+  color: var(--accent-strong);
+  background: var(--surface-raised);
 }
 
 .checkout-bar {
@@ -630,7 +633,7 @@ textarea:not([readonly]) {
   padding: 0 14px;
   border-radius: 7px;
   color: #ffffff;
-  background: var(--blue);
+  background: var(--accent);
   font-weight: 760;
 }
 
@@ -672,8 +675,8 @@ textarea:not([readonly]) {
 }
 
 .timeline-row.done .timeline-dot {
-  border-color: var(--blue);
-  background: var(--blue);
+  border-color: var(--olive);
+  background: var(--olive);
 }
 
 .timeline-row.current .timeline-dot {
@@ -702,7 +705,7 @@ textarea:not([readonly]) {
 }
 
 .inspector-toggle:hover {
-  background: var(--blue-soft);
+  background: var(--accent-soft);
 }
 
 .inspector-peek {
@@ -716,7 +719,7 @@ textarea:not([readonly]) {
   padding: 18px 8px;
   border-left: 1px solid var(--line);
   color: var(--ink);
-  background: #f4f4f3;
+  background: #f1ebe1;
 }
 
 .inspector-peek span {
@@ -731,7 +734,7 @@ textarea:not([readonly]) {
 }
 
 .inspector-peek:hover {
-  background: var(--blue-soft);
+  background: var(--accent-soft);
 }
 
 .inspector-card {
@@ -750,7 +753,7 @@ textarea:not([readonly]) {
   min-width: 0;
   padding: 12px;
   border-radius: 8px;
-  background: var(--surface-alt);
+  background: rgba(242, 236, 226, 0.74);
 }
 
 .usage-grid span,
@@ -788,8 +791,8 @@ textarea:not([readonly]) {
 
 .record-list button:hover,
 .record-list button.is-selected {
-  border-color: var(--blue);
-  background: var(--blue-soft);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .record-list span,
@@ -846,8 +849,8 @@ textarea:not([readonly]) {
   border: 1px solid var(--line);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(43, 52, 64, 0.08), transparent 52%),
-    linear-gradient(45deg, rgba(138, 100, 61, 0.1), transparent 54%),
+    linear-gradient(135deg, rgba(196, 95, 61, 0.12), transparent 52%),
+    linear-gradient(45deg, rgba(111, 115, 81, 0.12), transparent 54%),
     var(--surface-alt);
 }
 
