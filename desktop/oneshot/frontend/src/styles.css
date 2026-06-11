@@ -80,7 +80,7 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  padding: 14px 10px 12px;
+  padding: 52px 10px 12px;
   border-right: 1px solid var(--line);
   background: var(--sidebar);
 }
@@ -1099,6 +1099,7 @@ dd {
     display: grid;
     grid-template-columns: auto 1fr;
     gap: 10px;
+    padding: 12px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }

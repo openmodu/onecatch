@@ -117,6 +117,7 @@
 - 已修复视觉 QA 中发现的两处布局问题：
   - Agent 快捷切换条父容器高度塌陷。
   - Inspector 展开态流程 Tab 高度塌陷、主按钮被右栏裁切。
+- 已修复 macOS 原生窗口控制点覆盖左侧品牌区的问题：左侧 sidebar 顶部保留 traffic-light 安全区，移动端布局恢复普通内边距。
 - 验证结果：
   - `cd desktop/oneshot/frontend && npm run build` 通过。
   - `go test ./...` 通过。
