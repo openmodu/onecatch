@@ -7,29 +7,145 @@ import {
   OrderBinding,
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 
-const sections = [
-  { id: "agents", label: "Agent", icon: "A" },
-  { id: "orders", label: "订单", icon: "O" },
-  { id: "account", label: "账户", icon: "U" },
+const navigation = [
+  { id: "workbench", label: "工作台", icon: "W" },
+  { id: "orders", label: "我的订单", icon: "O" },
+  { id: "billing", label: "用量账单", icon: "U" },
+  { id: "account", label: "账户", icon: "A" },
 ];
 
 const categories = [
-  { id: "all", label: "全部" },
-  { id: "content", label: "内容" },
-  { id: "data", label: "数据" },
-  { id: "marketing", label: "营销" },
-  { id: "design", label: "设计" },
-  { id: "dev", label: "开发" },
-  { id: "office", label: "办公" },
-  { id: "research", label: "研究" },
+  { id: "all", label: "全部 Agent" },
+  { id: "content", label: "内容创作" },
+  { id: "data", label: "数据分析" },
+  { id: "marketing", label: "市场营销" },
+  { id: "design", label: "设计创意" },
+  { id: "dev", label: "开发与技术" },
+  { id: "office", label: "办公效率" },
+  { id: "research", label: "行业研究" },
 ];
 
 const orderFilters = [
-  { id: "", label: "全部" },
+  { id: "", label: "全部订单" },
+  { id: "pending_payment", label: "待支付" },
   { id: "running", label: "执行中" },
   { id: "delivered", label: "已交付" },
-  { id: "pending_payment", label: "待支付" },
 ];
+
+const workflowSteps = [
+  { id: "details", label: "Agent 详情" },
+  { id: "requirement", label: "需求填写" },
+  { id: "checkout", label: "扣次确认" },
+  { id: "running", label: "执行中" },
+  { id: "artifact", label: "交付物" },
+];
+
+const fallbackAgents = [
+  {
+    id: "research-analyst",
+    name: "行业研究分析师",
+    category: "research",
+    tags: ["专家", "竞品分析", "趋势洞察"],
+    description: "深度行业研究与竞品洞察，输出结构化分析报告。",
+    priceUses: 1,
+    priceCents: 1990,
+    rating: "4.9",
+    dealCount: 1268,
+    estimatedDuration: "2-4 小时",
+    deliverable: "市场规模、竞争格局、趋势洞察、机会清单",
+    artifactTypes: ["PDF 报告"],
+  },
+  {
+    id: "content-growth",
+    name: "内容增长写手",
+    category: "content",
+    tags: ["热门", "内容运营", "短视频脚本"],
+    description: "生成公众号、朋友圈、短视频脚本与产品文案。",
+    priceUses: 1,
+    priceCents: 880,
+    rating: "4.8",
+    dealCount: 3420,
+    estimatedDuration: "30-60 分钟",
+    deliverable: "标题方向、正文、分发建议",
+    artifactTypes: ["PDF 报告", "Markdown 文案"],
+  },
+  {
+    id: "business-data",
+    name: "经营数据分析师",
+    category: "data",
+    tags: ["企业", "指标拆解", "异常诊断"],
+    description: "处理经营数据，定位异常波动并输出业务建议。",
+    priceUses: 1,
+    priceCents: 1560,
+    rating: "4.7",
+    dealCount: 986,
+    estimatedDuration: "1-2 小时",
+    deliverable: "指标拆解、异常解释、改进建议",
+    artifactTypes: ["PDF 报告", "CSV 摘要"],
+  },
+  {
+    id: "launch-planner",
+    name: "新品上市策划",
+    category: "marketing",
+    tags: ["增长", "营销节奏", "渠道策略"],
+    description: "为新品制定目标客群、渠道节奏与首轮推广方案。",
+    priceUses: 1,
+    priceCents: 1290,
+    rating: "4.8",
+    dealCount: 2104,
+    estimatedDuration: "1 小时",
+    deliverable: "人群画像、卖点主张、投放节奏",
+    artifactTypes: ["PDF 报告"],
+  },
+];
+
+const fallbackOrders = [
+  {
+    id: "ORD20260610001029",
+    agentName: "行业研究分析师",
+    requirement: {
+      prompt:
+        "请帮我完成 2026 年中国 AI Agent 服务市场研究，包括市场规模、主要玩家、收费模式、增长机会和进入建议。",
+    },
+    status: "running",
+    usageCost: 1,
+    amountCents: 1990,
+    estimatedCompletionAt: "2026-06-10T12:30:00+08:00",
+    createdAt: "2026-06-10T10:30:00+08:00",
+    progress: [
+      { key: "submitted", label: "需求已提交", state: "done", timestamp: "2026-06-10T10:30:00+08:00" },
+      { key: "checkout", label: "扣次确认", state: "done", timestamp: "2026-06-10T10:31:00+08:00" },
+      { key: "running", label: "执行中", state: "current", timestamp: "2026-06-10T10:32:00+08:00" },
+      { key: "delivering", label: "交付物生成中", state: "next" },
+      { key: "delivered", label: "已交付", state: "next" },
+    ],
+  },
+  {
+    id: "ORD20260609000988",
+    agentName: "经营数据分析师",
+    requirement: { prompt: "竞品分析报告" },
+    status: "delivered",
+    usageCost: 1,
+    amountCents: 1560,
+    estimatedCompletionAt: "2026-06-09T17:36:00+08:00",
+    createdAt: "2026-06-09T16:24:00+08:00",
+    progress: [],
+  },
+];
+
+const fallbackArtifacts = [
+  {
+    id: "artifact-demo",
+    fileName: "2026年中国AI Agent服务市场研究报告.pdf",
+    fileType: "PDF",
+    sizeBytes: 2457600,
+    preview: "市场规模、竞争格局、趋势洞察、机会清单",
+  },
+];
+
+function canUseFallback() {
+  return import.meta.env.DEV && typeof window !== "undefined" && !window.__ONESOT_DISABLE_FIXTURE__;
+}
 
 function formatMoney(cents) {
   return `¥ ${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -65,20 +181,21 @@ function statusLabel(status) {
   return labels[status] || "待确认";
 }
 
-function NavIcon({ children }) {
-  return (
-    <span className="nav-icon" aria-hidden="true">
-      {children}
-    </span>
-  );
+function ledgerLabel(type) {
+  const labels = {
+    purchase: "购买次数",
+    debit: "执行扣次",
+    refund: "退回次数",
+  };
+  return labels[type] || "用量变动";
 }
 
 function SegmentControl({ items, value, onChange, label }) {
   return (
-    <div className="segment-control" aria-label={label}>
+    <div className="segmented" aria-label={label}>
       {items.map((item) => (
         <button
-          className={value === item.id ? "is-selected" : ""}
+          className={value === item.id ? "selected" : ""}
           key={item.id}
           type="button"
           onClick={() => onChange(item.id)}
@@ -96,16 +213,18 @@ export default function App() {
   const [ledger, setLedger] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
   const [artifacts, setArtifacts] = useState([]);
-  const [agentStatus, setAgentStatus] = useState("loading");
   const [currentUser, setCurrentUser] = useState(null);
   const [authProvider, setAuthProvider] = useState("");
   const [authStatus, setAuthStatus] = useState("checking");
+  const [agentStatus, setAgentStatus] = useState("loading");
   const [toast, setToast] = useState("");
-  const [activeSection, setActiveSection] = useState("agents");
+  const [activeView, setActiveView] = useState("workbench");
   const [activeCategory, setActiveCategory] = useState("all");
   const [selectedAgentId, setSelectedAgentId] = useState("");
+  const [selectedStep, setSelectedStep] = useState("checkout");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [orderFilter, setOrderFilter] = useState("");
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [requirement, setRequirement] = useState(
     "请帮我完成 2026 年中国 AI Agent 服务市场研究，包括市场规模、主要玩家、收费模式、增长机会和进入建议。",
   );
@@ -119,18 +238,20 @@ export default function App() {
     agents.find((agent) => agent.id === selectedAgentId) ?? visibleAgents[0] ?? null;
   const selectedOrder =
     userOrders.find((order) => order.id === selectedOrderId) ?? userOrders[0] ?? null;
-  const authProviderLabel = authProvider === "google" ? "Google 邮箱" : "微信";
   const currentBalance = balance?.remaining ?? 0;
-  const recentLedger = ledger.slice(-6).reverse();
-  const currentTimeline =
+  const authProviderLabel = authProvider === "google" ? "Google 邮箱" : "微信";
+  const recentLedger = ledger.slice(-5).reverse();
+  const inspectorArtifacts =
+    artifacts.length > 0 || selectedOrder?.status !== "delivered" ? artifacts : fallbackArtifacts;
+  const timeline =
     selectedOrder?.progress?.length > 0
       ? selectedOrder.progress
       : [
-          { state: "next", label: "需求已提交", timestamp: null },
-          { state: "next", label: "扣次确认", timestamp: null },
-          { state: "next", label: "执行中", timestamp: null },
-          { state: "next", label: "交付物生成中", timestamp: null },
-          { state: "next", label: "已交付", timestamp: null },
+          { key: "submitted", label: "需求已提交", state: selectedOrder ? "done" : "next" },
+          { key: "checkout", label: "扣次确认", state: selectedOrder ? "done" : "current" },
+          { key: "running", label: "执行中", state: selectedOrder?.status === "running" ? "current" : "next" },
+          { key: "delivering", label: "交付物生成中", state: selectedOrder?.status === "delivering" ? "current" : "next" },
+          { key: "delivered", label: "已交付", state: selectedOrder?.status === "delivered" ? "done" : "next" },
         ];
 
   useEffect(() => {
@@ -147,6 +268,14 @@ export default function App() {
       })
       .catch((error) => {
         if (!alive) return;
+        if (canUseFallback()) {
+          setAgents(fallbackAgents);
+          setSelectedAgentId((current) =>
+            fallbackAgents.some((agent) => agent.id === current) ? current : fallbackAgents[0].id,
+          );
+          setAgentStatus("fixture");
+          return;
+        }
         setAgents([]);
         setSelectedAgentId("");
         setAgentStatus("failed");
@@ -156,41 +285,6 @@ export default function App() {
       alive = false;
     };
   }, []);
-
-  useEffect(() => {
-    if (!currentUser?.id) {
-      setBalance(null);
-      setLedger([]);
-      setUserOrders([]);
-      setSelectedOrderId("");
-      setArtifacts([]);
-      return undefined;
-    }
-    refreshBilling();
-    refreshOrders(orderFilter);
-    const timer = window.setInterval(() => refreshOrders(orderFilter), 2000);
-    return () => window.clearInterval(timer);
-  }, [currentUser?.id, orderFilter]);
-
-  useEffect(() => {
-    let alive = true;
-    if (!selectedOrder?.id || selectedOrder.status !== "delivered") {
-      setArtifacts([]);
-      return undefined;
-    }
-    ArtifactBinding.ListArtifacts(selectedOrder.id)
-      .then((items) => {
-        if (!alive) return;
-        setArtifacts(Array.isArray(items) ? items : []);
-      })
-      .catch(() => {
-        if (!alive) return;
-        setArtifacts([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [selectedOrder?.id, selectedOrder?.status]);
 
   useEffect(() => {
     let alive = true;
@@ -212,11 +306,57 @@ export default function App() {
         setCurrentUser(null);
         setAuthProvider("");
         setAuthStatus("signed-out");
+        if (canUseFallback()) {
+          setBalance({ remaining: 12 });
+          setLedger([
+            { id: "ledger-demo-1", type: "purchase", delta: 10, balanceAfter: 12, createdAt: "2026-06-10T09:00:00+08:00" },
+            { id: "ledger-demo-2", type: "debit", delta: -1, balanceAfter: 11, createdAt: "2026-06-10T10:31:00+08:00" },
+          ]);
+          setUserOrders(fallbackOrders);
+          setSelectedOrderId(fallbackOrders[0].id);
+        }
       });
     return () => {
       alive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!currentUser?.id) {
+      if (!canUseFallback()) {
+        setBalance(null);
+        setLedger([]);
+        setUserOrders([]);
+        setSelectedOrderId("");
+        setArtifacts([]);
+      }
+      return undefined;
+    }
+    refreshBilling();
+    refreshOrders(orderFilter);
+    const timer = window.setInterval(() => refreshOrders(orderFilter), 2000);
+    return () => window.clearInterval(timer);
+  }, [currentUser?.id, orderFilter]);
+
+  useEffect(() => {
+    let alive = true;
+    if (!selectedOrder?.id || selectedOrder.status !== "delivered") {
+      setArtifacts([]);
+      return undefined;
+    }
+    ArtifactBinding.ListArtifacts(selectedOrder.id)
+      .then((items) => {
+        if (!alive) return;
+        setArtifacts(Array.isArray(items) ? items : []);
+      })
+      .catch(() => {
+        if (!alive) return;
+        setArtifacts(canUseFallback() ? fallbackArtifacts : []);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [selectedOrder?.id, selectedOrder?.status]);
 
   function showToast(message) {
     setToast(message);
@@ -233,6 +373,7 @@ export default function App() {
       setBalance(nextBalance);
       setLedger(Array.isArray(nextLedger) ? nextLedger : []);
     } catch (error) {
+      if (canUseFallback()) return;
       showToast(error?.message || "用量信息加载失败");
     }
   }
@@ -246,6 +387,7 @@ export default function App() {
         nextOrders.some((order) => order.id === current) ? current : nextOrders[0]?.id || "",
       );
     } catch (error) {
+      if (canUseFallback()) return;
       showToast(error?.message || "订单列表加载失败");
     }
   }
@@ -264,6 +406,22 @@ export default function App() {
       await Promise.all([refreshBilling(), refreshOrders(orderFilter)]);
       showToast(`已通过${provider === "google" ? " Google 邮箱" : "微信"}登录`);
     } catch (error) {
+      if (canUseFallback()) {
+        const fixtureUser = {
+          id: "local-preview-user",
+          displayName: provider === "google" ? "Google 邮箱用户" : "微信用户",
+          email: provider === "google" ? "preview@oneshot.local" : "",
+        };
+        setCurrentUser(fixtureUser);
+        setAuthProvider(provider);
+        window.localStorage.setItem("oneshot.authProvider", provider);
+        setAuthStatus("signed-in");
+        setBalance({ remaining: 12 });
+        setUserOrders(fallbackOrders);
+        setSelectedOrderId(fallbackOrders[0].id);
+        showToast("已进入本地预览登录态");
+        return;
+      }
       setAuthStatus("signed-out");
       showToast(error?.message || "登录失败，请稍后重试");
     }
@@ -278,14 +436,22 @@ export default function App() {
       setAuthStatus("signed-out");
       showToast("已退出登录");
     } catch (error) {
+      if (canUseFallback()) {
+        setCurrentUser(null);
+        setAuthProvider("");
+        window.localStorage.removeItem("oneshot.authProvider");
+        setAuthStatus("signed-out");
+        showToast("已退出本地预览登录态");
+        return;
+      }
       showToast(error?.message || "退出登录失败");
     }
   }
 
   async function buyUses() {
-    if (!currentUser) {
+    if (!currentUser && !canUseFallback()) {
       showToast("请先登录后再购买次数");
-      setActiveSection("account");
+      setActiveView("account");
       return;
     }
     try {
@@ -293,6 +459,21 @@ export default function App() {
       await refreshBilling();
       showToast("已购买 10 次");
     } catch (error) {
+      if (canUseFallback()) {
+        setBalance((value) => ({ remaining: (value?.remaining ?? 12) + 10 }));
+        setLedger((items) => [
+          ...items,
+          {
+            id: `ledger-${Date.now()}`,
+            type: "purchase",
+            delta: 10,
+            balanceAfter: (balance?.remaining ?? 12) + 10,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+        showToast("本地预览已增加 10 次");
+        return;
+      }
       showToast(error?.message || "购买次数失败");
     }
   }
@@ -302,13 +483,14 @@ export default function App() {
       showToast("请先选择可用 Agent");
       return;
     }
-    if (!currentUser) {
+    if (!currentUser && !canUseFallback()) {
       showToast("请先登录后再创建订单");
-      setActiveSection("account");
+      setActiveView("account");
       return;
     }
     if (!requirement.trim()) {
       showToast("请先填写任务需求");
+      setSelectedStep("requirement");
       return;
     }
     try {
@@ -317,11 +499,35 @@ export default function App() {
         requirement: { prompt: requirement },
       });
       setSelectedOrderId(order.id);
-      setActiveSection("orders");
-      setOrderFilter("");
+      setSelectedStep("running");
       await Promise.all([refreshBilling(), refreshOrders("")]);
       showToast("已开始执行");
     } catch (error) {
+      if (canUseFallback()) {
+        const order = {
+          id: `ORD${Date.now().toString().slice(-12)}`,
+          agentName: selectedAgent.name,
+          requirement: { prompt: requirement },
+          status: "running",
+          usageCost: selectedAgent.priceUses || 1,
+          amountCents: selectedAgent.priceCents,
+          estimatedCompletionAt: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+          createdAt: new Date().toISOString(),
+          progress: [
+            { key: "submitted", label: "需求已提交", state: "done", timestamp: new Date().toISOString() },
+            { key: "checkout", label: "扣次确认", state: "done", timestamp: new Date().toISOString() },
+            { key: "running", label: "执行中", state: "current", timestamp: new Date().toISOString() },
+            { key: "delivering", label: "交付物生成中", state: "next" },
+            { key: "delivered", label: "已交付", state: "next" },
+          ],
+        };
+        setUserOrders((items) => [order, ...items]);
+        setSelectedOrderId(order.id);
+        setSelectedStep("running");
+        setBalance((value) => ({ remaining: Math.max(0, (value?.remaining ?? 12) - 1) }));
+        showToast("本地预览已开始执行");
+        return;
+      }
       showToast(error?.message || "创建订单失败");
     }
   }
@@ -343,8 +549,12 @@ export default function App() {
       if (download.filePath) {
         await ArtifactBinding.ShowInFolder(download.filePath);
       }
-      showToast(`已下载到 ${download.filePath}`);
+      showToast(download.filePath ? `已下载到 ${download.filePath}` : "已下载交付物");
     } catch (error) {
+      if (canUseFallback()) {
+        showToast("本地预览已模拟下载");
+        return;
+      }
       showToast(error?.message || "下载失败");
     }
   }
@@ -355,305 +565,495 @@ export default function App() {
       await navigator.clipboard?.writeText?.(share.url);
       showToast("分享链接已生成");
     } catch (error) {
+      if (canUseFallback()) {
+        showToast("本地预览已模拟分享");
+        return;
+      }
       showToast(error?.message || "分享失败");
     }
   }
 
-  function renderMiddlePane() {
-    if (activeSection === "orders") {
-      return (
-        <>
-          <header className="pane-header">
-            <p>我的订单</p>
-            <h1>执行记录</h1>
-          </header>
-          <SegmentControl
-            items={orderFilters}
-            label="订单状态筛选"
-            value={orderFilter}
-            onChange={setOrderFilter}
-          />
-          <div className="item-list">
-            {userOrders.length > 0 ? userOrders.map((order) => (
-              <button
-                className={`list-item ${selectedOrder?.id === order.id ? "is-selected" : ""}`}
-                key={order.id}
-                type="button"
-                onClick={() => setSelectedOrderId(order.id)}
-              >
-                <span>
-                  <strong>{order.requirement?.prompt || "本次任务"}</strong>
-                  <small>{order.agentName || "Agent"} · {statusLabel(order.status)}</small>
-                </span>
-                <em>{formatDateTime(order.createdAt)}</em>
-              </button>
-            )) : (
-              <div className="empty-state">暂无订单</div>
-            )}
-          </div>
-        </>
-      );
-    }
+  function chooseAgent(agent) {
+    setSelectedAgentId(agent.id);
+    setSelectedStep("details");
+    setActiveView("workbench");
+  }
 
-    if (activeSection === "account") {
+  function chooseOrder(order) {
+    setSelectedOrderId(order.id);
+    setActiveView("orders");
+  }
+
+  function renderWorkbench() {
+    if (!selectedAgent) {
       return (
-        <>
-          <header className="pane-header">
-            <p>账户</p>
-            <h1>{currentUser ? "账户与用量" : "登录账户"}</h1>
-          </header>
-          <div className="account-summary-list">
-            <button className="list-item is-selected" type="button">
-              <span>
-                <strong>{currentUser?.displayName || currentUser?.email || "未登录"}</strong>
-                <small>{currentUser ? `${authProviderLabel}授权已连接` : "登录后可创建订单和查看交付物"}</small>
-              </span>
-            </button>
-            <button className="list-item" type="button" onClick={buyUses}>
-              <span>
-                <strong>{currentBalance} 次可用</strong>
-                <small>购买 10 次使用额度</small>
-              </span>
-            </button>
-          </div>
-        </>
+        <section className="empty-panel">
+          {agentStatus === "loading" ? "正在加载 Agent 目录" : "该分类暂无可用 Agent"}
+        </section>
       );
     }
 
     return (
-      <>
-        <header className="pane-header">
-          <p>Agent 市场</p>
-          <h1>选择一个服务</h1>
-        </header>
+      <section className="main-column">
+        <section className="agent-hero">
+          <div className="agent-mark" aria-hidden="true">
+            {selectedAgent.name?.slice(0, 1) || "A"}
+          </div>
+          <div className="agent-copy">
+            <div className="title-line">
+              <h1>{selectedAgent.name}</h1>
+              <span>{selectedAgent.tags?.[0] || "Agent"}</span>
+            </div>
+            <p>{selectedAgent.description}</p>
+            <div className="meta-row">
+              <strong>评分 {selectedAgent.rating || "-"}</strong>
+              <span>成交 {formatDealCount(selectedAgent.dealCount)} 次</span>
+              <span>平均交付 {selectedAgent.estimatedDuration || "待确认"}</span>
+            </div>
+          </div>
+          <div className="price-box">
+            <span>单次价格</span>
+            <strong>{formatMoney(selectedAgent.priceCents)}</strong>
+            <small>/ 次</small>
+          </div>
+        </section>
+
         <SegmentControl
           items={categories}
           label="Agent 分类"
           value={activeCategory}
           onChange={setActiveCategory}
         />
-        <div className="item-list">
-          {visibleAgents.length > 0 ? visibleAgents.map((agent) => (
+
+        <div className="agent-strip" aria-label="Agent 快捷切换">
+          {visibleAgents.map((agent) => (
             <button
-              className={`list-item agent-list-item ${selectedAgent?.id === agent.id ? "is-selected" : ""}`}
+              className={selectedAgent.id === agent.id ? "selected" : ""}
               key={agent.id}
               type="button"
-              onClick={() => setSelectedAgentId(agent.id)}
+              onClick={() => chooseAgent(agent)}
             >
-              <span>
-                <strong>{agent.name}</strong>
-                <small>{agent.description}</small>
-              </span>
+              <span>{agent.name.slice(0, 1)}</span>
+              <strong>{agent.name}</strong>
               <em>{formatMoney(agent.priceCents)}</em>
             </button>
-          )) : (
-            <div className="empty-state">
-              {agentStatus === "loading" ? "正在加载 Agent" : "该分类暂无 Agent"}
-            </div>
-          )}
+          ))}
         </div>
-      </>
-    );
-  }
 
-  function renderDetailPane() {
-    if (activeSection === "orders") {
-      return (
-        <section className="detail-panel">
-          <header className="detail-toolbar">
-            <div>
-              <p>订单详情</p>
-              <h2>{selectedOrder?.agentName || "选择一个订单"}</h2>
+        <div className="flow-tabs" role="tablist" aria-label="任务流程">
+          {workflowSteps.map((step, index) => (
+            <button
+              className={selectedStep === step.id ? "selected" : ""}
+              key={step.id}
+              type="button"
+              onClick={() => setSelectedStep(step.id)}
+            >
+              <span>{index + 1}</span>
+              {step.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="brief-grid">
+          <section className="panel requirement-panel">
+            <div className="panel-title">
+              <h2>{selectedStep === "requirement" ? "编辑需求" : "需求摘要"}</h2>
+              <button type="button" onClick={() => setSelectedStep("requirement")}>
+                编辑需求
+              </button>
             </div>
+            <textarea
+              aria-label="任务需求"
+              onChange={(event) => setRequirement(event.target.value)}
+              readOnly={selectedStep !== "requirement"}
+              value={requirement}
+            />
+          </section>
+
+          <section className="panel checklist-panel">
+            <h2>扣次说明</h2>
+            <ul>
+              <li>本次执行扣减 {selectedAgent.priceUses || 1} 次</li>
+              <li>单次独立交付，仅针对本次需求</li>
+              <li>开始执行后进入订单进度流转</li>
+            </ul>
+            <button className="soft-button" type="button" onClick={() => setSelectedStep("running")}>
+              查看执行状态
+            </button>
+          </section>
+
+          <section className="panel balance-panel">
+            <h2>当前余额</h2>
+            <div className="balance-number">
+              <strong>{currentBalance}</strong>
+              <span>次</span>
+            </div>
+            <button className="outline-button" type="button" onClick={buyUses}>
+              购买次数
+            </button>
+          </section>
+        </div>
+
+        <section className="checkout-panel">
+          <div className="calc-row">
+            <span>本次扣减</span>
+            <strong>{selectedAgent.priceUses || 1} 次</strong>
+          </div>
+          <div className="calc-row">
+            <span>单次价格</span>
+            <strong>{formatMoney(selectedAgent.priceCents)}</strong>
+          </div>
+          <div className="calc-row due">
+            <span>应付金额</span>
+            <strong>{formatMoney(selectedAgent.priceCents)}</strong>
+          </div>
+          <button className="primary-button" type="button" onClick={confirmCheckout}>
+            确认并支付
+          </button>
+        </section>
+
+        <section className="progress-panel">
+          <div className="panel-title">
+            <h2>执行进度</h2>
             {selectedOrder?.status === "running" && (
-              <button className="ghost-button" type="button" onClick={cancelSelectedOrder}>
+              <button type="button" onClick={cancelSelectedOrder}>
                 取消订单
               </button>
             )}
-          </header>
-
-          {selectedOrder ? (
-            <>
-              <div className="detail-card status-card">
-                <span>{statusLabel(selectedOrder.status)}</span>
-                <strong>{selectedOrder.requirement?.prompt || "本次任务"}</strong>
-                <small>预计完成：{formatDateTime(selectedOrder.estimatedCompletionAt)}</small>
-              </div>
-
-              <section className="timeline-card">
-                <h3>执行进度</h3>
-                {currentTimeline.map((step) => (
-                  <div className={`timeline-row ${step.state}`} key={step.key || step.label}>
-                    <span className="timeline-dot" />
-                    <strong>{step.label}</strong>
-                    <time>{step.timestamp ? formatDateTime(step.timestamp) : "待推进"}</time>
-                  </div>
-                ))}
-              </section>
-
-              <section className="detail-card artifact-card">
-                <div className="card-heading">
-                  <h3>交付物</h3>
-                  <span>{artifacts[0] ? artifacts[0].fileType : "PDF"}</span>
-                </div>
-                {artifacts[0] ? (
-                  <div className="artifact-row">
-                    <span>
-                      <strong>{artifacts[0].fileName}</strong>
-                      <small>{Math.max(1, Math.round((artifacts[0].sizeBytes || 0) / 1024))} KB</small>
-                    </span>
-                    <div className="inline-actions">
-                      <button type="button" onClick={() => shareArtifact(artifacts[0].id)}>分享</button>
-                      <button type="button" onClick={() => downloadArtifact(artifacts[0].id)}>下载</button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="muted-copy">订单交付后会在这里出现报告下载。</p>
-                )}
-              </section>
-            </>
-          ) : (
-            <div className="empty-detail">从中间列表选择一个订单。</div>
-          )}
-        </section>
-      );
-    }
-
-    if (activeSection === "account") {
-      return (
-        <section className="detail-panel">
-          <header className="detail-toolbar">
-            <div>
-              <p>账户</p>
-              <h2>{currentUser ? currentUser.displayName || currentUser.email : "登录 Oneshot"}</h2>
-            </div>
-            {currentUser && (
-              <button className="ghost-button" type="button" onClick={logout}>
-                退出
-              </button>
-            )}
-          </header>
-
-          {currentUser ? (
-            <>
-              <div className="usage-hero">
-                <span>剩余次数</span>
-                <strong>{currentBalance}</strong>
-                <button type="button" onClick={buyUses}>购买 10 次</button>
-              </div>
-              <section className="detail-card ledger-card">
-                <div className="card-heading">
-                  <h3>最近用量</h3>
-                  <span>{recentLedger.length} 条</span>
-                </div>
-                {recentLedger.length > 0 ? recentLedger.map((entry) => (
-                  <div className="ledger-row" key={entry.id}>
-                    <span>{entry.type === "purchase" ? "购买次数" : "执行扣次"}</span>
-                    <strong>{entry.delta > 0 ? `+${entry.delta}` : entry.delta}</strong>
-                  </div>
-                )) : (
-                  <p className="muted-copy">暂无用量记录。</p>
-                )}
-              </section>
-            </>
-          ) : (
-            <div className="login-card">
-              <p>{authStatus === "checking" ? "正在检查账号" : "登录后开始使用 Agent 服务"}</p>
-              <button type="button" disabled={authStatus === "checking"} onClick={() => login("wechat")}>
-                微信授权登录
-              </button>
-              <button className="ghost-button" type="button" disabled={authStatus === "checking"} onClick={() => login("google")}>
-                Google 邮箱登录
-              </button>
-            </div>
-          )}
-        </section>
-      );
-    }
-
-    return (
-      <section className="detail-panel">
-        <header className="detail-toolbar">
-          <div>
-            <p>Agent 详情</p>
-            <h2>{selectedAgent?.name || "选择一个 Agent"}</h2>
           </div>
-          <button className="balance-pill" type="button" onClick={buyUses}>
-            {currentBalance} 次
-          </button>
-        </header>
-
-        {selectedAgent ? (
-          <>
-            <div className="agent-hero">
-              <div className="agent-avatar" aria-hidden="true">{selectedAgent.name?.slice(0, 1) || "A"}</div>
-              <div>
-                <h3>{selectedAgent.name}</h3>
-                <p>{selectedAgent.description}</p>
-                <div className="meta-row">
-                  <span>评分 {selectedAgent.rating}</span>
-                  <span>成交 {formatDealCount(selectedAgent.dealCount)} 次</span>
-                  <span>{selectedAgent.estimatedDuration}</span>
-                </div>
-              </div>
+          {timeline.map((step) => (
+            <div className={`timeline-item ${step.state}`} key={step.key || step.label}>
+              <span className="timeline-dot" />
+              <strong>{step.label}</strong>
+              <time>{step.timestamp ? formatDateTime(step.timestamp) : "待推进"}</time>
+              <p>{step.state === "current" ? "当前正在处理" : step.state === "done" ? "已完成" : "等待进入"}</p>
             </div>
+          ))}
+        </section>
 
-            <section className="detail-card">
-              <div className="card-heading">
-                <h3>交付说明</h3>
-                <span>{formatMoney(selectedAgent.priceCents)} / 次</span>
-              </div>
-              <p className="muted-copy">{selectedAgent.deliverable}</p>
-            </section>
-
-            <section className="composer-card">
-              <label htmlFor="requirement">任务需求</label>
-              <textarea
-                id="requirement"
-                aria-label="任务需求"
-                onChange={(event) => setRequirement(event.target.value)}
-                value={requirement}
-              />
-              <div className="composer-actions">
-                <span>将扣减 {selectedAgent.priceUses || 1} 次</span>
-                <button className="primary-button" type="button" onClick={confirmCheckout}>
-                  开始执行
+        <section className="delivery-panel">
+          <div className="panel-title">
+            <h2>交付物</h2>
+            <button type="button" onClick={() => setSelectedStep("artifact")}>
+              查看
+            </button>
+          </div>
+          {inspectorArtifacts.length > 0 ? (
+            inspectorArtifacts.map((artifact) => (
+              <div className="file-row" key={artifact.id}>
+                <span className="file-icon">PDF</span>
+                <div>
+                  <strong>{artifact.fileName}</strong>
+                  <small>{Math.max(1, Math.round((artifact.sizeBytes || 0) / 1024))} KB · {artifact.fileType}</small>
+                </div>
+                <button type="button" onClick={() => shareArtifact(artifact.id)}>
+                  分享
+                </button>
+                <button type="button" onClick={() => downloadArtifact(artifact.id)}>
+                  下载
                 </button>
               </div>
-            </section>
-          </>
-        ) : (
-          <div className="empty-detail">从中间列表选择一个 Agent。</div>
+            ))
+          ) : (
+            <p className="muted-copy">订单交付后会在这里出现报告预览、下载和分享。</p>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  function renderOrders() {
+    return (
+      <section className="main-column">
+        <div className="section-heading">
+          <span>我的订单</span>
+          <h1>订单执行记录</h1>
+        </div>
+        <SegmentControl
+          items={orderFilters}
+          label="订单状态筛选"
+          value={orderFilter}
+          onChange={setOrderFilter}
+        />
+        <div className="order-list">
+          {userOrders.length > 0 ? (
+            userOrders.map((order) => (
+              <button
+                className={selectedOrder?.id === order.id ? "selected" : ""}
+                key={order.id}
+                type="button"
+                onClick={() => chooseOrder(order)}
+              >
+                <span>
+                  <strong>{order.requirement?.prompt || "本次任务"}</strong>
+                  <small>{order.agentName || "Agent"} · {formatDateTime(order.createdAt)}</small>
+                </span>
+                <em>{statusLabel(order.status)}</em>
+              </button>
+            ))
+          ) : (
+            <section className="empty-panel">暂无订单。回到工作台提交一次 Agent 任务。</section>
+          )}
+        </div>
+        {selectedOrder && (
+          <section className="order-detail-panel">
+            <div className="panel-title">
+              <h2>订单详情</h2>
+              {selectedOrder.status === "running" && (
+                <button type="button" onClick={cancelSelectedOrder}>
+                  取消订单
+                </button>
+              )}
+            </div>
+            <dl>
+              <div><dt>订单号</dt><dd>{selectedOrder.id}</dd></div>
+              <div><dt>关联 Agent</dt><dd>{selectedOrder.agentName}</dd></div>
+              <div><dt>订单状态</dt><dd>{statusLabel(selectedOrder.status)}</dd></div>
+              <div><dt>预计完成</dt><dd>{formatDateTime(selectedOrder.estimatedCompletionAt)}</dd></div>
+              <div><dt>本次扣减</dt><dd>{selectedOrder.usageCost || 1} 次</dd></div>
+              <div><dt>总金额</dt><dd>{formatMoney(selectedOrder.amountCents)}</dd></div>
+            </dl>
+          </section>
         )}
       </section>
     );
   }
 
+  function renderBilling() {
+    return (
+      <section className="main-column">
+        <div className="section-heading">
+          <span>用量与账单</span>
+          <h1>{currentBalance} 次可用</h1>
+        </div>
+        <section className="usage-hero">
+          <div>
+            <span>剩余次数</span>
+            <strong>{currentBalance}</strong>
+            <small>每次 Agent 执行扣减 1 次</small>
+          </div>
+          <button className="primary-button" type="button" onClick={buyUses}>
+            购买 10 次
+          </button>
+        </section>
+        <section className="panel ledger-panel">
+          <div className="panel-title">
+            <h2>最近使用记录</h2>
+            <span>{recentLedger.length} 条</span>
+          </div>
+          {recentLedger.length > 0 ? (
+            recentLedger.map((entry) => (
+              <div className="ledger-row" key={entry.id}>
+                <span>
+                  <strong>{ledgerLabel(entry.type)}</strong>
+                  <small>{formatDateTime(entry.createdAt)}</small>
+                </span>
+                <em>{entry.delta > 0 ? `+${entry.delta}` : entry.delta} 次</em>
+              </div>
+            ))
+          ) : (
+            <p className="muted-copy">暂无用量记录。</p>
+          )}
+        </section>
+      </section>
+    );
+  }
+
+  function renderAccount() {
+    return (
+      <section className="main-column">
+        <div className="section-heading">
+          <span>账户</span>
+          <h1>{currentUser ? "账户已连接" : "登录 Oneshot"}</h1>
+        </div>
+        {currentUser ? (
+          <section className="login-panel">
+            <div className="account-avatar">{currentUser.displayName?.slice(0, 1) || "U"}</div>
+            <div>
+              <strong>{currentUser.displayName || currentUser.email || "Oneshot 用户"}</strong>
+              <p>{authProviderLabel}授权已连接</p>
+            </div>
+            <button className="outline-button" type="button" onClick={logout}>
+              退出登录
+            </button>
+          </section>
+        ) : (
+          <section className="login-panel">
+            <div>
+              <strong>{authStatus === "checking" ? "正在检查账号" : "登录后开始使用 Agent 服务"}</strong>
+              <p>登录后可以购买次数、创建订单和查看交付物。</p>
+            </div>
+            <button className="primary-button" type="button" disabled={authStatus === "checking"} onClick={() => login("wechat")}>
+              微信授权登录
+            </button>
+            <button className="outline-button" type="button" disabled={authStatus === "checking"} onClick={() => login("google")}>
+              Google 邮箱登录
+            </button>
+          </section>
+        )}
+      </section>
+    );
+  }
+
+  function renderMainView() {
+    if (activeView === "orders") return renderOrders();
+    if (activeView === "billing") return renderBilling();
+    if (activeView === "account") return renderAccount();
+    return renderWorkbench();
+  }
+
   return (
-    <main className="split-shell">
-      <aside className="rail" aria-label="主导航">
-        <div className="app-mark">O</div>
-        <nav>
-          {sections.map((section) => (
+    <main className="app-shell">
+      <aside className="sidebar" aria-label="主导航">
+        <div className="brand">
+          <strong>oneshot</strong>
+          <span>Agent 服务市场</span>
+        </div>
+
+        <nav className="nav-block">
+          {navigation.map((item) => (
             <button
-              className={activeSection === section.id ? "is-active" : ""}
-              key={section.id}
+              className={activeView === item.id ? "active" : ""}
+              key={item.id}
               type="button"
-              onClick={() => setActiveSection(section.id)}
+              onClick={() => setActiveView(item.id)}
             >
-              <NavIcon>{section.icon}</NavIcon>
-              <span>{section.label}</span>
+              <span className="nav-icon">{item.icon}</span>
+              {item.label}
             </button>
           ))}
         </nav>
+
+        <div className="sidebar-footer">
+          {currentUser ? (
+            <section className="auth-card">
+              <span className="auth-avatar">{currentUser.displayName?.slice(0, 1) || "U"}</span>
+              <div>
+                <strong>{currentUser.displayName || currentUser.email || "Oneshot 用户"}</strong>
+                <small>{authProviderLabel}已连接</small>
+              </div>
+            </section>
+          ) : (
+            <section className="auth-card compact">
+              <strong>登录账号</strong>
+              <button type="button" onClick={() => login("wechat")}>微信登录</button>
+              <button type="button" onClick={() => login("google")}>Google</button>
+            </section>
+          )}
+        </div>
       </aside>
 
-      <section className="list-pane" aria-label="列表区">
-        {renderMiddlePane()}
-      </section>
+      <section className="workspace">
+        <header className="topbar">
+          <button className="back-link" type="button" onClick={() => setActiveView("workbench")}>
+            返回工作台
+          </button>
+          <div className="top-actions">
+            <button className="ghost-link" type="button" onClick={() => showToast("帮助中心暂未接入")}>
+              帮助中心
+            </button>
+            <button
+              className="inspector-toggle"
+              type="button"
+              aria-expanded={inspectorOpen}
+              onClick={() => setInspectorOpen((value) => !value)}
+            >
+              {inspectorOpen ? "收起 Inspector" : "打开 Inspector"}
+            </button>
+          </div>
+        </header>
 
-      <section className="content-pane" aria-label="详情区">
-        {renderDetailPane()}
+        <div className={`content-grid ${inspectorOpen ? "inspector-open" : "inspector-closed"}`}>
+          {renderMainView()}
+
+          {inspectorOpen ? (
+            <aside className="inspector" aria-label="Inspector">
+              <section className="inspector-card usage-card">
+                <div className="panel-title">
+                  <h2>用量与计费</h2>
+                  <button type="button" onClick={buyUses}>购买次数</button>
+                </div>
+                <div className="usage-stats">
+                  <div>
+                    <span>剩余次数</span>
+                    <strong>{currentBalance}</strong>
+                    <small>次</small>
+                  </div>
+                  <div>
+                    <span>单次价格</span>
+                    <strong>{selectedAgent ? formatMoney(selectedAgent.priceCents) : "待选"}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="inspector-card">
+                <div className="panel-title">
+                  <h2>使用记录</h2>
+                  <button type="button" onClick={() => setActiveView("billing")}>查看全部</button>
+                </div>
+                <div className="usage-list">
+                  {userOrders.slice(0, 4).map((order) => (
+                    <button
+                      className={selectedOrder?.id === order.id ? "selected" : ""}
+                      key={order.id}
+                      type="button"
+                      onClick={() => chooseOrder(order)}
+                    >
+                      <span>
+                        <strong>{order.requirement?.prompt || "本次任务"}</strong>
+                        <small>{order.id}</small>
+                      </span>
+                      <em>{order.usageCost ? `-${order.usageCost} 次` : statusLabel(order.status)}</em>
+                    </button>
+                  ))}
+                  {userOrders.length === 0 && <p className="muted-copy">暂无使用记录。</p>}
+                </div>
+              </section>
+
+              <section className="inspector-card">
+                <div className="panel-title">
+                  <h2>订单信息</h2>
+                  <button type="button" onClick={() => setActiveView("orders")}>详情</button>
+                </div>
+                {selectedOrder ? (
+                  <dl className="order-info">
+                    <div><dt>订单号</dt><dd>{selectedOrder.id}</dd></div>
+                    <div><dt>关联 Agent</dt><dd>{selectedOrder.agentName}</dd></div>
+                    <div><dt>订单状态</dt><dd>{statusLabel(selectedOrder.status)}</dd></div>
+                    <div><dt>预计完成</dt><dd>{formatDateTime(selectedOrder.estimatedCompletionAt)}</dd></div>
+                    <div><dt>总金额</dt><dd>{formatMoney(selectedOrder.amountCents)}</dd></div>
+                  </dl>
+                ) : (
+                  <p className="muted-copy">创建订单后会在这里显示订单信息。</p>
+                )}
+              </section>
+
+              <section className="inspector-card delivery-preview">
+                <div className="panel-title">
+                  <h2>交付物预览</h2>
+                  <button type="button" onClick={() => setSelectedStep("artifact")}>预览</button>
+                </div>
+                {inspectorArtifacts[0] ? (
+                  <>
+                    <div className="file-row compact">
+                      <span className="file-icon">PDF</span>
+                      <div>
+                        <strong>{inspectorArtifacts[0].fileName}</strong>
+                        <small>{inspectorArtifacts[0].fileType}</small>
+                      </div>
+                    </div>
+                    <div className="report-preview">
+                      <strong>AI Agent 服务市场研究</strong>
+                      <span>市场规模 / 竞争格局 / 增长机会</span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="muted-copy">订单交付后显示预览。</p>
+                )}
+              </section>
+            </aside>
+          ) : null}
+        </div>
       </section>
 
       {toast && (

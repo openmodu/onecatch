@@ -81,6 +81,7 @@
 
 ## 交付记录
 
+- 产品验收结论：该实现方向被判定为偏离原型和 Apple / Codex Desktop 式工作台交互。后续纠偏由 `design/issues/00-014-desktop-prototype-alignment.md` 承接。
 - 已将桌面端重构为三段式布局：
   - 左侧 rail 仅保留 Agent、订单、账户。
   - 中间 pane 承载 Agent 分类列表、订单状态列表或账户摘要。

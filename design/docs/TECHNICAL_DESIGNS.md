@@ -234,3 +234,205 @@ running -> delivering -> delivered
 - `npm run build`
 - `wails3 build DEV=true`
 - `wails3 dev` 原生窗口启动检查。
+
+## Issue 00-014: 桌面端回归原型与 Codex Desktop 风格纠偏
+
+### 评审状态
+
+本方案已按用户确认的“UI follow 原型”方向实现并验证。
+
+00-013 的实现把三段式理解为 `左侧 rail / 中间列表 / 右侧详情`。这适合文件、邮件或对象列表浏览，但不适合 Oneshot 当前的 Agent 服务交易工作台，因为用户的主任务不是浏览对象列表，而是完成一次 Agent 服务购买、需求提交、执行跟踪和交付下载。
+
+### Codex Desktop 参考原则
+
+官方 Codex app 说明将其定义为面向线程、项目、Git、终端和任务侧栏的聚焦桌面体验；任务侧栏用于展示计划、来源、生成物和任务总结，用户可以在主线程中持续协作。由此抽象到 Oneshot：
+
+| 原则 | 对 Oneshot 的落地 |
+| --- | --- |
+| 左侧是低频全局切换，不是业务筛选容器 | 左侧只放工作台、订单、用量/账单、账号入口 |
+| 中间是主工作区 | Agent 选择、需求、扣次、进度和交付物都在中间完成 |
+| 右侧是上下文，不是第二主流程 | 用量、订单信息、交付物预览进入可折叠 inspector |
+| 操作靠近对象 | 下单按钮靠近结算区，购买靠近余额，下载/分享靠近文件 |
+| 渐进披露 | 默认减少常驻信息密度，需要时再展开 inspector 或详情 |
+| 桌面原生克制 | 薄分割线、低饱和颜色、紧凑控件、稳定尺寸，避免营销页和后台大卡片感 |
+
+### 与原型的对齐
+
+原型明确的结构是：
+
+```text
+左侧导航与账号区 / 中间任务工作区 / 右侧可折叠 inspector
+```
+
+00-014 恢复这个结构，但对原型做减重：
+
+- 左侧保留全局导航与账号区，去掉大量 Agent 分类、订单状态、用量明细。
+- 中间保留 Agent hero、分类筛选、任务流程、需求、扣次确认、执行进度、交付物。
+- 右侧保留 inspector 能力，但不常驻压迫主流程；默认收起为顶部按钮，展开后显示上下文信息。
+
+### 信息架构
+
+```text
+左侧 sidebar：
+  - 工作台
+  - Agent 市场
+  - 我的订单
+  - 用量与账单
+  - 左下账号区
+
+中间 workspace：
+  - 顶部 toolbar：返回、当前上下文、Inspector 开关、帮助
+  - Agent summary：名称、标签、说明、评分、交付时长、单次价格
+  - Agent 分类筛选：segmented control 或横向 filter bar
+  - Agent 快捷切换：紧凑 chip，不作为列表主流程
+  - 任务流程：Agent 详情、需求填写、扣次确认、执行中、交付物
+  - 当前任务内容：需求、结算、进度、交付物
+
+右侧 inspector：
+  - 用量与计费
+  - 使用记录
+  - 订单信息
+  - 交付物预览
+```
+
+### 按钮位置规则
+
+| 操作 | 位置 | 原因 |
+| --- | --- | --- |
+| `确认并支付 / 开始执行` | 中间 `checkout` 结算区右侧或底部 | 主动作必须靠近扣次、价格和需求上下文 |
+| `编辑需求` | 需求卡片标题右侧 | 操作对象是需求文本 |
+| `购买次数` | 余额摘要卡片、用量页、账号区浮层 | 操作对象是余额，不是主导航 |
+| `Inspector 展开/收起` | 工作区右上角图标按钮 | 这是视图工具，不是业务步骤 |
+| `取消订单` | 订单详情或订单上下文菜单 | 次级危险操作，不抢主按钮 |
+| `下载 / 分享` | 交付物卡片内 | 操作对象是文件 |
+| `订单筛选` | 订单页中间顶部 filter bar | 筛选属于订单列表上下文，不属于全局导航 |
+| `Agent 分类` | 工作台中间 filter bar | 分类属于 Agent 市场上下文，不属于全局导航 |
+
+### 前端状态设计
+
+| 状态 | 说明 |
+| --- | --- |
+| `activeView` | `workbench` / `orders` / `billing` / `account` |
+| `activeCategory` | 当前 Agent 分类筛选 |
+| `selectedAgentId` | 当前主工作区 Agent |
+| `selectedStep` | `details` / `requirement` / `checkout` / `running` / `artifact` |
+| `orderFilter` | 订单筛选，传给 `OrderBinding.ListOrders(status)` |
+| `selectedOrderId` | 当前订单上下文 |
+| `inspectorOpen` | 右侧上下文面板展开状态 |
+
+### 后端 API
+
+本 issue 不新增后端 API。
+
+继续使用已有 API：
+
+| Method | Path | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/agents` | Agent 分类与 Agent 列表 |
+| `GET` | `/api/agents/{id}` | Agent 详情 |
+| `GET` | `/api/billing/balance` | 余额摘要 |
+| `GET` | `/api/billing/ledger` | 使用记录 |
+| `POST` | `/api/billing/purchases` | 购买次数 |
+| `POST` | `/api/orders` | 创建订单与扣次 |
+| `GET` | `/api/orders?status=` | 订单筛选 |
+| `GET` | `/api/orders/{orderID}` | 订单详情 |
+| `GET` | `/api/orders/{orderID}/artifacts` | 交付物列表 |
+
+### Wails Binding
+
+不新增 binding，前端对齐现有方法：
+
+| Binding | 用途 |
+| --- | --- |
+| `AuthBinding.CurrentUser()` | 启动时恢复账号状态 |
+| `AuthBinding.LoginWithWechat()` | 微信登录 |
+| `AuthBinding.LoginWithGoogle()` | Google 登录 |
+| `AuthBinding.Logout()` | 退出登录 |
+| `AgentBinding.ListAgents()` | 工作台 Agent 筛选与切换 |
+| `AgentBinding.GetAgent(id)` | Agent 详情 |
+| `BillingBinding.GetBalance()` | 余额摘要 |
+| `BillingBinding.ListLedger()` | 使用记录 |
+| `BillingBinding.StartPurchase(input)` | 购买次数 |
+| `OrderBinding.CreateOrder(input)` | 确认并支付 / 开始执行 |
+| `OrderBinding.ListOrders(status)` | 订单筛选 |
+| `OrderBinding.GetOrder(id)` | 订单上下文 |
+| `OrderBinding.CancelOrder(id)` | 取消订单 |
+| `ArtifactBinding.ListArtifacts(orderID)` | 交付物列表 |
+| `ArtifactBinding.DownloadArtifact(id)` | 下载交付物 |
+| `ArtifactBinding.ShareArtifact(id)` | 分享交付物 |
+
+### 前后端联调点
+
+| UI 区域 | 调用 |
+| --- | --- |
+| 启动恢复账号 | `AuthBinding.CurrentUser()` |
+| Agent 工作台 | `AgentBinding.ListAgents()`，前端按 `category` 筛选 |
+| Agent 切换 | `AgentBinding.GetAgent(id)` 或列表缓存 |
+| 余额摘要 | `BillingBinding.GetBalance()` |
+| 使用记录 | `BillingBinding.ListLedger()` |
+| 购买次数 | `BillingBinding.StartPurchase(input)` 后刷新余额与流水 |
+| 确认并支付 | `OrderBinding.CreateOrder(input)` 后刷新余额、订单、进度 |
+| 订单页筛选 | `OrderBinding.ListOrders(status)` |
+| 订单详情 | `OrderBinding.GetOrder(id)` |
+| 交付物 | `ArtifactBinding.ListArtifacts(orderID)` |
+| 下载 / 分享 | `ArtifactBinding.DownloadArtifact(id)`、`ArtifactBinding.ShareArtifact(id)` |
+
+### 视觉与交互约束
+
+- 不做营销 hero。
+- 不做管理后台式四处堆卡片。
+- 不使用大面积蓝色作为主色。
+- 不使用过大的圆角卡片，普通卡片圆角控制在 6-8px。
+- 不用左侧承载业务长列表。
+- 主工作区宽度优先，右侧 inspector 不能压缩核心任务到难以阅读。
+- 文字不使用 viewport 字号缩放，按钮和固定控件需要稳定尺寸。
+- macOS 桌面窗口下避免内容溢出、遮挡和横向滚动。
+
+### 验证方式
+
+实现完成后必须按以下顺序验证：
+
+1. 静态核对：
+   - 对照 `design/prototype/README.md` 的三段式定义。
+   - 对照 `design/prototype/src/App.jsx` 的核心流程。
+   - 对照本方案的按钮位置表。
+2. 自动验证：
+   - `go test ./...`
+   - `cd desktop/oneshot/frontend && npm run build`
+   - `wails3 build DEV=true`
+3. 联调验证：
+   - 未登录点击主按钮会阻止创建订单。
+   - 登录后创建订单会扣减余额并刷新订单。
+   - 订单筛选会调用 `OrderBinding.ListOrders(status)`。
+   - 交付物下载和分享仍走 Artifact binding。
+4. Mac 端视觉检查：
+   - 使用 `wails3 dev` 启动原生窗口。
+   - 检查 1280x800 和 1440x900。
+   - 记录截图路径；如果 macOS 权限导致 `screencapture` 失败，交付记录必须写明原因。
+   - 使用浏览器 dev fixture 截图补充视觉核对，但不能替代原生窗口检查。
+
+### 实施边界
+
+本次实现只改：
+
+- `desktop/oneshot/frontend/src/App.jsx`
+- `desktop/oneshot/frontend/src/styles.css`
+- 前端开发态 fixture
+- 相关 issue 的交付记录
+
+未新增后端 API 或 Wails binding。
+
+### 实施结果
+
+- 已按原型恢复 `左侧导航与账号区 / 中间任务工作区 / 右侧可折叠 inspector`。
+- 左侧不再承载 Agent 分类、订单筛选和用量明细。
+- Agent 分类、订单筛选、流程步骤和主按钮均回到中间工作区。
+- 右侧 Inspector 默认收起，展开后展示用量、使用记录、订单信息、交付物预览。
+- 浏览器开发态增加 fixture，以支持无 Wails runtime 的视觉 QA。
+- 验证通过：
+  - `go test ./...`
+  - `cd desktop/oneshot/frontend && npm run build`
+  - `cd desktop/oneshot && wails3 build DEV=true`
+  - `wails3 dev -config ./build/config.yml -port 9255`
+  - 浏览器截图：`/tmp/oneshot-ui-1440x900-fixed.png`、`/tmp/oneshot-ui-1280x800-final.png`
+  - Mac 原生截图：`/tmp/oneshot-wails-dev.png`
