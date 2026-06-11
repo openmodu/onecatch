@@ -229,12 +229,15 @@ func (c *localClient) CreateOrder(ctx context.Context, input oneshot.CreateOrder
 	return toClientOrder(order), nil
 }
 
-func (c *localClient) ListOrders(ctx context.Context) ([]oneshot.Order, error) {
+func (c *localClient) ListOrders(ctx context.Context, status string) ([]oneshot.Order, error) {
 	user, err := c.services.Auth.CurrentUser(ctx)
 	if err != nil {
 		return nil, err
 	}
-	orders, err := c.services.Orders.List(ctx, usecaseorders.ListInput{UserID: user.ID})
+	orders, err := c.services.Orders.List(ctx, usecaseorders.ListInput{
+		UserID: user.ID,
+		Status: domainorders.Status(status),
+	})
 	if err != nil {
 		return nil, err
 	}

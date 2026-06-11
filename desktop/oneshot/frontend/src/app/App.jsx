@@ -7,25 +7,29 @@ import {
   OrderBinding,
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 
+const sections = [
+  { id: "agents", label: "Agent", icon: "A" },
+  { id: "orders", label: "订单", icon: "O" },
+  { id: "account", label: "账户", icon: "U" },
+];
+
 const categories = [
-  { id: "all", label: "全部 Agent", icon: "A" },
-  { id: "content", label: "内容创作", icon: "C" },
-  { id: "data", label: "数据分析", icon: "D" },
-  { id: "marketing", label: "市场营销", icon: "M" },
-  { id: "design", label: "设计创意", icon: "P" },
-  { id: "dev", label: "开发与技术", icon: "T" },
-  { id: "office", label: "办公效率", icon: "O" },
-  { id: "research", label: "行业研究", icon: "R" },
+  { id: "all", label: "全部" },
+  { id: "content", label: "内容" },
+  { id: "data", label: "数据" },
+  { id: "marketing", label: "营销" },
+  { id: "design", label: "设计" },
+  { id: "dev", label: "开发" },
+  { id: "office", label: "办公" },
+  { id: "research", label: "研究" },
 ];
 
 const orderFilters = [
-  { id: "all", label: "全部订单" },
-  { id: "pending_payment", label: "待支付" },
+  { id: "", label: "全部" },
   { id: "running", label: "执行中" },
   { id: "delivered", label: "已交付" },
+  { id: "pending_payment", label: "待支付" },
 ];
-
-const steps = ["Agent 详情", "需求填写", "扣次确认", "执行中", "交付物"];
 
 function formatMoney(cents) {
   return `¥ ${(Number(cents || 0) / 100).toFixed(2)}`;
@@ -69,9 +73,27 @@ function NavIcon({ children }) {
   );
 }
 
+function SegmentControl({ items, value, onChange, label }) {
+  return (
+    <div className="segment-control" aria-label={label}>
+      {items.map((item) => (
+        <button
+          className={value === item.id ? "is-selected" : ""}
+          key={item.id}
+          type="button"
+          onClick={() => onChange(item.id)}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function App() {
   const [agents, setAgents] = useState([]);
   const [balance, setBalance] = useState(null);
+  const [ledger, setLedger] = useState([]);
   const [userOrders, setUserOrders] = useState([]);
   const [artifacts, setArtifacts] = useState([]);
   const [agentStatus, setAgentStatus] = useState("loading");
@@ -79,12 +101,11 @@ export default function App() {
   const [authProvider, setAuthProvider] = useState("");
   const [authStatus, setAuthStatus] = useState("checking");
   const [toast, setToast] = useState("");
+  const [activeSection, setActiveSection] = useState("agents");
   const [activeCategory, setActiveCategory] = useState("all");
   const [selectedAgentId, setSelectedAgentId] = useState("");
-  const [selectedStep, setSelectedStep] = useState("扣次确认");
   const [selectedOrderId, setSelectedOrderId] = useState("");
-  const [orderFilter, setOrderFilter] = useState("all");
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [orderFilter, setOrderFilter] = useState("");
   const [requirement, setRequirement] = useState(
     "请帮我完成 2026 年中国 AI Agent 服务市场研究，包括市场规模、主要玩家、收费模式、增长机会和进入建议。",
   );
@@ -94,25 +115,19 @@ export default function App() {
     return agents.filter((agent) => agent.category === activeCategory);
   }, [activeCategory, agents]);
 
-  const visibleOrders = useMemo(() => {
-    if (orderFilter === "all") return userOrders;
-    return userOrders.filter((order) => order.status === orderFilter);
-  }, [orderFilter, userOrders]);
-
   const selectedAgent =
-    visibleAgents.find((agent) => agent.id === selectedAgentId) ??
-    visibleAgents[0] ??
-    null;
+    agents.find((agent) => agent.id === selectedAgentId) ?? visibleAgents[0] ?? null;
   const selectedOrder =
     userOrders.find((order) => order.id === selectedOrderId) ?? userOrders[0] ?? null;
   const authProviderLabel = authProvider === "google" ? "Google 邮箱" : "微信";
   const currentBalance = balance?.remaining ?? 0;
+  const recentLedger = ledger.slice(-6).reverse();
   const currentTimeline =
     selectedOrder?.progress?.length > 0
       ? selectedOrder.progress
       : [
-          { state: "done", label: "需求已提交", timestamp: null },
-          { state: "current", label: "扣次确认中", timestamp: null },
+          { state: "next", label: "需求已提交", timestamp: null },
+          { state: "next", label: "扣次确认", timestamp: null },
           { state: "next", label: "执行中", timestamp: null },
           { state: "next", label: "交付物生成中", timestamp: null },
           { state: "next", label: "已交付", timestamp: null },
@@ -145,16 +160,17 @@ export default function App() {
   useEffect(() => {
     if (!currentUser?.id) {
       setBalance(null);
+      setLedger([]);
       setUserOrders([]);
       setSelectedOrderId("");
       setArtifacts([]);
       return undefined;
     }
     refreshBilling();
-    refreshOrders();
-    const timer = window.setInterval(refreshOrders, 2000);
+    refreshOrders(orderFilter);
+    const timer = window.setInterval(() => refreshOrders(orderFilter), 2000);
     return () => window.clearInterval(timer);
-  }, [currentUser?.id]);
+  }, [currentUser?.id, orderFilter]);
 
   useEffect(() => {
     let alive = true;
@@ -202,15 +218,6 @@ export default function App() {
     };
   }, []);
 
-  function selectCategory(categoryId) {
-    setActiveCategory(categoryId);
-    const nextAgent =
-      categoryId === "all"
-        ? agents[0]
-        : agents.find((agent) => agent.category === categoryId);
-    setSelectedAgentId(nextAgent?.id || "");
-  }
-
   function showToast(message) {
     setToast(message);
     window.clearTimeout(showToast.timer);
@@ -224,15 +231,15 @@ export default function App() {
         BillingBinding.ListLedger(),
       ]);
       setBalance(nextBalance);
-      void nextLedger;
+      setLedger(Array.isArray(nextLedger) ? nextLedger : []);
     } catch (error) {
       showToast(error?.message || "用量信息加载失败");
     }
   }
 
-  async function refreshOrders() {
+  async function refreshOrders(status = orderFilter) {
     try {
-      const items = await OrderBinding.ListOrders();
+      const items = await OrderBinding.ListOrders(status || "");
       const nextOrders = Array.isArray(items) ? items : [];
       setUserOrders(nextOrders);
       setSelectedOrderId((current) =>
@@ -254,7 +261,7 @@ export default function App() {
       setAuthProvider(session.provider || provider);
       window.localStorage.setItem("oneshot.authProvider", session.provider || provider);
       setAuthStatus("signed-in");
-      await Promise.all([refreshBilling(), refreshOrders()]);
+      await Promise.all([refreshBilling(), refreshOrders(orderFilter)]);
       showToast(`已通过${provider === "google" ? " Google 邮箱" : "微信"}登录`);
     } catch (error) {
       setAuthStatus("signed-out");
@@ -278,6 +285,7 @@ export default function App() {
   async function buyUses() {
     if (!currentUser) {
       showToast("请先登录后再购买次数");
+      setActiveSection("account");
       return;
     }
     try {
@@ -296,11 +304,11 @@ export default function App() {
     }
     if (!currentUser) {
       showToast("请先登录后再创建订单");
+      setActiveSection("account");
       return;
     }
     if (!requirement.trim()) {
       showToast("请先填写任务需求");
-      setSelectedStep("需求填写");
       return;
     }
     try {
@@ -309,11 +317,23 @@ export default function App() {
         requirement: { prompt: requirement },
       });
       setSelectedOrderId(order.id);
-      await Promise.all([refreshBilling(), refreshOrders()]);
-      setSelectedStep("执行中");
-      showToast("已扣减次数，订单开始执行");
+      setActiveSection("orders");
+      setOrderFilter("");
+      await Promise.all([refreshBilling(), refreshOrders("")]);
+      showToast("已开始执行");
     } catch (error) {
       showToast(error?.message || "创建订单失败");
+    }
+  }
+
+  async function cancelSelectedOrder() {
+    if (!selectedOrder?.id) return;
+    try {
+      await OrderBinding.CancelOrder(selectedOrder.id);
+      await refreshOrders(orderFilter);
+      showToast("订单已取消");
+    } catch (error) {
+      showToast(error?.message || "取消失败");
     }
   }
 
@@ -339,390 +359,303 @@ export default function App() {
     }
   }
 
-  return (
-    <main className="workbench-shell">
-      <aside className="sidebar" aria-label="工作台导航">
-        <header className="brand">
-          <strong>Oneshot</strong>
-          <span>Agent 服务市场</span>
-        </header>
-
-        <nav className="nav-section" aria-label="主导航">
-          <button className="nav-item is-active" type="button">
-            <NavIcon>H</NavIcon>
-            工作台
-          </button>
-        </nav>
-
-        <nav className="nav-section" aria-label="Agent 分类">
-          <p>Agent 市场</p>
-          {categories.map((category) => (
-            <button
-              className={`nav-item ${
-                activeCategory === category.id ? "is-selected" : ""
-              }`}
-              key={category.id}
-              type="button"
-              onClick={() => selectCategory(category.id)}
-            >
-              <NavIcon>{category.icon}</NavIcon>
-              {category.label}
-            </button>
-          ))}
-        </nav>
-
-        <nav className="nav-section" aria-label="次数与订单">
-          <p>次数与用量</p>
-          <button className="nav-item is-selected" type="button">
-            <NavIcon>U</NavIcon>
-            用量总览
-          </button>
-          <button className="nav-item" type="button" onClick={buyUses}>
-            <NavIcon>B</NavIcon>
-            购买次数
-          </button>
-          <button className="nav-item" type="button">
-            <NavIcon>L</NavIcon>
-            使用记录
-          </button>
-        </nav>
-
-        <nav className="nav-section" aria-label="订单筛选">
-          <p>我的订单</p>
-          {orderFilters.map((filter) => (
-            <button
-              className={`nav-item ${
-                orderFilter === filter.id ? "is-selected" : ""
-              }`}
-              key={filter.id}
-              type="button"
-              onClick={() => setOrderFilter(filter.id)}
-            >
-              <NavIcon>O</NavIcon>
-              {filter.label}
-            </button>
-          ))}
-        </nav>
-
-        <section className="account-panel" aria-label="账号区">
-          {currentUser ? (
-            <>
-              <p>已登录</p>
-              <div className="account-user">
-                <strong>{currentUser.displayName || currentUser.email}</strong>
-                <small>{authProviderLabel}授权已连接</small>
-              </div>
-              <button className="account-button secondary" type="button" onClick={logout}>
-                退出登录
-              </button>
-            </>
-          ) : (
-            <>
-              <p>{authStatus === "checking" ? "正在检查账号" : "登录账号"}</p>
+  function renderMiddlePane() {
+    if (activeSection === "orders") {
+      return (
+        <>
+          <header className="pane-header">
+            <p>我的订单</p>
+            <h1>执行记录</h1>
+          </header>
+          <SegmentControl
+            items={orderFilters}
+            label="订单状态筛选"
+            value={orderFilter}
+            onChange={setOrderFilter}
+          />
+          <div className="item-list">
+            {userOrders.length > 0 ? userOrders.map((order) => (
               <button
-                className="account-button"
+                className={`list-item ${selectedOrder?.id === order.id ? "is-selected" : ""}`}
+                key={order.id}
                 type="button"
-                disabled={authStatus === "checking"}
-                onClick={() => login("wechat")}
+                onClick={() => setSelectedOrderId(order.id)}
               >
-                微信授权登录
+                <span>
+                  <strong>{order.requirement?.prompt || "本次任务"}</strong>
+                  <small>{order.agentName || "Agent"} · {statusLabel(order.status)}</small>
+                </span>
+                <em>{formatDateTime(order.createdAt)}</em>
               </button>
-              <button
-                className="account-button secondary"
-                type="button"
-                disabled={authStatus === "checking"}
-                onClick={() => login("google")}
-              >
-                Google 邮箱登录
-              </button>
-            </>
-          )}
-        </section>
-      </aside>
+            )) : (
+              <div className="empty-state">暂无订单</div>
+            )}
+          </div>
+        </>
+      );
+    }
 
-      <section className="workspace">
-        <header className="topbar">
-          <button className="text-button" type="button">
-            返回工作台
-          </button>
-          <div className="topbar-actions">
-            <button className="text-button" type="button">
-              帮助中心
+    if (activeSection === "account") {
+      return (
+        <>
+          <header className="pane-header">
+            <p>账户</p>
+            <h1>{currentUser ? "账户与用量" : "登录账户"}</h1>
+          </header>
+          <div className="account-summary-list">
+            <button className="list-item is-selected" type="button">
+              <span>
+                <strong>{currentUser?.displayName || currentUser?.email || "未登录"}</strong>
+                <small>{currentUser ? `${authProviderLabel}授权已连接` : "登录后可创建订单和查看交付物"}</small>
+              </span>
             </button>
-            <button className="round-button" type="button" aria-label="通知">
-              N
+            <button className="list-item" type="button" onClick={buyUses}>
+              <span>
+                <strong>{currentBalance} 次可用</strong>
+                <small>购买 10 次使用额度</small>
+              </span>
             </button>
           </div>
+        </>
+      );
+    }
+
+    return (
+      <>
+        <header className="pane-header">
+          <p>Agent 市场</p>
+          <h1>选择一个服务</h1>
         </header>
-
-        <div
-          className={`workspace-grid ${
-            inspectorOpen ? "" : "is-inspector-collapsed"
-          }`}
-        >
-          <section className="main-pane" aria-label="Agent 工作区">
-            <section className="agent-summary">
-              <div className="agent-avatar" aria-hidden="true">
-                {selectedAgent?.name?.slice(0, 1) || "A"}
-              </div>
-              <div className="agent-heading">
-                <div className="title-row">
-                  <h1>{selectedAgent?.name || "暂无 Agent"}</h1>
-                  <span>{selectedAgent?.tags?.[0] || "待补充"}</span>
-                </div>
-                <p>
-                  {selectedAgent?.description ||
-                    (agentStatus === "loading" ? "正在加载 Agent 目录" : "该分类暂无可用 Agent")}
-                </p>
-                <div className="metric-row">
-                  <strong>评分 {selectedAgent?.rating || "-"}</strong>
-                  <span>成交 {formatDealCount(selectedAgent?.dealCount)} 次</span>
-                  <span>平均交付 {selectedAgent?.estimatedDuration || "待确认"}</span>
-                </div>
-              </div>
-              <div className="price-panel">
-                <span>单次价格</span>
-                <strong>{formatMoney(selectedAgent?.priceCents)}</strong>
-                <small>/ 次</small>
-              </div>
-            </section>
-
-            <section className="agent-strip" aria-label="可选 Agent">
-              {visibleAgents.length > 0 ? (
-                visibleAgents.map((agent) => (
-                  <button
-                    className={`agent-chip ${
-                      selectedAgentId === agent.id ? "is-selected" : ""
-                    }`}
-                    key={agent.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedAgentId(agent.id);
-                      setSelectedStep("Agent 详情");
-                    }}
-                  >
-                    <span>{agent.name}</span>
-                    <strong>{formatMoney(agent.priceCents)}</strong>
-                  </button>
-                ))
-              ) : (
-                <div className="empty-strip">
-                  {agentStatus === "loading" ? "正在加载 Agent" : "该分类暂无 Agent"}
-                </div>
-              )}
-            </section>
-
-            <nav className="step-tabs" aria-label="任务流程">
-              {steps.map((step, index) => (
-                <button
-                  className={selectedStep === step ? "is-selected" : ""}
-                  key={step}
-                  type="button"
-                  onClick={() => setSelectedStep(step)}
-                >
-                  <span>{index + 1}</span>
-                  {step}
-                </button>
-              ))}
-            </nav>
-
-            <div className="detail-grid">
-              <section className="panel requirement-panel">
-                <div className="panel-title">
-                  <h2>{selectedStep === "需求填写" ? "编辑需求" : "需求摘要"}</h2>
-                  <button type="button" onClick={() => setSelectedStep("需求填写")}>
-                    编辑需求
-                  </button>
-                </div>
-                <textarea
-                  aria-label="任务需求"
-                  onChange={(event) => setRequirement(event.target.value)}
-                  readOnly={selectedStep !== "需求填写"}
-                  value={requirement}
-                />
-              </section>
-
-              <section className="panel">
-                <h2>交付物说明</h2>
-                <ul className="check-list">
-                  <li>本次执行将扣减 1 次</li>
-                  <li>{selectedAgent?.deliverable || "请选择一个可用 Agent"}</li>
-                  <li>开始执行后进入订单进度流转</li>
-                </ul>
-              </section>
-
-              <section className="panel balance-panel">
-                <h2>当前余额</h2>
-                <div className="balance-number">
-                  <strong>{currentBalance}</strong>
-                  <span>次</span>
-                </div>
-                <button className="outline-button" type="button" onClick={buyUses}>
-                  购买次数
-                </button>
-              </section>
-            </div>
-
-            <section className="checkout-bar" aria-label="扣次确认">
-              <div>
-                <span>本次扣减</span>
-                <strong>1 次</strong>
-              </div>
-              <div>
-                <span>单次价格</span>
-                <strong>{formatMoney(selectedAgent?.priceCents)}</strong>
-              </div>
-              <div>
-                <span>应付金额</span>
-                <strong>{formatMoney(selectedAgent?.priceCents)}</strong>
-              </div>
-              <button className="primary-button" type="button" onClick={confirmCheckout}>
-                确认并支付
-              </button>
-            </section>
-
-            <section className="timeline-panel">
-              <h2>执行进度</h2>
-              {currentTimeline.map((step) => (
-                <div className={`timeline-row ${step.state}`} key={step.key || step.label}>
-                  <span className="timeline-dot" />
-                  <strong>{step.label}</strong>
-                  <time>
-                    {step.timestamp
-                      ? formatDateTime(step.timestamp)
-                      : step.state === "next"
-                        ? "待推进"
-                        : selectedAgent?.estimatedDuration || "待确认"}
-                  </time>
-                </div>
-              ))}
-            </section>
-          </section>
-
-          {inspectorOpen ? (
-            <aside className="inspector" aria-label="右侧 Inspector">
-              <button
-                className="inspector-toggle"
-                type="button"
-                aria-expanded="true"
-                onClick={() => setInspectorOpen(false)}
-              >
-                收起 Inspector
-              </button>
-
-              <section className="inspector-card usage-card">
-                <div className="card-title">
-                  <h2>用量与计费</h2>
-                  <button type="button" onClick={buyUses}>购买次数</button>
-                </div>
-                <div className="usage-grid">
-                  <div>
-                    <span>剩余次数</span>
-                    <strong>{currentBalance}</strong>
-                    <small>次</small>
-                  </div>
-                  <div>
-                    <span>本次价格</span>
-                    <strong>{formatMoney(selectedAgent?.priceCents)}</strong>
-                  </div>
-                </div>
-              </section>
-
-              <section className="inspector-card">
-                <div className="card-title">
-                  <h2>使用记录</h2>
-                  <button type="button">查看全部</button>
-                </div>
-                <div className="record-list">
-                  {visibleOrders.length > 0 ? visibleOrders.map((order) => (
-                    <button
-                      className={selectedOrderId === order.id ? "is-selected" : ""}
-                      key={order.id}
-                      type="button"
-                      onClick={() => setSelectedOrderId(order.id)}
-                    >
-                      <span>
-                        <strong>{order.requirement?.prompt || "本次任务"}</strong>
-                        <small>{order.id}</small>
-                      </span>
-                      <em>{order.usageCost ? `-${order.usageCost} 次` : "待扣次"}</em>
-                    </button>
-                  )) : (
-                    <div className="empty-strip">暂无订单</div>
-                  )}
-                </div>
-              </section>
-
-              <section className="inspector-card">
-                <div className="card-title">
-                  <h2>订单信息</h2>
-                  <button type="button">详情</button>
-                </div>
-                <dl className="order-info">
-                  <div>
-                    <dt>订单号</dt>
-                    <dd>{selectedOrder?.id || "暂无订单"}</dd>
-                  </div>
-                  <div>
-                    <dt>关联 Agent</dt>
-                    <dd>{selectedOrder?.agentName || selectedAgent?.name || "待选择"}</dd>
-                  </div>
-                  <div>
-                    <dt>订单状态</dt>
-                    <dd>{statusLabel(selectedOrder?.status)}</dd>
-                  </div>
-                  <div>
-                    <dt>预计完成</dt>
-                    <dd>{formatDateTime(selectedOrder?.estimatedCompletionAt)}</dd>
-                  </div>
-                  <div>
-                    <dt>总金额</dt>
-                    <dd>{formatMoney(selectedOrder?.amountCents)}</dd>
-                  </div>
-                </dl>
-              </section>
-
-              <section className="inspector-card delivery-card">
-                <div className="card-title">
-                  <h2>交付物预览</h2>
-                  <button
-                    type="button"
-                    disabled={!artifacts[0]}
-                    onClick={() => artifacts[0] && shareArtifact(artifacts[0].id)}
-                  >
-                    分享
-                  </button>
-                </div>
-                {artifacts[0] ? (
-                  <button
-                    className="file-preview"
-                    type="button"
-                    onClick={() => downloadArtifact(artifacts[0].id)}
-                  >
-                    <strong>{artifacts[0].fileName}</strong>
-                    <small>{Math.max(1, Math.round((artifacts[0].sizeBytes || 0) / 1024))} KB · {artifacts[0].fileType}</small>
-                  </button>
-                ) : (
-                  <div className="file-preview">
-                    <strong>{selectedOrder?.status === "delivered" ? "暂无交付物" : "订单交付后可下载"}</strong>
-                    <small>PDF 报告</small>
-                  </div>
-                )}
-              </section>
-            </aside>
-          ) : (
+        <SegmentControl
+          items={categories}
+          label="Agent 分类"
+          value={activeCategory}
+          onChange={setActiveCategory}
+        />
+        <div className="item-list">
+          {visibleAgents.length > 0 ? visibleAgents.map((agent) => (
             <button
-              className="inspector-peek"
+              className={`list-item agent-list-item ${selectedAgent?.id === agent.id ? "is-selected" : ""}`}
+              key={agent.id}
               type="button"
-              aria-expanded="false"
-              onClick={() => setInspectorOpen(true)}
+              onClick={() => setSelectedAgentId(agent.id)}
             >
-              <span>Inspector</span>
-              <small>{currentBalance} 次</small>
+              <span>
+                <strong>{agent.name}</strong>
+                <small>{agent.description}</small>
+              </span>
+              <em>{formatMoney(agent.priceCents)}</em>
             </button>
+          )) : (
+            <div className="empty-state">
+              {agentStatus === "loading" ? "正在加载 Agent" : "该分类暂无 Agent"}
+            </div>
           )}
         </div>
+      </>
+    );
+  }
+
+  function renderDetailPane() {
+    if (activeSection === "orders") {
+      return (
+        <section className="detail-panel">
+          <header className="detail-toolbar">
+            <div>
+              <p>订单详情</p>
+              <h2>{selectedOrder?.agentName || "选择一个订单"}</h2>
+            </div>
+            {selectedOrder?.status === "running" && (
+              <button className="ghost-button" type="button" onClick={cancelSelectedOrder}>
+                取消订单
+              </button>
+            )}
+          </header>
+
+          {selectedOrder ? (
+            <>
+              <div className="detail-card status-card">
+                <span>{statusLabel(selectedOrder.status)}</span>
+                <strong>{selectedOrder.requirement?.prompt || "本次任务"}</strong>
+                <small>预计完成：{formatDateTime(selectedOrder.estimatedCompletionAt)}</small>
+              </div>
+
+              <section className="timeline-card">
+                <h3>执行进度</h3>
+                {currentTimeline.map((step) => (
+                  <div className={`timeline-row ${step.state}`} key={step.key || step.label}>
+                    <span className="timeline-dot" />
+                    <strong>{step.label}</strong>
+                    <time>{step.timestamp ? formatDateTime(step.timestamp) : "待推进"}</time>
+                  </div>
+                ))}
+              </section>
+
+              <section className="detail-card artifact-card">
+                <div className="card-heading">
+                  <h3>交付物</h3>
+                  <span>{artifacts[0] ? artifacts[0].fileType : "PDF"}</span>
+                </div>
+                {artifacts[0] ? (
+                  <div className="artifact-row">
+                    <span>
+                      <strong>{artifacts[0].fileName}</strong>
+                      <small>{Math.max(1, Math.round((artifacts[0].sizeBytes || 0) / 1024))} KB</small>
+                    </span>
+                    <div className="inline-actions">
+                      <button type="button" onClick={() => shareArtifact(artifacts[0].id)}>分享</button>
+                      <button type="button" onClick={() => downloadArtifact(artifacts[0].id)}>下载</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="muted-copy">订单交付后会在这里出现报告下载。</p>
+                )}
+              </section>
+            </>
+          ) : (
+            <div className="empty-detail">从中间列表选择一个订单。</div>
+          )}
+        </section>
+      );
+    }
+
+    if (activeSection === "account") {
+      return (
+        <section className="detail-panel">
+          <header className="detail-toolbar">
+            <div>
+              <p>账户</p>
+              <h2>{currentUser ? currentUser.displayName || currentUser.email : "登录 Oneshot"}</h2>
+            </div>
+            {currentUser && (
+              <button className="ghost-button" type="button" onClick={logout}>
+                退出
+              </button>
+            )}
+          </header>
+
+          {currentUser ? (
+            <>
+              <div className="usage-hero">
+                <span>剩余次数</span>
+                <strong>{currentBalance}</strong>
+                <button type="button" onClick={buyUses}>购买 10 次</button>
+              </div>
+              <section className="detail-card ledger-card">
+                <div className="card-heading">
+                  <h3>最近用量</h3>
+                  <span>{recentLedger.length} 条</span>
+                </div>
+                {recentLedger.length > 0 ? recentLedger.map((entry) => (
+                  <div className="ledger-row" key={entry.id}>
+                    <span>{entry.type === "purchase" ? "购买次数" : "执行扣次"}</span>
+                    <strong>{entry.delta > 0 ? `+${entry.delta}` : entry.delta}</strong>
+                  </div>
+                )) : (
+                  <p className="muted-copy">暂无用量记录。</p>
+                )}
+              </section>
+            </>
+          ) : (
+            <div className="login-card">
+              <p>{authStatus === "checking" ? "正在检查账号" : "登录后开始使用 Agent 服务"}</p>
+              <button type="button" disabled={authStatus === "checking"} onClick={() => login("wechat")}>
+                微信授权登录
+              </button>
+              <button className="ghost-button" type="button" disabled={authStatus === "checking"} onClick={() => login("google")}>
+                Google 邮箱登录
+              </button>
+            </div>
+          )}
+        </section>
+      );
+    }
+
+    return (
+      <section className="detail-panel">
+        <header className="detail-toolbar">
+          <div>
+            <p>Agent 详情</p>
+            <h2>{selectedAgent?.name || "选择一个 Agent"}</h2>
+          </div>
+          <button className="balance-pill" type="button" onClick={buyUses}>
+            {currentBalance} 次
+          </button>
+        </header>
+
+        {selectedAgent ? (
+          <>
+            <div className="agent-hero">
+              <div className="agent-avatar" aria-hidden="true">{selectedAgent.name?.slice(0, 1) || "A"}</div>
+              <div>
+                <h3>{selectedAgent.name}</h3>
+                <p>{selectedAgent.description}</p>
+                <div className="meta-row">
+                  <span>评分 {selectedAgent.rating}</span>
+                  <span>成交 {formatDealCount(selectedAgent.dealCount)} 次</span>
+                  <span>{selectedAgent.estimatedDuration}</span>
+                </div>
+              </div>
+            </div>
+
+            <section className="detail-card">
+              <div className="card-heading">
+                <h3>交付说明</h3>
+                <span>{formatMoney(selectedAgent.priceCents)} / 次</span>
+              </div>
+              <p className="muted-copy">{selectedAgent.deliverable}</p>
+            </section>
+
+            <section className="composer-card">
+              <label htmlFor="requirement">任务需求</label>
+              <textarea
+                id="requirement"
+                aria-label="任务需求"
+                onChange={(event) => setRequirement(event.target.value)}
+                value={requirement}
+              />
+              <div className="composer-actions">
+                <span>将扣减 {selectedAgent.priceUses || 1} 次</span>
+                <button className="primary-button" type="button" onClick={confirmCheckout}>
+                  开始执行
+                </button>
+              </div>
+            </section>
+          </>
+        ) : (
+          <div className="empty-detail">从中间列表选择一个 Agent。</div>
+        )}
       </section>
+    );
+  }
+
+  return (
+    <main className="split-shell">
+      <aside className="rail" aria-label="主导航">
+        <div className="app-mark">O</div>
+        <nav>
+          {sections.map((section) => (
+            <button
+              className={activeSection === section.id ? "is-active" : ""}
+              key={section.id}
+              type="button"
+              onClick={() => setActiveSection(section.id)}
+            >
+              <NavIcon>{section.icon}</NavIcon>
+              <span>{section.label}</span>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      <section className="list-pane" aria-label="列表区">
+        {renderMiddlePane()}
+      </section>
+
+      <section className="content-pane" aria-label="详情区">
+        {renderDetailPane()}
+      </section>
+
       {toast && (
         <div className="toast" role="status">
           {toast}

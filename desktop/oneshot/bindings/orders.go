@@ -18,8 +18,8 @@ func (b *OrderBinding) CreateOrder(input oneshot.CreateOrderRequest) (oneshot.Or
 	return b.client.CreateOrder(context.Background(), input)
 }
 
-func (b *OrderBinding) ListOrders() ([]oneshot.Order, error) {
-	return b.client.ListOrders(context.Background())
+func (b *OrderBinding) ListOrders(status string) ([]oneshot.Order, error) {
+	return b.client.ListOrders(context.Background(), status)
 }
 
 func (b *OrderBinding) GetOrder(orderID string) (oneshot.Order, error) {

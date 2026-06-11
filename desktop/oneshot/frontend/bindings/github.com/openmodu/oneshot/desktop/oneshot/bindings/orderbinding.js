@@ -41,10 +41,11 @@ export function GetOrder(orderID) {
 }
 
 /**
+ * @param {string} status
  * @returns {$CancellablePromise<oneshot$0.Order[]>}
  */
-export function ListOrders() {
-    return $Call.ByID(396717011).then(/** @type {($result: any) => any} */(($result) => {
+export function ListOrders(status) {
+    return $Call.ByID(396717011, status).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }

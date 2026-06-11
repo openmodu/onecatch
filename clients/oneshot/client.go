@@ -27,7 +27,7 @@ type Client interface {
 	ListLedger(context.Context) ([]LedgerEntry, error)
 	StartPurchase(context.Context, StartPurchaseRequest) (Purchase, error)
 	CreateOrder(context.Context, CreateOrderRequest) (Order, error)
-	ListOrders(context.Context) ([]Order, error)
+	ListOrders(context.Context, string) ([]Order, error)
 	GetOrder(context.Context, string) (Order, error)
 	CancelOrder(context.Context, string) (Order, error)
 	ListArtifacts(context.Context, string) ([]Artifact, error)
@@ -131,9 +131,13 @@ func (c *HTTPClient) CreateOrder(ctx context.Context, input CreateOrderRequest) 
 	return out, err
 }
 
-func (c *HTTPClient) ListOrders(ctx context.Context) ([]Order, error) {
+func (c *HTTPClient) ListOrders(ctx context.Context, status string) ([]Order, error) {
 	var out []Order
-	err := c.do(ctx, http.MethodGet, "/api/orders", nil, &out)
+	path := "/api/orders"
+	if strings.TrimSpace(status) != "" {
+		path += "?status=" + url.QueryEscape(status)
+	}
+	err := c.do(ctx, http.MethodGet, path, nil, &out)
 	return out, err
 }
 
