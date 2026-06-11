@@ -7,6 +7,7 @@
 - PRD：`design/prd/00-agent-marketplace-mvp.md`
 - 相关 issue：`design/issues/00-002-auth-session.md`
 - 前置 issue：`design/issues/00-009-user-identity-persistence.md`
+- 技术方案：`design/docs/TECHNICAL_DESIGNS.md#issue-00-010-oauth-与安全会话`
 
 ## 目标
 

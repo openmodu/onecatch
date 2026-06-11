@@ -9,6 +9,7 @@
 - 相关 issue：`design/issues/00-004-usage-billing-payment.md`
 - 相关 issue：`design/issues/00-005-order-lifecycle.md`
 - 相关 issue：`design/issues/00-006-delivery-artifacts.md`
+- 技术方案：`design/docs/TECHNICAL_DESIGNS.md#issue-00-013-桌面端三段式交互重构`
 
 ## 目标
 

@@ -7,6 +7,7 @@
 - PRD：`design/prd/00-agent-marketplace-mvp.md`
 - 相关 issue：`design/issues/00-005-order-lifecycle.md`
 - 前置 issue：`design/issues/00-011-business-data-mysql-persistence.md`
+- 技术方案：`design/docs/TECHNICAL_DESIGNS.md#issue-00-012-agent-执行-worker`
 
 ## 目标
 

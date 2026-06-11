@@ -6,6 +6,7 @@
 
 - PRD：`design/prd/00-agent-marketplace-mvp.md`
 - 相关原型：`design/prototype/`
+- 技术方案：`design/docs/TECHNICAL_DESIGNS.md#issue-00-005-订单生命周期`
 
 ## 目标
 

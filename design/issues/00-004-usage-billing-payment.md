@@ -6,6 +6,7 @@
 
 - PRD：`design/prd/00-agent-marketplace-mvp.md`
 - 相关原型：`design/prototype/`
+- 技术方案：`design/docs/TECHNICAL_DESIGNS.md#issue-00-004-次数计费与支付`
 
 ## 目标
 
