@@ -40,6 +40,14 @@ const workflowSteps = [
   { id: "artifact", label: "交付物" },
 ];
 
+const inspectorPanels = [
+  { id: "preview", label: "预览", icon: "P", shortcut: "⌘P" },
+  { id: "detail", label: "明细", icon: "D", shortcut: "⌘D" },
+  { id: "order", label: "订单", icon: "O", shortcut: "⌘O" },
+  { id: "records", label: "记录", icon: "R", shortcut: "⌘R" },
+  { id: "progress", label: "进度", icon: "S", shortcut: "⌘J" },
+];
+
 const fallbackAgents = [
   {
     id: "research-analyst",
@@ -224,7 +232,9 @@ export default function App() {
   const [selectedStep, setSelectedStep] = useState("checkout");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const [orderFilter, setOrderFilter] = useState("");
-  const [inspectorOpen, setInspectorOpen] = useState(false);
+  const [inspectorMenuOpen, setInspectorMenuOpen] = useState(false);
+  const [activeInspectorPanel, setActiveInspectorPanel] = useState("detail");
+  const [inspectorPanelOpen, setInspectorPanelOpen] = useState(false);
   const [requirement, setRequirement] = useState(
     "请帮我完成 2026 年中国 AI Agent 服务市场研究，包括市场规模、主要玩家、收费模式、增长机会和进入建议。",
   );
@@ -582,6 +592,218 @@ export default function App() {
   function chooseOrder(order) {
     setSelectedOrderId(order.id);
     setActiveView("orders");
+  }
+
+  function openInspectorPanel(panelId) {
+    setActiveInspectorPanel(panelId);
+    setInspectorPanelOpen(true);
+    setInspectorMenuOpen(false);
+  }
+
+  function closeInspectorPanel() {
+    setInspectorPanelOpen(false);
+  }
+
+  function renderInspectorMenu() {
+    return (
+      <div className="inspector-menu" role="menu" aria-label="Inspector 菜单">
+        {inspectorPanels.map((panel) => (
+          <button
+            className={activeInspectorPanel === panel.id && inspectorPanelOpen ? "selected" : ""}
+            key={panel.id}
+            type="button"
+            role="menuitem"
+            onClick={() => openInspectorPanel(panel.id)}
+          >
+            <span className="menu-icon">{panel.icon}</span>
+            <strong>{panel.label}</strong>
+            <small>{panel.shortcut}</small>
+          </button>
+        ))}
+      </div>
+    );
+  }
+
+  function renderInspectorDetail(panelId) {
+    if (panelId === "preview") {
+      return (
+        <div className="drawer-section">
+          <div className="drawer-section-title">
+            <span>交付物预览</span>
+            <button type="button" onClick={() => setSelectedStep("artifact")}>定位</button>
+          </div>
+          {inspectorArtifacts[0] ? (
+            <>
+              <div className="file-row compact">
+                <span className="file-icon">PDF</span>
+                <div>
+                  <strong>{inspectorArtifacts[0].fileName}</strong>
+                  <small>{Math.max(1, Math.round((inspectorArtifacts[0].sizeBytes || 0) / 1024))} KB · {inspectorArtifacts[0].fileType}</small>
+                </div>
+              </div>
+              <div className="report-preview drawer-preview">
+                <strong>AI Agent 服务市场研究</strong>
+                <span>市场规模 / 竞争格局 / 增长机会</span>
+              </div>
+              <div className="drawer-actions">
+                <button type="button" onClick={() => shareArtifact(inspectorArtifacts[0].id)}>分享</button>
+                <button type="button" onClick={() => downloadArtifact(inspectorArtifacts[0].id)}>下载</button>
+              </div>
+            </>
+          ) : (
+            <p className="muted-copy">订单交付后显示预览和下载入口。</p>
+          )}
+        </div>
+      );
+    }
+
+    if (panelId === "order") {
+      return (
+        <div className="drawer-section">
+          <div className="drawer-section-title">
+            <span>订单信息</span>
+            <button type="button" onClick={() => setActiveView("orders")}>打开订单</button>
+          </div>
+          {selectedOrder ? (
+            <dl className="drawer-dl">
+              <div><dt>订单号</dt><dd>{selectedOrder.id}</dd></div>
+              <div><dt>关联 Agent</dt><dd>{selectedOrder.agentName}</dd></div>
+              <div><dt>订单状态</dt><dd>{statusLabel(selectedOrder.status)}</dd></div>
+              <div><dt>创建时间</dt><dd>{formatDateTime(selectedOrder.createdAt)}</dd></div>
+              <div><dt>预计完成</dt><dd>{formatDateTime(selectedOrder.estimatedCompletionAt)}</dd></div>
+              <div><dt>总金额</dt><dd>{formatMoney(selectedOrder.amountCents)}</dd></div>
+            </dl>
+          ) : (
+            <p className="muted-copy">创建订单后会在这里显示订单信息。</p>
+          )}
+        </div>
+      );
+    }
+
+    if (panelId === "records") {
+      return (
+        <div className="drawer-section">
+          <div className="drawer-section-title">
+            <span>使用记录</span>
+            <button type="button" onClick={() => setActiveView("billing")}>查看全部</button>
+          </div>
+          <div className="drawer-list">
+            {recentLedger.length > 0 ? recentLedger.map((entry) => (
+              <div className="drawer-list-row" key={entry.id}>
+                <span>
+                  <strong>{ledgerLabel(entry.type)}</strong>
+                  <small>{formatDateTime(entry.createdAt)}</small>
+                </span>
+                <em>{entry.delta > 0 ? `+${entry.delta}` : entry.delta} 次</em>
+              </div>
+            )) : (
+              <p className="muted-copy">暂无用量记录。</p>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    if (panelId === "progress") {
+      return (
+        <div className="drawer-section">
+          <div className="drawer-section-title">
+            <span>执行进度</span>
+            <button type="button" onClick={() => setSelectedStep("running")}>定位</button>
+          </div>
+          <div className="drawer-timeline">
+            {timeline.map((step) => (
+              <div className={`drawer-timeline-row ${step.state}`} key={step.key || step.label}>
+                <span className="timeline-dot" />
+                <strong>{step.label}</strong>
+                <time>{step.timestamp ? formatDateTime(step.timestamp) : "待推进"}</time>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="drawer-section">
+        <div className="drawer-section-title">
+          <span>扣次与订单明细</span>
+          <button type="button" onClick={buyUses}>购买次数</button>
+        </div>
+        <div className="detail-diff-list" aria-label="当前任务明细">
+          <div className="detail-diff-row added">
+            <span>余额</span>
+            <strong>{currentBalance} 次</strong>
+            <small>当前可用次数</small>
+          </div>
+          <div className="detail-diff-row removed">
+            <span>本次扣减</span>
+            <strong>-{selectedAgent?.priceUses || 1} 次</strong>
+            <small>确认并支付后扣减</small>
+          </div>
+          <div className="detail-diff-row neutral">
+            <span>单次价格</span>
+            <strong>{selectedAgent ? formatMoney(selectedAgent.priceCents) : "待选择"}</strong>
+            <small>{selectedAgent?.name || "请选择 Agent"}</small>
+          </div>
+          <div className="detail-diff-row neutral">
+            <span>订单</span>
+            <strong>{selectedOrder?.id || "待创建"}</strong>
+            <small>{selectedOrder ? statusLabel(selectedOrder.status) : "当前任务尚未创建订单"}</small>
+          </div>
+        </div>
+        <div className="drawer-section-title compact">
+          <span>最近订单</span>
+        </div>
+        <div className="drawer-list">
+          {userOrders.slice(0, 4).map((order) => (
+            <button
+              className={selectedOrder?.id === order.id ? "selected" : ""}
+              key={order.id}
+              type="button"
+              onClick={() => chooseOrder(order)}
+            >
+              <span>
+                <strong>{order.requirement?.prompt || "本次任务"}</strong>
+                <small>{order.id}</small>
+              </span>
+              <em>{order.usageCost ? `-${order.usageCost} 次` : statusLabel(order.status)}</em>
+            </button>
+          ))}
+          {userOrders.length === 0 && <p className="muted-copy">暂无订单。</p>}
+        </div>
+      </div>
+    );
+  }
+
+  function renderInspectorPanel() {
+    const panel =
+      inspectorPanels.find((item) => item.id === activeInspectorPanel) ?? inspectorPanels[1];
+    const contextName =
+      activeView === "orders"
+        ? "我的订单"
+        : activeView === "billing"
+          ? "用量账单"
+          : activeView === "account"
+            ? "账户"
+            : selectedAgent?.name || "工作台";
+
+    return (
+      <aside className="inspector-drawer" aria-label={`${panel.label}面板`}>
+        <header className="drawer-header">
+          <div>
+            <p>工作台 / {contextName}</p>
+            <h2>{panel.label}</h2>
+          </div>
+          <button type="button" aria-label="关闭 Inspector 面板" onClick={closeInspectorPanel}>
+            ×
+          </button>
+        </header>
+        <div className="drawer-content">
+          {renderInspectorDetail(panel.id)}
+        </div>
+      </aside>
+    );
   }
 
   function renderWorkbench() {
@@ -952,107 +1174,26 @@ export default function App() {
             <button className="ghost-link" type="button" onClick={() => showToast("帮助中心暂未接入")}>
               帮助中心
             </button>
-            <button
-              className="inspector-toggle"
-              type="button"
-              aria-expanded={inspectorOpen}
-              onClick={() => setInspectorOpen((value) => !value)}
-            >
-              {inspectorOpen ? "收起 Inspector" : "打开 Inspector"}
-            </button>
+            <div className="inspector-tool">
+              <button
+                className={`inspector-trigger ${inspectorMenuOpen ? "active" : ""}`}
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={inspectorMenuOpen}
+                onClick={() => setInspectorMenuOpen((value) => !value)}
+              >
+                <span aria-hidden="true">▣</span>
+                <small>⌄</small>
+              </button>
+              {inspectorMenuOpen && renderInspectorMenu()}
+            </div>
           </div>
         </header>
 
-        <div className={`content-grid ${inspectorOpen ? "inspector-open" : "inspector-closed"}`}>
+        <div className={`content-grid ${inspectorPanelOpen ? "inspector-open" : "inspector-closed"}`}>
           {renderMainView()}
 
-          {inspectorOpen ? (
-            <aside className="inspector" aria-label="Inspector">
-              <section className="inspector-card usage-card">
-                <div className="panel-title">
-                  <h2>用量与计费</h2>
-                  <button type="button" onClick={buyUses}>购买次数</button>
-                </div>
-                <div className="usage-stats">
-                  <div>
-                    <span>剩余次数</span>
-                    <strong>{currentBalance}</strong>
-                    <small>次</small>
-                  </div>
-                  <div>
-                    <span>单次价格</span>
-                    <strong>{selectedAgent ? formatMoney(selectedAgent.priceCents) : "待选"}</strong>
-                  </div>
-                </div>
-              </section>
-
-              <section className="inspector-card">
-                <div className="panel-title">
-                  <h2>使用记录</h2>
-                  <button type="button" onClick={() => setActiveView("billing")}>查看全部</button>
-                </div>
-                <div className="usage-list">
-                  {userOrders.slice(0, 4).map((order) => (
-                    <button
-                      className={selectedOrder?.id === order.id ? "selected" : ""}
-                      key={order.id}
-                      type="button"
-                      onClick={() => chooseOrder(order)}
-                    >
-                      <span>
-                        <strong>{order.requirement?.prompt || "本次任务"}</strong>
-                        <small>{order.id}</small>
-                      </span>
-                      <em>{order.usageCost ? `-${order.usageCost} 次` : statusLabel(order.status)}</em>
-                    </button>
-                  ))}
-                  {userOrders.length === 0 && <p className="muted-copy">暂无使用记录。</p>}
-                </div>
-              </section>
-
-              <section className="inspector-card">
-                <div className="panel-title">
-                  <h2>订单信息</h2>
-                  <button type="button" onClick={() => setActiveView("orders")}>详情</button>
-                </div>
-                {selectedOrder ? (
-                  <dl className="order-info">
-                    <div><dt>订单号</dt><dd>{selectedOrder.id}</dd></div>
-                    <div><dt>关联 Agent</dt><dd>{selectedOrder.agentName}</dd></div>
-                    <div><dt>订单状态</dt><dd>{statusLabel(selectedOrder.status)}</dd></div>
-                    <div><dt>预计完成</dt><dd>{formatDateTime(selectedOrder.estimatedCompletionAt)}</dd></div>
-                    <div><dt>总金额</dt><dd>{formatMoney(selectedOrder.amountCents)}</dd></div>
-                  </dl>
-                ) : (
-                  <p className="muted-copy">创建订单后会在这里显示订单信息。</p>
-                )}
-              </section>
-
-              <section className="inspector-card delivery-preview">
-                <div className="panel-title">
-                  <h2>交付物预览</h2>
-                  <button type="button" onClick={() => setSelectedStep("artifact")}>预览</button>
-                </div>
-                {inspectorArtifacts[0] ? (
-                  <>
-                    <div className="file-row compact">
-                      <span className="file-icon">PDF</span>
-                      <div>
-                        <strong>{inspectorArtifacts[0].fileName}</strong>
-                        <small>{inspectorArtifacts[0].fileType}</small>
-                      </div>
-                    </div>
-                    <div className="report-preview">
-                      <strong>AI Agent 服务市场研究</strong>
-                      <span>市场规模 / 竞争格局 / 增长机会</span>
-                    </div>
-                  </>
-                ) : (
-                  <p className="muted-copy">订单交付后显示预览。</p>
-                )}
-              </section>
-            </aside>
-          ) : null}
+          {inspectorPanelOpen ? renderInspectorPanel() : null}
         </div>
       </section>
 
