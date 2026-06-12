@@ -549,6 +549,157 @@ workspace
   - 1280px 宽下主区与 drawer 为 `630px 430px`，无横向溢出。
   - 关闭 drawer 后主区恢复单栏。
 
+## Issue 00-017: Mac native 桌面视觉系统收敛
+
+### 评审状态
+
+本方案已由用户确认进入实现，并已完成 00-017 交付。
+
+本方案基于 checkpoint 提交 `e6be354 chore(checkpoint): preserve current desktop UI state` 继续优化。Fable 版本已经完成了部分 native 方向的探索：Wails 原生菜单、toolbar drag/no-drag、图标化导航、Inspector popover 和快捷键展示。00-017 不推翻这些交互，只收敛视觉系统和 Mac 基础行为。
+
+### 问题诊断
+
+当前版本仍有三类问题：
+
+1. 视觉仍偏 Web app：
+   - 大面积米色/陶土色让界面更像网页后台或品牌页。
+   - 主工作区仍由大量 bordered cards 组成，桌面工具感不足。
+   - Inspector `明细` 仍是彩色大块，而不是更易扫读的 panel/list。
+2. Mac 基础行为不完整：
+   - `body { user-select: none; }` 会阻止订单号、说明文本等内容复制。
+   - 全局 `contextmenu` 拦截会破坏 Mac 常见右键行为。
+3. Dark mode 半成品风险：
+   - CSS 已声明 `color-scheme: light dark`，但 Wails 背景和截图验收没有覆盖 dark mode。
+   - 本期不应带半完成 dark mode 进入验收。
+
+### 设计目标
+
+```text
+保留当前交互模型
+  -> 收敛色彩到 macOS light neutral
+  -> 收敛 sidebar / toolbar / popover / drawer 到 native 桌面结构
+  -> 恢复选择、复制、右键等基础行为
+  -> 用截图和构建验证不跑偏
+```
+
+### 视觉系统
+
+| 区域 | 当前问题 | 目标 |
+| --- | --- | --- |
+| 全局背景 | 米色偏重 | macOS neutral `#f5f5f7` 一类浅灰 |
+| Sidebar | 色块和卡片感明显 | source list，低对比 selection |
+| Toolbar | 仍像网页按钮栏 | 原生 toolbar，轻按钮和拖拽区 |
+| Popover | 接近目标但阴影/选中态偏品牌 | native menu 式轻浮层 |
+| Main | 大量卡片边框 | grouped sections，弱边界 |
+| Inspector | 彩色摘要块 | inspector panel + list/table/diff rows |
+
+### API / Binding
+
+本 issue 不新增后端 API 或 Wails binding。
+
+| 数据 | 来源 |
+| --- | --- |
+| Agent | 已有 `AgentBinding.ListAgents()` |
+| 余额/流水 | 已有 `BillingBinding.GetBalance()` / `BillingBinding.ListLedger()` |
+| 订单 | 已有 `OrderBinding.ListOrders(status)` |
+| 交付物 | 已有 `ArtifactBinding.ListArtifacts(orderID)` |
+
+### Wails 改动
+
+- 保留当前 `AppMenu`、`EditMenu`、`WindowMenu` 原生菜单角色。
+- 将 `application.WebviewWindowOptions.BackgroundColour` 调整为与前端 light 背景一致的中性灰。
+- 不新增窗口、不新增系统菜单命令、不新增 binding。
+
+### 前端改动
+
+#### `styles.css`
+
+- 将 `:root` 收敛为 light mode token：
+  - `--bg`：macOS neutral background。
+  - `--sidebar`：轻 source list 背景。
+  - `--surface`：内容白色。
+  - `--line`：低对比分隔线。
+  - `--accent`：只用于主按钮、金额和轻 selection。
+- 移除本期未验收的 `@media (prefers-color-scheme: dark)` token。
+- 将文本选择策略从全局禁用改为控件级禁用：
+  - 禁用：button、nav item、drag region。
+  - 允许：正文、订单号、需求文本、drawer 文本、输入框。
+- 移除全局右键禁用相关视觉假设。
+- 调整：
+  - `.sidebar`、`.nav-block`、`.auth-card`
+  - `.topbar`、`.back-link`、`.ghost-link`、`.inspector-trigger`
+  - `.inspector-menu`
+  - `.agent-hero`、`.segmented`、`.agent-strip`、`.flow-tabs`、`.brief-grid`、`.checkout-panel`
+  - `.inspector-drawer`、`.drawer-header`、`.detail-diff-row`、`.drawer-list`
+- 恢复并维护 860px 以下断点，避免小窗口布局损坏。
+
+#### `App.jsx`
+
+- 移除全局 `contextmenu` event handler。
+- 保留当前 `Icon` 组件，不在本 issue 引入新依赖。
+- 如视觉需要，仅微调 drawer 明细 DOM 的 class 或结构，不改变数据来源和业务状态。
+- 保留 `⌘1` 到 `⌘5` 打开 Inspector 面板的行为。
+
+### 可复制与右键边界
+
+| 元素 | 选择 | 右键 |
+| --- | --- | --- |
+| 按钮、导航、toolbar 控件 | 不选择 | 浏览器/Wails 默认 |
+| 需求文本、订单号、金额、drawer 明细 | 可选择 | 不阻止 |
+| textarea/input | 可选择 | 不阻止 |
+| Wails drag 区 | 不选择 | 不阻止 |
+
+### 验证计划
+
+1. 自动验证：
+   - `cd desktop/oneshot/frontend && npm run build`
+   - `go test ./...`
+   - `cd desktop/oneshot && wails3 build DEV=true`
+2. 浏览器视觉验证：
+   - 1280x800 默认态。
+   - 1280x800 Inspector 菜单态。
+   - 1280x800 `明细` drawer 态。
+   - 1440x900 默认态和 drawer 态。
+   - 记录截图路径。
+   - 使用 DOM 检查 `document.documentElement.scrollWidth <= window.innerWidth`。
+3. Mac 原生验证：
+   - `cd desktop/oneshot && wails3 dev -port <free-port>`
+   - 检查 macOS 窗口控制点、toolbar、popover 和 drawer 不重叠。
+   - 检查 Wails native window 背景与前端背景无明显色差。
+4. 行为验证：
+   - 选择并复制订单号、需求文本、drawer 明细。
+   - 非输入区域右键不被应用层阻止。
+   - Inspector 菜单点击外部关闭。
+   - `⌘1` 到 `⌘5` 可打开对应面板。
+
+### 验收风险
+
+- 如果继续保留暖色主背景，即使控件变轻，仍会偏 Web/品牌页，不符合 Mac native 目标。
+- 如果保留全局禁止选择和右键，会和 Mac 桌面行为冲突。
+- 如果同时做 dark mode，会扩大验证范围；本 issue 明确只验收 light mode。
+
+### 验证结果
+
+- `cd desktop/oneshot/frontend && npm run build` 通过。
+- `go test ./...` 通过。
+- `cd desktop/oneshot && wails3 build DEV=true` 通过，仅有 macOS SDK 链接版本 warning。
+- `cd desktop/oneshot && wails3 dev -port 9262` 通过，Wails 原生启动并连接 `http://localhost:9262` 前端 dev server。
+- 浏览器视觉截图：
+  - 1280 默认态：`/tmp/oneshot-017-default-1280.png`
+  - 1280 菜单态：`/tmp/oneshot-017-menu-1280.png`
+  - 1280 明细 drawer 态：`/tmp/oneshot-017-detail-1280.png`
+  - 1440 默认态：`/tmp/oneshot-017-default-1440.png`
+  - 1440 明细 drawer 态：`/tmp/oneshot-017-detail-1440.png`
+- DOM 检查：
+  - 1280 和 1440 下 `document.documentElement.scrollWidth <= window.innerWidth`。
+  - drawer 打开时 1280 为 `630px 430px`，1440 为 `790px 430px`。
+  - `body` 与 `.main-column` 可选择文本，导航按钮不可选择。
+- 代码审计：
+  - `App.jsx` 已移除全局 `contextmenu` 拦截。
+  - `styles.css` 已移除 `prefers-color-scheme: dark` 半成品 token。
+  - Wails window background 已改为中性灰。
+  - 导航和 Inspector 图标已调为轻笔画、单色、统一尺寸的 template symbol 风格。
+
 ## Issue 00-015: 用户端与后台管理接口安全边界
 
 ### 后端 API

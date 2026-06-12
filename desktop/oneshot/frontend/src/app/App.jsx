@@ -10,10 +10,10 @@ import {
 const iconPaths = {
   workbench: (
     <>
-      <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
-      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
-      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
-      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
+      <rect x="4" y="4" width="6.5" height="6.5" rx="1.4" />
+      <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.4" />
+      <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.4" />
+      <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.4" />
     </>
   ),
   orders: (
@@ -30,8 +30,9 @@ const iconPaths = {
   ),
   account: (
     <>
-      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="9" r="3" />
+      <path d="M6.8 18.6a5.7 5.7 0 0 1 10.4 0" />
     </>
   ),
   preview: (
@@ -48,8 +49,8 @@ const iconPaths = {
   ),
   order: (
     <>
-      <rect x="8" y="2" width="8" height="4" rx="1" />
-      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+      <rect x="6" y="4" width="12" height="16" rx="2" />
+      <path d="M9 8h6M9 12h6M9 16h4" />
     </>
   ),
   records: (
@@ -61,8 +62,8 @@ const iconPaths = {
   progress: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
   panels: (
     <>
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M15 4v16" />
+      <rect x="3.5" y="5" width="17" height="14" rx="2.2" />
+      <path d="M14.5 5v14" />
     </>
   ),
   chevronLeft: <path d="m15 18-6-6 6-6" />,
@@ -74,9 +75,10 @@ function Icon({ name }) {
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.8"
+      strokeWidth="1.55"
       strokeLinecap="round"
       strokeLinejoin="round"
+      vectorEffect="non-scaling-stroke"
       aria-hidden="true"
     >
       {iconPaths[name]}
@@ -454,16 +456,6 @@ export default function App() {
     window.addEventListener("pointerdown", onPointerDown);
     return () => window.removeEventListener("pointerdown", onPointerDown);
   }, [inspectorMenuOpen]);
-
-  useEffect(() => {
-    function onContextMenu(event) {
-      if (!event.target.closest("textarea, input")) {
-        event.preventDefault();
-      }
-    }
-    document.addEventListener("contextmenu", onContextMenu);
-    return () => document.removeEventListener("contextmenu", onContextMenu);
-  }, []);
 
   useEffect(() => {
     let alive = true;
