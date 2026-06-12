@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AgentBinding,
   ArtifactBinding,
@@ -7,11 +7,88 @@ import {
   OrderBinding,
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 
+const iconPaths = {
+  workbench: (
+    <>
+      <rect x="3" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5" />
+      <rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5" />
+      <rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5" />
+    </>
+  ),
+  orders: (
+    <>
+      <path d="M8 6h13M8 12h13M8 18h13" />
+      <path d="M3 6h.01M3 12h.01M3 18h.01" />
+    </>
+  ),
+  billing: (
+    <>
+      <path d="M3 3v18h18" />
+      <path d="M18 17V9M13 17V5M8 17v-3" />
+    </>
+  ),
+  account: (
+    <>
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </>
+  ),
+  preview: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
+  detail: (
+    <>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M15 2v5h5M10 9H8M16 13H8M16 17H8" />
+    </>
+  ),
+  order: (
+    <>
+      <rect x="8" y="2" width="8" height="4" rx="1" />
+      <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    </>
+  ),
+  records: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </>
+  ),
+  progress: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+  panels: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M15 4v16" />
+    </>
+  ),
+  chevronLeft: <path d="m15 18-6-6 6-6" />,
+};
+
+function Icon({ name }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {iconPaths[name]}
+    </svg>
+  );
+}
+
 const navigation = [
-  { id: "workbench", label: "工作台", icon: "W" },
-  { id: "orders", label: "我的订单", icon: "O" },
-  { id: "billing", label: "用量账单", icon: "U" },
-  { id: "account", label: "账户", icon: "A" },
+  { id: "workbench", label: "工作台", icon: "workbench" },
+  { id: "orders", label: "我的订单", icon: "orders" },
+  { id: "billing", label: "用量账单", icon: "billing" },
+  { id: "account", label: "账户", icon: "account" },
 ];
 
 const categories = [
@@ -41,11 +118,11 @@ const workflowSteps = [
 ];
 
 const inspectorPanels = [
-  { id: "preview", label: "预览", icon: "P", shortcut: "⌘P" },
-  { id: "detail", label: "明细", icon: "D", shortcut: "⌘D" },
-  { id: "order", label: "订单", icon: "O", shortcut: "⌘O" },
-  { id: "records", label: "记录", icon: "R", shortcut: "⌘R" },
-  { id: "progress", label: "进度", icon: "S", shortcut: "⌘J" },
+  { id: "preview", label: "预览", icon: "preview", shortcut: "⌘1" },
+  { id: "detail", label: "明细", icon: "detail", shortcut: "⌘2" },
+  { id: "order", label: "订单", icon: "order", shortcut: "⌘3" },
+  { id: "records", label: "记录", icon: "records", shortcut: "⌘4" },
+  { id: "progress", label: "进度", icon: "progress", shortcut: "⌘5" },
 ];
 
 const fallbackAgents = [
@@ -238,6 +315,7 @@ export default function App() {
   const [requirement, setRequirement] = useState(
     "请帮我完成 2026 年中国 AI Agent 服务市场研究，包括市场规模、主要玩家、收费模式、增长机会和进入建议。",
   );
+  const inspectorToolRef = useRef(null);
 
   const visibleAgents = useMemo(() => {
     if (activeCategory === "all") return agents;
@@ -344,9 +422,48 @@ export default function App() {
     }
     refreshBilling();
     refreshOrders(orderFilter);
-    const timer = window.setInterval(() => refreshOrders(orderFilter), 2000);
+    const timer = window.setInterval(() => refreshOrders(orderFilter), 8000);
     return () => window.clearInterval(timer);
   }, [currentUser?.id, orderFilter]);
+
+  useEffect(() => {
+    function onKeyDown(event) {
+      if (event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
+        const index = Number(event.key) - 1;
+        if (index >= 0 && index < inspectorPanels.length) {
+          event.preventDefault();
+          openInspectorPanel(inspectorPanels[index].id);
+        }
+        return;
+      }
+      if (event.key === "Escape") {
+        setInspectorMenuOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!inspectorMenuOpen) return undefined;
+    function onPointerDown(event) {
+      if (!inspectorToolRef.current?.contains(event.target)) {
+        setInspectorMenuOpen(false);
+      }
+    }
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  }, [inspectorMenuOpen]);
+
+  useEffect(() => {
+    function onContextMenu(event) {
+      if (!event.target.closest("textarea, input")) {
+        event.preventDefault();
+      }
+    }
+    document.addEventListener("contextmenu", onContextMenu);
+    return () => document.removeEventListener("contextmenu", onContextMenu);
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -615,7 +732,7 @@ export default function App() {
             role="menuitem"
             onClick={() => openInspectorPanel(panel.id)}
           >
-            <span className="menu-icon">{panel.icon}</span>
+            <span className="menu-icon"><Icon name={panel.icon} /></span>
             <strong>{panel.label}</strong>
             <small>{panel.shortcut}</small>
           </button>
@@ -1140,7 +1257,7 @@ export default function App() {
               type="button"
               onClick={() => setActiveView(item.id)}
             >
-              <span className="nav-icon">{item.icon}</span>
+              <span className="nav-icon"><Icon name={item.icon} /></span>
               {item.label}
             </button>
           ))}
@@ -1168,13 +1285,14 @@ export default function App() {
       <section className="workspace">
         <header className="topbar">
           <button className="back-link" type="button" onClick={() => setActiveView("workbench")}>
+            <Icon name="chevronLeft" />
             返回工作台
           </button>
           <div className="top-actions">
             <button className="ghost-link" type="button" onClick={() => showToast("帮助中心暂未接入")}>
               帮助中心
             </button>
-            <div className="inspector-tool">
+            <div className="inspector-tool" ref={inspectorToolRef}>
               <button
                 className={`inspector-trigger ${inspectorMenuOpen ? "active" : ""}`}
                 type="button"
@@ -1182,7 +1300,7 @@ export default function App() {
                 aria-expanded={inspectorMenuOpen}
                 onClick={() => setInspectorMenuOpen((value) => !value)}
               >
-                <span aria-hidden="true">▣</span>
+                <span aria-hidden="true"><Icon name="panels" /></span>
                 <small>⌄</small>
               </button>
               {inspectorMenuOpen && renderInspectorMenu()}

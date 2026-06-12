@@ -37,13 +37,19 @@ func main() {
 		},
 	})
 
+	menu := wailsApp.NewMenu()
+	menu.AddRole(application.AppMenu)
+	menu.AddRole(application.EditMenu)
+	menu.AddRole(application.WindowMenu)
+	wailsApp.Menu.Set(menu)
+
 	wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            app.Name,
 		Width:            1280,
 		Height:           820,
 		MinWidth:         960,
 		MinHeight:        680,
-		BackgroundColour: application.NewRGB(247, 248, 250),
+		BackgroundColour: application.NewRGB(245, 241, 234),
 		URL:              "/",
 		Mac: application.MacWindow{
 			InvisibleTitleBarHeight: 48,

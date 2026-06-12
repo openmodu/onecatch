@@ -15,6 +15,17 @@ Issue 范围确认 -> 技术方案/API 设计 -> 实现 -> 验证 -> 交付记�
 - 前后端联调点：哪个页面/组件调用哪个 binding。
 - 验证方式：单测、集成测试、构建或手动验收。
 
+## 全局安全与接口分层规则
+
+- `/api/*` 只用于用户端产品接口，由桌面端、用户侧 SDK 和 Wails binding 调用。
+- 用户端接口必须从 session 或 `Authorization: Bearer <token>` 解析当前用户，不能接受客户端传入任意 `userId` 访问其他用户资源。
+- 后台管理接口必须与用户端接口严格分离，后续统一使用 `/admin/api/*` 或独立管理服务，且使用独立 router、handler、service 和 DTO。
+- 后台管理接口不能通过用户端 Wails binding 暴露，也不能复用用户端 client 自动获得权限。
+- 用户端 response DTO 遵循最小披露原则，不返回 `providerSubject`、session token、OAuth token、支付密钥、支付原始回调、内部 `storageUri`、内部错误堆栈或后台备注。
+- 邮箱只允许当前用户自己的账号接口返回；订单、流水、交付物列表不冗余返回用户邮箱。
+- 用户需求原文、交付物内容、token、支付密钥不得进入普通日志；需要定位问题时使用 request id、order id 和脱敏摘要。
+- 越权访问其他用户资源应返回 `404` 或统一权限错误，避免泄露资源存在性；后台权限不足返回 `403`。
+
 ## Issue 00-004: 次数计费与支付
 
 ### 后端 API
@@ -436,3 +447,136 @@ running -> delivering -> delivered
   - `wails3 dev -config ./build/config.yml -port 9255`
   - 浏览器截图：`/tmp/oneshot-ui-1440x900-fixed.png`、`/tmp/oneshot-ui-1280x800-final.png`
   - Mac 原生截图：`/tmp/oneshot-wails-dev.png`
+
+## Issue 00-016: Inspector 菜单与右侧内容面板
+
+### 评审状态
+
+本方案已由用户确认进入实现，并已完成 00-016 交付。
+
+用户提供 Claude Code 作为明确视觉和交互参考：点击右上角工具按钮先弹出菜单，选择 `Diff` 后，右侧出现可关闭的内容面板。Oneshot 不照搬编码工具能力，但采用这个交互模型。
+
+### 交互模型
+
+```text
+右上角 Inspector 入口
+  -> 点击显示浮层菜单
+  -> 选择菜单项
+  -> 右侧弹出内容面板
+  -> 点击 X 关闭面板
+```
+
+### 菜单项映射
+
+| Claude Code 参考 | Oneshot 菜单项 | 面板内容 |
+| --- | --- | --- |
+| `Preview` | `预览` | 当前交付物预览、文件、下载/分享 |
+| `Diff` | `明细` | 当前任务的扣次、价格、订单、流水明细 |
+| `Files` | `订单` | 当前订单字段和状态 |
+| `Background tasks` | `记录` | 最近使用记录和计费流水 |
+| `Plan` | `进度` | 当前订单执行进度 |
+
+`Terminal` 不映射到 Oneshot MVP，避免引入无关编码工具能力。
+
+### 前端状态
+
+| 状态 | 说明 |
+| --- | --- |
+| `inspectorMenuOpen` | 右上角浮层菜单是否展开 |
+| `activeInspectorPanel` | `preview` / `detail` / `order` / `records` / `progress` |
+| `inspectorPanelOpen` | 右侧内容面板是否打开 |
+
+### 前端结构
+
+```text
+topbar
+  inspector trigger
+  inspector menu popover
+
+workspace
+  main workbench
+  inspector drawer
+    drawer header
+    drawer content
+    drawer close button
+```
+
+### API / Binding
+
+本 issue 不新增后端 API 或 Wails binding。面板复用当前页面已经加载的数据和现有 binding：
+
+| 面板 | 数据来源 |
+| --- | --- |
+| `预览` | `ArtifactBinding.ListArtifacts(orderID)`，`DownloadArtifact`，`ShareArtifact` |
+| `明细` | `selectedAgent`、`selectedOrder`、`balance`、`ledger` |
+| `订单` | `OrderBinding.ListOrders(status)` 已加载的当前订单 |
+| `记录` | `BillingBinding.ListLedger()` 和订单列表 |
+| `进度` | 当前订单 `progress` |
+
+### 视觉约束
+
+- 菜单应是轻量浮层，锚定右上角 Inspector 入口。
+- 菜单不应改变主工作区布局。
+- 右侧面板可覆盖或占据右侧区域，但必须有清晰边界和关闭按钮。
+- 右侧面板宽度建议 420-460px；1280px 宽窗口下可降到 380px。
+- 面板内部滚动，页面整体不横向溢出。
+- 不使用编码产品专属的 Terminal/Files 文案，除非后续产品确实加入这些能力。
+
+### 验证方式
+
+1. 浏览器视觉验证：
+   - 默认工作台。
+   - Inspector 菜单打开态。
+   - 选择 `明细` 后的右侧面板态。
+   - 关闭面板后的恢复态。
+2. Mac 原生视觉验证：
+   - `wails3 dev -config ./build/config.yml -port <free-port>`
+   - 检查 macOS 窗口控制点、顶部工具按钮、菜单和右侧面板不重叠。
+3. 自动验证：
+   - `go test ./...`
+   - `cd desktop/oneshot/frontend && npm run build`
+   - `cd desktop/oneshot && wails3 build DEV=true`
+
+### 验证结果
+
+- `cd desktop/oneshot/frontend && npm run build` 通过。
+- `go test ./...` 通过。
+- `cd desktop/oneshot && wails3 build DEV=true` 通过，仅有 macOS SDK 链接版本 warning。
+- `cd desktop/oneshot && wails3 dev -port 9259` 通过，Wails 原生启动并连接 `http://localhost:9259` 前端 dev server。
+- 浏览器视觉检查通过：
+  - Inspector 入口点击后显示浮层菜单。
+  - 菜单项 `明细` 打开右侧 drawer，标题、上下文路径和关闭按钮可见。
+  - 1280px 宽下主区与 drawer 为 `630px 430px`，无横向溢出。
+  - 关闭 drawer 后主区恢复单栏。
+
+## Issue 00-015: 用户端与后台管理接口安全边界
+
+### 后端 API
+
+本 issue 不新增用户端业务 API，先定义和审计接口边界。
+
+| 类型 | 路由前缀 | 调用方 | 鉴权 | 说明 |
+| --- | --- | --- | --- | --- |
+| 用户端产品 API | `/api/*` | 桌面端、用户侧 SDK、Wails binding | 当前用户 session / Bearer token | 只返回当前用户有权访问的数据 |
+| 后台管理 API | `/admin/api/*` 或独立管理服务 | 后台管理端 | 管理员身份、权限、审计 | 不复用用户端 DTO，不通过用户端 binding 暴露 |
+
+### 用户端 DTO 规则
+
+- `User`：可返回当前用户 `id`、`displayName`、`email`、`avatarUrl`、`status`；不得返回身份 provider subject 或 token。
+- `Balance` / `LedgerEntry`：只返回当前用户余额和流水展示字段；不得返回支付原始回调或其他用户信息。
+- `Order`：只返回当前用户订单展示字段；不得返回后台备注、内部错误堆栈或其他用户身份信息。
+- `Artifact`：只返回展示和下载所需元数据；不得返回内部 `storageUri`。
+
+### 后台管理边界
+
+- 后台 handler 不放在现有用户端 handler 文件中，避免误注册到 `/api/*`。
+- 后台 service 不复用用户端 service 直接返回领域对象，必须经过 admin DTO 脱敏。
+- 后台敏感原文查看必须记录管理员、目标资源、操作时间、原因和 request id。
+- 后台接口的权限不足返回 `403`，未登录返回 `401`。
+
+### 验证方式
+
+- 路由审计：枚举 `/api/*`，确认没有后台管理能力。
+- DTO 测试：序列化响应不包含 `providerSubject`、token、内部 `storageUri`、支付原始回调或后台备注。
+- 跨用户测试：订单、交付物、余额和流水不能跨用户读取。
+- 日志测试：Authorization、OAuth callback、支付 callback、订单需求和交付物内容不会以原文进入普通日志。
