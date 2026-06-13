@@ -37,7 +37,9 @@ func NewUsecase(repo Repository, orders OrderRepository) *Usecase {
 }
 
 func (s *Usecase) CreateForOrder(ctx context.Context, order domainorders.Order) (domainartifacts.Artifact, error) {
-	if order.Status != domainorders.StatusDelivered {
+	// The worker generates the artifact while the order is still delivering,
+	// before the final transition to delivered.
+	if order.Status != domainorders.StatusDelivering && order.Status != domainorders.StatusDelivered {
 		return domainartifacts.Artifact{}, domainartifacts.ErrNotReady
 	}
 	existing, err := s.repo.ListArtifacts(ctx, order.UserID, order.ID)
@@ -129,14 +131,4 @@ func (s *Usecase) Share(ctx context.Context, userID string, artifactID string) (
 		URL:        "https://oneshot.local/share/" + token,
 		CreatedAt:  s.now(),
 	})
-}
-
-func renderReport(order domainorders.Order) []byte {
-	body := fmt.Sprintf("OneShot Report\n\nOrder: %s\nAgent: %s\nRequirement: %s\nStatus: %s\n",
-		order.ID,
-		order.AgentName,
-		order.Requirement.Prompt,
-		order.Status,
-	)
-	return []byte(body)
 }

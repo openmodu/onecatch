@@ -8,6 +8,7 @@ import (
 
 var ErrNotFound = errors.New("order not found")
 var ErrInvalidRequirement = errors.New("order requirement is required")
+var ErrStatusConflict = errors.New("order status changed concurrently")
 
 type Status string
 

@@ -19,6 +19,33 @@ type Repository interface {
 	FindOrCreateByIdentity(context.Context, users.AuthIdentity) (users.User, error)
 }
 
+// IdentityVerifier exchanges an OAuth authorization code with the provider
+// and returns the verified identity. Callbacks that carry a code MUST go
+// through a verifier unless insecure callbacks are explicitly enabled.
+type IdentityVerifier interface {
+	Verify(ctx context.Context, provider string, code string) (users.AuthIdentity, error)
+}
+
+// SessionStore persists issued sessions so logins survive server restarts.
+// Lookups receive the raw bearer token; implementations are expected to hash
+// it before storage.
+type SessionStore interface {
+	SaveSession(context.Context, domainauth.Session) error
+	FindSessionByToken(ctx context.Context, token string) (domainauth.Session, error)
+	DeleteSessionByToken(ctx context.Context, token string) error
+	DeleteExpiredSessions(ctx context.Context, now time.Time) error
+}
+
+type Options struct {
+	// Verifier validates authorization codes against the real provider.
+	Verifier IdentityVerifier
+	// Sessions persists issued sessions. Defaults to an in-process store.
+	Sessions SessionStore
+	// AllowInsecureCallbacks lets callbacks be trusted without provider-side
+	// verification. For local development and tests only.
+	AllowInsecureCallbacks bool
+}
+
 type OAuthCallbackInput struct {
 	State           string `json:"state"`
 	Code            string `json:"code"`
@@ -29,20 +56,39 @@ type OAuthCallbackInput struct {
 }
 
 type Usecase struct {
-	mu       sync.RWMutex
-	repo     Repository
-	session  *domainauth.Session
-	sessions map[string]domainauth.Session
-	states   map[string]string
-	now      func() time.Time
+	mu            sync.RWMutex
+	repo          Repository
+	session       *domainauth.Session
+	store         SessionStore
+	states        map[string]string
+	verifier      IdentityVerifier
+	allowInsecure bool
+	now           func() time.Time
 }
 
-func NewUsecase(repo Repository) *Usecase {
+// NewUsecase builds an auth usecase with secure defaults: a verifier is
+// configured from environment credentials when present, and insecure
+// callbacks require ONESHOT_AUTH_INSECURE_CALLBACKS=1.
+func NewUsecase(repo Repository, sessions SessionStore) *Usecase {
+	return NewUsecaseWithOptions(repo, Options{
+		Verifier:               NewHTTPVerifierFromEnv(),
+		Sessions:               sessions,
+		AllowInsecureCallbacks: os.Getenv("ONESHOT_AUTH_INSECURE_CALLBACKS") == "1",
+	})
+}
+
+func NewUsecaseWithOptions(repo Repository, opts Options) *Usecase {
+	store := opts.Sessions
+	if store == nil {
+		store = newMemorySessionStore()
+	}
 	return &Usecase{
-		repo:     repo,
-		sessions: make(map[string]domainauth.Session),
-		states:   make(map[string]string),
-		now:      time.Now,
+		repo:          repo,
+		store:         store,
+		states:        make(map[string]string),
+		verifier:      opts.Verifier,
+		allowInsecure: opts.AllowInsecureCallbacks,
+		now:           time.Now,
 	}
 }
 
@@ -56,20 +102,20 @@ func (s *Usecase) CurrentUser(context.Context) (users.User, error) {
 	return s.session.User, nil
 }
 
-func (s *Usecase) CurrentUserByToken(_ context.Context, token string) (users.User, error) {
-	session, err := s.SessionByToken(token)
+func (s *Usecase) CurrentUserByToken(ctx context.Context, token string) (users.User, error) {
+	session, err := s.SessionByToken(ctx, token)
 	if err != nil {
 		return users.User{}, err
 	}
 	return session.User, nil
 }
 
-func (s *Usecase) SessionByToken(token string) (domainauth.Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	session, ok := s.sessions[token]
-	if !ok || session.ExpiresAt.Before(s.now()) {
+func (s *Usecase) SessionByToken(ctx context.Context, token string) (domainauth.Session, error) {
+	session, err := s.store.FindSessionByToken(ctx, token)
+	if err != nil {
+		return domainauth.Session{}, err
+	}
+	if session.ExpiresAt.Before(s.now()) {
 		return domainauth.Session{}, domainauth.ErrUnauthenticated
 	}
 	return session, nil
@@ -101,22 +147,26 @@ func (s *Usecase) LoginWithGoogleCallback(ctx context.Context, input OAuthCallba
 	return s.loginWithOAuth(ctx, "google", input)
 }
 
-func (s *Usecase) Logout(context.Context) error {
+func (s *Usecase) Logout(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.session != nil {
-		delete(s.sessions, s.session.Token)
+		if err := s.store.DeleteSessionByToken(ctx, s.session.Token); err != nil {
+			return err
+		}
 	}
 	s.session = nil
 	return nil
 }
 
-func (s *Usecase) LogoutToken(_ context.Context, token string) error {
+func (s *Usecase) LogoutToken(ctx context.Context, token string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	delete(s.sessions, token)
+	if err := s.store.DeleteSessionByToken(ctx, token); err != nil {
+		return err
+	}
 	if s.session != nil && s.session.Token == token {
 		s.session = nil
 	}
@@ -142,16 +192,34 @@ func (s *Usecase) startOAuth(provider string) (domainauth.OAuthStart, error) {
 }
 
 func (s *Usecase) loginWithOAuth(ctx context.Context, provider string, input OAuthCallbackInput) (domainauth.Session, error) {
-	if input.State != "" {
-		if err := s.consumeState(provider, input.State); err != nil {
-			return domainauth.Session{}, err
-		}
-	}
 	if input.Code == "" && input.ProviderSubject == "" {
+		// Empty callback: development-only shortcut login.
+		if !s.allowInsecure {
+			return domainauth.Session{}, domainauth.ErrVerifierRequired
+		}
 		if provider == "google" {
 			return s.LoginWithGoogle(ctx)
 		}
 		return s.LoginWithWechat(ctx)
+	}
+
+	// State is mandatory for identity-bearing callbacks (CSRF protection).
+	if err := s.consumeState(provider, input.State); err != nil {
+		return domainauth.Session{}, err
+	}
+
+	if s.verifier != nil && input.Code != "" {
+		identity, err := s.verifier.Verify(ctx, provider, input.Code)
+		if err != nil {
+			return domainauth.Session{}, err
+		}
+		return s.login(ctx, identity)
+	}
+
+	// No verifier: never trust client-supplied identity unless explicitly
+	// running in insecure development mode.
+	if !s.allowInsecure {
+		return domainauth.Session{}, domainauth.ErrVerifierRequired
 	}
 
 	subject := input.ProviderSubject
@@ -192,14 +260,19 @@ func (s *Usecase) login(ctx context.Context, identity users.AuthIdentity) (domai
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	now := s.now()
+	_ = s.store.DeleteExpiredSessions(ctx, now)
+
 	session := domainauth.Session{
 		Token:     token,
 		Provider:  identity.Provider,
 		User:      user,
-		ExpiresAt: s.now().Add(30 * 24 * time.Hour),
+		ExpiresAt: now.Add(30 * 24 * time.Hour),
+	}
+	if err := s.store.SaveSession(ctx, session); err != nil {
+		return domainauth.Session{}, err
 	}
 	s.session = &session
-	s.sessions[token] = session
 	return session, nil
 }
 

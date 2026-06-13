@@ -9,6 +9,7 @@ import (
 
 var ErrUnauthenticated = errors.New("unauthenticated")
 var ErrInvalidOAuthState = errors.New("invalid oauth state")
+var ErrVerifierRequired = errors.New("oauth identity verification is required")
 
 type Session struct {
 	Token     string     `json:"token"`

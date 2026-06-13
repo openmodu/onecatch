@@ -9,9 +9,12 @@ import (
 	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
 	repoartifacts "github.com/openmodu/oneshot/internal/repo/artifacts"
 	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
+	repoconversations "github.com/openmodu/oneshot/internal/repo/conversations"
 	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
+	reposessions "github.com/openmodu/oneshot/internal/repo/sessions"
 	repousers "github.com/openmodu/oneshot/internal/repo/users"
 	pkgsql "github.com/openmodu/oneshot/pkg/sql"
+	"gorm.io/gorm"
 )
 
 type MySQLDSN string
@@ -22,7 +25,9 @@ var ProviderSet = wire.NewSet(
 	repoagents.NewAgentsRepo,
 	repoartifacts.NewArtifactsRepo,
 	repobilling.NewBillingRepo,
+	repoconversations.NewConversationsRepo,
 	repoorders.NewOrdersRepo,
+	reposessions.NewSessionsRepo,
 	repousers.NewUsersRepo,
 	NewOneShotRepo,
 )
@@ -50,7 +55,27 @@ func ProvideData(dsn MySQLDSN) (*Data, func(), error) {
 		return nil, nil, fmt.Errorf("ping mysql: %w", err)
 	}
 
+	// Run all schema migrations up front so failures surface at startup
+	// instead of on the first request.
+	for _, migrate := range []func(*gorm.DB) error{
+		repoagents.Migrate,
+		repoartifacts.Migrate,
+		repobilling.Migrate,
+		repoorders.Migrate,
+		reposessions.Migrate,
+		repousers.Migrate,
+	} {
+		if err := migrate(db.Gorm()); err != nil {
+			_ = db.Close()
+			return nil, nil, fmt.Errorf("migrate schema: %w", err)
+		}
+	}
+
 	data := NewDataWithSQL(db)
+	if err := Migrate(data); err != nil {
+		_ = data.Close()
+		return nil, nil, fmt.Errorf("migrate schema: %w", err)
+	}
 	return data, func() { _ = data.Close() }, nil
 }
 

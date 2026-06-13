@@ -700,6 +700,97 @@ workspace
   - Wails window background 已改为中性灰。
   - 导航和 Inspector 图标已调为轻笔画、单色、统一尺寸的 template symbol 风格。
 
+## Issue 00-018: 桌面端未登录态 binding 调用收敛
+
+### 评审状态
+
+本方案用于修复端到端测试发现的联调回归：Wails dev 原生端处于未登录状态时，前端因为 `import.meta.env.DEV` 启用了浏览器 fixture fallback，导致购买、下单等受保护操作先调用真实 binding，收到 `401 unauthenticated` 后再回退到 fixture。桌面原生运行时不应出现这种 fallback。
+
+### 问题诊断
+
+- `canUseFallback()` 当前只检查 Vite dev mode 和禁用开关。
+- Wails dev 也是 Vite dev mode，因此原生桌面运行时被误判为可以使用 fixture。
+- 结果：
+  - 未登录购买/下单不会被前端 guard 拦截。
+  - `BillingBinding`、`OrderBinding` 等受保护 binding 会先打后端并返回 401。
+  - Wails 日志出现多条 `Binding call failed: unauthenticated`。
+
+### 设计目标
+
+```text
+普通浏览器 localhost 预览
+  -> 允许 fixture fallback 做视觉 QA
+
+Wails 原生运行时
+  -> 禁止 fixture fallback
+  -> 未登录只探测 CurrentUser 和公开 Agent catalog
+  -> 登录后再拉 billing / orders / artifacts
+```
+
+### API / Binding
+
+不新增后端 API 或 Wails binding。
+
+现有接口边界保持不变：
+
+| binding | 后端接口 | 未登录行为 |
+| --- | --- | --- |
+| `AuthBinding.CurrentUser()` | `GET /api/me` | binding 转为空用户，供前端显示未登录 |
+| `AgentBinding.ListAgents()` | `GET /api/agents` | 公开接口，可未登录 |
+| `BillingBinding.GetBalance()` | `GET /api/billing/balance` | 需要 Bearer token |
+| `BillingBinding.ListLedger()` | `GET /api/billing/ledger` | 需要 Bearer token |
+| `OrderBinding.ListOrders(status)` | `GET /api/orders` | 需要 Bearer token |
+| `OrderBinding.CreateOrder(input)` | `POST /api/orders` | 需要 Bearer token |
+| `ArtifactBinding.ListArtifacts(orderID)` | `GET /api/orders/{orderID}/artifacts` | 需要 Bearer token |
+
+### 前端改动
+
+- 新增 `isWailsRuntime()`：
+  - 只检查 `window._wails.environment.OS`。
+  - 不用 `/wails/runtime` HTTP transport 可用性判断，因为普通浏览器打开 Vite dev server 时也可能尝试访问 Wails runtime；该场景应被视为浏览器视觉 QA，而不是原生桌面运行时。
+- 修改 `canUseFallback()`：
+  - 必须是 Vite dev mode。
+  - 必须未设置 `window.__ONESOT_DISABLE_FIXTURE__`。
+  - 必须不是 Wails runtime。
+- 保持登录后刷新逻辑：
+  - `currentUser?.id` 存在后才触发 billing/orders 拉取。
+  - 购买和下单在 Wails runtime 未登录时直接展示登录提示，不调用受保护 binding。
+
+### 验证计划
+
+1. 自动验证：
+   - `cd desktop/oneshot/frontend && npm run build`
+   - `go test ./...`
+2. 后端链路：
+   - 本地启动 server。
+   - curl 或桌面 HTTP client 验证登录、Agent、余额、下单、worker 交付、artifact、share、download。
+3. Wails 联调：
+   - `ONESHOT_API_BASE_URL=http://127.0.0.1:<port> wails3 dev -config ./build/config.yml -port <free-port>`
+   - 未登录首屏不再持续输出受保护 binding 的 `unauthenticated` 错误。
+   - 未登录点击购买/确认支付只显示登录提示。
+   - 登录后再触发真实 billing/orders binding。
+4. 浏览器视觉 QA：
+   - 普通浏览器打开 Vite dev server 仍可加载 fixture。
+
+### 验证结果
+
+- `cd desktop/oneshot/frontend && npm run build` 通过。
+- `go test ./...` 通过。
+- `git diff --check` 通过。
+- `ONESHOT_ADDR=:18080 ONESHOT_AUTH_INSECURE_CALLBACKS=1 go run ./cmd/oneshot-server` 成功启动本地后端。
+- `ONESHOT_API_BASE_URL=http://127.0.0.1:18080 wails3 dev -config ./build/config.yml -port 9267` 成功启动并连接前端；仅有 macOS SDK link target warning 和 npm audit warning。
+- Wails dev 未登录首屏静置 5 秒没有再输出受保护 binding 的 `unauthenticated` 错误。
+- 普通浏览器打开 `http://127.0.0.1:9267/`：
+  - fixture Agent、余额和订单可见。
+  - 点击 Google 登录和确认并支付走本地预览。
+  - 无 console error。
+- 桌面 HTTP client 到后端真实链路通过：
+  - Google 登录成功。
+  - Agent 列表返回 4 个。
+  - 创建订单 `order_000001`。
+  - worker 推进到 `delivered`。
+  - artifact 列表返回 1 个。
+
 ## Issue 00-015: 用户端与后台管理接口安全边界
 
 ### 后端 API

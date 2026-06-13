@@ -29,9 +29,6 @@ type artifactsImpl struct {
 	shares       map[string]domainartifacts.Share
 	nextArtifact int
 	nextShare    int
-
-	migrateOnce sync.Once
-	migrateErr  error
 }
 
 type artifactRecord struct {
@@ -149,17 +146,11 @@ func (r *artifactsImpl) SaveShare(ctx context.Context, share domainartifacts.Sha
 }
 
 func (r *artifactsImpl) saveArtifactSQL(ctx context.Context, artifact domainartifacts.Artifact) error {
-	if err := r.ensureSchema(); err != nil {
-		return err
-	}
 	record := fromDomainArtifact(artifact)
 	return r.sql.Gorm().WithContext(ctx).Save(&record).Error
 }
 
 func (r *artifactsImpl) listArtifactsSQL(ctx context.Context, userID string, orderID string) ([]domainartifacts.Artifact, error) {
-	if err := r.ensureSchema(); err != nil {
-		return nil, err
-	}
 	var records []artifactRecord
 	if err := r.sql.Gorm().WithContext(ctx).
 		Where("user_id = ? AND order_id = ?", userID, orderID).
@@ -175,9 +166,6 @@ func (r *artifactsImpl) listArtifactsSQL(ctx context.Context, userID string, ord
 }
 
 func (r *artifactsImpl) getArtifactSQL(ctx context.Context, userID string, artifactID string) (domainartifacts.Artifact, error) {
-	if err := r.ensureSchema(); err != nil {
-		return domainartifacts.Artifact{}, err
-	}
 	var record artifactRecord
 	err := r.sql.Gorm().WithContext(ctx).
 		Where("id = ? AND user_id = ?", artifactID, userID).
@@ -192,9 +180,6 @@ func (r *artifactsImpl) getArtifactSQL(ctx context.Context, userID string, artif
 }
 
 func (r *artifactsImpl) saveShareSQL(ctx context.Context, share domainartifacts.Share) (domainartifacts.Share, error) {
-	if err := r.ensureSchema(); err != nil {
-		return domainartifacts.Share{}, err
-	}
 	record := shareRecord{
 		ArtifactID: share.ArtifactID,
 		Token:      share.Token,
@@ -207,13 +192,10 @@ func (r *artifactsImpl) saveShareSQL(ctx context.Context, share domainartifacts.
 	return share, nil
 }
 
-func (r *artifactsImpl) ensureSchema() error {
-	r.migrateOnce.Do(func() {
-		r.migrateErr = r.sql.Gorm().AutoMigrate(&artifactRecord{}, &shareRecord{})
-	})
-	return r.migrateErr
+// Migrate creates or updates this repo's tables. Called once at startup.
+func Migrate(db *gorm.DB) error {
+	return db.AutoMigrate(&artifactRecord{}, &shareRecord{})
 }
-
 func fromDomainArtifact(artifact domainartifacts.Artifact) artifactRecord {
 	return artifactRecord{
 		ID:        artifact.ID,

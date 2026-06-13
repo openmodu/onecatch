@@ -12,7 +12,9 @@ import (
 	"github.com/openmodu/oneshot/internal/repo/agents"
 	"github.com/openmodu/oneshot/internal/repo/artifacts"
 	"github.com/openmodu/oneshot/internal/repo/billing"
+	"github.com/openmodu/oneshot/internal/repo/conversations"
 	"github.com/openmodu/oneshot/internal/repo/orders"
+	"github.com/openmodu/oneshot/internal/repo/sessions"
 	"github.com/openmodu/oneshot/internal/repo/users"
 	"github.com/openmodu/oneshot/internal/service"
 	"github.com/openmodu/oneshot/internal/usecase"
@@ -20,6 +22,7 @@ import (
 	artifacts2 "github.com/openmodu/oneshot/internal/usecase/artifacts"
 	"github.com/openmodu/oneshot/internal/usecase/auth"
 	billing2 "github.com/openmodu/oneshot/internal/usecase/billing"
+	conversations2 "github.com/openmodu/oneshot/internal/usecase/conversations"
 	"github.com/openmodu/oneshot/internal/usecase/execution"
 	orders2 "github.com/openmodu/oneshot/internal/usecase/orders"
 )
@@ -36,11 +39,14 @@ func initializeServices(cfg config.Config) (*service.Services, func(), error) {
 	agentsRepo := agents.NewAgentsRepo(sql)
 	artifactsRepo := artifacts.NewArtifactsRepo(sql)
 	billingRepo := billing.NewBillingRepo(sql)
+	conversationsRepo := conversations.NewConversationsRepo(sql)
 	ordersRepo := orders.NewOrdersRepo(sql)
+	sessionsRepo := sessions.NewSessionsRepo(sql)
 	usersRepo := users.NewUsersRepo(sql)
-	oneShotRepo := data.NewOneShotRepo(agentsRepo, artifactsRepo, billingRepo, ordersRepo, usersRepo)
+	oneShotRepo := data.NewOneShotRepo(agentsRepo, artifactsRepo, billingRepo, conversationsRepo, ordersRepo, sessionsRepo, usersRepo)
 	repository := usecase.ProvideAuthRepository(oneShotRepo)
-	authUsecase := auth.NewUsecase(repository)
+	sessionStore := usecase.ProvideAuthSessionStore(oneShotRepo)
+	authUsecase := auth.NewUsecase(repository, sessionStore)
 	agentsRepository := usecase.ProvideAgentRepository(oneShotRepo)
 	agentsUsecase := agents2.NewUsecase(agentsRepository)
 	artifactsRepository := usecase.ProvideArtifactRepository(oneShotRepo)
@@ -48,12 +54,17 @@ func initializeServices(cfg config.Config) (*service.Services, func(), error) {
 	artifactsUsecase := artifacts2.NewUsecase(artifactsRepository, orderRepository)
 	billingRepository := usecase.ProvideBillingRepository(oneShotRepo)
 	billingUsecase := billing2.NewUsecase(billingRepository)
-	executionOrderRepository := usecase.ProvideExecutionOrderRepository(oneShotRepo)
-	executionUsecase := execution.NewUsecase(executionOrderRepository, artifactsUsecase)
+	conversationsRepository := usecase.ProvideConversationRepository(oneShotRepo)
+	agentGetter := usecase.ProvideConversationAgentGetter(agentsUsecase)
 	agentRepository := usecase.ProvideOrderAgentRepository(oneShotRepo)
 	ordersRepository := usecase.ProvideOrderRepository(oneShotRepo)
 	ordersUsecase := orders2.NewUsecase(agentRepository, ordersRepository, billingUsecase)
-	services := service.NewServices(authUsecase, agentsUsecase, artifactsUsecase, billingUsecase, executionUsecase, ordersUsecase)
+	orderCreator := usecase.ProvideConversationOrderCreator(ordersUsecase)
+	conversationsUsecase := conversations2.NewUsecase(conversationsRepository, agentGetter, orderCreator)
+	executionOrderRepository := usecase.ProvideExecutionOrderRepository(oneShotRepo)
+	artifactCreator := usecase.ProvideExecutionArtifactCreator(artifactsUsecase)
+	executionUsecase := execution.NewUsecase(executionOrderRepository, artifactCreator)
+	services := service.NewServices(authUsecase, agentsUsecase, artifactsUsecase, billingUsecase, conversationsUsecase, executionUsecase, ordersUsecase)
 	return services, func() {
 		cleanup()
 	}, nil

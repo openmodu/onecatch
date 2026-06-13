@@ -1,6 +1,6 @@
 # Issue 00-015: 用户端与后台管理接口安全边界
 
-状态：待开发
+状态：已完成
 
 ## 来源
 
@@ -56,12 +56,12 @@
 
 ## 验收标准
 
-- [ ] `/api/*` 用户端接口没有后台管理能力。
-- [ ] 用户端订单、余额、流水和交付物接口都按当前用户鉴权。
-- [ ] 用户端接口不会返回 `providerSubject`、token、内部存储 URI、支付原始回调或后台备注。
-- [ ] 跨用户访问订单和交付物被拒绝，且不泄露资源归属。
-- [ ] 后续后台管理接口只能通过独立路由和独立鉴权进入。
-- [ ] 日志不记录 token、支付密钥、用户需求全文或交付物原文。
+- [x] `/api/*` 用户端接口没有后台管理能力。
+- [x] 用户端订单、余额、流水和交付物接口都按当前用户鉴权。
+- [x] 用户端接口不会返回 `providerSubject`、token、内部存储 URI、支付原始回调或后台备注。
+- [x] 跨用户访问订单和交付物被拒绝，且不泄露资源归属。
+- [x] 后续后台管理接口只能通过独立路由和独立鉴权进入。
+- [x] 日志不记录 token、支付密钥、用户需求全文或交付物原文。
 
 ## 测试计划
 
@@ -81,3 +81,10 @@
   - 携带 Bearer token 后，`GET /api/me`、`GET /api/billing/balance`、`GET /api/billing/ledger`、`POST /api/billing/purchases`、`POST /api/orders`、`GET /api/orders`、`GET /api/orders/{id}`、`GET /api/orders/{id}/artifacts`、`POST /api/artifacts/{id}/share`、`GET /api/artifacts/{id}/download` 均有数据返回。
   - 发现待修复安全问题：登录后即使不带 `Authorization` header，`GET /api/me` 和 `GET /api/orders` 仍会通过进程内 fallback session 返回数据；HTTP 用户端接口应要求显式 token 或明确的安全 cookie/session 机制。
   - 发现待评估最小披露问题：用户端订单、流水、交付物响应当前仍返回 `userId`，订单响应返回用户需求原文；后续需要按用户端 DTO 规则确认哪些字段可返回。
+- 2026-06-13 实现：
+  - Bearer-only 鉴权已在 issue 00-015 之前的传输层加固中落地（移除进程内 fallback session），未授权返回 `401`。
+  - 用户端 DTO（`internal/transport/http/dto.go`）：`/api/me`、余额、流水、购买、订单、交付物、分享全部改用用户端 DTO 输出，砍掉 `userId`、`paymentId`、交付物内部 `preview`、分享 `token`（仅 URL 内嵌）；邮箱只在 `/api/me` 返回；订单需求原文作为属主自有数据保留在响应中。
+  - 管理端边界（`internal/transport/http/admin.go`）：独立 `/admin/api` 路由 + `requireAdmin`（`X-Admin-Token`，常量时间比较，未配置即默认关闭返回 `403`）+ slog 审计；不挂在 `/api` 下，桌面 oneshot client 不可达。
+  - 日志脱敏（`internal/transport/http/redact.go`）：`redactToken` 掩码、`promptDigest` 仅记录长度；订单创建审计日志用需求摘要而非全文；交付物原文不写日志。
+  - 跨用户访问订单/交付物/取消均返回 `404`，不泄露资源归属。
+  - 测试：`dto`/`boundary`/`redact` 三组测试覆盖 DTO 无隐私字段（黑盒扫 `userId`/`providerSubject`/`paymentId`/`storageUri`）、跨用户 404、未授权 401、admin 403/200、`/api` 下无 admin 路由、脱敏。`go test ./...`、`-race`、gofmt、vet 全过。

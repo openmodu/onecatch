@@ -2,6 +2,8 @@ package billing
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -19,6 +21,8 @@ type BillingRepo interface {
 	ListLedger(context.Context, string) ([]domainbilling.LedgerEntry, error)
 	AddLedgerEntry(context.Context, domainbilling.LedgerEntry) error
 	SavePurchase(context.Context, domainbilling.Purchase) (domainbilling.Purchase, bool, error)
+	DebitForOrder(ctx context.Context, userID string, orderID string, ledgerID string, uses int, at time.Time) (domainbilling.LedgerEntry, error)
+	RefundForOrder(ctx context.Context, userID string, orderID string, ledgerID string, uses int, at time.Time) (domainbilling.LedgerEntry, error)
 	NextLedgerID(context.Context) (string, error)
 	NextPurchaseID(context.Context) (string, error)
 }
@@ -32,9 +36,6 @@ type billingImpl struct {
 	purchases    map[string]domainbilling.Purchase
 	nextLedger   int
 	nextPurchase int
-
-	migrateOnce sync.Once
-	migrateErr  error
 }
 
 type balanceRecord struct {
@@ -145,9 +146,61 @@ func (r *billingImpl) SavePurchase(ctx context.Context, purchase domainbilling.P
 	return purchase, false, nil
 }
 
+func (r *billingImpl) DebitForOrder(ctx context.Context, userID string, orderID string, ledgerID string, uses int, at time.Time) (domainbilling.LedgerEntry, error) {
+	entry := domainbilling.LedgerEntry{
+		ID:        ledgerID,
+		UserID:    userID,
+		Type:      domainbilling.LedgerTypeDebit,
+		OrderID:   orderID,
+		Delta:     -uses,
+		CreatedAt: at,
+	}
+	if r.sql != nil && r.sql.Gorm() != nil {
+		return r.applyOrderDeltaSQL(ctx, entry, uses)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if r.balances[userID] < uses {
+		return domainbilling.LedgerEntry{}, domainbilling.ErrInsufficientBalance
+	}
+	r.balances[userID] -= uses
+	entry.BalanceAfter = r.balances[userID]
+	r.ledger = append(r.ledger, entry)
+	return entry, nil
+}
+
+func (r *billingImpl) RefundForOrder(ctx context.Context, userID string, orderID string, ledgerID string, uses int, at time.Time) (domainbilling.LedgerEntry, error) {
+	entry := domainbilling.LedgerEntry{
+		ID:        ledgerID,
+		UserID:    userID,
+		Type:      domainbilling.LedgerTypeRefund,
+		OrderID:   orderID,
+		Delta:     uses,
+		CreatedAt: at,
+	}
+	if r.sql != nil && r.sql.Gorm() != nil {
+		return r.applyOrderDeltaSQL(ctx, entry, uses)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	for _, existing := range r.ledger {
+		if existing.OrderID == orderID && existing.Type == domainbilling.LedgerTypeRefund {
+			return existing, nil
+		}
+	}
+	r.balances[userID] += uses
+	entry.BalanceAfter = r.balances[userID]
+	r.ledger = append(r.ledger, entry)
+	return entry, nil
+}
+
 func (r *billingImpl) NextLedgerID(context.Context) (string, error) {
 	if r.sql != nil && r.sql.Gorm() != nil {
-		return fmt.Sprintf("ledger_%d", time.Now().UnixNano()), nil
+		return randomID("ledger_")
 	}
 
 	r.mu.Lock()
@@ -159,7 +212,7 @@ func (r *billingImpl) NextLedgerID(context.Context) (string, error) {
 
 func (r *billingImpl) NextPurchaseID(context.Context) (string, error) {
 	if r.sql != nil && r.sql.Gorm() != nil {
-		return fmt.Sprintf("purchase_%d", time.Now().UnixNano()), nil
+		return randomID("purchase_")
 	}
 
 	r.mu.Lock()
@@ -170,9 +223,6 @@ func (r *billingImpl) NextPurchaseID(context.Context) (string, error) {
 }
 
 func (r *billingImpl) getBalanceSQL(ctx context.Context, userID string) (domainbilling.Balance, error) {
-	if err := r.ensureSchema(); err != nil {
-		return domainbilling.Balance{}, err
-	}
 	record, err := r.findOrCreateBalance(ctx, r.sql.Gorm(), userID)
 	if err != nil {
 		return domainbilling.Balance{}, err
@@ -181,9 +231,6 @@ func (r *billingImpl) getBalanceSQL(ctx context.Context, userID string) (domainb
 }
 
 func (r *billingImpl) listLedgerSQL(ctx context.Context, userID string) ([]domainbilling.LedgerEntry, error) {
-	if err := r.ensureSchema(); err != nil {
-		return nil, err
-	}
 	var records []ledgerRecord
 	if err := r.sql.Gorm().WithContext(ctx).Where("user_id = ?", userID).Order("created_at ASC").Find(&records).Error; err != nil {
 		return nil, err
@@ -196,9 +243,6 @@ func (r *billingImpl) listLedgerSQL(ctx context.Context, userID string) ([]domai
 }
 
 func (r *billingImpl) addLedgerEntrySQL(ctx context.Context, entry domainbilling.LedgerEntry) error {
-	if err := r.ensureSchema(); err != nil {
-		return err
-	}
 	return r.sql.Gorm().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "user_id"}},
@@ -225,9 +269,6 @@ func (r *billingImpl) addLedgerEntrySQL(ctx context.Context, entry domainbilling
 }
 
 func (r *billingImpl) savePurchaseSQL(ctx context.Context, purchase domainbilling.Purchase) (domainbilling.Purchase, bool, error) {
-	if err := r.ensureSchema(); err != nil {
-		return domainbilling.Purchase{}, false, err
-	}
 	var out domainbilling.Purchase
 	duplicated := false
 	err := r.sql.Gorm().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -261,6 +302,64 @@ func (r *billingImpl) savePurchaseSQL(ctx context.Context, purchase domainbillin
 	return out, duplicated, err
 }
 
+// applyOrderDeltaSQL atomically applies a debit or refund against the balance
+// row and records the ledger entry in the same transaction. Debits require
+// sufficient remaining balance; refunds are idempotent per order.
+func (r *billingImpl) applyOrderDeltaSQL(ctx context.Context, entry domainbilling.LedgerEntry, uses int) (domainbilling.LedgerEntry, error) {
+	out := entry
+	err := r.sql.Gorm().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if entry.Type == domainbilling.LedgerTypeRefund {
+			var existing ledgerRecord
+			err := tx.Where("order_id = ? AND type = ?", entry.OrderID, string(domainbilling.LedgerTypeRefund)).First(&existing).Error
+			if err == nil {
+				out = toDomainLedger(existing)
+				return nil
+			}
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+		}
+
+		if _, err := r.findOrCreateBalance(ctx, tx, entry.UserID); err != nil {
+			return err
+		}
+
+		update := tx.Model(&balanceRecord{}).Where("user_id = ?", entry.UserID)
+		if entry.Type == domainbilling.LedgerTypeDebit {
+			update = update.Where("remaining >= ?", uses)
+		}
+		result := update.UpdateColumns(map[string]any{
+			"remaining":  gorm.Expr("remaining + ?", entry.Delta),
+			"updated_at": entry.CreatedAt,
+		})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return domainbilling.ErrInsufficientBalance
+		}
+
+		var record balanceRecord
+		if err := tx.Where("user_id = ?", entry.UserID).First(&record).Error; err != nil {
+			return err
+		}
+		out.BalanceAfter = record.Remaining
+		return tx.Create(&ledgerRecord{
+			ID:           out.ID,
+			UserID:       out.UserID,
+			Type:         string(out.Type),
+			OrderID:      out.OrderID,
+			Delta:        out.Delta,
+			BalanceAfter: out.BalanceAfter,
+			CreatedAt:    out.CreatedAt,
+		}).Error
+	})
+	if err != nil {
+		return domainbilling.LedgerEntry{}, err
+	}
+	return out, nil
+}
+
 func (r *billingImpl) findOrCreateBalance(ctx context.Context, db *gorm.DB, userID string) (balanceRecord, error) {
 	var record balanceRecord
 	err := db.WithContext(ctx).Where("user_id = ?", userID).First(&record).Error
@@ -280,11 +379,16 @@ func (r *billingImpl) findOrCreateBalance(ctx context.Context, db *gorm.DB, user
 	return record, db.WithContext(ctx).Create(&record).Error
 }
 
-func (r *billingImpl) ensureSchema() error {
-	r.migrateOnce.Do(func() {
-		r.migrateErr = r.sql.Gorm().AutoMigrate(&balanceRecord{}, &ledgerRecord{}, &purchaseRecord{})
-	})
-	return r.migrateErr
+// Migrate creates or updates this repo's tables. Called once at startup.
+func Migrate(db *gorm.DB) error {
+	return db.AutoMigrate(&balanceRecord{}, &ledgerRecord{}, &purchaseRecord{})
+}
+func randomID(prefix string) (string, error) {
+	buf := make([]byte, 10)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate id: %w", err)
+	}
+	return prefix + hex.EncodeToString(buf), nil
 }
 
 func defaultBalance(userID string) int {

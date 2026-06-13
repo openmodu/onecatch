@@ -91,6 +91,11 @@ func TestUsersRepoMySQLSchemaWithDSN(t *testing.T) {
 	}
 	defer db.Close()
 
+	// Schema is created at startup now, not on the request path.
+	if err := Migrate(db.Gorm()); err != nil {
+		t.Fatalf("Migrate() error = %v", err)
+	}
+
 	repo := NewUsersRepo(db)
 	ctx := context.Background()
 	first, err := repo.FindOrCreateByIdentity(ctx, domainusers.AuthIdentity{

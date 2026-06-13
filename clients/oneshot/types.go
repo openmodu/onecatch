@@ -26,6 +26,33 @@ type OAuthStart struct {
 	State    string `json:"state"`
 }
 
+type ConversationMessage struct {
+	ID        string    `json:"id"`
+	Role      string    `json:"role"`
+	Kind      string    `json:"kind"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type Conversation struct {
+	ID        string                `json:"id"`
+	AgentID   string                `json:"agentId"`
+	AgentName string                `json:"agentName"`
+	Status    string                `json:"status"`
+	OrderID   string                `json:"orderId,omitempty"`
+	Messages  []ConversationMessage `json:"messages"`
+	CreatedAt time.Time             `json:"createdAt"`
+	UpdatedAt time.Time             `json:"updatedAt"`
+}
+
+type StartConversationRequest struct {
+	AgentID string `json:"agentId"`
+}
+
+type PostMessageRequest struct {
+	Text string `json:"text"`
+}
+
 type Agent struct {
 	ID                string   `json:"id"`
 	Name              string   `json:"name"`

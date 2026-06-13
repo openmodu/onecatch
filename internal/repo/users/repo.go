@@ -26,9 +26,6 @@ type usersImpl struct {
 	mu         sync.RWMutex
 	users      map[string]domainusers.User
 	identities map[string]domainusers.AuthIdentity
-
-	migrateOnce sync.Once
-	migrateErr  error
 }
 
 type userRecord struct {
@@ -122,10 +119,6 @@ func (r *usersImpl) findOrCreateInMemory(identity domainusers.AuthIdentity) doma
 }
 
 func (r *usersImpl) findOrCreateInSQL(ctx context.Context, identity domainusers.AuthIdentity) (domainusers.User, error) {
-	if err := r.ensureSchema(); err != nil {
-		return domainusers.User{}, err
-	}
-
 	var out domainusers.User
 	err := r.sql.Gorm().WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existingIdentity authIdentityRecord
@@ -192,13 +185,10 @@ func (r *usersImpl) resolveUserForIdentity(tx *gorm.DB, identity domainusers.Aut
 	return user, tx.Create(&user).Error
 }
 
-func (r *usersImpl) ensureSchema() error {
-	r.migrateOnce.Do(func() {
-		r.migrateErr = r.sql.Gorm().AutoMigrate(&userRecord{}, &authIdentityRecord{})
-	})
-	return r.migrateErr
+// Migrate creates or updates this repo's tables. Called once at startup.
+func Migrate(db *gorm.DB) error {
+	return db.AutoMigrate(&userRecord{}, &authIdentityRecord{})
 }
-
 func findUserRecord(tx *gorm.DB, userID string) (userRecord, error) {
 	var user userRecord
 	err := tx.Where("id = ?", userID).First(&user).Error

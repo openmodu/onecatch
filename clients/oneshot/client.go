@@ -15,6 +15,11 @@ import (
 	"time"
 )
 
+// ErrUnauthenticated is returned when the API rejects a request with 401, so
+// callers can treat "not logged in" distinctly without importing server-side
+// domain packages.
+var ErrUnauthenticated = errors.New("unauthenticated")
+
 type Client interface {
 	CurrentUser(context.Context) (User, error)
 	StartWechat(context.Context) (OAuthStart, error)
@@ -23,6 +28,10 @@ type Client interface {
 	Logout(context.Context) error
 	ListAgents(context.Context) ([]Agent, error)
 	GetAgent(context.Context, string) (Agent, error)
+	StartConversation(context.Context, StartConversationRequest) (Conversation, error)
+	GetConversation(context.Context, string) (Conversation, error)
+	PostConversationMessage(context.Context, string, PostMessageRequest) (Conversation, error)
+	ConfirmConversation(context.Context, string) (Conversation, error)
 	GetBalance(context.Context) (Balance, error)
 	ListLedger(context.Context) ([]LedgerEntry, error)
 	StartPurchase(context.Context, StartPurchaseRequest) (Purchase, error)
@@ -104,6 +113,30 @@ func (c *HTTPClient) ListAgents(ctx context.Context) ([]Agent, error) {
 func (c *HTTPClient) GetAgent(ctx context.Context, agentID string) (Agent, error) {
 	var out Agent
 	err := c.do(ctx, http.MethodGet, "/api/agents/"+url.PathEscape(agentID), nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) StartConversation(ctx context.Context, input StartConversationRequest) (Conversation, error) {
+	var out Conversation
+	err := c.do(ctx, http.MethodPost, "/api/conversations", input, &out)
+	return out, err
+}
+
+func (c *HTTPClient) GetConversation(ctx context.Context, conversationID string) (Conversation, error) {
+	var out Conversation
+	err := c.do(ctx, http.MethodGet, "/api/conversations/"+conversationID, nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) PostConversationMessage(ctx context.Context, conversationID string, input PostMessageRequest) (Conversation, error) {
+	var out Conversation
+	err := c.do(ctx, http.MethodPost, "/api/conversations/"+conversationID+"/messages", input, &out)
+	return out, err
+}
+
+func (c *HTTPClient) ConfirmConversation(ctx context.Context, conversationID string) (Conversation, error) {
+	var out Conversation
+	err := c.do(ctx, http.MethodPost, "/api/conversations/"+conversationID+"/confirm", nil, &out)
 	return out, err
 }
 
@@ -236,11 +269,15 @@ func (c *HTTPClient) do(ctx context.Context, method string, path string, input a
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		message := fmt.Sprintf("oneshot api request failed: %s", resp.Status)
 		var apiErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil && apiErr.Error != "" {
-			return errors.New(apiErr.Error)
+			message = apiErr.Error
 		}
-		return fmt.Errorf("oneshot api request failed: %s", resp.Status)
+		if resp.StatusCode == http.StatusUnauthorized {
+			return fmt.Errorf("%w: %s", ErrUnauthenticated, message)
+		}
+		return errors.New(message)
 	}
 	if output == nil || resp.StatusCode == http.StatusNoContent {
 		return nil
