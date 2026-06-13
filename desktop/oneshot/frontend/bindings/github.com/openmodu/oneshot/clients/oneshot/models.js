@@ -333,6 +333,143 @@ export class Balance {
     }
 }
 
+export class Conversation {
+    /**
+     * Creates a new Conversation instance.
+     * @param {Partial<Conversation>} [$$source = {}] - The source object to create the Conversation.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("agentId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["agentId"] = "";
+        }
+        if (!("agentName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["agentName"] = "";
+        }
+        if (!("status" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["status"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["orderId"] = undefined;
+        }
+        if (!("messages" in $$source)) {
+            /**
+             * @member
+             * @type {ConversationMessage[]}
+             */
+            this["messages"] = [];
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["createdAt"] = null;
+        }
+        if (!("updatedAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["updatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Conversation instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Conversation}
+     */
+    static createFrom($$source = {}) {
+        const $$createField5_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("messages" in $$parsedSource) {
+            $$parsedSource["messages"] = $$createField5_0($$parsedSource["messages"]);
+        }
+        return new Conversation(/** @type {Partial<Conversation>} */($$parsedSource));
+    }
+}
+
+export class ConversationMessage {
+    /**
+     * Creates a new ConversationMessage instance.
+     * @param {Partial<ConversationMessage>} [$$source = {}] - The source object to create the ConversationMessage.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("role" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["role"] = "";
+        }
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
+        if (!("text" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["text"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ConversationMessage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ConversationMessage}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ConversationMessage(/** @type {Partial<ConversationMessage>} */($$parsedSource));
+    }
+}
+
 export class CreateOrderRequest {
     /**
      * Creates a new CreateOrderRequest instance.
@@ -363,7 +500,7 @@ export class CreateOrderRequest {
      * @returns {CreateOrderRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType1;
+        const $$createField1_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("requirement" in $$parsedSource) {
             $$parsedSource["requirement"] = $$createField1_0($$parsedSource["requirement"]);
@@ -556,8 +693,8 @@ export class Order {
      * @returns {Order}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType1;
-        const $$createField10_0 = $$createType3;
+        const $$createField4_0 = $$createType3;
+        const $$createField10_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("requirement" in $$parsedSource) {
             $$parsedSource["requirement"] = $$createField4_0($$parsedSource["requirement"]);
@@ -767,7 +904,7 @@ export class Session {
      * @returns {Session}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType4;
+        const $$createField2_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("user" in $$parsedSource) {
             $$parsedSource["user"] = $$createField2_0($$parsedSource["user"]);
@@ -862,7 +999,9 @@ export class User {
 
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = Requirement.createFrom;
-const $$createType2 = ProgressStep.createFrom;
-const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = User.createFrom;
+const $$createType1 = ConversationMessage.createFrom;
+const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = Requirement.createFrom;
+const $$createType4 = ProgressStep.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = User.createFrom;

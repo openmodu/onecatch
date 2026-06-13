@@ -17,7 +17,7 @@ func main() {
 	log := logger.MustNew(logger.Config{Service: "oneshot-desktop"})
 	defer logger.Sync(log)
 
-	apiClient := initializeClient()
+	apiClient := newDesktopClient()
 
 	wailsApp := application.New(application.Options{
 		Name:        app.Name,
@@ -27,6 +27,7 @@ func main() {
 			application.NewService(bindings.NewAgentBinding(apiClient)),
 			application.NewService(bindings.NewArtifactBinding(apiClient)),
 			application.NewService(bindings.NewBillingBinding(apiClient)),
+			application.NewService(bindings.NewConversationBinding(apiClient)),
 			application.NewService(bindings.NewOrderBinding(apiClient)),
 		},
 		Assets: application.AssetOptions{

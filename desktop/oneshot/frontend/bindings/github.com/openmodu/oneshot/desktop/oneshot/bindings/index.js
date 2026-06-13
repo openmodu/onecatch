@@ -6,11 +6,13 @@ import * as AgentBinding from "./agentbinding.js";
 import * as ArtifactBinding from "./artifactbinding.js";
 import * as AuthBinding from "./authbinding.js";
 import * as BillingBinding from "./billingbinding.js";
+import * as ConversationBinding from "./conversationbinding.js";
 import * as OrderBinding from "./orderbinding.js";
 export {
     AgentBinding,
     ArtifactBinding,
     AuthBinding,
     BillingBinding,
+    ConversationBinding,
     OrderBinding
 };

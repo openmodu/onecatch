@@ -8,6 +8,8 @@ export {
     ArtifactDownload,
     ArtifactShare,
     Balance,
+    Conversation,
+    ConversationMessage,
     CreateOrderRequest,
     LedgerEntry,
     Order,

@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	oneshot "github.com/openmodu/oneshot/clients/oneshot"
-	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
 )
 
 type AuthBinding struct {
@@ -18,7 +17,7 @@ func NewAuthBinding(client oneshot.Client) *AuthBinding {
 
 func (b *AuthBinding) CurrentUser() (oneshot.User, error) {
 	user, err := b.client.CurrentUser(context.Background())
-	if errors.Is(err, domainauth.ErrUnauthenticated) {
+	if errors.Is(err, oneshot.ErrUnauthenticated) {
 		return oneshot.User{}, nil
 	}
 	return user, err

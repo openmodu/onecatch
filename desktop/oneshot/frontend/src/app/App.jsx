@@ -4,6 +4,7 @@ import {
   ArtifactBinding,
   AuthBinding,
   BillingBinding,
+  ConversationBinding,
   OrderBinding,
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 
@@ -230,8 +231,15 @@ const fallbackArtifacts = [
   },
 ];
 
+function isWailsRuntime() {
+  if (typeof window === "undefined") return false;
+  return Boolean(window._wails?.environment?.OS);
+}
+
 function canUseFallback() {
-  return import.meta.env.DEV && typeof window !== "undefined" && !window.__ONESOT_DISABLE_FIXTURE__;
+  if (!import.meta.env.DEV || typeof window === "undefined") return false;
+  if (window.__ONESOT_DISABLE_FIXTURE__ || window.__ONESHOT_DISABLE_FIXTURE__) return false;
+  return !isWailsRuntime();
 }
 
 function formatMoney(cents) {
@@ -318,6 +326,11 @@ export default function App() {
     "请帮我完成 2026 年中国 AI Agent 服务市场研究，包括市场规模、主要玩家、收费模式、增长机会和进入建议。",
   );
   const inspectorToolRef = useRef(null);
+  const [conversation, setConversation] = useState(null);
+  const [composer, setComposer] = useState("");
+  const [conversationBusy, setConversationBusy] = useState(false);
+  const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const threadEndRef = useRef(null);
 
   const visibleAgents = useMemo(() => {
     if (activeCategory === "all") return agents;
@@ -345,6 +358,15 @@ export default function App() {
         ];
 
   useEffect(() => {
+    if (canUseFallback()) {
+      setAgents(fallbackAgents);
+      setSelectedAgentId((current) =>
+        fallbackAgents.some((agent) => agent.id === current) ? current : fallbackAgents[0].id,
+      );
+      setAgentStatus("fixture");
+      return undefined;
+    }
+
     let alive = true;
     AgentBinding.ListAgents()
       .then((items) => {
@@ -358,14 +380,6 @@ export default function App() {
       })
       .catch((error) => {
         if (!alive) return;
-        if (canUseFallback()) {
-          setAgents(fallbackAgents);
-          setSelectedAgentId((current) =>
-            fallbackAgents.some((agent) => agent.id === current) ? current : fallbackAgents[0].id,
-          );
-          setAgentStatus("fixture");
-          return;
-        }
         setAgents([]);
         setSelectedAgentId("");
         setAgentStatus("failed");
@@ -377,6 +391,20 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (canUseFallback()) {
+      setCurrentUser(null);
+      setAuthProvider("");
+      setAuthStatus("signed-out");
+      setBalance({ remaining: 12 });
+      setLedger([
+        { id: "ledger-demo-1", type: "purchase", delta: 10, balanceAfter: 12, createdAt: "2026-06-10T09:00:00+08:00" },
+        { id: "ledger-demo-2", type: "debit", delta: -1, balanceAfter: 11, createdAt: "2026-06-10T10:31:00+08:00" },
+      ]);
+      setUserOrders(fallbackOrders);
+      setSelectedOrderId(fallbackOrders[0].id);
+      return undefined;
+    }
+
     let alive = true;
     AuthBinding.CurrentUser()
       .then((user) => {
@@ -396,15 +424,6 @@ export default function App() {
         setCurrentUser(null);
         setAuthProvider("");
         setAuthStatus("signed-out");
-        if (canUseFallback()) {
-          setBalance({ remaining: 12 });
-          setLedger([
-            { id: "ledger-demo-1", type: "purchase", delta: 10, balanceAfter: 12, createdAt: "2026-06-10T09:00:00+08:00" },
-            { id: "ledger-demo-2", type: "debit", delta: -1, balanceAfter: 11, createdAt: "2026-06-10T10:31:00+08:00" },
-          ]);
-          setUserOrders(fallbackOrders);
-          setSelectedOrderId(fallbackOrders[0].id);
-        }
       });
     return () => {
       alive = false;
@@ -458,6 +477,10 @@ export default function App() {
   }, [inspectorMenuOpen]);
 
   useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [conversation?.messages?.length, selectedOrder?.status, inspectorArtifacts.length]);
+
+  useEffect(() => {
     let alive = true;
     if (!selectedOrder?.id || selectedOrder.status !== "delivered") {
       setArtifacts([]);
@@ -484,6 +507,19 @@ export default function App() {
   }
 
   async function refreshBilling() {
+    if (canUseFallback()) {
+      setBalance((value) => value ?? { remaining: 12 });
+      setLedger((items) =>
+        items.length > 0
+          ? items
+          : [
+              { id: "ledger-demo-1", type: "purchase", delta: 10, balanceAfter: 12, createdAt: "2026-06-10T09:00:00+08:00" },
+              { id: "ledger-demo-2", type: "debit", delta: -1, balanceAfter: 11, createdAt: "2026-06-10T10:31:00+08:00" },
+            ],
+      );
+      return;
+    }
+
     try {
       const [nextBalance, nextLedger] = await Promise.all([
         BillingBinding.GetBalance(),
@@ -498,6 +534,17 @@ export default function App() {
   }
 
   async function refreshOrders(status = orderFilter) {
+    if (canUseFallback()) {
+      const nextOrders = status
+        ? fallbackOrders.filter((order) => order.status === status)
+        : fallbackOrders;
+      setUserOrders((items) => (items.length > 0 ? items : nextOrders));
+      setSelectedOrderId((current) =>
+        nextOrders.some((order) => order.id === current) ? current : nextOrders[0]?.id || "",
+      );
+      return;
+    }
+
     try {
       const items = await OrderBinding.ListOrders(status || "");
       const nextOrders = Array.isArray(items) ? items : [];
@@ -513,6 +560,23 @@ export default function App() {
 
   async function login(provider) {
     setAuthStatus("checking");
+    if (canUseFallback()) {
+      const fixtureUser = {
+        id: "local-preview-user",
+        displayName: provider === "google" ? "Google 邮箱用户" : "微信用户",
+        email: provider === "google" ? "preview@oneshot.local" : "",
+      };
+      setCurrentUser(fixtureUser);
+      setAuthProvider(provider);
+      window.localStorage.setItem("oneshot.authProvider", provider);
+      setAuthStatus("signed-in");
+      setBalance({ remaining: 12 });
+      setUserOrders(fallbackOrders);
+      setSelectedOrderId(fallbackOrders[0].id);
+      showToast("已进入本地预览登录态");
+      return;
+    }
+
     try {
       const session =
         provider === "google"
@@ -525,28 +589,21 @@ export default function App() {
       await Promise.all([refreshBilling(), refreshOrders(orderFilter)]);
       showToast(`已通过${provider === "google" ? " Google 邮箱" : "微信"}登录`);
     } catch (error) {
-      if (canUseFallback()) {
-        const fixtureUser = {
-          id: "local-preview-user",
-          displayName: provider === "google" ? "Google 邮箱用户" : "微信用户",
-          email: provider === "google" ? "preview@oneshot.local" : "",
-        };
-        setCurrentUser(fixtureUser);
-        setAuthProvider(provider);
-        window.localStorage.setItem("oneshot.authProvider", provider);
-        setAuthStatus("signed-in");
-        setBalance({ remaining: 12 });
-        setUserOrders(fallbackOrders);
-        setSelectedOrderId(fallbackOrders[0].id);
-        showToast("已进入本地预览登录态");
-        return;
-      }
       setAuthStatus("signed-out");
       showToast(error?.message || "登录失败，请稍后重试");
     }
   }
 
   async function logout() {
+    if (canUseFallback()) {
+      setCurrentUser(null);
+      setAuthProvider("");
+      window.localStorage.removeItem("oneshot.authProvider");
+      setAuthStatus("signed-out");
+      showToast("已退出本地预览登录态");
+      return;
+    }
+
     try {
       await AuthBinding.Logout();
       setCurrentUser(null);
@@ -555,14 +612,6 @@ export default function App() {
       setAuthStatus("signed-out");
       showToast("已退出登录");
     } catch (error) {
-      if (canUseFallback()) {
-        setCurrentUser(null);
-        setAuthProvider("");
-        window.localStorage.removeItem("oneshot.authProvider");
-        setAuthStatus("signed-out");
-        showToast("已退出本地预览登录态");
-        return;
-      }
       showToast(error?.message || "退出登录失败");
     }
   }
@@ -573,26 +622,27 @@ export default function App() {
       setActiveView("account");
       return;
     }
+    if (canUseFallback()) {
+      setBalance((value) => ({ remaining: (value?.remaining ?? 12) + 10 }));
+      setLedger((items) => [
+        ...items,
+        {
+          id: `ledger-${Date.now()}`,
+          type: "purchase",
+          delta: 10,
+          balanceAfter: (balance?.remaining ?? 12) + 10,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      showToast("本地预览已增加 10 次");
+      return;
+    }
+
     try {
       await BillingBinding.StartPurchase({ planId: "uses_10" });
       await refreshBilling();
       showToast("已购买 10 次");
     } catch (error) {
-      if (canUseFallback()) {
-        setBalance((value) => ({ remaining: (value?.remaining ?? 12) + 10 }));
-        setLedger((items) => [
-          ...items,
-          {
-            id: `ledger-${Date.now()}`,
-            type: "purchase",
-            delta: 10,
-            balanceAfter: (balance?.remaining ?? 12) + 10,
-            createdAt: new Date().toISOString(),
-          },
-        ]);
-        showToast("本地预览已增加 10 次");
-        return;
-      }
       showToast(error?.message || "购买次数失败");
     }
   }
@@ -612,6 +662,32 @@ export default function App() {
       setSelectedStep("requirement");
       return;
     }
+    if (canUseFallback()) {
+      const order = {
+        id: `ORD${Date.now().toString().slice(-12)}`,
+        agentName: selectedAgent.name,
+        requirement: { prompt: requirement },
+        status: "running",
+        usageCost: selectedAgent.priceUses || 1,
+        amountCents: selectedAgent.priceCents,
+        estimatedCompletionAt: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
+        createdAt: new Date().toISOString(),
+        progress: [
+          { key: "submitted", label: "需求已提交", state: "done", timestamp: new Date().toISOString() },
+          { key: "checkout", label: "扣次确认", state: "done", timestamp: new Date().toISOString() },
+          { key: "running", label: "执行中", state: "current", timestamp: new Date().toISOString() },
+          { key: "delivering", label: "交付物生成中", state: "next" },
+          { key: "delivered", label: "已交付", state: "next" },
+        ],
+      };
+      setUserOrders((items) => [order, ...items]);
+      setSelectedOrderId(order.id);
+      setSelectedStep("running");
+      setBalance((value) => ({ remaining: Math.max(0, (value?.remaining ?? 12) - 1) }));
+      showToast("本地预览已开始执行");
+      return;
+    }
+
     try {
       const order = await OrderBinding.CreateOrder({
         agentId: selectedAgent.id,
@@ -622,37 +698,22 @@ export default function App() {
       await Promise.all([refreshBilling(), refreshOrders("")]);
       showToast("已开始执行");
     } catch (error) {
-      if (canUseFallback()) {
-        const order = {
-          id: `ORD${Date.now().toString().slice(-12)}`,
-          agentName: selectedAgent.name,
-          requirement: { prompt: requirement },
-          status: "running",
-          usageCost: selectedAgent.priceUses || 1,
-          amountCents: selectedAgent.priceCents,
-          estimatedCompletionAt: new Date(Date.now() + 90 * 60 * 1000).toISOString(),
-          createdAt: new Date().toISOString(),
-          progress: [
-            { key: "submitted", label: "需求已提交", state: "done", timestamp: new Date().toISOString() },
-            { key: "checkout", label: "扣次确认", state: "done", timestamp: new Date().toISOString() },
-            { key: "running", label: "执行中", state: "current", timestamp: new Date().toISOString() },
-            { key: "delivering", label: "交付物生成中", state: "next" },
-            { key: "delivered", label: "已交付", state: "next" },
-          ],
-        };
-        setUserOrders((items) => [order, ...items]);
-        setSelectedOrderId(order.id);
-        setSelectedStep("running");
-        setBalance((value) => ({ remaining: Math.max(0, (value?.remaining ?? 12) - 1) }));
-        showToast("本地预览已开始执行");
-        return;
-      }
       showToast(error?.message || "创建订单失败");
     }
   }
 
   async function cancelSelectedOrder() {
     if (!selectedOrder?.id) return;
+    if (canUseFallback()) {
+      setUserOrders((items) =>
+        items.map((order) =>
+          order.id === selectedOrder.id ? { ...order, status: "cancelled" } : order,
+        ),
+      );
+      showToast("本地预览已取消订单");
+      return;
+    }
+
     try {
       await OrderBinding.CancelOrder(selectedOrder.id);
       await refreshOrders(orderFilter);
@@ -663,6 +724,11 @@ export default function App() {
   }
 
   async function downloadArtifact(artifactId) {
+    if (canUseFallback()) {
+      showToast("本地预览已模拟下载");
+      return;
+    }
+
     try {
       const download = await ArtifactBinding.DownloadArtifact(artifactId);
       if (download.filePath) {
@@ -670,32 +736,148 @@ export default function App() {
       }
       showToast(download.filePath ? `已下载到 ${download.filePath}` : "已下载交付物");
     } catch (error) {
-      if (canUseFallback()) {
-        showToast("本地预览已模拟下载");
-        return;
-      }
       showToast(error?.message || "下载失败");
     }
   }
 
   async function shareArtifact(artifactId) {
+    if (canUseFallback()) {
+      showToast("本地预览已模拟分享");
+      return;
+    }
+
     try {
       const share = await ArtifactBinding.ShareArtifact(artifactId);
       await navigator.clipboard?.writeText?.(share.url);
       showToast("分享链接已生成");
     } catch (error) {
-      if (canUseFallback()) {
-        showToast("本地预览已模拟分享");
-        return;
-      }
       showToast(error?.message || "分享失败");
     }
   }
 
-  function chooseAgent(agent) {
-    setSelectedAgentId(agent.id);
-    setSelectedStep("details");
+  function localConversationMessage(role, kind, text) {
+    return {
+      id: `local-msg-${Date.now()}-${Math.round(Math.random() * 1e6)}`,
+      role,
+      kind,
+      text,
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  async function startConversationFor(agent) {
+    if (!agent) return;
     setActiveView("workbench");
+    setSelectedAgentId(agent.id);
+    setSelectedOrderId("");
+    setShowAgentPicker(false);
+    setComposer("");
+    setConversationBusy(true);
+    try {
+      const conv = await ConversationBinding.StartConversation(agent.id);
+      setConversation(conv);
+    } catch (error) {
+      if (canUseFallback()) {
+        setConversation({
+          id: `local-conv-${Date.now()}`,
+          agentId: agent.id,
+          agentName: agent.name,
+          status: "active",
+          messages: [
+            localConversationMessage(
+              "agent",
+              "text",
+              `你好，我是${agent.name}。${agent.description || ""}\n请描述你的任务，我会先给出扣次确认。`,
+            ),
+          ],
+        });
+      } else {
+        showToast(error?.message || "无法开始会话");
+      }
+    } finally {
+      setConversationBusy(false);
+    }
+  }
+
+  async function sendConversationMessage() {
+    const text = composer.trim();
+    if (!text || !conversation) return;
+    setComposer("");
+    setConversationBusy(true);
+    try {
+      const conv = await ConversationBinding.PostMessage(conversation.id, text);
+      setConversation(conv);
+    } catch (error) {
+      if (canUseFallback()) {
+        setConversation((prev) => ({
+          ...prev,
+          status: "awaiting_confirm",
+          messages: [
+            ...prev.messages,
+            localConversationMessage("user", "text", text),
+            localConversationMessage(
+              "agent",
+              "checkout",
+              `我已理解你的任务。本次执行将扣减 ${selectedAgent?.priceUses || 1} 次，确认后开始。`,
+            ),
+          ],
+        }));
+      } else {
+        showToast(error?.message || "发送失败");
+      }
+    } finally {
+      setConversationBusy(false);
+    }
+  }
+
+  async function confirmConversationCheckout() {
+    if (!conversation || conversationBusy) return;
+    setConversationBusy(true);
+    try {
+      const conv = await ConversationBinding.ConfirmCheckout(conversation.id);
+      setConversation(conv);
+      if (conv.orderId) setSelectedOrderId(conv.orderId);
+      await Promise.all([refreshBilling(), refreshOrders("")]);
+      showToast("已开始执行");
+    } catch (error) {
+      if (canUseFallback()) {
+        const orderId = `ORD${Date.now().toString().slice(-12)}`;
+        const lastUser = [...(conversation.messages || [])]
+          .reverse()
+          .find((m) => m.role === "user");
+        const order = {
+          id: orderId,
+          agentName: conversation.agentName,
+          requirement: { prompt: lastUser?.text || "本次任务" },
+          status: "running",
+          usageCost: selectedAgent?.priceUses || 1,
+          amountCents: selectedAgent?.priceCents,
+          createdAt: new Date().toISOString(),
+          progress: [],
+        };
+        setUserOrders((items) => [order, ...items]);
+        setSelectedOrderId(orderId);
+        setConversation((prev) => ({
+          ...prev,
+          status: "running",
+          orderId,
+          messages: [
+            ...prev.messages,
+            localConversationMessage("system", "text", `已开始执行，订单号 ${orderId}。进度和交付物会在这里更新。`),
+          ],
+        }));
+        setBalance((value) => ({ remaining: Math.max(0, (value?.remaining ?? 12) - 1) }));
+        showToast("本地预览已开始执行");
+      } else {
+        showToast(error?.message || "确认失败");
+      }
+    } finally {
+      setConversationBusy(false);
+    }
+  }
+
+  function chooseAgent(agent) {
+    startConversationFor(agent);
   }
 
   function chooseOrder(order) {
@@ -916,179 +1098,187 @@ export default function App() {
   }
 
   function renderWorkbench() {
-    if (!selectedAgent) {
+    const convOrder = conversation?.orderId ? selectedOrder : null;
+    const awaiting = conversation?.status === "awaiting_confirm";
+
+    const renderChatMessage = (message) => {
+      if (message.kind === "checkout") {
+        return (
+          <div className="chat-row agent" key={message.id}>
+            <div className="chat-bubble chat-card chat-checkout">
+              <p>{message.text}</p>
+              <div className="chat-checkout-actions">
+                {awaiting ? (
+                  <button
+                    className="primary-button"
+                    type="button"
+                    disabled={conversationBusy}
+                    onClick={confirmConversationCheckout}
+                  >
+                    确认并支付
+                  </button>
+                ) : (
+                  <span className="chat-confirmed">已确认</span>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      }
+      const side = message.role === "user" ? "user" : "agent";
       return (
-        <section className="empty-panel">
-          {agentStatus === "loading" ? "正在加载 Agent 目录" : "该分类暂无可用 Agent"}
-        </section>
+        <div className={`chat-row ${side}`} key={message.id}>
+          <div className="chat-bubble">{message.text}</div>
+        </div>
       );
-    }
+    };
 
-    return (
-      <section className="main-column">
-        <section className="agent-hero">
-          <div className="agent-mark" aria-hidden="true">
-            {selectedAgent.name?.slice(0, 1) || "A"}
-          </div>
-          <div className="agent-copy">
-            <div className="title-line">
-              <h1>{selectedAgent.name}</h1>
-              <span>{selectedAgent.tags?.[0] || "Agent"}</span>
-            </div>
-            <p>{selectedAgent.description}</p>
-            <div className="meta-row">
-              <strong>评分 {selectedAgent.rating || "-"}</strong>
-              <span>成交 {formatDealCount(selectedAgent.dealCount)} 次</span>
-              <span>平均交付 {selectedAgent.estimatedDuration || "待确认"}</span>
-            </div>
-          </div>
-          <div className="price-box">
-            <span>单次价格</span>
-            <strong>{formatMoney(selectedAgent.priceCents)}</strong>
-            <small>/ 次</small>
-          </div>
-        </section>
-
+    const picker = (
+      <div className="agent-picker">
         <SegmentControl
           items={categories}
           label="Agent 分类"
           value={activeCategory}
           onChange={setActiveCategory}
         />
-
-        <div className="agent-strip" aria-label="Agent 快捷切换">
+        <div className="agent-strip" aria-label="选择 Agent">
           {visibleAgents.map((agent) => (
             <button
-              className={selectedAgent.id === agent.id ? "selected" : ""}
+              className={conversation?.agentId === agent.id ? "selected" : ""}
               key={agent.id}
               type="button"
-              onClick={() => chooseAgent(agent)}
+              onClick={() => startConversationFor(agent)}
             >
               <span>{agent.name.slice(0, 1)}</span>
               <strong>{agent.name}</strong>
               <em>{formatMoney(agent.priceCents)}</em>
             </button>
           ))}
-        </div>
-
-        <div className="flow-tabs" role="tablist" aria-label="任务流程">
-          {workflowSteps.map((step, index) => (
-            <button
-              className={selectedStep === step.id ? "selected" : ""}
-              key={step.id}
-              type="button"
-              onClick={() => setSelectedStep(step.id)}
-            >
-              <span>{index + 1}</span>
-              {step.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="brief-grid">
-          <section className="panel requirement-panel">
-            <div className="panel-title">
-              <h2>{selectedStep === "requirement" ? "编辑需求" : "需求摘要"}</h2>
-              <button type="button" onClick={() => setSelectedStep("requirement")}>
-                编辑需求
-              </button>
-            </div>
-            <textarea
-              aria-label="任务需求"
-              onChange={(event) => setRequirement(event.target.value)}
-              readOnly={selectedStep !== "requirement"}
-              value={requirement}
-            />
-          </section>
-
-          <section className="panel checklist-panel">
-            <h2>扣次说明</h2>
-            <ul>
-              <li>本次执行扣减 {selectedAgent.priceUses || 1} 次</li>
-              <li>单次独立交付，仅针对本次需求</li>
-              <li>开始执行后进入订单进度流转</li>
-            </ul>
-            <button className="soft-button" type="button" onClick={() => setSelectedStep("running")}>
-              查看执行状态
-            </button>
-          </section>
-
-          <section className="panel balance-panel">
-            <h2>当前余额</h2>
-            <div className="balance-number">
-              <strong>{currentBalance}</strong>
-              <span>次</span>
-            </div>
-            <button className="outline-button" type="button" onClick={buyUses}>
-              购买次数
-            </button>
-          </section>
-        </div>
-
-        <section className="checkout-panel">
-          <div className="calc-row">
-            <span>本次扣减</span>
-            <strong>{selectedAgent.priceUses || 1} 次</strong>
-          </div>
-          <div className="calc-row">
-            <span>单次价格</span>
-            <strong>{formatMoney(selectedAgent.priceCents)}</strong>
-          </div>
-          <div className="calc-row due">
-            <span>应付金额</span>
-            <strong>{formatMoney(selectedAgent.priceCents)}</strong>
-          </div>
-          <button className="primary-button" type="button" onClick={confirmCheckout}>
-            确认并支付
-          </button>
-        </section>
-
-        <section className="progress-panel">
-          <div className="panel-title">
-            <h2>执行进度</h2>
-            {selectedOrder?.status === "running" && (
-              <button type="button" onClick={cancelSelectedOrder}>
-                取消订单
-              </button>
-            )}
-          </div>
-          {timeline.map((step) => (
-            <div className={`timeline-item ${step.state}`} key={step.key || step.label}>
-              <span className="timeline-dot" />
-              <strong>{step.label}</strong>
-              <time>{step.timestamp ? formatDateTime(step.timestamp) : "待推进"}</time>
-              <p>{step.state === "current" ? "当前正在处理" : step.state === "done" ? "已完成" : "等待进入"}</p>
-            </div>
-          ))}
-        </section>
-
-        <section className="delivery-panel">
-          <div className="panel-title">
-            <h2>交付物</h2>
-            <button type="button" onClick={() => setSelectedStep("artifact")}>
-              查看
-            </button>
-          </div>
-          {inspectorArtifacts.length > 0 ? (
-            inspectorArtifacts.map((artifact) => (
-              <div className="file-row" key={artifact.id}>
-                <span className="file-icon">PDF</span>
-                <div>
-                  <strong>{artifact.fileName}</strong>
-                  <small>{Math.max(1, Math.round((artifact.sizeBytes || 0) / 1024))} KB · {artifact.fileType}</small>
-                </div>
-                <button type="button" onClick={() => shareArtifact(artifact.id)}>
-                  分享
-                </button>
-                <button type="button" onClick={() => downloadArtifact(artifact.id)}>
-                  下载
-                </button>
-              </div>
-            ))
-          ) : (
-            <p className="muted-copy">订单交付后会在这里出现报告预览、下载和分享。</p>
+          {visibleAgents.length === 0 && (
+            <p className="muted-copy">
+              {agentStatus === "loading" ? "正在加载 Agent 目录" : "该分类暂无可用 Agent"}
+            </p>
           )}
+        </div>
+      </div>
+    );
+
+    if (!conversation) {
+      return (
+        <section className="workbench-chat">
+          <div className="chat-intro">
+            <h1>选择一个 Agent 开始对话</h1>
+            <p className="muted-copy">
+              描述你的任务，确认扣次后开始执行；进度与交付物都在对话里呈现。
+            </p>
+          </div>
+          {picker}
         </section>
+      );
+    }
+
+    return (
+      <section className="workbench-chat">
+        <header className="chat-header">
+          <div className="chat-agent">
+            <span className="agent-mark-sm" aria-hidden="true">
+              {conversation.agentName?.slice(0, 1) || "A"}
+            </span>
+            <div>
+              <strong>{conversation.agentName}</strong>
+              <small>
+                {selectedAgent
+                  ? `${formatMoney(selectedAgent.priceCents)} / 次 · 余额 ${currentBalance} 次`
+                  : `余额 ${currentBalance} 次`}
+              </small>
+            </div>
+          </div>
+          <button className="soft-button" type="button" onClick={() => setShowAgentPicker((v) => !v)}>
+            {showAgentPicker ? "收起" : "切换 Agent"}
+          </button>
+        </header>
+
+        {showAgentPicker && picker}
+
+        <div className="chat-thread" aria-label="对话">
+          {conversation.messages.map(renderChatMessage)}
+
+          {convOrder && (
+            <div className="chat-row agent">
+              <div className="chat-bubble chat-card">
+                <div className="chat-card-title">
+                  <span>执行进度</span>
+                  {convOrder.status === "running" && (
+                    <button type="button" onClick={cancelSelectedOrder}>
+                      取消
+                    </button>
+                  )}
+                </div>
+                <div className="chat-timeline">
+                  {timeline.map((step) => (
+                    <div className={`chat-timeline-row ${step.state}`} key={step.key || step.label}>
+                      <span className="timeline-dot" />
+                      <strong>{step.label}</strong>
+                      <time>{step.timestamp ? formatDateTime(step.timestamp) : "待推进"}</time>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {convOrder && inspectorArtifacts.length > 0 && (
+            <div className="chat-row agent">
+              <div className="chat-bubble chat-card">
+                <div className="chat-card-title">
+                  <span>交付物</span>
+                </div>
+                {inspectorArtifacts.map((artifact) => (
+                  <div className="file-row" key={artifact.id}>
+                    <span className="file-icon">PDF</span>
+                    <div>
+                      <strong>{artifact.fileName}</strong>
+                      <small>
+                        {Math.max(1, Math.round((artifact.sizeBytes || 0) / 1024))} KB · {artifact.fileType}
+                      </small>
+                    </div>
+                    <button type="button" onClick={() => shareArtifact(artifact.id)}>
+                      分享
+                    </button>
+                    <button type="button" onClick={() => downloadArtifact(artifact.id)}>
+                      下载
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div ref={threadEndRef} />
+        </div>
+
+        <div className="chat-composer">
+          <textarea
+            aria-label="输入任务"
+            placeholder={awaiting ? "可继续补充或修改任务…" : "描述你要完成的任务…"}
+            value={composer}
+            onChange={(event) => setComposer(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+                event.preventDefault();
+                sendConversationMessage();
+              }
+            }}
+          />
+          <button
+            className="primary-button"
+            type="button"
+            disabled={conversationBusy || !composer.trim()}
+            onClick={sendConversationMessage}
+          >
+            发送
+          </button>
+        </div>
       </section>
     );
   }
