@@ -2,10 +2,13 @@ package httptransport
 
 import (
 	"fmt"
+	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/openmodu/oneshot/internal/api"
+	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
 	"github.com/openmodu/oneshot/internal/domain/orders"
 	"github.com/openmodu/oneshot/internal/domain/users"
 	"github.com/openmodu/oneshot/internal/service"
@@ -17,13 +20,18 @@ import (
 
 type Server struct {
 	services *service.Services
+	log      *slog.Logger
 }
 
 func NewServer(services *service.Services) http.Handler {
-	server := &Server{services: services}
+	server := &Server{services: services, log: slog.Default()}
 	router := api.NewRouter()
 
 	router.Use(api.DefaultMiddlewares()...)
+
+	// Admin lives under a separate route tree with its own auth, never under
+	// /api and never reachable through the desktop client.
+	newAdminHandler(os.Getenv("ONESHOT_ADMIN_TOKEN"), server.log).register(router)
 
 	router.Get("/healthz", server.health)
 	router.Group("/api", func(router api.Router) {
@@ -37,6 +45,10 @@ func NewServer(services *service.Services) http.Handler {
 		router.Get("/billing/balance", server.getBalance)
 		router.Get("/billing/ledger", server.listLedger)
 		router.Post("/billing/purchases", server.startPurchase)
+		router.Post("/conversations", server.startConversation)
+		router.Get("/conversations/{conversationID}", server.getConversation)
+		router.Post("/conversations/{conversationID}/messages", server.postConversationMessage)
+		router.Post("/conversations/{conversationID}/confirm", server.confirmConversation)
 		router.Post("/orders", server.createOrder)
 		router.Get("/orders", server.listOrders)
 		router.Get("/orders/{orderID}/artifacts", server.listArtifacts)
@@ -59,7 +71,7 @@ func (s *Server) currentUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, user)
+	httpx.WriteJSON(w, http.StatusOK, toUserDTO(user))
 }
 
 func (s *Server) startWechat(w http.ResponseWriter, r *http.Request) {
@@ -82,7 +94,7 @@ func (s *Server) loginWithWechat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, session)
+	httpx.WriteJSON(w, http.StatusOK, toSessionDTO(session))
 }
 
 func (s *Server) loginWithGoogle(w http.ResponseWriter, r *http.Request) {
@@ -96,19 +108,16 @@ func (s *Server) loginWithGoogle(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, session)
+	httpx.WriteJSON(w, http.StatusOK, toSessionDTO(session))
 }
 
 func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
-	if token := bearerToken(r); token != "" {
-		if err := s.services.Auth.LogoutToken(r.Context(), token); err != nil {
-			writeError(w, err)
-			return
-		}
-		httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	token := bearerToken(r)
+	if token == "" {
+		writeError(w, domainauth.ErrUnauthenticated)
 		return
 	}
-	if err := s.services.Auth.Logout(r.Context()); err != nil {
+	if err := s.services.Auth.LogoutToken(r.Context(), token); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -146,7 +155,7 @@ func (s *Server) getBalance(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, balance)
+	httpx.WriteJSON(w, http.StatusOK, toBalanceDTO(balance))
 }
 
 func (s *Server) listLedger(w http.ResponseWriter, r *http.Request) {
@@ -161,7 +170,7 @@ func (s *Server) listLedger(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, ledger)
+	httpx.WriteJSON(w, http.StatusOK, toLedgerDTOs(ledger))
 }
 
 func (s *Server) startPurchase(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +198,83 @@ func (s *Server) startPurchase(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, purchase)
+	httpx.WriteJSON(w, http.StatusOK, toPurchaseDTO(purchase))
+}
+
+func (s *Server) startConversation(w http.ResponseWriter, r *http.Request) {
+	user, err := s.currentUserFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	var input struct {
+		AgentID string `json:"agentId"`
+	}
+	if err := httpx.DecodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	conv, err := s.services.Conversations.Start(r.Context(), user.ID, input.AgentID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusCreated, toConversationDTO(conv))
+}
+
+func (s *Server) getConversation(w http.ResponseWriter, r *http.Request) {
+	user, err := s.currentUserFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	conv, err := s.services.Conversations.Get(r.Context(), user.ID, api.URLParam(r, "conversationID"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toConversationDTO(conv))
+}
+
+func (s *Server) postConversationMessage(w http.ResponseWriter, r *http.Request) {
+	user, err := s.currentUserFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	var input struct {
+		Text string `json:"text"`
+	}
+	if err := httpx.DecodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	conv, err := s.services.Conversations.PostMessage(r.Context(), user.ID, api.URLParam(r, "conversationID"), input.Text)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toConversationDTO(conv))
+}
+
+func (s *Server) confirmConversation(w http.ResponseWriter, r *http.Request) {
+	user, err := s.currentUserFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	conv, err := s.services.Conversations.Confirm(r.Context(), user.ID, api.URLParam(r, "conversationID"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toConversationDTO(conv))
 }
 
 func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
@@ -217,7 +302,13 @@ func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusCreated, order)
+	// Audit order creation without logging the requirement text in full.
+	s.log.Info("order created",
+		slog.String("orderId", order.ID),
+		slog.String("agentId", order.AgentID),
+		slog.String("requirement", promptDigest(order.Requirement.Prompt)),
+	)
+	httpx.WriteJSON(w, http.StatusCreated, toOrderDTO(order))
 }
 
 func (s *Server) listOrders(w http.ResponseWriter, r *http.Request) {
@@ -235,7 +326,7 @@ func (s *Server) listOrders(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, items)
+	httpx.WriteJSON(w, http.StatusOK, toOrderDTOs(items))
 }
 
 func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
@@ -251,7 +342,7 @@ func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, order)
+	httpx.WriteJSON(w, http.StatusOK, toOrderDTO(order))
 }
 
 func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {
@@ -267,7 +358,7 @@ func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, order)
+	httpx.WriteJSON(w, http.StatusOK, toOrderDTO(order))
 }
 
 func (s *Server) listArtifacts(w http.ResponseWriter, r *http.Request) {
@@ -283,7 +374,7 @@ func (s *Server) listArtifacts(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, artifacts)
+	httpx.WriteJSON(w, http.StatusOK, toArtifactDTOs(artifacts))
 }
 
 func (s *Server) downloadArtifact(w http.ResponseWriter, r *http.Request) {
@@ -318,14 +409,18 @@ func (s *Server) shareArtifact(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	httpx.WriteJSON(w, http.StatusOK, share)
+	httpx.WriteJSON(w, http.StatusOK, toShareDTO(share))
 }
 
+// currentUserFromRequest resolves the user strictly from the Bearer token.
+// The server never falls back to the in-process "current session" — that
+// shortcut is only meaningful inside the single-user desktop process.
 func (s *Server) currentUserFromRequest(r *http.Request) (users.User, error) {
-	if token := bearerToken(r); token != "" {
-		return s.services.Auth.CurrentUserByToken(r.Context(), token)
+	token := bearerToken(r)
+	if token == "" {
+		return users.User{}, domainauth.ErrUnauthenticated
 	}
-	return s.services.Auth.CurrentUser(r.Context())
+	return s.services.Auth.CurrentUserByToken(r.Context(), token)
 }
 
 func bearerToken(r *http.Request) string {

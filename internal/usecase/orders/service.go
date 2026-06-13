@@ -3,6 +3,9 @@ package orders
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/openmodu/oneshot/internal/domain/agents"
@@ -17,6 +20,7 @@ type AgentRepository interface {
 type Repository interface {
 	NextOrderID(context.Context) (string, error)
 	SaveOrder(context.Context, orders.Order) error
+	TransitionOrder(ctx context.Context, order orders.Order, from orders.Status) error
 	ListOrders(context.Context, string) ([]orders.Order, error)
 	ListOrdersByStatus(context.Context, orders.Status, int) ([]orders.Order, error)
 	GetOrder(context.Context, string, string) (orders.Order, error)
@@ -90,7 +94,14 @@ func (s *Usecase) Create(ctx context.Context, input CreateInput) (orders.Order, 
 		UpdatedAt:             now,
 	}
 	order.Progress = orders.BuildProgress(order)
-	return order, s.orders.SaveOrder(ctx, order)
+	if err := s.orders.SaveOrder(ctx, order); err != nil {
+		// Compensate the debit so a failed save does not strand the user's uses.
+		if refundErr := s.billing.RefundForOrder(ctx, input.UserID, id, agent.PriceUses); refundErr != nil {
+			return orders.Order{}, fmt.Errorf("save order: %w (refund failed: %v)", err, refundErr)
+		}
+		return orders.Order{}, fmt.Errorf("save order: %w", err)
+	}
+	return order, nil
 }
 
 func (s *Usecase) List(ctx context.Context, input ListInput) ([]orders.Order, error) {
@@ -126,23 +137,34 @@ func (s *Usecase) Cancel(ctx context.Context, userID string, orderID string) (or
 		return orders.Order{}, fmt.Errorf("order %s cannot be cancelled from status %s", order.ID, order.Status)
 	}
 
+	from := order.Status
 	order.Status = orders.StatusCancelled
 	order.UpdatedAt = s.now()
+	if err := s.orders.TransitionOrder(ctx, order, from); err != nil {
+		return orders.Order{}, err
+	}
+	if err := s.billing.RefundForOrder(ctx, userID, order.ID, order.UsageCost); err != nil {
+		return orders.Order{}, fmt.Errorf("order cancelled but refund failed: %w", err)
+	}
 	order.Progress = orders.BuildProgress(order)
-	return order, s.orders.SaveOrder(ctx, order)
+	return order, nil
 }
 
+var durationNumbers = regexp.MustCompile(`\d+`)
+
+// parseDuration reads estimates like "30-60 分钟" or "2-4 小时" and returns the
+// upper bound. Unrecognized values fall back to one hour.
 func parseDuration(value string) time.Duration {
-	switch value {
-	case "30-60 分钟":
-		return time.Hour
-	case "1 小时":
-		return time.Hour
-	case "1-2 小时":
-		return 2 * time.Hour
-	case "2-4 小时":
-		return 4 * time.Hour
-	default:
+	matches := durationNumbers.FindAllString(value, -1)
+	if len(matches) == 0 {
 		return time.Hour
 	}
+	upper, err := strconv.Atoi(matches[len(matches)-1])
+	if err != nil || upper <= 0 {
+		return time.Hour
+	}
+	if strings.Contains(value, "分钟") {
+		return time.Duration(upper) * time.Minute
+	}
+	return time.Duration(upper) * time.Hour
 }

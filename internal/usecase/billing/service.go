@@ -13,6 +13,8 @@ type Repository interface {
 	ListLedger(context.Context, string) ([]billing.LedgerEntry, error)
 	AddLedgerEntry(context.Context, billing.LedgerEntry) error
 	SavePurchase(context.Context, billing.Purchase) (billing.Purchase, bool, error)
+	DebitForOrder(ctx context.Context, userID string, orderID string, ledgerID string, uses int, at time.Time) (billing.LedgerEntry, error)
+	RefundForOrder(ctx context.Context, userID string, orderID string, ledgerID string, uses int, at time.Time) (billing.LedgerEntry, error)
 	NextLedgerID(context.Context) (string, error)
 	NextPurchaseID(context.Context) (string, error)
 }
@@ -106,27 +108,24 @@ func (s *Usecase) DebitForOrder(ctx context.Context, userID string, orderID stri
 	if uses <= 0 {
 		return fmt.Errorf("uses must be positive")
 	}
-
-	balance, err := s.repo.GetBalance(ctx, userID)
-	if err != nil {
-		return err
-	}
-	if balance.Remaining < uses {
-		return billing.ErrInsufficientBalance
-	}
-
 	id, err := s.repo.NextLedgerID(ctx)
 	if err != nil {
 		return err
 	}
+	_, err = s.repo.DebitForOrder(ctx, userID, orderID, id, uses, s.now())
+	return err
+}
 
-	return s.repo.AddLedgerEntry(ctx, billing.LedgerEntry{
-		ID:           id,
-		UserID:       userID,
-		Type:         billing.LedgerTypeDebit,
-		OrderID:      orderID,
-		Delta:        -uses,
-		BalanceAfter: balance.Remaining - uses,
-		CreatedAt:    s.now(),
-	})
+// RefundForOrder returns the uses debited for an order. It is idempotent per
+// order: repeated calls return the original refund entry.
+func (s *Usecase) RefundForOrder(ctx context.Context, userID string, orderID string, uses int) error {
+	if uses <= 0 {
+		return fmt.Errorf("uses must be positive")
+	}
+	id, err := s.repo.NextLedgerID(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = s.repo.RefundForOrder(ctx, userID, orderID, id, uses, s.now())
+	return err
 }

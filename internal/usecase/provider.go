@@ -7,6 +7,7 @@ import (
 	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
 	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
 	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
+	usecaseconversations "github.com/openmodu/oneshot/internal/usecase/conversations"
 	usecaseexecution "github.com/openmodu/oneshot/internal/usecase/execution"
 	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
 )
@@ -16,14 +17,20 @@ var ProviderSet = wire.NewSet(
 	ProvideArtifactOrderRepository,
 	ProvideArtifactRepository,
 	ProvideAuthRepository,
+	ProvideAuthSessionStore,
 	ProvideBillingRepository,
+	ProvideExecutionArtifactCreator,
 	ProvideExecutionOrderRepository,
 	ProvideOrderAgentRepository,
 	ProvideOrderRepository,
+	ProvideConversationRepository,
+	ProvideConversationAgentGetter,
+	ProvideConversationOrderCreator,
 	usecaseauth.NewUsecase,
 	usecaseagents.NewUsecase,
 	usecaseartifacts.NewUsecase,
 	usecasebilling.NewUsecase,
+	usecaseconversations.NewUsecase,
 	usecaseexecution.NewUsecase,
 	usecaseorders.NewUsecase,
 )
@@ -44,6 +51,10 @@ func ProvideAuthRepository(repos *data.OneShotRepo) usecaseauth.Repository {
 	return repos.Users
 }
 
+func ProvideAuthSessionStore(repos *data.OneShotRepo) usecaseauth.SessionStore {
+	return repos.Sessions
+}
+
 func ProvideBillingRepository(repos *data.OneShotRepo) usecasebilling.Repository {
 	return repos.Billing
 }
@@ -52,10 +63,26 @@ func ProvideExecutionOrderRepository(repos *data.OneShotRepo) usecaseexecution.O
 	return repos.Orders
 }
 
+func ProvideExecutionArtifactCreator(artifacts *usecaseartifacts.Usecase) usecaseexecution.ArtifactCreator {
+	return artifacts
+}
+
 func ProvideOrderAgentRepository(repos *data.OneShotRepo) usecaseorders.AgentRepository {
 	return repos.Agents
 }
 
 func ProvideOrderRepository(repos *data.OneShotRepo) usecaseorders.Repository {
 	return repos.Orders
+}
+
+func ProvideConversationRepository(repos *data.OneShotRepo) usecaseconversations.Repository {
+	return repos.Conversations
+}
+
+func ProvideConversationAgentGetter(agents *usecaseagents.Usecase) usecaseconversations.AgentGetter {
+	return agents
+}
+
+func ProvideConversationOrderCreator(orders *usecaseorders.Usecase) usecaseconversations.OrderCreator {
+	return orders
 }

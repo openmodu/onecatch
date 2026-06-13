@@ -22,9 +22,6 @@ type agentsImpl struct {
 	mu  sync.RWMutex
 
 	agents []domainagents.Agent
-
-	migrateOnce sync.Once
-	migrateErr  error
 }
 
 type agentRecord struct {
@@ -85,10 +82,6 @@ func (r *agentsImpl) GetAgent(ctx context.Context, id string) (domainagents.Agen
 }
 
 func (r *agentsImpl) listAgentsSQL(ctx context.Context) ([]domainagents.Agent, error) {
-	if err := r.ensureSchema(ctx); err != nil {
-		return nil, err
-	}
-
 	var records []agentRecord
 	if err := r.sql.Gorm().WithContext(ctx).Order("id ASC").Find(&records).Error; err != nil {
 		return nil, err
@@ -101,10 +94,6 @@ func (r *agentsImpl) listAgentsSQL(ctx context.Context) ([]domainagents.Agent, e
 }
 
 func (r *agentsImpl) getAgentSQL(ctx context.Context, id string) (domainagents.Agent, error) {
-	if err := r.ensureSchema(ctx); err != nil {
-		return domainagents.Agent{}, err
-	}
-
 	var record agentRecord
 	err := r.sql.Gorm().WithContext(ctx).Where("id = ?", id).First(&record).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -116,32 +105,28 @@ func (r *agentsImpl) getAgentSQL(ctx context.Context, id string) (domainagents.A
 	return toDomainAgent(record), nil
 }
 
-func (r *agentsImpl) ensureSchema(ctx context.Context) error {
-	r.migrateOnce.Do(func() {
-		db := r.sql.Gorm().WithContext(ctx)
-		if err := db.AutoMigrate(&agentRecord{}); err != nil {
-			r.migrateErr = err
-			return
-		}
-		var count int64
-		if err := db.Model(&agentRecord{}).Count(&count).Error; err != nil {
-			r.migrateErr = err
-			return
-		}
-		if count > 0 {
-			return
-		}
-		records := make([]agentRecord, 0, len(domainagents.SeedCatalog()))
-		now := time.Now()
-		for _, agent := range domainagents.SeedCatalog() {
-			record := fromDomainAgent(agent)
-			record.CreatedAt = now
-			record.UpdatedAt = now
-			records = append(records, record)
-		}
-		r.migrateErr = db.Create(&records).Error
-	})
-	return r.migrateErr
+// Migrate creates this repo's tables and seeds the agent catalog when empty.
+// Called once at startup.
+func Migrate(db *gorm.DB) error {
+	if err := db.AutoMigrate(&agentRecord{}); err != nil {
+		return err
+	}
+	var count int64
+	if err := db.Model(&agentRecord{}).Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+	records := make([]agentRecord, 0, len(domainagents.SeedCatalog()))
+	now := time.Now()
+	for _, agent := range domainagents.SeedCatalog() {
+		record := fromDomainAgent(agent)
+		record.CreatedAt = now
+		record.UpdatedAt = now
+		records = append(records, record)
+	}
+	return db.Create(&records).Error
 }
 
 func toDomainAgent(record agentRecord) domainagents.Agent {

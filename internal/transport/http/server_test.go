@@ -2,6 +2,7 @@ package httptransport
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +15,7 @@ import (
 	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
 	repoartifacts "github.com/openmodu/oneshot/internal/repo/artifacts"
 	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
+	repoconversations "github.com/openmodu/oneshot/internal/repo/conversations"
 	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
 	repousers "github.com/openmodu/oneshot/internal/repo/users"
 	"github.com/openmodu/oneshot/internal/service"
@@ -21,6 +23,7 @@ import (
 	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
 	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
 	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
+	usecaseconversations "github.com/openmodu/oneshot/internal/usecase/conversations"
 	usecaseexecution "github.com/openmodu/oneshot/internal/usecase/execution"
 	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
 )
@@ -28,7 +31,7 @@ import (
 func TestAuthRoutesSessionLifecycle(t *testing.T) {
 	handler := newTestHandler()
 
-	assertStatus(t, handler, http.MethodGet, "/api/me", nil, http.StatusUnauthorized)
+	assertStatus(t, handler, http.MethodGet, "/api/me", nil, "", http.StatusUnauthorized)
 
 	loginResp := httptest.NewRecorder()
 	handler.ServeHTTP(loginResp, httptest.NewRequest(http.MethodPost, "/api/auth/google/callback", nil))
@@ -37,6 +40,7 @@ func TestAuthRoutesSessionLifecycle(t *testing.T) {
 	}
 
 	var session struct {
+		Token    string `json:"token"`
 		Provider string `json:"provider"`
 		User     struct {
 			ID string `json:"id"`
@@ -48,71 +52,102 @@ func TestAuthRoutesSessionLifecycle(t *testing.T) {
 	if session.Provider != "google" {
 		t.Fatalf("provider = %q, want google", session.Provider)
 	}
-	if session.User.ID == "" {
-		t.Fatal("user id is empty")
+	if session.User.ID == "" || session.Token == "" {
+		t.Fatalf("missing user id or token: %+v", session)
 	}
 
-	assertStatus(t, handler, http.MethodGet, "/api/me", nil, http.StatusOK)
-	assertStatus(t, handler, http.MethodPost, "/api/auth/logout", nil, http.StatusOK)
-	assertStatus(t, handler, http.MethodGet, "/api/me", nil, http.StatusUnauthorized)
+	assertStatus(t, handler, http.MethodGet, "/api/me", nil, session.Token, http.StatusOK)
+	assertStatus(t, handler, http.MethodPost, "/api/auth/logout", nil, session.Token, http.StatusOK)
+	assertStatus(t, handler, http.MethodGet, "/api/me", nil, session.Token, http.StatusUnauthorized)
+}
+
+func TestAuthRequiresBearerToken(t *testing.T) {
+	handler := newTestHandler()
+	loginForTest(t, handler)
+
+	// A logged-in session must not leak to requests without a token.
+	assertStatus(t, handler, http.MethodGet, "/api/me", nil, "", http.StatusUnauthorized)
+	assertStatus(t, handler, http.MethodGet, "/api/billing/balance", nil, "", http.StatusUnauthorized)
+	assertStatus(t, handler, http.MethodPost, "/api/auth/logout", nil, "", http.StatusUnauthorized)
 }
 
 func TestWechatAuthRoutes(t *testing.T) {
 	handler := newTestHandler()
 
-	for _, path := range []string{"/api/auth/wechat/start", "/api/auth/wechat/callback"} {
-		resp := httptest.NewRecorder()
-		handler.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, path, nil))
-		if resp.Code != http.StatusOK {
-			t.Fatalf("%s status = %d, want %d; body: %s", path, resp.Code, http.StatusOK, resp.Body.String())
-		}
-
-		var session struct {
-			Provider string `json:"provider"`
-		}
-		if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
-			t.Fatalf("decode %s response: %v", path, err)
-		}
-		if session.Provider != "wechat" {
-			t.Fatalf("%s provider = %q, want wechat", path, session.Provider)
-		}
-
-		assertStatus(t, handler, http.MethodPost, "/api/auth/logout", nil, http.StatusOK)
+	startResp := httptest.NewRecorder()
+	handler.ServeHTTP(startResp, httptest.NewRequest(http.MethodPost, "/api/auth/wechat/start", nil))
+	if startResp.Code != http.StatusOK {
+		t.Fatalf("wechat start status = %d; body: %s", startResp.Code, startResp.Body.String())
 	}
+	var start struct {
+		Provider string `json:"provider"`
+		State    string `json:"state"`
+		AuthURL  string `json:"authUrl"`
+	}
+	if err := json.NewDecoder(startResp.Body).Decode(&start); err != nil {
+		t.Fatalf("decode wechat start: %v", err)
+	}
+	if start.Provider != "wechat" || start.State == "" || start.AuthURL == "" {
+		t.Fatalf("unexpected wechat start: %+v", start)
+	}
+
+	callbackBody := bytes.NewBufferString(`{"state":"` + start.State + `","providerSubject":"wechat-openid-http","displayName":"Wechat User"}`)
+	callbackResp := httptest.NewRecorder()
+	callbackReq := httptest.NewRequest(http.MethodPost, "/api/auth/wechat/callback", callbackBody)
+	callbackReq.Header.Set("Content-Type", "application/json")
+	handler.ServeHTTP(callbackResp, callbackReq)
+	if callbackResp.Code != http.StatusOK {
+		t.Fatalf("wechat callback status = %d; body: %s", callbackResp.Code, callbackResp.Body.String())
+	}
+	var session struct {
+		Token    string `json:"token"`
+		Provider string `json:"provider"`
+	}
+	if err := json.NewDecoder(callbackResp.Body).Decode(&session); err != nil {
+		t.Fatalf("decode wechat callback: %v", err)
+	}
+	if session.Provider != "wechat" || session.Token == "" {
+		t.Fatalf("unexpected wechat session: %+v", session)
+	}
+
+	// Replaying an identity-bearing callback without a fresh state must fail.
+	replay := bytes.NewBufferString(`{"providerSubject":"wechat-openid-http"}`)
+	assertStatus(t, handler, http.MethodPost, "/api/auth/wechat/callback", replay, "", http.StatusUnauthorized)
+
+	assertStatus(t, handler, http.MethodPost, "/api/auth/logout", nil, session.Token, http.StatusOK)
 }
 
 func TestCreateOrderRequiresLogin(t *testing.T) {
 	handler := newTestFixture().handler
 	body := bytes.NewBufferString(`{"agentId":"industry-research","requirement":{"prompt":"需要一份行业研究"}}`)
 
-	assertStatus(t, handler, http.MethodPost, "/api/orders", body, http.StatusUnauthorized)
+	assertStatus(t, handler, http.MethodPost, "/api/orders", body, "", http.StatusUnauthorized)
 }
 
 func TestBillingPurchaseAndOrderDebit(t *testing.T) {
 	fixture := newTestFixture()
 	handler := fixture.handler
-	loginForTest(t, handler)
+	token := loginForTest(t, handler)
 
 	purchaseBody := bytes.NewBufferString(`{"planId":"uses_10","paymentId":"pay-idempotent-1"}`)
-	purchaseResp := httptest.NewRecorder()
-	handler.ServeHTTP(purchaseResp, httptest.NewRequest(http.MethodPost, "/api/billing/purchases", purchaseBody))
-	if purchaseResp.Code != http.StatusOK {
-		t.Fatalf("purchase status = %d, want %d; body: %s", purchaseResp.Code, http.StatusOK, purchaseResp.Body.String())
-	}
+	assertStatus(t, handler, http.MethodPost, "/api/billing/purchases", purchaseBody, token, http.StatusOK)
 	purchaseBody = bytes.NewBufferString(`{"planId":"uses_10","paymentId":"pay-idempotent-1"}`)
-	assertStatus(t, handler, http.MethodPost, "/api/billing/purchases", purchaseBody, http.StatusOK)
+	assertStatus(t, handler, http.MethodPost, "/api/billing/purchases", purchaseBody, token, http.StatusOK)
 
 	var balance struct {
 		Remaining int `json:"remaining"`
 	}
-	getJSON(t, handler, http.MethodGet, "/api/billing/balance", nil, http.StatusOK, &balance)
+	getJSON(t, handler, http.MethodGet, "/api/billing/balance", nil, token, http.StatusOK, &balance)
 	if balance.Remaining != 20 {
 		t.Fatalf("balance after idempotent purchase = %d, want 20", balance.Remaining)
 	}
 
 	orderBody := bytes.NewBufferString(`{"agentId":"research-analyst","requirement":{"prompt":"需要一份行业研究"}}`)
 	orderResp := httptest.NewRecorder()
-	handler.ServeHTTP(orderResp, httptest.NewRequest(http.MethodPost, "/api/orders", orderBody))
+	orderReq := httptest.NewRequest(http.MethodPost, "/api/orders", orderBody)
+	orderReq.Header.Set("Content-Type", "application/json")
+	orderReq.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(orderResp, orderReq)
 	if orderResp.Code != http.StatusCreated {
 		t.Fatalf("create order status = %d, want %d; body: %s", orderResp.Code, http.StatusCreated, orderResp.Body.String())
 	}
@@ -133,7 +168,7 @@ func TestBillingPurchaseAndOrderDebit(t *testing.T) {
 	var afterDebit struct {
 		Remaining int `json:"remaining"`
 	}
-	getJSON(t, handler, http.MethodGet, "/api/billing/balance", nil, http.StatusOK, &afterDebit)
+	getJSON(t, handler, http.MethodGet, "/api/billing/balance", nil, token, http.StatusOK, &afterDebit)
 	if afterDebit.Remaining != 19 {
 		t.Fatalf("balance after order debit = %d, want 19", afterDebit.Remaining)
 	}
@@ -141,28 +176,45 @@ func TestBillingPurchaseAndOrderDebit(t *testing.T) {
 	var ledger []struct {
 		Type         string `json:"type"`
 		PaymentID    string `json:"paymentId"`
+		UserID       string `json:"userId"`
 		OrderID      string `json:"orderId"`
 		BalanceAfter int    `json:"balanceAfter"`
 	}
-	getJSON(t, handler, http.MethodGet, "/api/billing/ledger", nil, http.StatusOK, &ledger)
+	getJSON(t, handler, http.MethodGet, "/api/billing/ledger", nil, token, http.StatusOK, &ledger)
 	if len(ledger) != 2 {
 		t.Fatalf("ledger len = %d, want 2: %+v", len(ledger), ledger)
 	}
-	if ledger[0].Type != "purchase" || ledger[0].PaymentID != "pay-idempotent-1" || ledger[0].BalanceAfter != 20 {
+	if ledger[0].Type != "purchase" || ledger[0].BalanceAfter != 20 {
 		t.Fatalf("purchase ledger mismatch: %+v", ledger[0])
 	}
 	if ledger[1].Type != "debit" || ledger[1].OrderID != order.ID || ledger[1].BalanceAfter != 19 {
 		t.Fatalf("debit ledger mismatch: %+v", ledger[1])
+	}
+	// Privacy: ledger entries must not leak the payment reference or owner id.
+	for _, entry := range ledger {
+		if entry.PaymentID != "" || entry.UserID != "" {
+			t.Fatalf("ledger entry leaked private field: %+v", entry)
+		}
+	}
+
+	// Cancelling the running order refunds the debited use.
+	assertStatus(t, handler, http.MethodPost, "/api/orders/"+order.ID+"/cancel", nil, token, http.StatusOK)
+	var afterCancel struct {
+		Remaining int `json:"remaining"`
+	}
+	getJSON(t, handler, http.MethodGet, "/api/billing/balance", nil, token, http.StatusOK, &afterCancel)
+	if afterCancel.Remaining != 20 {
+		t.Fatalf("balance after cancel refund = %d, want 20", afterCancel.Remaining)
 	}
 }
 
 func TestOrderValidationAndArtifacts(t *testing.T) {
 	fixture := newTestFixture()
 	handler := fixture.handler
-	loginForTest(t, handler)
+	token := loginForTest(t, handler)
 
 	emptyRequirement := bytes.NewBufferString(`{"agentId":"research-analyst","requirement":{"prompt":"   "}}`)
-	assertStatus(t, handler, http.MethodPost, "/api/orders", emptyRequirement, http.StatusBadRequest)
+	assertStatus(t, handler, http.MethodPost, "/api/orders", emptyRequirement, token, http.StatusBadRequest)
 
 	running := domainorders.Order{
 		ID:          "order_running",
@@ -176,16 +228,16 @@ func TestOrderValidationAndArtifacts(t *testing.T) {
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
-	if err := fixture.orders.SaveOrder(nil, running); err != nil {
+	if err := fixture.orders.SaveOrder(context.Background(), running); err != nil {
 		t.Fatalf("save running order: %v", err)
 	}
-	assertStatus(t, handler, http.MethodGet, "/api/orders/order_running/artifacts", nil, http.StatusConflict)
+	assertStatus(t, handler, http.MethodGet, "/api/orders/order_running/artifacts", nil, token, http.StatusConflict)
 
 	delivered := running
 	delivered.ID = "order_delivered"
 	delivered.Requirement = domainorders.Requirement{Prompt: "已交付订单"}
 	delivered.Status = domainorders.StatusDelivered
-	if err := fixture.orders.SaveOrder(nil, delivered); err != nil {
+	if err := fixture.orders.SaveOrder(context.Background(), delivered); err != nil {
 		t.Fatalf("save delivered order: %v", err)
 	}
 	var artifacts []struct {
@@ -193,13 +245,15 @@ func TestOrderValidationAndArtifacts(t *testing.T) {
 		FileName string `json:"fileName"`
 		FileType string `json:"fileType"`
 	}
-	getJSON(t, handler, http.MethodGet, "/api/orders/order_delivered/artifacts", nil, http.StatusOK, &artifacts)
+	getJSON(t, handler, http.MethodGet, "/api/orders/order_delivered/artifacts", nil, token, http.StatusOK, &artifacts)
 	if len(artifacts) != 1 || artifacts[0].ID == "" || artifacts[0].FileType != "PDF" {
 		t.Fatalf("unexpected artifacts: %+v", artifacts)
 	}
 
 	downloadResp := httptest.NewRecorder()
-	handler.ServeHTTP(downloadResp, httptest.NewRequest(http.MethodGet, "/api/artifacts/"+artifacts[0].ID+"/download", nil))
+	downloadReq := httptest.NewRequest(http.MethodGet, "/api/artifacts/"+artifacts[0].ID+"/download", nil)
+	downloadReq.Header.Set("Authorization", "Bearer "+token)
+	handler.ServeHTTP(downloadResp, downloadReq)
 	if downloadResp.Code != http.StatusOK {
 		t.Fatalf("download status = %d, want %d; body: %s", downloadResp.Code, http.StatusOK, downloadResp.Body.String())
 	}
@@ -214,9 +268,13 @@ func TestOrderValidationAndArtifacts(t *testing.T) {
 		Token string `json:"token"`
 		URL   string `json:"url"`
 	}
-	getJSON(t, handler, http.MethodPost, "/api/artifacts/"+artifacts[0].ID+"/share", nil, http.StatusOK, &share)
-	if share.Token == "" || share.URL == "" {
+	getJSON(t, handler, http.MethodPost, "/api/artifacts/"+artifacts[0].ID+"/share", nil, token, http.StatusOK, &share)
+	if share.URL == "" {
 		t.Fatalf("unexpected share response: %+v", share)
+	}
+	// Privacy: the raw share token is embedded in the URL, not exposed separately.
+	if share.Token != "" {
+		t.Fatalf("share response leaked raw token: %+v", share)
 	}
 }
 
@@ -265,7 +323,7 @@ func TestAgentCatalogRoutes(t *testing.T) {
 		t.Fatalf("agent detail id = %q, want research-analyst", detail.ID)
 	}
 
-	assertStatus(t, handler, http.MethodGet, "/api/agents/missing-agent", nil, http.StatusNotFound)
+	assertStatus(t, handler, http.MethodGet, "/api/agents/missing-agent", nil, "", http.StatusNotFound)
 }
 
 type testFixture struct {
@@ -281,45 +339,54 @@ func newTestFixture() testFixture {
 	agentRepo := repoagents.NewAgentsRepo(nil)
 	artifactRepo := repoartifacts.NewArtifactsRepo(nil)
 	billingRepo := repobilling.NewBillingRepo(nil)
+	conversationRepo := repoconversations.NewConversationsRepo(nil)
 	orderRepo := repoorders.NewOrdersRepo(nil)
 	userRepo := repousers.NewUsersRepo(nil)
+	agentsUsecase := usecaseagents.NewUsecase(agentRepo)
 	billingUsecase := usecasebilling.NewUsecase(billingRepo)
 	artifactsUsecase := usecaseartifacts.NewUsecase(artifactRepo, orderRepo)
 	executionUsecase := usecaseexecution.NewUsecase(orderRepo, artifactsUsecase)
+	ordersUsecase := usecaseorders.NewUsecase(agentRepo, orderRepo, billingUsecase)
+	conversationsUsecase := usecaseconversations.NewUsecase(conversationRepo, agentsUsecase, ordersUsecase)
 
 	return testFixture{
 		handler: NewServer(service.NewServices(
-			usecaseauth.NewUsecase(userRepo),
-			usecaseagents.NewUsecase(agentRepo),
+			usecaseauth.NewUsecaseWithOptions(userRepo, usecaseauth.Options{AllowInsecureCallbacks: true}),
+			agentsUsecase,
 			artifactsUsecase,
 			billingUsecase,
+			conversationsUsecase,
 			executionUsecase,
-			usecaseorders.NewUsecase(agentRepo, orderRepo, billingUsecase),
+			ordersUsecase,
 		)),
 		orders: orderRepo,
 	}
 }
 
-func loginForTest(t *testing.T, handler http.Handler) {
+func loginForTest(t *testing.T, handler http.Handler) string {
 	t.Helper()
-	assertStatus(t, handler, http.MethodPost, "/api/auth/google/callback", nil, http.StatusOK)
+
+	resp := httptest.NewRecorder()
+	handler.ServeHTTP(resp, httptest.NewRequest(http.MethodPost, "/api/auth/google/callback", nil))
+	if resp.Code != http.StatusOK {
+		t.Fatalf("login status = %d; body: %s", resp.Code, resp.Body.String())
+	}
+	var session struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&session); err != nil {
+		t.Fatalf("decode login response: %v", err)
+	}
+	if session.Token == "" {
+		t.Fatal("login response missing token")
+	}
+	return session.Token
 }
 
-func getJSON(t *testing.T, handler http.Handler, method string, path string, body *bytes.Buffer, want int, out any) {
+func getJSON(t *testing.T, handler http.Handler, method string, path string, body *bytes.Buffer, token string, want int, out any) {
 	t.Helper()
 
-	var payload *bytes.Buffer
-	if body == nil {
-		payload = bytes.NewBuffer(nil)
-	} else {
-		payload = body
-	}
-	req := httptest.NewRequest(method, path, payload)
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	resp := httptest.NewRecorder()
-	handler.ServeHTTP(resp, req)
+	resp := doRequest(handler, method, path, body, token)
 	if resp.Code != want {
 		t.Fatalf("%s %s status = %d, want %d; body: %s", method, path, resp.Code, want, resp.Body.String())
 	}
@@ -328,23 +395,30 @@ func getJSON(t *testing.T, handler http.Handler, method string, path string, bod
 	}
 }
 
-func assertStatus(t *testing.T, handler http.Handler, method string, path string, body *bytes.Buffer, want int) {
+func assertStatus(t *testing.T, handler http.Handler, method string, path string, body *bytes.Buffer, token string, want int) {
 	t.Helper()
 
+	resp := doRequest(handler, method, path, body, token)
+	if resp.Code != want {
+		t.Fatalf("%s %s status = %d, want %d; body: %s", method, path, resp.Code, want, resp.Body.String())
+	}
+}
+
+func doRequest(handler http.Handler, method string, path string, body *bytes.Buffer, token string) *httptest.ResponseRecorder {
 	var payload *bytes.Buffer
 	if body == nil {
 		payload = bytes.NewBuffer(nil)
 	} else {
 		payload = body
 	}
-
 	req := httptest.NewRequest(method, path, payload)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 	resp := httptest.NewRecorder()
 	handler.ServeHTTP(resp, req)
-	if resp.Code != want {
-		t.Fatalf("%s %s status = %d, want %d; body: %s", method, path, resp.Code, want, resp.Body.String())
-	}
+	return resp
 }

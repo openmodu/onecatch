@@ -2,8 +2,11 @@ package orders
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -15,6 +18,7 @@ import (
 type OrdersRepo interface {
 	NextOrderID(context.Context) (string, error)
 	SaveOrder(context.Context, domainorders.Order) error
+	TransitionOrder(ctx context.Context, order domainorders.Order, from domainorders.Status) error
 	ListOrders(context.Context, string) ([]domainorders.Order, error)
 	ListOrdersByStatus(context.Context, domainorders.Status, int) ([]domainorders.Order, error)
 	GetOrder(context.Context, string, string) (domainorders.Order, error)
@@ -26,9 +30,6 @@ type ordersImpl struct {
 
 	orders    map[string]domainorders.Order
 	nextOrder int
-
-	migrateOnce sync.Once
-	migrateErr  error
 }
 
 type orderRecord struct {
@@ -59,7 +60,11 @@ func (orderRecord) TableName() string {
 
 func (r *ordersImpl) NextOrderID(context.Context) (string, error) {
 	if r.sql != nil && r.sql.Gorm() != nil {
-		return fmt.Sprintf("order_%d", time.Now().UnixNano()), nil
+		buf := make([]byte, 10)
+		if _, err := rand.Read(buf); err != nil {
+			return "", fmt.Errorf("generate order id: %w", err)
+		}
+		return "order_" + hex.EncodeToString(buf), nil
 	}
 
 	r.mu.Lock()
@@ -81,6 +86,28 @@ func (r *ordersImpl) SaveOrder(ctx context.Context, order domainorders.Order) er
 	return nil
 }
 
+// TransitionOrder updates an order only when its current status matches from,
+// so concurrent transitions (e.g. cancel vs worker delivery) cannot overwrite
+// each other. Returns domainorders.ErrStatusConflict when the guard fails.
+func (r *ordersImpl) TransitionOrder(ctx context.Context, order domainorders.Order, from domainorders.Status) error {
+	if r.sql != nil && r.sql.Gorm() != nil {
+		return r.transitionOrderSQL(ctx, order, from)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	current, ok := r.orders[order.ID]
+	if !ok {
+		return domainorders.ErrNotFound
+	}
+	if current.Status != from {
+		return domainorders.ErrStatusConflict
+	}
+	r.orders[order.ID] = order
+	return nil
+}
+
 func (r *ordersImpl) ListOrders(ctx context.Context, userID string) ([]domainorders.Order, error) {
 	if r.sql != nil && r.sql.Gorm() != nil {
 		return r.listOrdersSQL(ctx, userID)
@@ -95,6 +122,10 @@ func (r *ordersImpl) ListOrders(ctx context.Context, userID string) ([]domainord
 			out = append(out, order)
 		}
 	}
+	// Match the SQL implementation's created_at DESC ordering.
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].CreatedAt.After(out[j].CreatedAt)
+	})
 	return out, nil
 }
 
@@ -134,17 +165,36 @@ func (r *ordersImpl) GetOrder(ctx context.Context, userID string, orderID string
 }
 
 func (r *ordersImpl) saveOrderSQL(ctx context.Context, order domainorders.Order) error {
-	if err := r.ensureSchema(); err != nil {
-		return err
-	}
 	record := fromDomainOrder(order)
 	return r.sql.Gorm().WithContext(ctx).Save(&record).Error
 }
 
-func (r *ordersImpl) listOrdersSQL(ctx context.Context, userID string) ([]domainorders.Order, error) {
-	if err := r.ensureSchema(); err != nil {
-		return nil, err
+func (r *ordersImpl) transitionOrderSQL(ctx context.Context, order domainorders.Order, from domainorders.Status) error {
+	result := r.sql.Gorm().WithContext(ctx).Model(&orderRecord{}).
+		Where("id = ? AND status = ?", order.ID, string(from)).
+		UpdateColumns(map[string]any{
+			"status":         string(order.Status),
+			"failure_reason": order.FailureReason,
+			"updated_at":     order.UpdatedAt,
+		})
+	if result.Error != nil {
+		return result.Error
 	}
+	if result.RowsAffected == 0 {
+		var record orderRecord
+		err := r.sql.Gorm().WithContext(ctx).Select("id").Where("id = ?", order.ID).First(&record).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domainorders.ErrNotFound
+		}
+		if err != nil {
+			return err
+		}
+		return domainorders.ErrStatusConflict
+	}
+	return nil
+}
+
+func (r *ordersImpl) listOrdersSQL(ctx context.Context, userID string) ([]domainorders.Order, error) {
 	var records []orderRecord
 	if err := r.sql.Gorm().WithContext(ctx).Where("user_id = ?", userID).Order("created_at DESC").Find(&records).Error; err != nil {
 		return nil, err
@@ -153,9 +203,6 @@ func (r *ordersImpl) listOrdersSQL(ctx context.Context, userID string) ([]domain
 }
 
 func (r *ordersImpl) listOrdersByStatusSQL(ctx context.Context, status domainorders.Status, limit int) ([]domainorders.Order, error) {
-	if err := r.ensureSchema(); err != nil {
-		return nil, err
-	}
 	db := r.sql.Gorm().WithContext(ctx).Where("status = ?", string(status)).Order("created_at ASC")
 	if limit > 0 {
 		db = db.Limit(limit)
@@ -168,9 +215,6 @@ func (r *ordersImpl) listOrdersByStatusSQL(ctx context.Context, status domainord
 }
 
 func (r *ordersImpl) getOrderSQL(ctx context.Context, userID string, orderID string) (domainorders.Order, error) {
-	if err := r.ensureSchema(); err != nil {
-		return domainorders.Order{}, err
-	}
 	var record orderRecord
 	err := r.sql.Gorm().WithContext(ctx).Where("id = ? AND user_id = ?", orderID, userID).First(&record).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -182,11 +226,9 @@ func (r *ordersImpl) getOrderSQL(ctx context.Context, userID string, orderID str
 	return toDomainOrder(record), nil
 }
 
-func (r *ordersImpl) ensureSchema() error {
-	r.migrateOnce.Do(func() {
-		r.migrateErr = r.sql.Gorm().AutoMigrate(&orderRecord{})
-	})
-	return r.migrateErr
+// Migrate creates or updates this repo's tables. Called once at startup.
+func Migrate(db *gorm.DB) error {
+	return db.AutoMigrate(&orderRecord{})
 }
 
 func toDomainOrders(records []orderRecord) []domainorders.Order {
