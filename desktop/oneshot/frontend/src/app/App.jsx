@@ -312,7 +312,7 @@ export default function App() {
   const [authProvider, setAuthProvider] = useState("");
   const [authStatus, setAuthStatus] = useState("checking");
   const [agentStatus, setAgentStatus] = useState("loading");
-  const [toast, setToast] = useState("");
+  const [toast, setToast] = useState(null);
   const [activeView, setActiveView] = useState("workbench");
   const [activeCategory, setActiveCategory] = useState("all");
   const [selectedAgentId, setSelectedAgentId] = useState("");
@@ -482,7 +482,7 @@ export default function App() {
 
   useEffect(() => {
     let alive = true;
-    if (!selectedOrder?.id || selectedOrder.status !== "delivered") {
+    if (!currentUser?.id || !selectedOrder?.id || selectedOrder.status !== "delivered") {
       setArtifacts([]);
       return undefined;
     }
@@ -498,12 +498,19 @@ export default function App() {
     return () => {
       alive = false;
     };
-  }, [selectedOrder?.id, selectedOrder?.status]);
+  }, [currentUser?.id, selectedOrder?.id, selectedOrder?.status]);
 
-  function showToast(message) {
-    setToast(message);
+  function toastTone(message) {
+    if (/失败|错误|无法|请先|不足|不存在|unauthenticated/i.test(message)) return "error";
+    if (/已|成功|通过|完成|生成|增加/.test(message)) return "success";
+    return "info";
+  }
+
+  function showToast(message, tone) {
+    const nextTone = tone || toastTone(message);
+    setToast({ message, tone: nextTone });
     window.clearTimeout(showToast.timer);
-    showToast.timer = window.setTimeout(() => setToast(""), 2200);
+    showToast.timer = window.setTimeout(() => setToast(null), nextTone === "error" ? 3600 : 2400);
   }
 
   async function refreshBilling() {
@@ -704,6 +711,11 @@ export default function App() {
 
   async function cancelSelectedOrder() {
     if (!selectedOrder?.id) return;
+    if (!currentUser?.id && !canUseFallback()) {
+      showToast("请先登录后再取消订单");
+      setActiveView("account");
+      return;
+    }
     if (canUseFallback()) {
       setUserOrders((items) =>
         items.map((order) =>
@@ -724,6 +736,11 @@ export default function App() {
   }
 
   async function downloadArtifact(artifactId) {
+    if (!currentUser?.id && !canUseFallback()) {
+      showToast("请先登录后再下载交付物");
+      setActiveView("account");
+      return;
+    }
     if (canUseFallback()) {
       showToast("本地预览已模拟下载");
       return;
@@ -741,6 +758,11 @@ export default function App() {
   }
 
   async function shareArtifact(artifactId) {
+    if (!currentUser?.id && !canUseFallback()) {
+      showToast("请先登录后再分享交付物");
+      setActiveView("account");
+      return;
+    }
     if (canUseFallback()) {
       showToast("本地预览已模拟分享");
       return;
@@ -767,6 +789,11 @@ export default function App() {
 
   async function startConversationFor(agent) {
     if (!agent) return;
+    if (!currentUser?.id && !canUseFallback()) {
+      showToast("请先登录后再开始会话");
+      setActiveView("account");
+      return;
+    }
     setActiveView("workbench");
     setSelectedAgentId(agent.id);
     setSelectedOrderId("");
@@ -802,6 +829,11 @@ export default function App() {
   async function sendConversationMessage() {
     const text = composer.trim();
     if (!text || !conversation) return;
+    if (!currentUser?.id && !canUseFallback()) {
+      showToast("请先登录后再发送消息");
+      setActiveView("account");
+      return;
+    }
     setComposer("");
     setConversationBusy(true);
     try {
@@ -832,6 +864,11 @@ export default function App() {
 
   async function confirmConversationCheckout() {
     if (!conversation || conversationBusy) return;
+    if (!currentUser?.id && !canUseFallback()) {
+      showToast("请先登录后再确认支付");
+      setActiveView("account");
+      return;
+    }
     setConversationBusy(true);
     try {
       const conv = await ConversationBinding.ConfirmCheckout(conversation.id);
@@ -1498,8 +1535,9 @@ export default function App() {
       </section>
 
       {toast && (
-        <div className="toast" role="status">
-          {toast}
+        <div className={`toast ${toast.tone}`} role={toast.tone === "error" ? "alert" : "status"}>
+          <span className="toast-dot" aria-hidden="true" />
+          <span>{toast.message}</span>
         </div>
       )}
     </main>

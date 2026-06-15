@@ -129,6 +129,8 @@
 - 已将全局 token 收敛为 light-only macOS neutral，移除未验收的 dark mode token。
 - 已将 sidebar、toolbar、Inspector popover、主工作区 grouped sections、drawer 明细列表做轻量化。
 - 已将导航和 Inspector 图标调为更接近 macOS template symbol 的轻笔画、单色和统一尺寸。
+- 2026-06-14 修复：Inspector popover 展开时不再被下方工作台内容遮挡，菜单锚定按钮下方并保持在顶部工具层上方。
+- 2026-06-14 修复：错误/状态提示从右下角网页 toast 调整为顶部居中的 macOS native-ish 磨砂浮层，并按提示类型显示系统色状态点。
 - 浏览器视觉验证：
   - 1280 默认态：`/tmp/oneshot-017-default-1280.png`
   - 1280 菜单态：`/tmp/oneshot-017-menu-1280.png`

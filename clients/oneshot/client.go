@@ -168,7 +168,9 @@ func (c *HTTPClient) ListOrders(ctx context.Context, status string) ([]Order, er
 	var out []Order
 	path := "/api/orders"
 	if strings.TrimSpace(status) != "" {
-		path += "?status=" + url.QueryEscape(status)
+		values := url.Values{}
+		values.Set("status", strings.TrimSpace(status))
+		path += "?" + values.Encode()
 	}
 	err := c.do(ctx, http.MethodGet, path, nil, &out)
 	return out, err
@@ -237,7 +239,11 @@ func (c *HTTPClient) ShareArtifact(ctx context.Context, artifactID string) (Arti
 }
 
 func (c *HTTPClient) do(ctx context.Context, method string, path string, input any, output any) error {
-	endpoint := c.baseURL.ResolveReference(&url.URL{Path: path})
+	ref, err := url.Parse(path)
+	if err != nil {
+		return err
+	}
+	endpoint := c.baseURL.ResolveReference(ref)
 
 	var body *bytes.Reader
 	if input == nil {

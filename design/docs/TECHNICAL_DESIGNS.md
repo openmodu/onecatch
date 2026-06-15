@@ -74,6 +74,12 @@ Issue 范围确认 -> 技术方案/API 设计 -> 实现 -> 验证 -> 交付记�
 | `clients/oneshot` | `CreateOrder(ctx, input)`、`ListOrders(ctx, status)`、`GetOrder(ctx, id)`、`CancelOrder(ctx, id)` |
 | Wails | `OrderBinding.CreateOrder(input)`、`OrderBinding.ListOrders(status)`、`OrderBinding.GetOrder(id)`、`OrderBinding.CancelOrder(id)` |
 
+客户端 SDK 约束：
+
+- `ListOrders(ctx, status)` 必须把非空 `status` 编码为 URL query：`/api/orders?status=<status>`。
+- `clients/oneshot` 的内部 HTTP 请求构造必须保留 query string，不能把 `?status=` 当作 path 转义成 `%3Fstatus=`。
+- 回归验证由 `clients/oneshot` 单测覆盖，断言真实请求 path 为 `/api/orders` 且 query 中包含 `status`。
+
 ### 数据模型
 
 - `Order`：包含用户、Agent、需求、状态、消耗次数、金额、预计完成、失败原因、进度。
@@ -517,6 +523,7 @@ workspace
 
 - 菜单应是轻量浮层，锚定右上角 Inspector 入口。
 - 菜单不应改变主工作区布局。
+- 菜单必须浮在 topbar 和主内容之上；`.topbar` 需要形成明确 stacking context，避免菜单下半部分被 `.content-grid` 或聊天内容遮挡。
 - 右侧面板可覆盖或占据右侧区域，但必须有清晰边界和关闭按钮。
 - 右侧面板宽度建议 420-460px；1280px 宽窗口下可降到 380px。
 - 面板内部滚动，页面整体不横向溢出。
@@ -629,6 +636,7 @@ workspace
   - `.sidebar`、`.nav-block`、`.auth-card`
   - `.topbar`、`.back-link`、`.ghost-link`、`.inspector-trigger`
   - `.inspector-menu`
+  - `.toast`：错误、成功和普通提示收敛为 macOS native-ish 顶部磨砂浮层，不再使用网页式右下角卡片。
   - `.agent-hero`、`.segmented`、`.agent-strip`、`.flow-tabs`、`.brief-grid`、`.checkout-panel`
   - `.inspector-drawer`、`.drawer-header`、`.detail-diff-row`、`.drawer-list`
 - 恢复并维护 860px 以下断点，避免小窗口布局损坏。
@@ -699,6 +707,8 @@ workspace
   - `styles.css` 已移除 `prefers-color-scheme: dark` 半成品 token。
   - Wails window background 已改为中性灰。
   - 导航和 Inspector 图标已调为轻笔画、单色、统一尺寸的 template symbol 风格。
+- 2026-06-14 复验：Inspector popover 展开时 `.topbar z-index = 100`、`.inspector-menu z-index = 120`，菜单在内容区上方，不再被聊天内容遮挡。
+- 2026-06-14 修复：Wails 内错误/状态提示改为顶部居中的 macOS native-ish 磨砂浮层，按 error/success/info 使用系统色状态点。
 
 ## Issue 00-018: 桌面端未登录态 binding 调用收敛
 
@@ -742,6 +752,9 @@ Wails 原生运行时
 | `OrderBinding.ListOrders(status)` | `GET /api/orders` | 需要 Bearer token |
 | `OrderBinding.CreateOrder(input)` | `POST /api/orders` | 需要 Bearer token |
 | `ArtifactBinding.ListArtifacts(orderID)` | `GET /api/orders/{orderID}/artifacts` | 需要 Bearer token |
+| `ConversationBinding.StartConversation(agentID)` | `POST /api/conversations` | 需要 Bearer token |
+| `ConversationBinding.PostMessage(conversationID, text)` | `POST /api/conversations/{conversationID}/messages` | 需要 Bearer token |
+| `ConversationBinding.ConfirmCheckout(conversationID)` | `POST /api/conversations/{conversationID}/confirm` | 需要 Bearer token |
 
 ### 前端改动
 
@@ -754,7 +767,9 @@ Wails 原生运行时
   - 必须不是 Wails runtime。
 - 保持登录后刷新逻辑：
   - `currentUser?.id` 存在后才触发 billing/orders 拉取。
-  - 购买和下单在 Wails runtime 未登录时直接展示登录提示，不调用受保护 binding。
+  - 购买、下单和 conversation 会话开始/发送/确认在 Wails runtime 未登录时直接展示登录提示，不调用受保护 binding。
+  - 订单交付物加载、下载、分享、取消订单同样必须以 `currentUser?.id` 为前置条件，避免工作台切换或 stale selected order 触发 artifact/order binding。
+  - 浏览器 fixture 模式仍允许无真实登录走本地 conversation 预览。
 
 ### 验证计划
 

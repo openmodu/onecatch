@@ -123,6 +123,7 @@
   - 选择 `明细` 后菜单自动收起，右侧面板标题为 `明细`。
   - 1280px 宽下布局为 `630px 430px`，无横向溢出。
   - 关闭按钮生效，关闭后主工作区恢复单栏。
+- 2026-06-14 修复：Inspector 菜单所在 topbar 提升为独立 stacking context，菜单层级高于主内容，避免展开后被聊天内容遮挡。
 - 自动验证：
   - `cd desktop/oneshot/frontend && npm run build` 通过。
   - `go test ./...` 通过。

@@ -91,7 +91,9 @@
 - 已将订单交付物下载、分享放在订单详情交付物区域。
 - 已将账户余额和购买次数放到账户详情。
 - 已将 `OrderBinding.ListOrders(status)` 与 HTTP `/api/orders?status=` 对齐。
+- 2026-06-14 回归修复：`clients/oneshot` 统一通过 URL 解析保留 query string，避免订单筛选请求被编码为 `/api/orders%3Fstatus=...`。
 - 验证结果：
+  - `go test ./clients/oneshot` 通过，覆盖 `ListOrders(status)` 的 path/query 断言。
   - `go test ./...` 通过。
   - `npm run build` 通过。
   - `wails3 build DEV=true` 通过；仅有 macOS link target warning。
