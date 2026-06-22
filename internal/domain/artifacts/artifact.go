@@ -17,6 +17,11 @@ type Artifact struct {
 	SizeBytes int64     `json:"sizeBytes"`
 	Preview   string    `json:"preview"`
 	CreatedAt time.Time `json:"createdAt"`
+
+	// StorageURI is the absolute path to the real file the agent produced in
+	// its workspace. It is internal infrastructure detail and is never exposed
+	// over the user-facing API (see the PRD's minimal-disclosure rule).
+	StorageURI string `json:"-"`
 }
 
 type Download struct {

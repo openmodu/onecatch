@@ -2,7 +2,12 @@ package artifacts
 
 import (
 	"context"
-	"fmt"
+	"io/fs"
+	"mime"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	domainartifacts "github.com/openmodu/oneshot/internal/domain/artifacts"
@@ -36,36 +41,78 @@ func NewUsecase(repo Repository, orders OrderRepository) *Usecase {
 	}
 }
 
-func (s *Usecase) CreateForOrder(ctx context.Context, order domainorders.Order) (domainartifacts.Artifact, error) {
-	// The worker generates the artifact while the order is still delivering,
-	// before the final transition to delivered.
+// maxArtifactsPerOrder bounds how many produced files we surface, so a runaway
+// agent (or a workspace that accreted a dependency tree) cannot flood the order
+// with thousands of artifacts.
+const maxArtifactsPerOrder = 100
+
+// summaryFileName holds the agent's closing message, guaranteeing every
+// delivered order has at least one human-readable deliverable.
+const summaryFileName = "SUMMARY.md"
+
+// RecordWorkspaceOutput turns the files an agent produced in its workspace into
+// the order's deliverables. The agent's final message is written to SUMMARY.md
+// so there is always something to show, then every regular file in the
+// workspace is registered as an artifact whose bytes live on disk.
+//
+// It is idempotent: if the order already has artifacts, they are returned
+// unchanged so a retry never duplicates deliverables.
+func (s *Usecase) RecordWorkspaceOutput(ctx context.Context, order domainorders.Order, workspaceDir string, finalMessage string) ([]domainartifacts.Artifact, error) {
 	if order.Status != domainorders.StatusDelivering && order.Status != domainorders.StatusDelivered {
-		return domainartifacts.Artifact{}, domainartifacts.ErrNotReady
+		return nil, domainartifacts.ErrNotReady
 	}
-	existing, err := s.repo.ListArtifacts(ctx, order.UserID, order.ID)
-	if err != nil {
-		return domainartifacts.Artifact{}, err
-	}
-	if len(existing) > 0 {
-		return existing[0], nil
+	if existing, err := s.repo.ListArtifacts(ctx, order.UserID, order.ID); err != nil {
+		return nil, err
+	} else if len(existing) > 0 {
+		return existing, nil
 	}
 
-	id, err := s.repo.NextArtifactID(ctx)
+	if err := s.writeSummary(workspaceDir, order, finalMessage); err != nil {
+		return nil, err
+	}
+
+	files, err := collectFiles(workspaceDir)
 	if err != nil {
-		return domainartifacts.Artifact{}, err
+		return nil, err
 	}
-	fileName := fmt.Sprintf("%s-report.pdf", order.ID)
-	artifact := domainartifacts.Artifact{
-		ID:        id,
-		OrderID:   order.ID,
-		UserID:    order.UserID,
-		FileName:  fileName,
-		FileType:  "PDF",
-		SizeBytes: int64(len(renderReport(order))),
-		Preview:   "report-preview",
-		CreatedAt: s.now(),
+
+	out := make([]domainartifacts.Artifact, 0, len(files))
+	for _, rel := range files {
+		abs := filepath.Join(workspaceDir, rel)
+		info, statErr := os.Stat(abs)
+		if statErr != nil {
+			continue
+		}
+		id, idErr := s.repo.NextArtifactID(ctx)
+		if idErr != nil {
+			return nil, idErr
+		}
+		artifact := domainartifacts.Artifact{
+			ID:         id,
+			OrderID:    order.ID,
+			UserID:     order.UserID,
+			FileName:   filepath.ToSlash(rel),
+			FileType:   fileType(rel),
+			SizeBytes:  info.Size(),
+			Preview:    previewLabel(rel),
+			StorageURI: abs,
+			CreatedAt:  s.now(),
+		}
+		if err := s.repo.SaveArtifact(ctx, artifact); err != nil {
+			return nil, err
+		}
+		out = append(out, artifact)
 	}
-	return artifact, s.repo.SaveArtifact(ctx, artifact)
+	return out, nil
+}
+
+func (s *Usecase) writeSummary(workspaceDir string, order domainorders.Order, finalMessage string) error {
+	body := strings.TrimSpace(finalMessage)
+	if body == "" {
+		body = "（本次任务未返回总结文本。）"
+	}
+	content := "# 任务总结\n\n- 订单：" + order.ID + "\n- Agent：" + order.AgentName + "\n\n" + body + "\n"
+	return os.WriteFile(filepath.Join(workspaceDir, summaryFileName), []byte(content), 0o644)
 }
 
 func (s *Usecase) ListForOrder(ctx context.Context, userID string, orderID string) ([]domainartifacts.Artifact, error) {
@@ -76,18 +123,7 @@ func (s *Usecase) ListForOrder(ctx context.Context, userID string, orderID strin
 	if order.Status != domainorders.StatusDelivered {
 		return nil, domainartifacts.ErrNotReady
 	}
-	artifact, err := s.CreateForOrder(ctx, order)
-	if err != nil {
-		return nil, err
-	}
-	artifacts, err := s.repo.ListArtifacts(ctx, userID, orderID)
-	if err != nil {
-		return nil, err
-	}
-	if len(artifacts) == 0 {
-		return []domainartifacts.Artifact{artifact}, nil
-	}
-	return artifacts, nil
+	return s.repo.ListArtifacts(ctx, userID, orderID)
 }
 
 func (s *Usecase) Download(ctx context.Context, userID string, artifactID string) (domainartifacts.Download, error) {
@@ -102,10 +138,24 @@ func (s *Usecase) Download(ctx context.Context, userID string, artifactID string
 	if order.Status != domainorders.StatusDelivered {
 		return domainartifacts.Download{}, domainartifacts.ErrNotReady
 	}
+
+	if artifact.StorageURI == "" {
+		// Legacy/fallback path: synthesize a report when no real file is backing
+		// the artifact (kept for resilience; the worker always stores files).
+		return domainartifacts.Download{
+			Artifact:    artifact,
+			ContentType: "application/pdf",
+			Content:     renderReport(order),
+		}, nil
+	}
+	content, err := os.ReadFile(artifact.StorageURI)
+	if err != nil {
+		return domainartifacts.Download{}, err
+	}
 	return domainartifacts.Download{
 		Artifact:    artifact,
-		ContentType: "application/pdf",
-		Content:     renderReport(order),
+		ContentType: contentType(artifact.FileName),
+		Content:     content,
 	}, nil
 }
 
@@ -131,4 +181,112 @@ func (s *Usecase) Share(ctx context.Context, userID string, artifactID string) (
 		URL:        "https://oneshot.local/share/" + token,
 		CreatedAt:  s.now(),
 	})
+}
+
+// skipDirs are directories an agent might create as scratch/dependency space
+// that are not deliverables worth surfacing to the user.
+var skipDirs = map[string]bool{
+	".git":         true,
+	"node_modules": true,
+	".venv":        true,
+	"__pycache__":  true,
+	".cache":       true,
+}
+
+// collectFiles returns workspace-relative paths of regular files, skipping
+// hidden files and known scratch directories, capped and sorted for stability.
+func collectFiles(workspaceDir string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(workspaceDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		name := d.Name()
+		if d.IsDir() {
+			if path == workspaceDir {
+				return nil
+			}
+			if skipDirs[name] || strings.HasPrefix(name, ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if strings.HasPrefix(name, ".") {
+			return nil
+		}
+		rel, relErr := filepath.Rel(workspaceDir, path)
+		if relErr != nil {
+			return relErr
+		}
+		files = append(files, rel)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(files, func(i, j int) bool {
+		// Surface the summary first, then everything else alphabetically.
+		if files[i] == summaryFileName {
+			return true
+		}
+		if files[j] == summaryFileName {
+			return false
+		}
+		return files[i] < files[j]
+	})
+	if len(files) > maxArtifactsPerOrder {
+		files = files[:maxArtifactsPerOrder]
+	}
+	return files, nil
+}
+
+// fileType is the short, user-facing label for an artifact's kind.
+func fileType(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".md", ".markdown":
+		return "Markdown"
+	case ".pdf":
+		return "PDF"
+	case ".csv":
+		return "CSV"
+	case ".json":
+		return "JSON"
+	case ".txt":
+		return "Text"
+	case ".html", ".htm":
+		return "HTML"
+	case ".py":
+		return "Python"
+	case ".go":
+		return "Go"
+	case ".js", ".ts", ".jsx", ".tsx":
+		return "Code"
+	case "":
+		return "File"
+	default:
+		return strings.ToUpper(strings.TrimPrefix(filepath.Ext(name), "."))
+	}
+}
+
+func previewLabel(name string) string {
+	return fileType(name) + " · " + filepath.Base(name)
+}
+
+// contentType resolves a MIME type for download, with sensible defaults for the
+// text formats agents most often produce.
+func contentType(name string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".md", ".markdown":
+		return "text/markdown; charset=utf-8"
+	case ".csv":
+		return "text/csv; charset=utf-8"
+	case ".txt":
+		return "text/plain; charset=utf-8"
+	case ".json":
+		return "application/json"
+	}
+	if ct := mime.TypeByExtension(filepath.Ext(name)); ct != "" {
+		return ct
+	}
+	return "application/octet-stream"
 }

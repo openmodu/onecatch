@@ -276,6 +276,23 @@ function statusLabel(status) {
   return labels[status] || "待确认";
 }
 
+// runEventLabel maps a normalized agent event kind to a short Chinese label and
+// whether it is "verbose" (reasoning/tool noise) so the UI can de-emphasize it.
+function runEventLabel(kind) {
+  const labels = {
+    started: "已启动",
+    reasoning: "思考",
+    message: "回复",
+    tool_use: "执行命令",
+    tool_result: "命令结果",
+    file_change: "写入文件",
+    usage: "用量",
+    result: "完成",
+    error: "错误",
+  };
+  return labels[kind] || kind;
+}
+
 function ledgerLabel(type) {
   const labels = {
     purchase: "购买次数",
@@ -330,6 +347,7 @@ export default function App() {
   const [composer, setComposer] = useState("");
   const [conversationBusy, setConversationBusy] = useState(false);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
+  const [runLog, setRunLog] = useState(null);
   const threadEndRef = useRef(null);
 
   const visibleAgents = useMemo(() => {
@@ -479,6 +497,35 @@ export default function App() {
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [conversation?.messages?.length, selectedOrder?.status, inspectorArtifacts.length]);
+
+  // Poll the live agent run log while an order is executing, so the desktop
+  // shows the local agent working in real time, then settles on the final
+  // result. Polling stops once the run reaches a terminal state.
+  useEffect(() => {
+    let alive = true;
+    const orderId = selectedOrder?.id;
+    const active = orderId && (selectedOrder.status === "running" || selectedOrder.status === "delivering");
+    if (!orderId) {
+      setRunLog(null);
+      return undefined;
+    }
+
+    async function pull() {
+      try {
+        const log = await OrderBinding.GetOrderRun(orderId);
+        if (alive) setRunLog(log);
+      } catch {
+        // Run log is best-effort; ignore transient errors while polling.
+      }
+    }
+    pull();
+    if (!active) return () => { alive = false; };
+    const timer = window.setInterval(pull, 2000);
+    return () => {
+      alive = false;
+      window.clearInterval(timer);
+    };
+  }, [selectedOrder?.id, selectedOrder?.status]);
 
   useEffect(() => {
     let alive = true;
@@ -1227,6 +1274,34 @@ export default function App() {
             </div>
           )}
 
+          {convOrder && runLog && Array.isArray(runLog.events) && runLog.events.length > 0 && (
+            <div className="chat-row agent">
+              <div className="chat-bubble chat-card">
+                <div className="chat-card-title">
+                  <span>
+                    本地 Agent 执行
+                    {runLog.runtime ? ` · ${runLog.runtime}` : ""}
+                  </span>
+                  {runLog.status === "running" && <span className="run-live">运行中…</span>}
+                </div>
+                <div className="run-stream">
+                  {runLog.events
+                    .filter((event) => event.text || event.kind === "file_change")
+                    .map((event, index) => (
+                      <div className={`run-event run-${event.kind}`} key={index}>
+                        <span className="run-kind">{runEventLabel(event.kind)}</span>
+                        <span className="run-text">{event.text || "(无文本)"}</span>
+                      </div>
+                    ))}
+                </div>
+                {runLog.finalMessage && runLog.status !== "running" && (
+                  <p className="run-final">{runLog.finalMessage}</p>
+                )}
+                {runLog.error && <p className="run-error">{runLog.error}</p>}
+              </div>
+            </div>
+          )}
+
           {convOrder && inspectorArtifacts.length > 0 && (
             <div className="chat-row agent">
               <div className="chat-bubble chat-card">
@@ -1235,7 +1310,7 @@ export default function App() {
                 </div>
                 {inspectorArtifacts.map((artifact) => (
                   <div className="file-row" key={artifact.id}>
-                    <span className="file-icon">PDF</span>
+                    <span className="file-icon">{(artifact.fileType || "FILE").slice(0, 4)}</span>
                     <div>
                       <strong>{artifact.fileName}</strong>
                       <small>

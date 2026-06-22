@@ -132,6 +132,27 @@ type CreateOrderRequest struct {
 	Requirement Requirement `json:"requirement"`
 }
 
+// RunEvent is one normalized step streamed by the local agent runtime as it
+// works (assistant message, tool use, file change, etc.).
+type RunEvent struct {
+	Kind string    `json:"kind"`
+	Text string    `json:"text,omitempty"`
+	At   time.Time `json:"at"`
+}
+
+// RunLog is the live view of an order's agent run, used by the desktop to show
+// the agent working in real time.
+type RunLog struct {
+	OrderID      string     `json:"orderId"`
+	Runtime      string     `json:"runtime,omitempty"`
+	Status       string     `json:"status"`
+	Events       []RunEvent `json:"events"`
+	FinalMessage string     `json:"finalMessage,omitempty"`
+	Error        string     `json:"error,omitempty"`
+	StartedAt    time.Time  `json:"startedAt,omitempty"`
+	UpdatedAt    time.Time  `json:"updatedAt,omitempty"`
+}
+
 type Artifact struct {
 	ID        string    `json:"id"`
 	OrderID   string    `json:"orderId"`

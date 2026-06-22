@@ -16,6 +16,8 @@ export {
     ProgressStep,
     Purchase,
     Requirement,
+    RunEvent,
+    RunLog,
     Session,
     StartPurchaseRequest,
     User

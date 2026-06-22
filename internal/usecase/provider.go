@@ -19,7 +19,8 @@ var ProviderSet = wire.NewSet(
 	ProvideAuthRepository,
 	ProvideAuthSessionStore,
 	ProvideBillingRepository,
-	ProvideExecutionArtifactCreator,
+	ProvideExecutionArtifactRecorder,
+	ProvideExecutionAgentResolver,
 	ProvideExecutionOrderRepository,
 	ProvideOrderAgentRepository,
 	ProvideOrderRepository,
@@ -63,8 +64,12 @@ func ProvideExecutionOrderRepository(repos *data.OneShotRepo) usecaseexecution.O
 	return repos.Orders
 }
 
-func ProvideExecutionArtifactCreator(artifacts *usecaseartifacts.Usecase) usecaseexecution.ArtifactCreator {
+func ProvideExecutionArtifactRecorder(artifacts *usecaseartifacts.Usecase) usecaseexecution.ArtifactRecorder {
 	return artifacts
+}
+
+func ProvideExecutionAgentResolver(repos *data.OneShotRepo) usecaseexecution.AgentResolver {
+	return repos.Agents
 }
 
 func ProvideOrderAgentRepository(repos *data.OneShotRepo) usecaseorders.AgentRepository {

@@ -62,8 +62,11 @@ func initializeServices(cfg config.Config) (*service.Services, func(), error) {
 	orderCreator := usecase.ProvideConversationOrderCreator(ordersUsecase)
 	conversationsUsecase := conversations2.NewUsecase(conversationsRepository, agentGetter, orderCreator)
 	executionOrderRepository := usecase.ProvideExecutionOrderRepository(oneShotRepo)
-	artifactCreator := usecase.ProvideExecutionArtifactCreator(artifactsUsecase)
-	executionUsecase := execution.NewUsecase(executionOrderRepository, artifactCreator)
+	artifactRecorder := usecase.ProvideExecutionArtifactRecorder(artifactsUsecase)
+	executionAgentResolver := usecase.ProvideExecutionAgentResolver(oneShotRepo)
+	agentEngine := provideAgentEngine(cfg)
+	executionConfig := provideExecutionConfig(cfg)
+	executionUsecase := execution.NewUsecase(executionOrderRepository, executionAgentResolver, artifactRecorder, agentEngine, executionConfig)
 	services := service.NewServices(authUsecase, agentsUsecase, artifactsUsecase, billingUsecase, conversationsUsecase, executionUsecase, ordersUsecase)
 	return services, func() {
 		cleanup()

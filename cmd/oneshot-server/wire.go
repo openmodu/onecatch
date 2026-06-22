@@ -13,6 +13,8 @@ import (
 func initializeServices(cfg config.Config) (*service.Services, func(), error) {
 	wire.Build(
 		provideMySQLDSN,
+		provideAgentEngine,
+		provideExecutionConfig,
 		data.ProviderSet,
 		usecase.ProviderSet,
 		service.ProviderSet,

@@ -52,6 +52,7 @@ func NewServer(services *service.Services) http.Handler {
 		router.Post("/orders", server.createOrder)
 		router.Get("/orders", server.listOrders)
 		router.Get("/orders/{orderID}/artifacts", server.listArtifacts)
+		router.Get("/orders/{orderID}/run", server.getOrderRun)
 		router.Get("/orders/{orderID}", server.getOrder)
 		router.Post("/orders/{orderID}/cancel", server.cancelOrder)
 		router.Get("/artifacts/{artifactID}/download", server.downloadArtifact)
@@ -343,6 +344,25 @@ func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.WriteJSON(w, http.StatusOK, toOrderDTO(order))
+}
+
+// getOrderRun returns the live agent run log for an order. Ownership is
+// enforced by first loading the order through the orders usecase, which scopes
+// reads to the caller; only then is the worker's in-memory run log exposed.
+func (s *Server) getOrderRun(w http.ResponseWriter, r *http.Request) {
+	user, err := s.currentUserFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	id := api.URLParam(r, "orderID")
+	if _, err := s.services.Orders.Get(r.Context(), user.ID, id); err != nil {
+		writeError(w, err)
+		return
+	}
+	log, found := s.services.Execution.Snapshot(id)
+	httpx.WriteJSON(w, http.StatusOK, toRunDTO(id, log, found))
 }
 
 func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {

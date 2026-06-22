@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -17,12 +18,24 @@ type Config struct {
 	HTTPAddr string
 	MySQLDSN string
 	Log      logger.Config
+	// WorkspaceRoot is where each order's agent workspace is created.
+	WorkspaceRoot string
+	// CodexBinary / ClaudeBinary override the agent CLIs; empty resolves from PATH.
+	CodexBinary  string
+	ClaudeBinary string
 }
 
 type fileConfig struct {
-	HTTP   httpConfig    `yaml:"http"`
-	MySQL  mysqlConfig   `yaml:"mysql"`
-	Logger logger.Config `yaml:"logger"`
+	HTTP      httpConfig      `yaml:"http"`
+	MySQL     mysqlConfig     `yaml:"mysql"`
+	Logger    logger.Config   `yaml:"logger"`
+	Execution executionConfig `yaml:"execution"`
+}
+
+type executionConfig struct {
+	WorkspaceRoot string `yaml:"workspace_root"`
+	CodexBinary   string `yaml:"codex_binary"`
+	ClaudeBinary  string `yaml:"claude_binary"`
 }
 
 type httpConfig struct {
@@ -60,7 +73,8 @@ func loadPath(path string, required bool) (Config, error) {
 
 func defaultConfig() Config {
 	return Config{
-		HTTPAddr: ":8080",
+		HTTPAddr:      ":8080",
+		WorkspaceRoot: defaultWorkspaceRoot(),
 		Log: logger.Config{
 			Service:       "oneshot-server",
 			Level:         logger.DefaultLevel,
@@ -111,6 +125,16 @@ func applyFile(cfg *Config, file fileConfig) {
 	}
 
 	applyLoggerFile(&cfg.Log, file.Logger)
+
+	if file.Execution.WorkspaceRoot != "" {
+		cfg.WorkspaceRoot = file.Execution.WorkspaceRoot
+	}
+	if file.Execution.CodexBinary != "" {
+		cfg.CodexBinary = file.Execution.CodexBinary
+	}
+	if file.Execution.ClaudeBinary != "" {
+		cfg.ClaudeBinary = file.Execution.ClaudeBinary
+	}
 }
 
 func applyLoggerFile(cfg *logger.Config, file logger.Config) {
@@ -165,6 +189,21 @@ func applyEnv(cfg *Config) {
 	cfg.Log.Compress = envBool("ONESHOT_LOG_COMPRESS", cfg.Log.Compress)
 	cfg.Log.Development = envBool("ONESHOT_LOG_DEVELOPMENT", cfg.Log.Development)
 	cfg.Log.DisableStdout = envBool("ONESHOT_LOG_DISABLE_STDOUT", cfg.Log.DisableStdout)
+
+	cfg.WorkspaceRoot = envString("ONESHOT_WORKSPACE_ROOT", cfg.WorkspaceRoot)
+	cfg.CodexBinary = envString("ONESHOT_CODEX_BIN", cfg.CodexBinary)
+	cfg.ClaudeBinary = envString("ONESHOT_CLAUDE_BIN", cfg.ClaudeBinary)
+}
+
+// defaultWorkspaceRoot puts agent workspaces under the user's home directory so
+// deliverables survive across runs, falling back to a local ./workspaces dir
+// when the home directory cannot be determined.
+func defaultWorkspaceRoot() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "workspaces"
+	}
+	return filepath.Join(home, ".oneshot", "workspaces")
 }
 
 func mysqlDSN(mysql mysqlConfig) string {

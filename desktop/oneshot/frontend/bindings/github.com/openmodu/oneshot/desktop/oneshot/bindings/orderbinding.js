@@ -41,15 +41,28 @@ export function GetOrder(orderID) {
 }
 
 /**
+ * GetOrderRun returns the live agent run log for an order so the desktop can
+ * stream the agent's progress into the conversation.
+ * @param {string} orderID
+ * @returns {$CancellablePromise<oneshot$0.RunLog>}
+ */
+export function GetOrderRun(orderID) {
+    return $Call.ByID(1650226771, orderID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * @param {string} status
  * @returns {$CancellablePromise<oneshot$0.Order[]>}
  */
 export function ListOrders(status) {
     return $Call.ByID(396717011, status).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType2($result);
     }));
 }
 
 // Private type creation functions
 const $$createType0 = oneshot$0.Order.createFrom;
-const $$createType1 = $Create.Array($$createType0);
+const $$createType1 = oneshot$0.RunLog.createFrom;
+const $$createType2 = $Create.Array($$createType0);

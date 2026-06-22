@@ -860,6 +860,137 @@ export class Requirement {
     }
 }
 
+/**
+ * RunEvent is one normalized step streamed by the local agent runtime as it
+ * works (assistant message, tool use, file change, etc.).
+ */
+export class RunEvent {
+    /**
+     * Creates a new RunEvent instance.
+     * @param {Partial<RunEvent>} [$$source = {}] - The source object to create the RunEvent.
+     */
+    constructor($$source = {}) {
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["text"] = undefined;
+        }
+        if (!("at" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["at"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RunEvent instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RunEvent}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RunEvent(/** @type {Partial<RunEvent>} */($$parsedSource));
+    }
+}
+
+/**
+ * RunLog is the live view of an order's agent run, used by the desktop to show
+ * the agent working in real time.
+ */
+export class RunLog {
+    /**
+     * Creates a new RunLog instance.
+     * @param {Partial<RunLog>} [$$source = {}] - The source object to create the RunLog.
+     */
+    constructor($$source = {}) {
+        if (!("orderId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["orderId"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["runtime"] = undefined;
+        }
+        if (!("status" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["status"] = "";
+        }
+        if (!("events" in $$source)) {
+            /**
+             * @member
+             * @type {RunEvent[]}
+             */
+            this["events"] = [];
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["finalMessage"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["error"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["startedAt"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["updatedAt"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RunLog instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RunLog}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType7;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("events" in $$parsedSource) {
+            $$parsedSource["events"] = $$createField3_0($$parsedSource["events"]);
+        }
+        return new RunLog(/** @type {Partial<RunLog>} */($$parsedSource));
+    }
+}
+
 export class Session {
     /**
      * Creates a new Session instance.
@@ -904,7 +1035,7 @@ export class Session {
      * @returns {Session}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType6;
+        const $$createField2_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("user" in $$parsedSource) {
             $$parsedSource["user"] = $$createField2_0($$parsedSource["user"]);
@@ -1004,4 +1135,6 @@ const $$createType2 = $Create.Array($$createType1);
 const $$createType3 = Requirement.createFrom;
 const $$createType4 = ProgressStep.createFrom;
 const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = User.createFrom;
+const $$createType6 = RunEvent.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = User.createFrom;

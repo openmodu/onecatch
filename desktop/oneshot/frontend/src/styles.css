@@ -1780,3 +1780,80 @@ dd {
   flex: 0 0 auto;
   min-height: 48px;
 }
+
+/* Live local-agent execution stream */
+.run-live {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-strong);
+  animation: run-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes run-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.run-stream {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.run-event {
+  display: grid;
+  grid-template-columns: 64px 1fr;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.run-kind {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--subtle);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.run-text {
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.run-event.run-reasoning .run-text,
+.run-event.run-tool_use .run-text,
+.run-event.run-tool_result .run-text {
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.run-event.run-file_change .run-kind,
+.run-event.run-file_change .run-text {
+  color: var(--green);
+}
+
+.run-event.run-error .run-text {
+  color: var(--accent-strong);
+}
+
+.run-final {
+  margin: 0;
+  padding-top: 4px;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.run-error {
+  margin: 0;
+  color: var(--accent-strong);
+  font-size: 13px;
+}

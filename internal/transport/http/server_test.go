@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/openmodu/oneshot/internal/agentrun"
 	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
 	"github.com/openmodu/oneshot/internal/domain/users"
 	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
@@ -240,41 +243,103 @@ func TestOrderValidationAndArtifacts(t *testing.T) {
 	if err := fixture.orders.SaveOrder(context.Background(), delivered); err != nil {
 		t.Fatalf("save delivered order: %v", err)
 	}
+	// Simulate what the worker does: record the files the agent produced in its
+	// workspace as the order's deliverables.
+	workspace := t.TempDir()
+	if err := os.WriteFile(filepath.Join(workspace, "report.md"), []byte("# 报告\norder_delivered 的研究结论"), 0o644); err != nil {
+		t.Fatalf("seed workspace file: %v", err)
+	}
+	if _, err := fixture.artifacts.RecordWorkspaceOutput(context.Background(), delivered, workspace, "已完成研究"); err != nil {
+		t.Fatalf("record workspace output: %v", err)
+	}
+
 	var artifacts []struct {
 		ID       string `json:"id"`
 		FileName string `json:"fileName"`
 		FileType string `json:"fileType"`
 	}
 	getJSON(t, handler, http.MethodGet, "/api/orders/order_delivered/artifacts", nil, token, http.StatusOK, &artifacts)
-	if len(artifacts) != 1 || artifacts[0].ID == "" || artifacts[0].FileType != "PDF" {
+	// Expect the agent's report.md plus the always-written SUMMARY.md.
+	var reportID string
+	names := map[string]string{}
+	for _, a := range artifacts {
+		names[a.FileName] = a.ID
+		if a.FileName == "report.md" {
+			reportID = a.ID
+			if a.FileType != "Markdown" {
+				t.Fatalf("report.md file type = %q, want Markdown", a.FileType)
+			}
+		}
+	}
+	if _, ok := names["SUMMARY.md"]; !ok || reportID == "" {
 		t.Fatalf("unexpected artifacts: %+v", artifacts)
 	}
 
 	downloadResp := httptest.NewRecorder()
-	downloadReq := httptest.NewRequest(http.MethodGet, "/api/artifacts/"+artifacts[0].ID+"/download", nil)
+	downloadReq := httptest.NewRequest(http.MethodGet, "/api/artifacts/"+reportID+"/download", nil)
 	downloadReq.Header.Set("Authorization", "Bearer "+token)
 	handler.ServeHTTP(downloadResp, downloadReq)
 	if downloadResp.Code != http.StatusOK {
 		t.Fatalf("download status = %d, want %d; body: %s", downloadResp.Code, http.StatusOK, downloadResp.Body.String())
 	}
-	if got := downloadResp.Header().Get("Content-Type"); !strings.Contains(got, "application/pdf") {
-		t.Fatalf("download content type = %q, want application/pdf", got)
+	if got := downloadResp.Header().Get("Content-Type"); !strings.Contains(got, "text/markdown") {
+		t.Fatalf("download content type = %q, want text/markdown", got)
 	}
-	if !strings.Contains(downloadResp.Body.String(), "order_delivered") {
-		t.Fatalf("download body missing order id: %q", downloadResp.Body.String())
+	if !strings.Contains(downloadResp.Body.String(), "order_delivered 的研究结论") {
+		t.Fatalf("download body missing real file content: %q", downloadResp.Body.String())
 	}
 
 	var share struct {
 		Token string `json:"token"`
 		URL   string `json:"url"`
 	}
-	getJSON(t, handler, http.MethodPost, "/api/artifacts/"+artifacts[0].ID+"/share", nil, token, http.StatusOK, &share)
+	getJSON(t, handler, http.MethodPost, "/api/artifacts/"+reportID+"/share", nil, token, http.StatusOK, &share)
 	if share.URL == "" {
 		t.Fatalf("unexpected share response: %+v", share)
 	}
 	// Privacy: the raw share token is embedded in the URL, not exposed separately.
 	if share.Token != "" {
 		t.Fatalf("share response leaked raw token: %+v", share)
+	}
+}
+
+func TestOrderRunEndpoint(t *testing.T) {
+	fixture := newTestFixture()
+	handler := fixture.handler
+	token := loginForTest(t, handler)
+
+	// Unauthenticated access is rejected.
+	assertStatus(t, handler, http.MethodGet, "/api/orders/whatever/run", nil, "", http.StatusUnauthorized)
+
+	// An order the caller does not own yields 404, never another user's run.
+	assertStatus(t, handler, http.MethodGet, "/api/orders/order_missing/run", nil, token, http.StatusNotFound)
+
+	// A real order with no run yet reports a stable empty shape.
+	running := domainorders.Order{
+		ID:        "order_run_view",
+		UserID:    users.DevUserID,
+		AgentID:   "research-analyst",
+		AgentName: "行业研究分析师",
+		Status:    domainorders.StatusRunning,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	if err := fixture.orders.SaveOrder(context.Background(), running); err != nil {
+		t.Fatalf("save order: %v", err)
+	}
+	var run struct {
+		OrderID string `json:"orderId"`
+		Status  string `json:"status"`
+		Events  []struct {
+			Kind string `json:"kind"`
+		} `json:"events"`
+	}
+	getJSON(t, handler, http.MethodGet, "/api/orders/order_run_view/run", nil, token, http.StatusOK, &run)
+	if run.OrderID != "order_run_view" || run.Status != "pending" {
+		t.Fatalf("unexpected run view: %+v", run)
+	}
+	if run.Events == nil {
+		t.Fatal("events should be a non-nil array")
 	}
 }
 
@@ -327,8 +392,9 @@ func TestAgentCatalogRoutes(t *testing.T) {
 }
 
 type testFixture struct {
-	handler http.Handler
-	orders  repoorders.OrdersRepo
+	handler   http.Handler
+	orders    repoorders.OrdersRepo
+	artifacts *usecaseartifacts.Usecase
 }
 
 func newTestHandler() http.Handler {
@@ -345,7 +411,7 @@ func newTestFixture() testFixture {
 	agentsUsecase := usecaseagents.NewUsecase(agentRepo)
 	billingUsecase := usecasebilling.NewUsecase(billingRepo)
 	artifactsUsecase := usecaseartifacts.NewUsecase(artifactRepo, orderRepo)
-	executionUsecase := usecaseexecution.NewUsecase(orderRepo, artifactsUsecase)
+	executionUsecase := usecaseexecution.NewUsecase(orderRepo, agentRepo, artifactsUsecase, agentrun.NewEngineWithRunners(), usecaseexecution.Config{})
 	ordersUsecase := usecaseorders.NewUsecase(agentRepo, orderRepo, billingUsecase)
 	conversationsUsecase := usecaseconversations.NewUsecase(conversationRepo, agentsUsecase, ordersUsecase)
 
@@ -359,7 +425,8 @@ func newTestFixture() testFixture {
 			executionUsecase,
 			ordersUsecase,
 		)),
-		orders: orderRepo,
+		orders:    orderRepo,
+		artifacts: artifactsUsecase,
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	domainconversations "github.com/openmodu/oneshot/internal/domain/conversations"
 	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
 	"github.com/openmodu/oneshot/internal/domain/users"
+	usecaseexecution "github.com/openmodu/oneshot/internal/usecase/execution"
 )
 
 // This file defines the user-facing response DTOs. They expose only the fields
@@ -216,6 +217,51 @@ func toConversationDTO(c domainconversations.Conversation) conversationDTO {
 		Messages:  messages,
 		CreatedAt: c.CreatedAt,
 		UpdatedAt: c.UpdatedAt,
+	}
+}
+
+type runEventDTO struct {
+	Kind string    `json:"kind"`
+	Text string    `json:"text,omitempty"`
+	At   time.Time `json:"at"`
+}
+
+type runDTO struct {
+	OrderID      string        `json:"orderId"`
+	Runtime      string        `json:"runtime,omitempty"`
+	Status       string        `json:"status"`
+	Events       []runEventDTO `json:"events"`
+	FinalMessage string        `json:"finalMessage,omitempty"`
+	Error        string        `json:"error,omitempty"`
+	StartedAt    time.Time     `json:"startedAt,omitempty"`
+	UpdatedAt    time.Time     `json:"updatedAt,omitempty"`
+}
+
+// toRunDTO projects the worker's live run log for the desktop. The raw JSONL
+// from the runtime is intentionally dropped — only the normalized kind/text the
+// UI renders is exposed.
+func toRunDTO(orderID string, log usecaseexecution.RunLog, found bool) runDTO {
+	if !found {
+		// No run yet (e.g. order still pending): report a stable empty shape.
+		return runDTO{OrderID: orderID, Status: "pending", Events: []runEventDTO{}}
+	}
+	events := make([]runEventDTO, 0, len(log.Events))
+	for _, e := range log.Events {
+		events = append(events, runEventDTO{
+			Kind: string(e.Kind),
+			Text: e.Text,
+			At:   e.At,
+		})
+	}
+	return runDTO{
+		OrderID:      orderID,
+		Runtime:      log.Runtime,
+		Status:       string(log.Status),
+		Events:       events,
+		FinalMessage: log.FinalMessage,
+		Error:        log.Error,
+		StartedAt:    log.StartedAt,
+		UpdatedAt:    log.UpdatedAt,
 	}
 }
 
