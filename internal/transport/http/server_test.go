@@ -365,8 +365,8 @@ func TestAgentCatalogRoutes(t *testing.T) {
 	if err := json.NewDecoder(listResp.Body).Decode(&agents); err != nil {
 		t.Fatalf("decode agents response: %v", err)
 	}
-	if len(agents) != 4 {
-		t.Fatalf("agent count = %d, want 4", len(agents))
+	if len(agents) != 6 {
+		t.Fatalf("agent count = %d, want 6", len(agents))
 	}
 	if agents[0].ID == "" || agents[0].Name == "" || agents[0].PriceCents == 0 || agents[0].Rating == "" || agents[0].DealCount == 0 || agents[0].Deliverable == "" || len(agents[0].Tags) == 0 {
 		t.Fatalf("first agent missing catalog fields: %+v", agents[0])
@@ -412,7 +412,7 @@ func newTestFixture() testFixture {
 	billingUsecase := usecasebilling.NewUsecase(billingRepo)
 	artifactsUsecase := usecaseartifacts.NewUsecase(artifactRepo, orderRepo)
 	executionUsecase := usecaseexecution.NewUsecase(orderRepo, agentRepo, artifactsUsecase, agentrun.NewEngineWithRunners(), usecaseexecution.Config{})
-	ordersUsecase := usecaseorders.NewUsecase(agentRepo, orderRepo, billingUsecase)
+	ordersUsecase := usecaseorders.NewUsecase(agentRepo, orderRepo, billingUsecase, executionUsecase)
 	conversationsUsecase := usecaseconversations.NewUsecase(conversationRepo, agentsUsecase, ordersUsecase)
 
 	return testFixture{

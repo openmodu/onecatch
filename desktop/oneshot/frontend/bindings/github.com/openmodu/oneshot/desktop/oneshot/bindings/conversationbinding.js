@@ -43,10 +43,11 @@ export function PostMessage(conversationID, text) {
 
 /**
  * @param {string} agentID
+ * @param {string} workspace
  * @returns {$CancellablePromise<oneshot$0.Conversation>}
  */
-export function StartConversation(agentID) {
-    return $Call.ByID(73328826, agentID).then(/** @type {($result: any) => any} */(($result) => {
+export function StartConversation(agentID, workspace) {
+    return $Call.ByID(73328826, agentID, workspace).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }

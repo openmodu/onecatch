@@ -36,12 +36,21 @@ func (r *CodexRunner) Available() bool {
 }
 
 func (r *CodexRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
-	args := []string{
-		"exec", "--json",
-		// Workspaces are bare task directories, not git repos.
-		"--skip-git-repo-check",
-		"--sandbox", string(codexSandbox(req.Sandbox)),
-		"-C", req.Workspace,
+	var args []string
+	if req.ResumeSessionID != "" {
+		// `codex exec resume` accepts a narrower flag set than a fresh exec:
+		// no --sandbox / -C. The sandbox is set via a config override and the
+		// working directory comes from the process cwd (cmd.Dir below), which
+		// also lets codex match the recorded session by cwd.
+		args = []string{"exec", "resume", req.ResumeSessionID, "--json", "--skip-git-repo-check",
+			"-c", "sandbox_mode=" + string(codexSandbox(req.Sandbox))}
+	} else {
+		args = []string{"exec", "--json",
+			// Workspaces are bare task directories, not git repos.
+			"--skip-git-repo-check",
+			"--sandbox", string(codexSandbox(req.Sandbox)),
+			"-C", req.Workspace,
+		}
 	}
 	if req.Model != "" {
 		args = append(args, "-m", req.Model)

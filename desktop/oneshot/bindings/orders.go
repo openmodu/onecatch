@@ -32,6 +32,11 @@ func (b *OrderBinding) GetOrderRun(orderID string) (oneshot.RunLog, error) {
 	return b.client.GetOrderRun(context.Background(), orderID)
 }
 
+// ContinueOrder resumes a finished task with a follow-up instruction.
+func (b *OrderBinding) ContinueOrder(orderID string, prompt string) (oneshot.Order, error) {
+	return b.client.ContinueOrder(context.Background(), orderID, oneshot.ContinueOrderRequest{Prompt: prompt})
+}
+
 func (b *OrderBinding) CancelOrder(orderID string) (oneshot.Order, error) {
 	return b.client.CancelOrder(context.Background(), orderID)
 }

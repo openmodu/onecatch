@@ -24,6 +24,7 @@ var ProviderSet = wire.NewSet(
 	ProvideExecutionOrderRepository,
 	ProvideOrderAgentRepository,
 	ProvideOrderRepository,
+	ProvideOrderRunSessionReader,
 	ProvideConversationRepository,
 	ProvideConversationAgentGetter,
 	ProvideConversationOrderCreator,
@@ -78,6 +79,10 @@ func ProvideOrderAgentRepository(repos *data.OneShotRepo) usecaseorders.AgentRep
 
 func ProvideOrderRepository(repos *data.OneShotRepo) usecaseorders.Repository {
 	return repos.Orders
+}
+
+func ProvideOrderRunSessionReader(execution *usecaseexecution.Usecase) usecaseorders.RunSessionReader {
+	return execution
 }
 
 func ProvideConversationRepository(repos *data.OneShotRepo) usecaseconversations.Repository {

@@ -55,6 +55,7 @@ func NewServer(services *service.Services) http.Handler {
 		router.Get("/orders/{orderID}/run", server.getOrderRun)
 		router.Get("/orders/{orderID}", server.getOrder)
 		router.Post("/orders/{orderID}/cancel", server.cancelOrder)
+		router.Post("/orders/{orderID}/continue", server.continueOrder)
 		router.Get("/artifacts/{artifactID}/download", server.downloadArtifact)
 		router.Post("/artifacts/{artifactID}/share", server.shareArtifact)
 	})
@@ -210,14 +211,15 @@ func (s *Server) startConversation(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var input struct {
-		AgentID string `json:"agentId"`
+		AgentID   string `json:"agentId"`
+		Workspace string `json:"workspace"`
 	}
 	if err := httpx.DecodeJSON(r, &input); err != nil {
 		writeError(w, err)
 		return
 	}
 
-	conv, err := s.services.Conversations.Start(r.Context(), user.ID, input.AgentID)
+	conv, err := s.services.Conversations.Start(r.Context(), user.ID, input.AgentID, input.Workspace)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -288,6 +290,7 @@ func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
 	var input struct {
 		AgentID     string             `json:"agentId"`
 		Requirement orders.Requirement `json:"requirement"`
+		Workspace   string             `json:"workspace"`
 	}
 	if err := httpx.DecodeJSON(r, &input); err != nil {
 		writeError(w, err)
@@ -298,6 +301,7 @@ func (s *Server) createOrder(w http.ResponseWriter, r *http.Request) {
 		UserID:      user.ID,
 		AgentID:     input.AgentID,
 		Requirement: input.Requirement,
+		Workspace:   input.Workspace,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -363,6 +367,31 @@ func (s *Server) getOrderRun(w http.ResponseWriter, r *http.Request) {
 	}
 	log, found := s.services.Execution.Snapshot(id)
 	httpx.WriteJSON(w, http.StatusOK, toRunDTO(id, log, found))
+}
+
+// continueOrder resumes a finished task with a follow-up instruction (a
+// multi-turn continuation), reusing the prior agent session and workspace.
+func (s *Server) continueOrder(w http.ResponseWriter, r *http.Request) {
+	user, err := s.currentUserFromRequest(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	var input struct {
+		Prompt string `json:"prompt"`
+	}
+	if err := httpx.DecodeJSON(r, &input); err != nil {
+		writeError(w, err)
+		return
+	}
+
+	order, err := s.services.Orders.Continue(r.Context(), user.ID, api.URLParam(r, "orderID"), input.Prompt)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	httpx.WriteJSON(w, http.StatusOK, toOrderDTO(order))
 }
 
 func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {

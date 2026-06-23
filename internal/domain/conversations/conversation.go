@@ -42,14 +42,17 @@ type Message struct {
 }
 
 type Conversation struct {
-	ID                 string    `json:"id"`
-	UserID             string    `json:"userId"`
-	AgentID            string    `json:"agentId"`
-	AgentName          string    `json:"agentName"`
-	Status             Status    `json:"status"`
-	OrderID            string    `json:"orderId,omitempty"`
-	PendingRequirement string    `json:"pendingRequirement,omitempty"`
-	Messages           []Message `json:"messages"`
-	CreatedAt          time.Time `json:"createdAt"`
-	UpdatedAt          time.Time `json:"updatedAt"`
+	ID                 string `json:"id"`
+	UserID             string `json:"userId"`
+	AgentID            string `json:"agentId"`
+	AgentName          string `json:"agentName"`
+	Status             Status `json:"status"`
+	OrderID            string `json:"orderId,omitempty"`
+	PendingRequirement string `json:"pendingRequirement,omitempty"`
+	// Workspace optionally points the agent at one of the user's own
+	// directories; carried into the order at confirm. Internal.
+	Workspace string    `json:"-"`
+	Messages  []Message `json:"messages"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }

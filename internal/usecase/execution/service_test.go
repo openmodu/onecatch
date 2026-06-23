@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,22 +19,45 @@ import (
 
 // stubEngine simulates a local agent: on Run it writes a deliverable into the
 // workspace, streams a couple of events, and reports success (or a configured
-// failure). It lets the worker be tested without spawning a real CLI.
+// failure). It lets the worker be tested without spawning a real CLI. On a
+// resume it writes a distinct file and records the session id it was given.
 type stubEngine struct {
 	available []agentrun.Runtime
 	writeFile string
 	result    agentrun.Result
 	runErr    error
+
+	mu          sync.Mutex
+	lastResume  string
+	resumeFile  string
+	resumeCalls int
 }
 
 func (e *stubEngine) Run(ctx context.Context, req agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	sink(agentrun.Event{Kind: agentrun.KindStarted, At: time.Now()})
-	if e.writeFile != "" {
-		_ = os.WriteFile(filepath.Join(req.Workspace, e.writeFile), []byte("# 报告\n内容"), 0o644)
-		sink(agentrun.Event{Kind: agentrun.KindFileChange, Text: e.writeFile, At: time.Now()})
+	resume := req.ResumeSessionID != ""
+	file := e.writeFile
+	if resume {
+		e.mu.Lock()
+		e.lastResume = req.ResumeSessionID
+		e.resumeCalls++
+		e.mu.Unlock()
+		if e.resumeFile != "" {
+			file = e.resumeFile
+		}
+	}
+	if file != "" {
+		_ = os.WriteFile(filepath.Join(req.Workspace, file), []byte("# 报告\n内容"), 0o644)
+		sink(agentrun.Event{Kind: agentrun.KindFileChange, Text: file, At: time.Now()})
 	}
 	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: e.result.FinalMessage, At: time.Now()})
 	return e.result, e.runErr
+}
+
+func (e *stubEngine) lastResumeID() string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return e.lastResume
 }
 
 func (e *stubEngine) Available(rt agentrun.Runtime) bool {
@@ -191,6 +215,98 @@ func TestRunOnceDoesNotDoubleDispatch(t *testing.T) {
 	order, _ := orderRepo.GetOrder(ctx, users.DevUserID, "order_worker_1")
 	if order.Status != domainorders.StatusDelivered {
 		t.Fatalf("status = %s, want delivered", order.Status)
+	}
+}
+
+func TestWorkerResumesTaskAcrossTurns(t *testing.T) {
+	ctx := context.Background()
+	engine := &stubEngine{
+		available:  []agentrun.Runtime{agentrun.RuntimeCodex},
+		writeFile:  "report.md",
+		resumeFile: "turn2.md",
+		result:     agentrun.Result{FinalMessage: "ok", Succeeded: true, SessionID: "sess-A"},
+	}
+	worker, orderRepo, artifactUsecase := newWorker(t, engine)
+
+	if err := orderRepo.SaveOrder(ctx, runningOrder()); err != nil {
+		t.Fatalf("save order: %v", err)
+	}
+	// Turn 1.
+	_ = worker.RunOnce(ctx)
+	worker.Wait()
+	if id, ok := worker.SessionID("order_worker_1"); !ok || id != "sess-A" {
+		t.Fatalf("session id = %q ok=%v, want sess-A", id, ok)
+	}
+
+	// Re-queue the same order as a resume (what orders.Continue does).
+	delivered, _ := orderRepo.GetOrder(ctx, users.DevUserID, "order_worker_1")
+	delivered.Status = domainorders.StatusRunning
+	delivered.ResumeSessionID = "sess-A"
+	delivered.Requirement = domainorders.Requirement{Prompt: "继续"}
+	if err := orderRepo.TransitionOrder(ctx, delivered, domainorders.StatusDelivered); err != nil {
+		t.Fatalf("requeue: %v", err)
+	}
+	// Turn 2.
+	_ = worker.RunOnce(ctx)
+	worker.Wait()
+
+	if got := engine.lastResumeID(); got != "sess-A" {
+		t.Fatalf("engine resume id = %q, want sess-A", got)
+	}
+	final, _ := orderRepo.GetOrder(ctx, users.DevUserID, "order_worker_1")
+	if final.Status != domainorders.StatusDelivered {
+		t.Fatalf("status = %s, want delivered", final.Status)
+	}
+	if final.ResumeSessionID != "" {
+		t.Fatalf("resume id should be cleared after run, got %q", final.ResumeSessionID)
+	}
+
+	// Run log accumulated a second turn; artifacts gained the new file.
+	log, _ := worker.Snapshot("order_worker_1")
+	if log.Turns != 2 {
+		t.Fatalf("turns = %d, want 2", log.Turns)
+	}
+	arts, _ := artifactUsecase.ListForOrder(ctx, users.DevUserID, "order_worker_1")
+	var names []string
+	for _, a := range arts {
+		names = append(names, a.FileName)
+	}
+	if !contains(names, "report.md") || !contains(names, "turn2.md") {
+		t.Fatalf("artifacts = %v, want both turn files", names)
+	}
+}
+
+func TestRunLogPersistsAcrossWorkers(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	orderRepo := repoorders.NewOrdersRepo(nil)
+	artifactUsecase := usecaseartifacts.NewUsecase(repoartifacts.NewArtifactsRepo(nil), orderRepo)
+	agentRepo := repoagents.NewAgentsRepo(nil)
+	engine := &stubEngine{
+		available: []agentrun.Runtime{agentrun.RuntimeCodex},
+		writeFile: "report.md",
+		result:    agentrun.Result{FinalMessage: "done", Succeeded: true, SessionID: "sess-P"},
+	}
+
+	w1 := NewUsecase(orderRepo, agentRepo, artifactUsecase, engine, Config{WorkspaceRoot: root})
+	if err := orderRepo.SaveOrder(ctx, runningOrder()); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	_ = w1.RunOnce(ctx)
+	w1.Wait()
+
+	// A brand-new worker (simulating a restart) sharing the same root must see
+	// the prior run log — including the session id — loaded from disk.
+	w2 := NewUsecase(orderRepo, agentRepo, artifactUsecase, engine, Config{WorkspaceRoot: root})
+	log, ok := w2.Snapshot("order_worker_1")
+	if !ok {
+		t.Fatal("expected run log loaded from disk after restart")
+	}
+	if log.Status != RunSucceeded || log.SessionID != "sess-P" {
+		t.Fatalf("hydrated log = %+v, want succeeded/sess-P", log)
+	}
+	if id, ok := w2.SessionID("order_worker_1"); !ok || id != "sess-P" {
+		t.Fatalf("session after restart = %q ok=%v", id, ok)
 	}
 }
 

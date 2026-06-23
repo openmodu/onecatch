@@ -38,6 +38,11 @@ type Request struct {
 	Model string
 	// Sandbox selects the permission level; defaults to SandboxWorkspaceWrite.
 	Sandbox Sandbox
+	// ResumeSessionID, when set, continues a prior run instead of starting a
+	// fresh one: the runtime reopens that session (keeping its context and
+	// history) and applies Prompt as the next turn. The id is the SessionID a
+	// previous Result reported.
+	ResumeSessionID string
 }
 
 // Sink receives normalized events as they stream from the agent. It is called

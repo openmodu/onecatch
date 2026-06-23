@@ -39,6 +39,7 @@ type Client interface {
 	ListOrders(context.Context, string) ([]Order, error)
 	GetOrder(context.Context, string) (Order, error)
 	GetOrderRun(context.Context, string) (RunLog, error)
+	ContinueOrder(context.Context, string, ContinueOrderRequest) (Order, error)
 	CancelOrder(context.Context, string) (Order, error)
 	ListArtifacts(context.Context, string) ([]Artifact, error)
 	DownloadArtifact(context.Context, string) (ArtifactDownload, error)
@@ -184,6 +185,12 @@ func (c *HTTPClient) GetOrder(ctx context.Context, orderID string) (Order, error
 func (c *HTTPClient) GetOrderRun(ctx context.Context, orderID string) (RunLog, error) {
 	var out RunLog
 	err := c.do(ctx, http.MethodGet, "/api/orders/"+url.PathEscape(orderID)+"/run", nil, &out)
+	return out, err
+}
+
+func (c *HTTPClient) ContinueOrder(ctx context.Context, orderID string, input ContinueOrderRequest) (Order, error) {
+	var out Order
+	err := c.do(ctx, http.MethodPost, "/api/orders/"+url.PathEscape(orderID)+"/continue", input, &out)
 	return out, err
 }
 

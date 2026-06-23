@@ -14,8 +14,8 @@ func NewConversationBinding(client oneshot.Client) *ConversationBinding {
 	return &ConversationBinding{client: client}
 }
 
-func (b *ConversationBinding) StartConversation(agentID string) (oneshot.Conversation, error) {
-	return b.client.StartConversation(context.Background(), oneshot.StartConversationRequest{AgentID: agentID})
+func (b *ConversationBinding) StartConversation(agentID string, workspace string) (oneshot.Conversation, error) {
+	return b.client.StartConversation(context.Background(), oneshot.StartConversationRequest{AgentID: agentID, Workspace: workspace})
 }
 
 func (b *ConversationBinding) GetConversation(conversationID string) (oneshot.Conversation, error) {

@@ -41,6 +41,15 @@ type Order struct {
 	Progress              []ProgressStep `json:"progress"`
 	CreatedAt             time.Time      `json:"createdAt"`
 	UpdatedAt             time.Time      `json:"updatedAt"`
+
+	// Workspace, when set, is an absolute directory the agent should operate in
+	// directly (e.g. the user's own project) instead of a managed per-order
+	// workspace. Internal; never serialized to the user-facing API.
+	Workspace string `json:"-"`
+	// ResumeSessionID, when set on a re-queued order, tells the worker to
+	// resume the prior agent session for a multi-turn continuation rather than
+	// starting fresh. Internal.
+	ResumeSessionID string `json:"-"`
 }
 
 type ProgressStep struct {

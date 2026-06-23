@@ -40,8 +40,9 @@ func NewUsecase(repo Repository, agents AgentGetter, orders OrderCreator) *Useca
 	return &Usecase{repo: repo, agents: agents, orders: orders, now: time.Now}
 }
 
-// Start opens a conversation with an agent and seeds the greeting message.
-func (s *Usecase) Start(ctx context.Context, userID string, agentID string) (domainconversations.Conversation, error) {
+// Start opens a conversation with an agent and seeds the greeting message. An
+// optional workspace points the agent at one of the user's own directories.
+func (s *Usecase) Start(ctx context.Context, userID string, agentID string, workspace string) (domainconversations.Conversation, error) {
 	if userID == "" {
 		return domainconversations.Conversation{}, fmt.Errorf("user id is required")
 	}
@@ -66,6 +67,7 @@ func (s *Usecase) Start(ctx context.Context, userID string, agentID string) (dom
 		AgentID:   agent.ID,
 		AgentName: agent.Name,
 		Status:    domainconversations.StatusActive,
+		Workspace: strings.TrimSpace(workspace),
 		Messages:  []domainconversations.Message{greeting},
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -130,6 +132,7 @@ func (s *Usecase) Confirm(ctx context.Context, userID string, convID string) (do
 		UserID:      userID,
 		AgentID:     conv.AgentID,
 		Requirement: domainorders.Requirement{Prompt: conv.PendingRequirement},
+		Workspace:   conv.Workspace,
 	})
 	if err != nil {
 		return domainconversations.Conversation{}, err

@@ -16,10 +16,16 @@ import (
 	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
 )
 
+// noResume satisfies orders.RunSessionReader; the conversation tests never
+// resume, so it always reports no session.
+type noResume struct{}
+
+func (noResume) SessionID(string) (string, bool) { return "", false }
+
 func newFixture() (*Usecase, *usecasebilling.Usecase) {
 	agentRepo := repoagents.NewAgentsRepo(nil)
 	billingUsecase := usecasebilling.NewUsecase(repobilling.NewBillingRepo(nil))
-	ordersUsecase := usecaseorders.NewUsecase(agentRepo, repoorders.NewOrdersRepo(nil), billingUsecase)
+	ordersUsecase := usecaseorders.NewUsecase(agentRepo, repoorders.NewOrdersRepo(nil), billingUsecase, noResume{})
 	usecase := NewUsecase(repoconversations.NewConversationsRepo(nil), usecaseagents.NewUsecase(agentRepo), ordersUsecase)
 	return usecase, billingUsecase
 }
@@ -30,7 +36,7 @@ func TestConversationFlowDebitsOnlyOnConfirm(t *testing.T) {
 
 	before, _ := billing.GetBalance(ctx, users.DevUserID)
 
-	conv, err := usecase.Start(ctx, users.DevUserID, "research-analyst")
+	conv, err := usecase.Start(ctx, users.DevUserID, "research-analyst", "")
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
@@ -78,7 +84,7 @@ func TestConversationCrossUserIsolation(t *testing.T) {
 	ctx := context.Background()
 	usecase, _ := newFixture()
 
-	conv, err := usecase.Start(ctx, users.DevUserID, "research-analyst")
+	conv, err := usecase.Start(ctx, users.DevUserID, "research-analyst", "")
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
@@ -95,7 +101,7 @@ func TestPostMessageRejectsEmpty(t *testing.T) {
 	ctx := context.Background()
 	usecase, _ := newFixture()
 
-	conv, err := usecase.Start(ctx, users.DevUserID, "research-analyst")
+	conv, err := usecase.Start(ctx, users.DevUserID, "research-analyst", "")
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}

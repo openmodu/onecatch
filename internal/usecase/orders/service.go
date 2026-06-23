@@ -26,10 +26,18 @@ type Repository interface {
 	GetOrder(context.Context, string, string) (orders.Order, error)
 }
 
+// RunSessionReader exposes the resumable runtime session id for an order,
+// supplied by the execution worker. It lets Continue re-open a prior agent
+// session without the orders package depending on the worker's RunLog type.
+type RunSessionReader interface {
+	SessionID(orderID string) (string, bool)
+}
+
 type Usecase struct {
 	agents  AgentRepository
 	orders  Repository
 	billing *usecasebilling.Usecase
+	runs    RunSessionReader
 	now     func() time.Time
 }
 
@@ -37,6 +45,9 @@ type CreateInput struct {
 	UserID      string             `json:"userId"`
 	AgentID     string             `json:"agentId"`
 	Requirement orders.Requirement `json:"requirement"`
+	// Workspace optionally points the agent at a directory of the user's own
+	// (e.g. a project repo) instead of a managed per-order workspace.
+	Workspace string `json:"workspace,omitempty"`
 }
 
 type ListInput struct {
@@ -44,11 +55,12 @@ type ListInput struct {
 	Status orders.Status `json:"status,omitempty"`
 }
 
-func NewUsecase(agentRepo AgentRepository, orderRepo Repository, billing *usecasebilling.Usecase) *Usecase {
+func NewUsecase(agentRepo AgentRepository, orderRepo Repository, billing *usecasebilling.Usecase, runs RunSessionReader) *Usecase {
 	return &Usecase{
 		agents:  agentRepo,
 		orders:  orderRepo,
 		billing: billing,
+		runs:    runs,
 		now:     time.Now,
 	}
 }
@@ -90,6 +102,7 @@ func (s *Usecase) Create(ctx context.Context, input CreateInput) (orders.Order, 
 		UsageCost:             agent.PriceUses,
 		AmountCents:           agent.PriceCents,
 		EstimatedCompletionAt: estimated,
+		Workspace:             strings.TrimSpace(input.Workspace),
 		CreatedAt:             now,
 		UpdatedAt:             now,
 	}
@@ -147,6 +160,43 @@ func (s *Usecase) Cancel(ctx context.Context, userID string, orderID string) (or
 		return orders.Order{}, fmt.Errorf("order cancelled but refund failed: %w", err)
 	}
 	order.Progress = orders.BuildProgress(order)
+	return order, nil
+}
+
+// Continue resumes a finished task with a follow-up instruction: it re-queues
+// the same order (same workspace, same agent) carrying the prior runtime
+// session id so the agent picks up where it left off. Continuations are not
+// re-billed — they extend an already-paid task.
+func (s *Usecase) Continue(ctx context.Context, userID string, orderID string, prompt string) (orders.Order, error) {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return orders.Order{}, orders.ErrInvalidRequirement
+	}
+	order, err := s.orders.GetOrder(ctx, userID, orderID)
+	if err != nil {
+		return orders.Order{}, err
+	}
+	// Only a settled task can be continued; an active one is already running.
+	if order.Status != orders.StatusDelivered && order.Status != orders.StatusFailed {
+		return orders.Order{}, fmt.Errorf("order %s cannot be continued from status %s", order.ID, order.Status)
+	}
+	sessionID, ok := s.runs.SessionID(orderID)
+	if !ok {
+		return orders.Order{}, fmt.Errorf("order %s has no resumable session", order.ID)
+	}
+
+	from := order.Status
+	now := s.now()
+	order.Requirement = orders.Requirement{Prompt: prompt}
+	order.ResumeSessionID = sessionID
+	order.Status = orders.StatusRunning
+	order.FailureReason = ""
+	order.EstimatedCompletionAt = now.Add(time.Hour)
+	order.UpdatedAt = now
+	order.Progress = orders.BuildProgress(order)
+	if err := s.orders.TransitionOrder(ctx, order, from); err != nil {
+		return orders.Order{}, err
+	}
 	return order, nil
 }
 

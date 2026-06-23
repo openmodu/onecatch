@@ -490,6 +490,14 @@ export class CreateOrderRequest {
              */
             this["requirement"] = (new Requirement());
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * Workspace optionally points the agent at one of your own directories.
+             * @member
+             * @type {string | undefined}
+             */
+            this["workspace"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }

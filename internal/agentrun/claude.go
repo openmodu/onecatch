@@ -41,6 +41,10 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 		// stream-json requires --verbose to emit per-step events.
 		"--verbose",
 	}
+	if req.ResumeSessionID != "" {
+		// Continue a prior conversation, preserving its context.
+		args = append(args, "--resume", req.ResumeSessionID)
+	}
 	if req.Sandbox != SandboxReadOnly {
 		// Claude Code gates writes/commands behind permission prompts that
 		// would hang a headless run; bypass them for write-capable tasks.

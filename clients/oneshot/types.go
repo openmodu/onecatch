@@ -47,6 +47,8 @@ type Conversation struct {
 
 type StartConversationRequest struct {
 	AgentID string `json:"agentId"`
+	// Workspace optionally points the agent at one of the user's own directories.
+	Workspace string `json:"workspace,omitempty"`
 }
 
 type PostMessageRequest struct {
@@ -130,6 +132,14 @@ type ProgressStep struct {
 type CreateOrderRequest struct {
 	AgentID     string      `json:"agentId"`
 	Requirement Requirement `json:"requirement"`
+	// Workspace optionally points the agent at one of your own directories.
+	Workspace string `json:"workspace,omitempty"`
+}
+
+// ContinueOrderRequest carries a follow-up instruction that resumes a finished
+// task (multi-turn continuation) in its original workspace and session.
+type ContinueOrderRequest struct {
+	Prompt string `json:"prompt"`
 }
 
 // RunEvent is one normalized step streamed by the local agent runtime as it

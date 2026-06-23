@@ -15,8 +15,8 @@ func TestAgentsRepoSeedCatalog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListAgents() error = %v", err)
 	}
-	if len(items) != 4 {
-		t.Fatalf("agent count = %d, want 4", len(items))
+	if len(items) != 6 {
+		t.Fatalf("agent count = %d, want 6", len(items))
 	}
 
 	agent, err := repo.GetAgent(context.Background(), "research-analyst")

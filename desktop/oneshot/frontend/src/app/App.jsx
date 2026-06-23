@@ -276,6 +276,12 @@ function statusLabel(status) {
   return labels[status] || "待确认";
 }
 
+// isDirectRuntimeAgent is true for the generic developer agents that let the
+// user pick a runtime and point it at their own working directory.
+function isDirectRuntimeAgent(agent) {
+  return !!agent && agent.category === "dev";
+}
+
 // runEventLabel maps a normalized agent event kind to a short Chinese label and
 // whether it is "verbose" (reasoning/tool noise) so the UI can de-emphasize it.
 function runEventLabel(kind) {
@@ -348,6 +354,7 @@ export default function App() {
   const [conversationBusy, setConversationBusy] = useState(false);
   const [showAgentPicker, setShowAgentPicker] = useState(false);
   const [runLog, setRunLog] = useState(null);
+  const [workspaceInput, setWorkspaceInput] = useState("");
   const threadEndRef = useRef(null);
 
   const visibleAgents = useMemo(() => {
@@ -820,8 +827,9 @@ export default function App() {
     setShowAgentPicker(false);
     setComposer("");
     setConversationBusy(true);
+    const workspace = isDirectRuntimeAgent(agent) ? workspaceInput.trim() : "";
     try {
-      const conv = await ConversationBinding.StartConversation(agent.id);
+      const conv = await ConversationBinding.StartConversation(agent.id, workspace);
       setConversation(conv);
     } catch (error) {
       if (canUseFallback()) {
@@ -849,6 +857,36 @@ export default function App() {
   async function sendConversationMessage() {
     const text = composer.trim();
     if (!text || !conversation) return;
+
+    // If the conversation's order has finished, a new message resumes the task
+    // (multi-turn continuation) instead of opening a fresh checkout.
+    const linkedOrder = conversation.orderId
+      ? userOrders.find((o) => o.id === conversation.orderId)
+      : null;
+    if (linkedOrder && (linkedOrder.status === "delivered" || linkedOrder.status === "failed")) {
+      setComposer("");
+      setConversationBusy(true);
+      try {
+        const order = await OrderBinding.ContinueOrder(linkedOrder.id, text);
+        setConversation((prev) => ({
+          ...prev,
+          messages: [
+            ...prev.messages,
+            localConversationMessage("user", "text", text),
+            localConversationMessage("system", "text", "已继续执行该任务，新的进度会在上方更新。"),
+          ],
+        }));
+        setSelectedOrderId(order.id);
+        await refreshOrders("");
+        showToast("已继续任务");
+      } catch (error) {
+        showToast(error?.message || "继续任务失败");
+      } finally {
+        setConversationBusy(false);
+      }
+      return;
+    }
+
     setComposer("");
     setConversationBusy(true);
     try {
@@ -1147,6 +1185,7 @@ export default function App() {
   function renderWorkbench() {
     const convOrder = conversation?.orderId ? selectedOrder : null;
     const awaiting = conversation?.status === "awaiting_confirm";
+    const canResume = !!convOrder && (convOrder.status === "delivered" || convOrder.status === "failed");
 
     const renderChatMessage = (message) => {
       if (message.kind === "checkout") {
@@ -1198,7 +1237,7 @@ export default function App() {
             >
               <span>{agent.name.slice(0, 1)}</span>
               <strong>{agent.name}</strong>
-              <em>{formatMoney(agent.priceCents)}</em>
+              <em>{isDirectRuntimeAgent(agent) ? `本地 ${agent.runtime || ""}` : formatMoney(agent.priceCents)}</em>
             </button>
           ))}
           {visibleAgents.length === 0 && (
@@ -1234,9 +1273,13 @@ export default function App() {
             <div>
               <strong>{conversation.agentName}</strong>
               <small>
-                {selectedAgent
-                  ? `${formatMoney(selectedAgent.priceCents)} / 次 · 余额 ${currentBalance} 次`
-                  : `余额 ${currentBalance} 次`}
+                {selectedAgent?.runtime ? `本地 ${selectedAgent.runtime}` : ""}
+                {selectedAgent?.runtime ? " · " : ""}
+                {isDirectRuntimeAgent(selectedAgent)
+                  ? "本地执行"
+                  : selectedAgent
+                    ? `${formatMoney(selectedAgent.priceCents)} / 次 · 余额 ${currentBalance} 次`
+                    : `余额 ${currentBalance} 次`}
               </small>
             </div>
           </div>
@@ -1244,6 +1287,26 @@ export default function App() {
             {showAgentPicker ? "收起" : "切换 Agent"}
           </button>
         </header>
+
+        {isDirectRuntimeAgent(selectedAgent) && !conversation.orderId && (
+          <div className="workspace-bar">
+            <label htmlFor="workspace-input">工作目录</label>
+            <input
+              id="workspace-input"
+              type="text"
+              placeholder="留空则使用受管理的临时目录；填入绝对路径可在你的项目里工作"
+              value={workspaceInput}
+              onChange={(event) => setWorkspaceInput(event.target.value)}
+              onBlur={() => {
+                // Re-open the conversation so the new directory takes effect,
+                // but only before any task has been sent.
+                if (selectedAgent && conversation.status === "active" && conversation.messages?.length <= 1) {
+                  startConversationFor(selectedAgent);
+                }
+              }}
+            />
+          </div>
+        )}
 
         {showAgentPicker && picker}
 
@@ -1335,7 +1398,13 @@ export default function App() {
         <div className="chat-composer">
           <textarea
             aria-label="输入任务"
-            placeholder={awaiting ? "可继续补充或修改任务…" : "描述你要完成的任务…"}
+            placeholder={
+              canResume
+                ? "任务已完成，输入后续指令可在同一会话里续跑…"
+                : awaiting
+                  ? "可继续补充或修改任务…"
+                  : "描述你要完成的任务…"
+            }
             value={composer}
             onChange={(event) => setComposer(event.target.value)}
             onKeyDown={(event) => {
@@ -1351,7 +1420,7 @@ export default function App() {
             disabled={conversationBusy || !composer.trim()}
             onClick={sendConversationMessage}
           >
-            发送
+            {canResume ? "续跑" : "发送"}
           </button>
         </div>
       </section>

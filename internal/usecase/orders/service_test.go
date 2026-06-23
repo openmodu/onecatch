@@ -13,11 +13,75 @@ import (
 	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
 )
 
+// stubSessions is a RunSessionReader returning a fixed resumable session.
+type stubSessions struct {
+	id string
+	ok bool
+}
+
+func (s stubSessions) SessionID(string) (string, bool) { return s.id, s.ok }
+
 func newOrderFixture() (*Usecase, *usecasebilling.Usecase, repoorders.OrdersRepo) {
+	return newOrderFixtureWithSessions(stubSessions{})
+}
+
+func newOrderFixtureWithSessions(runs RunSessionReader) (*Usecase, *usecasebilling.Usecase, repoorders.OrdersRepo) {
 	agentRepo := repoagents.NewAgentsRepo(nil)
 	orderRepo := repoorders.NewOrdersRepo(nil)
 	billingUsecase := usecasebilling.NewUsecase(repobilling.NewBillingRepo(nil))
-	return NewUsecase(agentRepo, orderRepo, billingUsecase), billingUsecase, orderRepo
+	return NewUsecase(agentRepo, orderRepo, billingUsecase, runs), billingUsecase, orderRepo
+}
+
+func TestContinueResumesDeliveredOrder(t *testing.T) {
+	ctx := context.Background()
+	usecase, _, orderRepo := newOrderFixtureWithSessions(stubSessions{id: "sess-1", ok: true})
+
+	order, err := usecase.Create(ctx, CreateInput{
+		UserID:      users.DevUserID,
+		AgentID:     "research-analyst",
+		Requirement: domainorders.Requirement{Prompt: "首轮任务"},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// Settle the order so it can be continued.
+	order.Status = domainorders.StatusDelivered
+	if err := orderRepo.TransitionOrder(ctx, order, domainorders.StatusRunning); err != nil {
+		t.Fatalf("settle: %v", err)
+	}
+
+	resumed, err := usecase.Continue(ctx, users.DevUserID, order.ID, "继续做第二步")
+	if err != nil {
+		t.Fatalf("continue: %v", err)
+	}
+	if resumed.Status != domainorders.StatusRunning {
+		t.Fatalf("status = %s, want running", resumed.Status)
+	}
+	if resumed.ResumeSessionID != "sess-1" {
+		t.Fatalf("resume session = %q, want sess-1", resumed.ResumeSessionID)
+	}
+	if resumed.Requirement.Prompt != "继续做第二步" {
+		t.Fatalf("requirement = %q", resumed.Requirement.Prompt)
+	}
+}
+
+func TestContinueRejectsWhenNoSession(t *testing.T) {
+	ctx := context.Background()
+	usecase, _, orderRepo := newOrderFixtureWithSessions(stubSessions{ok: false})
+	order, err := usecase.Create(ctx, CreateInput{
+		UserID:      users.DevUserID,
+		AgentID:     "research-analyst",
+		Requirement: domainorders.Requirement{Prompt: "任务"},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	order.Status = domainorders.StatusDelivered
+	_ = orderRepo.TransitionOrder(ctx, order, domainorders.StatusRunning)
+
+	if _, err := usecase.Continue(ctx, users.DevUserID, order.ID, "继续"); err == nil {
+		t.Fatal("expected error when no resumable session")
+	}
 }
 
 func TestCancelRefundsDebitedUses(t *testing.T) {

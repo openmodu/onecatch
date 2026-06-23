@@ -1,7 +1,8 @@
 // Package execution is the long-horizon worker: it picks up running orders and
-// drives a real local agent (Codex / Claude Code) to completion in a per-order
-// workspace, streaming the agent's progress and turning the files it produces
-// into the order's deliverables.
+// drives a real local agent (Codex / Claude Code) to completion, streaming the
+// agent's progress and turning the files it produces into the order's
+// deliverables. Tasks can run in a managed per-order workspace or in a
+// user-supplied directory, and can be resumed for multi-turn continuations.
 package execution
 
 import (
@@ -30,9 +31,11 @@ type AgentResolver interface {
 	GetAgent(context.Context, string) (domainagents.Agent, error)
 }
 
-// ArtifactRecorder records the files an agent produced as order deliverables.
+// ArtifactRecorder records what an agent produced as order deliverables.
+// metaDir is the managed directory where the run summary is written; when
+// collectFiles is true the agent's workspace is also scanned for real files.
 type ArtifactRecorder interface {
-	RecordWorkspaceOutput(ctx context.Context, order domainorders.Order, workspaceDir string, finalMessage string) ([]domainartifacts.Artifact, error)
+	RecordRunOutput(ctx context.Context, order domainorders.Order, metaDir string, workspaceDir string, collectFiles bool, finalMessage string) ([]domainartifacts.Artifact, error)
 }
 
 // Engine runs a request against a local agent runtime. *agentrun.Engine
@@ -46,7 +49,8 @@ type Engine interface {
 // Config tunes the worker.
 type Config struct {
 	// WorkspaceRoot is the directory under which each order gets its own
-	// workspace (<root>/<orderID>). Defaults to ./workspaces.
+	// managed workspace and run metadata (<root>/<orderID>). Defaults to
+	// ./workspaces.
 	WorkspaceRoot string
 	// MaxConcurrent caps how many orders run at once. Defaults to 2.
 	MaxConcurrent int
@@ -61,8 +65,9 @@ const (
 	RunFailed    RunStatus = "failed"
 )
 
-// RunLog is the live, in-memory record of an order's agent run: the streamed
-// events plus terminal state. It powers the "watch the agent work" view.
+// RunLog is the live record of an order's agent run: streamed events plus
+// terminal state. It powers the "watch the agent work" view and is persisted so
+// history and the resume session id survive a restart.
 type RunLog struct {
 	OrderID      string           `json:"orderId"`
 	Runtime      string           `json:"runtime"`
@@ -70,8 +75,13 @@ type RunLog struct {
 	Events       []agentrun.Event `json:"events"`
 	FinalMessage string           `json:"finalMessage,omitempty"`
 	Error        string           `json:"error,omitempty"`
-	StartedAt    time.Time        `json:"startedAt"`
-	UpdatedAt    time.Time        `json:"updatedAt"`
+	// SessionID is the runtime's session id from the latest turn, used to
+	// resume the task.
+	SessionID string `json:"sessionId,omitempty"`
+	// Turns counts how many times the task has run (1 = first run, 2+ resumed).
+	Turns     int       `json:"turns"`
+	StartedAt time.Time `json:"startedAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type Usecase struct {
@@ -82,8 +92,8 @@ type Usecase struct {
 	cfg       Config
 	now       func() time.Time
 
+	runs     *runStore
 	mu       sync.Mutex
-	runs     map[string]*RunLog
 	inflight map[string]bool
 	wg       sync.WaitGroup
 }
@@ -102,9 +112,15 @@ func NewUsecase(orderRepo OrderRepository, agents AgentResolver, artifacts Artif
 		engine:    engine,
 		cfg:       cfg,
 		now:       time.Now,
-		runs:      make(map[string]*RunLog),
+		runs:      newRunStore(cfg.WorkspaceRoot),
 		inflight:  make(map[string]bool),
 	}
+}
+
+// AvailableRuntimes lists the local runtimes that are installed, so callers can
+// show the user which agents they can actually run.
+func (s *Usecase) AvailableRuntimes() []agentrun.Runtime {
+	return s.engine.AvailableRuntimes()
 }
 
 // RunOnce picks up running orders that are not already in flight and dispatches
@@ -158,29 +174,50 @@ func (s *Usecase) Start(ctx context.Context, interval time.Duration) {
 // shutdown.
 func (s *Usecase) Wait() { s.wg.Wait() }
 
-// Snapshot returns a copy of an order's run log, if the worker has one.
+// Snapshot returns a copy of an order's run log, loading it from disk if the
+// worker has not run it this process (e.g. after a restart).
 func (s *Usecase) Snapshot(orderID string) (RunLog, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	log, ok := s.runs[orderID]
-	if !ok {
-		return RunLog{}, false
+	return s.runs.get(orderID)
+}
+
+// SessionID returns the resumable runtime session id from an order's latest
+// run, hydrating from disk after a restart. It satisfies the orders package's
+// RunSessionReader so a task can be resumed for a multi-turn continuation.
+func (s *Usecase) SessionID(orderID string) (string, bool) {
+	log, ok := s.runs.get(orderID)
+	if !ok || strings.TrimSpace(log.SessionID) == "" {
+		return "", false
 	}
-	cp := *log
-	cp.Events = append([]agentrun.Event(nil), log.Events...)
-	return cp, true
+	return log.SessionID, true
 }
 
 // runOrder executes one order end to end. It is synchronous so it can be unit
 // tested directly; RunOnce wraps it in a goroutine.
 func (s *Usecase) runOrder(ctx context.Context, order domainorders.Order) {
-	workspace := filepath.Join(s.cfg.WorkspaceRoot, order.ID)
-	s.beginRun(order)
+	resume := order.ResumeSessionID != ""
 
-	if err := os.MkdirAll(workspace, 0o755); err != nil {
+	// The managed metadata dir always lives under the workspace root; it holds
+	// the run log and summary even when the agent works in a user directory.
+	metaDir := filepath.Join(s.cfg.WorkspaceRoot, order.ID)
+	if err := os.MkdirAll(metaDir, 0o755); err != nil {
 		s.failOrder(ctx, order, "prepare workspace: "+err.Error())
 		return
 	}
+
+	// Where the agent actually works: the user's directory if supplied,
+	// otherwise the managed workspace.
+	workDir := metaDir
+	collectFiles := true
+	if order.Workspace != "" {
+		workDir = order.Workspace
+		collectFiles = false // never scan a user's whole project for artifacts
+		if info, err := os.Stat(workDir); err != nil || !info.IsDir() {
+			s.failOrder(ctx, order, "工作目录不存在或不可用："+workDir)
+			return
+		}
+	}
+
+	s.beginRun(order, resume)
 
 	agent, err := s.agents.GetAgent(ctx, order.AgentID)
 	if err != nil {
@@ -195,16 +232,21 @@ func (s *Usecase) runOrder(ctx context.Context, order domainorders.Order) {
 	}
 	s.setRuntime(order.ID, string(runtime))
 
+	prompt := composePrompt(agent, order.Requirement.Prompt, resume)
 	req := agentrun.Request{
-		Runtime:   runtime,
-		Workspace: workspace,
-		Prompt:    composePrompt(agent, order.Requirement.Prompt),
-		Model:     agent.Model,
-		Sandbox:   agentrun.Sandbox(agent.Sandbox),
+		Runtime:         runtime,
+		Workspace:       workDir,
+		Prompt:          prompt,
+		Model:           agent.Model,
+		Sandbox:         agentrun.Sandbox(agent.Sandbox),
+		ResumeSessionID: order.ResumeSessionID,
 	}
 	res, runErr := s.engine.Run(ctx, req, func(e agentrun.Event) {
 		s.appendEvent(order.ID, e)
 	})
+	if res.SessionID != "" {
+		s.setSession(order.ID, res.SessionID)
+	}
 
 	if ctx.Err() != nil {
 		// Deliberate shutdown — leave the order running for a future restart.
@@ -223,13 +265,14 @@ func (s *Usecase) runOrder(ctx context.Context, order domainorders.Order) {
 	// running -> delivering. A conflict here means the user cancelled mid-run.
 	delivering := order
 	delivering.Status = domainorders.StatusDelivering
+	delivering.ResumeSessionID = "" // consumed
 	delivering.UpdatedAt = s.now()
 	if err := s.orders.TransitionOrder(ctx, delivering, domainorders.StatusRunning); err != nil {
 		s.markRun(order.ID, RunFailed, res.FinalMessage, "订单状态已变更："+err.Error())
 		return
 	}
 
-	if _, err := s.artifacts.RecordWorkspaceOutput(ctx, delivering, workspace, res.FinalMessage); err != nil {
+	if _, err := s.artifacts.RecordRunOutput(ctx, delivering, metaDir, workDir, collectFiles, res.FinalMessage); err != nil {
 		failed := delivering
 		failed.Status = domainorders.StatusFailed
 		failed.FailureReason = "record output: " + err.Error()
@@ -267,52 +310,67 @@ func (s *Usecase) failOrder(ctx context.Context, order domainorders.Order, reaso
 	failed := order
 	failed.Status = domainorders.StatusFailed
 	failed.FailureReason = reason
+	failed.ResumeSessionID = ""
 	failed.UpdatedAt = s.now()
 	_ = s.orders.TransitionOrder(ctx, failed, domainorders.StatusRunning)
 	s.markRun(order.ID, RunFailed, "", reason)
 }
 
-// --- run log bookkeeping (all guarded by s.mu) ---
+// --- run log bookkeeping (delegated to the persistent run store) ---
 
-func (s *Usecase) beginRun(order domainorders.Order) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	now := s.now()
-	s.runs[order.ID] = &RunLog{
-		OrderID:   order.ID,
-		Status:    RunRunning,
-		StartedAt: now,
-		UpdatedAt: now,
-	}
+// beginRun marks a run as started. A fresh run resets the event stream; a
+// resume keeps the prior events and bumps the turn counter so the continuation
+// appends to the same transcript.
+func (s *Usecase) beginRun(order domainorders.Order, resume bool) {
+	s.runs.update(order.ID, true, func(log *RunLog) {
+		now := s.now()
+		log.OrderID = order.ID
+		log.Status = RunRunning
+		log.Error = ""
+		log.UpdatedAt = now
+		if resume && log.Turns > 0 {
+			log.Turns++
+		} else {
+			log.Events = nil
+			log.FinalMessage = ""
+			log.Turns = 1
+			log.StartedAt = now
+		}
+	})
 }
 
 func (s *Usecase) setRuntime(orderID, runtime string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if log, ok := s.runs[orderID]; ok {
+	s.runs.update(orderID, true, func(log *RunLog) {
 		log.Runtime = runtime
 		log.UpdatedAt = s.now()
-	}
+	})
 }
 
+func (s *Usecase) setSession(orderID, sessionID string) {
+	s.runs.update(orderID, true, func(log *RunLog) {
+		log.SessionID = sessionID
+		log.UpdatedAt = s.now()
+	})
+}
+
+// appendEvent records a streamed event in memory (no disk write per line).
 func (s *Usecase) appendEvent(orderID string, e agentrun.Event) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if log, ok := s.runs[orderID]; ok {
+	s.runs.update(orderID, false, func(log *RunLog) {
 		log.Events = append(log.Events, e)
 		log.UpdatedAt = s.now()
-	}
+	})
 }
 
+// markRun records terminal state and flushes the run log to disk.
 func (s *Usecase) markRun(orderID string, status RunStatus, final, errText string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if log, ok := s.runs[orderID]; ok {
+	s.runs.update(orderID, true, func(log *RunLog) {
 		log.Status = status
-		log.FinalMessage = final
+		if final != "" {
+			log.FinalMessage = final
+		}
 		log.Error = errText
 		log.UpdatedAt = s.now()
-	}
+	})
 }
 
 // --- in-flight guard ---
@@ -339,16 +397,21 @@ func (s *Usecase) inflightCount() int {
 	return len(s.inflight)
 }
 
-// composePrompt joins the agent's persona instruction with the user's task into
-// the single prompt handed to the runtime.
-func composePrompt(agent domainagents.Agent, task string) string {
+// composePrompt joins the agent's persona instruction with the user's task. On
+// a resume the persona is already in the session context, so only the follow-up
+// task is sent.
+func composePrompt(agent domainagents.Agent, task string, resume bool) string {
 	task = strings.TrimSpace(task)
 	var b strings.Builder
-	if sp := strings.TrimSpace(agent.SystemPrompt); sp != "" {
-		b.WriteString(sp)
-		b.WriteString("\n\n")
+	if !resume {
+		if sp := strings.TrimSpace(agent.SystemPrompt); sp != "" {
+			b.WriteString(sp)
+			b.WriteString("\n\n")
+		}
+		b.WriteString("用户任务：\n")
+	} else {
+		b.WriteString("用户补充/后续任务：\n")
 	}
-	b.WriteString("用户任务：\n")
 	b.WriteString(task)
 	b.WriteString("\n\n请在当前工作目录中完成任务，并把交付物保存为文件。完成后用一段话总结你做了什么。")
 	return b.String()

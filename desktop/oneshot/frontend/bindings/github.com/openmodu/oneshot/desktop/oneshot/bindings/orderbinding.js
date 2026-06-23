@@ -21,6 +21,18 @@ export function CancelOrder(orderID) {
 }
 
 /**
+ * ContinueOrder resumes a finished task with a follow-up instruction.
+ * @param {string} orderID
+ * @param {string} prompt
+ * @returns {$CancellablePromise<oneshot$0.Order>}
+ */
+export function ContinueOrder(orderID, prompt) {
+    return $Call.ByID(1167186233, orderID, prompt).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
  * @param {oneshot$0.CreateOrderRequest} input
  * @returns {$CancellablePromise<oneshot$0.Order>}
  */

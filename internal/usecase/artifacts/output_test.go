@@ -64,13 +64,76 @@ func TestRecordWorkspaceOutputCollectsRealFilesAndSummary(t *testing.T) {
 		t.Fatalf("scratch/hidden files were not skipped: %v", got)
 	}
 
-	// Idempotent: a second call returns the same set without duplicating.
+	// A second pass over the same files adds nothing new (no duplicates), and
+	// the order's total deliverable set is unchanged.
 	again, err := uc.RecordWorkspaceOutput(ctx, order, ws, "再次")
 	if err != nil {
 		t.Fatalf("record again: %v", err)
 	}
-	if len(again) != len(out) {
-		t.Fatalf("idempotency broken: first=%d second=%d", len(out), len(again))
+	if len(again) != 0 {
+		t.Fatalf("expected no new artifacts on re-record, got %d", len(again))
+	}
+	all, err := uc.ListForOrder(ctx, order.UserID, order.ID)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(all) != len(out) {
+		t.Fatalf("total artifacts changed: was %d now %d", len(out), len(all))
+	}
+}
+
+func TestRecordRunOutputAddsNewFilesOnResume(t *testing.T) {
+	ctx := context.Background()
+	uc, orderRepo := newArtifactsUsecase(t)
+	order := deliveredOrder()
+	if err := orderRepo.SaveOrder(ctx, order); err != nil {
+		t.Fatalf("save order: %v", err)
+	}
+	ws := t.TempDir()
+	mustWrite(t, filepath.Join(ws, "turn1.md"), "first")
+
+	first, err := uc.RecordRunOutput(ctx, order, ws, ws, true, "turn 1")
+	if err != nil {
+		t.Fatalf("turn1: %v", err)
+	}
+	// A continuation produces an additional file; only it should be recorded.
+	mustWrite(t, filepath.Join(ws, "turn2.md"), "second")
+	second, err := uc.RecordRunOutput(ctx, order, ws, ws, true, "turn 2")
+	if err != nil {
+		t.Fatalf("turn2: %v", err)
+	}
+	got := map[string]bool{}
+	for _, a := range second {
+		got[a.FileName] = true
+	}
+	if !got["turn2.md"] {
+		t.Fatalf("resume did not record new file turn2.md: %v", second)
+	}
+	if got["turn1.md"] {
+		t.Fatalf("resume re-recorded turn1.md")
+	}
+	_ = first
+}
+
+func TestRecordRunOutputSummaryOnlyForExternalDir(t *testing.T) {
+	ctx := context.Background()
+	uc, orderRepo := newArtifactsUsecase(t)
+	order := deliveredOrder()
+	if err := orderRepo.SaveOrder(ctx, order); err != nil {
+		t.Fatalf("save order: %v", err)
+	}
+	metaDir := t.TempDir()
+	workDir := t.TempDir()
+	// The user's project dir has many files; none should be harvested.
+	mustWrite(t, filepath.Join(workDir, "main.go"), "package main")
+	mustWrite(t, filepath.Join(workDir, "README.md"), "# project")
+
+	out, err := uc.RecordRunOutput(ctx, order, metaDir, workDir, false, "改好了")
+	if err != nil {
+		t.Fatalf("record: %v", err)
+	}
+	if len(out) != 1 || out[0].FileName != summaryFileName {
+		t.Fatalf("external dir should yield only SUMMARY.md, got %+v", out)
 	}
 }
 

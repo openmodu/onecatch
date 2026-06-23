@@ -114,5 +114,41 @@ func SeedCatalog() []Agent {
 			SystemPrompt: "你是一名新品上市策划。根据用户的产品信息，输出目标人群画像、核心卖点主张与首轮投放节奏。" +
 				"把方案写入当前工作目录下的 launch-plan.md。",
 		},
+		// Direct-runtime developer agents: no persona, you pick the runtime and
+		// (optionally) point it at your own working directory.
+		{
+			ID:                "codex",
+			Name:              "Codex 工程师",
+			Category:          "dev",
+			Tags:              []string{"本地", "编码", "可指定目录"},
+			Description:       "直接驱动本地 Codex CLI 执行编码/分析任务，可在你的项目目录中工作。",
+			PriceUses:         1,
+			PriceCents:        0,
+			Rating:            "—",
+			DealCount:         0,
+			EstimatedDuration: "按任务",
+			Deliverable:       "代码改动、文件、执行总结",
+			ArtifactTypes:     []string{"文件", "Markdown 总结"},
+			Runtime:           RuntimeCodex,
+			Sandbox:           "workspace-write",
+			SystemPrompt:      "你是一名严谨的软件工程师，使用本地工具完成用户给出的编码或分析任务。",
+		},
+		{
+			ID:                "claude-code",
+			Name:              "Claude Code 工程师",
+			Category:          "dev",
+			Tags:              []string{"本地", "编码", "可指定目录"},
+			Description:       "直接驱动本地 Claude Code 执行编码/分析任务，可在你的项目目录中工作。",
+			PriceUses:         1,
+			PriceCents:        0,
+			Rating:            "—",
+			DealCount:         0,
+			EstimatedDuration: "按任务",
+			Deliverable:       "代码改动、文件、执行总结",
+			ArtifactTypes:     []string{"文件", "Markdown 总结"},
+			Runtime:           RuntimeClaude,
+			Sandbox:           "workspace-write",
+			SystemPrompt:      "你是一名严谨的软件工程师，使用本地工具完成用户给出的编码或分析任务。",
+		},
 	}
 }

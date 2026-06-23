@@ -50,36 +50,60 @@ const maxArtifactsPerOrder = 100
 // delivered order has at least one human-readable deliverable.
 const summaryFileName = "SUMMARY.md"
 
-// RecordWorkspaceOutput turns the files an agent produced in its workspace into
-// the order's deliverables. The agent's final message is written to SUMMARY.md
-// so there is always something to show, then every regular file in the
-// workspace is registered as an artifact whose bytes live on disk.
-//
-// It is idempotent: if the order already has artifacts, they are returned
-// unchanged so a retry never duplicates deliverables.
+// RecordWorkspaceOutput is the simple form used when the agent works in the
+// managed workspace: the summary and produced files live in the same dir.
 func (s *Usecase) RecordWorkspaceOutput(ctx context.Context, order domainorders.Order, workspaceDir string, finalMessage string) ([]domainartifacts.Artifact, error) {
+	return s.RecordRunOutput(ctx, order, workspaceDir, workspaceDir, true, finalMessage)
+}
+
+// RecordRunOutput turns what an agent produced into the order's deliverables.
+// The agent's final message is written to SUMMARY.md in metaDir so there is
+// always something to show; when collectFiles is true, every regular file in
+// workspaceDir is also registered as an artifact whose bytes live on disk.
+//
+// It is safe across multi-turn resumes: files already recorded (by name) are
+// skipped, so only new deliverables are added each turn — never duplicated.
+func (s *Usecase) RecordRunOutput(ctx context.Context, order domainorders.Order, metaDir string, workspaceDir string, collectFiles bool, finalMessage string) ([]domainartifacts.Artifact, error) {
 	if order.Status != domainorders.StatusDelivering && order.Status != domainorders.StatusDelivered {
 		return nil, domainartifacts.ErrNotReady
 	}
-	if existing, err := s.repo.ListArtifacts(ctx, order.UserID, order.ID); err != nil {
-		return nil, err
-	} else if len(existing) > 0 {
-		return existing, nil
-	}
 
-	if err := s.writeSummary(workspaceDir, order, finalMessage); err != nil {
-		return nil, err
-	}
-
-	files, err := collectFiles(workspaceDir)
+	existing, err := s.repo.ListArtifacts(ctx, order.UserID, order.ID)
 	if err != nil {
 		return nil, err
 	}
+	seen := make(map[string]bool, len(existing))
+	for _, a := range existing {
+		seen[a.FileName] = true
+	}
 
-	out := make([]domainartifacts.Artifact, 0, len(files))
-	for _, rel := range files {
-		abs := filepath.Join(workspaceDir, rel)
-		info, statErr := os.Stat(abs)
+	if err := s.writeSummary(metaDir, order, finalMessage); err != nil {
+		return nil, err
+	}
+
+	// The summary lives in metaDir; gather it plus any deliverables.
+	type candidate struct{ rel, abs string }
+	var candidates []candidate
+	candidates = append(candidates, candidate{rel: summaryFileName, abs: filepath.Join(metaDir, summaryFileName)})
+	if collectFiles {
+		files, err := walkWorkspaceFiles(workspaceDir)
+		if err != nil {
+			return nil, err
+		}
+		for _, rel := range files {
+			if rel == summaryFileName {
+				continue // already added from metaDir
+			}
+			candidates = append(candidates, candidate{rel: rel, abs: filepath.Join(workspaceDir, rel)})
+		}
+	}
+
+	out := make([]domainartifacts.Artifact, 0, len(candidates))
+	for _, c := range candidates {
+		if seen[filepath.ToSlash(c.rel)] {
+			continue // recorded on a previous turn
+		}
+		info, statErr := os.Stat(c.abs)
 		if statErr != nil {
 			continue
 		}
@@ -91,16 +115,17 @@ func (s *Usecase) RecordWorkspaceOutput(ctx context.Context, order domainorders.
 			ID:         id,
 			OrderID:    order.ID,
 			UserID:     order.UserID,
-			FileName:   filepath.ToSlash(rel),
-			FileType:   fileType(rel),
+			FileName:   filepath.ToSlash(c.rel),
+			FileType:   fileType(c.rel),
 			SizeBytes:  info.Size(),
-			Preview:    previewLabel(rel),
-			StorageURI: abs,
+			Preview:    previewLabel(c.rel),
+			StorageURI: c.abs,
 			CreatedAt:  s.now(),
 		}
 		if err := s.repo.SaveArtifact(ctx, artifact); err != nil {
 			return nil, err
 		}
+		seen[artifact.FileName] = true
 		out = append(out, artifact)
 	}
 	return out, nil
@@ -195,7 +220,7 @@ var skipDirs = map[string]bool{
 
 // collectFiles returns workspace-relative paths of regular files, skipping
 // hidden files and known scratch directories, capped and sorted for stability.
-func collectFiles(workspaceDir string) ([]string, error) {
+func walkWorkspaceFiles(workspaceDir string) ([]string, error) {
 	var files []string
 	err := filepath.WalkDir(workspaceDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
