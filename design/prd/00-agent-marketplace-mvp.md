@@ -1,5 +1,7 @@
 # PRD 00: Oneshot Agent 服务市场 MVP
 
+状态：历史方案（不再作为当前产品方向；当前主线见 `design/prd/01-custom-agent-workflows.md`）
+
 ## 1. 背景
 
 Oneshot 是一个桌面化 Agent 服务市场。用户可以在桌面工作台中浏览专业 Agent，按使用次数购买额度，提交具体需求，系统扣减次数后执行 Agent，并在订单完成后查看、下载或分享交付物。
