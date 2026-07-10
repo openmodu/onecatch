@@ -268,3 +268,77 @@ select { height: 36px; padding: 0 10px; font-size: 11px; }
   .run-list { grid-template-columns: 1fr; }
   .topbar { padding-left: 20px; padding-right: 20px; }
 }
+
+.mode-chip { margin-left: auto; margin-right: 8px; border-radius: 99px; padding: 4px 7px; background: #eef1ee; color: #68736b; font: 500 7px "DM Mono", monospace; }
+.mode-chip.dag { background: #e7ecff; color: #4968c7; }
+.dag-run-map { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 9px; }
+.dag-run-map .flow-step:not(:last-child)::after { display: none; }
+.dag-run-map .flow-step { border: 1px solid #e3e8e3; border-radius: 8px; padding: 7px; }
+.dag-run-map .flow-step.running { border-color: #4bc87f; background: #f0fbf4; }
+.dag-run-map .flow-step.completed { opacity: .72; }
+
+.worker-grid { display: grid; grid-template-columns: repeat(3, minmax(250px, 1fr)); gap: 12px; margin-top: 20px; }
+.worker-card { padding: 17px; }
+.worker-card-head, .worker-machine, .worker-actions { display: flex; align-items: center; }
+.worker-card-head { justify-content: space-between; }
+.worker-machine { gap: 9px; }
+.worker-machine > svg { width: 34px; height: 34px; padding: 8px; border-radius: 9px; color: #4266cc; background: #e8edff; }
+.worker-machine strong, .worker-machine small { display: block; }
+.worker-machine strong { font-size: 11px; }
+.worker-machine small { color: #89938b; font: 400 8px "DM Mono", monospace; }
+.worker-card > code { display: block; margin: 16px 0 10px; padding: 8px; border-radius: 7px; background: #f5f7f4; color: #637067; overflow: hidden; text-overflow: ellipsis; font: 400 8px "DM Mono", monospace; }
+.worker-health { min-height: 32px; color: #8a948c; font-size: 8px; }
+.worker-health span { margin-right: 8px; }
+.worker-health i { display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 4px; background: #d09b4d; }
+.worker-health .ok i { background: var(--green); }
+.worker-actions { gap: 6px; margin-top: 12px; }
+.worker-actions .danger { margin-left: auto; color: #b94b4b; }
+.worker-command { margin-top: 14px; padding: 16px; }
+.worker-command code { display: block; margin-top: 8px; padding: 10px; background: #18261e; border-radius: 8px; color: #82e5aa; overflow-x: auto; font: 400 8px "DM Mono", monospace; }
+.worker-command p { margin: 8px 0 0; color: #7f8981; font-size: 8px; }
+.checkbox-label { flex-direction: row !important; align-items: center; }
+.checkbox-label input { width: 14px; height: 14px; }
+
+.dag-editor-shell { min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.dag-toolbar { height: 55px; flex: 0 0 55px; display: flex; align-items: center; justify-content: space-between; padding: 9px 16px; border-bottom: 1px solid #e1e6e0; }
+.dag-toolbar > div { display: flex; align-items: center; gap: 7px; }
+.dag-meta input { height: 32px; padding: 0 9px; font-size: 9px; }
+.dag-meta input:first-child { width: 170px; font-family: "DM Mono", monospace; }
+.dag-meta input:last-child { width: 230px; font-weight: 650; }
+.dag-workspace { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 290px; }
+.dag-canvas { position: relative; min-height: 520px; overflow: auto; background-color: #f6f8f4; background-image: radial-gradient(#ccd5cd 0.8px, transparent .8px); background-size: 18px 18px; touch-action: none; }
+.dag-edges { position: absolute; inset: 0; width: 900px; height: 560px; overflow: visible; pointer-events: none; }
+.dag-edge { pointer-events: stroke; cursor: pointer; }
+.dag-edge path { fill: none; stroke: #8190b7; stroke-width: 2; }
+.dag-edge:hover path { stroke: #d45c5c; stroke-width: 3; }
+.dag-edge text { fill: #b15151; font: 700 12px sans-serif; opacity: 0; pointer-events: none; }
+.dag-edge:hover text { opacity: 1; }
+.dag-node-card { position: absolute; z-index: 2; width: 190px; height: 96px; padding: 12px; border: 1px solid #d8dfd8; border-radius: 11px; background: rgba(255,255,253,.96); box-shadow: 0 8px 22px rgba(25,39,29,.08); cursor: grab; user-select: none; }
+.dag-node-card:active { cursor: grabbing; }
+.dag-node-card.selected { border-color: #4fbe7d; box-shadow: 0 0 0 2px rgba(53,208,127,.13), 0 10px 24px rgba(25,39,29,.1); }
+.dag-node-card.connecting { border-color: #5879db; box-shadow: 0 0 0 3px rgba(80,111,211,.14); }
+.dag-node-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px; }
+.dag-node-head small { color: #7b8880; font: 400 7px "DM Mono", monospace; }
+.dag-node-card > strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+.dag-node-card > p { margin: 5px 0 0; color: #8a948c; font-size: 7px; }
+.dag-port { position: absolute; width: 12px; height: 12px; padding: 0; border: 2px solid white; border-radius: 50%; background: #5c78cf; box-shadow: 0 0 0 1px #5c78cf; cursor: crosshair; }
+.dag-port.input { left: -6px; top: 42px; }
+.dag-port.output { right: -6px; top: 42px; }
+.canvas-hint { position: sticky; left: 12px; top: 480px; width: fit-content; border-radius: 7px; padding: 6px 9px; color: #77827a; background: rgba(255,255,255,.85); font-size: 7px; }
+.dag-inspector { overflow-y: auto; padding: 14px; border-left: 1px solid #e0e5df; background: #fbfcf9; }
+.dag-inspector-title { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 13px; }
+.dag-inspector-title h3 { margin: 4px 0 0; font-size: 12px; }
+.dag-inspector > label, .dag-inspector .two-fields label { display: flex; flex-direction: column; gap: 4px; margin-bottom: 9px; }
+.dag-inspector input, .dag-inspector select { height: 31px; padding: 0 8px; font-size: 9px; }
+.dag-inspector textarea { height: 54px; padding: 7px; resize: vertical; font-size: 8px; }
+.two-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+.dag-inspector .transition-row { grid-template-columns: 1fr 15px 1fr; }
+.dag-validation { min-height: 35px; display: flex; align-items: center; gap: 9px; overflow-x: auto; padding: 5px 15px; border-top: 1px solid #e2e7e1; color: #7c877e; font-size: 7px; }
+.dag-validation.has-errors { background: #fff5f5; color: #a94b4b; }
+.dag-validation span { white-space: nowrap; }
+.dag-validation code { margin-right: 4px; font: 500 7px "DM Mono", monospace; }
+
+@media (max-width: 1200px) {
+  .worker-grid { grid-template-columns: repeat(2, minmax(250px, 1fr)); }
+  .dag-workspace { grid-template-columns: minmax(0, 1fr) 260px; }
+}

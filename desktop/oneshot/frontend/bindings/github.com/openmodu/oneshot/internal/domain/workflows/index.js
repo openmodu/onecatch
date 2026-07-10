@@ -4,6 +4,10 @@
 
 export {
     Definition,
+    Layout,
+    NodeState,
+    NodeStatus,
+    Point,
     Policy,
     Run,
     RunStatus,

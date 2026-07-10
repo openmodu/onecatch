@@ -277,3 +277,54 @@ func TestRunMustMatchDefinitionID(t *testing.T) {
 		t.Fatalf("Start() error = %v, want ErrRunDefinitionMismatch", err)
 	}
 }
+
+func dagDefinition() Definition {
+	return Definition{
+		ID: "parallel_review", Name: "Parallel review", Mode: ModeDAG, EntryStepID: "security",
+		Steps: []Step{
+			{ID: "security", Name: "Security", Runtime: "codex", Sandbox: "read-only", RolePrompt: "Review security", Instruction: "Review", Transitions: map[string]string{"completed": TargetDone}},
+			{ID: "tests", Name: "Tests", Runtime: "claude", Sandbox: "read-only", RolePrompt: "Review tests", Instruction: "Review", Transitions: map[string]string{"completed": TargetDone}},
+			{ID: "synthesis", Name: "Synthesis", Runtime: "codex", Sandbox: "workspace-write", DependsOn: []string{"security", "tests"}, RolePrompt: "Synthesize", Instruction: "Apply findings", Transitions: map[string]string{"completed": TargetDone}},
+		},
+	}
+}
+
+func TestValidateDAG(t *testing.T) {
+	def := dagDefinition()
+	if err := Validate(def); err != nil {
+		t.Fatalf("Validate(DAG) error = %v", err)
+	}
+	run, err := NewRun(def, "run_dag", time.Now())
+	if err != nil || len(run.Nodes) != 3 || run.Nodes["security"].Status != NodePending {
+		t.Fatalf("NewRun(DAG) = %+v, %v", run, err)
+	}
+}
+
+func TestValidateDAGRejectsCycleAndParallelWrites(t *testing.T) {
+	cycle := dagDefinition()
+	cycle.Steps[0].DependsOn = []string{"synthesis"}
+	assertValidationCode(t, Validate(cycle), "dag_cycle")
+
+	writes := dagDefinition()
+	writes.Steps[0].Sandbox = "workspace-write"
+	writes.Steps[1].Sandbox = "workspace-write"
+	assertValidationCode(t, Validate(writes), "parallel_write_conflict")
+
+	remoteWrite := dagDefinition()
+	remoteWrite.Steps[2].WorkerID = "mac-mini"
+	assertValidationCode(t, Validate(remoteWrite), "remote_write_unsupported")
+}
+
+func assertValidationCode(t *testing.T, err error, code string) {
+	t.Helper()
+	var issues ValidationErrors
+	if !errors.As(err, &issues) {
+		t.Fatalf("error = %v, want ValidationErrors", err)
+	}
+	for _, issue := range issues {
+		if issue.Code == code {
+			return
+		}
+	}
+	t.Fatalf("issues = %+v, want %s", issues, code)
+}

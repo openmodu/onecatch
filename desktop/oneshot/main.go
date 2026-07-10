@@ -52,6 +52,7 @@ func main() {
 			application.NewService(workspaceBinding),
 			application.NewService(bindings.NewWorkflowBinding(localApp)),
 			application.NewService(bindings.NewTaskRunBinding(localApp)),
+			application.NewService(bindings.NewWorkerBinding(localApp)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

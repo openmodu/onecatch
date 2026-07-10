@@ -9,6 +9,7 @@ export {
     RuntimeConfigInput,
     RuntimeEventView,
     RuntimeInfo,
+    WorkerStatus,
     WorkflowEventView,
     WorkspaceStatus
 } from "./models.js";

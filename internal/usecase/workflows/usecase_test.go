@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -49,10 +50,13 @@ func (e *scriptedEngine) Run(_ context.Context, request agentrun.Request, sink a
 }
 
 type fixedGitInspector struct {
+	mu    sync.Mutex
 	calls int
 }
 
 func (g *fixedGitInspector) Inspect(context.Context, string) (domainworkspaces.GitSnapshot, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
 	g.calls++
 	return domainworkspaces.GitSnapshot{IsRepo: true, Head: "abc", Status: " M main.go", DiffStat: "main.go | 1 +"}, nil
 }
@@ -202,7 +206,7 @@ func TestUnavailableRuntimePausesWithoutFallback(t *testing.T) {
 	}
 }
 
-func setupUsecase(t *testing.T, definition domainworkflows.Definition, engine *scriptedEngine) (*Usecase, *localdata.Store, domaintasks.Task) {
+func setupUsecase(t *testing.T, definition domainworkflows.Definition, engine Engine) (*Usecase, *localdata.Store, domaintasks.Task) {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), ".oneshot")
 	store, err := localdata.OpenStore(root)
@@ -225,15 +229,99 @@ func setupUsecase(t *testing.T, definition domainworkflows.Definition, engine *s
 	git := &fixedGitInspector{}
 	usecase := NewUsecase(store.Repos.Tasks, store.Repos.Workflows, engine, workspacelock.New(store.Data.Paths.Locks), git)
 	sequence := 0
+	var stateMu sync.Mutex
 	usecase.newID = func(prefix string) string {
+		stateMu.Lock()
+		defer stateMu.Unlock()
 		sequence++
 		return fmt.Sprintf("%s_%d", prefix, sequence)
 	}
 	usecase.now = func() time.Time {
+		stateMu.Lock()
+		defer stateMu.Unlock()
 		now = now.Add(time.Second)
 		return now
 	}
 	return usecase, store, task
+}
+
+type concurrentEngine struct {
+	mu        sync.Mutex
+	active    int
+	maxActive int
+	requests  []agentrun.Request
+}
+
+func (e *concurrentEngine) Available(agentrun.Runtime) bool { return true }
+func (e *concurrentEngine) Run(ctx context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
+	e.mu.Lock()
+	e.active++
+	if e.active > e.maxActive {
+		e.maxActive = e.active
+	}
+	e.requests = append(e.requests, request)
+	e.mu.Unlock()
+	select {
+	case <-ctx.Done():
+		return agentrun.Result{}, ctx.Err()
+	case <-time.After(40 * time.Millisecond):
+	}
+	e.mu.Lock()
+	e.active--
+	e.mu.Unlock()
+	return success(`{"signal":"completed","content":"node complete"}`, "session"), nil
+}
+
+func TestExecuteDAGRunsRootsInParallelAndJoins(t *testing.T) {
+	definition := domainworkflows.Definition{
+		ID: "parallel_review", Name: "Parallel", Mode: domainworkflows.ModeDAG, EntryStepID: "security",
+		Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
+		Steps: []domainworkflows.Step{
+			{ID: "security", Name: "Security", Runtime: "codex", Sandbox: "read-only", RolePrompt: "Review security", Instruction: "Review", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
+			{ID: "tests", Name: "Tests", Runtime: "claude", Sandbox: "read-only", RolePrompt: "Review tests", Instruction: "Review", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
+			{ID: "synthesis", Name: "Synthesis", Runtime: "codex", Sandbox: "workspace-write", DependsOn: []string{"security", "tests"}, RolePrompt: "Synthesize", Instruction: "Apply findings", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
+		},
+	}
+	engine := &concurrentEngine{}
+	usecase, _, task := setupUsecase(t, definition, engine)
+	run, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil || run.Status != domainworkflows.RunCompleted {
+		t.Fatalf("DAG run = %+v, %v", run, err)
+	}
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	if engine.maxActive != 2 || len(engine.requests) != 3 {
+		t.Fatalf("max active = %d, requests = %d", engine.maxActive, len(engine.requests))
+	}
+	if !strings.Contains(engine.requests[2].Prompt, "security: node complete") || !strings.Contains(engine.requests[2].Prompt, "tests: node complete") {
+		t.Fatalf("join prompt missing dependency results: %s", engine.requests[2].Prompt)
+	}
+}
+
+type fakeRemoteExecutor struct {
+	workerID    string
+	workspaceID string
+}
+
+func (e *fakeRemoteExecutor) RunRemote(_ context.Context, workerID, workspaceID string, _ agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
+	e.workerID, e.workspaceID = workerID, workspaceID
+	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: "remote event"})
+	return success(`{"signal":"completed","content":"remote complete"}`, "remote-session"), nil
+}
+
+func TestExecuteDAGDispatchesConfiguredRemoteNode(t *testing.T) {
+	definition := domainworkflows.Definition{ID: "remote_dag", Name: "Remote", Mode: domainworkflows.ModeDAG, EntryStepID: "review", Policy: domainworkflows.Policy{MaxTransitions: 5, MaxConsecutiveFailures: 2, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{{ID: "review", Name: "Remote review", Runtime: "codex", WorkerID: "mac-mini", Sandbox: "read-only", RolePrompt: "Review", Instruction: "Review remotely", Transitions: map[string]string{"completed": domainworkflows.TargetDone}}}}
+	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{}}
+	usecase, _, task := setupUsecase(t, definition, engine)
+	remote := &fakeRemoteExecutor{}
+	usecase.SetRemoteExecutor(remote)
+	run, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil || run.Status != domainworkflows.RunCompleted {
+		t.Fatalf("remote DAG = %+v, %v", run, err)
+	}
+	if remote.workerID != "mac-mini" || remote.workspaceID != "ws_1" || len(engine.calls) != 0 {
+		t.Fatalf("remote dispatch = %+v, local calls = %d", remote, len(engine.calls))
+	}
 }
 
 func reviewLoop() domainworkflows.Definition {

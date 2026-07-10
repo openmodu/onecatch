@@ -26,6 +26,7 @@ import (
 	"github.com/openmodu/oneshot/internal/gitinspect"
 	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
+	"github.com/openmodu/oneshot/internal/worker"
 	"github.com/openmodu/oneshot/internal/workspacelock"
 )
 
@@ -96,14 +97,19 @@ type App struct {
 	active       map[string]context.CancelFunc
 	lastErrors   map[string]string
 	wg           sync.WaitGroup
+	workers      *worker.Registry
+	workerClient *worker.Client
 }
 
 func New(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitinspect.Inspector) *App {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &App{
+	app := &App{
 		store: store, orchestrator: orchestrator, runtimes: runtimes, git: git,
 		rootCtx: ctx, rootCancel: cancel, active: make(map[string]context.CancelFunc), lastErrors: make(map[string]string),
+		workers: worker.NewRegistry(filepath.Join(store.Data.Paths.Root, "workers.json")), workerClient: worker.NewClient(),
 	}
+	orchestrator.SetRemoteExecutor(remoteExecutor{registry: app.workers, client: app.workerClient})
+	return app
 }
 
 func (a *App) Close() error {
@@ -455,6 +461,11 @@ func builtinDefinitions() []domainworkflows.Definition {
 		{ID: "implement_review", Name: "实现与审查 Loop", Description: "Codex 实现，Claude Code 审查；有问题就回到实现步骤。", EntryStepID: "implement", Steps: []domainworkflows.Step{
 			{ID: "implement", Name: "实现", Runtime: "codex", Sandbox: "workspace-write", RolePrompt: "你是负责落地代码和测试的实现者。", Instruction: "实现目标、运行验证，并把变更交给审查者。", Transitions: map[string]string{"ready_for_review": "review", "need_human": domainworkflows.TargetPause}},
 			{ID: "review", Name: "审查", Runtime: "claude", Sandbox: "read-only", RolePrompt: "你是独立、严格的代码审查者。", Instruction: "检查需求、实现、风险和测试；有问题要求修改。", Transitions: map[string]string{"changes_requested": "implement", "approved": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}},
+		}},
+		{ID: "parallel_review", Name: "并行审查 DAG", Description: "安全与测试节点并行只读分析，等待全部完成后由汇总节点落地修改。", Mode: domainworkflows.ModeDAG, EntryStepID: "security", Layout: domainworkflows.Layout{Nodes: map[string]domainworkflows.Point{"security": {X: 80, Y: 90}, "tests": {X: 80, Y: 280}, "synthesis": {X: 420, Y: 185}}}, Steps: []domainworkflows.Step{
+			{ID: "security", Name: "安全审查", Runtime: "codex", WorkerID: "local", Sandbox: "read-only", RolePrompt: "你是安全审查 Agent。", Instruction: "独立检查安全风险并给出可操作建议。", Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}},
+			{ID: "tests", Name: "测试审查", Runtime: "claude", WorkerID: "local", Sandbox: "read-only", RolePrompt: "你是测试与可靠性审查 Agent。", Instruction: "独立检查测试覆盖、并发和回归风险。", Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}},
+			{ID: "synthesis", Name: "汇总落地", Runtime: "codex", WorkerID: "local", Sandbox: "workspace-write", DependsOn: []string{"security", "tests"}, RolePrompt: "你是负责汇总并落地修改的 Agent。", Instruction: "结合所有直接依赖结果实施修改并验证。", Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}},
 		}},
 	}
 }

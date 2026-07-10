@@ -41,6 +41,13 @@ export class Definition {
              */
             this["description"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["mode"] = undefined;
+        }
         if (!("entryStepId" in $$source)) {
             /**
              * @member
@@ -61,6 +68,13 @@ export class Definition {
              * @type {Policy}
              */
             this["policy"] = (new Policy());
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {Layout | undefined}
+             */
+            this["layout"] = undefined;
         }
         if (/** @type {any} */(false)) {
             /**
@@ -86,16 +100,181 @@ export class Definition {
      * @returns {Definition}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType1;
-        const $$createField5_0 = $$createType2;
+        const $$createField5_0 = $$createType1;
+        const $$createField6_0 = $$createType2;
+        const $$createField7_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("steps" in $$parsedSource) {
-            $$parsedSource["steps"] = $$createField4_0($$parsedSource["steps"]);
+            $$parsedSource["steps"] = $$createField5_0($$parsedSource["steps"]);
         }
         if ("policy" in $$parsedSource) {
-            $$parsedSource["policy"] = $$createField5_0($$parsedSource["policy"]);
+            $$parsedSource["policy"] = $$createField6_0($$parsedSource["policy"]);
+        }
+        if ("layout" in $$parsedSource) {
+            $$parsedSource["layout"] = $$createField7_0($$parsedSource["layout"]);
         }
         return new Definition(/** @type {Partial<Definition>} */($$parsedSource));
+    }
+}
+
+export class Layout {
+    /**
+     * Creates a new Layout instance.
+     * @param {Partial<Layout>} [$$source = {}] - The source object to create the Layout.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {{ [_ in string]?: Point } | undefined}
+             */
+            this["nodes"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Layout instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Layout}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType5;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("nodes" in $$parsedSource) {
+            $$parsedSource["nodes"] = $$createField0_0($$parsedSource["nodes"]);
+        }
+        return new Layout(/** @type {Partial<Layout>} */($$parsedSource));
+    }
+}
+
+export class NodeState {
+    /**
+     * Creates a new NodeState instance.
+     * @param {Partial<NodeState>} [$$source = {}] - The source object to create the NodeState.
+     */
+    constructor($$source = {}) {
+        if (!("stepId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["stepId"] = "";
+        }
+        if (!("status" in $$source)) {
+            /**
+             * @member
+             * @type {NodeStatus}
+             */
+            this["status"] = NodeStatus.$zero;
+        }
+        if (!("attempt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["attempt"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["signal"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["content"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["error"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["startedAt"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["finishedAt"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NodeState instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {NodeState}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NodeState(/** @type {Partial<NodeState>} */($$parsedSource));
+    }
+}
+
+/**
+ * @readonly
+ * @enum {string}
+ */
+export const NodeStatus = {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero: "",
+
+    NodePending: "pending",
+    NodeRunning: "running",
+    NodeCompleted: "completed",
+    NodePaused: "paused",
+    NodeFailed: "failed",
+};
+
+export class Point {
+    /**
+     * Creates a new Point instance.
+     * @param {Partial<Point>} [$$source = {}] - The source object to create the Point.
+     */
+    constructor($$source = {}) {
+        if (!("x" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["x"] = 0;
+        }
+        if (!("y" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["y"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Point instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Point}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Point(/** @type {Partial<Point>} */($$parsedSource));
     }
 }
 
@@ -227,6 +406,13 @@ export class Run {
         if (/** @type {any} */(false)) {
             /**
              * @member
+             * @type {{ [_ in string]?: NodeState } | undefined}
+             */
+            this["nodes"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
              * @type {string | undefined}
              */
             this["pauseReason"] = undefined;
@@ -269,14 +455,18 @@ export class Run {
      * @returns {Run}
      */
     static createFrom($$source = {}) {
-        const $$createField8_0 = $$createType3;
-        const $$createField9_0 = $$createType5;
+        const $$createField8_0 = $$createType6;
+        const $$createField9_0 = $$createType8;
+        const $$createField10_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sessions" in $$parsedSource) {
             $$parsedSource["sessions"] = $$createField8_0($$parsedSource["sessions"]);
         }
         if ("history" in $$parsedSource) {
             $$parsedSource["history"] = $$createField9_0($$parsedSource["history"]);
+        }
+        if ("nodes" in $$parsedSource) {
+            $$parsedSource["nodes"] = $$createField10_0($$parsedSource["nodes"]);
         }
         return new Run(/** @type {Partial<Run>} */($$parsedSource));
     }
@@ -346,6 +536,20 @@ export class Step {
              */
             this["sandbox"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["workerId"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["dependsOn"] = undefined;
+        }
         if (!("rolePrompt" in $$source)) {
             /**
              * @member
@@ -377,10 +581,14 @@ export class Step {
      * @returns {Step}
      */
     static createFrom($$source = {}) {
-        const $$createField7_0 = $$createType3;
+        const $$createField6_0 = $$createType11;
+        const $$createField9_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("dependsOn" in $$parsedSource) {
+            $$parsedSource["dependsOn"] = $$createField6_0($$parsedSource["dependsOn"]);
+        }
         if ("transitions" in $$parsedSource) {
-            $$parsedSource["transitions"] = $$createField7_0($$parsedSource["transitions"]);
+            $$parsedSource["transitions"] = $$createField9_0($$parsedSource["transitions"]);
         }
         return new Step(/** @type {Partial<Step>} */($$parsedSource));
     }
@@ -612,6 +820,12 @@ export class ValidationIssue {
 const $$createType0 = Step.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = Policy.createFrom;
-const $$createType3 = $Create.Map($Create.Any, $Create.Any);
-const $$createType4 = TransitionRecord.createFrom;
-const $$createType5 = $Create.Array($$createType4);
+const $$createType3 = Layout.createFrom;
+const $$createType4 = Point.createFrom;
+const $$createType5 = $Create.Map($Create.Any, $$createType4);
+const $$createType6 = $Create.Map($Create.Any, $Create.Any);
+const $$createType7 = TransitionRecord.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = NodeState.createFrom;
+const $$createType10 = $Create.Map($Create.Any, $$createType9);
+const $$createType11 = $Create.Array($Create.Any);

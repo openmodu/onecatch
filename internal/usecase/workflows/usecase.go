@@ -49,6 +49,10 @@ type Engine interface {
 	Run(context.Context, agentrun.Request, agentrun.Sink) (agentrun.Result, error)
 }
 
+type RemoteExecutor interface {
+	RunRemote(context.Context, string, string, agentrun.Request, agentrun.Sink) (agentrun.Result, error)
+}
+
 type WorkspaceLocker interface {
 	Acquire(context.Context, string, string, string) (func() error, error)
 }
@@ -67,7 +71,10 @@ type Usecase struct {
 	git       GitInspector
 	now       func() time.Time
 	newID     IDGenerator
+	remote    RemoteExecutor
 }
+
+func (s *Usecase) SetRemoteExecutor(remote RemoteExecutor) { s.remote = remote }
 
 func NewUsecase(tasks TaskRepository, workflows WorkflowRepository, engine Engine, locker WorkspaceLocker, git GitInspector) *Usecase {
 	return &Usecase{
@@ -141,6 +148,9 @@ func (s *Usecase) ExecuteRun(ctx context.Context, runID string) (domainworkflows
 	if err != nil {
 		return run, err
 	}
+	if definition.Mode == domainworkflows.ModeDAG {
+		return s.driveDAG(ctx, task, workspace, definition, run, "")
+	}
 	release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
 	if err != nil {
 		paused, pauseErr := domainworkflows.Pause(definition, run, PauseReasonWorkspaceLocked, err.Error(), s.now())
@@ -182,12 +192,24 @@ func (s *Usecase) RecoverRun(ctx context.Context, runID string) (domainworkflows
 	if err != nil {
 		return run, err
 	}
-	release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
-	if err != nil {
-		return run, err
+	if definition.Mode != domainworkflows.ModeDAG {
+		release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
+		if err != nil {
+			return run, err
+		}
+		defer release()
 	}
-	defer release()
 	message := "desktop exited before the run completed"
+	if definition.Mode == domainworkflows.ModeDAG {
+		for stepID, node := range run.Nodes {
+			if node.Status == domainworkflows.NodeRunning {
+				node.Status = domainworkflows.NodePaused
+				node.Error = message
+				node.FinishedAt = s.now()
+				run.Nodes[stepID] = node
+			}
+		}
+	}
 	paused, err := domainworkflows.Pause(definition, run, PauseReasonInterrupted, message, s.now())
 	if err != nil {
 		return run, err
@@ -223,6 +245,23 @@ func (s *Usecase) ResumeRun(ctx context.Context, runID, instruction string) (dom
 	workspace, err := s.tasks.GetWorkspace(ctx, task.WorkspaceID)
 	if err != nil {
 		return run, err
+	}
+	if definition.Mode == domainworkflows.ModeDAG {
+		resumed, err := domainworkflows.Resume(definition, run, s.now())
+		if err != nil {
+			return run, err
+		}
+		resumed, err = s.workflows.UpdateRun(ctx, resumed, run.Revision)
+		if err != nil {
+			return run, err
+		}
+		if err := s.setTaskStatus(ctx, &task, domaintasks.StatusRunning); err != nil {
+			return resumed, err
+		}
+		if err := s.appendEvent(ctx, run.ID, "run.resumed", "", map[string]any{"hasInstruction": strings.TrimSpace(instruction) != "", "mode": "dag"}); err != nil {
+			return resumed, err
+		}
+		return s.driveDAG(ctx, task, workspace, definition, resumed, instruction)
 	}
 	release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
 	if err != nil {

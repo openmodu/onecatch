@@ -8,6 +8,9 @@ import (
 )
 
 const (
+	ModeSerial = "serial"
+	ModeDAG    = "dag"
+
 	TargetDone  = "$done"
 	TargetPause = "$pause"
 	TargetFail  = "$fail"
@@ -23,9 +26,11 @@ type Definition struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
+	Mode        string    `json:"mode,omitempty"`
 	EntryStepID string    `json:"entryStepId"`
 	Steps       []Step    `json:"steps"`
 	Policy      Policy    `json:"policy"`
+	Layout      Layout    `json:"layout,omitempty"`
 	CreatedAt   time.Time `json:"createdAt,omitempty"`
 	UpdatedAt   time.Time `json:"updatedAt,omitempty"`
 }
@@ -39,9 +44,20 @@ type Step struct {
 	Runtime     string            `json:"runtime"`
 	Model       string            `json:"model,omitempty"`
 	Sandbox     string            `json:"sandbox,omitempty"`
+	WorkerID    string            `json:"workerId,omitempty"`
+	DependsOn   []string          `json:"dependsOn,omitempty"`
 	RolePrompt  string            `json:"rolePrompt"`
 	Instruction string            `json:"instruction"`
 	Transitions map[string]string `json:"transitions"`
+}
+
+type Point struct {
+	X float64 `json:"x"`
+	Y float64 `json:"y"`
+}
+
+type Layout struct {
+	Nodes map[string]Point `json:"nodes,omitempty"`
 }
 
 // Policy bounds automatic execution. Zero values are filled by Normalize.
@@ -65,21 +81,43 @@ const (
 // Run is the durable state needed to resume orchestration. Runtime sessions
 // are keyed by step ID so revisiting a role resumes only that role's context.
 type Run struct {
-	ID                  string             `json:"id"`
-	TaskID              string             `json:"taskId"`
-	WorkflowID          string             `json:"workflowId"`
-	Revision            int64              `json:"revision"`
-	Status              RunStatus          `json:"status"`
-	CurrentStepID       string             `json:"currentStepId"`
-	TransitionCount     int                `json:"transitionCount"`
-	ConsecutiveFailures int                `json:"consecutiveFailures"`
-	Sessions            map[string]string  `json:"sessions,omitempty"`
-	History             []TransitionRecord `json:"history,omitempty"`
-	PauseReason         string             `json:"pauseReason,omitempty"`
-	LastError           string             `json:"lastError,omitempty"`
-	StartedAt           time.Time          `json:"startedAt"`
-	UpdatedAt           time.Time          `json:"updatedAt"`
-	CompletedAt         time.Time          `json:"completedAt,omitempty"`
+	ID                  string               `json:"id"`
+	TaskID              string               `json:"taskId"`
+	WorkflowID          string               `json:"workflowId"`
+	Revision            int64                `json:"revision"`
+	Status              RunStatus            `json:"status"`
+	CurrentStepID       string               `json:"currentStepId"`
+	TransitionCount     int                  `json:"transitionCount"`
+	ConsecutiveFailures int                  `json:"consecutiveFailures"`
+	Sessions            map[string]string    `json:"sessions,omitempty"`
+	History             []TransitionRecord   `json:"history,omitempty"`
+	Nodes               map[string]NodeState `json:"nodes,omitempty"`
+	PauseReason         string               `json:"pauseReason,omitempty"`
+	LastError           string               `json:"lastError,omitempty"`
+	StartedAt           time.Time            `json:"startedAt"`
+	UpdatedAt           time.Time            `json:"updatedAt"`
+	CompletedAt         time.Time            `json:"completedAt,omitempty"`
+}
+
+type NodeStatus string
+
+const (
+	NodePending   NodeStatus = "pending"
+	NodeRunning   NodeStatus = "running"
+	NodeCompleted NodeStatus = "completed"
+	NodePaused    NodeStatus = "paused"
+	NodeFailed    NodeStatus = "failed"
+)
+
+type NodeState struct {
+	StepID     string     `json:"stepId"`
+	Status     NodeStatus `json:"status"`
+	Attempt    int        `json:"attempt"`
+	Signal     string     `json:"signal,omitempty"`
+	Content    string     `json:"content,omitempty"`
+	Error      string     `json:"error,omitempty"`
+	StartedAt  time.Time  `json:"startedAt,omitempty"`
+	FinishedAt time.Time  `json:"finishedAt,omitempty"`
 }
 
 // Outcome is the only control message an Agent can return. It names a signal,

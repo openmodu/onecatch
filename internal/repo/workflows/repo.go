@@ -467,6 +467,16 @@ func validateRunForStorage(run domainworkflows.Run) error {
 	if strings.TrimSpace(run.ID) == "" || strings.TrimSpace(run.TaskID) == "" || strings.TrimSpace(run.WorkflowID) == "" || strings.TrimSpace(run.CurrentStepID) == "" || run.Status == "" {
 		return errors.New("workflow run is invalid")
 	}
+	for stepID, node := range run.Nodes {
+		if stepID == "" || node.StepID != stepID {
+			return errors.New("workflow DAG node is invalid")
+		}
+		switch node.Status {
+		case domainworkflows.NodePending, domainworkflows.NodeRunning, domainworkflows.NodeCompleted, domainworkflows.NodePaused, domainworkflows.NodeFailed:
+		default:
+			return errors.New("workflow DAG node status is invalid")
+		}
+	}
 	return nil
 }
 

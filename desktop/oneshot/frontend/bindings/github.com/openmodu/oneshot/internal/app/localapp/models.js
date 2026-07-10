@@ -15,6 +15,9 @@ import * as workflows$0 from "../../domain/workflows/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as workspaces$0 from "../../domain/workspaces/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as worker$0 from "../../worker/models.js";
 
 export class AddWorkspaceInput {
     /**
@@ -359,6 +362,49 @@ export class RuntimeInfo {
     }
 }
 
+export class WorkerStatus {
+    /**
+     * Creates a new WorkerStatus instance.
+     * @param {Partial<WorkerStatus>} [$$source = {}] - The source object to create the WorkerStatus.
+     */
+    constructor($$source = {}) {
+        if (!("worker" in $$source)) {
+            /**
+             * @member
+             * @type {worker$0.Info}
+             */
+            this["worker"] = (new worker$0.Info());
+        }
+        if (!("health" in $$source)) {
+            /**
+             * @member
+             * @type {worker$0.Health}
+             */
+            this["health"] = (new worker$0.Health());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkerStatus instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WorkerStatus}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType10;
+        const $$createField1_0 = $$createType11;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("worker" in $$parsedSource) {
+            $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
+        }
+        if ("health" in $$parsedSource) {
+            $$parsedSource["health"] = $$createField1_0($$parsedSource["health"]);
+        }
+        return new WorkerStatus(/** @type {Partial<WorkerStatus>} */($$parsedSource));
+    }
+}
+
 export class WorkflowEventView {
     /**
      * Creates a new WorkflowEventView instance.
@@ -453,7 +499,7 @@ export class WorkspaceStatus {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType2;
-        const $$createField1_0 = $$createType10;
+        const $$createField1_0 = $$createType12;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -476,4 +522,6 @@ const $$createType6 = WorkflowEventView.createFrom;
 const $$createType7 = $Create.Array($$createType6);
 const $$createType8 = RuntimeEventView.createFrom;
 const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = workspaces$0.GitSnapshot.createFrom;
+const $$createType10 = worker$0.Info.createFrom;
+const $$createType11 = worker$0.Health.createFrom;
+const $$createType12 = workspaces$0.GitSnapshot.createFrom;

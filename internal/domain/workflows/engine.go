@@ -37,7 +37,7 @@ func NewRun(input Definition, runID string, now time.Time) (Run, error) {
 	if strings.TrimSpace(runID) == "" {
 		return Run{}, fmt.Errorf("run id is required")
 	}
-	return Run{
+	run := Run{
 		ID:            runID,
 		WorkflowID:    def.ID,
 		Status:        RunReady,
@@ -46,7 +46,14 @@ func NewRun(input Definition, runID string, now time.Time) (Run, error) {
 		Sessions:      make(map[string]string),
 		StartedAt:     now,
 		UpdatedAt:     now,
-	}, nil
+	}
+	if def.Mode == ModeDAG {
+		run.Nodes = make(map[string]NodeState, len(def.Steps))
+		for _, step := range def.Steps {
+			run.Nodes[step.ID] = NodeState{StepID: step.ID, Status: NodePending}
+		}
+	}
+	return run, nil
 }
 
 func Start(input Definition, run Run, now time.Time) (Run, error) {
@@ -225,5 +232,11 @@ func cloneRun(run Run) Run {
 		}
 	}
 	out.History = append([]TransitionRecord(nil), run.History...)
+	if run.Nodes != nil {
+		out.Nodes = make(map[string]NodeState, len(run.Nodes))
+		for stepID, state := range run.Nodes {
+			out.Nodes[stepID] = state
+		}
+	}
 	return out
 }

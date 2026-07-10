@@ -4,11 +4,13 @@
 
 import * as RuntimeBinding from "./runtimebinding.js";
 import * as TaskRunBinding from "./taskrunbinding.js";
+import * as WorkerBinding from "./workerbinding.js";
 import * as WorkflowBinding from "./workflowbinding.js";
 import * as WorkspaceBinding from "./workspacebinding.js";
 export {
     RuntimeBinding,
     TaskRunBinding,
+    WorkerBinding,
     WorkflowBinding,
     WorkspaceBinding
 };

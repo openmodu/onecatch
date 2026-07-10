@@ -34,6 +34,9 @@ func (e ValidationErrors) Error() string {
 // does not silently repair IDs, graph edges or user instructions.
 func Normalize(def Definition) Definition {
 	out := def
+	if out.Mode == "" {
+		out.Mode = ModeSerial
+	}
 	if out.Policy.MaxTransitions == 0 {
 		out.Policy.MaxTransitions = DefaultMaxTransitions
 	}
@@ -45,11 +48,21 @@ func Normalize(def Definition) Definition {
 	}
 	out.Steps = append([]Step(nil), def.Steps...)
 	for i := range out.Steps {
+		if out.Steps[i].WorkerID == "" {
+			out.Steps[i].WorkerID = "local"
+		}
+		out.Steps[i].DependsOn = append([]string(nil), def.Steps[i].DependsOn...)
 		if def.Steps[i].Transitions != nil {
 			out.Steps[i].Transitions = make(map[string]string, len(def.Steps[i].Transitions))
 			for signal, target := range def.Steps[i].Transitions {
 				out.Steps[i].Transitions[signal] = target
 			}
+		}
+	}
+	if def.Layout.Nodes != nil {
+		out.Layout.Nodes = make(map[string]Point, len(def.Layout.Nodes))
+		for stepID, point := range def.Layout.Nodes {
+			out.Layout.Nodes[stepID] = point
 		}
 	}
 	return out
@@ -69,6 +82,9 @@ func Validate(input Definition) error {
 	}
 	if strings.TrimSpace(def.Name) == "" {
 		add("name", "required", "is required")
+	}
+	if def.Mode != ModeSerial && def.Mode != ModeDAG {
+		add("mode", "invalid_value", "must be serial or dag")
 	}
 	if !identifierPattern.MatchString(def.EntryStepID) {
 		add("entryStepId", "invalid_identifier", "must be a lowercase step identifier")
@@ -95,6 +111,9 @@ func Validate(input Definition) error {
 		if strings.TrimSpace(step.Runtime) == "" {
 			add(path+".runtime", "required", "is required")
 		}
+		if !identifierPattern.MatchString(step.WorkerID) {
+			add(path+".workerId", "invalid_identifier", "must be a lowercase identifier")
+		}
 		if strings.TrimSpace(step.RolePrompt) == "" {
 			add(path+".rolePrompt", "required", "is required")
 		}
@@ -104,6 +123,9 @@ func Validate(input Definition) error {
 		if step.Sandbox != "" && step.Sandbox != "read-only" && step.Sandbox != "workspace-write" && step.Sandbox != "full" {
 			add(path+".sandbox", "invalid_value", "must be read-only, workspace-write or full")
 		}
+		if def.Mode == ModeDAG && step.WorkerID != "local" && sandboxWrites(step.Sandbox) {
+			add(path+".sandbox", "remote_write_unsupported", "remote DAG nodes must be read-only until workspace synchronization is configured")
+		}
 		if len(step.Transitions) == 0 {
 			add(path+".transitions", "required", "must contain at least one signal")
 		}
@@ -112,6 +134,7 @@ func Validate(input Definition) error {
 			signals = append(signals, signal)
 		}
 		sort.Strings(signals)
+		hasDone := false
 		for _, signal := range signals {
 			target := step.Transitions[signal]
 			transitionPath := path + ".transitions." + signal
@@ -121,6 +144,15 @@ func Validate(input Definition) error {
 			if !isTerminalTarget(target) && !identifierPattern.MatchString(target) {
 				add(transitionPath, "invalid_target", "target must be a step identifier or reserved terminal")
 			}
+			if target == TargetDone {
+				hasDone = true
+			}
+			if def.Mode == ModeDAG && !isTerminalTarget(target) {
+				add(transitionPath, "dag_invalid_target", "DAG step ordering must use dependsOn; signal targets must be terminal")
+			}
+		}
+		if def.Mode == ModeDAG && !hasDone {
+			add(path+".transitions", "no_completion_path", "DAG step must declare a $done outcome")
 		}
 	}
 
@@ -139,7 +171,9 @@ func Validate(input Definition) error {
 		}
 	}
 
-	if _, ok := steps[def.EntryStepID]; ok {
+	if def.Mode == ModeDAG {
+		validateDAG(def, steps, add)
+	} else if _, ok := steps[def.EntryStepID]; ok {
 		reachable, reachesDone := reachableSteps(def.EntryStepID, steps)
 		for i, step := range def.Steps {
 			if _, ok := reachable[step.ID]; !ok {
@@ -156,6 +190,83 @@ func Validate(input Definition) error {
 	}
 	return nil
 }
+
+func validateDAG(def Definition, steps map[string]Step, add func(string, string, string)) {
+	indegree := make(map[string]int, len(steps))
+	children := make(map[string][]string, len(steps))
+	for _, step := range def.Steps {
+		seen := make(map[string]struct{}, len(step.DependsOn))
+		for index, dependency := range step.DependsOn {
+			path := fmt.Sprintf("steps[%s].dependsOn[%d]", step.ID, index)
+			if dependency == step.ID {
+				add(path, "dag_self_dependency", "step cannot depend on itself")
+				continue
+			}
+			if _, duplicate := seen[dependency]; duplicate {
+				add(path, "duplicate", "dependency must be unique")
+				continue
+			}
+			seen[dependency] = struct{}{}
+			if _, ok := steps[dependency]; !ok {
+				add(path, "dag_unknown_dependency", "dependency does not exist")
+				continue
+			}
+			indegree[step.ID]++
+			children[dependency] = append(children[dependency], step.ID)
+		}
+	}
+	queue := make([]string, 0, len(steps))
+	for stepID := range steps {
+		if indegree[stepID] == 0 {
+			queue = append(queue, stepID)
+		}
+	}
+	visited := 0
+	for len(queue) > 0 {
+		stepID := queue[0]
+		queue = queue[1:]
+		visited++
+		for _, child := range children[stepID] {
+			indegree[child]--
+			if indegree[child] == 0 {
+				queue = append(queue, child)
+			}
+		}
+	}
+	if visited != len(steps) {
+		add("steps", "dag_cycle", "DAG dependencies must not contain a cycle")
+		return
+	}
+	for i := 0; i < len(def.Steps); i++ {
+		for j := i + 1; j < len(def.Steps); j++ {
+			left, right := def.Steps[i], def.Steps[j]
+			if sandboxWrites(left.Sandbox) && sandboxWrites(right.Sandbox) && !dagReaches(left.ID, right.ID, children) && !dagReaches(right.ID, left.ID, children) {
+				add(fmt.Sprintf("steps[%d].sandbox", j), "parallel_write_conflict", fmt.Sprintf("write steps %s and %s may run in parallel", left.ID, right.ID))
+			}
+		}
+	}
+}
+
+func dagReaches(from, target string, children map[string][]string) bool {
+	seen := map[string]struct{}{from: {}}
+	queue := []string{from}
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, child := range children[current] {
+			if child == target {
+				return true
+			}
+			if _, ok := seen[child]; !ok {
+				seen[child] = struct{}{}
+				queue = append(queue, child)
+			}
+		}
+	}
+	return false
+}
+
+func sandboxWrites(sandbox string) bool { return sandbox != "read-only" }
 
 func validatePolicy(policy Policy, add func(string, string, string)) {
 	if policy.MaxTransitions < 1 || policy.MaxTransitions > maxTransitionsLimit {
