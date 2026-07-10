@@ -176,6 +176,24 @@ func Pause(input Definition, run Run, reason, message string, now time.Time) (Ru
 	return out, nil
 }
 
+// Cancel permanently stops a run that is not actively executing. Running
+// processes must first be interrupted and persisted as paused by the
+// orchestrator, which keeps cancellation free of process-lifecycle races.
+func Cancel(input Definition, run Run, now time.Time) (Run, error) {
+	def := Normalize(input)
+	if err := validateRunDefinition(def, run); err != nil {
+		return Run{}, err
+	}
+	if run.Status != RunReady && run.Status != RunPaused {
+		return Run{}, fmt.Errorf("%w: cancel from %s", ErrInvalidRunState, run.Status)
+	}
+	out := cloneRun(run)
+	out.Status = RunCancelled
+	out.PauseReason = ""
+	out.UpdatedAt = now
+	return out, nil
+}
+
 func validateRunDefinition(def Definition, run Run) error {
 	if err := Validate(def); err != nil {
 		return err

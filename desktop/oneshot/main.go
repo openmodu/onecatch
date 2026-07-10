@@ -1,10 +1,16 @@
 package main
 
 import (
+	"context"
 	"embed"
 
 	"github.com/openmodu/oneshot/desktop/oneshot/app"
 	"github.com/openmodu/oneshot/desktop/oneshot/bindings"
+	"github.com/openmodu/oneshot/internal/app/localapp"
+	localdata "github.com/openmodu/oneshot/internal/data/local"
+	"github.com/openmodu/oneshot/internal/gitinspect"
+	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
+	"github.com/openmodu/oneshot/internal/workspacelock"
 	"github.com/openmodu/oneshot/pkg/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"go.uber.org/zap"
@@ -17,18 +23,35 @@ func main() {
 	log := logger.MustNew(logger.Config{Service: "oneshot-desktop"})
 	defer logger.Sync(log)
 
-	apiClient := newDesktopClient()
+	store, err := localdata.OpenStore("")
+	if err != nil {
+		log.Fatal("open local store", zap.Error(err))
+	}
+	runtimes, err := localapp.NewRuntimeRegistry(store.Data.Paths.Root)
+	if err != nil {
+		log.Fatal("open runtime registry", zap.Error(err))
+	}
+	git := gitinspect.New("")
+	orchestrator := workflowuc.NewUsecase(store.Repos.Tasks, store.Repos.Workflows, runtimes, workspacelock.New(store.Data.Paths.Locks), git)
+	localApp := localapp.New(store, orchestrator, runtimes, git)
+	defer localApp.Close()
+	if err := localApp.RecoverInterruptedRuns(context.Background()); err != nil {
+		log.Fatal("recover interrupted runs", zap.Error(err))
+	}
+	if err := localApp.EnsureBuiltinDefinitions(context.Background()); err != nil {
+		log.Fatal("create builtin workflows", zap.Error(err))
+	}
+	var wailsApp *application.App
+	workspaceBinding := bindings.NewWorkspaceBinding(localApp, func() *application.App { return wailsApp })
 
-	wailsApp := application.New(application.Options{
+	wailsApp = application.New(application.Options{
 		Name:        app.Name,
 		Description: app.Description,
 		Services: []application.Service{
-			application.NewService(bindings.NewAuthBinding(apiClient)),
-			application.NewService(bindings.NewAgentBinding(apiClient)),
-			application.NewService(bindings.NewArtifactBinding(apiClient)),
-			application.NewService(bindings.NewBillingBinding(apiClient)),
-			application.NewService(bindings.NewConversationBinding(apiClient)),
-			application.NewService(bindings.NewOrderBinding(apiClient)),
+			application.NewService(bindings.NewRuntimeBinding(localApp)),
+			application.NewService(workspaceBinding),
+			application.NewService(bindings.NewWorkflowBinding(localApp)),
+			application.NewService(bindings.NewTaskRunBinding(localApp)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -37,7 +60,6 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
-
 	menu := wailsApp.NewMenu()
 	menu.AddRole(application.AppMenu)
 	menu.AddRole(application.EditMenu)
@@ -46,10 +68,10 @@ func main() {
 
 	wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            app.Name,
-		Width:            1280,
-		Height:           820,
-		MinWidth:         960,
-		MinHeight:        680,
+		Width:            1440,
+		Height:           900,
+		MinWidth:         1080,
+		MinHeight:        720,
 		BackgroundColour: application.NewRGB(245, 245, 247),
 		URL:              "/",
 		Mac: application.MacWindow{

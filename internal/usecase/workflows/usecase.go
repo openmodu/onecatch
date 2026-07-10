@@ -22,6 +22,7 @@ import (
 const (
 	PauseReasonInterrupted        = "interrupted"
 	PauseReasonRuntimeUnavailable = "runtime_unavailable"
+	PauseReasonWorkspaceLocked    = "workspace_locked"
 )
 
 type TaskRepository interface {
@@ -80,11 +81,11 @@ func NewUsecase(tasks TaskRepository, workflows WorkflowRepository, engine Engin
 	}
 }
 
-// ExecuteTask creates a new Run from the current workflow template, persists
-// its private workflow snapshot, and drives it synchronously to a terminal or
-// paused state.
-func (s *Usecase) ExecuteTask(ctx context.Context, taskID string) (domainworkflows.Run, error) {
-	task, workspace, definition, err := s.loadTaskContext(ctx, taskID)
+// StartTask creates and persists a running Run and its private workflow
+// snapshot. Execution is deliberately separate so desktop callers receive the
+// durable run ID before a potentially long Agent process starts.
+func (s *Usecase) StartTask(ctx context.Context, taskID string) (domainworkflows.Run, error) {
+	task, _, definition, err := s.loadTaskContext(ctx, taskID)
 	if err != nil {
 		return domainworkflows.Run{}, err
 	}
@@ -97,11 +98,6 @@ func (s *Usecase) ExecuteTask(ctx context.Context, taskID string) (domainworkflo
 	if err != nil {
 		return domainworkflows.Run{}, err
 	}
-	release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
-	if err != nil {
-		return run, err
-	}
-	defer release()
 	if err := s.workflows.SaveRun(ctx, run, definition); err != nil {
 		return run, err
 	}
@@ -111,7 +107,102 @@ func (s *Usecase) ExecuteTask(ctx context.Context, taskID string) (domainworkflo
 	if err := s.appendEvent(ctx, run.ID, "run.started", "", map[string]any{"taskId": task.ID, "workflowId": definition.ID}); err != nil {
 		return run, err
 	}
+	return run, nil
+}
+
+// ExecuteTask is the synchronous compatibility entry point used by tests and
+// non-UI callers.
+func (s *Usecase) ExecuteTask(ctx context.Context, taskID string) (domainworkflows.Run, error) {
+	run, err := s.StartTask(ctx, taskID)
+	if err != nil {
+		return run, err
+	}
+	return s.ExecuteRun(ctx, run.ID)
+}
+
+// ExecuteRun drives a previously prepared running Run.
+func (s *Usecase) ExecuteRun(ctx context.Context, runID string) (domainworkflows.Run, error) {
+	run, err := s.workflows.GetRun(ctx, runID)
+	if err != nil {
+		return domainworkflows.Run{}, err
+	}
+	definition, err := s.workflows.GetRunDefinition(ctx, runID)
+	if err != nil {
+		return run, err
+	}
+	if run.Status != domainworkflows.RunRunning {
+		return run, fmt.Errorf("%w: execute from %s", domainworkflows.ErrInvalidRunState, run.Status)
+	}
+	task, err := s.tasks.GetTask(ctx, run.TaskID)
+	if err != nil {
+		return run, err
+	}
+	workspace, err := s.tasks.GetWorkspace(ctx, task.WorkspaceID)
+	if err != nil {
+		return run, err
+	}
+	release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
+	if err != nil {
+		paused, pauseErr := domainworkflows.Pause(definition, run, PauseReasonWorkspaceLocked, err.Error(), s.now())
+		if pauseErr != nil {
+			return run, err
+		}
+		paused, updateErr := s.workflows.UpdateRun(context.Background(), paused, run.Revision)
+		if updateErr != nil {
+			return run, updateErr
+		}
+		_ = s.setTaskStatus(context.Background(), &task, domaintasks.StatusPaused)
+		_ = s.appendEvent(context.Background(), run.ID, "run.paused", run.CurrentStepID, map[string]any{"reason": PauseReasonWorkspaceLocked, "error": err.Error()})
+		return paused, err
+	}
+	defer release()
 	return s.drive(ctx, task, workspace, definition, run, "")
+}
+
+// RecoverRun turns a durable running Run with no live workspace owner into a
+// resumable paused Run. If another process still owns the workspace lock it is
+// left untouched.
+func (s *Usecase) RecoverRun(ctx context.Context, runID string) (domainworkflows.Run, error) {
+	run, err := s.workflows.GetRun(ctx, runID)
+	if err != nil {
+		return domainworkflows.Run{}, err
+	}
+	if run.Status != domainworkflows.RunRunning {
+		return run, nil
+	}
+	definition, err := s.workflows.GetRunDefinition(ctx, runID)
+	if err != nil {
+		return run, err
+	}
+	task, err := s.tasks.GetTask(ctx, run.TaskID)
+	if err != nil {
+		return run, err
+	}
+	workspace, err := s.tasks.GetWorkspace(ctx, task.WorkspaceID)
+	if err != nil {
+		return run, err
+	}
+	release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
+	if err != nil {
+		return run, err
+	}
+	defer release()
+	message := "desktop exited before the run completed"
+	paused, err := domainworkflows.Pause(definition, run, PauseReasonInterrupted, message, s.now())
+	if err != nil {
+		return run, err
+	}
+	paused, err = s.workflows.UpdateRun(ctx, paused, run.Revision)
+	if err != nil {
+		return run, err
+	}
+	if err := s.setTaskStatus(ctx, &task, domaintasks.StatusPaused); err != nil {
+		return paused, err
+	}
+	if err := s.appendEvent(ctx, run.ID, "run.paused", run.CurrentStepID, map[string]any{"reason": PauseReasonInterrupted, "error": message, "recovered": true}); err != nil {
+		return paused, err
+	}
+	return paused, nil
 }
 
 // ResumeRun resumes the current step from the Run's private workflow snapshot.
@@ -155,7 +246,43 @@ func (s *Usecase) ResumeRun(ctx context.Context, runID, instruction string) (dom
 	return s.drive(ctx, task, workspace, definition, resumed, instruction)
 }
 
+// CancelRun marks a ready or paused run and its task as cancelled. Active runs
+// are interrupted first by the application service, which causes drive to
+// persist the paused state before this method is called.
+func (s *Usecase) CancelRun(ctx context.Context, runID string) (domainworkflows.Run, error) {
+	run, err := s.workflows.GetRun(ctx, runID)
+	if err != nil {
+		return domainworkflows.Run{}, err
+	}
+	definition, err := s.workflows.GetRunDefinition(ctx, runID)
+	if err != nil {
+		return run, err
+	}
+	cancelled, err := domainworkflows.Cancel(definition, run, s.now())
+	if err != nil {
+		return run, err
+	}
+	cancelled, err = s.workflows.UpdateRun(ctx, cancelled, run.Revision)
+	if err != nil {
+		return run, err
+	}
+	task, err := s.tasks.GetTask(ctx, run.TaskID)
+	if err != nil {
+		return cancelled, err
+	}
+	if err := s.setTaskStatus(ctx, &task, domaintasks.StatusCancelled); err != nil {
+		return cancelled, err
+	}
+	if err := s.appendEvent(ctx, run.ID, "run.cancelled", run.CurrentStepID, map[string]any{}); err != nil {
+		return cancelled, err
+	}
+	return cancelled, nil
+}
+
 func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, definition domainworkflows.Definition, run domainworkflows.Run, instruction string) (domainworkflows.Run, error) {
+	if run.Sessions == nil {
+		run.Sessions = make(map[string]string)
+	}
 	for run.Status == domainworkflows.RunRunning {
 		step, ok := findStep(definition, run.CurrentStepID)
 		if !ok {

@@ -2,5 +2,5 @@ package app
 
 const (
 	Name        = "Oneshot"
-	Description = "Agent service marketplace desktop app"
+	Description = "Local Agent workflow orchestrator"
 )

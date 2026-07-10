@@ -20,7 +20,7 @@
 - 支持 context 打断后暂停、跨应用重启恢复和人工补充指令；主动 cancel handle 与持久取消操作由 01-004 封装。
 - 获取 Workspace 写锁，记录运行前后 git status/diff 和真实文件变化。
 - `$done` 后生成本地运行摘要，不创建订单交付物。
-- 本 issue 提供同步 `ExecuteTask/ResumeRun` 用例；异步调度、UI 轮询和主动 cancel handle 在 01-004 application service/binding 中封装。
+- 本 issue 提供 `StartTask/ExecuteRun` 拆分及同步兼容入口 `ExecuteTask/ResumeRun`；异步调度、UI 轮询和主动 cancel handle 在 01-004 application service/binding 中封装。
 
 ## 非目标
 
@@ -58,7 +58,7 @@
 
 ## 交付记录
 
-- 新增 `internal/usecase/workflows`：同步 `ExecuteTask/ResumeRun`，从 Run 自有 Workflow 快照选择步骤，构造严格 outcome prompt，串行调用 agentrun 并持久推进。
+- 新增 `internal/usecase/workflows`：`StartTask` 先持久化并返回 Run，`ExecuteRun/ResumeRun` 从 Run 自有 Workflow 快照选择步骤，构造严格 outcome prompt，串行调用 agentrun 并持久推进；`ExecuteTask` 保留同步兼容入口。
 - 新增 `internal/workspacelock`：`O_EXCL` 运行锁、PID/run metadata、live owner 拒绝、stale owner 清理和 owner-safe release。
 - 新增 `internal/gitinspect`：只读采集 HEAD、porcelain status 和 diff stat；非 git Workspace 正常降级。
 - workflow state machine 新增显式 `Pause`；context cancel、runtime unavailable、失败上限和 workflow `$pause` 都落成可恢复状态。

@@ -1,6 +1,6 @@
 # Issue 01-005: Workflow 桌面编辑与运行监控
 
-状态：待开发
+状态：已完成
 
 ## 来源
 
@@ -18,6 +18,7 @@
 - Workspace 选择、runtime 可用状态、步骤表单、转移编辑和本地域校验结果展示。
 - run 启动、当前步骤、历史、暂停/恢复/终止和补充指令。
 - 用线性步骤列表加回边标记表达首版 loop，不引入重型画布依赖。
+- 旧市场、登录、计费和订单 UI 从桌面入口移除，不保留双模式。
 
 ## 非目标
 
@@ -39,9 +40,9 @@
 
 ## 验收标准
 
-- [ ] 用户能从模板创建并保存 review loop。
-- [ ] 运行时能看到步骤切换和回边。
-- [ ] 用户能暂停、补充指令并恢复。
+- [x] 用户能从模板创建并保存 review loop。
+- [x] 运行时能看到步骤切换和回边。
+- [x] 用户能暂停、补充指令并恢复。
 
 ## 测试计划
 
@@ -49,4 +50,9 @@
 
 ## 交付记录
 
-- 待开发。
+- 完整替换旧服务市场 UI，新增本地工作目录、runtime 健康状态、Task composer、最近 Run 与 Run inspector。
+- Workflow 页面提供单 Agent / 实现审查模板、步骤表单、runtime/sandbox、role/instruction、signal/target 和 policy 编辑；领域 validation issues 原样显示。
+- Run inspector 展示当前步骤、转移计数、步骤执行记录和 runtime stream，支持运行中打断、暂停态补充指令恢复以及永久终止。
+- Full sandbox 在保存 Workflow 和启动 Run 前二次确认；空状态、错误 toast、后台轮询与 `~/.oneshot/` 本地存储提示已接入。
+- 浏览器开发模式仅在 Wails runtime 不存在时展示 demo 数据，便于 UI 开发；生产桌面使用生成 bindings。
+- 验证：前端 production/dev build 通过；1280×720 实际浏览器视觉检查通过，Workflow 编辑器打开、校验、保存交互通过；Wails 桌面 build 和进程启动冒烟通过。

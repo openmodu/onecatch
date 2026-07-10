@@ -248,6 +248,26 @@ func TestPauseAndResumeKeepCurrentStep(t *testing.T) {
 	}
 }
 
+func TestCancelReadyOrPausedRun(t *testing.T) {
+	def := reviewLoopDefinition()
+	now := time.Now()
+	ready, _ := NewRun(def, "run_ready", now)
+	cancelled, err := Cancel(def, ready, now.Add(time.Second))
+	if err != nil || cancelled.Status != RunCancelled {
+		t.Fatalf("Cancel(ready) = %+v, %v", cancelled, err)
+	}
+
+	running, _ := Start(def, ready, now)
+	if _, err := Cancel(def, running, now); !errors.Is(err, ErrInvalidRunState) {
+		t.Fatalf("Cancel(running) error = %v, want ErrInvalidRunState", err)
+	}
+	paused, _ := Pause(def, running, "interrupted", "stopped", now)
+	cancelled, err = Cancel(def, paused, now)
+	if err != nil || cancelled.Status != RunCancelled || cancelled.PauseReason != "" {
+		t.Fatalf("Cancel(paused) = %+v, %v", cancelled, err)
+	}
+}
+
 func TestRunMustMatchDefinitionID(t *testing.T) {
 	def := reviewLoopDefinition()
 	run, _ := NewRun(def, "run_1", time.Now())

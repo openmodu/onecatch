@@ -210,6 +210,10 @@ Runtime 不可用时不沿用旧 worker 的“自动换另一个 runtime”策�
 
 ## 10. Wails Bindings（Issue 01-004）
 
+桌面启动时直接打开 `~/.oneshot/` 的 local store，创建 runtime registry、workspace lock、git inspector 与 workflow usecase。application service 先调用 `StartTask` 持久化 Run 和 Workflow 快照，再用受控 goroutine 调用 `ExecuteRun`；因此 `StartRun` 会立即返回可轮询的 run ID。每个 active run 保存独立 cancel handle，context 打断落盘为 paused 后才能永久 cancel。
+
+Runtime binary 覆盖写入 `~/.oneshot/runtime.json`，只向前端返回 runtime 名称、可用性和版本，不回传配置路径或环境变量。应用首次启动写入 `single_agent` 和 `implement_review` 两个内置模板，但不覆盖用户已有同 ID 模板。
+
 ### 10.1 RuntimeBinding
 
 - `ListRuntimes()`
@@ -218,6 +222,7 @@ Runtime 不可用时不沿用旧 worker 的“自动换另一个 runtime”策�
 
 ### 10.2 WorkspaceBinding
 
+- `ChooseDirectory()`
 - `AddWorkspace(path)`
 - `ListWorkspaces()`
 - `GetWorkspace(id)`
@@ -234,8 +239,10 @@ Runtime 不可用时不沿用旧 worker 的“自动换另一个 runtime”策�
 ### 10.4 TaskRunBinding
 
 - `CreateTask(input)`
+- `ListTasks(workspaceID)`
 - `StartRun(taskID)`
-- `GetRun(runID)`
+- `GetRun(runID)`（返回 Run、Task、Workspace、Workflow 快照、StepRuns 与 events）
+- `ListRunsByTask(taskID)`
 - `ListRunEvents(runID, afterSeq)`
 - `InterruptRun(runID)`
 - `ResumeRun(runID, instruction)`
@@ -264,7 +271,10 @@ Bindings 调用本地 application service，不通过 HTTP loopback。所有入�
 - 前端把普通步骤 target 与 `$done/$pause/$fail` 分开显示。
 - runtime event 与 workflow event 使用各自 seq 增量刷新。
 - 文件变化来自实际 git/status 与 agentrun file event，不依赖 Agent 自述。
-- App 启动先检测 runtimes 和 interrupted Runs，再恢复普通 UI。
+- App 启动先检测 runtimes，并扫描遗留的 running Runs：无 live Workspace lock 的 Run 按 interrupted 落为 paused，有其他存活进程持锁的 Run 保持不变；随后确保内置模板存在并加载普通 UI。
+- 桌面主入口只注册 Runtime、Workspace、Workflow、TaskRun 四组 binding；旧市场、登录、订单、计费和交付物 binding 不再注册。
+- 首版编辑器使用步骤卡片、signal/target 行和只读流程预览表达 loop，不引入画布依赖。
+- Run inspector 轮询组合详情；active run 约 1 秒刷新，非 active run 降频刷新。浏览器开发预览在没有 Wails runtime 时使用只读 demo 数据，正式桌面始终调用生成的 bindings。
 
 ## 12. 验证计划
 
