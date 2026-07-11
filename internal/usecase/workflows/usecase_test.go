@@ -298,6 +298,32 @@ func TestExecuteDAGRunsRootsInParallelAndJoins(t *testing.T) {
 	}
 }
 
+func TestDAGRunSnapshotLimitsConcurrencyWithoutBreakingJoin(t *testing.T) {
+	definition := domainworkflows.Definition{ID: "limited_dag", Name: "Limited", Mode: domainworkflows.ModeDAG, EntryStepID: "one", Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{
+		{ID: "one", Name: "One", Runtime: "codex", Sandbox: "read-only", RolePrompt: "One", Instruction: "One", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
+		{ID: "two", Name: "Two", Runtime: "claude", Sandbox: "read-only", RolePrompt: "Two", Instruction: "Two", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
+		{ID: "join", Name: "Join", Runtime: "codex", Sandbox: "workspace-write", DependsOn: []string{"one", "two"}, RolePrompt: "Join", Instruction: "Join", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
+	}}
+	engine := &concurrentEngine{}
+	usecase, _, task := setupUsecase(t, definition, engine)
+	run, err := usecase.StartTaskResolved(context.Background(), task.ID, definition, RunResolution{MaxLocalDAGConcurrency: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err = usecase.ExecuteRun(context.Background(), run.ID)
+	if err != nil || run.Status != domainworkflows.RunCompleted {
+		t.Fatalf("run = %+v, %v", run, err)
+	}
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	if engine.maxActive != 1 || len(engine.requests) != 3 {
+		t.Fatalf("max active = %d, requests = %d", engine.maxActive, len(engine.requests))
+	}
+	if !strings.Contains(engine.requests[2].Prompt, "one: node complete") || !strings.Contains(engine.requests[2].Prompt, "two: node complete") {
+		t.Fatalf("join lost dependency results: %s", engine.requests[2].Prompt)
+	}
+}
+
 type fakeRemoteExecutor struct {
 	workerID    string
 	workspaceID string

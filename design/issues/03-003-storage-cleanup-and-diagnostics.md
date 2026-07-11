@@ -1,6 +1,6 @@
 # Issue 03-003: 存储清理、日志与诊断导出
 
-状态：待开发
+状态：已完成
 
 ## 来源
 
@@ -25,15 +25,20 @@
 
 ## 验收标准
 
-- [ ] 不跟随 symlink，分类大小和时间可观察。
-- [ ] 未 Preview、过期 token 和状态变化不能误删。
-- [ ] active/paused Run 永不清理。
-- [ ] 默认诊断不含 token、环境值、Prompt、raw events 和完整路径。
+- [x] 不跟随 symlink，分类大小和时间可观察。
+- [x] 未 Preview、过期 token 和状态变化不能误删。
+- [x] active/paused Run 永不清理。
+- [x] 默认诊断不含 token、环境值、Prompt、raw events 和完整路径。
 
 ## 测试计划
 
 - 临时目录 fixture、清理故障恢复、zip 内容审计和路径脱敏测试。
+- 实际结果：覆盖 symlink 不跟随、cleanup token 单次消费与目录移除、ZIP 环境值审计；全量 Go/race 通过。
 
 ## 交付记录
 
-- 待开发。
+- 新增不跟随 symlink 的目录用量分类和 Finder reveal。
+- 清理只选择过期 completed/cancelled Run；5 分钟 token 单次消费，执行前复核 revision/status/active，并逐个原子移动到 `.trash` 后删除。
+- logger 支持稳定 logger 指针下的 level 和 lumberjack writer 热切换。
+- 诊断 ZIP 默认只含脱敏 settings、版本、用量、Run 状态与日志；环境值会从日志二次脱敏，Prompt/runtime events 需设置授权和本次确认。
+- 验证：symlink、preview/execute/复用 token、诊断环境值审计及全量 race 通过。

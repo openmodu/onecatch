@@ -165,3 +165,14 @@ Worker UI 移入 Experimental；开关关闭时 DAG worker select 只显示 Loca
 - Binding：DTO 脱敏和稳定错误码。
 - Desktop：dirty guard、section save、conflict、danger confirmation、Worker experimental visibility。
 - 回归：serial/DAG snapshots、全量 Go/race、frontend/Wails build。
+
+## 14. 实现记录
+
+- Settings schema v1 落在 `internal/domain/settings`，repo 使用 revision CAS 与 `localfile.WriteJSONAtomic`。
+- Run 快照保存 resolved model/sandbox、环境变量 key、DAG 并发与 interrupt grace；不保存任何环境变量值。
+- Full access confirmation token 绑定 Task、Workspace、Workflow `UpdatedAt`，有效期 2 分钟且单次消费。
+- cleanup token 有效期 5 分钟；执行前按 revision/status 再验证，逐个移动到 `.trash`。
+- logger 使用可热切换 level 与 rotation writer；设置文件成功写入但 reload 失败时返回 `settings_reload_failed`。
+- 桌面设置页实现五分区独立 draft/save/reset、dirty guard、inline validation、冲突重载与 Experimental Worker 门控。
+- UI 交互遵循“默认安静、变化显性、风险二次确认”：clean 状态只显示同步结果，dirty 状态才出现分区标记与 sticky save bar；校验错误同时提供 banner 与字段级说明；危险操作统一使用可键盘完成的应用内确认框。
+- Storage 进入分区时自动计算用量并展示分类占比；Experimental Worker 必须保存开关后才显示管理面板，避免草稿状态提前影响调度入口。

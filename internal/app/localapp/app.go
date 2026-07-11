@@ -20,10 +20,12 @@ import (
 
 	"github.com/openmodu/oneshot/internal/agentrun"
 	localdata "github.com/openmodu/oneshot/internal/data/local"
+	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
 	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
 	"github.com/openmodu/oneshot/internal/gitinspect"
+	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
 	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/internal/worker"
@@ -87,18 +89,23 @@ type RunDetail struct {
 }
 
 type App struct {
-	store        *localdata.Store
-	orchestrator *workflowuc.Usecase
-	runtimes     *RuntimeRegistry
-	git          *gitinspect.Inspector
-	rootCtx      context.Context
-	rootCancel   context.CancelFunc
-	mu           sync.RWMutex
-	active       map[string]context.CancelFunc
-	lastErrors   map[string]string
-	wg           sync.WaitGroup
-	workers      *worker.Registry
-	workerClient *worker.Client
+	store          *localdata.Store
+	orchestrator   *workflowuc.Usecase
+	runtimes       *RuntimeRegistry
+	git            *gitinspect.Inspector
+	rootCtx        context.Context
+	rootCancel     context.CancelFunc
+	mu             sync.RWMutex
+	active         map[string]context.CancelFunc
+	lastErrors     map[string]string
+	wg             sync.WaitGroup
+	workers        *worker.Registry
+	workerClient   *worker.Client
+	settings       settingsrepo.SettingsRepo
+	cleanupMu      sync.Mutex
+	cleanupPlans   map[string]cleanupPlan
+	confirmations  map[string]runConfirmation
+	settingsReload func(domainsettings.Settings) error
 }
 
 func New(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitinspect.Inspector) *App {
@@ -107,6 +114,9 @@ func New(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *Run
 		store: store, orchestrator: orchestrator, runtimes: runtimes, git: git,
 		rootCtx: ctx, rootCancel: cancel, active: make(map[string]context.CancelFunc), lastErrors: make(map[string]string),
 		workers: worker.NewRegistry(filepath.Join(store.Data.Paths.Root, "workers.json")), workerClient: worker.NewClient(),
+		settings:      settingsrepo.NewSettingsRepo(store.Data.Paths.Root),
+		cleanupPlans:  make(map[string]cleanupPlan),
+		confirmations: make(map[string]runConfirmation),
 	}
 	orchestrator.SetRemoteExecutor(remoteExecutor{registry: app.workers, client: app.workerClient})
 	return app
@@ -128,7 +138,18 @@ func (a *App) DataRoot() string { return a.store.Data.Paths.Root }
 func (a *App) ListRuntimes() []RuntimeInfo                      { return a.runtimes.List() }
 func (a *App) CheckRuntime(runtime string) (RuntimeInfo, error) { return a.runtimes.Check(runtime) }
 func (a *App) UpdateRuntimeConfig(input RuntimeConfigInput) (RuntimeInfo, error) {
-	return a.runtimes.Update(input)
+	current, err := a.settings.Get(context.Background())
+	if err != nil {
+		return RuntimeInfo{}, mapSettingsError(err)
+	}
+	runtime := current.Runtimes[input.Runtime]
+	runtime.Binary = strings.TrimSpace(input.Binary)
+	current.Runtimes[input.Runtime] = runtime
+	_, err = a.UpdateRuntimeSettings(context.Background(), current.Runtimes, current.Revision)
+	if err != nil {
+		return RuntimeInfo{}, err
+	}
+	return a.runtimes.Check(input.Runtime)
 }
 
 func (a *App) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (domainworkspaces.Workspace, error) {
@@ -153,7 +174,20 @@ func (a *App) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (domain
 	}
 	sandbox := strings.TrimSpace(input.DefaultSandbox)
 	if sandbox == "" {
-		sandbox = string(agentrun.SandboxWorkspaceWrite)
+		settings, settingsErr := a.settings.Get(ctx)
+		if settingsErr != nil {
+			return domainworkspaces.Workspace{}, mapSettingsError(settingsErr)
+		}
+		sandbox = settings.Execution.DefaultSandbox
+	}
+	if sandbox == string(agentrun.SandboxFull) {
+		settings, settingsErr := a.settings.Get(ctx)
+		if settingsErr != nil {
+			return domainworkspaces.Workspace{}, mapSettingsError(settingsErr)
+		}
+		if !settings.Security.AllowFullSandbox {
+			return domainworkspaces.Workspace{}, coded("security_full_sandbox_disabled", "Full access sandbox is disabled in Settings")
+		}
 	}
 	now := time.Now().UTC()
 	workspace := domainworkspaces.Workspace{ID: workspaceID(abs), Name: name, Path: filepath.Clean(abs), DefaultSandbox: sandbox, CreatedAt: now, LastOpenedAt: now}
@@ -200,6 +234,22 @@ func (a *App) ValidateDefinition(input domainworkflows.Definition) []domainworkf
 }
 
 func (a *App) SaveDefinition(ctx context.Context, input domainworkflows.Definition) (domainworkflows.Definition, error) {
+	settings, err := a.settings.Get(ctx)
+	if err != nil {
+		return domainworkflows.Definition{}, mapSettingsError(err)
+	}
+	if input.Policy.MaxTransitions == 0 {
+		input.Policy.MaxTransitions = settings.Execution.MaxTransitions
+	}
+	if input.Policy.MaxConsecutiveFailures == 0 {
+		input.Policy.MaxConsecutiveFailures = settings.Execution.MaxConsecutiveFailures
+	}
+	if input.Policy.StepTimeoutSeconds == 0 {
+		input.Policy.StepTimeoutSeconds = settings.Execution.StepTimeoutSeconds
+	}
+	if err := validateDefinitionSettings(input, settings); err != nil {
+		return domainworkflows.Definition{}, err
+	}
 	definition, err := a.store.Repos.Workflows.SaveDefinition(ctx, input)
 	if err != nil {
 		var issues domainworkflows.ValidationErrors
@@ -276,7 +326,22 @@ func (a *App) ListTasks(ctx context.Context, workspaceID string) ([]domaintasks.
 }
 
 func (a *App) StartRun(ctx context.Context, taskID string) (domainworkflows.Run, error) {
-	run, err := a.orchestrator.StartTask(ctx, taskID)
+	return a.startRun(ctx, taskID, "")
+}
+
+func (a *App) StartRunConfirmed(ctx context.Context, taskID, confirmationToken string) (domainworkflows.Run, error) {
+	return a.startRun(ctx, taskID, confirmationToken)
+}
+
+func (a *App) startRun(ctx context.Context, taskID, confirmationToken string) (domainworkflows.Run, error) {
+	if err := a.validateTaskSecurity(ctx, taskID, confirmationToken); err != nil {
+		return domainworkflows.Run{}, err
+	}
+	definition, resolution, err := a.resolveRunSettings(ctx, taskID)
+	if err != nil {
+		return domainworkflows.Run{}, err
+	}
+	run, err := a.orchestrator.StartTaskResolved(ctx, taskID, definition, resolution)
 	if err != nil {
 		return run, mapError(err)
 	}
@@ -296,6 +361,17 @@ func (a *App) ResumeRun(ctx context.Context, runID, instruction string) (domainw
 	}
 	if a.isActive(runID) {
 		return run, coded("run_invalid_state", "run is still stopping")
+	}
+	definition, err := a.store.Repos.Workflows.GetRunDefinition(ctx, runID)
+	if err != nil {
+		return run, mapError(err)
+	}
+	settings, err := a.settings.Get(ctx)
+	if err != nil {
+		return run, mapSettingsError(err)
+	}
+	if err := validateDefinitionSettings(definition, settings); err != nil {
+		return run, err
 	}
 	a.dispatch(run.ID, func(runCtx context.Context) (domainworkflows.Run, error) {
 		return a.orchestrator.ResumeRun(runCtx, run.ID, instruction)

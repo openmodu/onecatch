@@ -1,6 +1,6 @@
 # PRD 03: 本地设置中心
 
-状态：设计完成，待开发
+状态：已完成
 
 ## 1. 背景
 
@@ -125,15 +125,15 @@ DAG 并发数限制同时 running 的 read-only 节点；write 节点仍受 Work
 
 ## 13. 验收标准
 
-- [ ] 设置中心五个 section 的字段、默认值和说明与本文一致。
-- [ ] 每个 section 独立保存，dirty state、放弃、revision 冲突可观察。
-- [ ] Runtime 草稿可以无额度检查 binary/version。
-- [ ] 执行默认值只影响新对象，active/historical Run 不变化。
-- [ ] Full sandbox 总开关能阻止新定义保存和新 Run 启动。
-- [ ] 数据清理必须 Preview 后使用 token 执行，且不会删除 active/paused Run。
-- [ ] 设置列表和诊断导出不暴露 token、环境变量值或未授权 Prompt。
-- [ ] 远端 Worker 默认关闭，关闭时本地 DAG 正常使用且远端配置保留。
-- [ ] `runtime.json` 可安全迁移，旧 Workflow/Run 不受影响。
+- [x] 设置中心五个 section 的字段、默认值和说明与本文一致。
+- [x] 每个 section 独立保存，dirty state、放弃、revision 冲突可观察。
+- [x] Runtime 草稿可以无额度检查 binary/version。
+- [x] 执行默认值只影响新对象，active/historical Run 不变化。
+- [x] Full sandbox 总开关能阻止新定义保存和新 Run 启动。
+- [x] 数据清理必须 Preview 后使用 token 执行，且不会删除 active/paused Run。
+- [x] 设置列表和诊断导出不暴露 token、环境变量值或未授权 Prompt。
+- [x] 远端 Worker 默认关闭，关闭时本地 DAG 正常使用且远端配置保留。
+- [x] `runtime.json` 可安全迁移，旧 Workflow/Run 不受影响。
 
 ## 14. 待实现后再评估
 

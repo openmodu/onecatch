@@ -62,6 +62,13 @@ func (s *Usecase) driveDAG(ctx context.Context, task domaintasks.Task, workspace
 			}
 			return s.pauseDAG(ctx, &task, definition, run, "dag_blocked", "no DAG node is ready")
 		}
+		maxConcurrency := run.MaxLocalDAGConcurrency
+		if maxConcurrency < 1 {
+			maxConcurrency = int(s.maxDAGConcurrency.Load())
+		}
+		if maxConcurrency > 0 && len(ready) > maxConcurrency {
+			ready = ready[:maxConcurrency]
+		}
 
 		for _, step := range ready {
 			node := run.Nodes[step.ID]
@@ -181,7 +188,7 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 		}
 		defer release()
 	}
-	request := agentrun.Request{Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeDAGPrompt(task, definition, step, run, instruction), Model: step.Model, Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: run.Sessions[step.ID]}
+	request := agentrun.Request{Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeDAGPrompt(task, definition, step, run, instruction), Model: step.Model, Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: run.Sessions[step.ID], EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second}
 	var result agentrun.Result
 	if step.WorkerID != "" && step.WorkerID != "local" {
 		if s.remote == nil {

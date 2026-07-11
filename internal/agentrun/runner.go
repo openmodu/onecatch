@@ -43,6 +43,14 @@ type Request struct {
 	// history) and applies Prompt as the next turn. The id is the SessionID a
 	// previous Result reported.
 	ResumeSessionID string
+	// Environment is the complete environment inherited by the child process.
+	// Nil preserves the parent process environment.
+	Environment []string
+	// EnvironmentAllowlist freezes the names inherited for this Run. A non-nil
+	// empty slice means inherit only the required baseline environment.
+	EnvironmentAllowlist []string
+	// InterruptGrace controls how long a cancelled process may exit cleanly.
+	InterruptGrace time.Duration
 }
 
 // Sink receives normalized events as they stream from the agent. It is called

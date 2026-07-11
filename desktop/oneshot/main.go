@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"embed"
+	"path/filepath"
 
 	"github.com/openmodu/oneshot/desktop/oneshot/app"
 	"github.com/openmodu/oneshot/desktop/oneshot/bindings"
 	"github.com/openmodu/oneshot/internal/app/localapp"
 	localdata "github.com/openmodu/oneshot/internal/data/local"
+	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
 	"github.com/openmodu/oneshot/internal/gitinspect"
+	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/internal/workspacelock"
 	"github.com/openmodu/oneshot/pkg/logger"
@@ -27,6 +30,19 @@ func main() {
 	if err != nil {
 		log.Fatal("open local store", zap.Error(err))
 	}
+	settingsValue, err := settingsrepo.NewSettingsRepo(store.Data.Paths.Root).Get(context.Background())
+	if err != nil {
+		log.Fatal("open settings", zap.Error(err))
+	}
+	logConfig := func(value domainsettings.Settings) logger.Config {
+		return logger.Config{Service: "oneshot-desktop", Level: value.Storage.LogLevel, File: filepath.Join(store.Data.Paths.Logs, "oneshot.log"), MaxSizeMB: value.Storage.LogMaxSizeMB, MaxBackups: value.Storage.LogMaxBackups, MaxAgeDays: value.Storage.LogMaxAgeDays, Compress: true}
+	}
+	managedLog, err := logger.NewManaged(logConfig(settingsValue))
+	if err != nil {
+		log.Fatal("configure logger", zap.Error(err))
+	}
+	log = managedLog.Logger
+	defer logger.Sync(log)
 	runtimes, err := localapp.NewRuntimeRegistry(store.Data.Paths.Root)
 	if err != nil {
 		log.Fatal("open runtime registry", zap.Error(err))
@@ -35,6 +51,10 @@ func main() {
 	orchestrator := workflowuc.NewUsecase(store.Repos.Tasks, store.Repos.Workflows, runtimes, workspacelock.New(store.Data.Paths.Locks), git)
 	localApp := localapp.New(store, orchestrator, runtimes, git)
 	defer localApp.Close()
+	localApp.SetSettingsReload(func(value domainsettings.Settings) error { return managedLog.Reconfigure(logConfig(value)) })
+	if err := localApp.InitializeSettings(context.Background()); err != nil {
+		log.Fatal("initialize settings", zap.Error(err))
+	}
 	if err := localApp.RecoverInterruptedRuns(context.Background()); err != nil {
 		log.Fatal("recover interrupted runs", zap.Error(err))
 	}
@@ -49,6 +69,7 @@ func main() {
 		Description: app.Description,
 		Services: []application.Service{
 			application.NewService(bindings.NewRuntimeBinding(localApp)),
+			application.NewService(bindings.NewSettingsBinding(localApp)),
 			application.NewService(workspaceBinding),
 			application.NewService(bindings.NewWorkflowBinding(localApp)),
 			application.NewService(bindings.NewTaskRunBinding(localApp)),

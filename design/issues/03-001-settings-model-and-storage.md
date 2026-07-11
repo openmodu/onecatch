@@ -1,6 +1,6 @@
 # Issue 03-001: Settings 模型、持久化与迁移
 
-状态：待开发
+状态：已完成
 
 ## 来源
 
@@ -24,15 +24,19 @@
 
 ## 验收标准
 
-- [ ] 缺失文件返回完整安全默认值。
-- [ ] section update 不覆盖其他 section，revision 冲突明确失败。
-- [ ] runtime migration 成功/失败都不损坏原配置。
-- [ ] 文件权限为 `0600`，设置 DTO 不含 secret 值。
+- [x] 缺失文件返回完整安全默认值。
+- [x] section update 不覆盖其他 section，revision 冲突明确失败。
+- [x] runtime migration 成功/失败都不损坏原配置。
+- [x] 文件权限为 `0600`，设置 DTO 不含 secret 值。
 
 ## 测试计划
 
 - defaults/validation 表驱动、migration fixture、并发 CAS race、重启读取。
+- 实际结果：domain/repo 单测覆盖默认值、危险 env key、迁移成功与失败回滚、`0600`、并发 CAS；全量 race 通过。
 
 ## 交付记录
 
-- 待开发。
+- 新增 `internal/domain/settings` 和 `internal/repo/settings`，实现 schema v1、安全默认值、字段校验、revision CAS 与 `0600` 原子快照。
+- `runtime.json` 首次读取时迁移 binary 配置，写入失败会回滚原文件，成功后保留 `runtime.v0.backup.json`。
+- 新增 Settings application service、Wails binding、section update/reset 与稳定错误码。
+- 验证：defaults/validation、迁移、权限、并发 CAS、全量 `go test ./...` 与 `go test -race ./...` 均通过。

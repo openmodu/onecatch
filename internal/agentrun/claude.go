@@ -3,6 +3,7 @@ package agentrun
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -57,6 +58,11 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 	cmd := exec.CommandContext(ctx, r.binary, args...)
 	// Claude Code operates on its current working directory.
 	cmd.Dir = req.Workspace
+	cmd.Env = req.Environment
+	if req.InterruptGrace > 0 {
+		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+		cmd.WaitDelay = req.InterruptGrace
+	}
 	cmd.Stdin = nil
 	return streamProcess(ctx, cmd, &claudeParser{}, r.now, sink)
 }

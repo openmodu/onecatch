@@ -323,6 +323,38 @@ export class Policy {
     }
 }
 
+export class ResolvedRuntimeSettings {
+    /**
+     * Creates a new ResolvedRuntimeSettings instance.
+     * @param {Partial<ResolvedRuntimeSettings>} [$$source = {}] - The source object to create the ResolvedRuntimeSettings.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["environmentAllowlist"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ResolvedRuntimeSettings instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ResolvedRuntimeSettings}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType6;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("environmentAllowlist" in $$parsedSource) {
+            $$parsedSource["environmentAllowlist"] = $$createField0_0($$parsedSource["environmentAllowlist"]);
+        }
+        return new ResolvedRuntimeSettings(/** @type {Partial<ResolvedRuntimeSettings>} */($$parsedSource));
+    }
+}
+
 /**
  * Run is the durable state needed to resume orchestration. Runtime sessions
  * are keyed by step ID so revisiting a role resumes only that role's context.
@@ -445,6 +477,27 @@ export class Run {
              */
             this["completedAt"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["maxLocalDAGConcurrency"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["interruptGraceSeconds"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {{ [_ in string]?: ResolvedRuntimeSettings } | undefined}
+             */
+            this["runtimeSettings"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -455,9 +508,10 @@ export class Run {
      * @returns {Run}
      */
     static createFrom($$source = {}) {
-        const $$createField8_0 = $$createType6;
-        const $$createField9_0 = $$createType8;
-        const $$createField10_0 = $$createType10;
+        const $$createField8_0 = $$createType7;
+        const $$createField9_0 = $$createType9;
+        const $$createField10_0 = $$createType11;
+        const $$createField18_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("sessions" in $$parsedSource) {
             $$parsedSource["sessions"] = $$createField8_0($$parsedSource["sessions"]);
@@ -467,6 +521,9 @@ export class Run {
         }
         if ("nodes" in $$parsedSource) {
             $$parsedSource["nodes"] = $$createField10_0($$parsedSource["nodes"]);
+        }
+        if ("runtimeSettings" in $$parsedSource) {
+            $$parsedSource["runtimeSettings"] = $$createField18_0($$parsedSource["runtimeSettings"]);
         }
         return new Run(/** @type {Partial<Run>} */($$parsedSource));
     }
@@ -581,8 +638,8 @@ export class Step {
      * @returns {Step}
      */
     static createFrom($$source = {}) {
-        const $$createField6_0 = $$createType11;
-        const $$createField9_0 = $$createType6;
+        const $$createField6_0 = $$createType6;
+        const $$createField9_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("dependsOn" in $$parsedSource) {
             $$parsedSource["dependsOn"] = $$createField6_0($$parsedSource["dependsOn"]);
@@ -823,9 +880,11 @@ const $$createType2 = Policy.createFrom;
 const $$createType3 = Layout.createFrom;
 const $$createType4 = Point.createFrom;
 const $$createType5 = $Create.Map($Create.Any, $$createType4);
-const $$createType6 = $Create.Map($Create.Any, $Create.Any);
-const $$createType7 = TransitionRecord.createFrom;
-const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = NodeState.createFrom;
-const $$createType10 = $Create.Map($Create.Any, $$createType9);
-const $$createType11 = $Create.Array($Create.Any);
+const $$createType6 = $Create.Array($Create.Any);
+const $$createType7 = $Create.Map($Create.Any, $Create.Any);
+const $$createType8 = TransitionRecord.createFrom;
+const $$createType9 = $Create.Array($$createType8);
+const $$createType10 = NodeState.createFrom;
+const $$createType11 = $Create.Map($Create.Any, $$createType10);
+const $$createType12 = ResolvedRuntimeSettings.createFrom;
+const $$createType13 = $Create.Map($Create.Any, $$createType12);

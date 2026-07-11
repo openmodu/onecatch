@@ -2,15 +2,14 @@ package localapp
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
-	"github.com/openmodu/oneshot/pkg/localfile"
+	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
 )
 
 type RuntimeConfig struct {
@@ -24,28 +23,27 @@ type RuntimeConfigInput struct {
 }
 
 type RuntimeInfo struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Available bool   `json:"available"`
-	Version   string `json:"version,omitempty"`
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	Available bool      `json:"available"`
+	Version   string    `json:"version,omitempty"`
+	CheckedAt time.Time `json:"checkedAt"`
 }
 
 // RuntimeRegistry is a hot-swappable Engine. The orchestrator keeps this
 // pointer while users update local CLI paths from the desktop application.
 type RuntimeRegistry struct {
-	mu         sync.RWMutex
-	configPath string
-	config     RuntimeConfig
-	engine     *agentrun.Engine
+	mu             sync.RWMutex
+	config         RuntimeConfig
+	settings       map[string]domainsettings.RuntimeSettings
+	interruptGrace time.Duration
+	engine         *agentrun.Engine
 }
 
 func NewRuntimeRegistry(root string) (*RuntimeRegistry, error) {
-	registry := &RuntimeRegistry{configPath: filepath.Join(root, "runtime.json")}
-	var config RuntimeConfig
-	if err := localfile.ReadJSON(registry.configPath, &config); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return nil, err
-	}
-	registry.replace(config)
+	_ = root
+	registry := &RuntimeRegistry{}
+	registry.replace(RuntimeConfig{})
 	return registry, nil
 }
 
@@ -58,7 +56,22 @@ func (r *RuntimeRegistry) Available(runtime agentrun.Runtime) bool {
 func (r *RuntimeRegistry) Run(ctx context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	r.mu.RLock()
 	engine := r.engine
+	runtimeSettings := r.settings[string(request.Runtime)]
+	interruptGrace := r.interruptGrace
 	r.mu.RUnlock()
+	if request.Model == "" {
+		request.Model = runtimeSettings.DefaultModel
+	}
+	allowlist := runtimeSettings.EnvironmentAllowlist
+	if request.EnvironmentAllowlist != nil {
+		allowlist = request.EnvironmentAllowlist
+	}
+	if request.Environment == nil {
+		request.Environment = allowedEnvironment(allowlist)
+	}
+	if request.InterruptGrace <= 0 {
+		request.InterruptGrace = interruptGrace
+	}
 	return engine.Run(ctx, request, sink)
 }
 
@@ -101,19 +114,63 @@ func (r *RuntimeRegistry) Update(input RuntimeConfigInput) (RuntimeInfo, error) 
 		r.mu.Unlock()
 		return RuntimeInfo{}, coded("runtime_unknown", "unknown runtime")
 	}
-	if err := localfile.WriteJSONAtomic(r.configPath, config); err != nil {
-		r.mu.Unlock()
-		return RuntimeInfo{}, err
-	}
 	r.config = config
 	r.engine = agentrun.NewEngine(agentrun.Config{CodexBinary: config.CodexBinary, ClaudeBinary: config.ClaudeBinary})
 	r.mu.Unlock()
 	return r.Check(input.Runtime)
 }
 
+func (r *RuntimeRegistry) ApplySettings(runtimes map[string]domainsettings.RuntimeSettings, interruptGraceSeconds int) {
+	r.mu.Lock()
+	copySettings := make(map[string]domainsettings.RuntimeSettings, len(runtimes))
+	for id, item := range runtimes {
+		copySettings[id] = item
+	}
+	r.settings = copySettings
+	r.interruptGrace = time.Duration(interruptGraceSeconds) * time.Second
+	config := RuntimeConfig{CodexBinary: runtimes["codex"].Binary, ClaudeBinary: runtimes["claude"].Binary}
+	r.replace(config)
+	r.mu.Unlock()
+}
+
+func (r *RuntimeRegistry) CheckDraft(runtime string, input domainsettings.RuntimeSettings) (RuntimeInfo, error) {
+	name := map[string]string{"codex": "Codex", "claude": "Claude Code"}[runtime]
+	if name == "" {
+		return RuntimeInfo{}, coded("runtime_unknown", "unknown runtime")
+	}
+	engine := agentrun.NewEngine(agentrun.Config{CodexBinary: func() string {
+		if runtime == "codex" {
+			return input.Binary
+		}
+		return ""
+	}(), ClaudeBinary: func() string {
+		if runtime == "claude" {
+			return input.Binary
+		}
+		return ""
+	}()})
+	return runtimeInfo(engine, agentrun.Runtime(runtime), name, input.Binary), nil
+}
+
 func (r *RuntimeRegistry) replace(config RuntimeConfig) {
 	r.config = config
 	r.engine = agentrun.NewEngine(agentrun.Config{CodexBinary: config.CodexBinary, ClaudeBinary: config.ClaudeBinary})
+}
+
+func allowedEnvironment(allowlist []string) []string {
+	keys := append([]string{"PATH", "HOME", "TMPDIR", "USER", "LANG", "LC_ALL"}, allowlist...)
+	seen := make(map[string]struct{}, len(keys))
+	environment := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if value, ok := os.LookupEnv(key); ok {
+			environment = append(environment, key+"="+value)
+		}
+	}
+	return environment
 }
 
 func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, configured string) RuntimeInfo {
@@ -127,12 +184,14 @@ func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, config
 	}
 	version := ""
 	if available {
-		if output, err := exec.Command(binary, "--version").CombinedOutput(); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if output, err := exec.CommandContext(ctx, binary, "--version").CombinedOutput(); err == nil {
 			version = strings.TrimSpace(string(output))
 			if index := strings.IndexByte(version, '\n'); index >= 0 {
 				version = version[:index]
 			}
 		}
 	}
-	return RuntimeInfo{ID: string(runtime), Name: name, Available: available, Version: version}
+	return RuntimeInfo{ID: string(runtime), Name: name, Available: available, Version: version, CheckedAt: time.Now().UTC()}
 }

@@ -8,6 +8,9 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as settings$0 from "../../domain/settings/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as tasks$0 from "../../domain/tasks/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -18,6 +21,9 @@ import * as workspaces$0 from "../../domain/workspaces/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as worker$0 from "../../worker/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as time$0 from "../../../../../../time/models.js";
 
 export class AddWorkspaceInput {
     /**
@@ -58,6 +64,144 @@ export class AddWorkspaceInput {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new AddWorkspaceInput(/** @type {Partial<AddWorkspaceInput>} */($$parsedSource));
+    }
+}
+
+export class CleanupPreview {
+    /**
+     * Creates a new CleanupPreview instance.
+     * @param {Partial<CleanupPreview>} [$$source = {}] - The source object to create the CleanupPreview.
+     */
+    constructor($$source = {}) {
+        if (!("token" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["token"] = "";
+        }
+        if (!("runIds" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["runIds"] = [];
+        }
+        if (!("count" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["count"] = 0;
+        }
+        if (!("estimatedBytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["estimatedBytes"] = 0;
+        }
+        if (!("expiresAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["expiresAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CleanupPreview instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CleanupPreview}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("runIds" in $$parsedSource) {
+            $$parsedSource["runIds"] = $$createField1_0($$parsedSource["runIds"]);
+        }
+        return new CleanupPreview(/** @type {Partial<CleanupPreview>} */($$parsedSource));
+    }
+}
+
+export class CleanupPreviewInput {
+    /**
+     * Creates a new CleanupPreviewInput instance.
+     * @param {Partial<CleanupPreviewInput>} [$$source = {}] - The source object to create the CleanupPreviewInput.
+     */
+    constructor($$source = {}) {
+        if (!("retentionDays" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["retentionDays"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CleanupPreviewInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CleanupPreviewInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CleanupPreviewInput(/** @type {Partial<CleanupPreviewInput>} */($$parsedSource));
+    }
+}
+
+export class CleanupResult {
+    /**
+     * Creates a new CleanupResult instance.
+     * @param {Partial<CleanupResult>} [$$source = {}] - The source object to create the CleanupResult.
+     */
+    constructor($$source = {}) {
+        if (!("removedRunIds" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["removedRunIds"] = [];
+        }
+        if (!("skippedRunIds" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["skippedRunIds"] = [];
+        }
+        if (!("removedBytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["removedBytes"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CleanupResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CleanupResult}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType0;
+        const $$createField1_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("removedRunIds" in $$parsedSource) {
+            $$parsedSource["removedRunIds"] = $$createField0_0($$parsedSource["removedRunIds"]);
+        }
+        if ("skippedRunIds" in $$parsedSource) {
+            $$parsedSource["skippedRunIds"] = $$createField1_0($$parsedSource["skippedRunIds"]);
+        }
+        return new CleanupResult(/** @type {Partial<CleanupResult>} */($$parsedSource));
     }
 }
 
@@ -107,6 +251,101 @@ export class CreateTaskInput {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new CreateTaskInput(/** @type {Partial<CreateTaskInput>} */($$parsedSource));
+    }
+}
+
+export class DiagnosticsExport {
+    /**
+     * Creates a new DiagnosticsExport instance.
+     * @param {Partial<DiagnosticsExport>} [$$source = {}] - The source object to create the DiagnosticsExport.
+     */
+    constructor($$source = {}) {
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["bytes"] = 0;
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DiagnosticsExport instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DiagnosticsExport}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DiagnosticsExport(/** @type {Partial<DiagnosticsExport>} */($$parsedSource));
+    }
+}
+
+export class DiagnosticsExportInput {
+    /**
+     * Creates a new DiagnosticsExportInput instance.
+     * @param {Partial<DiagnosticsExportInput>} [$$source = {}] - The source object to create the DiagnosticsExportInput.
+     */
+    constructor($$source = {}) {
+        if (!("destination" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["destination"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["runIds"] = undefined;
+        }
+        if (!("includePrompt" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["includePrompt"] = false;
+        }
+        if (!("includeRawEvents" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["includeRawEvents"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DiagnosticsExportInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {DiagnosticsExportInput}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("runIds" in $$parsedSource) {
+            $$parsedSource["runIds"] = $$createField1_0($$parsedSource["runIds"]);
+        }
+        return new DiagnosticsExportInput(/** @type {Partial<DiagnosticsExportInput>} */($$parsedSource));
     }
 }
 
@@ -189,13 +428,13 @@ export class RunDetail {
      * @returns {RunDetail}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType0;
-        const $$createField1_0 = $$createType1;
-        const $$createField2_0 = $$createType2;
-        const $$createField3_0 = $$createType3;
-        const $$createField4_0 = $$createType5;
-        const $$createField5_0 = $$createType7;
-        const $$createField6_0 = $$createType9;
+        const $$createField0_0 = $$createType1;
+        const $$createField1_0 = $$createType2;
+        const $$createField2_0 = $$createType3;
+        const $$createField3_0 = $$createType4;
+        const $$createField4_0 = $$createType6;
+        const $$createField5_0 = $$createType8;
+        const $$createField6_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("run" in $$parsedSource) {
             $$parsedSource["run"] = $$createField0_0($$parsedSource["run"]);
@@ -219,6 +458,48 @@ export class RunDetail {
             $$parsedSource["runtimeEvents"] = $$createField6_0($$parsedSource["runtimeEvents"]);
         }
         return new RunDetail(/** @type {Partial<RunDetail>} */($$parsedSource));
+    }
+}
+
+export class RunStartPreview {
+    /**
+     * Creates a new RunStartPreview instance.
+     * @param {Partial<RunStartPreview>} [$$source = {}] - The source object to create the RunStartPreview.
+     */
+    constructor($$source = {}) {
+        if (!("requiresFullSandboxConfirmation" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["requiresFullSandboxConfirmation"] = false;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["confirmationToken"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["expiresAt"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RunStartPreview instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RunStartPreview}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RunStartPreview(/** @type {Partial<RunStartPreview>} */($$parsedSource));
     }
 }
 
@@ -254,6 +535,45 @@ export class RuntimeConfigInput {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new RuntimeConfigInput(/** @type {Partial<RuntimeConfigInput>} */($$parsedSource));
+    }
+}
+
+export class RuntimeDraftInput {
+    /**
+     * Creates a new RuntimeDraftInput instance.
+     * @param {Partial<RuntimeDraftInput>} [$$source = {}] - The source object to create the RuntimeDraftInput.
+     */
+    constructor($$source = {}) {
+        if (!("runtime" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["runtime"] = "";
+        }
+        if (!("settings" in $$source)) {
+            /**
+             * @member
+             * @type {settings$0.RuntimeSettings}
+             */
+            this["settings"] = (new settings$0.RuntimeSettings());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RuntimeDraftInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RuntimeDraftInput}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType11;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("settings" in $$parsedSource) {
+            $$parsedSource["settings"] = $$createField1_0($$parsedSource["settings"]);
+        }
+        return new RuntimeDraftInput(/** @type {Partial<RuntimeDraftInput>} */($$parsedSource));
     }
 }
 
@@ -347,6 +667,13 @@ export class RuntimeInfo {
              */
             this["version"] = undefined;
         }
+        if (!("checkedAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["checkedAt"] = null;
+        }
 
         Object.assign(this, $$source);
     }
@@ -359,6 +686,101 @@ export class RuntimeInfo {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new RuntimeInfo(/** @type {Partial<RuntimeInfo>} */($$parsedSource));
+    }
+}
+
+export class StorageCategory {
+    /**
+     * Creates a new StorageCategory instance.
+     * @param {Partial<StorageCategory>} [$$source = {}] - The source object to create the StorageCategory.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("bytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["bytes"] = 0;
+        }
+        if (!("files" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["files"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StorageCategory instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {StorageCategory}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new StorageCategory(/** @type {Partial<StorageCategory>} */($$parsedSource));
+    }
+}
+
+export class StorageUsage {
+    /**
+     * Creates a new StorageUsage instance.
+     * @param {Partial<StorageUsage>} [$$source = {}] - The source object to create the StorageUsage.
+     */
+    constructor($$source = {}) {
+        if (!("root" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["root"] = "";
+        }
+        if (!("totalBytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["totalBytes"] = 0;
+        }
+        if (!("categories" in $$source)) {
+            /**
+             * @member
+             * @type {StorageCategory[]}
+             */
+            this["categories"] = [];
+        }
+        if (!("calculatedAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["calculatedAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new StorageUsage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {StorageUsage}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType13;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("categories" in $$parsedSource) {
+            $$parsedSource["categories"] = $$createField2_0($$parsedSource["categories"]);
+        }
+        return new StorageUsage(/** @type {Partial<StorageUsage>} */($$parsedSource));
     }
 }
 
@@ -392,8 +814,8 @@ export class WorkerStatus {
      * @returns {WorkerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType10;
-        const $$createField1_0 = $$createType11;
+        const $$createField0_0 = $$createType14;
+        const $$createField1_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worker" in $$parsedSource) {
             $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
@@ -498,8 +920,8 @@ export class WorkspaceStatus {
      * @returns {WorkspaceStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType2;
-        const $$createField1_0 = $$createType12;
+        const $$createField0_0 = $$createType3;
+        const $$createField1_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -512,16 +934,20 @@ export class WorkspaceStatus {
 }
 
 // Private type creation functions
-const $$createType0 = workflows$0.Run.createFrom;
-const $$createType1 = tasks$0.Task.createFrom;
-const $$createType2 = workspaces$0.Workspace.createFrom;
-const $$createType3 = workflows$0.Definition.createFrom;
-const $$createType4 = workflows$0.StepRun.createFrom;
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = WorkflowEventView.createFrom;
-const $$createType7 = $Create.Array($$createType6);
-const $$createType8 = RuntimeEventView.createFrom;
-const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = worker$0.Info.createFrom;
-const $$createType11 = worker$0.Health.createFrom;
-const $$createType12 = workspaces$0.GitSnapshot.createFrom;
+const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = workflows$0.Run.createFrom;
+const $$createType2 = tasks$0.Task.createFrom;
+const $$createType3 = workspaces$0.Workspace.createFrom;
+const $$createType4 = workflows$0.Definition.createFrom;
+const $$createType5 = workflows$0.StepRun.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = WorkflowEventView.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = RuntimeEventView.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = settings$0.RuntimeSettings.createFrom;
+const $$createType12 = StorageCategory.createFrom;
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = worker$0.Info.createFrom;
+const $$createType15 = worker$0.Health.createFrom;
+const $$createType16 = workspaces$0.GitSnapshot.createFrom;

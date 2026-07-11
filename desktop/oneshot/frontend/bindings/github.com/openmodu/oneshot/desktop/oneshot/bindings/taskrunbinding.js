@@ -88,6 +88,16 @@ export function ListTasks(workspaceID) {
 }
 
 /**
+ * @param {string} taskID
+ * @returns {$CancellablePromise<localapp$0.RunStartPreview>}
+ */
+export function PreviewRun(taskID) {
+    return $Call.ByID(2734983773, taskID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType7($result);
+    }));
+}
+
+/**
  * @param {string} runID
  * @param {string} instruction
  * @returns {$CancellablePromise<workflows$0.Run>}
@@ -100,10 +110,11 @@ export function ResumeRun(runID, instruction) {
 
 /**
  * @param {string} taskID
+ * @param {string} confirmationToken
  * @returns {$CancellablePromise<workflows$0.Run>}
  */
-export function StartRun(taskID) {
-    return $Call.ByID(2521904853, taskID).then(/** @type {($result: any) => any} */(($result) => {
+export function StartRun(taskID, confirmationToken) {
+    return $Call.ByID(2521904853, taskID, confirmationToken).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -116,3 +127,4 @@ const $$createType3 = localapp$0.WorkflowEventView.createFrom;
 const $$createType4 = $Create.Array($$createType3);
 const $$createType5 = $Create.Array($$createType0);
 const $$createType6 = $Create.Array($$createType1);
+const $$createType7 = localapp$0.RunStartPreview.createFrom;

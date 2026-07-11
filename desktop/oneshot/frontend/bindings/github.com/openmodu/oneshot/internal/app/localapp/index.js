@@ -4,11 +4,20 @@
 
 export {
     AddWorkspaceInput,
+    CleanupPreview,
+    CleanupPreviewInput,
+    CleanupResult,
     CreateTaskInput,
+    DiagnosticsExport,
+    DiagnosticsExportInput,
     RunDetail,
+    RunStartPreview,
     RuntimeConfigInput,
+    RuntimeDraftInput,
     RuntimeEventView,
     RuntimeInfo,
+    StorageCategory,
+    StorageUsage,
     WorkerStatus,
     WorkflowEventView,
     WorkspaceStatus

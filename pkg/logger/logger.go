@@ -2,8 +2,10 @@ package logger
 
 import (
 	"errors"
+	"io"
 	"os"
 	"strings"
+	"sync"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -30,6 +32,87 @@ type Config struct {
 	Compress      bool   `yaml:"compress"`
 	Development   bool   `yaml:"development"`
 	DisableStdout bool   `yaml:"disable_stdout"`
+}
+
+// Managed keeps the logger pointer stable while allowing Settings to update
+// its level and rotating file destination without restarting the desktop app.
+type Managed struct {
+	Logger *zap.Logger
+	level  zap.AtomicLevel
+	file   *switchWriter
+	mu     sync.Mutex
+}
+
+func NewManaged(cfg Config) (*Managed, error) {
+	level, err := parseLevel(defaultString(cfg.Level, DefaultLevel))
+	if err != nil {
+		return nil, err
+	}
+	stacktraceLevel, err := parseLevel(DefaultStacktraceLvl)
+	if err != nil {
+		return nil, err
+	}
+	cores := make([]zapcore.Core, 0, 2)
+	if !cfg.DisableStdout {
+		output, err := encoder(defaultString(cfg.Format, DefaultFormat), encoderConfig(cfg.Development))
+		if err != nil {
+			return nil, err
+		}
+		cores = append(cores, zapcore.NewCore(output, zapcore.Lock(os.Stdout), level))
+	}
+	var file *switchWriter
+	if cfg.File != "" {
+		output, err := encoder(defaultString(cfg.Format, DefaultFormat), encoderConfig(cfg.Development))
+		if err != nil {
+			return nil, err
+		}
+		file = &switchWriter{current: rotationWriter(cfg)}
+		cores = append(cores, zapcore.NewCore(output, zapcore.AddSync(file), level))
+	}
+	if len(cores) == 0 {
+		return nil, errors.New("logger requires stdout or file output")
+	}
+	options := []zap.Option{zap.AddCaller(), zap.AddStacktrace(stacktraceLevel)}
+	if cfg.Service != "" {
+		options = append(options, zap.Fields(zap.String("service", cfg.Service)))
+	}
+	if cfg.Development {
+		options = append(options, zap.Development())
+	}
+	return &Managed{Logger: zap.New(zapcore.NewTee(cores...), options...), level: level, file: file}, nil
+}
+
+func (m *Managed) Reconfigure(cfg Config) error {
+	level, err := parseLevel(defaultString(cfg.Level, DefaultLevel))
+	if err != nil {
+		return err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.level.SetLevel(level.Level())
+	if m.file != nil && cfg.File != "" {
+		m.file.replace(rotationWriter(cfg))
+	}
+	return nil
+}
+
+type switchWriter struct {
+	mu      sync.Mutex
+	current io.WriteCloser
+}
+
+func (w *switchWriter) Write(data []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.current.Write(data)
+}
+func (w *switchWriter) Sync() error { return nil }
+func (w *switchWriter) replace(next io.WriteCloser) {
+	w.mu.Lock()
+	previous := w.current
+	w.current = next
+	w.mu.Unlock()
+	_ = previous.Close()
 }
 
 func New(cfg Config) (*zap.Logger, error) {

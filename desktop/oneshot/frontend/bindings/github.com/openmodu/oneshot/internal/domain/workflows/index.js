@@ -9,6 +9,7 @@ export {
     NodeStatus,
     Point,
     Policy,
+    ResolvedRuntimeSettings,
     Run,
     RunStatus,
     Step,

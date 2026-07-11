@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
@@ -63,21 +64,34 @@ type GitInspector interface {
 
 type IDGenerator func(prefix string) string
 
+type RunResolution struct {
+	MaxLocalDAGConcurrency int
+	InterruptGraceSeconds  int
+	RuntimeSettings        map[string]domainworkflows.ResolvedRuntimeSettings
+}
+
 type Usecase struct {
-	tasks     TaskRepository
-	workflows WorkflowRepository
-	engine    Engine
-	locker    WorkspaceLocker
-	git       GitInspector
-	now       func() time.Time
-	newID     IDGenerator
-	remote    RemoteExecutor
+	tasks             TaskRepository
+	workflows         WorkflowRepository
+	engine            Engine
+	locker            WorkspaceLocker
+	git               GitInspector
+	now               func() time.Time
+	newID             IDGenerator
+	remote            RemoteExecutor
+	maxDAGConcurrency atomic.Int64
 }
 
 func (s *Usecase) SetRemoteExecutor(remote RemoteExecutor) { s.remote = remote }
+func (s *Usecase) SetMaxDAGConcurrency(value int) {
+	if value < 1 {
+		value = 1
+	}
+	s.maxDAGConcurrency.Store(int64(value))
+}
 
 func NewUsecase(tasks TaskRepository, workflows WorkflowRepository, engine Engine, locker WorkspaceLocker, git GitInspector) *Usecase {
-	return &Usecase{
+	usecase := &Usecase{
 		tasks:     tasks,
 		workflows: workflows,
 		engine:    engine,
@@ -86,6 +100,8 @@ func NewUsecase(tasks TaskRepository, workflows WorkflowRepository, engine Engin
 		now:       time.Now,
 		newID:     randomID,
 	}
+	usecase.SetMaxDAGConcurrency(4)
+	return usecase
 }
 
 // StartTask creates and persists a running Run and its private workflow
@@ -96,11 +112,32 @@ func (s *Usecase) StartTask(ctx context.Context, taskID string) (domainworkflows
 	if err != nil {
 		return domainworkflows.Run{}, err
 	}
+	return s.startTask(ctx, task, definition, RunResolution{})
+}
+
+func (s *Usecase) StartTaskResolved(ctx context.Context, taskID string, definition domainworkflows.Definition, resolution RunResolution) (domainworkflows.Run, error) {
+	task, _, stored, err := s.loadTaskContext(ctx, taskID)
+	if err != nil {
+		return domainworkflows.Run{}, err
+	}
+	if definition.ID != stored.ID {
+		return domainworkflows.Run{}, fmt.Errorf("workflow definition does not match task")
+	}
+	if err := domainworkflows.Validate(definition); err != nil {
+		return domainworkflows.Run{}, err
+	}
+	return s.startTask(ctx, task, definition, resolution)
+}
+
+func (s *Usecase) startTask(ctx context.Context, task domaintasks.Task, definition domainworkflows.Definition, resolution RunResolution) (domainworkflows.Run, error) {
 	run, err := domainworkflows.NewRun(definition, s.newID("run"), s.now())
 	if err != nil {
 		return domainworkflows.Run{}, err
 	}
 	run.TaskID = task.ID
+	run.MaxLocalDAGConcurrency = resolution.MaxLocalDAGConcurrency
+	run.InterruptGraceSeconds = resolution.InterruptGraceSeconds
+	run.RuntimeSettings = resolution.RuntimeSettings
 	run, err = domainworkflows.Start(definition, run, s.now())
 	if err != nil {
 		return domainworkflows.Run{}, err
@@ -382,12 +419,14 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
 		var streamErr error
 		result, runErr := s.engine.Run(stepCtx, agentrun.Request{
-			Runtime:         runtime,
-			Workspace:       workspace.Path,
-			Prompt:          composePrompt(task, definition, step, run, instruction),
-			Model:           step.Model,
-			Sandbox:         allowedSandbox(step.Sandbox, workspace.DefaultSandbox),
-			ResumeSessionID: run.Sessions[step.ID],
+			Runtime:              runtime,
+			Workspace:            workspace.Path,
+			Prompt:               composePrompt(task, definition, step, run, instruction),
+			Model:                step.Model,
+			Sandbox:              allowedSandbox(step.Sandbox, workspace.DefaultSandbox),
+			ResumeSessionID:      run.Sessions[step.ID],
+			EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime),
+			InterruptGrace:       time.Duration(run.InterruptGraceSeconds) * time.Second,
 		}, func(event agentrun.Event) {
 			payload, err := json.Marshal(event)
 			if err == nil && streamErr == nil {
@@ -543,6 +582,17 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		}
 	}
 	return run, nil
+}
+
+func resolvedEnvironmentAllowlist(run domainworkflows.Run, runtime string) []string {
+	if run.RuntimeSettings == nil {
+		return nil
+	}
+	settings, ok := run.RuntimeSettings[runtime]
+	if !ok {
+		return nil
+	}
+	return append([]string{}, settings.EnvironmentAllowlist...)
 }
 
 func (s *Usecase) loadTaskContext(ctx context.Context, taskID string) (domaintasks.Task, domainworkspaces.Workspace, domainworkflows.Definition, error) {

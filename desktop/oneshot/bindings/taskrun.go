@@ -18,8 +18,11 @@ func (b *TaskRunBinding) CreateTask(input localapp.CreateTaskInput) (domaintasks
 func (b *TaskRunBinding) ListTasks(workspaceID string) ([]domaintasks.Task, error) {
 	return b.app.ListTasks(context.Background(), workspaceID)
 }
-func (b *TaskRunBinding) StartRun(taskID string) (domainworkflows.Run, error) {
-	return b.app.StartRun(context.Background(), taskID)
+func (b *TaskRunBinding) PreviewRun(taskID string) (localapp.RunStartPreview, error) {
+	return b.app.PreviewRun(context.Background(), taskID)
+}
+func (b *TaskRunBinding) StartRun(taskID, confirmationToken string) (domainworkflows.Run, error) {
+	return b.app.StartRunConfirmed(context.Background(), taskID, confirmationToken)
 }
 func (b *TaskRunBinding) GetRun(runID string) (localapp.RunDetail, error) {
 	return b.app.GetRunDetail(context.Background(), runID)

@@ -81,22 +81,29 @@ const (
 // Run is the durable state needed to resume orchestration. Runtime sessions
 // are keyed by step ID so revisiting a role resumes only that role's context.
 type Run struct {
-	ID                  string               `json:"id"`
-	TaskID              string               `json:"taskId"`
-	WorkflowID          string               `json:"workflowId"`
-	Revision            int64                `json:"revision"`
-	Status              RunStatus            `json:"status"`
-	CurrentStepID       string               `json:"currentStepId"`
-	TransitionCount     int                  `json:"transitionCount"`
-	ConsecutiveFailures int                  `json:"consecutiveFailures"`
-	Sessions            map[string]string    `json:"sessions,omitempty"`
-	History             []TransitionRecord   `json:"history,omitempty"`
-	Nodes               map[string]NodeState `json:"nodes,omitempty"`
-	PauseReason         string               `json:"pauseReason,omitempty"`
-	LastError           string               `json:"lastError,omitempty"`
-	StartedAt           time.Time            `json:"startedAt"`
-	UpdatedAt           time.Time            `json:"updatedAt"`
-	CompletedAt         time.Time            `json:"completedAt,omitempty"`
+	ID                     string                             `json:"id"`
+	TaskID                 string                             `json:"taskId"`
+	WorkflowID             string                             `json:"workflowId"`
+	Revision               int64                              `json:"revision"`
+	Status                 RunStatus                          `json:"status"`
+	CurrentStepID          string                             `json:"currentStepId"`
+	TransitionCount        int                                `json:"transitionCount"`
+	ConsecutiveFailures    int                                `json:"consecutiveFailures"`
+	Sessions               map[string]string                  `json:"sessions,omitempty"`
+	History                []TransitionRecord                 `json:"history,omitempty"`
+	Nodes                  map[string]NodeState               `json:"nodes,omitempty"`
+	PauseReason            string                             `json:"pauseReason,omitempty"`
+	LastError              string                             `json:"lastError,omitempty"`
+	StartedAt              time.Time                          `json:"startedAt"`
+	UpdatedAt              time.Time                          `json:"updatedAt"`
+	CompletedAt            time.Time                          `json:"completedAt,omitempty"`
+	MaxLocalDAGConcurrency int                                `json:"maxLocalDAGConcurrency,omitempty"`
+	InterruptGraceSeconds  int                                `json:"interruptGraceSeconds,omitempty"`
+	RuntimeSettings        map[string]ResolvedRuntimeSettings `json:"runtimeSettings,omitempty"`
+}
+
+type ResolvedRuntimeSettings struct {
+	EnvironmentAllowlist []string `json:"environmentAllowlist,omitempty"`
 }
 
 type NodeStatus string
