@@ -1,8 +1,11 @@
 package agentrun
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
@@ -182,6 +185,32 @@ func TestRunnerSurfacesProcessFailure(t *testing.T) {
 	if got := err.Error(); got == "" || !contains(got, "boom: model auth failed") {
 		t.Fatalf("error %q should include stderr tail", got)
 	}
+}
+
+func TestRunnerDrainsStdoutAfterOversizedLine(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestOversizedLineHelperProcess")
+	cmd.Env = append(os.Environ(), "ONESHOT_OVERSIZED_LINE_HELPER=1")
+
+	_, err := streamProcess(ctx, cmd, &codexParser{}, fixedClock(), nil)
+	if err == nil {
+		t.Fatal("expected oversized stdout line to fail")
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		t.Fatalf("runner blocked instead of draining stdout: %v", err)
+	}
+	if !contains(err.Error(), "read") || !contains(err.Error(), "stdout") {
+		t.Fatalf("error %q should identify stdout read failure", err)
+	}
+}
+
+func TestOversizedLineHelperProcess(t *testing.T) {
+	if os.Getenv("ONESHOT_OVERSIZED_LINE_HELPER") != "1" {
+		return
+	}
+	_, _ = os.Stdout.Write(bytes.Repeat([]byte{'x'}, 9*1024*1024))
+	os.Exit(0)
 }
 
 func TestEngineUnknownRuntime(t *testing.T) {

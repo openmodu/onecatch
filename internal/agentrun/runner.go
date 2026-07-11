@@ -120,8 +120,14 @@ func streamProcess(ctx context.Context, cmd *exec.Cmd, parser lineParser, now no
 		parser.parse(line, now(), sink)
 	}
 	scanErr := scanner.Err()
+	var drainErr error
 	if scanErr != nil && !errors.Is(scanErr, io.ErrClosedPipe) {
 		sink(Event{Kind: KindError, Text: fmt.Sprintf("read stream: %v", scanErr), At: now()})
+		// Scanner stops consuming after errors such as ErrTooLong. Keep draining
+		// the pipe before Wait so a child with more output cannot block forever
+		// on a full stdout pipe. The unread scanner buffer is intentionally
+		// discarded because the JSONL token is already incomplete.
+		_, drainErr = io.Copy(io.Discard, stdout)
 	}
 
 	waitErr := cmd.Wait()
@@ -134,6 +140,13 @@ func streamProcess(ctx context.Context, cmd *exec.Cmd, parser lineParser, now no
 		}
 		res.Succeeded = false
 		return res, fmt.Errorf("%s exited: %w%s", cmd.Path, waitErr, stderr.tail())
+	}
+	if scanErr != nil && !errors.Is(scanErr, io.ErrClosedPipe) {
+		res.Succeeded = false
+		if drainErr != nil && !errors.Is(drainErr, io.ErrClosedPipe) {
+			return res, fmt.Errorf("read %s stdout: %w (drain: %v)", cmd.Path, scanErr, drainErr)
+		}
+		return res, fmt.Errorf("read %s stdout: %w", cmd.Path, scanErr)
 	}
 	return res, nil
 }

@@ -8,6 +8,7 @@ import {
   WorkerBinding,
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
+import { nextWorkflowItemID } from "./workflowIds.js";
 import { Action, Kicker, ModeBadge, StatusBadge, Toolbar, ToolbarSpacer } from "../ui/primitives.jsx";
 
 const statusLabel = {
@@ -508,7 +509,10 @@ function Modal({ title, subtitle, onClose, children, wide = false }) {
 
 function WorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, updateStep, updateTransition, removeTransition, runtimes, workers, defaultSandbox, allowFullSandbox, onClose }) {
   if (editor.mode === "dag") return <DAGWorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} runtimes={runtimes} workers={workers} defaultSandbox={defaultSandbox} allowFullSandbox={allowFullSandbox} onClose={onClose} />;
-  const addStep = () => setEditor((current) => ({ ...current, steps: [...current.steps, { id: `step_${current.steps.length + 1}`, name: "新步骤", runtime: "codex", model: "", sandbox: defaultSandbox, rolePrompt: "你在这个流程中的角色。", instruction: "描述这个步骤要完成的事情。", transitions: { completed: "$done" } }] }));
+  const addStep = () => setEditor((current) => {
+    const id = nextWorkflowItemID("step", current.steps);
+    return { ...current, steps: [...current.steps, { id, name: "新步骤", runtime: "codex", model: "", sandbox: defaultSandbox, rolePrompt: "你在这个流程中的角色。", instruction: "描述这个步骤要完成的事情。", transitions: { completed: "$done" } }] };
+  });
   const removeStep = (index) => setEditor((current) => ({ ...current, steps: current.steps.filter((_, itemIndex) => itemIndex !== index) }));
   return <section className="workflow-editor-surface">
     <Toolbar className="editor-toolbar"><Action onClick={onClose}>&lt; 返回</Action><strong>{editor.name}</strong><code>{editor.id} · serial</code><ToolbarSpacer /><Action tone="cyan" onClick={validateEditor}>校验</Action><Action tone="primary" disabled={busy === "workflow"} onClick={saveWorkflow}>{busy === "workflow" ? "保存中" : "保存"}</Action></Toolbar>
@@ -539,7 +543,7 @@ function DAGWorkflowEditor({ editor, setEditor, validation, validateEditor, save
     return { ...current, entryStepId: current.entryStepId === oldID ? nextID : current.entryStepId, steps, layout: { nodes } };
   });
   const addNode = () => {
-    const id = `node_${editor.steps.length + 1}`;
+    const id = nextWorkflowItemID("node", editor.steps);
     setEditor((current) => ({ ...current, steps: [...current.steps, { id, name: "新节点", runtime: "codex", workerId: "local", sandbox: defaultSandbox, dependsOn: [], rolePrompt: "你在 DAG 中的角色。", instruction: "描述这个节点的任务。", transitions: { completed: "$done", need_human: "$pause" } }], layout: { nodes: { ...(current.layout?.nodes || {}), [id]: { x: 120 + current.steps.length * 34, y: 110 + current.steps.length * 34 } } } }));
     setSelectedID(id);
   };

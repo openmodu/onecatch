@@ -15,6 +15,8 @@ Workflow 采用“信号驱动的有向步骤图”：步骤定义可接受的 o
 
 旧 `00-*` 代码和文档作为历史实现保留，但 PRD 01 的实现不要求兼容 Order、Billing、Auth、Artifact 或远端 API。
 
+桌面可执行文件只保留 `Runtime`、`Settings`、`Workspace`、`Workflow`、`TaskRun`、`Worker` 六类 Wails service。旧市场 bindings 与指向 `oneshot-server` 的桌面 HTTP client 不作为“历史兼容层”编译进 local-first 桌面；历史领域代码可留在各自 server/usecase 包中，但不得从桌面入口重新注册。
+
 ## 2. 相比 Buddy 的调整
 
 保留：
@@ -158,6 +160,14 @@ Prompt 尾部追加当前步骤专属 contract：
 | `running` | user interrupt | `paused` | 中断子进程并记录 interrupted |
 | `paused` | resume | `running` | 默认重跑 currentStep |
 | 非终态 | cancel | `cancelled` | 释放锁，不删除历史 |
+
+## 7.1 Runtime 输出流异常
+
+Codex 与 Claude Code 的 JSONL 解析保留单行大小上限，避免异常 runtime 输出导致无界内存增长。scanner 因超长行等读取错误停止时，runner 必须继续读取并丢弃 stdout 直到 EOF，再调用 `cmd.Wait()`；否则子进程可能因 pipe 写满而无法退出。排空后本次 StepRun 按 runtime stream error 失败，不使用不完整的 parser 结果推进 Workflow。
+
+## 7.2 Workflow 编辑器 ID 分配
+
+新增串行步骤和 DAG 节点不得用 `steps.length + 1` 直接生成 ID。客户端从当前定义的全部 ID 中计算相应前缀的最大数字后缀并递增，同时执行占用检查；因此删除中间项后新增不会与仍存在的高序号项冲突。保存时的领域唯一性校验继续作为最终防线。
 
 每次合法 outcome 都追加 TransitionRecord。未知 signal 返回领域错误并保持原 Run 不变。达到 `maxTransitions` 时本次 outcome 仍记录、currentStep 更新为目标，但 Run 进入 paused，不再启动下一步骤。
 
