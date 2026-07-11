@@ -109,8 +109,12 @@
 .ui-action--cyan { color: var(--acp-cyan); }
 .ui-action--danger { color: var(--acp-danger); }
 .ui-action--muted { color: var(--acp-text-soft); }
-.ui-action:hover { background: currentColor; color: var(--acp-canvas); }
-.ui-action--primary:hover { background: var(--acp-good); }
+.ui-action:hover:not(:disabled) { color: var(--acp-canvas); }
+.ui-action--accent:hover:not(:disabled) { background: var(--acp-accent); }
+.ui-action--cyan:hover:not(:disabled) { background: var(--acp-cyan); }
+.ui-action--danger:hover:not(:disabled) { background: var(--acp-danger); }
+.ui-action--muted:hover:not(:disabled) { background: var(--acp-text-muted); }
+.ui-action--primary:hover:not(:disabled) { background: var(--acp-good); }
 .ui-action:disabled { opacity: .44; cursor: not-allowed; }
 .ui-action:focus-visible { outline: 1px solid var(--acp-cyan); outline-offset: 2px; }
 

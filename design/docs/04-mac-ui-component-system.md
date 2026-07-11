@@ -26,6 +26,8 @@ Token 写入 `src/ui/tokens.css`，组件和页面不再直接维护重复魔法
 
 primitive 只负责表现和可访问性，不持有业务状态。
 
+Action hover 不使用 `background: currentColor`，因为同一规则内修改前景色会让背景跟随最终前景色，造成文字与背景同色。各 variant 必须显式映射 hover background，前景统一使用 canvas 色。
+
 ## 4. 页面迁移
 
 - App shell 使用 geometry token。
