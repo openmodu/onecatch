@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
+import { Action, Field, NumberField, SettingPanel as SettingCard, ToggleRow as Toggle } from "../ui/primitives.jsx";
 
 const sectionMeta = [
   { id: "runtime", label: "Runtime", description: "命令与模型" },
   { id: "execution", label: "执行", description: "新流程默认值" },
   { id: "security", label: "安全", description: "授权与诊断" },
   { id: "storage", label: "存储与日志", description: "本机数据管理" },
-  { id: "experimental", label: "实验功能", description: "远端 Worker" },
+  { id: "experimental", label: "远端 Worker", description: "实验功能" },
 ];
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const message = (error) => String(error?.message || error || "未知错误").replace(/^Error:\s*/, "");
@@ -61,8 +62,8 @@ export function ConfirmDialog({ dialog, busy = false, onCancel, onConfirm }) {
         {dialog.detail && <div className="confirm-detail">{dialog.detail}</div>}
       </div>
       <div className="confirm-actions">
-        <button className="secondary-button" disabled={busy} onClick={onCancel}>{dialog.cancelLabel || "取消"}</button>
-        <button autoFocus className={dialog.dangerous ? "danger-button" : "primary-button"} disabled={busy} onClick={onConfirm}>{busy ? "处理中…" : dialog.confirmLabel || "确认"}</button>
+        <Action disabled={busy} onClick={onCancel}>{dialog.cancelLabel || "取消"}</Action>
+        <Action autoFocus tone={dialog.dangerous ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>{busy ? "处理中…" : dialog.confirmLabel || "确认"}</Action>
       </div>
     </section>
   </div>;
@@ -193,9 +194,9 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     <section className="settings-content">
       <div className="settings-title">
         <div><span className="kicker">LOCAL SETTINGS</span><h2>{activeMeta.label}</h2><p>{activeMeta.description} · revision {value?.revision || 1}</p></div>
-        <div className="settings-title-actions"><span className="settings-sync-state">{dirty ? "等待保存" : "已同步"}</span><button className="text-button" onClick={reset}>恢复默认</button></div>
+        <div className="settings-title-actions"><span className="settings-sync-state">{dirty ? "等待保存" : `已同步 · revision ${value?.revision || 1}`}</span><Action onClick={reset}>恢复默认</Action></div>
       </div>
-      {conflict && <div className="settings-banner conflict" role="alert"><div><strong>设置已在另一个窗口变化</strong><span>当前草稿没有覆盖新值，请重新加载后再修改。</span></div><button className="secondary-button compact" onClick={reload}>重新加载设置</button></div>}
+      {conflict && <div className="settings-banner conflict" role="alert"><div><strong>设置已在另一个窗口变化</strong><span>当前草稿没有覆盖新值，请重新加载后再修改。</span></div><Action onClick={reload}>重新加载设置</Action></div>}
       {validationErrors.length > 0 && <div className="settings-banner invalid" role="alert"><div><strong>还有 {validationErrors.length} 个字段需要修正</strong><span>错误已标在对应字段下方，修正后才能保存。</span></div></div>}
       {section === "runtime" && <RuntimeSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} />}
       {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
@@ -204,7 +205,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       {section === "experimental" && <ExperimentalSettings draft={draft.experimental} saved={value?.experimental || demoSettings.experimental} setValue={(next) => setSectionValue("experimental", next)} workersPanel={workersPanel} />}
       {dirty && <div className="settings-savebar" role="region" aria-label="未保存设置">
         <div><strong>当前分区有未保存的修改</strong><span>保存后立即应用；不会追溯修改已启动的 Run。</span></div>
-        <div><button className="secondary-button" disabled={saving} onClick={discard}>放弃更改</button><button className="primary-button" disabled={saving || validationErrors.length > 0} onClick={save}>{saving ? "保存中…" : "保存设置"}</button></div>
+        <div><Action disabled={saving} onClick={discard}>放弃更改</Action><Action tone="primary" disabled={saving || validationErrors.length > 0} onClick={save}>{saving ? "保存中…" : "保存设置"}</Action></div>
       </div>}
     </section>
     <ConfirmDialog dialog={dialog} busy={confirming} onCancel={closeDialog} onConfirm={acceptDialog} />
@@ -216,13 +217,13 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
   return <>{["codex", "claude"].map((id) => {
     const current = status[id] || runtimes.find((item) => item.id === id) || {};
     const statusText = current.checking ? "正在检测命令…" : current.available ? `${current.version || "可用"}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString("zh-CN")}` : ""}` : current.error || "未安装或尚未检测";
-    return <SettingCard key={id} title={id === "codex" ? "Codex" : "Claude Code"} description="留空时从 PATH 自动发现；测试配置只执行 version check，不启动 Agent，也不消耗模型额度。" aside={<span className={`setting-status ${current.available ? "ok" : current.error ? "bad" : ""}`}><i />{statusText}</span>}>
+    return <SettingCard className="runtime-setting-card" key={id} title={id === "codex" ? "Codex" : "Claude Code"} description="留空时从 PATH 自动发现；测试配置只执行 version check，不启动 Agent，也不消耗模型额度。" aside={<span className={`setting-status ${current.available ? "ok" : current.error ? "bad" : ""}`}><i />{statusText}</span>}>
       <div className="settings-grid">
         <Field label="Binary 路径" hint={`留空使用 ${id}`} error={errors[`${id}.binary`]}><input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={id} /></Field>
         <Field label="默认模型" hint="留空由 Runtime 决定" error={errors[`${id}.defaultModel`]}><input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder="Runtime 默认" /></Field>
         <Field className="full" label="环境变量 Key 白名单" hint="只保存变量名，不保存值；使用逗号分隔" error={errors[`${id}.environmentAllowlist`]}><input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder="OPENAI_API_KEY, HTTPS_PROXY" /></Field>
       </div>
-      <div className="settings-actions"><button className="secondary-button compact" disabled={current.checking} onClick={() => check(id)}>{current.checking ? "检测中…" : "测试配置"}</button></div>
+      <div className="settings-actions"><Action tone="cyan" disabled={current.checking} onClick={() => check(id)}>{current.checking ? "检测中…" : "测试配置"}</Action></div>
     </SettingCard>;
   })}</>;
 }
@@ -230,7 +231,7 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
 function ExecutionSettings({ value, setValue, errors }) {
   const number = (key, next) => setValue({ ...value, [key]: Number(next) });
   return <SettingCard title="默认执行策略" description="节点显式配置优先于 Workflow，Workflow 又优先于这里的全局默认值。只影响新 Workflow 或没有显式值的新 Run。">
-    <div className="settings-grid">
+    <div className="settings-grid execution-grid">
       <NumberField field="maxTransitions" label="最大转移次数" hint="1–10000" value={value.maxTransitions} error={errors.maxTransitions} onChange={(next) => number("maxTransitions", next)} />
       <NumberField field="maxConsecutiveFailures" label="连续失败上限" hint="1–100" value={value.maxConsecutiveFailures} error={errors.maxConsecutiveFailures} onChange={(next) => number("maxConsecutiveFailures", next)} />
       <NumberField field="stepTimeoutSeconds" label="单节点超时" hint="30–86400 秒" value={value.stepTimeoutSeconds} error={errors.stepTimeoutSeconds} onChange={(next) => number("stepTimeoutSeconds", next)} />
@@ -258,14 +259,14 @@ function SecuritySettings({ value, setValue, confirmFullAccess }) {
 function StorageSettings({ value, setValue, errors, security, diagnosticOptions, setDiagnosticOptions, usage, usageLoading, refreshUsage, preview, previewCleanup, executeCleanup, reveal, diagnosticPath, setDiagnosticPath, exportDiagnostics }) {
   const number = (key, next) => setValue({ ...value, [key]: Number(next) });
   return <>
-    <SettingCard title="本地数据" description="数据根目录固定为 ~/.oneshot/，统计只扫描已知子目录且不会跟随符号链接。" aside={<button className="secondary-button compact" onClick={refreshUsage} disabled={usageLoading}>{usageLoading ? "计算中…" : "重新计算"}</button>}>
-      <div className="data-root-row"><div><span>数据根目录</span><code>~/.oneshot/</code></div><button className="text-button" onClick={reveal}>在 Finder 中显示</button></div>
+    <SettingCard title="本地数据" description="数据根目录固定为 ~/.oneshot/，统计只扫描已知子目录且不会跟随符号链接。" aside={<Action tone="cyan" onClick={refreshUsage} disabled={usageLoading}>{usageLoading ? "计算中…" : "重新计算"}</Action>}>
+      <div className="data-root-row"><div><span>数据根目录</span><code>~/.oneshot/</code></div><Action onClick={reveal}>在 Finder 中显示</Action></div>
       {usage ? <><div className="usage-total">{bytes(usage.totalBytes)} <small>总占用</small></div><div className="usage-bars">{(usage.categories || []).map((item) => <div key={item.name}><span>{item.name}</span><b>{bytes(item.bytes)}</b><i style={{ width: `${Math.max(3, item.bytes / Math.max(usage.totalBytes, 1) * 100)}%` }} /></div>)}</div><p className="storage-calculated-at">最后计算：{usage.calculatedAt ? new Date(usage.calculatedAt).toLocaleString("zh-CN") : "刚刚"}</p></> : <div className="settings-inline-empty">{usageLoading ? "正在计算本机空间用量…" : "还没有空间用量数据。"}</div>}
     </SettingCard>
     <SettingCard title="历史 Run 清理" description="只清理超过保留期的 completed / cancelled Run；active、running、paused 永远跳过。">
       <Field label="完成记录保留期" hint="默认永久保留"><select value={value.completedRunRetentionDays} onChange={(event) => { number("completedRunRetentionDays", event.target.value); setPreview(null); }}><option value={0}>永久保留</option><option value={30}>30 天</option><option value={90}>90 天</option><option value={180}>180 天</option></select></Field>
-      <div className="settings-actions"><button className="secondary-button compact" disabled={!value.completedRunRetentionDays} onClick={previewCleanup}>预览清理</button></div>
-      {preview?.token && <div className="cleanup-preview" role="status"><div><span className="kicker">CLEANUP PREVIEW</span><strong>{preview.count} 个历史 Run</strong><p>预计释放 {bytes(preview.estimatedBytes)}，执行前会再次检查运行状态。</p></div><button className="danger-outline" disabled={!preview.count} onClick={executeCleanup}>不可逆清理</button></div>}
+      <div className="settings-actions"><Action tone="muted" disabled={!value.completedRunRetentionDays} onClick={previewCleanup}>预览清理</Action></div>
+      {preview?.token && <div className="cleanup-preview" role="status"><div><span className="kicker">CLEANUP PREVIEW</span><strong>{preview.count} 个历史 Run</strong><p>预计释放 {bytes(preview.estimatedBytes)}，执行前会再次检查运行状态。</p></div><Action tone="danger" disabled={!preview.count} onClick={executeCleanup}>不可逆清理</Action></div>}
     </SettingCard>
     <SettingCard title="日志轮转" description="保存后立即应用新的日志级别和轮转限制。">
       <div className="settings-grid">
@@ -280,7 +281,7 @@ function StorageSettings({ value, setValue, errors, security, diagnosticOptions,
       <Field label="ZIP 保存路径" hint="留空时保存到数据目录"><input value={diagnosticPath} onChange={(event) => setDiagnosticPath(event.target.value)} placeholder="/Users/me/Desktop/oneshot-diagnostics.zip" /></Field>
       <Toggle checked={diagnosticOptions.includePrompt} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includePrompt: checked })} label="本次包含 Prompt" description={security.diagnosticsIncludePrompt ? "导出时会再次确认。" : "需要先在“安全”中授权。"} disabled={!security.diagnosticsIncludePrompt} />
       <Toggle checked={diagnosticOptions.includeRawEvents} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includeRawEvents: checked })} label="本次包含原始事件" description={security.diagnosticsIncludeRawEvents ? "导出时会再次确认。" : "需要先在“安全”中授权。"} disabled={!security.diagnosticsIncludeRawEvents} />
-      <div className="settings-actions"><button className="secondary-button" onClick={exportDiagnostics}>导出诊断 ZIP</button></div>
+      <div className="settings-actions"><Action onClick={exportDiagnostics}>导出诊断 ZIP</Action></div>
     </SettingCard>
   </>;
 }
@@ -296,19 +297,6 @@ function ExperimentalSettings({ draft, saved, setValue, workersPanel }) {
     {!draft.remoteWorkersEnabled && saved.remoteWorkersEnabled && <div className="settings-pending panel"><strong>保存后停止远端调度</strong><span>Worker token 与配置会保留，重新启用后可继续使用。</span></div>}
     {!draft.remoteWorkersEnabled && !saved.remoteWorkersEnabled && <div className="settings-disabled panel"><strong>远端调度当前关闭</strong><span>本地串行 Loop 和并行 DAG 不受影响。</span></div>}
   </>;
-}
-
-function SettingCard({ title, description, aside, children }) {
-  return <article className="setting-card panel"><div className="setting-card-head"><div><h3>{title}</h3><p>{description}</p></div>{aside}</div>{children}</article>;
-}
-function Field({ label, hint, error, helpId, className = "", children }) {
-  return <label className={`settings-field ${className} ${error ? "has-error" : ""}`}><span>{label}</span>{children}<small id={helpId}>{error || hint}</small></label>;
-}
-function NumberField({ field, label, hint, value, error, onChange }) {
-  return <Field label={label} hint={hint} error={error} helpId={`${field}-help`}><input type="number" value={value} aria-invalid={Boolean(error)} aria-describedby={`${field}-help`} onChange={(event) => onChange(event.target.value)} /></Field>;
-}
-function Toggle({ checked, onChange, label, description, dangerous, disabled = false }) {
-  return <label className={`settings-toggle ${dangerous ? "dangerous" : ""} ${disabled ? "disabled" : ""}`}><span><strong>{label}</strong><small>{description}</small></span><input type="checkbox" disabled={disabled} checked={Boolean(checked)} onChange={(event) => onChange(event.target.checked)} /><i aria-hidden="true" /></label>;
 }
 
 function validateSection(section, draft) {

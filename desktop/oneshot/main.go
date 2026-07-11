@@ -90,14 +90,14 @@ func main() {
 
 	wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            app.Name,
-		Width:            1440,
-		Height:           900,
+		Width:            1280,
+		Height:           800,
 		MinWidth:         1080,
 		MinHeight:        720,
 		BackgroundColour: application.NewRGB(245, 245, 247),
 		URL:              "/",
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 48,
+			InvisibleTitleBarHeight: 38,
 			Backdrop:                application.MacBackdropTranslucent,
 			TitleBar:                application.MacTitleBarHiddenInset,
 		},

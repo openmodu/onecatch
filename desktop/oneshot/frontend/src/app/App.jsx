@@ -8,6 +8,7 @@ import {
   WorkerBinding,
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
+import { Action, Kicker, ModeBadge, StatusBadge, Toolbar, ToolbarSpacer } from "../ui/primitives.jsx";
 
 const statusLabel = {
   ready: "等待运行",
@@ -79,7 +80,7 @@ const dagTemplate = {
   mode: "dag",
   entryStepId: "security",
   policy: { maxTransitions: 20, maxConsecutiveFailures: 3, stepTimeoutSeconds: 1800 },
-  layout: { nodes: { security: { x: 70, y: 70 }, tests: { x: 70, y: 260 }, synthesis: { x: 430, y: 165 } } },
+  layout: { nodes: { security: { x: 64, y: 88 }, tests: { x: 64, y: 336 }, synthesis: { x: 412, y: 212 } } },
   steps: [
     { id: "security", name: "安全审查", runtime: "codex", workerId: "local", sandbox: "read-only", dependsOn: [], rolePrompt: "你是安全审查 Agent。", instruction: "独立检查安全风险。", transitions: { completed: "$done", need_human: "$pause" } },
     { id: "tests", name: "测试审查", runtime: "claude", workerId: "local", sandbox: "read-only", dependsOn: [], rolePrompt: "你是测试可靠性审查 Agent。", instruction: "独立检查测试和回归风险。", transitions: { completed: "$done", need_human: "$pause" } },
@@ -158,7 +159,7 @@ function formatTime(value) {
 function errorMessage(error) { return String(error?.message || error || "未知错误").replace(/^Error:\s*/, ""); }
 
 function StatusPill({ status, active }) {
-  return <span className={`status-pill ${status || "ready"}`}>{active && <span className="pulse" />}{statusLabel[status] || status}</span>;
+  return <StatusBadge status={status || "ready"} className="status-pill">{active && <span className="pulse" />}{statusLabel[status] || status}</StatusBadge>;
 }
 
 function App() {
@@ -403,67 +404,58 @@ function App() {
   };
 
   const allRuns = useMemo(() => tasks.flatMap((task) => (runs[task.id] || []).map((run) => ({ ...run, task }))).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)), [runs, tasks]);
+  const goView = (next) => { setEditor(null); setView(next); };
+  const commandText = view === "settings" ? "settings @ ~/.oneshot" : selectedWorkspace ? `${selectedWorkspace.name} @ ${selectedWorkspace.path}` : "选择一个工作目录";
 
   if (mode === "loading") return <div className="loading-screen"><div className="brand-mark">1</div><span>正在打开本地工作台…</span></div>;
 
-  return (
+  return <div className="app-frame">
+    <header className="mac-titlebar" aria-label="Oneshot window"><span aria-hidden="true" /><strong>Oneshot</strong><span /></header>
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><div className="brand-mark">1</div><div><strong>Oneshot</strong><span>LOCAL ORCHESTRATOR</span></div></div>
-        <div className="sidebar-section-label">工作目录</div>
-        <div className="workspace-list">
-          {workspaces.map((workspace) => <button key={workspace.id} className={`workspace-item ${workspace.id === workspaceID ? "active" : ""}`} onClick={() => setWorkspaceID(workspace.id)}><span className="workspace-avatar">{workspace.name.slice(0, 1).toUpperCase()}</span><span><strong>{workspace.name}</strong><small>{workspace.path}</small></span></button>)}
-          {!workspaces.length && <div className="sidebar-empty">还没有工作目录</div>}
+        <div className="brand"><strong>ONESHOT</strong><span>// local agents</span></div>
+        <div className="workspace-block">
+          <div className="sidebar-section-label">cwd</div>
+          <div className="workspace-list">
+            {workspaces.map((workspace) => <button key={workspace.id} className={`workspace-item ${workspace.id === workspaceID ? "active" : ""}`} onClick={() => setWorkspaceID(workspace.id)}><span><strong>{workspace.name}</strong><small>{workspace.path}</small></span></button>)}
+            {!workspaces.length && <div className="sidebar-empty">还没有工作目录</div>}
+          </div>
+          <button className="add-workspace" onClick={chooseWorkspace}>[ + 加入工作目录 ]</button>
         </div>
-        <button className="add-workspace" onClick={chooseWorkspace}><Icon name="plus" /> 加入工作目录</button>
-        <nav>
-          <button className={view === "tasks" ? "active" : ""} onClick={() => setView("tasks")}><Icon name="tasks" />任务与运行</button>
-          <button className={view === "workflows" ? "active" : ""} onClick={() => setView("workflows")}><Icon name="workflow" />Workflow</button>
+        <nav className="primary-nav">
+          <button className={view === "tasks" && !editor ? "active" : ""} onClick={() => goView("tasks")}><span>&gt;</span><b>任务与运行</b><small>runs</small></button>
+          <button className={view === "workflows" || editor ? "active" : ""} onClick={() => goView("workflows")}><span>%</span><b>Workflow</b><small>flows</small></button>
+          <button className={view === "settings" && !editor ? "active" : ""} onClick={() => goView("settings")}><span>#</span><b>设置</b><small>prefs</small></button>
         </nav>
         <div className="runtime-panel">
-          <div className="sidebar-section-label">本地 Runtime</div>
-          {runtimes.map((runtime) => <div className="runtime-row" key={runtime.id}><span className={`runtime-dot ${runtime.available ? "online" : "offline"}`} /><span><strong>{runtime.name}</strong><small>{runtime.available ? runtime.version || "可用" : "未安装"}</small></span></div>)}
+          <div className="sidebar-section-label">runtime</div>
+          {runtimes.map((runtime) => <div className="runtime-row" key={runtime.id}><span className={`runtime-dot ${runtime.available ? "online" : "offline"}`} /><strong>{runtime.id}</strong><small>{runtime.available ? String(runtime.version || "ready").replace(`${runtime.id} `, "") : "missing"}</small></div>)}
+          <div className="storage-note"><span>数据仅保存在本机</span><code>~/.oneshot/</code></div>
         </div>
-        <div className="storage-note"><span>数据仅保存在本机</span><code>~/.oneshot/</code></div>
-        <nav className="settings-nav"><button className={view === "settings" ? "active" : ""} onClick={() => setView("settings")}><Icon name="settings" />设置</button></nav>
       </aside>
 
       <main className="main-area">
-        <header className="topbar"><div><span className="eyebrow">{view === "settings" ? "本机应用配置" : selectedWorkspace ? selectedWorkspace.path : "选择一个工作目录"}</span><h1>{view === "tasks" ? "任务与运行" : view === "workflows" ? "Workflow 设计" : "设置"}</h1></div><div className="top-actions"><span className={`connection ${mode}`}>{mode === "wails" ? "本地服务已连接" : "界面预览"}</span><button className="icon-button" title="刷新" onClick={() => { boot(); loadTasks(); }}><Icon name="refresh" /></button></div></header>
-
-        {view === "tasks" ? (
-          <div className="workspace-grid">
-            <section className="content-column">
-              <div className="composer panel">
-                <div className="panel-heading"><div><span className="kicker">NEW RUN</span><h2>交给本地 Agent</h2></div><Icon name="branch" size={22} /></div>
-                <input className="title-input" placeholder="这次要完成什么？" value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} />
-                <textarea placeholder="描述目标、约束和验收方式。每个步骤会继承这段任务上下文。" value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} />
-                <div className="composer-footer"><label><span>执行流程</span><select value={taskForm.workflowId} onChange={(event) => setTaskForm((form) => ({ ...form, workflowId: event.target.value }))}>{workflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label><button className="primary-button" disabled={busy === "run" || !selectedWorkspace} onClick={createTaskAndRun}><Icon name="play" />{busy === "run" ? "正在启动…" : "启动 Run"}</button></div>
-              </div>
-
-              <div className="section-title"><div><h2>最近运行</h2><span>{allRuns.length} runs</span></div></div>
-              <div className="run-list">
-                {allRuns.map((item) => <button key={item.id} className={`run-card ${selectedRunID === item.id ? "selected" : ""}`} onClick={() => { setSelectedRunID(item.id); loadRun(item.id); }}><div className="run-card-top"><StatusPill status={item.status} /><span>{formatTime(item.updatedAt)}</span></div><h3>{item.task.title}</h3><p>{workflows.find((workflow) => workflow.id === item.workflowId)?.name || item.workflowId}</p><div className="run-meta"><span><Icon name="branch" size={14} /> {item.transitionCount || 0} 次转移</span><code>{shortID(item.id)}</code></div></button>)}
-                {!allRuns.length && <div className="empty-state"><div className="empty-icon"><Icon name="play" size={26} /></div><h3>还没有运行记录</h3><p>写下一个任务目标并选择 Workflow，Oneshot 会在后台调度本地 Agent。</p></div>}
-              </div>
-            </section>
-
-            <aside className="inspector panel">
-              {runDetail ? <RunInspector detail={runDetail} workflows={workflows} busy={busy} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} /> : <div className="inspector-empty"><Icon name="branch" size={30} /><h3>选择一个 Run</h3><p>这里会显示当前步骤、Agent 输出、回边和人工介入操作。</p></div>}
-            </aside>
-          </div>
-        ) : view === "workflows" ? (
-          <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} />
-        ) : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage compact workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
+        <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><span className={`connection ${mode}`}>{mode === "wails" ? "local" : "preview"}</span></div>
+        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} /> : view === "tasks" ? <div className="workspace-grid">
+          <section className="content-column">
+            <div className="composer">
+              <Kicker>new run</Kicker>
+              <input className="title-input" placeholder="这次要完成什么？" value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} />
+              <textarea placeholder="描述目标、约束和验收方式。每个步骤会继承这段任务上下文。" value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} />
+              <div className="composer-footer"><label><span>workflow</span><select value={taskForm.workflowId} onChange={(event) => setTaskForm((form) => ({ ...form, workflowId: event.target.value }))}>{workflows.map((workflow) => <option key={workflow.id} value={workflow.id}>{workflow.name}</option>)}</select></label><Action tone="primary" disabled={busy === "run" || !selectedWorkspace} onClick={createTaskAndRun}>{busy === "run" ? "starting…" : "start run"}</Action></div>
+            </div>
+            <div className="section-title"><div><h2>最近运行</h2></div><span>{allRuns.length} runs</span></div>
+            <div className="run-list">{allRuns.map((item) => <button key={item.id} className={`run-card ${selectedRunID === item.id ? "selected" : ""}`} onClick={() => { setSelectedRunID(item.id); loadRun(item.id); }}><StatusPill status={item.status} /><h3>{item.task.title}</h3><p>{workflows.find((workflow) => workflow.id === item.workflowId)?.name || item.workflowId} · {formatTime(item.updatedAt)}</p></button>)}{!allRuns.length && <div className="empty-state"><h3>还没有运行记录</h3><p>写下任务目标并选择 Workflow，Oneshot 会在后台调度本地 Agent。</p></div>}</div>
+          </section>
+          <aside className="inspector">{runDetail ? <RunInspector detail={runDetail} busy={busy} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} /> : <div className="inspector-empty"><h3>选择一个 Run</h3><p>这里会显示当前步骤、Agent 输出、回边和人工介入操作。</p></div>}</aside>
+        </div> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
-
-      {workspaceModal && <Modal title="加入工作目录" subtitle="Agent 只会在你授权的目录中工作" onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>目录路径<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>显示名称（可选）<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder="默认使用目录名" /></label><label>默认 Sandbox<select value={workspaceForm.defaultSandbox} onChange={(event) => setWorkspaceForm((form) => ({ ...form, defaultSandbox: event.target.value }))}><option value="">使用设置中的全局默认</option><option value="read-only">Read only</option><option value="workspace-write">Workspace write</option>{settings.security?.allowFullSandbox && <option value="full">Full access（危险）</option>}</select></label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkspaceModal(false)}>取消</button><button className="primary-button" onClick={addWorkspace} disabled={busy === "workspace"}>加入目录</button></div></div></Modal>}
-      {editor && <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} />}
-      {workerModal && <Modal title="远端 Worker" subtitle="仅用于受信任 LAN / VPN；token 保存于本机 0600 文件" onClose={() => setWorkerModal(false)}><div className="form-stack"><label>Worker ID<input value={workerForm.id} onChange={(event) => setWorkerForm((form) => ({ ...form, id: event.target.value }))} placeholder="mac-mini" /></label><label>名称<input value={workerForm.name} onChange={(event) => setWorkerForm((form) => ({ ...form, name: event.target.value }))} placeholder="Build Mac mini" /></label><label>Base URL<input value={workerForm.baseUrl} onChange={(event) => setWorkerForm((form) => ({ ...form, baseUrl: event.target.value }))} placeholder="http://192.168.1.20:9231" /></label><label>Bearer token<input type="password" value={workerForm.token} onChange={(event) => setWorkerForm((form) => ({ ...form, token: event.target.value }))} placeholder="更新时留空则保留原 token" /></label><label className="checkbox-label"><input type="checkbox" checked={workerForm.enabled} onChange={(event) => setWorkerForm((form) => ({ ...form, enabled: event.target.checked }))} />启用调度</label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkerModal(false)}>取消</button><button className="primary-button" disabled={busy === "worker"} onClick={saveWorker}>保存 Worker</button></div></div></Modal>}
-      <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
-      {notice && <div className={`toast ${notice.type}`}>{notice.type === "success" && <Icon name="check" />}<span>{notice.text}</span></div>}
     </div>
-  );
+    {workspaceModal && <Modal title="加入工作目录" subtitle="Agent 只会在你授权的目录中工作" onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>目录路径<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>显示名称（可选）<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder="默认使用目录名" /></label><label>默认 Sandbox<select value={workspaceForm.defaultSandbox} onChange={(event) => setWorkspaceForm((form) => ({ ...form, defaultSandbox: event.target.value }))}><option value="">使用设置中的全局默认</option><option value="read-only">Read only</option><option value="workspace-write">Workspace write</option>{settings.security?.allowFullSandbox && <option value="full">Full access（危险）</option>}</select></label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkspaceModal(false)}>[ 取消 ]</button><button className="primary-button" onClick={addWorkspace} disabled={busy === "workspace"}>[ 加入目录 ]</button></div></div></Modal>}
+    {workerModal && <Modal title="远端 Worker" subtitle="仅用于受信任 LAN / VPN；token 保存于本机 0600 文件" onClose={() => setWorkerModal(false)}><div className="form-stack"><label>Worker ID<input value={workerForm.id} onChange={(event) => setWorkerForm((form) => ({ ...form, id: event.target.value }))} placeholder="mac-mini" /></label><label>名称<input value={workerForm.name} onChange={(event) => setWorkerForm((form) => ({ ...form, name: event.target.value }))} placeholder="Build Mac mini" /></label><label>Base URL<input value={workerForm.baseUrl} onChange={(event) => setWorkerForm((form) => ({ ...form, baseUrl: event.target.value }))} placeholder="http://192.168.1.20:9231" /></label><label>Bearer token<input type="password" value={workerForm.token} onChange={(event) => setWorkerForm((form) => ({ ...form, token: event.target.value }))} placeholder="更新时留空则保留原 token" /></label><label className="checkbox-label"><input type="checkbox" checked={workerForm.enabled} onChange={(event) => setWorkerForm((form) => ({ ...form, enabled: event.target.checked }))} />启用调度</label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkerModal(false)}>[ 取消 ]</button><button className="primary-button" disabled={busy === "worker"} onClick={saveWorker}>[ 保存 Worker ]</button></div></div></Modal>}
+    <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
+    {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
+  </div>;
 }
 
 function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, runAction }) {
@@ -473,7 +465,7 @@ function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, r
   const currentStep = workflow.steps?.find((step) => step.id === currentNodeID) || workflow.steps?.[0];
   const visibleEvents = runtimeEvents.filter((event) => event.text).slice(-8).reverse();
   return <>
-    <div className="inspector-header"><div><span className="kicker">RUN INSPECTOR</span><h2>{detail.task.title}</h2></div><StatusPill status={run.status} active={detail.active} /></div>
+    <div className="inspector-header"><div><Kicker>RUN INSPECTOR</Kicker><h2>{detail.task.title}</h2></div><StatusPill status={run.status} active={detail.active} /></div>
     <div className="run-id-row"><code>{shortID(run.id)}</code><span>{run.transitionCount || 0} / {workflow.policy?.maxTransitions || 20} 次转移</span></div>
     <div className="current-step"><span>当前步骤</span><div><span className={`runtime-badge ${currentStep?.runtime}`}>{currentStep?.runtime || "—"}</span><strong>{currentStep?.name || run.currentStepId}</strong></div>{run.pauseReason && <p>暂停原因：{run.pauseReason}</p>}{detail.lastError && <p className="error-copy">{detail.lastError}</p>}</div>
     <div className={`flow-mini ${workflow.mode === "dag" ? "dag-run-map" : ""}`}>
@@ -482,15 +474,27 @@ function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, r
     <div className="inspector-section"><div className="inspector-section-title"><h3>步骤记录</h3><span>{stepRuns.length}</span></div><div className="timeline">{stepRuns.map((stepRun) => <div className="timeline-item" key={stepRun.id}><span className={`timeline-dot ${stepRun.status}`} /><div><div><strong>{workflow.steps?.find((step) => step.id === stepRun.stepId)?.name || stepRun.stepId}</strong><StatusPill status={stepRun.status} /></div><p>{stepRun.content || stepRun.error || `第 ${stepRun.attempt} 次执行`}</p><small>{formatTime(stepRun.finishedAt || stepRun.startedAt)}{stepRun.signal ? ` · signal: ${stepRun.signal}` : ""}</small></div></div>)}</div></div>
     <div className="inspector-section runtime-stream"><div className="inspector-section-title"><h3>Agent 动态</h3><span>LIVE</span></div>{visibleEvents.map((event) => <div className="event-row" key={`${event.stepRunId}-${event.seq}`}><span>{event.kind}</span><p>{event.text}</p></div>)}{!visibleEvents.length && <p className="muted-copy">Agent 输出会实时保存在当前 StepRun 的 events.jsonl。</p>}</div>
     <div className="run-controls">
-      {run.status === "running" && <button className="danger-outline" disabled={busy === "interrupt"} onClick={() => runAction("interrupt")}><Icon name="pause" />打断并暂停</button>}
-      {run.status === "paused" && <><textarea value={resumeInstruction} onChange={(event) => setResumeInstruction(event.target.value)} placeholder="补充指令（可选），恢复后注入当前步骤…" /><div><button className="secondary-button danger" disabled={busy === "cancel"} onClick={() => runAction("cancel")}><Icon name="stop" />终止</button><button className="primary-button" disabled={busy === "resume"} onClick={() => runAction("resume")}><Icon name="play" />恢复运行</button></div></>}
+      {run.status === "running" && <Action tone="danger" disabled={busy === "interrupt"} onClick={() => runAction("interrupt")}>打断并暂停</Action>}
+      {run.status === "paused" && <><textarea value={resumeInstruction} onChange={(event) => setResumeInstruction(event.target.value)} placeholder="补充指令（可选），恢复后注入当前步骤…" /><div><Action tone="danger" disabled={busy === "cancel"} onClick={() => runAction("cancel")}>终止</Action><Action tone="primary" disabled={busy === "resume"} onClick={() => runAction("resume")}>恢复运行</Action></div></>}
       {["completed", "failed", "cancelled"].includes(run.status) && <div className="terminal-note">这个 Run 已结束，完整记录仍保存在本机。</div>}
     </div>
   </>;
 }
 
 function WorkflowLibrary({ workflows, runtimes, openEditor }) {
-  return <div className="library-page"><div className="library-hero"><div><span className="kicker">LOOPS & PARALLEL DAG</span><h2>把你的工作方式变成 Workflow</h2><p>串行模式适合可回环流程；DAG 模式让无依赖的只读 Agent 并行，并在 join 节点汇总。</p></div><div className="hero-actions"><button className="secondary-button" onClick={() => openEditor(singleTemplate)}>单 Agent</button><button className="secondary-button" onClick={() => openEditor(loopTemplate)}>Review Loop</button><button className="primary-button" onClick={() => openEditor(dagTemplate)}><Icon name="plus" />并行 DAG</button></div></div><div className="workflow-grid">{workflows.map((workflow) => <article className="workflow-card panel" key={workflow.id}><div className="workflow-card-top"><div className="workflow-symbol"><Icon name="workflow" /></div><span className={`mode-chip ${workflow.mode || "serial"}`}>{(workflow.mode || "serial").toUpperCase()}</span><button className="icon-button" onClick={() => openEditor(workflow)}><Icon name="edit" /></button></div><h3>{workflow.name}</h3><p>{workflow.description || "自定义本地 Agent 调度流程"}</p><div className="workflow-path">{workflow.steps?.map((step, index) => <span key={step.id}><b className={step.runtime}>{step.runtime.slice(0, 1).toUpperCase()}</b><em>{step.name}</em>{index < workflow.steps.length - 1 && <i>{workflow.mode === "dag" ? "⋯" : "→"}</i>}</span>)}</div><div className="workflow-card-footer"><span>{workflow.steps?.length || 0} steps</span><span>{workflow.policy?.maxTransitions || 20} max transitions</span></div></article>)}</div><div className="runtime-callout panel"><div><h3>Runtime 可用性</h3><p>Workflow 不会自动替换缺失的 runtime，以免破坏角色语义。</p></div>{runtimes.map((runtime) => <span key={runtime.id} className={runtime.available ? "available" : "missing"}><i />{runtime.name} · {runtime.available ? "Ready" : "Missing"}</span>)}</div></div>;
+  const path = (workflow) => {
+    if (workflow.mode === "dag") {
+      const roots = (workflow.steps || []).filter((step) => !(step.dependsOn || []).length).map((step) => step.name);
+      const joins = (workflow.steps || []).filter((step) => (step.dependsOn || []).length).map((step) => step.name);
+      return `${roots.join(" ∥ ")}${joins.length ? ` → ${joins.join(" → ")}` : ""}`;
+    }
+    return `${(workflow.steps || []).map((step) => step.name).join(" → ")}${workflow.steps?.length > 1 ? " ↺" : " → $done"}`;
+  };
+  return <div className="library-page">
+    <div className="library-hero"><div><Kicker>loops &amp; parallel dag</Kicker><h2>把你的工作方式变成 Workflow</h2></div><div className="hero-actions"><Action onClick={() => openEditor(loopTemplate)}>+ loop</Action><Action tone="primary" onClick={() => openEditor(dagTemplate)}>+ 并行 dag</Action></div></div>
+    <div className="workflow-grid">{workflows.map((workflow) => <button className="workflow-card" key={workflow.id} onClick={() => openEditor(workflow)}><ModeBadge mode={workflow.mode || "serial"} /><strong>{workflow.name}</strong><span className="workflow-path">{path(workflow)}</span><small>{workflow.steps?.length || 0} {workflow.mode === "dag" ? "nodes · all join" : `${workflow.steps?.length === 1 ? "step" : "steps"} · ${workflow.policy?.maxTransitions || 20} max`}</small><b>[ edit ]</b></button>)}</div>
+    <div className="runtime-callout">Workflow 不会自动替换缺失的 runtime，以免破坏角色语义。{runtimes.some((runtime) => !runtime.available) && <strong>存在缺失 Runtime</strong>}</div>
+  </div>;
 }
 
 function WorkerPage({ workers, health, checkWorker, deleteWorker, openWorker }) {
@@ -498,13 +502,23 @@ function WorkerPage({ workers, health, checkWorker, deleteWorker, openWorker }) 
 }
 
 function Modal({ title, subtitle, onClose, children, wide = false }) {
-  return <div className="modal-backdrop"><div className={`modal ${wide ? "wide" : ""}`}><div className="modal-header"><div><h2>{title}</h2><p>{subtitle}</p></div><button className="icon-button" onClick={onClose}><Icon name="close" /></button></div>{children}</div></div>;
+  if (wide) return <section className="workflow-editor-surface legacy-wide-editor"><Toolbar className="modal-header editor-toolbar"><Action onClick={onClose}>&lt; 返回</Action><div><h2>{title}</h2><p>{subtitle}</p></div></Toolbar>{children}</section>;
+  return <div className="modal-backdrop"><div className="modal"><div className="modal-header"><div><h2>{title}</h2><p>{subtitle}</p></div><button className="text-button" onClick={onClose}>[ 关闭 ]</button></div>{children}</div></div>;
 }
 
 function WorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, updateStep, updateTransition, removeTransition, runtimes, workers, defaultSandbox, allowFullSandbox, onClose }) {
   if (editor.mode === "dag") return <DAGWorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} runtimes={runtimes} workers={workers} defaultSandbox={defaultSandbox} allowFullSandbox={allowFullSandbox} onClose={onClose} />;
   const addStep = () => setEditor((current) => ({ ...current, steps: [...current.steps, { id: `step_${current.steps.length + 1}`, name: "新步骤", runtime: "codex", model: "", sandbox: defaultSandbox, rolePrompt: "你在这个流程中的角色。", instruction: "描述这个步骤要完成的事情。", transitions: { completed: "$done" } }] }));
-  return <Modal wide title="Workflow 编辑器" subtitle="步骤发出 signal，转移表决定继续、回环、暂停或完成" onClose={onClose}><div className="editor-layout"><div className="editor-main"><div className="editor-basics"><label>Workflow ID<input value={editor.id} onChange={(event) => setEditor({ ...editor, id: event.target.value })} /></label><label>名称<input value={editor.name} onChange={(event) => setEditor({ ...editor, name: event.target.value })} /></label><label className="full">描述<textarea value={editor.description || ""} onChange={(event) => setEditor({ ...editor, description: event.target.value })} /></label><label>入口步骤<select value={editor.entryStepId} onChange={(event) => setEditor({ ...editor, entryStepId: event.target.value })}>{editor.steps.map((step) => <option key={step.id} value={step.id}>{step.name}</option>)}</select></label><label>最大转移次数<input type="number" value={editor.policy.maxTransitions} onChange={(event) => setEditor({ ...editor, policy: { ...editor.policy, maxTransitions: Number(event.target.value) } })} /></label></div><div className="editor-section-title"><div><h3>步骤与转移</h3><p>普通 target 指向步骤，保留 target 为 $done / $pause / $fail。</p></div><button className="secondary-button compact" onClick={addStep}><Icon name="plus" />添加步骤</button></div><div className="step-editor-list">{editor.steps.map((step, stepIndex) => <div className="step-editor" key={`${step.id}-${stepIndex}`}><div className="step-editor-number">{stepIndex + 1}</div><div className="step-editor-body"><div className="step-editor-grid"><label>Step ID<input value={step.id} onChange={(event) => updateStep(stepIndex, "id", event.target.value)} /></label><label>显示名称<input value={step.name} onChange={(event) => updateStep(stepIndex, "name", event.target.value)} /></label><label>Runtime<select value={step.runtime} onChange={(event) => updateStep(stepIndex, "runtime", event.target.value)}>{runtimes.map((runtime) => <option key={runtime.id} value={runtime.id}>{runtime.name}{runtime.available ? "" : "（未安装）"}</option>)}</select></label><label>Sandbox<select value={step.sandbox || "workspace-write"} onChange={(event) => updateStep(stepIndex, "sandbox", event.target.value)}><option value="read-only">Read only</option><option value="workspace-write">Workspace write</option><option value="full">Full access</option></select></label><label className="full">角色提示<textarea value={step.rolePrompt} onChange={(event) => updateStep(stepIndex, "rolePrompt", event.target.value)} /></label><label className="full">步骤指令<textarea value={step.instruction} onChange={(event) => updateStep(stepIndex, "instruction", event.target.value)} /></label></div><div className="transition-editor"><span>Signals & targets</span>{Object.entries(step.transitions || {}).map(([signal, target]) => <div className="transition-row" key={signal}><input value={signal} onChange={(event) => updateTransition(stepIndex, signal, event.target.value, target)} /><span>→</span><input value={target} onChange={(event) => updateTransition(stepIndex, signal, signal, event.target.value)} /><button onClick={() => removeTransition(stepIndex, signal)}><Icon name="close" size={14} /></button></div>)}<button className="text-button" onClick={() => updateTransition(stepIndex, `signal_${Object.keys(step.transitions || {}).length + 1}`, `signal_${Object.keys(step.transitions || {}).length + 1}`, "$done")}><Icon name="plus" size={14} />添加 signal</button></div></div></div>)}</div></div><aside className="editor-side"><div className="graph-preview"><span className="kicker">FLOW PREVIEW</span>{editor.steps.map((step, index) => <div className="graph-node" key={step.id}><span>{index + 1}</span><div><strong>{step.name || step.id}</strong><small>{step.runtime}</small></div></div>)}<div className="graph-legend"><span><i className="done" />$done</span><span><i className="pause" />$pause</span><span><i className="loop" />回边 / 下一步</span></div></div><div className={`validation-box ${validation.length ? "has-errors" : "valid"}`}><div><strong>{validation.length ? `${validation.length} 个配置问题` : "等待校验"}</strong><button className="text-button" onClick={validateEditor}>立即校验</button></div>{validation.map((issue, index) => <p key={`${issue.path}-${index}`}><code>{issue.path}</code>{issue.message}</p>)}{!validation.length && <p>保存时会检查入口、可达性、完成路径和 policy 边界。</p>}</div></aside></div><div className="editor-footer"><button className="secondary-button" onClick={onClose}>取消</button><button className="primary-button" disabled={busy === "workflow"} onClick={saveWorkflow}>{busy === "workflow" ? "保存中…" : "校验并保存"}</button></div></Modal>;
+  const removeStep = (index) => setEditor((current) => ({ ...current, steps: current.steps.filter((_, itemIndex) => itemIndex !== index) }));
+  return <section className="workflow-editor-surface">
+    <Toolbar className="editor-toolbar"><Action onClick={onClose}>&lt; 返回</Action><strong>{editor.name}</strong><code>{editor.id} · serial</code><ToolbarSpacer /><Action tone="cyan" onClick={validateEditor}>校验</Action><Action tone="primary" disabled={busy === "workflow"} onClick={saveWorkflow}>{busy === "workflow" ? "保存中" : "保存"}</Action></Toolbar>
+    <div className="editor-layout"><div className="editor-main"><div className="step-editor-list">{editor.steps.map((step, stepIndex) => <section className="step-editor" key={`${step.id}-${stepIndex}`}>
+      <div className="step-editor-head"><b>{String(stepIndex + 1).padStart(2, "0")}</b><input aria-label="步骤名称" value={step.name} onChange={(event) => updateStep(stepIndex, "name", event.target.value)} /><select aria-label="Runtime" value={step.runtime} onChange={(event) => updateStep(stepIndex, "runtime", event.target.value)}>{runtimes.map((runtime) => <option key={runtime.id} value={runtime.id}>{runtime.id}{runtime.available ? "" : "（未安装）"}</option>)}</select><select aria-label="Sandbox" value={step.sandbox || "workspace-write"} onChange={(event) => updateStep(stepIndex, "sandbox", event.target.value)}><option value="read-only">read-only</option><option value="workspace-write">workspace-write</option><option value="full" disabled={!allowFullSandbox && step.sandbox !== "full"}>full-access</option></select><button className="text-button danger" disabled={editor.steps.length <= 1} onClick={() => removeStep(stepIndex)}>[ 删除步骤 ]</button></div>
+      <div className="step-editor-grid"><label>角色提示<textarea value={step.rolePrompt} onChange={(event) => updateStep(stepIndex, "rolePrompt", event.target.value)} /></label><label>步骤指令<textarea value={step.instruction} onChange={(event) => updateStep(stepIndex, "instruction", event.target.value)} /></label></div>
+      <div className="transition-editor"><span>signals → targets</span>{Object.entries(step.transitions || {}).map(([signal, target]) => <div className="transition-row" key={signal}><input value={signal} onChange={(event) => updateTransition(stepIndex, signal, event.target.value, target)} /><span>→</span><input value={target} onChange={(event) => updateTransition(stepIndex, signal, signal, event.target.value)} /><button onClick={() => removeTransition(stepIndex, signal)}>× 删除</button></div>)}<button className="text-button" onClick={() => updateTransition(stepIndex, `signal_${Object.keys(step.transitions || {}).length + 1}`, `signal_${Object.keys(step.transitions || {}).length + 1}`, "$done")}>[ + signal ]</button></div>
+    </section>)}</div><button className="text-button add-step" onClick={addStep}>[ + 添加步骤 ]</button></div>
+    <aside className="editor-side"><span className="kicker">flow preview</span><pre className="flow-ascii">{editor.steps.map((step, index) => `${index ? "│\n" : ""}┌─ ${index + 1} ${step.name}      ${step.runtime}\n${Object.entries(step.transitions || {}).map(([signal, target]) => `│  ${signal} → ${target}`).join("\n")}`).join("\n")}</pre><div className="policy-box"><span>policy</span><p>max transitions <b>{editor.policy?.maxTransitions || 20}</b></p><p>连续失败上限 <b>{editor.policy?.maxConsecutiveFailures || 3}</b></p><p>单步超时 <b>{editor.policy?.stepTimeoutSeconds || 1800}s</b></p></div><div className={`validation-box ${validation.length ? "has-errors" : "valid"}`}><div><strong>validation</strong><b>{validation.length ? `${validation.length} errors` : "ok"}</b></div>{validation.map((issue, index) => <p key={`${issue.path}-${index}`}><code>{issue.path}</code>{issue.message}</p>)}{!validation.length && <p>保存时会检查入口、可达性、完成路径和 policy 边界。</p>}</div></aside></div>
+  </section>;
 }
 
 function DAGWorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, runtimes, workers, defaultSandbox, allowFullSandbox, onClose }) {

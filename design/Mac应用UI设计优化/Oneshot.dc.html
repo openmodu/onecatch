@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<template id="__bundler_thumbnail" data-bg-color="#F5F5F0">
+  <svg viewBox="0 0 120 80" xmlns="http://www.w3.org/2000/svg">
+    <rect width="120" height="80" fill="#F5F5F0"/>
+    <rect x="8" y="8" width="30" height="64" fill="#EBEBE6" stroke="#694D1F" stroke-width="1"/>
+    <rect x="46" y="8" width="66" height="64" fill="none" stroke="#694D1F" stroke-width="1"/>
+    <text x="14" y="24" font-family="monospace" font-size="9" font-weight="700" fill="#694D1F">ONE</text>
+    <text x="52" y="24" font-family="monospace" font-size="8" fill="#407338">&gt; oneshot</text>
+    <rect x="52" y="34" width="52" height="10" fill="none" stroke="#33732E" stroke-width="1"/>
+    <rect x="52" y="50" width="52" height="16" fill="none" stroke="#a15e14" stroke-width="0.75"/>
+  </svg>
+</template>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="./mirage-tokens.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #8a8880; }
+  a, a:hover { color: var(--acp-accent); }
+  input::placeholder, textarea::placeholder { color: var(--acp-text-soft); }
+  @keyframes acp-pulse { 50% { opacity: .35; } }
+  body[data-theme="dark"] {
+    color-scheme: dark;
+    --acp-canvas: #1C1C1C; --acp-ink: #252525; --acp-panel: #252525; --acp-panel-elev: #313131;
+    --acp-line: rgba(255,255,255,0.16); --acp-text: #EFEFEF;
+    --acp-text-muted: rgba(239,239,239,0.68); --acp-text-soft: rgba(239,239,239,0.46);
+    --acp-accent: #EDC278; --acp-accent-soft: #B3F2AD; --acp-good: #91E082;
+    --acp-warn: #FFBA54; --acp-danger: #FF6B61; --acp-cyan: #73E0EB;
+  }
+  body[data-theme="light"] {
+    color-scheme: light;
+    --acp-canvas: #F5F5F0; --acp-ink: #EBEBE6; --acp-panel: #EBEBE6; --acp-panel-elev: #DFDFD7;
+    --acp-line: rgba(115,110,94,0.36); --acp-text: #1A1A1A;
+    --acp-text-muted: rgba(26,26,26,0.68); --acp-text-soft: rgba(26,26,26,0.46);
+    --acp-accent: #694D1F; --acp-accent-soft: #407338; --acp-good: #33732E;
+    --acp-warn: #A15E14; --acp-danger: #AD2E24; --acp-cyan: #216E78;
+  }
+</style>
+</helmet>
+<div data-screen-label="Oneshot 重设计" style="width: 1280px; height: 800px; margin: 24px auto; display: flex; flex-direction: column; background: var(--acp-canvas); color: var(--acp-text); font: var(--fw-regular) 12px/1.45 var(--font-mono); box-shadow: 0 22px 60px rgba(0,0,0,.35); border-radius: 10px; overflow: hidden;">
+
+  <!-- macOS titlebar -->
+  <div style="height: 38px; flex: 0 0 38px; display: flex; align-items: center; padding: 0 14px; border-bottom: 1px solid var(--acp-line); background: var(--acp-ink); gap: 8px;">
+    <div style="display: flex; gap: 8px;">
+      <span style="width: 12px; height: 12px; border-radius: 999px; background: #FF5F57;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 999px; background: #FEBC2E;"></span>
+      <span style="width: 12px; height: 12px; border-radius: 999px; background: #28C840;"></span>
+    </div>
+    <div style="flex: 1; text-align: center; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-muted);">Oneshot</div>
+    <div style="width: 52px;"></div>
+  </div>
+
+  <div style="flex: 1; min-height: 0; display: flex;">
+
+    <!-- rail -->
+    <aside style="width: 216px; flex: 0 0 216px; display: flex; flex-direction: column; border-right: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent);">
+      <div style="padding: 18px 16px 14px; border-bottom: 1px solid var(--acp-line);">
+        <div style="font: var(--fw-bold) 15px/1 var(--font-mono); letter-spacing: .16em; color: var(--acp-accent);">ONESHOT</div>
+        <div style="margin-top: 6px; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">// local agents</div>
+      </div>
+
+      <div style="padding: 14px 16px 12px; border-bottom: 1px solid var(--acp-line);">
+        <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft); margin-bottom: 9px;">cwd</div>
+        <button onClick="{{ noop }}" style="all: unset; cursor: pointer; display: block; width: 100%; box-sizing: border-box; padding: 8px 10px; background: color-mix(in oklab, var(--acp-accent-soft) 12%, transparent); border-left: 2px solid var(--acp-accent-soft);">
+          <div style="font: var(--fw-semibold) 12px/1.2 var(--font-mono); color: var(--acp-text);">oneshot</div>
+          <div style="margin-top: 4px; font: var(--fw-regular) 10px/1.2 var(--font-mono); color: var(--acp-text-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">~/Code/openmodu/oneshot</div>
+        </button>
+        <button onClick="{{ noop }}" style="all: unset; cursor: pointer; display: inline-block; margin-top: 8px; padding: 6px 8px; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ + 加入工作目录 ]</button>
+      </div>
+
+      <nav style="padding: 12px 8px; display: flex; flex-direction: column; gap: 2px;">
+        <sc-for list="{{ navItems }}" as="nav" hint-placeholder-count="3">
+          <button onClick="{{ nav.go }}" style="all: unset; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 9px 10px; background: {{ nav.bg }}; color: {{ nav.color }};" style-hover="background: color-mix(in oklab, var(--acp-text) 6%, transparent);">
+            <span style="font: var(--fw-bold) 11px/1 var(--font-mono); width: 14px; text-align: center;">{{ nav.glyph }}</span>
+            <span style="font: {{ nav.font }};">{{ nav.label }}</span>
+            <span style="margin-left: auto; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">{{ nav.caption }}</span>
+          </button>
+        </sc-for>
+      </nav>
+
+      <div style="margin-top: auto; padding: 12px 16px; border-top: 1px solid var(--acp-line); display: flex; flex-direction: column; gap: 8px;">
+        <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft);">runtime</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 6px; height: 6px; border-radius: 999px; background: var(--acp-good); box-shadow: 0 0 5px var(--acp-good);"></span>
+          <span style="font: var(--fw-medium) 11px/1 var(--font-mono);">codex</span>
+          <span style="margin-left: auto; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">0.98.0</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="width: 6px; height: 6px; border-radius: 999px; background: var(--acp-good); box-shadow: 0 0 5px var(--acp-good);"></span>
+          <span style="font: var(--fw-medium) 11px/1 var(--font-mono);">claude</span>
+          <span style="margin-left: auto; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">2.1.4</span>
+        </div>
+        <div style="margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--acp-line); font: var(--fw-regular) 10px/1.5 var(--font-mono); color: var(--acp-text-soft);">数据仅保存在本机<br><span style="color: var(--acp-text-muted);">~/.oneshot/</span></div>
+      </div>
+    </aside>
+
+    <!-- main -->
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+
+      <!-- command-line strip -->
+      <div style="height: 44px; flex: 0 0 44px; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--acp-line);">
+        <span style="font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-accent);">&gt;</span>
+        <span style="font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-muted);">{{ cmdline }}</span>
+        <span style="margin-left: auto; display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px; border-radius: 999px; font: var(--fw-bold) 11px/1 var(--font-mono); color: var(--acp-good); background: color-mix(in oklab, var(--acp-good) 14%, transparent);"><span style="width: 7px; height: 7px; border-radius: 999px; background: var(--acp-good); box-shadow: 0 0 5px var(--acp-good);"></span>local</span>
+      </div>
+
+      <!-- ===================== RUNS VIEW ===================== -->
+      <sc-if value="{{ showRuns }}" hint-placeholder-val="{{ true }}">
+      <div style="flex: 1; min-height: 0; display: flex;">
+        <section style="flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-y: auto;">
+
+          <!-- composer -->
+          <div style="padding: 16px 20px; border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent); display: flex; flex-direction: column; gap: 10px;">
+            <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft);">new run</div>
+            <input value="{{ taskTitle }}" onChange="{{ setTaskTitle }}" placeholder="这次要完成什么？" style="box-sizing: border-box; width: 100%; padding: 10px 12px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-semibold) 13px/1.3 var(--font-mono); color: var(--acp-text);">
+            <textarea value="{{ taskPrompt }}" onChange="{{ setTaskPrompt }}" placeholder="描述目标、约束和验收方式。每个步骤会继承这段任务上下文。" style="box-sizing: border-box; width: 100%; height: 56px; resize: none; padding: 10px 12px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text);"></textarea>
+            <div style="display: flex; align-items: center; gap: 14px;">
+              <span style="font: var(--fw-regular) 11px/1 var(--font-mono); color: var(--acp-text-soft);">workflow</span>
+              <select value="{{ composerWorkflow }}" onChange="{{ setComposerWorkflow }}" style="padding: 6px 8px; background: var(--acp-ink); border: 1px solid var(--acp-line); border-radius: 2px; outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);">
+                <option value="implement_review">实现与审查 Loop</option>
+                <option value="single_agent">单 Agent 完成</option>
+                <option value="parallel_review">并行审查 DAG</option>
+              </select>
+              <button onClick="{{ startRun }}" style="all: unset; cursor: pointer; margin-left: auto; padding: 7px 12px; font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-canvas); background: var(--acp-accent-soft);" style-hover="background: var(--acp-good);">[ start run ]</button>
+            </div>
+          </div>
+
+          <!-- run list -->
+          <div style="padding: 14px 20px 8px; display: flex; align-items: baseline; justify-content: space-between;">
+            <span style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft);">最近运行</span>
+            <span style="font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">{{ runCount }} runs</span>
+          </div>
+          <div style="display: flex; flex-direction: column;">
+            <sc-for list="{{ runRows }}" as="run" hint-placeholder-count="3">
+              <button onClick="{{ run.select }}" style="all: unset; cursor: pointer; display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--acp-line); background: {{ run.bg }};" style-hover="background: color-mix(in oklab, var(--acp-text) 4%, transparent);">
+                <span style="flex: 0 0 auto; font: var(--t-mono-11b); padding: 4px 8px; border-radius: 2px; border: 1px solid {{ run.toneBorder }}; background: {{ run.toneBg }}; color: {{ run.tone }};">{{ run.statusLabel }}</span>
+                <span style="min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--fw-semibold) 12px/1.3 var(--font-mono); color: var(--acp-text);">{{ run.title }}</span>
+                <span style="margin-left: auto; flex: 0 0 auto; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">{{ run.meta }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </section>
+
+        <!-- inspector -->
+        <aside style="width: 400px; flex: 0 0 400px; border-left: 1px solid var(--acp-line); overflow-y: auto; display: flex; flex-direction: column;">
+          <div style="padding: 16px 18px; border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent);">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;">
+              <div>
+                <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft);">RUN 8a3c2f01</div>
+                <div style="margin-top: 7px; font: var(--fw-semibold) 13px/1.35 var(--font-mono); color: var(--acp-text);">优化本地 Agent 调度流程</div>
+              </div>
+              <span style="flex: 0 0 auto; font: var(--t-mono-11b); padding: 5px 10px; border-radius: 2px; border: 1px solid color-mix(in oklab, var(--acp-warn) 38%, transparent); background: color-mix(in oklab, var(--acp-warn) 10%, transparent); color: var(--acp-warn); animation: acp-pulse 1.6s infinite;">等待介入</span>
+            </div>
+            <div style="margin-top: 10px; display: flex; gap: 14px; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">
+              <span>ctx 实现与审查 Loop</span>
+              <span>2/20 次转移</span>
+              <span>暂停: workflow_signal</span>
+            </div>
+          </div>
+
+          <!-- flow map -->
+          <div style="padding: 14px 18px; border-bottom: 1px solid var(--acp-line);">
+            <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft); margin-bottom: 10px;">flow</div>
+            <div style="display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font: var(--fw-bold) 11px/1 var(--font-mono); color: var(--acp-accent);">▸</span>
+                <span style="font: var(--fw-semibold) 12px/1 var(--font-mono); color: var(--acp-text);">实现</span>
+                <span style="font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">codex · workspace-write</span>
+                <span style="margin-left: auto; font: var(--fw-bold) 10px/1 var(--font-mono); color: var(--acp-warn);">PAUSED</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 10px;">
+                <span style="font: var(--fw-regular) 11px/1 var(--font-mono); color: var(--acp-text-soft);">·</span>
+                <span style="font: var(--fw-regular) 12px/1 var(--font-mono); color: var(--acp-text-muted);">审查</span>
+                <span style="font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">claude · read-only</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- step log -->
+          <div style="padding: 14px 18px; border-bottom: 1px solid var(--acp-line);">
+            <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft); margin-bottom: 10px;">步骤记录</div>
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+              <div style="border-left: 2px solid var(--acp-good); padding-left: 10px;">
+                <div style="display: flex; gap: 8px; align-items: baseline;">
+                  <span style="font: var(--fw-semibold) 11px/1 var(--font-mono); color: var(--acp-text);">实现</span>
+                  <span style="font: var(--fw-bold) 10px/1 var(--font-mono); color: var(--acp-good);">succeeded</span>
+                  <span style="margin-left: auto; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">ready_for_review</span>
+                </div>
+                <p style="margin: 5px 0 0; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text-muted);">完成后端应用服务</p>
+              </div>
+              <div style="border-left: 2px solid var(--acp-good); padding-left: 10px;">
+                <div style="display: flex; gap: 8px; align-items: baseline;">
+                  <span style="font: var(--fw-semibold) 11px/1 var(--font-mono); color: var(--acp-text);">审查</span>
+                  <span style="font: var(--fw-bold) 10px/1 var(--font-mono); color: var(--acp-good);">succeeded</span>
+                  <span style="margin-left: auto; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">changes_requested</span>
+                </div>
+                <p style="margin: 5px 0 0; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text-muted);">要求完善中断反馈</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- agent output -->
+          <div style="padding: 14px 18px; flex: 1;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+              <span style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft);">agent 动态</span>
+              <span style="font: var(--fw-bold) 10px/1 var(--font-mono); color: var(--acp-cyan); padding: 4px 8px; background: color-mix(in oklab, var(--acp-cyan) 10%, transparent);">tail -f</span>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 10px;">
+              <div>
+                <span style="font: var(--fw-bold) 10px/1 var(--font-mono); text-transform: uppercase; color: var(--acp-warn);">tool_use</span>
+                <p style="margin: 4px 0 0; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text-muted); white-space: pre-wrap;">go test ./...</p>
+              </div>
+              <div>
+                <span style="font: var(--fw-bold) 10px/1 var(--font-mono); text-transform: uppercase; color: var(--acp-cyan);">message</span>
+                <p style="margin: 4px 0 0; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text-muted);">核心流程正确，建议补充中断态 UI。</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- action center -->
+          <div style="padding: 14px 18px 16px; border-top: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-warn) 6%, transparent);">
+            <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-warn); margin-bottom: 8px;">这个 Agent 在等你</div>
+            <textarea placeholder="补充指令（可选），恢复后注入当前步骤…" style="box-sizing: border-box; width: 100%; height: 48px; resize: none; padding: 9px 11px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text);"></textarea>
+            <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px;">
+              <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 12px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-danger);" style-hover="background: var(--acp-danger); color: var(--acp-canvas);">[ 终止 ]</button>
+              <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 12px; font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-canvas); background: var(--acp-accent-soft);" style-hover="background: var(--acp-good);">[ 恢复运行 ]</button>
+            </div>
+          </div>
+        </aside>
+      </div>
+      </sc-if>
+
+      <!-- ===================== WORKFLOWS VIEW ===================== -->
+      <sc-if value="{{ showWorkflows }}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; min-height: 0; overflow-y: auto;">
+        <div style="padding: 18px 20px 16px; border-bottom: 1px solid var(--acp-line); display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;">
+          <div>
+            <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft);">loops &amp; parallel dag</div>
+            <div style="margin-top: 8px; font: var(--fw-bold) 16px/1.3 var(--font-mono); color: var(--acp-text);">把你的工作方式变成 Workflow</div>
+          </div>
+          <div style="display: flex; gap: 10px; flex: 0 0 auto;">
+            <button onClick="{{ openEditor }}" style="all: unset; cursor: pointer; padding: 7px 12px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ + loop ]</button>
+            <button onClick="{{ openDag }}" style="all: unset; cursor: pointer; padding: 7px 12px; font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-canvas); background: var(--acp-accent-soft);" style-hover="background: var(--acp-good);">[ + 并行 dag ]</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column;">
+          <sc-for list="{{ workflowRows }}" as="wf" hint-placeholder-count="3">
+            <button onClick="{{ wf.open }}" style="all: unset; cursor: pointer; display: grid; grid-template-columns: 76px 200px 1fr 150px 76px; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--acp-line);" style-hover="background: color-mix(in oklab, var(--acp-text) 4%, transparent);">
+              <span style="justify-self: start; font: var(--t-mono-11b); padding: 4px 0; width: 68px; text-align: center; border-radius: 2px; border: 1px solid {{ wf.modeBorder }}; background: {{ wf.modeBg }}; color: {{ wf.modeColor }};">{{ wf.mode }}</span>
+              <span style="font: var(--fw-semibold) 12px/1.3 var(--font-mono); color: var(--acp-text);">{{ wf.name }}</span>
+              <span style="font: var(--fw-regular) 11px/1.4 var(--font-mono); color: var(--acp-text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{ wf.path }}</span>
+              <span style="text-align: right; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">{{ wf.meta }}</span>
+              <span style="justify-self: end; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-accent); padding: 7px 10px;" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ edit ]</span>
+            </button>
+          </sc-for>
+        </div>
+        <div style="margin: 18px 20px; padding: 12px 14px; border-left: 2px solid var(--acp-warn); background: color-mix(in oklab, var(--acp-warn) 8%, transparent); font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text-muted);">Workflow 不会自动替换缺失的 runtime，以免破坏角色语义。</div>
+      </div>
+      </sc-if>
+
+      <!-- ===================== SERIAL EDITOR ===================== -->
+      <sc-if value="{{ showEditor }}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+        <div style="height: 46px; flex: 0 0 46px; display: flex; align-items: center; gap: 14px; padding: 0 20px; border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent);">
+          <button onClick="{{ closeEditor }}" style="all: unset; cursor: pointer; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-muted);" style-hover="background: var(--acp-text-muted); color: var(--acp-canvas);">[ &lt; 返回 ]</button>
+          <span style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text);">实现与审查 Loop</span>
+          <span style="font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">implement_review · serial</span>
+          <div style="margin-left: auto; display: flex; gap: 10px;">
+            <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 12px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-cyan);" style-hover="background: var(--acp-cyan); color: var(--acp-canvas);">[ 校验 ]</button>
+            <button onClick="{{ closeEditor }}" style="all: unset; cursor: pointer; padding: 7px 12px; font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-canvas); background: var(--acp-accent-soft);" style-hover="background: var(--acp-good);">[ 保存 ]</button>
+          </div>
+        </div>
+        <div style="flex: 1; min-height: 0; display: flex;">
+          <div style="flex: 1; min-width: 0; overflow-y: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px;">
+
+            <sc-for list="{{ editorSteps }}" as="step" hint-placeholder-count="2">
+              <div style="border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent); padding: 14px 16px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                  <span style="font: var(--fw-bold) 11px/1 var(--font-mono); color: var(--acp-accent);">{{ step.index }}</span>
+                  <input defaultValue="{{ step.name }}" style="background: transparent; border: 0; border-bottom: 1px dashed var(--acp-line); outline: none; font: var(--fw-bold) 13px/1.4 var(--font-mono); color: var(--acp-text); width: 120px;">
+                  <select defaultValue="{{ step.runtime }}" style="padding: 6px 8px; background: var(--acp-ink); border: 1px solid color-mix(in oklab, {{ step.runtimeTone }} 45%, transparent); border-radius: 2px; outline: none; font: var(--fw-bold) 12px/1 var(--font-mono); color: {{ step.runtimeTone }}; cursor: pointer;">
+                    <option value="codex">codex</option>
+                    <option value="claude">claude</option>
+                  </select>
+                  <select defaultValue="{{ step.sandbox }}" style="padding: 6px 8px; background: var(--acp-ink); border: 1px solid var(--acp-line); border-radius: 2px; outline: none; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-muted); cursor: pointer;">
+                    <option value="workspace-write">workspace-write</option>
+                    <option value="read-only">read-only</option>
+                    <option value="full-access">full-access</option>
+                  </select>
+                  <button onClick="{{ noop }}" style="all: unset; cursor: pointer; margin-left: auto; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-soft);" style-hover="background: var(--acp-danger); color: var(--acp-canvas);">[ 删除步骤 ]</button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                  <label style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">角色提示</span>
+                    <textarea defaultValue="{{ step.rolePrompt }}" style="box-sizing: border-box; height: 44px; resize: none; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text);"></textarea>
+                  </label>
+                  <label style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">步骤指令</span>
+                    <textarea defaultValue="{{ step.instruction }}" style="box-sizing: border-box; height: 44px; resize: none; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text);"></textarea>
+                  </label>
+                </div>
+                <div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--acp-line);">
+                  <div style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft); margin-bottom: 10px;">signals → targets</div>
+                  <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <sc-for list="{{ step.transitions }}" as="tr" hint-placeholder-count="2">
+                      <div style="display: flex; align-items: center; gap: 12px;">
+                        <input defaultValue="{{ tr.signal }}" style="box-sizing: border-box; width: 200px; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-semibold) 12px/1 var(--font-mono); color: var(--acp-cyan);">
+                        <span style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text-soft);">→</span>
+                        <input defaultValue="{{ tr.target }}" style="box-sizing: border-box; width: 160px; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-semibold) 12px/1 var(--font-mono); color: {{ tr.targetColor }};">
+                        <button onClick="{{ noop }}" title="删除此 signal" style="all: unset; cursor: pointer; margin-left: auto; padding: 7px 10px; border: 1px solid var(--acp-line); border-radius: 2px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-soft);" style-hover="color: var(--acp-danger); border-color: color-mix(in oklab, var(--acp-danger) 50%, transparent);">× 删除</button>
+                      </div>
+                    </sc-for>
+                    <button onClick="{{ noop }}" style="all: unset; cursor: pointer; margin-top: 4px; padding: 7px 10px; align-self: flex-start; font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ + signal ]</button>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+
+            <button onClick="{{ noop }}" style="all: unset; cursor: pointer; align-self: flex-start; padding: 7px 12px; font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ + 添加步骤 ]</button>
+          </div>
+
+          <!-- side: preview + policy + validation -->
+          <aside style="width: 280px; flex: 0 0 280px; border-left: 1px solid var(--acp-line); overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 18px;">
+            <div>
+              <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft); margin-bottom: 10px;">flow preview</div>
+              <div style="font: var(--fw-medium) 11px/1.9 var(--font-mono); color: var(--acp-text-muted); white-space: pre;">┌─ 1 实现        codex
+│    ready_for_review ─┐
+│  ┌───────────────────┘
+│  2 审查        claude
+│    changes_requested ↺
+│    approved → <span style="color: var(--acp-good);">$done</span>
+└─── need_human → <span style="color: var(--acp-warn);">$pause</span></div>
+            </div>
+            <div style="border-top: 1px solid var(--acp-line); padding-top: 14px;">
+              <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft); margin-bottom: 10px;">policy</div>
+              <div style="display: flex; flex-direction: column; gap: 8px; font: var(--fw-regular) 11px/1 var(--font-mono); color: var(--acp-text-muted);">
+                <div style="display: flex; justify-content: space-between;"><span>max transitions</span><span style="color: var(--acp-text); font-weight: 700;">20</span></div>
+                <div style="display: flex; justify-content: space-between;"><span>连续失败上限</span><span style="color: var(--acp-text); font-weight: 700;">3</span></div>
+                <div style="display: flex; justify-content: space-between;"><span>单步超时</span><span style="color: var(--acp-text); font-weight: 700;">1800s</span></div>
+              </div>
+            </div>
+            <div style="border-top: 1px solid var(--acp-line); padding-top: 14px;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft);">validation</span>
+                <span style="font: var(--fw-bold) 11px/1 var(--font-mono); color: var(--acp-good);">ok</span>
+              </div>
+              <p style="margin: 0; font: var(--fw-regular) 10px/1.6 var(--font-mono); color: var(--acp-text-soft);">保存时会检查入口、可达性、完成路径和 policy 边界。</p>
+            </div>
+          </aside>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ===================== DAG CANVAS ===================== -->
+      <sc-if value="{{ showDag }}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; min-height: 0; display: flex; flex-direction: column;">
+        <div style="height: 46px; flex: 0 0 46px; display: flex; align-items: center; gap: 14px; padding: 0 20px; border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent);">
+          <button onClick="{{ closeEditor }}" style="all: unset; cursor: pointer; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-muted);" style-hover="background: var(--acp-text-muted); color: var(--acp-canvas);">[ &lt; 返回 ]</button>
+          <span style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text);">并行审查 DAG</span>
+          <span style="font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">parallel_review · dag · all join</span>
+          <div style="margin-left: auto; display: flex; gap: 10px;">
+            <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 12px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-muted);" style-hover="background: var(--acp-text-muted); color: var(--acp-canvas);">[ 自动布局 ]</button>
+            <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 12px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ + 节点 ]</button>
+            <button onClick="{{ closeEditor }}" style="all: unset; cursor: pointer; padding: 7px 12px; font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-canvas); background: var(--acp-accent-soft);" style-hover="background: var(--acp-good);">[ 保存 ]</button>
+          </div>
+        </div>
+        <div style="flex: 1; min-height: 0; display: flex;">
+          <!-- canvas -->
+          <div style="flex: 1; min-width: 0; position: relative; overflow: hidden; background-image: radial-gradient(color-mix(in oklab, var(--acp-text) 14%, transparent) 1px, transparent 1px); background-size: 22px 22px;">
+            <svg style="position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none;" viewBox="0 0 780 660" preserveAspectRatio="none">
+              <path d="M 268 138 C 330 138, 350 262, 412 262" fill="none" stroke="var(--acp-text-soft)" stroke-width="1.5"></path>
+              <path d="M 268 386 C 330 386, 350 262, 412 262" fill="none" stroke="var(--acp-text-soft)" stroke-width="1.5"></path>
+            </svg>
+            <div style="position: absolute; left: 64px; top: 88px; width: 204px; border-top: 2px solid var(--acp-accent-soft); border-bottom: 1px solid var(--acp-line); background: var(--acp-canvas); box-shadow: 0 0 0 1px color-mix(in oklab, var(--acp-accent-soft) 40%, transparent); padding: 12px 14px; cursor: grab;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px;">
+                <span style="font: var(--fw-bold) 10px/1 var(--font-mono); color: var(--acp-accent-soft);">codex</span>
+                <span style="font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">local</span>
+              </div>
+              <div style="font: var(--fw-bold) 12px/1.3 var(--font-mono); color: var(--acp-text);">安全审查</div>
+              <div style="margin-top: 5px; font: var(--fw-regular) 10px/1.3 var(--font-mono); color: var(--acp-text-soft);">root · 可并行 · read-only</div>
+            </div>
+            <div style="position: absolute; left: 64px; top: 336px; width: 204px; border-top: 2px solid var(--acp-warn); border-bottom: 1px solid var(--acp-line); background: var(--acp-canvas); padding: 12px 14px; cursor: grab;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px;">
+                <span style="font: var(--fw-bold) 10px/1 var(--font-mono); color: var(--acp-warn);">claude</span>
+                <span style="font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">local</span>
+              </div>
+              <div style="font: var(--fw-bold) 12px/1.3 var(--font-mono); color: var(--acp-text);">测试审查</div>
+              <div style="margin-top: 5px; font: var(--fw-regular) 10px/1.3 var(--font-mono); color: var(--acp-text-soft);">root · 可并行 · read-only</div>
+            </div>
+            <div style="position: absolute; left: 412px; top: 212px; width: 204px; border-top: 2px solid var(--acp-accent-soft); border-bottom: 1px solid var(--acp-line); background: var(--acp-canvas); padding: 12px 14px; cursor: grab;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 7px;">
+                <span style="font: var(--fw-bold) 10px/1 var(--font-mono); color: var(--acp-accent-soft);">codex</span>
+                <span style="font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">local</span>
+              </div>
+              <div style="font: var(--fw-bold) 12px/1.3 var(--font-mono); color: var(--acp-text);">汇总落地</div>
+              <div style="margin-top: 5px; font: var(--fw-regular) 10px/1.3 var(--font-mono); color: var(--acp-text-soft);">join · 等待 2 个依赖 · workspace-write</div>
+            </div>
+            <div style="position: absolute; left: 16px; bottom: 14px; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">拖动节点 · 点击边删除依赖 · 输出点 → 输入点建立依赖</div>
+          </div>
+          <!-- node inspector -->
+          <aside style="width: 280px; flex: 0 0 280px; border-left: 1px solid var(--acp-line); overflow-y: auto; padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; background: color-mix(in oklab, var(--acp-panel) 42%, transparent);">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+              <div>
+                <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft);">node</div>
+                <div style="margin-top: 7px; font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text);">安全审查</div>
+              </div>
+              <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-soft);" style-hover="background: var(--acp-danger); color: var(--acp-canvas);">[ 删除 ]</button>
+            </div>
+            <label style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">node id</span>
+              <input defaultValue="security" style="box-sizing: border-box; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);">
+            </label>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">runtime</span>
+                <select style="padding: 7px 8px; background: var(--acp-ink); border: 1px solid var(--acp-line); border-radius: 2px; outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);"><option>codex</option><option>claude</option></select>
+              </label>
+              <label style="display: flex; flex-direction: column; gap: 6px;">
+                <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">worker</span>
+                <select style="padding: 7px 8px; background: var(--acp-ink); border: 1px solid var(--acp-line); border-radius: 2px; outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);"><option>local</option><option>mac-mini</option></select>
+              </label>
+            </div>
+            <label style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">sandbox</span>
+              <select style="padding: 7px 8px; background: var(--acp-ink); border: 1px solid var(--acp-line); border-radius: 2px; outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);"><option>read-only</option><option>workspace-write</option><option>full access</option></select>
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">角色提示</span>
+              <textarea defaultValue="你是安全审查 Agent。" style="box-sizing: border-box; height: 44px; resize: none; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text);"></textarea>
+            </label>
+            <label style="display: flex; flex-direction: column; gap: 6px;">
+              <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">节点指令</span>
+              <textarea defaultValue="独立检查安全风险。" style="box-sizing: border-box; height: 44px; resize: none; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text);"></textarea>
+            </label>
+            <div style="border-top: 1px solid var(--acp-line); padding-top: 10px;">
+              <div style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft); margin-bottom: 8px;">终点 signals</div>
+              <div style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <input defaultValue="completed" style="box-sizing: border-box; flex: 1; min-width: 0; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-semibold) 12px/1 var(--font-mono); color: var(--acp-cyan);">
+                  <span style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text-soft);">→</span>
+                  <select defaultValue="$done" style="padding: 7px 8px; background: var(--acp-ink); border: 1px solid var(--acp-line); border-radius: 2px; outline: none; font: var(--fw-semibold) 12px/1 var(--font-mono); color: var(--acp-good); cursor: pointer;"><option>$done</option><option>$pause</option><option>$fail</option></select>
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                  <input defaultValue="need_human" style="box-sizing: border-box; flex: 1; min-width: 0; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-semibold) 12px/1 var(--font-mono); color: var(--acp-cyan);">
+                  <span style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text-soft);">→</span>
+                  <select defaultValue="$pause" style="padding: 7px 8px; background: var(--acp-ink); border: 1px solid var(--acp-line); border-radius: 2px; outline: none; font: var(--fw-semibold) 12px/1 var(--font-mono); color: var(--acp-warn); cursor: pointer;"><option>$done</option><option>$pause</option><option>$fail</option></select>
+                </div>
+                <button onClick="{{ noop }}" style="all: unset; cursor: pointer; margin-top: 2px; padding: 7px 10px; align-self: flex-start; font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ + signal ]</button>
+              </div>
+            </div>
+          </aside>
+        </div>
+        <div style="height: 34px; flex: 0 0 34px; display: flex; align-items: center; gap: 14px; padding: 0 20px; border-top: 1px solid var(--acp-line); font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">
+          <span style="color: var(--acp-good); font-weight: 700;">validation ok</span>
+          <span>保存前会检查环、未知依赖和并行写冲突。</span>
+        </div>
+      </div>
+      </sc-if>
+
+      <!-- ===================== SETTINGS ===================== -->
+      <sc-if value="{{ showSettings }}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; min-height: 0; display: flex;">
+        <aside style="width: 176px; flex: 0 0 176px; border-right: 1px solid var(--acp-line); padding: 16px 8px; display: flex; flex-direction: column; gap: 2px;">
+          <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft); padding: 0 10px 10px;">preferences</div>
+          <sc-for list="{{ settingsSections }}" as="sec" hint-placeholder-count="5">
+            <button onClick="{{ sec.go }}" style="all: unset; cursor: pointer; padding: 8px 10px; background: {{ sec.bg }};" style-hover="background: color-mix(in oklab, var(--acp-text) 6%, transparent);">
+              <div style="font: {{ sec.font }}; color: {{ sec.color }};">{{ sec.label }}</div>
+              <div style="margin-top: 3px; font: var(--fw-regular) 10px/1.3 var(--font-mono); color: var(--acp-text-soft);">{{ sec.caption }}</div>
+            </button>
+          </sc-for>
+        </aside>
+        <div style="flex: 1; min-width: 0; overflow-y: auto; padding: 18px 24px 40px;">
+          <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px;">
+            <div style="font: var(--fw-bold) 15px/1 var(--font-mono); color: var(--acp-text);">{{ settingsTitle }}</div>
+            <div style="display: flex; gap: 16px; align-items: baseline;">
+              <span style="font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">已同步 · revision 1</span>
+              <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ 恢复默认 ]</button>
+            </div>
+          </div>
+
+          <sc-if value="{{ showSettingsRuntime }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; flex-direction: column; gap: 18px;">
+            <sc-for list="{{ runtimeCards }}" as="rt" hint-placeholder-count="2">
+              <div style="border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent); padding: 14px 16px;">
+                <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px;">
+                  <span style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text);">{{ rt.name }}</span>
+                  <span style="font: var(--fw-bold) 11px/1 var(--font-mono); color: var(--acp-good);">{{ rt.version }}</span>
+                </div>
+                <p style="margin: 0 0 12px; font: var(--fw-regular) 11px/1.6 var(--font-mono); color: var(--acp-text-soft);">留空时从 PATH 自动发现；测试配置只执行 version check，不消耗模型额度。</p>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                  <label style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">binary 路径</span>
+                    <input placeholder="{{ rt.binary }}" style="box-sizing: border-box; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);">
+                  </label>
+                  <label style="display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">默认模型</span>
+                    <input placeholder="runtime 默认" style="box-sizing: border-box; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);">
+                  </label>
+                  <label style="grid-column: 1/-1; display: flex; flex-direction: column; gap: 6px;">
+                    <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">环境变量 key 白名单</span>
+                    <input placeholder="OPENAI_API_KEY, HTTPS_PROXY" style="box-sizing: border-box; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);">
+                  </label>
+                </div>
+                <button onClick="{{ noop }}" style="all: unset; cursor: pointer; margin-top: 12px; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-cyan);" style-hover="background: var(--acp-cyan); color: var(--acp-canvas);">[ 测试配置 ]</button>
+              </div>
+            </sc-for>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ showSettingsSecurity }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 18px;">
+            <div style="border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent); padding: 14px 16px;">
+              <div style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text); margin-bottom: 4px;">执行授权</div>
+              <p style="margin: 0 0 10px; font: var(--fw-regular) 11px/1.6 var(--font-mono); color: var(--acp-text-soft);">关闭 Full access 后，旧 Workflow 仍可查看和编辑，但保存、启动和恢复都会被安全检查阻止。</p>
+              <sc-for list="{{ securityToggles }}" as="tg" hint-placeholder-count="2">
+                <button onClick="{{ tg.toggle }}" style="all: unset; cursor: pointer; display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; padding: 10px 0; border-top: 1px solid var(--acp-line);">
+                  <div style="min-width: 0; flex: 1;">
+                    <div style="font: var(--fw-semibold) 12px/1.3 var(--font-mono); color: {{ tg.labelColor }};">{{ tg.label }}</div>
+                    <div style="margin-top: 3px; font: var(--fw-regular) 10px/1.5 var(--font-mono); color: var(--acp-text-soft);">{{ tg.description }}</div>
+                  </div>
+                  <span style="flex: 0 0 auto; font: var(--fw-bold) 11px/1 var(--font-mono); color: {{ tg.stateColor }};">{{ tg.stateLabel }}</span>
+                </button>
+              </sc-for>
+            </div>
+            <div style="padding: 12px 14px; border-left: 2px solid var(--acp-danger); background: color-mix(in oklab, var(--acp-danger) 8%, transparent); font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text-muted);">Full access 允许 Agent 在工作目录之外读写。只应对完全信任的项目和 Workflow 使用。</div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ showSettingsExecution }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent); padding: 14px 16px;">
+            <div style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text); margin-bottom: 4px;">默认执行策略</div>
+            <p style="margin: 0 0 12px; font: var(--fw-regular) 11px/1.6 var(--font-mono); color: var(--acp-text-soft);">节点显式配置优先于 Workflow，Workflow 优先于全局默认。只影响新 Workflow 或没有显式值的新 Run。</p>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+              <sc-for list="{{ executionFields }}" as="f" hint-placeholder-count="6">
+                <label style="display: flex; flex-direction: column; gap: 6px;">
+                  <span style="font: var(--fw-medium) 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--acp-text-soft);">{{ f.label }}</span>
+                  <input defaultValue="{{ f.value }}" style="box-sizing: border-box; padding: 8px 10px; background: color-mix(in oklab, var(--acp-ink) 60%, transparent); border: 0; border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);">
+                  <span style="font: var(--fw-regular) 10px/1.3 var(--font-mono); color: var(--acp-text-soft);">{{ f.hint }}</span>
+                </label>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ showSettingsStorage }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 18px;">
+            <div style="border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent); padding: 14px 16px;">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 4px;">
+                <span style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text);">本地数据</span>
+                <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-cyan);" style-hover="background: var(--acp-cyan); color: var(--acp-canvas);">[ 重新计算 ]</button>
+              </div>
+              <div style="display: flex; align-items: baseline; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid var(--acp-line);">
+                <span style="font: var(--fw-regular) 11px/1 var(--font-mono); color: var(--acp-text-soft);">数据根目录</span>
+                <span style="font: var(--fw-bold) 12px/1 var(--font-mono); color: var(--acp-text);">~/.oneshot/</span>
+                <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ 在 Finder 中显示 ]</button>
+              </div>
+              <div style="margin: 14px 0 4px; font: var(--fw-bold) 20px/1 var(--font-mono); color: var(--acp-text);">7.0 MB <span style="font: var(--fw-regular) 11px/1 var(--font-mono); color: var(--acp-text-soft);">总占用</span></div>
+              <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                <sc-for list="{{ usageBars }}" as="u" hint-placeholder-count="4">
+                  <div style="display: flex; flex-direction: column; gap: 4px;">
+                    <div style="display: flex; justify-content: space-between; font: var(--fw-regular) 11px/1 var(--font-mono);"><span style="color: var(--acp-text-muted);">{{ u.name }}</span><span style="color: var(--acp-text);">{{ u.size }}</span></div>
+                    <div style="height: 3px; background: color-mix(in oklab, var(--acp-text) 8%, transparent);"><div style="height: 3px; background: var(--acp-accent); width: {{ u.width }};"></div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent); padding: 14px 16px;">
+              <div style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text); margin-bottom: 4px;">历史 Run 清理</div>
+              <p style="margin: 0 0 10px; font: var(--fw-regular) 11px/1.6 var(--font-mono); color: var(--acp-text-soft);">只清理超过保留期的 completed / cancelled Run；active、running、paused 永远跳过。</p>
+              <div style="display: flex; align-items: center; gap: 14px;">
+                <span style="font: var(--fw-regular) 11px/1 var(--font-mono); color: var(--acp-text-soft);">保留期</span>
+                <select style="padding: 6px 8px; background: var(--acp-ink); border: 1px solid var(--acp-line); border-radius: 2px; outline: none; font: var(--fw-medium) 11px/1 var(--font-mono); color: var(--acp-text);"><option>永久保留</option><option>30 天</option><option>90 天</option><option>180 天</option></select>
+                <button onClick="{{ noop }}" style="all: unset; cursor: pointer; margin-left: auto; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-text-soft);" style-hover="background: var(--acp-text-muted); color: var(--acp-canvas);">[ 预览清理 ]</button>
+              </div>
+            </div>
+          </div>
+          </sc-if>
+
+          <sc-if value="{{ showSettingsWorkers }}" hint-placeholder-val="{{ false }}">
+          <div style="display: flex; flex-direction: column; gap: 18px;">
+            <div style="padding: 12px 14px; border-left: 2px solid var(--acp-warn); background: color-mix(in oklab, var(--acp-warn) 8%, transparent); font: var(--fw-regular) 11px/1.5 var(--font-mono); color: var(--acp-text-muted);">远端 Worker 仅适用于受信任 LAN / VPN。Oneshot 只传 prompt、outcome 和事件，不同步项目文件。</div>
+            <div style="border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent); padding: 14px 16px;">
+              <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px;">
+                <span style="font: var(--fw-bold) 13px/1 var(--font-mono); color: var(--acp-text);">已注册 Worker</span>
+                <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 10px; font: var(--fw-medium) 12px/1 var(--font-mono); color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ + 注册 worker ]</button>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--acp-line);">
+                <span style="width: 7px; height: 7px; border-radius: 999px; background: var(--acp-good); box-shadow: 0 0 5px var(--acp-good);"></span>
+                <div style="min-width: 0;">
+                  <div style="font: var(--fw-semibold) 12px/1.3 var(--font-mono); color: var(--acp-text);">Mac mini</div>
+                  <div style="margin-top: 3px; font: var(--fw-regular) 10px/1 var(--font-mono); color: var(--acp-text-soft);">mac-mini · http://192.168.1.20:9231 · codex ok · claude ok</div>
+                </div>
+                <div style="margin-left: auto; display: flex; gap: 6px; font: var(--fw-medium) 12px/1 var(--font-mono);">
+                  <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 10px; color: var(--acp-cyan);" style-hover="background: var(--acp-cyan); color: var(--acp-canvas);">[ 健康检查 ]</button>
+                  <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 10px; color: var(--acp-accent);" style-hover="background: var(--acp-accent); color: var(--acp-canvas);">[ 编辑 ]</button>
+                  <button onClick="{{ noop }}" style="all: unset; cursor: pointer; padding: 7px 10px; color: var(--acp-danger);" style-hover="background: var(--acp-danger); color: var(--acp-canvas);">[ 删除 ]</button>
+                </div>
+              </div>
+            </div>
+            <div style="border-top: 1px solid var(--acp-line); border-bottom: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-ink) 60%, transparent); padding: 12px 16px;">
+              <div style="font: var(--fw-bold) 10px/1 var(--font-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--acp-text-soft); margin-bottom: 8px;">remote command</div>
+              <code style="display: block; font: var(--fw-regular) 11px/1.6 var(--font-mono); color: var(--acp-accent); overflow-wrap: anywhere;">ONESHOT_WORKER_TOKEN=... oneshot-worker --listen 0.0.0.0:9231 --id mac-mini --workspace workspace-id=/path/to/clone</code>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+      </div>
+      </sc-if>
+
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1328,&quot;height&quot;:848},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;外观&quot;}}">
+class Component extends DCLogic {
+  state = {
+    view: "runs",
+    taskTitle: "",
+    taskPrompt: "",
+    composerWorkflow: "implement_review",
+    settingsSection: "runtime",
+    allowFullSandbox: false,
+    confirmEveryRun: true,
+  };
+
+  componentDidMount() {
+    document.body.dataset.theme = this.props.theme ?? "light";
+  }
+  componentDidUpdate() {
+    document.body.dataset.theme = this.props.theme ?? "light";
+  }
+
+  renderVals() {
+    const { view } = this.state;
+    const go = (v) => () => this.setState({ view: v });
+    const tone = {
+      paused:   { tone: "var(--acp-warn)",   label: "等待介入" },
+      running:  { tone: "var(--acp-accent)", label: "运行中" },
+      completed:{ tone: "var(--acp-good)",   label: "已完成" },
+      failed:   { tone: "var(--acp-danger)", label: "失败" },
+    };
+    const runs = [
+      { id: "8a3c2f01", title: "优化本地 Agent 调度流程", status: "paused",    meta: "实现与审查 Loop · 14:32" },
+      { id: "5f19d6b2", title: "补充 wails bindings 的错误处理", status: "running", meta: "单 Agent 完成 · 14:05" },
+      { id: "c2e88a40", title: "重构 taskrun 事件存储", status: "completed", meta: "实现与审查 Loop · 昨天" },
+    ];
+    const navDefs = [
+      { id: "runs",      glyph: ">", label: "任务与运行", caption: "runs" },
+      { id: "workflows", glyph: "%", label: "Workflow",   caption: "flows" },
+      { id: "settings",  glyph: "#", label: "设置",       caption: "prefs" },
+    ];
+    return {
+      noop: () => {},
+      cmdline: view === "settings" ? "settings @ ~/.oneshot" : "oneshot @ ~/Code/openmodu/oneshot",
+      showRuns: view === "runs",
+      showWorkflows: view === "workflows",
+      showSettings: view === "settings",
+      showEditor: view === "editor",
+      showDag: view === "dag",
+      openEditor: go("editor"),
+      openDag: go("dag"),
+      closeEditor: go("workflows"),
+      navItems: navDefs.map((n) => ({
+        ...n,
+        go: go(n.id),
+        bg: view === n.id ? "color-mix(in oklab, var(--acp-accent-soft) 14%, transparent)" : "transparent",
+        color: view === n.id ? "var(--acp-text)" : "var(--acp-text-muted)",
+        font: view === n.id ? "var(--fw-bold) 12px/1 var(--font-mono)" : "var(--fw-medium) 12px/1 var(--font-mono)",
+      })),
+      settingsSections: [
+        { id: "runtime", label: "Runtime", caption: "命令与模型" },
+        { id: "execution", label: "执行", caption: "新流程默认值" },
+        { id: "security", label: "安全", caption: "授权与诊断" },
+        { id: "storage", label: "存储与日志", caption: "本机数据" },
+        { id: "workers", label: "远端 Worker", caption: "实验功能" },
+      ].map((s) => ({
+        ...s,
+        go: () => this.setState({ settingsSection: s.id }),
+        bg: this.state.settingsSection === s.id ? "color-mix(in oklab, var(--acp-accent-soft) 14%, transparent)" : "transparent",
+        color: this.state.settingsSection === s.id ? "var(--acp-text)" : "var(--acp-text-muted)",
+        font: this.state.settingsSection === s.id ? "var(--fw-bold) 12px/1.3 var(--font-mono)" : "var(--fw-medium) 12px/1.3 var(--font-mono)",
+      })),
+      settingsTitle: ({ runtime: "Runtime", execution: "执行", security: "安全", storage: "存储与日志", workers: "远端 Worker" })[this.state.settingsSection],
+      showSettingsRuntime: this.state.settingsSection === "runtime",
+      showSettingsSecurity: this.state.settingsSection === "security",
+      showSettingsExecution: this.state.settingsSection === "execution",
+      showSettingsStorage: this.state.settingsSection === "storage",
+      showSettingsWorkers: this.state.settingsSection === "workers",
+      executionFields: [
+        { label: "最大转移次数", value: "20", hint: "1–10000" },
+        { label: "连续失败上限", value: "3", hint: "1–100" },
+        { label: "单节点超时", value: "1800", hint: "30–86400 秒" },
+        { label: "dag 本地并发", value: "4", hint: "1–16 个只读节点" },
+        { label: "中断宽限", value: "10", hint: "1–60 秒" },
+        { label: "默认 sandbox", value: "workspace-write", hint: "full 不能设为默认" },
+      ],
+      usageBars: [
+        { name: "runs", size: "4.7 MB", width: "68%" },
+        { name: "logs", size: "1.6 MB", width: "23%" },
+        { name: "events", size: "480 KB", width: "7%" },
+        { name: "workflows", size: "160 KB", width: "3%" },
+      ],
+      runtimeCards: [
+        { id: "codex", name: "Codex", version: "codex 0.98.0", binary: "codex" },
+        { id: "claude", name: "Claude Code", version: "2.1.4", binary: "claude" },
+      ],
+      securityToggles: [
+        {
+          label: "允许 Full access sandbox",
+          description: "危险：Agent 可在工作目录之外执行读写操作。",
+          on: this.state.allowFullSandbox,
+          danger: true,
+          toggle: () => this.setState((s) => ({ allowFullSandbox: !s.allowFullSandbox })),
+        },
+        {
+          label: "每次运行前再次确认",
+          description: this.state.allowFullSandbox ? "启动包含 Full access 的 Run 前要求一次性确认。" : "启用 Full access 后才能修改此项。",
+          on: this.state.confirmEveryRun,
+          danger: false,
+          toggle: () => this.state.allowFullSandbox && this.setState((s) => ({ confirmEveryRun: !s.confirmEveryRun })),
+        },
+      ].map((t) => ({
+        ...t,
+        labelColor: t.danger ? "var(--acp-danger)" : "var(--acp-text)",
+        stateLabel: t.on ? "[ on ]" : "[ off ]",
+        stateColor: t.on ? (t.danger ? "var(--acp-danger)" : "var(--acp-good)") : "var(--acp-text-soft)",
+      })),
+      workflowRows: [
+        { id: "single_agent", name: "单 Agent 完成", mode: "serial", path: "执行 → $done", meta: "1 step · 20 max" },
+        { id: "implement_review", name: "实现与审查 Loop", mode: "serial", path: "实现 → 审查 ↺", meta: "2 steps · 20 max" },
+        { id: "parallel_review", name: "并行审查 DAG", mode: "dag", path: "安全审查 ∥ 测试审查 → 汇总落地", meta: "3 nodes · all join" },
+      ].map((w) => {
+        const c = w.mode === "dag" ? "var(--acp-cyan)" : "var(--acp-accent)";
+        return {
+          ...w,
+          open: go(w.mode === "dag" ? "dag" : "editor"),
+          modeColor: c,
+          modeBorder: `color-mix(in oklab, ${c} 38%, transparent)`,
+          modeBg: `color-mix(in oklab, ${c} 10%, transparent)`,
+        };
+      }),
+      editorSteps: [
+        {
+          index: "01", name: "实现", runtime: "codex", runtimeTone: "var(--acp-accent-soft)", sandbox: "workspace-write",
+          rolePrompt: "你是负责落地代码和测试的实现者。",
+          instruction: "实现目标、运行验证，并把变更交给审查者。",
+          transitions: [
+            { signal: "ready_for_review", target: "review", targetColor: "var(--acp-text)" },
+            { signal: "need_human", target: "$pause", targetColor: "var(--acp-warn)" },
+          ],
+        },
+        {
+          index: "02", name: "审查", runtime: "claude", runtimeTone: "var(--acp-warn)", sandbox: "read-only",
+          rolePrompt: "你是独立、严格的代码审查者。",
+          instruction: "检查需求、实现、风险和测试；有问题要求修改。",
+          transitions: [
+            { signal: "changes_requested", target: "implement", targetColor: "var(--acp-cyan)" },
+            { signal: "approved", target: "$done", targetColor: "var(--acp-good)" },
+            { signal: "need_human", target: "$pause", targetColor: "var(--acp-warn)" },
+          ],
+        },
+      ],
+      runCount: runs.length,
+      runRows: runs.map((r, i) => ({
+        ...r,
+        select: () => {},
+        statusLabel: tone[r.status].label,
+        tone: tone[r.status].tone,
+        toneBorder: `color-mix(in oklab, ${tone[r.status].tone} 38%, transparent)`,
+        toneBg: `color-mix(in oklab, ${tone[r.status].tone} 10%, transparent)`,
+        bg: i === 0 ? "color-mix(in oklab, var(--acp-accent-soft) 8%, transparent)" : "transparent",
+      })),
+      taskTitle: this.state.taskTitle,
+      setTaskTitle: (e) => this.setState({ taskTitle: e.target.value }),
+      taskPrompt: this.state.taskPrompt,
+      setTaskPrompt: (e) => this.setState({ taskPrompt: e.target.value }),
+      composerWorkflow: this.state.composerWorkflow,
+      setComposerWorkflow: (e) => this.setState({ composerWorkflow: e.target.value }),
+      startRun: () => this.setState({ taskTitle: "", taskPrompt: "" }),
+    };
+  }
+}
+</script>
+</body>
+</html>
