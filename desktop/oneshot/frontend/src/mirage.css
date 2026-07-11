@@ -89,11 +89,13 @@ select { height: 32px; padding: 0 8px; font-size: 11px; }
 .empty-state { margin: 20px; border-color: var(--acp-line); border-radius: 0; color: var(--acp-text-muted); }
 .inspector { min-height: 0; padding: 0; border-left: 1px solid var(--acp-line); overflow-y: auto; }
 .inspector-header { padding: 16px 18px 10px; }
-.inspector-header h2 { margin-top: 7px; font-size: 13px; }
-.run-id-row { margin: 0; padding: 0 18px 12px; border-bottom: 1px solid var(--acp-line); color: var(--acp-text-soft); }
+.inspector-header h2 { margin-top: 7px; font-size: 16px; line-height: 1.35; }
+.run-id-row { margin: 0; padding: 0 18px 12px; border-bottom: 1px solid var(--acp-line); color: var(--acp-text-soft); font-size: 11px; }
+.run-id-row code { font-size: 11px; }
 .current-step { margin: 0; padding: 12px 18px; border-bottom: 1px solid var(--acp-line); border-radius: 0; background: transparent; color: var(--acp-text); }
-.current-step > span { color: var(--acp-text-soft); }
-.current-step p { color: var(--acp-text-muted); }
+.current-step > span { color: var(--acp-text-soft); font-size: 10px; }
+.current-step strong { font-size: 14px; }
+.current-step p { color: var(--acp-text-muted); font-size: 12px; line-height: 1.5; }
 .runtime-badge { border-color: var(--acp-line); border-radius: 2px; }
 .runtime-badge.codex { color: var(--acp-accent-soft); }
 .runtime-badge.claude { color: var(--acp-warn); }
@@ -101,9 +103,38 @@ select { height: 32px; padding: 0 8px; font-size: 11px; }
 .flow-node { border: 0; border-radius: 0; background: transparent; color: var(--acp-text-soft); }
 .flow-step.current .flow-node { background: transparent; color: var(--acp-accent); }
 .flow-step:not(:last-child)::after { background: var(--acp-line); }
+.flow-step strong { font-size: 12px; }
+.flow-step small { font-size: 10px; line-height: 1.4; }
 .inspector-section { margin: 0; padding: 12px 18px; border-top: 0; border-bottom: 1px solid var(--acp-line); }
+.inspector-section-title h3 { font-size: 13px; }
+.inspector-section-title > span { font-size: 10px; }
+.conversation-section { padding-block: 16px; background: color-mix(in oklab, var(--acp-panel) 22%, transparent); }
+.conversation-user { border-color: color-mix(in oklab, var(--acp-accent-soft) 35%, var(--acp-line)); border-radius: 5px 5px 0 5px; background: color-mix(in oklab, var(--acp-accent-soft) 9%, transparent); }
+.conversation-user p, .conversation-agent p { color: var(--acp-text); font-size: 13px; }
+.conversation-speaker strong { font-size: 12px; }
+.conversation-speaker span { color: var(--acp-text-soft); font-size: 10px; }
+.conversation-round { border-color: var(--acp-line); background: transparent; }
+.conversation-round > header { border-bottom-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 3%, transparent); }
+.conversation-round > header strong { font-size: 13px; }
+.conversation-round > header time { color: var(--acp-text-soft); font-size: 10px; }
+.round-signal { color: var(--acp-text-soft); font-size: 10px; }
+.conversation-agent { border-left-color: var(--acp-accent-soft); background: color-mix(in oklab, var(--acp-canvas) 80%, transparent); }
+.conversation-agent.error { border-left-color: var(--acp-danger); background: color-mix(in oklab, var(--acp-danger) 6%, transparent); }
+.conversation-activity { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, transparent); }
+.conversation-activity summary { color: var(--acp-text-muted); font-size: 11px; }
+.conversation-activity[open] summary, .activity-row { border-color: var(--acp-line); }
+.activity-row > span { color: var(--acp-accent-soft); font-size: 10px; }
+.activity-row pre { color: var(--acp-text-muted); font-size: 11px; }
+.session-card { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, transparent); }
+.session-value { border-top-color: var(--acp-line); }
+.session-value > span { color: var(--acp-text-soft); }
+.session-value code { color: var(--acp-text); }
+.session-value button { color: var(--acp-accent); }
+.session-value button:hover { color: var(--acp-accent-soft); }
 .event-row { border-left-color: var(--acp-line); }
 .run-controls { bottom: 0; margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--acp-line); background: var(--acp-canvas); }
+.run-controls > textarea { font-size: 12px; line-height: 1.5; }
+.terminal-note { font-size: 11px; }
 .run-controls > div { justify-content: flex-end; }
 
 .library-page { padding: 0; overflow-y: auto; }

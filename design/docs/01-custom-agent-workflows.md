@@ -285,6 +285,8 @@ Bindings 调用本地 application service，不通过 HTTP loopback。所有入�
 - 桌面主入口只注册 Runtime、Workspace、Workflow、TaskRun 四组 binding；旧市场、登录、订单、计费和交付物 binding 不再注册。
 - 首版编辑器使用步骤卡片、signal/target 行和只读流程预览表达 loop，不引入画布依赖。
 - Run inspector 轮询组合详情；active run 约 1 秒刷新，非 active run 降频刷新。浏览器开发预览在没有 Wails runtime 时使用只读 demo 数据，正式桌面始终调用生成的 bindings。
+- Run inspector 按步骤展示当前 Runtime session ID 与人工接管命令。优先读取 `Run.sessions[stepId]`，旧数据回退到最新 StepRun 的 `sessionIdAfter/sessionIdBefore`；同一步骤只显示当前可恢复会话。Codex 使用 `codex resume <session-id>`，Claude Code 使用 `claude --resume <session-id>`，未知 Runtime 只显示 ID、不猜测命令。
+- Run inspector 的执行历史采用会话时间线：Task prompt 与非空恢复 instruction 是用户消息；StepRun 是带轮次、步骤、Runtime 和状态的 Agent 回合；message/result/error 作为可读回复，连续的 tool/reasoning/file events 收进默认折叠的活动组。UI 不截断为最后若干事件，outcome JSON 只显示 `content`。`run.resumed` 事件在本地 payload 中保存 trim 后的 instruction，以便重启后仍能重建对话；旧事件缺少该字段时保持兼容。
 
 ## 12. 验证计划
 

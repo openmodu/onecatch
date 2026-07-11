@@ -164,6 +164,39 @@ select { height: 36px; padding: 0 10px; font-size: 11px; }
 .timeline-item strong { font-size: 9px; }
 .timeline-item p { margin: 3px 0; color: #646f67; font-size: 8px; line-height: 1.5; }
 .timeline-item small { color: #9aa29c; font-size: 7px; }
+.conversation-list { display: grid; gap: 14px; }
+.conversation-user { width: fit-content; max-width: 88%; margin-left: auto; padding: 11px 13px; border: 1px solid #d8e4d8; border-radius: 6px 6px 0 6px; background: #edf5ed; }
+.conversation-speaker { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.conversation-speaker strong { font-size: 11px; }
+.conversation-speaker span { color: #879189; font: 500 9px "DM Mono", monospace; }
+.conversation-user p, .conversation-agent p { margin: 0; color: #354039; font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.conversation-round { border: 1px solid #dfe5df; background: #fafbf9; }
+.conversation-round > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; border-bottom: 1px solid #dfe5df; }
+.conversation-round > header > div { display: flex; align-items: center; gap: 8px; }
+.conversation-round > header > div:first-child > span:first-child { color: #78837b; font: 600 9px "DM Mono", monospace; text-transform: uppercase; }
+.conversation-round > header strong { font-size: 12px; }
+.conversation-round > header time { color: #8b958d; font: 500 9px "DM Mono", monospace; }
+.round-signal { color: #6d786f; font: 500 9px "DM Mono", monospace; }
+.conversation-round-body { display: grid; gap: 10px; padding: 11px; }
+.conversation-agent { padding: 11px 12px; border-left: 2px solid #4e9a63; background: #fff; }
+.conversation-agent.error { border-left-color: #bd554e; background: #fff8f7; }
+.conversation-activity { border: 1px solid #e1e6e1; background: #f5f6f3; }
+.conversation-activity summary { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; color: #657068; font-size: 10px; cursor: pointer; }
+.conversation-activity summary b { font: 500 9px "DM Mono", monospace; }
+.conversation-activity[open] summary { border-bottom: 1px solid #e1e6e1; }
+.activity-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; padding: 8px 10px; border-top: 1px solid #e6eae6; }
+.activity-row:first-child { border-top: 0; }
+.activity-row > span { color: #4d9360; font: 600 9px "DM Mono", monospace; text-transform: uppercase; }
+.activity-row pre { margin: 0; color: #4c5850; font: 400 10px/1.55 "DM Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.session-list { display: grid; gap: 8px; }
+.session-card { border: 1px solid #e2e7e2; padding: 9px; background: #fafbf9; }
+.session-card-title { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }
+.session-card-title strong { font-size: 9px; }
+.session-value { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: start; gap: 6px; padding: 5px 0; border-top: 1px solid #e7ebe7; }
+.session-value > span { padding-top: 2px; color: #8b958e; font: 500 7px "DM Mono", monospace; text-transform: uppercase; }
+.session-value code { color: #455148; font: 400 8px/1.45 "DM Mono", monospace; overflow-wrap: anywhere; user-select: text; }
+.session-value button { border: 0; padding: 1px 0; background: transparent; color: #347449; font: 500 7px "DM Mono", monospace; cursor: pointer; }
+.session-value button:hover { color: #153f24; }
 .event-row { border-left: 2px solid #dde4dd; padding: 1px 0 6px 9px; }
 .event-row > span { color: #278c55; font: 500 7px "DM Mono", monospace; text-transform: uppercase; }
 .event-row p { margin: 3px 0 0; color: #59665d; font-size: 8px; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }

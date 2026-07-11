@@ -295,7 +295,8 @@ func (s *Usecase) ResumeRun(ctx context.Context, runID, instruction string) (dom
 		if err := s.setTaskStatus(ctx, &task, domaintasks.StatusRunning); err != nil {
 			return resumed, err
 		}
-		if err := s.appendEvent(ctx, run.ID, "run.resumed", "", map[string]any{"hasInstruction": strings.TrimSpace(instruction) != "", "mode": "dag"}); err != nil {
+		trimmedInstruction := strings.TrimSpace(instruction)
+		if err := s.appendEvent(ctx, run.ID, "run.resumed", "", map[string]any{"hasInstruction": trimmedInstruction != "", "instruction": trimmedInstruction, "mode": "dag"}); err != nil {
 			return resumed, err
 		}
 		return s.driveDAG(ctx, task, workspace, definition, resumed, instruction)
@@ -316,7 +317,8 @@ func (s *Usecase) ResumeRun(ctx context.Context, runID, instruction string) (dom
 	if err := s.setTaskStatus(ctx, &task, domaintasks.StatusRunning); err != nil {
 		return resumed, err
 	}
-	if err := s.appendEvent(ctx, run.ID, "run.resumed", resumed.CurrentStepID, map[string]any{"hasInstruction": strings.TrimSpace(instruction) != ""}); err != nil {
+	trimmedInstruction := strings.TrimSpace(instruction)
+	if err := s.appendEvent(ctx, run.ID, "run.resumed", resumed.CurrentStepID, map[string]any{"hasInstruction": trimmedInstruction != "", "instruction": trimmedInstruction}); err != nil {
 		return resumed, err
 	}
 	return s.drive(ctx, task, workspace, definition, resumed, instruction)

@@ -163,6 +163,19 @@ func TestResumeRunUsesSnapshotSessionAndHumanInstruction(t *testing.T) {
 	if engine.calls[1].ResumeSessionID != "session-1" || !strings.Contains(engine.calls[1].Prompt, "继续并确认当前结果") {
 		t.Fatalf("resume request = %+v", engine.calls[1])
 	}
+	events, err := reopened.Repos.Workflows.ListEvents(context.Background(), completed.ID, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundInstruction := false
+	for _, event := range events {
+		if event.Type == "run.resumed" && strings.Contains(string(event.Payload), `"instruction":"继续并确认当前结果"`) {
+			foundInstruction = true
+		}
+	}
+	if !foundInstruction {
+		t.Fatalf("run.resumed event did not persist the human instruction: %+v", events)
+	}
 	stepRuns, err := reopened.Repos.Workflows.ListStepRuns(context.Background(), completed.ID)
 	if err != nil || len(stepRuns) != 2 || stepRuns[1].Attempt != 2 {
 		t.Fatalf("step runs = %+v, %v", stepRuns, err)

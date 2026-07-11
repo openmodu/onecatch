@@ -8,6 +8,8 @@ import {
   WorkerBinding,
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
+import { buildRunConversation } from "./runConversation.js";
+import { runtimeSessionEntries } from "./sessionCommands.js";
 import { nextWorkflowItemID } from "./workflowIds.js";
 import { Action, Kicker, ModeBadge, StatusBadge, Toolbar, ToolbarSpacer } from "../ui/primitives.jsx";
 
@@ -115,8 +117,8 @@ const demoRun = {
   workspace: demoWorkspaces[0],
   workflow: demoWorkflows[1],
   stepRuns: [
-    { id: "step_1", stepId: "implement", attempt: 1, status: "succeeded", signal: "ready_for_review", content: "完成后端应用服务", startedAt: demoNow, finishedAt: demoNow },
-    { id: "step_2", stepId: "review", attempt: 1, status: "succeeded", signal: "changes_requested", content: "要求完善中断反馈", startedAt: demoNow, finishedAt: demoNow },
+    { id: "step_1", stepId: "implement", attempt: 1, status: "succeeded", signal: "ready_for_review", content: "完成后端应用服务", sessionIdAfter: "019f4b11-codex-demo", startedAt: demoNow, finishedAt: demoNow },
+    { id: "step_2", stepId: "review", attempt: 1, status: "succeeded", signal: "changes_requested", content: "要求完善中断反馈", sessionIdAfter: "45db32aa-claude-demo", startedAt: demoNow, finishedAt: demoNow },
   ],
   events: [
     { seq: 1, type: "run.started", stepId: "", at: demoNow },
@@ -125,8 +127,13 @@ const demoRun = {
     { seq: 4, type: "run.paused", stepId: "implement", at: demoNow },
   ],
   runtimeEvents: [
+    { stepRunId: "step_1", seq: 1, kind: "started", text: "019f4b11-codex-demo", at: demoNow },
+    { stepRunId: "step_1", seq: 2, kind: "tool_use", text: "rg -n \"interrupt|pause\" internal desktop", at: demoNow },
+    { stepRunId: "step_1", seq: 3, kind: "file_change", text: "internal/usecase/workflows/usecase.go", at: demoNow },
+    { stepRunId: "step_1", seq: 4, kind: "message", text: "已完成调度层拆分并补充中断恢复测试。", at: demoNow },
     { stepRunId: "step_2", seq: 1, kind: "tool_use", text: "go test ./...", at: demoNow },
-    { stepRunId: "step_2", seq: 2, kind: "message", text: "核心流程正确，建议补充中断态 UI。", at: demoNow },
+    { stepRunId: "step_2", seq: 2, kind: "message", text: "核心流程正确，但需要补充 UI 中断后的状态反馈。", at: demoNow },
+    { stepRunId: "step_2", seq: 3, kind: "result", text: '{"signal":"changes_requested","content":"建议在暂停区域明确展示恢复后的当前步骤。"}', at: demoNow },
   ],
   active: false,
 };
@@ -448,7 +455,7 @@ function App() {
             <div className="section-title"><div><h2>最近运行</h2></div><span>{allRuns.length} runs</span></div>
             <div className="run-list">{allRuns.map((item) => <button key={item.id} className={`run-card ${selectedRunID === item.id ? "selected" : ""}`} onClick={() => { setSelectedRunID(item.id); loadRun(item.id); }}><StatusPill status={item.status} /><h3>{item.task.title}</h3><p>{workflows.find((workflow) => workflow.id === item.workflowId)?.name || item.workflowId} · {formatTime(item.updatedAt)}</p></button>)}{!allRuns.length && <div className="empty-state"><h3>还没有运行记录</h3><p>写下任务目标并选择 Workflow，Oneshot 会在后台调度本地 Agent。</p></div>}</div>
           </section>
-          <aside className="inspector">{runDetail ? <RunInspector detail={runDetail} busy={busy} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} /> : <div className="inspector-empty"><h3>选择一个 Run</h3><p>这里会显示当前步骤、Agent 输出、回边和人工介入操作。</p></div>}</aside>
+          <aside className="inspector">{runDetail ? <RunInspector detail={runDetail} busy={busy} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} notify={notify} /> : <div className="inspector-empty"><h3>选择一个 Run</h3><p>这里会显示当前步骤、Agent 输出、回边和人工介入操作。</p></div>}</aside>
         </div> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
     </div>
@@ -459,12 +466,21 @@ function App() {
   </div>;
 }
 
-function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, runAction }) {
+function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, runAction, notify }) {
   const { run, workflow, stepRuns = [], runtimeEvents = [] } = detail;
   const dagNodes = run.nodes || {};
   const currentNodeID = workflow.mode === "dag" ? Object.values(dagNodes).find((node) => node.status === "running" || node.status === "paused")?.stepId : run.currentStepId;
   const currentStep = workflow.steps?.find((step) => step.id === currentNodeID) || workflow.steps?.[0];
-  const visibleEvents = runtimeEvents.filter((event) => event.text).slice(-8).reverse();
+  const conversation = buildRunConversation(detail);
+  const sessions = runtimeSessionEntries(detail);
+  const copySessionValue = async (value, label) => {
+    try {
+      await copyText(value);
+      notify("success", `${label}已复制`);
+    } catch {
+      notify("error", "复制失败，请手动选择文本");
+    }
+  };
   return <>
     <div className="inspector-header"><div><Kicker>RUN INSPECTOR</Kicker><h2>{detail.task.title}</h2></div><StatusPill status={run.status} active={detail.active} /></div>
     <div className="run-id-row"><code>{shortID(run.id)}</code><span>{run.transitionCount || 0} / {workflow.policy?.maxTransitions || 20} 次转移</span></div>
@@ -472,14 +488,53 @@ function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, r
     <div className={`flow-mini ${workflow.mode === "dag" ? "dag-run-map" : ""}`}>
       {(workflow.steps || []).map((step, index) => { const nodeStatus = dagNodes[step.id]?.status; return <div className={`flow-step ${step.id === currentNodeID ? "current" : ""} ${nodeStatus || ""}`} key={step.id}><div className="flow-node"><span>{index + 1}</span></div><div><strong>{step.name}</strong><small>{step.runtime} · {step.workerId || "local"} · {nodeStatus || step.sandbox || "workspace-write"}</small></div>{nodeStatus && <span className="you-are-here">{nodeStatus.toUpperCase()}</span>}</div>; })}
     </div>
-    <div className="inspector-section"><div className="inspector-section-title"><h3>步骤记录</h3><span>{stepRuns.length}</span></div><div className="timeline">{stepRuns.map((stepRun) => <div className="timeline-item" key={stepRun.id}><span className={`timeline-dot ${stepRun.status}`} /><div><div><strong>{workflow.steps?.find((step) => step.id === stepRun.stepId)?.name || stepRun.stepId}</strong><StatusPill status={stepRun.status} /></div><p>{stepRun.content || stepRun.error || `第 ${stepRun.attempt} 次执行`}</p><small>{formatTime(stepRun.finishedAt || stepRun.startedAt)}{stepRun.signal ? ` · signal: ${stepRun.signal}` : ""}</small></div></div>)}</div></div>
-    <div className="inspector-section runtime-stream"><div className="inspector-section-title"><h3>Agent 动态</h3><span>LIVE</span></div>{visibleEvents.map((event) => <div className="event-row" key={`${event.stepRunId}-${event.seq}`}><span>{event.kind}</span><p>{event.text}</p></div>)}{!visibleEvents.length && <p className="muted-copy">Agent 输出会实时保存在当前 StepRun 的 events.jsonl。</p>}</div>
+    <ConversationTimeline items={conversation} active={detail.active} />
+    {sessions.length > 0 && <div className="inspector-section session-recovery"><div className="inspector-section-title"><h3>Agent 会话</h3><span>{sessions.length} SESSIONS</span></div><div className="session-list">{sessions.map((session) => <div className="session-card" key={session.stepID}><div className="session-card-title"><span className={`runtime-badge ${session.runtime}`}>{session.runtime}</span><strong>{session.stepName}</strong></div><div className="session-value"><span>{session.idLabel}</span><code>{session.sessionID}</code><button type="button" onClick={() => copySessionValue(session.sessionID, "会话 ID")}>[ 复制 ID ]</button></div>{session.command && <div className="session-value command"><span>resume</span><code>{session.command}</code><button type="button" onClick={() => copySessionValue(session.command, "恢复命令")}>[ 复制命令 ]</button></div>}</div>)}</div></div>}
     <div className="run-controls">
       {run.status === "running" && <Action tone="danger" disabled={busy === "interrupt"} onClick={() => runAction("interrupt")}>打断并暂停</Action>}
       {run.status === "paused" && <><textarea value={resumeInstruction} onChange={(event) => setResumeInstruction(event.target.value)} placeholder="补充指令（可选），恢复后注入当前步骤…" /><div><Action tone="danger" disabled={busy === "cancel"} onClick={() => runAction("cancel")}>终止</Action><Action tone="primary" disabled={busy === "resume"} onClick={() => runAction("resume")}>恢复运行</Action></div></>}
       {["completed", "failed", "cancelled"].includes(run.status) && <div className="terminal-note">这个 Run 已结束，完整记录仍保存在本机。</div>}
     </div>
   </>;
+}
+
+function ConversationTimeline({ items, active }) {
+  const activityLabel = { reasoning: "过程", tool_use: "工具", tool_result: "结果", file_change: "文件" };
+  return <div className="inspector-section conversation-section">
+    <div className="inspector-section-title"><h3>对话记录</h3><span>{active ? "LIVE" : `${items.filter((item) => item.type === "round").length} ROUNDS`}</span></div>
+    <div className="conversation-list">
+      {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
+        <div className="conversation-speaker"><strong>你</strong><span>{item.id === "task" ? "任务目标" : formatTime(item.at)}</span></div>
+        <p>{item.text}</p>
+      </div> : <article className="conversation-round" key={item.id}>
+        <header><div><span>第 {item.round} 轮</span><strong>{item.stepName}</strong><span className={`runtime-badge ${item.runtime}`}>{item.runtime}</span></div><div><StatusPill status={item.status} />{item.signal && <code className="round-signal">{item.signal}</code>}<time>{formatTime(item.finishedAt || item.startedAt)}</time></div></header>
+        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={`message-${index}`}><div className="conversation-speaker"><strong>Agent</strong></div><p>{entry.text}</p></div> : <details className="conversation-activity" key={`activity-${index}`}><summary><span>工具与过程</span><b>{entry.events.length} 条</b></summary><div>{entry.events.map((event, eventIndex) => <div className="activity-row" key={`${event.kind}-${eventIndex}`}><span>{activityLabel[event.kind] || event.kind}</span><pre>{event.text}</pre></div>)}</div></details>)}</div>
+      </article>)}
+      {!items.length && <p className="muted-copy">Agent 消息会按执行轮次显示在这里。</p>}
+    </div>
+  </div>;
+}
+
+async function copyText(value) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // WebView and local preview permissions vary; fall back to a selected
+      // temporary textarea when the modern API is present but denied.
+    }
+  }
+  const input = document.createElement("textarea");
+  input.value = value;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+  if (!copied) throw new Error("clipboard unavailable");
 }
 
 function WorkflowLibrary({ workflows, runtimes, openEditor }) {
