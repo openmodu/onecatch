@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
-import { Action, Field, NumberField, SettingPanel as SettingCard, ToggleRow as Toggle } from "../ui/primitives.jsx";
+import { Action, Field, NumberField, SettingPanel as SettingCard, TUISelect, ToggleRow as Toggle } from "../ui/primitives.jsx";
 
 const sectionMeta = [
   { id: "runtime", label: "Runtime", description: "命令与模型" },
@@ -226,7 +226,7 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
       <div className="settings-grid">
         <Field label="Binary 路径" hint={`留空使用 ${meta[id].command}`} error={errors[`${id}.binary`]}><input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={meta[id].command} /></Field>
         <Field label="默认模型" hint="留空由 Runtime 决定" error={errors[`${id}.defaultModel`]}><input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder="Runtime 默认" /></Field>
-        {id === "modu" && <Field label="Provider" hint="自动会根据允许继承的 API Key 检测" error={errors[`${id}.provider`]}><select value={value[id]?.provider || "auto"} aria-invalid={Boolean(errors[`${id}.provider`])} onChange={(event) => update(id, "provider", event.target.value)}><option value="auto">自动检测</option><option value="openai">OpenAI / Compatible</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option></select></Field>}
+        {id === "modu" && <Field label="Provider" hint="自动会根据允许继承的 API Key 检测" error={errors[`${id}.provider`]}><TUISelect ariaLabel="Provider" value={value[id]?.provider || "auto"} onChange={(provider) => update(id, "provider", provider)} options={[{ value: "auto", label: "自动检测" }, { value: "openai", label: "OpenAI / Compatible" }, { value: "anthropic", label: "Anthropic" }, { value: "gemini", label: "Gemini" }]} /></Field>}
         <Field className="full" label="环境变量 Key 白名单" hint="只保存变量名，不保存值；使用逗号分隔" error={errors[`${id}.environmentAllowlist`]}><input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder={meta[id].env} /></Field>
       </div>
       <div className="settings-actions"><Action tone="cyan" disabled={current.checking} onClick={() => check(id)}>{current.checking ? "检测中…" : "测试配置"}</Action></div>
@@ -243,7 +243,7 @@ function ExecutionSettings({ value, setValue, errors }) {
       <NumberField field="stepTimeoutSeconds" label="单节点超时" hint="30–86400 秒" value={value.stepTimeoutSeconds} error={errors.stepTimeoutSeconds} onChange={(next) => number("stepTimeoutSeconds", next)} />
       <NumberField field="maxLocalDAGConcurrency" label="DAG 本地并发" hint="1–16 个只读节点" value={value.maxLocalDAGConcurrency} error={errors.maxLocalDAGConcurrency} onChange={(next) => number("maxLocalDAGConcurrency", next)} />
       <NumberField field="interruptGraceSeconds" label="中断宽限时间" hint="1–60 秒" value={value.interruptGraceSeconds} error={errors.interruptGraceSeconds} onChange={(next) => number("interruptGraceSeconds", next)} />
-      <Field label="默认 Sandbox" hint="Full access 不能设为全局默认"><select value={value.defaultSandbox} onChange={(event) => setValue({ ...value, defaultSandbox: event.target.value })}><option value="read-only">Read only</option><option value="workspace-write">Workspace write</option></select></Field>
+      <Field label="默认 Sandbox" hint="Full access 不能设为全局默认"><TUISelect ariaLabel="默认 Sandbox" value={value.defaultSandbox} onChange={(defaultSandbox) => setValue({ ...value, defaultSandbox })} options={[{ value: "read-only", label: "Read only" }, { value: "workspace-write", label: "Workspace write" }]} /></Field>
     </div>
   </SettingCard>;
 }
@@ -270,13 +270,13 @@ function StorageSettings({ value, setValue, errors, security, diagnosticOptions,
       {usage ? <><div className="usage-total">{bytes(usage.totalBytes)} <small>总占用</small></div><div className="usage-bars">{(usage.categories || []).map((item) => <div key={item.name}><span>{item.name}</span><b>{bytes(item.bytes)}</b><i style={{ width: `${Math.max(3, item.bytes / Math.max(usage.totalBytes, 1) * 100)}%` }} /></div>)}</div><p className="storage-calculated-at">最后计算：{usage.calculatedAt ? new Date(usage.calculatedAt).toLocaleString("zh-CN") : "刚刚"}</p></> : <div className="settings-inline-empty">{usageLoading ? "正在计算本机空间用量…" : "还没有空间用量数据。"}</div>}
     </SettingCard>
     <SettingCard title="历史 Run 清理" description="只清理超过保留期的 completed / cancelled Run；active、running、paused 永远跳过。">
-      <Field label="完成记录保留期" hint="默认永久保留"><select value={value.completedRunRetentionDays} onChange={(event) => { number("completedRunRetentionDays", event.target.value); setPreview(null); }}><option value={0}>永久保留</option><option value={30}>30 天</option><option value={90}>90 天</option><option value={180}>180 天</option></select></Field>
+      <Field label="完成记录保留期" hint="默认永久保留"><TUISelect ariaLabel="完成记录保留期" value={value.completedRunRetentionDays} onChange={(retentionDays) => { number("completedRunRetentionDays", retentionDays); setPreview(null); }} options={[{ value: 0, label: "永久保留" }, { value: 30, label: "30 天" }, { value: 90, label: "90 天" }, { value: 180, label: "180 天" }]} /></Field>
       <div className="settings-actions"><Action tone="muted" disabled={!value.completedRunRetentionDays} onClick={previewCleanup}>预览清理</Action></div>
       {preview?.token && <div className="cleanup-preview" role="status"><div><span className="kicker">CLEANUP PREVIEW</span><strong>{preview.count} 个历史 Run</strong><p>预计释放 {bytes(preview.estimatedBytes)}，执行前会再次检查运行状态。</p></div><Action tone="danger" disabled={!preview.count} onClick={executeCleanup}>不可逆清理</Action></div>}
     </SettingCard>
     <SettingCard title="日志轮转" description="保存后立即应用新的日志级别和轮转限制。">
       <div className="settings-grid">
-        <Field label="日志级别" hint="推荐 info"><select value={value.logLevel} onChange={(event) => setValue({ ...value, logLevel: event.target.value })}><option>error</option><option>warn</option><option>info</option><option>debug</option></select></Field>
+        <Field label="日志级别" hint="推荐 info"><TUISelect ariaLabel="日志级别" value={value.logLevel} onChange={(logLevel) => setValue({ ...value, logLevel })} options={["error", "warn", "info", "debug"]} /></Field>
         <NumberField field="logMaxSizeMB" label="单文件大小" hint="1–1024 MB" value={value.logMaxSizeMB} error={errors.logMaxSizeMB} onChange={(next) => number("logMaxSizeMB", next)} />
         <NumberField field="logMaxBackups" label="备份文件数" hint="1–50" value={value.logMaxBackups} error={errors.logMaxBackups} onChange={(next) => number("logMaxBackups", next)} />
         <NumberField field="logMaxAgeDays" label="日志保留期" hint="1–365 天" value={value.logMaxAgeDays} error={errors.logMaxAgeDays} onChange={(next) => number("logMaxAgeDays", next)} />
