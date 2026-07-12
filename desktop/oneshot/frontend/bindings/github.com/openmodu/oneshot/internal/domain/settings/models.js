@@ -124,6 +124,13 @@ export class RuntimeSettings {
         if (/** @type {any} */(false)) {
             /**
              * @member
+             * @type {string | undefined}
+             */
+            this["provider"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
              * @type {string[] | undefined}
              */
             this["environmentAllowlist"] = undefined;
@@ -138,10 +145,10 @@ export class RuntimeSettings {
      * @returns {RuntimeSettings}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType0;
+        const $$createField3_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("environmentAllowlist" in $$parsedSource) {
-            $$parsedSource["environmentAllowlist"] = $$createField2_0($$parsedSource["environmentAllowlist"]);
+            $$parsedSource["environmentAllowlist"] = $$createField3_0($$parsedSource["environmentAllowlist"]);
         }
         return new RuntimeSettings(/** @type {Partial<RuntimeSettings>} */($$parsedSource));
     }

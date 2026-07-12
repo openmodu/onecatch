@@ -336,6 +336,13 @@ export class ResolvedRuntimeSettings {
              */
             this["environmentAllowlist"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["provider"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }

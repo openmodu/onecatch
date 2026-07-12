@@ -61,7 +61,6 @@ DAG 全图中的节点、连线、toolbar 和 Inspector 已能以原尺寸辨认
 P0：0，P1：0，P2：0。
 
 final result: passed
-
 ---
 
 # Run Inspector Live Timeline Design QA
@@ -175,5 +174,62 @@ Fixes applied:
 ## Follow-up Polish
 
 - P3: real runtimes do not currently report reliable per-tool duration, so the implementation shows event time rather than inventing duration values from the mock.
+
+final result: passed
+
+
+---
+
+# Issue 04-007 TUI Select Design QA
+
+- Source visual truth: `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-7de83a33-d5b6-4c89-b4a3-e5972d25f2ce.png`（原生 popup 为待消除的反例；页面现有直角、hairline、绿色语义色为目标语言）
+- Follow-up annotation: `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-851ad4cd-fe03-4890-af98-ed3b343d9fed.png`（菜单底部硬阴影形成额外背板）
+- Implementation screenshot: `/tmp/oneshot-select-qa/task-open.jpg`
+- Follow-up implementation screenshot: `/tmp/oneshot-select-qa/sandbox-no-shadow.jpg`
+- Combined comparison: `/tmp/oneshot-select-qa/source-vs-task-open.jpg`
+- Viewport: 1280 × 720 implementation; source focused crop normalized to 720px height for comparison
+- State: 工作台 Workflow 选择框展开，当前项为“并行审查 DAG”
+
+## Full-view comparison evidence
+
+- 实现保留页面原有 TUI 字体、hairline、直角和绿色语义色，没有引入 macOS 蓝色选中态或圆角浮层。
+- 菜单通过 portal 覆盖列表区域，未被工作台列或滚动容器裁切。
+- 触发器与菜单宽度一致，展开层级不会推动周围布局。
+
+## Focused region comparison evidence
+
+- 原生控件的圆角外框、蓝色 focus ring、系统阴影和蓝色选中项已移除。
+- 闭合触发器仅保留 1px 底线；展开/键盘焦点以 cyan 内嵌底线表达，没有第二圈 outline。
+- 菜单为 0px 圆角矩形，当前项用 `>` 与绿色文本标记，活动项使用低对比背景。
+
+## Required fidelity surfaces
+
+- Fonts and typography: 继承共享 monospace token，字号、字重和行高与工作台元数据一致；长值保持单行省略。
+- Spacing and layout rhythm: 触发器使用共享 control height/padding；选项 36px 最小高度；矩形菜单与 trigger 左右对齐。
+- Colors and visual tokens: 只使用 canvas、line、cyan、good 与 accent-soft 共享 token。
+- Image quality and asset fidelity: 本控件不包含图片资产；未以位图替代 UI 内容。
+- Copy and content: 现有 Workflow、Runtime、Sandbox、Worker 与设置选项文案和值保持不变。
+
+## Interaction verification
+
+- ArrowDown + Enter 可切换选项并关闭菜单。
+- Escape 可关闭并把焦点留在 trigger。
+- 点击外部可关闭菜单。
+- 设置页 Provider 展开态实测：trigger 顶边 0px、底边 1px、outline 0px；菜单 fixed、0px radius、4 个选项。
+
+## Comparison history
+
+1. 首轮发现设置页 `.settings-page button:focus-visible` 覆盖共享 Select，产生 3px 绿色外圈（P1）。
+2. 提高共享 Select focus/open 规则的组件作用域优先级，同时明确 `outline-offset: 0`。
+3. 复验得到 outline 0px、顶边 0px、底边 1px，P1 已关闭。
+4. 用户复查发现菜单的 5px 硬阴影会形成底部“背板”（P2）；移除 box-shadow 后菜单只保留单层 hairline 边框。
+
+## Findings
+
+- 无剩余 P0/P1/P2 视觉或交互问题。
+
+## Follow-up polish
+
+- P3：后续可在真实长选项数据出现时补充菜单横向溢出与 tooltip 体验。
 
 final result: passed

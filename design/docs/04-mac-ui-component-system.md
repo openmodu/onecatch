@@ -25,8 +25,11 @@ Issue 04-004 将字号进一步收敛为语义可读性层级：micro 11px、cap
 - `Panel`：统一 section hairline、背景和 14×16px 内容 padding。
 - `Toolbar`：统一 46px editor toolbar 与左右 action slot。
 - `ToggleRow`：统一安全设置行和 on/off 命令状态。
+- `TUISelect`：统一任务、设置和编辑器选择控件。触发器使用单底线与文本 caret；菜单通过 portal 避免被滚动容器裁切，使用无阴影矩形 TUI 列表和 `>` 当前项标记；支持 ArrowUp/ArrowDown、Home/End、Enter/Space、Escape 和外部点击关闭。
 
 primitive 只负责表现和可访问性，不持有业务状态。
+
+Issue 04-007 起，产品代码不再渲染原生 `<select>`。macOS 原生 popup 无法可靠修改圆角、蓝色选中态和阴影，也会与页面 TUI 视觉冲突；所有选项数据统一传给 `TUISelect`，选择结果仍以原字符串值交给现有业务 handler，不改变 DTO 或 binding。
 
 Action hover 不使用 `background: currentColor`，因为同一规则内修改前景色会让背景跟随最终前景色，造成文字与背景同色。各 variant 必须显式映射 hover background，前景统一使用 canvas 色。
 

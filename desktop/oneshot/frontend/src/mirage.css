@@ -72,7 +72,7 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .composer-footer { margin-top: 10px; align-items: center; }
 .composer-footer label { display: flex; align-items: center; gap: 12px; min-width: 0; color: var(--acp-text-soft); font-size: var(--ui-font-meta); }
 .composer-footer label > span { margin: 0; }
-.composer-footer select { width: 220px; }
+.composer-footer .ui-select { width: 220px; }
 .section-title { min-height: 42px; margin: 0; padding: 12px 20px 8px; border-bottom: 1px solid var(--acp-line); }
 .section-title h2 { color: var(--acp-text-soft); font-size: var(--ui-font-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .section-title > span { color: var(--acp-text-soft); font-size: var(--ui-font-caption); }
