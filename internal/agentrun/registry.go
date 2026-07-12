@@ -31,13 +31,15 @@ type Engine struct {
 type Config struct {
 	CodexBinary  string
 	ClaudeBinary string
+	ModuBinary   string
 }
 
-// NewEngine builds an engine with the standard codex and claude runners.
+// NewEngine builds an engine with all standard local runtime runners.
 func NewEngine(cfg Config) *Engine {
 	return NewEngineWithRunners(
 		NewCodexRunner(cfg.CodexBinary),
 		NewClaudeRunner(cfg.ClaudeBinary),
+		NewModuRunner(cfg.ModuBinary),
 	)
 }
 
@@ -66,7 +68,7 @@ func (e *Engine) Available(rt Runtime) bool {
 // can show users which local agents they can actually run.
 func (e *Engine) AvailableRuntimes() []Runtime {
 	// Stable order so the UI does not reshuffle between calls.
-	order := []Runtime{RuntimeCodex, RuntimeClaude}
+	order := []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu}
 	var out []Runtime
 	for _, rt := range order {
 		if e.Available(rt) {

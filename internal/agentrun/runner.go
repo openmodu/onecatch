@@ -36,6 +36,9 @@ type Request struct {
 	Prompt string
 	// Model optionally overrides the runtime's default model.
 	Model string
+	// Provider optionally selects a runtime provider. It is currently consumed
+	// by Modu Code and ignored by runtimes with a fixed provider.
+	Provider string
 	// Sandbox selects the permission level; defaults to SandboxWorkspaceWrite.
 	Sandbox Sandbox
 	// ResumeSessionID, when set, continues a prior run instead of starting a

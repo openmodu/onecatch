@@ -16,7 +16,7 @@ const sectionKey = (section) => section === "runtime" ? "runtimes" : section;
 
 export const demoSettings = {
   schemaVersion: 1, revision: 1,
-  runtimes: { codex: { binary: "", defaultModel: "", environmentAllowlist: [] }, claude: { binary: "", defaultModel: "", environmentAllowlist: [] } },
+  runtimes: { codex: { binary: "", defaultModel: "", environmentAllowlist: [] }, claude: { binary: "", defaultModel: "", environmentAllowlist: [] }, modu: { binary: "", defaultModel: "", provider: "auto", environmentAllowlist: [] } },
   execution: { maxTransitions: 20, maxConsecutiveFailures: 3, stepTimeoutSeconds: 1800, maxLocalDAGConcurrency: 4, interruptGraceSeconds: 10, defaultSandbox: "workspace-write" },
   security: { allowFullSandbox: false, confirmFullSandboxEveryRun: true, diagnosticsIncludePrompt: false, diagnosticsIncludeRawEvents: false },
   storage: { completedRunRetentionDays: 0, logLevel: "info", logMaxSizeMB: 20, logMaxBackups: 5, logMaxAgeDays: 14 },
@@ -214,14 +214,20 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
 
 function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
   const update = (id, field, next) => setValue({ ...value, [id]: { ...value[id], [field]: next } });
-  return <>{["codex", "claude"].map((id) => {
+  const meta = {
+    codex: { name: "Codex", command: "codex", description: "留空时从 PATH 自动发现；测试配置只执行 version check，不启动 Agent，也不消耗模型额度。", env: "OPENAI_API_KEY, HTTPS_PROXY" },
+    claude: { name: "Claude Code", command: "claude", description: "留空时从 PATH 自动发现；测试配置只执行 version check，不启动 Agent，也不消耗模型额度。", env: "ANTHROPIC_API_KEY, HTTPS_PROXY" },
+    modu: { name: "Modu Code", command: "modu-code", description: "通过 ACP stdio 接入。当前会话只在子进程内有效，Loop 会由 Oneshot 续传任务上下文。测试只检查命令可执行，不请求模型。", env: "OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_BASE_URL" },
+  };
+  return <>{["codex", "claude", "modu"].map((id) => {
     const current = status[id] || runtimes.find((item) => item.id === id) || {};
     const statusText = current.checking ? "正在检测命令…" : current.available ? `${current.version || "可用"}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString("zh-CN")}` : ""}` : current.error || "未安装或尚未检测";
-    return <SettingCard className="runtime-setting-card" key={id} title={id === "codex" ? "Codex" : "Claude Code"} description="留空时从 PATH 自动发现；测试配置只执行 version check，不启动 Agent，也不消耗模型额度。" aside={<span className={`setting-status ${current.available ? "ok" : current.error ? "bad" : ""}`}><i />{statusText}</span>}>
+    return <SettingCard className="runtime-setting-card" key={id} title={meta[id].name} description={meta[id].description} aside={<span className={`setting-status ${current.available ? "ok" : current.error ? "bad" : ""}`}><i />{statusText}</span>}>
       <div className="settings-grid">
-        <Field label="Binary 路径" hint={`留空使用 ${id}`} error={errors[`${id}.binary`]}><input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={id} /></Field>
+        <Field label="Binary 路径" hint={`留空使用 ${meta[id].command}`} error={errors[`${id}.binary`]}><input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={meta[id].command} /></Field>
         <Field label="默认模型" hint="留空由 Runtime 决定" error={errors[`${id}.defaultModel`]}><input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder="Runtime 默认" /></Field>
-        <Field className="full" label="环境变量 Key 白名单" hint="只保存变量名，不保存值；使用逗号分隔" error={errors[`${id}.environmentAllowlist`]}><input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder="OPENAI_API_KEY, HTTPS_PROXY" /></Field>
+        {id === "modu" && <Field label="Provider" hint="自动会根据允许继承的 API Key 检测" error={errors[`${id}.provider`]}><select value={value[id]?.provider || "auto"} aria-invalid={Boolean(errors[`${id}.provider`])} onChange={(event) => update(id, "provider", event.target.value)}><option value="auto">自动检测</option><option value="openai">OpenAI / Compatible</option><option value="anthropic">Anthropic</option><option value="gemini">Gemini</option></select></Field>}
+        <Field className="full" label="环境变量 Key 白名单" hint="只保存变量名，不保存值；使用逗号分隔" error={errors[`${id}.environmentAllowlist`]}><input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder={meta[id].env} /></Field>
       </div>
       <div className="settings-actions"><Action tone="cyan" disabled={current.checking} onClick={() => check(id)}>{current.checking ? "检测中…" : "测试配置"}</Action></div>
     </SettingCard>;
@@ -304,12 +310,13 @@ function validateSection(section, draft) {
   const add = (field, messageText) => errors.push({ field, message: messageText });
   if (section === "runtime") {
     const forbidden = (key) => ["PATH", "HOME", "SHELL", "BASH_ENV", "ENV", "ZDOTDIR"].includes(key) || key.startsWith("DYLD_") || key.startsWith("LD_");
-    for (const id of ["codex", "claude"]) {
+    for (const id of ["codex", "claude", "modu"]) {
       const runtime = draft.runtimes[id];
       if (/[\r\n\0]/.test(runtime.binary || "")) add(`${id}.binary`, "路径不能包含换行或控制字符");
       if (/[\r\n\0]/.test(runtime.defaultModel || "")) add(`${id}.defaultModel`, "模型名不能包含换行或控制字符");
       const invalid = (runtime.environmentAllowlist || []).find((key) => !/^[A-Z_][A-Z0-9_]{0,127}$/.test(key) || forbidden(key));
       if (invalid) add(`${id}.environmentAllowlist`, `${invalid} 不是允许继承的环境变量 Key`);
+      if (id === "modu" && !["", "auto", "openai", "anthropic", "gemini"].includes(runtime.provider || "")) add(`${id}.provider`, "Provider 配置无效");
     }
   }
   if (section === "execution") {

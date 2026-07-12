@@ -104,6 +104,7 @@ type Run struct {
 
 type ResolvedRuntimeSettings struct {
 	EnvironmentAllowlist []string `json:"environmentAllowlist,omitempty"`
+	Provider             string   `json:"provider,omitempty"`
 }
 
 type NodeStatus string

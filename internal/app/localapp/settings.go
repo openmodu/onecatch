@@ -266,7 +266,11 @@ func (a *App) resolveRunSettings(ctx context.Context, taskID string) (domainwork
 	}
 	runtimeSettings := make(map[string]domainworkflows.ResolvedRuntimeSettings, len(settings.Runtimes))
 	for id, item := range settings.Runtimes {
-		runtimeSettings[id] = domainworkflows.ResolvedRuntimeSettings{EnvironmentAllowlist: append([]string{}, item.EnvironmentAllowlist...)}
+		provider := item.Provider
+		if id == "modu" && provider == "" {
+			provider = "auto"
+		}
+		runtimeSettings[id] = domainworkflows.ResolvedRuntimeSettings{EnvironmentAllowlist: append([]string{}, item.EnvironmentAllowlist...), Provider: provider}
 	}
 	return definition, workflowuc.RunResolution{MaxLocalDAGConcurrency: settings.Execution.MaxLocalDAGConcurrency, InterruptGraceSeconds: settings.Execution.InterruptGraceSeconds, RuntimeSettings: runtimeSettings}, nil
 }

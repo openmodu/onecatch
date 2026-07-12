@@ -428,6 +428,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			Sandbox:              allowedSandbox(step.Sandbox, workspace.DefaultSandbox),
 			ResumeSessionID:      run.Sessions[step.ID],
 			EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime),
+			Provider:             resolvedRuntimeProvider(run, step.Runtime),
 			InterruptGrace:       time.Duration(run.InterruptGraceSeconds) * time.Second,
 		}, func(event agentrun.Event) {
 			payload, err := json.Marshal(event)
@@ -595,6 +596,13 @@ func resolvedEnvironmentAllowlist(run domainworkflows.Run, runtime string) []str
 		return nil
 	}
 	return append([]string{}, settings.EnvironmentAllowlist...)
+}
+
+func resolvedRuntimeProvider(run domainworkflows.Run, runtime string) string {
+	if run.RuntimeSettings == nil {
+		return ""
+	}
+	return run.RuntimeSettings[runtime].Provider
 }
 
 func (s *Usecase) loadTaskContext(ctx context.Context, taskID string) (domaintasks.Task, domainworkspaces.Workspace, domainworkflows.Definition, error) {

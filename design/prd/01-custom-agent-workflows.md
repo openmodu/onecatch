@@ -127,8 +127,9 @@ implement/review --need_human--> $pause
 
 ### 7.1 Runtime 管理
 
-- 检测 Codex、Claude Code 的安装状态和版本。
-- 允许为 runtime 配置 binary path、默认 model 和环境变量白名单。
+- 检测 Codex、Claude Code、Modu Code 的安装状态和版本/协议可用性。
+- 允许为 runtime 配置 binary path、默认 model 和环境变量白名单；Modu Code 还允许显式选择 Provider。
+- Modu Code 通过 ACP JSON-RPC/LDJSON 接入，不使用可注入的 shell 命令模板；当前 CLI 不支持跨进程 session 恢复时，Oneshot 必须明确按无原生会话恢复能力运行，不得展示无效恢复命令。
 - runtime 不可用时不得静默换成另一个角色；应暂停并明确提示。
 - CLI 原始事件统一映射为消息、推理、工具、文件变化、用量、结果和错误。
 

@@ -1,4 +1,4 @@
-// Package agentrun runs local CLI coding agents (Codex, Claude Code) as
+// Package agentrun runs local CLI coding agents (Codex, Claude Code, Modu Code) as
 // subprocesses for long-horizon tasks, normalizing their heterogeneous
 // streaming output into a single event model the rest of the product consumes.
 //
@@ -25,12 +25,14 @@ const (
 	RuntimeCodex Runtime = "codex"
 	// RuntimeClaude drives Anthropic's Claude Code via `claude -p`.
 	RuntimeClaude Runtime = "claude"
+	// RuntimeModu drives Modu Code via the Agent Client Protocol over stdio.
+	RuntimeModu Runtime = "modu"
 )
 
 // Valid reports whether r is a runtime the engine can drive.
 func (r Runtime) Valid() bool {
 	switch r {
-	case RuntimeCodex, RuntimeClaude:
+	case RuntimeCodex, RuntimeClaude, RuntimeModu:
 		return true
 	default:
 		return false

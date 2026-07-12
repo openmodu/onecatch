@@ -34,6 +34,7 @@ type Settings struct {
 type RuntimeSettings struct {
 	Binary               string   `json:"binary,omitempty"`
 	DefaultModel         string   `json:"defaultModel,omitempty"`
+	Provider             string   `json:"provider,omitempty"`
 	EnvironmentAllowlist []string `json:"environmentAllowlist,omitempty"`
 }
 
@@ -72,6 +73,7 @@ func Defaults() Settings {
 		Runtimes: map[string]RuntimeSettings{
 			"codex":  {},
 			"claude": {},
+			"modu":   {},
 		},
 		Execution: ExecutionSettings{
 			MaxTransitions: 20, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 1800,
@@ -101,7 +103,7 @@ func Normalize(input Settings) (Settings, error) {
 	if input.Runtimes == nil {
 		input.Runtimes = defaults.Runtimes
 	}
-	for _, id := range []string{"codex", "claude"} {
+	for _, id := range []string{"codex", "claude", "modu"} {
 		if _, ok := input.Runtimes[id]; !ok {
 			input.Runtimes[id] = RuntimeSettings{}
 		}
@@ -139,6 +141,7 @@ func Normalize(input Settings) (Settings, error) {
 	for id, runtime := range input.Runtimes {
 		runtime.Binary = strings.TrimSpace(runtime.Binary)
 		runtime.DefaultModel = strings.TrimSpace(runtime.DefaultModel)
+		runtime.Provider = strings.ToLower(strings.TrimSpace(runtime.Provider))
 		runtime.EnvironmentAllowlist = normalizeKeys(runtime.EnvironmentAllowlist)
 		input.Runtimes[id] = runtime
 	}
@@ -155,11 +158,18 @@ func Validate(input Settings) error {
 		return errors.New("revision must be positive")
 	}
 	for id, runtime := range input.Runtimes {
-		if id != "codex" && id != "claude" {
+		if id != "codex" && id != "claude" && id != "modu" {
 			return fmt.Errorf("unknown runtime %q", id)
 		}
-		if strings.ContainsAny(runtime.Binary+runtime.DefaultModel, "\r\n\x00") {
+		if strings.ContainsAny(runtime.Binary+runtime.DefaultModel+runtime.Provider, "\r\n\x00") {
 			return fmt.Errorf("runtime %s contains control characters", id)
+		}
+		if id == "modu" {
+			if !contains([]string{"", "auto", "openai", "anthropic", "gemini"}, runtime.Provider) {
+				return errors.New("modu provider must be auto, openai, anthropic, or gemini")
+			}
+		} else if runtime.Provider != "" {
+			return fmt.Errorf("runtime %s does not support provider selection", id)
 		}
 		for _, key := range runtime.EnvironmentAllowlist {
 			if !environmentKey.MatchString(key) || forbiddenEnvironmentKey(key) {

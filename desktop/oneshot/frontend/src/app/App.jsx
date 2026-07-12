@@ -98,6 +98,7 @@ const demoWorkspaces = [
 const demoRuntimes = [
   { id: "codex", name: "Codex", available: true, version: "codex 0.98.0" },
   { id: "claude", name: "Claude Code", available: true, version: "2.1.4" },
+  { id: "modu", name: "Modu Code", available: true, version: "ACP · executable" },
 ];
 const demoWorkflows = [
   { ...singleTemplate, id: "single_agent", name: "单 Agent 完成" },
@@ -320,7 +321,7 @@ function App() {
   const checkWorker = async (worker) => {
     setWorkerHealth((current) => ({ ...current, [worker.id]: { checking: true } }));
     try {
-      const status = mode === "demo" ? { health: { workerId: worker.id, name: worker.name, runtimes: { codex: true, claude: true } } } : await WorkerBinding.CheckWorker(worker.id);
+      const status = mode === "demo" ? { health: { workerId: worker.id, name: worker.name, runtimes: { codex: true, claude: true, modu: true } } } : await WorkerBinding.CheckWorker(worker.id);
       setWorkerHealth((current) => ({ ...current, [worker.id]: { ok: true, ...status.health } }));
     } catch (error) { setWorkerHealth((current) => ({ ...current, [worker.id]: { ok: false, error: errorMessage(error) } })); }
   };

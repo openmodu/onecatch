@@ -140,6 +140,7 @@ select { height: 36px; padding: 0 10px; font-size: 11px; }
 .runtime-badge { border: 1px solid rgba(255,255,255,.14); padding: 4px 7px; border-radius: 6px; font: 500 8px "DM Mono", monospace; text-transform: uppercase; }
 .runtime-badge.codex { color: #65e49c; }
 .runtime-badge.claude { color: #ffac78; }
+.runtime-badge.modu { color: #67d6dc; }
 .current-step p { color: #a6b9ad; margin: 9px 0 0; font-size: 9px; }
 .current-step p.error-copy { color: #ffadad; }
 .flow-mini { padding: 14px 4px 5px; }

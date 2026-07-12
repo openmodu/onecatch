@@ -99,6 +99,7 @@ select { height: 32px; padding: 0 8px; font-size: 11px; }
 .runtime-badge { border-color: var(--acp-line); border-radius: 2px; }
 .runtime-badge.codex { color: var(--acp-accent-soft); }
 .runtime-badge.claude { color: var(--acp-warn); }
+.runtime-badge.modu { color: var(--acp-cyan); }
 .flow-mini { padding: 10px 18px; border-bottom: 1px solid var(--acp-line); }
 .flow-node { border: 0; border-radius: 0; background: transparent; color: var(--acp-text-soft); }
 .flow-step.current .flow-node { background: transparent; color: var(--acp-accent); }

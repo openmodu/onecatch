@@ -54,7 +54,7 @@ func (s *Server) authorize(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
-	writeJSON(writer, http.StatusOK, Health{WorkerID: s.id, Name: s.name, Runtimes: map[string]bool{"codex": s.engine.Available(agentrun.RuntimeCodex), "claude": s.engine.Available(agentrun.RuntimeClaude)}})
+	writeJSON(writer, http.StatusOK, Health{WorkerID: s.id, Name: s.name, Runtimes: map[string]bool{"codex": s.engine.Available(agentrun.RuntimeCodex), "claude": s.engine.Available(agentrun.RuntimeClaude), "modu": s.engine.Available(agentrun.RuntimeModu)}})
 }
 
 func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {

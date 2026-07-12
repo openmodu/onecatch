@@ -135,6 +135,17 @@ func TestDiagnosticsNeverPersistsAllowedEnvironmentValue(t *testing.T) {
 	}
 }
 
+func TestConfigureModuProviderOverridesInheritedValue(t *testing.T) {
+	got := configureModuProvider([]string{"PATH=/bin", "MODU_CODE_PROVIDER=openai"}, "anthropic")
+	if strings.Join(got, "|") != "PATH=/bin|MODU_CODE_PROVIDER=anthropic" {
+		t.Fatalf("environment = %v", got)
+	}
+	got = configureModuProvider(got, "auto")
+	if strings.Join(got, "|") != "PATH=/bin" {
+		t.Fatalf("auto environment = %v", got)
+	}
+}
+
 func TestRunFreezesResolvedSettings(t *testing.T) {
 	app, _ := newStorageTestApp(t)
 	ctx := context.Background()
@@ -152,6 +163,9 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	runtime.DefaultModel = "snapshot-model"
 	runtime.EnvironmentAllowlist = []string{"ONESHOT_TEST_ENV"}
 	settings.Runtimes["codex"] = runtime
+	modu := settings.Runtimes["modu"]
+	modu.Provider = "anthropic"
+	settings.Runtimes["modu"] = modu
 	saved, err := app.UpdateRuntimeSettings(ctx, settings.Runtimes, settings.Revision)
 	if err != nil {
 		t.Fatal(err)
@@ -183,6 +197,9 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	}
 	if got := run.RuntimeSettings["codex"].EnvironmentAllowlist; len(got) != 1 || got[0] != "ONESHOT_TEST_ENV" {
 		t.Fatalf("environment snapshot = %#v", got)
+	}
+	if got := run.RuntimeSettings["modu"].Provider; got != "anthropic" {
+		t.Fatalf("modu provider snapshot = %q", got)
 	}
 }
 

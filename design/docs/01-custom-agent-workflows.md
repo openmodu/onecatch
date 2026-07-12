@@ -288,6 +288,21 @@ Bindings 调用本地 application service，不通过 HTTP loopback。所有入�
 - Run inspector 按步骤展示当前 Runtime session ID 与人工接管命令。优先读取 `Run.sessions[stepId]`，旧数据回退到最新 StepRun 的 `sessionIdAfter/sessionIdBefore`；同一步骤只显示当前可恢复会话。Codex 使用 `codex resume <session-id>`，Claude Code 使用 `claude --resume <session-id>`，未知 Runtime 只显示 ID、不猜测命令。
 - Run inspector 的执行历史采用会话时间线：Task prompt 与非空恢复 instruction 是用户消息；StepRun 是带轮次、步骤、Runtime 和状态的 Agent 回合；message/result/error 作为可读回复，连续的 tool/reasoning/file events 收进默认折叠的活动组。UI 不截断为最后若干事件，outcome JSON 只显示 `content`。`run.resumed` 事件在本地 payload 中保存 trim 后的 instruction，以便重启后仍能重建对话；旧事件缺少该字段时保持兼容。
 
+### 11.1 Modu Code ACP Runtime（Issue 01-009）
+
+Modu Code 使用 JSON-RPC 2.0 LDJSON over stdio，不通过 shell 拼接任务参数。`ModuRunner` 为每次 StepRun 启动一个受 context 管理的子进程，依次发送：
+
+1. `initialize`，确认 ACP protocol version。
+2. `session/new`，以当前 Workspace 作为 `cwd`。
+3. `session/prompt`，prompt 只包含一个 `type=text` content block。
+4. 读取 `session/update` 的 `agent_message_chunk`，聚合为一个 `message` 与最终 `result` 事件。
+
+Runtime 设置新增可选 `provider`，仅 `modu` 接受 `auto/openai/anthropic/gemini`。非 auto 值在启动时写入 `MODU_CODE_PROVIDER`；默认模型写入 `MODU_CODE_MODEL`。API Key 和 `OPENAI_BASE_URL` 仍只通过已有 environment allowlist 从宿主继承，设置文件不保存 secret 值。binary 留空解析 `modu-code`。
+
+当前已验证的 Modu Code 版本只在进程内维护 `sessions`，没有 `session/load`，且每次进程都会从 `modu-sess-1` 重新编号。因此 Oneshot 不持久化或展示该短生命周期 ID，不生成恢复命令；Loop 再入和人工恢复会启动新 session，并使用 Orchestrator 已有的 Task、最近 outcomes 与人工补充 prompt 衔接。未来 Modu Code 声明持久 session capability 后，再单独增加 capability negotiation 与恢复语义。
+
+首版只消费 Modu Code 当前实现的 agent text chunk。若 Agent 发出未支持的 ACP 反向请求，runner 返回明确 protocol error，不自动授予文件、终端或权限能力。配置检查只验证 binary 可执行，不启动 provider，因此不消耗模型额度。
+
 ## 12. 验证计划
 
 - 领域：图校验、协议 parser、回边、所有终点、未知 signal、上限和 resume。

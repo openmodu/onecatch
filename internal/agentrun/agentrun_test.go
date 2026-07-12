@@ -173,6 +173,71 @@ func TestClaudeRunnerReportsAgentFailure(t *testing.T) {
 	}
 }
 
+func TestModuRunnerSpeaksACPAndAggregatesMessage(t *testing.T) {
+	bin := stubACPBinary(t, false)
+	runner := NewModuRunner(bin)
+	runner.now = fixedClock()
+
+	var events []Event
+	result, err := runner.Run(context.Background(), Request{
+		Workspace:   t.TempDir(),
+		Prompt:      "finish the task",
+		Model:       "custom-model",
+		Environment: []string{"PATH=" + os.Getenv("PATH")},
+	}, collectSink(&events))
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if !result.Succeeded || result.FinalMessage != "custom-model: done" {
+		t.Fatalf("result = %+v", result)
+	}
+	if result.SessionID != "" {
+		t.Fatalf("short-lived Modu session must not be exposed, got %q", result.SessionID)
+	}
+	if countKind(events, KindStarted) != 1 || countKind(events, KindMessage) != 1 || countKind(events, KindResult) != 1 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestModuRunnerReportsACPError(t *testing.T) {
+	runner := NewModuRunner(stubACPBinary(t, true))
+	var events []Event
+	result, err := runner.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "fail"}, collectSink(&events))
+	if err == nil || !contains(err.Error(), "provider failed") {
+		t.Fatalf("err = %v", err)
+	}
+	if result.Succeeded || countKind(events, KindError) != 1 {
+		t.Fatalf("result/events = %+v / %+v", result, events)
+	}
+}
+
+func stubACPBinary(t *testing.T, promptError bool) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	path := filepath.Join(t.TempDir(), "modu-code")
+	promptReply := `printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"modu-sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"'"$MODU_CODE_MODEL"': "}}}}'` + "\n" +
+		`printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"modu-sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"done"}}}}'` + "\n" +
+		`printf '%s\n' '{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}'`
+	if promptError {
+		promptReply = `printf '%s\n' '{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"provider failed"}}'`
+	}
+	script := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"id":1'*) printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}' ;;
+    *'"id":2'*) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"sessionId":"modu-sess-1"}}' ;;
+    *'"id":3'*) ` + promptReply + ` ;;
+  esac
+done
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write ACP stub: %v", err)
+	}
+	return path
+}
+
 func TestRunnerSurfacesProcessFailure(t *testing.T) {
 	bin := stubBinary(t, "", "boom: model auth failed", 3)
 	r := NewCodexRunner(bin)

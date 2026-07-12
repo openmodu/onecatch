@@ -30,6 +30,39 @@ func TestNormalizeEnvironmentAllowlist(t *testing.T) {
 	}
 }
 
+func TestNormalizeAddsModuAndNormalizesProvider(t *testing.T) {
+	input := Defaults()
+	delete(input.Runtimes, "modu")
+	got, err := Normalize(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got.Runtimes["modu"]; !ok {
+		t.Fatal("Normalize did not add Modu runtime")
+	}
+	got.Runtimes["modu"] = RuntimeSettings{Provider: " Anthropic "}
+	got, err = Normalize(got)
+	if err != nil || got.Runtimes["modu"].Provider != "anthropic" {
+		t.Fatalf("normalized = %+v, err = %v", got.Runtimes["modu"], err)
+	}
+	if err := Validate(got); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateRejectsInvalidRuntimeProvider(t *testing.T) {
+	input := Defaults()
+	input.Runtimes["modu"] = RuntimeSettings{Provider: "custom"}
+	if err := Validate(input); err == nil {
+		t.Fatal("expected custom Modu provider to be rejected")
+	}
+	input = Defaults()
+	input.Runtimes["codex"] = RuntimeSettings{Provider: "openai"}
+	if err := Validate(input); err == nil {
+		t.Fatal("expected provider on Codex to be rejected")
+	}
+}
+
 func TestValidateRejectsDangerousEnvironmentKeys(t *testing.T) {
 	for _, key := range []string{"PATH", "DYLD_INSERT_LIBRARIES", "LD_PRELOAD", "bad-key"} {
 		input := Defaults()
