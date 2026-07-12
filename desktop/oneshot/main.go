@@ -95,10 +95,9 @@ func main() {
 		Height:           800,
 		MinWidth:         1080,
 		MinHeight:        720,
-		BackgroundColour: application.NewRGB(245, 245, 247),
+		BackgroundColour: application.NewRGB(245, 245, 240),
 		URL:              "/",
 		Mac: application.MacWindow{
-			Backdrop: application.MacBackdropTranslucent,
 			TitleBar: application.MacTitleBarHiddenInsetUnified,
 		},
 	})

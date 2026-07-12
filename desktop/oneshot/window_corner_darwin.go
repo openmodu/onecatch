@@ -4,10 +4,11 @@ package main
 
 /*
 #cgo CFLAGS: -x objective-c
-#cgo LDFLAGS: -framework Cocoa -framework QuartzCore
+#cgo LDFLAGS: -framework Cocoa -framework QuartzCore -framework WebKit
 
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 
 @interface OneshotTitlebarDoubleClickHandler : NSObject <NSGestureRecognizerDelegate>
@@ -30,6 +31,91 @@ package main
 @end
 
 static char oneshotTitlebarDoubleClickKey;
+
+// Canvas colour mirrored from frontend tokens (--acp-canvas): light #F5F5F0,
+// dark #1C1C1C. Resolved against the window's effective appearance at apply
+// time — WebKit copies NSColor values into plain RGBA on assignment, so a
+// dynamic NSColor would freeze at whatever appearance was active on first set.
+static NSColor *oneshotCanvasColor(NSAppearance *appearance) {
+	NSAppearanceName match = [appearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
+	if ([match isEqualToString:NSAppearanceNameDarkAqua]) {
+		return [NSColor colorWithSRGBRed:0x1C / 255.0 green:0x1C / 255.0 blue:0x1C / 255.0 alpha:1.0];
+	}
+	return [NSColor colorWithSRGBRed:0xF5 / 255.0 green:0xF5 / 255.0 blue:0xF0 / 255.0 alpha:1.0];
+}
+
+static WKWebView *oneshotFindWebView(NSView *view) {
+	if ([view isKindOfClass:[WKWebView class]]) {
+		return (WKWebView *)view;
+	}
+	for (NSView *child in view.subviews) {
+		WKWebView *found = oneshotFindWebView(child);
+		if (found != nil) {
+			return found;
+		}
+	}
+	return nil;
+}
+
+// Live-resize exposes backing layers before WebKit repaints. Three layers can
+// show through and every one must match the app canvas: the NSWindow
+// background, WKWebView's fill for not-yet-rendered regions (the private
+// "backgroundColor" property — the one that actually paints the resize gap),
+// and the overscroll/under-page colour.
+static void oneshotMatchBackgroundToCanvas(NSWindow *window) {
+	NSColor *canvas = oneshotCanvasColor(window.effectiveAppearance);
+	window.backgroundColor = canvas;
+	// WebKit paints the page from its (asynchronous) WebContent process, so
+	// during zoom/resize the enlarged region is transparent until the next
+	// content frame arrives — whatever sits behind the window shows through.
+	// A CALayer background stretches synchronously with the animation, so the
+	// frame view fills that gap with the canvas colour instead.
+	NSView *frame = window.contentView.superview;
+	frame.wantsLayer = YES;
+	frame.layer.backgroundColor = canvas.CGColor;
+	WKWebView *webView = oneshotFindWebView(window.contentView);
+	if (webView == nil) {
+		return;
+	}
+	@try {
+		// Stop WebKit from compositing its own opaque white base layer — it
+		// stretches synchronously during live resize and would cover the
+		// canvas-coloured frame layer below. The page CSS paints an opaque
+		// canvas background, so nothing user-visible becomes translucent.
+		[webView setValue:@NO forKey:@"drawsBackground"];
+		[webView setValue:canvas forKey:@"backgroundColor"];
+	} @catch (NSException *exception) {
+		// Private WebKit properties; ignore if a future SDK removes them.
+	}
+	if (@available(macOS 12.0, *)) {
+		webView.underPageBackgroundColor = canvas;
+	}
+}
+
+@interface OneshotAppearanceObserver : NSObject
+@property(nonatomic, assign) NSWindow *window;
+@end
+
+@implementation OneshotAppearanceObserver
+- (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
+	if ([keyPath isEqualToString:@"effectiveAppearance"]) {
+		oneshotMatchBackgroundToCanvas(self.window);
+	}
+}
+@end
+
+static char oneshotAppearanceObserverKey;
+
+static void oneshotInstallAppearanceObserver(NSWindow *window) {
+	if (objc_getAssociatedObject(window, &oneshotAppearanceObserverKey) != nil) {
+		return;
+	}
+	OneshotAppearanceObserver *observer = [[OneshotAppearanceObserver alloc] init];
+	observer.window = window;
+	[window addObserver:observer forKeyPath:@"effectiveAppearance" options:NSKeyValueObservingOptionNew context:NULL];
+	objc_setAssociatedObject(window, &oneshotAppearanceObserverKey, observer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	[observer release];
+}
 
 static void oneshotInstallTitlebarDoubleClick(NSWindow *window) {
 	if (objc_getAssociatedObject(window, &oneshotTitlebarDoubleClickKey) != nil) {
@@ -58,6 +144,8 @@ static void oneshotSetWindowCornerRadius(void *handle, double radius) {
 		return;
 	}
 	oneshotInstallTitlebarDoubleClick(window);
+	oneshotInstallAppearanceObserver(window);
+	oneshotMatchBackgroundToCanvas(window);
 
 	NSView *frame = window.contentView.superview;
 	frame.wantsLayer = YES;
