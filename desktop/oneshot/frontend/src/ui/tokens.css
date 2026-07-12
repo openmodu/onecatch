@@ -23,12 +23,26 @@
   --ui-weight-semibold: 600;
   --ui-weight-bold: 700;
 
-  --ui-font-10: 10px;
-  --ui-font-11: 11px;
-  --ui-font-12: 12px;
-  --ui-font-13: 13px;
-  --ui-font-15: 15px;
-  --ui-font-16: 16px;
+  /* Readability scale: no user-facing text is rendered below 11px. */
+  --ui-font-micro: 11px;
+  --ui-font-caption: 12px;
+  --ui-font-meta: 13px;
+  --ui-font-body: 14px;
+  --ui-font-emphasis: 15px;
+  --ui-font-subtitle: 16px;
+  --ui-font-title: 17px;
+  --ui-font-heading: 18px;
+  --ui-font-hero: 20px;
+  --ui-font-display: 27px;
+  --ui-font-metric: 29px;
+
+  /* Compatibility aliases for existing primitives. */
+  --ui-font-10: var(--ui-font-caption);
+  --ui-font-11: var(--ui-font-meta);
+  --ui-font-12: var(--ui-font-body);
+  --ui-font-13: var(--ui-font-emphasis);
+  --ui-font-15: var(--ui-font-title);
+  --ui-font-16: var(--ui-font-heading);
 
   --ui-space-1: 4px;
   --ui-space-2: 6px;
@@ -42,7 +56,7 @@
   --ui-space-10: 24px;
 
   /* App geometry: the 1280 × 800 source frame. */
-  --ui-titlebar-height: 38px;
+  --ui-titlebar-height: 52px;
   --ui-sidebar-width: 216px;
   --ui-command-height: 44px;
   --ui-run-inspector-width: 480px;
@@ -57,7 +71,9 @@
   --ui-action-padding-y: 7px;
   --ui-action-padding-x: 10px;
   --ui-action-padding-x-primary: 12px;
-  --ui-action-font-size: 12px;
+  --ui-action-font-size: var(--ui-font-body);
+  --ui-event-state-width: 50px;
+  --ui-event-time-width: 64px;
   --ui-badge-radius: 2px;
   --ui-panel-padding-y: 14px;
   --ui-panel-padding-x: 16px;
@@ -170,6 +186,48 @@
 .ui-field > input, .ui-field > select, .ui-field > textarea { min-height: var(--ui-control-height); padding: 8px var(--ui-control-padding-x); font: var(--ui-weight-medium) var(--ui-font-11)/1 var(--ui-font-mono); }
 .ui-field__hint { color: var(--acp-text-soft); font: var(--ui-weight-regular) var(--ui-font-10)/1.3 var(--ui-font-mono); text-transform: none; }
 .ui-field--error .ui-field__hint { color: var(--acp-danger); }
+
+.ui-select { position: relative; width: 100%; min-width: 0; }
+.ui-select__trigger {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--ui-control-height);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ui-space-4);
+  padding: 0 var(--ui-control-padding-x);
+  border-bottom: var(--ui-rule);
+  background: color-mix(in oklab, var(--acp-ink) 38%, transparent);
+  color: var(--acp-text);
+  font: var(--ui-weight-medium) var(--ui-font-meta)/1 var(--ui-font-mono);
+  cursor: pointer;
+}
+.ui-select__trigger:hover:not(:disabled) { background: color-mix(in oklab, var(--acp-text) 4%, transparent); border-bottom-color: var(--acp-text-muted); }
+.ui-select__trigger:focus-visible, .ui-select--open .ui-select__trigger { outline: 0; border-bottom-color: var(--acp-cyan); box-shadow: inset 0 -2px var(--acp-cyan); }
+.ui-select__trigger:disabled { opacity: .44; cursor: not-allowed; }
+.ui-select__value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
+.ui-select__caret { color: var(--acp-text-muted); font-size: var(--ui-font-caption); }
+.ui-select__menu {
+  position: fixed;
+  z-index: 1000;
+  max-height: 248px;
+  overflow-y: auto;
+  padding: var(--ui-space-1) 0;
+  border: var(--ui-rule);
+  border-radius: 0;
+  background: var(--acp-canvas);
+  box-shadow: 5px 5px 0 color-mix(in oklab, var(--acp-text) 12%, transparent);
+  color: var(--acp-text);
+  font: var(--ui-weight-medium) var(--ui-font-meta)/1.35 var(--ui-font-mono);
+}
+.ui-select__option { min-height: 36px; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: var(--ui-space-2); padding: 7px var(--ui-control-padding-x); cursor: pointer; }
+.ui-select__option.active { background: color-mix(in oklab, var(--acp-accent-soft) 12%, transparent); }
+.ui-select__option.selected { color: var(--acp-good); }
+.ui-select__option.disabled { color: var(--acp-text-soft); opacity: .5; cursor: not-allowed; }
+.ui-select__mark { color: var(--acp-good); font-weight: var(--ui-weight-bold); }
+.ui-select__option small { color: var(--acp-text-soft); font-size: var(--ui-font-micro); }
 
 .ui-toggle-row {
   width: 100%;

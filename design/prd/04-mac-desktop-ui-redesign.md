@@ -31,6 +31,10 @@
 
 - Shell 包含 Mac titlebar、216px rail、44px command strip 和 local 状态。
 - 主导航只保留任务、Workflow、设置；Runtime 与本地数据位置合并到 rail 底部。
+- 产品定位为个人工作台，品牌副标题使用 `personal workspace`，不再以 `local agents` 把产品描述成 Agent 列表。
+- macOS 窗口使用接近 Codex 的系统 unified toolbar：保留原生交通灯及工具栏留白，不使用 CSS 仿制窗口控制按钮；双击标题栏切换窗口放大与还原。
+- 标题栏文字不可选择，双击或拖动时不得出现文字选区和底部灰白分隔闪线。
+- macOS 普通窗口使用接近现代原生应用的 26pt continuous corner；放大或全屏时取消圆角，恢复窗口时重新应用。
 - 页面主要依赖分隔线、留白和排版分组，不使用卡片墙、渐变背景和大面积阴影。
 - 主动作采用 `[ action ]` 文案形式；危险、警告、成功和运行状态使用固定语义色。
 - Workflow 列表为横向信息行，串行和 DAG 编辑器不再以遮罩 modal 呈现。
@@ -39,6 +43,7 @@
 - 核心输入、按钮、导航和编辑器必须支持键盘焦点状态。
 - 原型中重复出现的尺寸、间距、字体、控件和分区结构必须由共享 token 与 UI primitive 管理，禁止页面各自复制一套近似值。
 - 同类型组件只允许通过 variant 表达语义差异；基础尺寸或间距调整应能在一个位置全局生效。
+- 桌面端文字必须使用统一的可读性字号层级；辅助信息不得小于 11px，标签、元数据、正文和标题需要保持稳定层级，不能因页面不同退回 7–10px 的局部规格。
 
 ## 数据对象
 
@@ -58,6 +63,7 @@
 - [x] 浅色与系统深色主题 token 均已覆盖。
 - [x] frontend production build、Wails dev build、Go test/race/vet 通过。
 - [x] 同视口 design QA 无 P0/P1/P2 差异，`design-qa.md` 结果为 passed。
+- [x] 任务、Workflow、Inspector、设置与 DAG 编辑器共用可读性字号 token，最小可见字号不低于 11px。
 
 ## 待确认问题
 

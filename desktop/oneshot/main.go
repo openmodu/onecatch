@@ -16,6 +16,7 @@ import (
 	"github.com/openmodu/oneshot/internal/workspacelock"
 	"github.com/openmodu/oneshot/pkg/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 	"go.uber.org/zap"
 )
 
@@ -88,7 +89,7 @@ func main() {
 	menu.AddRole(application.WindowMenu)
 	wailsApp.Menu.Set(menu)
 
-	wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            app.Name,
 		Width:            1280,
 		Height:           800,
@@ -97,11 +98,20 @@ func main() {
 		BackgroundColour: application.NewRGB(245, 245, 247),
 		URL:              "/",
 		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 38,
-			Backdrop:                application.MacBackdropTranslucent,
-			TitleBar:                application.MacTitleBarHiddenInset,
+			Backdrop: application.MacBackdropTranslucent,
+			TitleBar: application.MacTitleBarHiddenInsetUnified,
 		},
 	})
+	applyWindowCorner := func(radius float64) {
+		application.InvokeSync(func() {
+			setNativeWindowCornerRadius(mainWindow.NativeWindow(), radius)
+		})
+	}
+	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { applyWindowCorner(26) })
+	mainWindow.OnWindowEvent(events.Common.WindowMaximise, func(*application.WindowEvent) { applyWindowCorner(0) })
+	mainWindow.OnWindowEvent(events.Common.WindowUnMaximise, func(*application.WindowEvent) { applyWindowCorner(26) })
+	mainWindow.OnWindowEvent(events.Common.WindowFullscreen, func(*application.WindowEvent) { applyWindowCorner(0) })
+	mainWindow.OnWindowEvent(events.Common.WindowUnFullscreen, func(*application.WindowEvent) { applyWindowCorner(26) })
 
 	if err := wailsApp.Run(); err != nil {
 		log.Fatal("wails app failed", zap.Error(err))
