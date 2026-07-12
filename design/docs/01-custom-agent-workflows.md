@@ -287,6 +287,13 @@ Bindings 调用本地 application service，不通过 HTTP loopback。所有入�
 - Run inspector 轮询组合详情；active run 约 1 秒刷新，非 active run 降频刷新。浏览器开发预览在没有 Wails runtime 时使用只读 demo 数据，正式桌面始终调用生成的 bindings。
 - Run inspector 按步骤展示当前 Runtime session ID 与人工接管命令。优先读取 `Run.sessions[stepId]`，旧数据回退到最新 StepRun 的 `sessionIdAfter/sessionIdBefore`；同一步骤只显示当前可恢复会话。Codex 使用 `codex resume <session-id>`，Claude Code 使用 `claude --resume <session-id>`，未知 Runtime 只显示 ID、不猜测命令。
 - Run inspector 的执行历史采用会话时间线：Task prompt 与非空恢复 instruction 是用户消息；StepRun 是带轮次、步骤、Runtime 和状态的 Agent 回合；message/result/error 作为可读回复，连续的 tool/reasoning/file events 收进默认折叠的活动组。UI 不截断为最后若干事件，outcome JSON 只显示 `content`。`run.resumed` 事件在本地 payload 中保存 trim 后的 instruction，以便重启后仍能重建对话；旧事件缺少该字段时保持兼容。
+- Issue 01-010 起，Run inspector 不再把连续 tool/reasoning/file events 汇总为一个活动组。前端 view model 按 runtime event `seq` 生成交错的 message/tool items；每个 tool item 是独立且默认关闭的 disclosure，相邻 `tool_result` 归入前一个 `tool_use` 的展开详情。Run 标题、状态、当前步骤、Workflow 步骤和 runtime sessions 合并为一个紧凑摘要，流程与恢复命令放在同一个默认折叠的详情区。
+- 工具摘要优先从常见的 `zsh -lc` launcher 中提取首条可读命令，完整原始事件仍保留在展开详情；用户与 Agent 消息使用独立身份标识，工具项通过同一组 token 呈现 hover、键盘 focus、open 和 running 状态。
+- 方案 2 的最终结构不再渲染 StepRun “第 N 轮”头部，而是让各轮内部事件直接连续排列；summary 采用标题/状态/计数与当前步骤/会话恢复两行布局。工具 disclosure 使用 `@phosphor-icons/react` caret，闭合行固定为展开入口、可读动作、状态和时间四列。
+- 事件类型的可见标识采用 icon-first 规则：用户消息为白色 `Circle`（通过 `--ui-event-user` 与 token 描边在深浅主题保持可见），Agent 消息为 cyan `Circle`，工具/文件/过程项不再显示 kind 文本并沿用 disclosure caret。`aria-label` 继续包含用户、Agent 和具体 runtime event kind，避免纯视觉标记损失辅助技术语义。
+- Conversation message header 为左右布局：左侧仅保留圆点与 runtime，右侧固定为轮次元数据和贴近内容边缘的 55px 时间列。Agent 的 `第 N 轮` 直接使用 StepRun 在 timeline 中的 `round`，同一 StepRun 内多条 message 共享轮次；用户消息不虚构轮次。初始 task message 的时间依次读取 task.createdAt、run.startedAt、task.updatedAt、run.updatedAt。
+- Tool caret 位于 summary 首列，闭合显示 `CaretRight`、展开显示 `CaretDown`；summary 列为 `var(--ui-event-marker-size) / minmax(0, 1fr) / 45px / 55px`。圆点和 caret 共用 9px marker 尺寸与正文前景 token，因此左边缘、中心线和主题对比保持一致；所有时间在内容区右边缘对齐。
+- Workspace 切换是任务列表与 Inspector 的一致性边界。前端在选择新 Workspace 时立即清空 `tasks`、`runs`、`selectedRunID`、`runDetail` 和未提交的恢复指令，避免旧 Run 详情短暂或持续串入新目录；Task/Run 异步加载各使用单调递增的请求版本，晚到的旧 Workspace 响应必须丢弃。新运行列表落地后通过 `runPairsContain` 再校验已选 Run，只有仍属于当前列表时才允许保留详情。
 
 ### 11.1 Modu Code ACP Runtime（Issue 01-009）
 

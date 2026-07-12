@@ -109,23 +109,46 @@ select { height: 32px; padding: 0 8px; font-size: 11px; }
 .inspector-section { margin: 0; padding: 12px 18px; border-top: 0; border-bottom: 1px solid var(--acp-line); }
 .inspector-section-title h3 { font-size: 13px; }
 .inspector-section-title > span { font-size: 10px; }
-.conversation-section { padding-block: 16px; background: color-mix(in oklab, var(--acp-panel) 22%, transparent); }
-.conversation-user { border-color: color-mix(in oklab, var(--acp-accent-soft) 35%, var(--acp-line)); border-radius: 5px 5px 0 5px; background: color-mix(in oklab, var(--acp-accent-soft) 9%, transparent); }
+.run-summary { border-bottom-color: var(--acp-line); background: var(--acp-canvas); }
+.run-summary-head h2 { color: var(--acp-text); }
+.run-summary-stats { color: var(--acp-text-soft); }
+.run-summary-stats time { color: var(--acp-text-soft); }
+.run-summary-notice, .run-summary-details, .run-summary-flow, .run-summary-step, .run-summary-session { border-color: var(--acp-line); }
+.run-summary-notice { color: var(--acp-warn); }
+.run-summary-details > summary { color: var(--acp-text-muted); }
+.run-summary-current { color: var(--acp-text-soft); }
+.run-summary-current strong, .run-summary-recovery { color: var(--acp-text); }
+.run-summary-step > b, .run-summary-step > span small, .run-summary-id span { color: var(--acp-text-soft); }
+.run-summary-step > span strong, .run-summary-id code { color: var(--acp-text); }
+.run-summary-step.current > b, .run-summary-step.current > span strong, .run-summary-step em { color: var(--acp-accent-soft); }
+.conversation-section { padding: 0; background: var(--acp-canvas); }
+.conversation-user { border-color: var(--acp-line); border-radius: 0; background: var(--acp-canvas); }
 .conversation-user p, .conversation-agent p { color: var(--acp-text); font-size: 13px; }
-.conversation-speaker strong { font-size: 12px; }
-.conversation-speaker span { color: var(--acp-text-soft); font-size: 10px; }
-.conversation-round { border-color: var(--acp-line); background: transparent; }
-.conversation-round > header { border-bottom-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 3%, transparent); }
-.conversation-round > header strong { font-size: 13px; }
-.conversation-round > header time { color: var(--acp-text-soft); font-size: 10px; }
-.round-signal { color: var(--acp-text-soft); font-size: 10px; }
-.conversation-agent { border-left-color: var(--acp-accent-soft); background: color-mix(in oklab, var(--acp-canvas) 80%, transparent); }
+.conversation-event-dot.user { color: var(--ui-event-user); filter: drop-shadow(0 0 1px var(--acp-text-muted)); }
+.conversation-event-dot.agent { color: var(--acp-cyan); }
+.conversation-speaker strong, .conversation-speaker time { color: var(--acp-text-soft); font-size: 10px; }
+.conversation-round-index { color: var(--acp-text-soft); }
+.conversation-round { border-color: var(--acp-line); background: var(--acp-canvas); }
+.conversation-agent { border-color: var(--acp-line); background: var(--acp-canvas); }
+.conversation-agent:hover { background: color-mix(in oklab, var(--acp-text) 2%, transparent); }
 .conversation-agent.error { border-left-color: var(--acp-danger); background: color-mix(in oklab, var(--acp-danger) 6%, transparent); }
-.conversation-activity { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, transparent); }
-.conversation-activity summary { color: var(--acp-text-muted); font-size: 11px; }
-.conversation-activity[open] summary, .activity-row { border-color: var(--acp-line); }
-.activity-row > span { color: var(--acp-accent-soft); font-size: 10px; }
-.activity-row pre { color: var(--acp-text-muted); font-size: 11px; }
+.conversation-tool, .conversation-tool[open] > summary, .conversation-tool-body > div { border-color: var(--acp-line); }
+.conversation-tool { background: var(--acp-canvas); }
+.conversation-tool > summary:hover { background: color-mix(in oklab, var(--acp-accent-soft) 5%, transparent); }
+.conversation-tool > summary:focus-visible { outline-color: var(--acp-cyan); }
+.conversation-tool > summary, .conversation-tool-body pre { color: var(--acp-text-muted); }
+.conversation-tool-body span { color: var(--acp-text-soft); }
+.conversation-tool-summary strong { color: var(--acp-text); }
+.conversation-tool-state { color: var(--acp-good); }
+.conversation-tool.running { border-left-color: var(--acp-cyan); background: color-mix(in oklab, var(--acp-cyan) 6%, transparent); }
+.conversation-tool.running .conversation-tool-state { color: var(--acp-cyan); }
+.conversation-tool.failed { border-left-color: var(--acp-danger); background: color-mix(in oklab, var(--acp-danger) 6%, transparent); }
+.conversation-tool.failed .conversation-tool-state { color: var(--acp-danger); }
+.conversation-tool time { color: var(--acp-text-soft); }
+.conversation-tool-caret { color: var(--acp-text); }
+.conversation-tool[open] { background: color-mix(in oklab, var(--acp-text) 1.5%, var(--acp-canvas)); }
+.conversation-tool-body { border-left-color: var(--acp-cyan); }
+.conversation-tool-body pre { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, var(--acp-canvas)); color: var(--acp-text-muted); }
 .session-card { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, transparent); }
 .session-value { border-top-color: var(--acp-line); }
 .session-value > span { color: var(--acp-text-soft); }

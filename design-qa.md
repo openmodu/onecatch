@@ -61,3 +61,119 @@ DAG 全图中的节点、连线、toolbar 和 Inspector 已能以原尺寸辨认
 P0：0，P1：0，P2：0。
 
 final result: passed
+
+---
+
+# Run Inspector Live Timeline Design QA
+
+- Source visual truth: `/Users/ityike/.codex/generated_images/019f4aee-e179-7293-91d2-814d195f974b/exec-33ca3520-1774-47d6-8df4-db274707ac9a.png`
+- Original mismatch evidence: `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-df3ebaf4-74a7-4d1e-a2a8-504c8a9bd025.png`
+- Implementation screenshot: `/tmp/oneshot-option2-final-v5.png`
+- Side-by-side comparison: `/tmp/oneshot-option2-compare-final-v6.jpg`
+- Viewport: `1280 × 836`, Inspector width `480px`
+- State: light theme, demo paused Run, first tool disclosure open for parity with the source visual
+
+## Findings
+
+No actionable P0/P1/P2 mismatch remains after iteration 4.
+
+- Typography: Agent/user body is `13px`, weight 400, with 1.65 line-height; tool title and metadata use the existing mono hierarchy. Long commands are one-line ellipsized when closed and fully readable after expansion.
+- Spacing/layout: the Run summary is `59.9px` high, user and one-line Agent messages are about `75px` and `77px`, and closed tool rows are `50px`, matching the selected source rhythm. Inspector has no horizontal overflow (`clientWidth = scrollWidth = 479px`).
+- Colors/tokens: all new foregrounds, hairlines, active cyan, success green and error red are mapped through the existing Mirage tokens in `mirage.css`; no new gradient, shadow or hard-coded dark-only surface was introduced.
+- Image/assets: the selected design contains no raster imagery or custom brand assets in the changed region. Disclosure affordances use Phosphor caret icons and existing runtime/status primitives; no replacement imagery is required.
+- Copy/content: the compact summary retains task title, Run status, current step/runtime, transition count, Run ID, Workflow steps, sessions and resume commands. Raw `workflow_signal` is intentionally hidden because the visible “等待介入” state already communicates it and the source design does not show raw protocol values.
+
+## Interaction Evidence
+
+- Three demo tool events render as three independent disclosures; all report `open = false` on initial render.
+- Opening the first tool changes only that item to `open = true`; the other two remain closed.
+- The expanded item exposes its full command content.
+- “会话与恢复” opens one combined detail region containing two Workflow steps and two runtime sessions.
+- Runtime event DOM order is user → tool → file change → Agent message → tool → Agent messages, matching persisted event order.
+- Browser console has no application errors; only the expected Wails browser-preview warning is present.
+
+## Comparison History
+
+### Iteration 1 — blocked
+
+- P1: all tool calls were grouped under one “工具与过程” disclosure, so messages and tools were no longer chronological.
+- P1: long commands were expanded together and filled most of the Inspector.
+- P1: Run Inspector, current step, Workflow execution and Agent sessions were four separate vertical sections.
+- P2: message text was visually subordinate to raw command output.
+
+Fixes applied:
+
+- Changed the derived conversation model from `messages + one activity group` to ordered `message/tool` items.
+- Bound an adjacent `tool_result` to its preceding `tool_use` without merging separate tool calls.
+- Added one default-closed disclosure per tool/process/file event.
+- Replaced four summary sections with one compact sticky Run summary and one default-closed “执行与会话” detail.
+- Raised message body text to 14px and constrained closed tool rows to a single line.
+
+### Iteration 2 — passed
+
+- Summary height reduced from `145.5px` to `114px` by removing the redundant raw `workflow_signal` notice.
+- All tool items remain `52.9px` closed regardless of command length.
+- No horizontal overflow remains in the Inspector, round headers or tool summaries.
+- Bottom Run controls remain visible at the viewport boundary.
+
+### Iteration 3 — blocked by source fidelity
+
+- Implementation screenshot: `/tmp/oneshot-run-inspector-polished-v3.png`
+- User and Agent messages had distinct identities, but retained the legacy “第 N 轮” header, status rail and card-like message surface that do not exist in option 2.
+- The summary remained about twice the source height (`114px` versus about `60px`), and native disclosure markers appeared on the left instead of the source's right-aligned caret.
+- Every tool call remains an independent, default-closed disclosure. Its summary shows a readable command stripped from the common `zsh -lc` launcher, while the complete raw event remains available after expansion.
+- Expanded tool content is separated into `COMMAND / PROCESS / PATH / RESULT`; hover, keyboard focus, open and running states use shared Mirage tokens and include dark-theme overrides.
+- This iteration was functionally correct but visually rejected by the user and is not considered a fidelity pass.
+- Regression verification: Node `12/12`, frontend production build and `git diff --check` passed; browser console contains no application error.
+
+### Iteration 4 — option 2 fidelity passed
+
+- Removed the StepRun round header, message card rail and tinted user surface; events now form the same flat chronological stream as the source.
+- Rebuilt the summary as two compact rows: title/status/count/time, then current step/runtime and “会话与恢复”. Measured height is `59.9px`.
+- Rebuilt tool summaries as five fixed columns with a right-aligned Phosphor caret. Closed rows measure `50px`; one expanded row leaves its siblings closed and shows a bordered `COMMAND` body with a cyan active rail.
+- Added readable action titles for common `sed`, package runner, git, search and find commands while preserving the full raw command after expansion.
+- Side-by-side evidence `/tmp/oneshot-option2-compare-final-v6.jpg` confirms matching hierarchy, spacing rhythm, flat borders, body weight, tool-row density and expanded-body treatment. Remaining visible differences are demo event content, runtime/status values and unavailable tool durations rather than design drift.
+- Browser verification: no horizontal overflow, no legacy round headers, controls remain reachable, and default tool state remains closed on initial render. Node `12/12`, production build and `git diff --check` pass.
+
+### Iteration 5 — icon-only event markers passed
+
+- User override: replace visible event-type text with a white user dot, blue Agent dot and the existing tool disclosure arrow while retaining option 2's layout and density.
+- Implementation screenshot: `/tmp/oneshot-event-dot-markers-v6.png`; comparison evidence: `/tmp/oneshot-event-dot-compare-v6.jpg`.
+- Removed all visible `USER / AGENT / TOOL USE / FILE CHANGE` strings from the conversation surface. Runtime names, state and timestamps remain because they carry task context rather than repeat the event type.
+- User and Agent markers are 9px Phosphor `Circle` icons. The user marker resolves to the dedicated white `--ui-event-user` token with a token-based one-pixel visual edge, while the Agent marker resolves to the cyan token in both themes.
+- Tool summaries now use `minmax(0, 1fr) / 45px / 55px / 16px` tracks, so the removed label column becomes command-title space; the right caret retains the same open/closed behavior.
+- Browser verification at `1280 × 800`: no visible type-label strings, all four markers are 9px, every tool starts closed, Inspector remains `479px / 479px` with no horizontal overflow, and tool title/state/time/caret alignment remains stable.
+- Accessibility: user and Agent circles expose `aria-label`; tool summaries retain kind-aware accessible names even though the kind text is no longer visible.
+- Regression verification: Node `12/12`, production build and `git diff --check` pass.
+
+### Iteration 6 — right-aligned time and round metadata passed
+
+- User annotation source: `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-6d3bfa5f-0a32-468d-a89e-a5bc3337589d.png`.
+- Implementation screenshot: `/tmp/oneshot-round-time-alignment-v8.png`; normalized comparison: `/tmp/oneshot-round-time-compare-v8.jpg`.
+- User, Agent and tool timestamps now share an exact right edge at browser x=`1243`; all message timestamps use the same 55px track as tool timestamps and preserve the 23px caret gutter.
+- Agent messages show `第 1 轮`, `第 2 轮`, etc. immediately before the timestamp. Multiple messages from the same StepRun repeat the same round number, while user messages remain unnumbered.
+- The initial user message now falls back to task/run `updatedAt` only when created/started timestamps are absent, avoiding a visible em dash for compatible older records.
+- Browser verification at `1280 × 800`: four message timestamps and three tool timestamps are vertically aligned on the same right edge, round labels do not collide with runtime or time, Inspector overflow delta is zero, and no legacy round header was reintroduced.
+- Regression verification: Node `13/13`, production build and `git diff --check` pass.
+
+### Iteration 7 — tool state spacing passed
+
+- Tool state remains in its fixed 45px grid track but now uses `justify-self: end`, moving short state labels toward the timestamp without shifting the shared 55px time column or disclosure caret.
+- This is a spacing-only adjustment; event order, disclosure behavior, time alignment and responsive width are unchanged.
+
+### Iteration 8 — leading tool caret passed
+
+- Tool disclosure caret moved from the trailing column to the 16px leading column before the command title.
+- Closed tools render `CaretRight`; open tools render `CaretDown` through the existing native `<details>` state selectors.
+- The former 23px trailing caret gutter was removed from message headers, so user, Agent and tool timestamps remain aligned at the content area's right edge.
+
+### Iteration 9 — marker alignment and contrast passed
+
+- User/Agent circles and tool carets now share the `--ui-event-marker-size: 9px` leading track, aligning both their left edge and visual center across event rows.
+- Tool caret color changed from muted gray to the primary foreground token, rendering black in the light theme and preserving readable contrast in the dark theme.
+
+## Follow-up Polish
+
+- P3: real runtimes do not currently report reliable per-tool duration, so the implementation shows event time rather than inventing duration values from the mock.
+
+final result: passed

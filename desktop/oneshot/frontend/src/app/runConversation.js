@@ -15,26 +15,50 @@ export function readableAgentMessage(value) {
   return text;
 }
 
+export function readableToolTitle(value) {
+  const firstLine = String(value || "").trim().split("\n")[0];
+  if (!firstLine) return "无内容";
+  const shell = firstLine.match(/(?:^|\s)(?:\S*\/)?(?:zsh|bash|sh)\s+-lc\s+/);
+  let command = shell ? firstLine.slice((shell.index || 0) + shell[0].length).trim() : firstLine;
+  for (let index = 0; index < 2; index += 1) {
+    if ((command.startsWith('"') && command.endsWith('"')) || (command.startsWith("'") && command.endsWith("'"))) command = command.slice(1, -1).trim();
+  }
+  const sedTarget = command.match(/\bsed\s+-n\s+['"][^'"]+['"]\s+['"]([^'"]+)['"]/);
+  if (sedTarget) return `读取 ${sedTarget[1].split("/").pop()}`;
+  if (/^(?:npm|pnpm|yarn|bun)\b/.test(command)) return `运行 ${command}`;
+  if (/^git\s+(?:diff|status|show|log)\b/.test(command)) return `检查 ${command}`;
+  if (/^(?:rg|grep)\b/.test(command)) return `搜索 ${command}`;
+  if (/^find\b/.test(command)) return `查找 ${command}`;
+  return command || firstLine;
+}
+
 function roundItems(events, fallbackText, fallbackError) {
-  const messages = [];
-  const activities = [];
+  const items = [];
   const seenMessages = new Set();
+  let lastTool = null;
   for (const event of [...events].sort((a, b) => a.seq - b.seq)) {
     if (!event.text || hiddenKinds.has(event.kind)) continue;
     if (assistantKinds.has(event.kind)) {
       const text = readableAgentMessage(event.text);
       if (!text || seenMessages.has(text)) continue;
       seenMessages.add(text);
-      messages.push({ type: "message", tone: event.kind === "error" ? "error" : "agent", text, at: event.at });
+      items.push({ type: "message", tone: event.kind === "error" ? "error" : "agent", text, at: event.at });
+      lastTool = null;
       continue;
     }
-    activities.push({ kind: event.kind, text: event.text, at: event.at });
+    if (event.kind === "tool_result" && lastTool) {
+      lastTool.details.push({ kind: event.kind, text: event.text, at: event.at });
+      continue;
+    }
+    const tool = { type: "tool", kind: event.kind, title: readableToolTitle(event.text), text: event.text, at: event.at, details: [] };
+    items.push(tool);
+    lastTool = event.kind === "tool_use" ? tool : null;
   }
-  if (!messages.length) {
+  if (!items.some((item) => item.type === "message")) {
     const text = readableAgentMessage(fallbackText || fallbackError);
-    if (text) messages.push({ type: "message", tone: fallbackError ? "error" : "agent", text });
+    if (text) items.push({ type: "message", tone: fallbackError ? "error" : "agent", text });
   }
-  return activities.length ? [...messages, { type: "activity", events: activities }] : messages;
+  return items;
 }
 
 function resumedInstructions(events) {
@@ -60,7 +84,7 @@ export function buildRunConversation(detail) {
   }
   const timeline = [];
   const taskText = String(detail?.task?.prompt || "").trim();
-  if (taskText) timeline.push({ type: "user", id: "task", text: taskText, at: detail.task.createdAt || detail.run?.startedAt || "", sortRank: 0 });
+  if (taskText) timeline.push({ type: "user", id: "task", text: taskText, at: detail.task.createdAt || detail.run?.startedAt || detail.task.updatedAt || detail.run?.updatedAt || "", sortRank: 0 });
   for (const instruction of resumedInstructions(detail?.events)) timeline.push({ ...instruction, sortRank: 0 });
   for (const [index, stepRun] of (detail?.stepRuns || []).entries()) {
     const step = workflowSteps.get(stepRun.stepId) || {};

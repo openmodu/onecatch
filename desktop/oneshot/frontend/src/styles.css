@@ -165,30 +165,84 @@ select { height: 36px; padding: 0 10px; font-size: 11px; }
 .timeline-item strong { font-size: 9px; }
 .timeline-item p { margin: 3px 0; color: #646f67; font-size: 8px; line-height: 1.5; }
 .timeline-item small { color: #9aa29c; font-size: 7px; }
-.conversation-list { display: grid; gap: 14px; }
-.conversation-user { width: fit-content; max-width: 88%; margin-left: auto; padding: 11px 13px; border: 1px solid #d8e4d8; border-radius: 6px 6px 0 6px; background: #edf5ed; }
-.conversation-speaker { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
-.conversation-speaker strong { font-size: 11px; }
-.conversation-speaker span { color: #879189; font: 500 9px "DM Mono", monospace; }
-.conversation-user p, .conversation-agent p { margin: 0; color: #354039; font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-.conversation-round { border: 1px solid #dfe5df; background: #fafbf9; }
-.conversation-round > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 11px; border-bottom: 1px solid #dfe5df; }
-.conversation-round > header > div { display: flex; align-items: center; gap: 8px; }
-.conversation-round > header > div:first-child > span:first-child { color: #78837b; font: 600 9px "DM Mono", monospace; text-transform: uppercase; }
-.conversation-round > header strong { font-size: 12px; }
-.conversation-round > header time { color: #8b958d; font: 500 9px "DM Mono", monospace; }
-.round-signal { color: #6d786f; font: 500 9px "DM Mono", monospace; }
-.conversation-round-body { display: grid; gap: 10px; padding: 11px; }
-.conversation-agent { padding: 11px 12px; border-left: 2px solid #4e9a63; background: #fff; }
-.conversation-agent.error { border-left-color: #bd554e; background: #fff8f7; }
-.conversation-activity { border: 1px solid #e1e6e1; background: #f5f6f3; }
-.conversation-activity summary { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; color: #657068; font-size: 10px; cursor: pointer; }
-.conversation-activity summary b { font: 500 9px "DM Mono", monospace; }
-.conversation-activity[open] summary { border-bottom: 1px solid #e1e6e1; }
-.activity-row { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 8px; padding: 8px 10px; border-top: 1px solid #e6eae6; }
-.activity-row:first-child { border-top: 0; }
-.activity-row > span { color: #4d9360; font: 600 9px "DM Mono", monospace; text-transform: uppercase; }
-.activity-row pre { margin: 0; color: #4c5850; font: 400 10px/1.55 "DM Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.run-summary { position: sticky; top: 0; z-index: 3; border-bottom: 1px solid #dfe5df; background: #fff; }
+.run-summary-head { min-height: 33px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px 3px; }
+.run-summary-head > div { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.run-summary-head h2 { min-width: 0; margin: 0; font-size: 14px; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.run-summary-head .status-pill { flex: 0 0 auto; }
+.run-summary-stats { color: #78837b; font: 500 10px/1.3 "DM Mono", monospace; white-space: nowrap; }
+.run-summary-stats time { color: #8b958d; }
+.run-summary-notice { display: grid; gap: 4px; padding: 8px 18px; border-top: 1px solid #e4e8e4; color: #7c6650; font-size: 10px; line-height: 1.45; }
+.run-summary-details { border: 0; }
+.run-summary-details > summary { min-height: 25px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 3px 14px 7px; color: #59645d; font-size: 11px; cursor: pointer; list-style: none; }
+.run-summary-details > summary::-webkit-details-marker { display: none; }
+.run-summary-current { min-width: 0; display: flex; align-items: center; gap: 6px; color: #78837b; }
+.run-summary-current strong { color: #354039; font-weight: 500; }
+.run-summary-current i { color: #a0a8a2; font-style: normal; }
+.runtime-name { font: 500 11px "DM Mono", monospace; text-transform: capitalize; }
+.runtime-name.codex { color: #347449; }
+.runtime-name.claude { color: #a36622; }
+.runtime-name.modu { color: #268ca1; }
+.run-summary-recovery { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 7px; color: #59645d; }
+.details-caret { width: 12px; height: 12px; }
+.opened { display: none; }
+details[open] > summary .closed { display: none; }
+details[open] > summary .opened { display: block; }
+.run-summary-detail-body { padding: 0 18px 12px; }
+.run-summary-flow { border-top: 1px solid #e4e8e4; }
+.run-summary-step { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid #e8ebe8; }
+.run-summary-step > b { color: #9aa29c; font: 500 9px "DM Mono", monospace; }
+.run-summary-step > span strong, .run-summary-step > span small { display: block; }
+.run-summary-step > span strong { color: #455148; font-size: 11px; }
+.run-summary-step > span small { margin-top: 2px; color: #8b958d; font: 400 9px/1.35 "DM Mono", monospace; }
+.run-summary-step.current > b, .run-summary-step.current > span strong { color: #347449; }
+.run-summary-step em { color: #347449; font: 500 8px "DM Mono", monospace; text-transform: uppercase; }
+.run-summary-id { display: grid; grid-template-columns: 50px minmax(0, 1fr); gap: 8px; padding: 8px 0; }
+.run-summary-id span { color: #8b958d; font: 500 8px "DM Mono", monospace; }
+.run-summary-id code { color: #59645d; font: 400 9px/1.4 "DM Mono", monospace; overflow-wrap: anywhere; user-select: text; }
+.run-summary-session { padding: 8px 0; border-top: 1px solid #e4e8e4; }
+.run-summary-session > div:first-child { display: flex; align-items: center; gap: 7px; margin-bottom: 5px; }
+.run-summary-session > div:first-child strong { font-size: 10px; }
+.conversation-section { background: #fff; }
+.conversation-list { display: grid; gap: 0; }
+.conversation-user { width: auto; max-width: none; margin: 0; padding: 15px 14px 16px; border: 0; border-bottom: 1px solid #e0e5e0; border-radius: 0; background: #fff; }
+.conversation-speaker { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.conversation-identity { display: inline-flex; align-items: center; gap: 8px; }
+.conversation-event-dot { width: var(--ui-event-marker-size); height: var(--ui-event-marker-size); flex: 0 0 auto; }
+.conversation-event-dot.user { color: #fff; filter: drop-shadow(0 0 1px #68736b); }
+.conversation-event-dot.agent { color: #268ca1; }
+.conversation-speaker strong, .conversation-speaker time { color: #879189; font: 500 10px "DM Mono", monospace; }
+.conversation-message-meta { min-width: 0; display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.conversation-message-meta time { width: 55px; text-align: right; }
+.conversation-round-index { color: #78837b; font: 500 9px "DM Mono", monospace; white-space: nowrap; }
+.conversation-user p, .conversation-agent p { margin: 0; color: #29332d; font-size: 13px; font-weight: 400; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.conversation-round { border: 0; border-bottom: 1px solid #dfe5df; background: #fff; }
+.conversation-round-body { display: grid; gap: 0; padding: 0; }
+.conversation-agent { margin: 0; padding: 16px 14px 17px; border: 0; border-bottom: 1px solid #e0e5e0; background: #fff; transition: background-color 120ms ease; }
+.conversation-agent:hover { background: #fbfcfa; }
+.conversation-agent.error { border-left: 2px solid #bd554e; background: #fff8f7; }
+.conversation-tool { border: 0; border-bottom: 1px solid #e5e9e5; background: #fff; }
+.conversation-tool > summary { padding: 0 14px; color: #59645d; cursor: pointer; list-style: none; }
+.conversation-tool > summary::-webkit-details-marker { display: none; }
+.conversation-tool > summary:hover { background: #f4f7f3; }
+.conversation-tool > summary:focus-visible { outline: 1px solid #268ca1; outline-offset: -1px; }
+.conversation-tool-summary { min-height: 49px; display: grid; grid-template-columns: var(--ui-event-marker-size) minmax(0, 1fr) 45px 55px; align-items: center; gap: 7px; }
+.conversation-tool-summary strong { min-width: 0; color: #354039; font: 500 11px "DM Mono", monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conversation-tool-state { display: inline-flex; align-items: center; justify-self: end; gap: 5px; color: #347449; font: 600 9px "DM Mono", monospace; }
+.conversation-tool.running { border-left: 2px solid #268ca1; background: #f4fafb; }
+.conversation-tool.running .conversation-tool-state { color: #268ca1; }
+.conversation-tool.failed { border-left: 2px solid #bd554e; background: #fff8f7; }
+.conversation-tool.failed .conversation-tool-state { color: #bd554e; }
+.conversation-tool time { color: #8b958d; font: 500 9px "DM Mono", monospace; text-align: right; }
+.conversation-tool-caret { display: grid; place-items: center; color: #1a1a1a; }
+.conversation-tool-caret svg { width: var(--ui-event-marker-size); height: var(--ui-event-marker-size); }
+.conversation-tool[open] { background: #f8faf7; }
+.conversation-tool[open] > summary { border-bottom: 1px solid #e1e6e1; }
+.conversation-tool-body { padding: 8px 14px 15px 20px; border-left: 2px solid #22a9c7; }
+.conversation-tool-body > div { display: grid; gap: 5px; padding: 9px 0; border-top: 1px solid #e6eae6; }
+.conversation-tool-body > div:first-child { border-top: 0; }
+.conversation-tool-body span { color: #78837b; font: 600 9px "DM Mono", monospace; text-transform: uppercase; }
+.conversation-tool-body pre { margin: 0; padding: 10px 11px; border: 1px solid #dce3dc; border-radius: 3px; background: #f8faf7; color: #4c5850; font: 400 11px/1.55 "DM Mono", monospace; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
 .session-list { display: grid; gap: 8px; }
 .session-card { border: 1px solid #e2e7e2; padding: 9px; background: #fafbf9; }
 .session-card-title { display: flex; align-items: center; gap: 7px; margin-bottom: 8px; }

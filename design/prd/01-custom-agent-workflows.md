@@ -161,6 +161,9 @@ implement/review --need_human--> $pause
 
 - UI 明确展示当前步骤、runtime、已使用转移次数、暂停原因和下一目标。
 - 每个 StepRun 展示结构化 outcome、耗时、session、文件变化和验证结果。
+- Live Inspector 必须按实际发生顺序交错展示 Agent message 与独立 Tool Use；工具详情默认折叠，不能把多次工具调用汇总为一个长日志面板。
+- Run 状态、当前步骤、执行进度和恢复会话应使用一个紧凑摘要，避免重复占用对话空间。
+- “最近运行”和右侧 Run 详情必须同时限定在当前选中的 Workspace；切换工作目录后立即清除旧 Run 选中态，当前目录没有运行记录时右侧只显示空状态，不得保留其他目录的数据。
 - 用户可以查看整个 Run 的时间线和最近 git diff。
 - 提供“单 Agent”“实现 → 审查”内置模板，并允许复制修改。
 - Workflow 只保留当前模板；历史执行使用各 Run 自己的 Workflow 快照查看和恢复。
@@ -230,6 +233,7 @@ implement/review --need_human--> $pause
 - [ ] 应用重启后可查看 Run 历史，并可确认恢复暂停的 Run。
 - [ ] 用户可以打断、补充指令、恢复或终止 Run。
 - [ ] 用户能查看步骤时间线、文件变化和 git diff。
+- [ ] 切换 Workspace 后，运行列表与 Run 详情保持同一数据范围；无运行记录的 Workspace 不显示上一个 Workspace 的详情。
 - [ ] Wails binding、本地数据模型和技术方案一致。
 
 ## 11. 待确认问题

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CaretDown, CaretRight, Circle } from "@phosphor-icons/react";
 import {
   RuntimeBinding,
   SettingsBinding,
@@ -11,6 +12,7 @@ import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
 import { buildRunConversation } from "./runConversation.js";
 import { runtimeSessionEntries } from "./sessionCommands.js";
 import { nextWorkflowItemID } from "./workflowIds.js";
+import { runPairsContain } from "./workspaceRunSelection.js";
 import { Action, Kicker, ModeBadge, StatusBadge, Toolbar, ToolbarSpacer } from "../ui/primitives.jsx";
 
 const statusLabel = {
@@ -197,6 +199,8 @@ function App() {
   const [settings, setSettings] = useState(demoSettings);
   const [appDialog, setAppDialog] = useState(null);
   const appDialogResolve = useRef(null);
+  const taskLoadVersion = useRef(0);
+  const runLoadVersion = useRef(0);
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID);
 
@@ -216,6 +220,18 @@ function App() {
     setAppDialog(null);
     resolve?.(accepted);
   }, []);
+
+  const selectWorkspace = useCallback((nextWorkspaceID) => {
+    if (!nextWorkspaceID || nextWorkspaceID === workspaceID) return;
+    taskLoadVersion.current += 1;
+    runLoadVersion.current += 1;
+    setWorkspaceID(nextWorkspaceID);
+    setTasks([]);
+    setRuns({});
+    setSelectedRunID("");
+    setRunDetail(null);
+    setResumeInstruction("");
+  }, [workspaceID]);
 
   const boot = useCallback(async () => {
     try {
@@ -250,13 +266,22 @@ function App() {
 
   const loadTasks = useCallback(async () => {
     if (!workspaceID || mode !== "wails") return;
+    const loadVersion = ++taskLoadVersion.current;
     try {
       const items = await TaskRunBinding.ListTasks(workspaceID);
-      setTasks(items || []);
       const runPairs = await Promise.all((items || []).map(async (task) => [task.id, await TaskRunBinding.ListRunsByTask(task.id)]));
-      setRuns(Object.fromEntries(runPairs));
-    } catch (error) { notify("error", errorMessage(error)); }
-  }, [mode, notify, workspaceID]);
+      if (loadVersion !== taskLoadVersion.current) return;
+      const nextRuns = Object.fromEntries(runPairs);
+      setTasks(items || []);
+      setRuns(nextRuns);
+      if (selectedRunID && !runPairsContain(runPairs, selectedRunID)) {
+        runLoadVersion.current += 1;
+        setSelectedRunID("");
+        setRunDetail(null);
+        setResumeInstruction("");
+      }
+    } catch (error) { if (loadVersion === taskLoadVersion.current) notify("error", errorMessage(error)); }
+  }, [mode, notify, selectedRunID, workspaceID]);
 
   useEffect(() => {
     if (mode === "wails") loadTasks();
@@ -265,12 +290,14 @@ function App() {
 
   const loadRun = useCallback(async (runID, silent = false) => {
     if (!runID) return;
+    const loadVersion = ++runLoadVersion.current;
     if (mode === "demo") { setRunDetail((current) => current?.run?.id === runID ? current : demoRun); return; }
     try {
       const detail = await TaskRunBinding.GetRun(runID);
+      if (loadVersion !== runLoadVersion.current) return;
       setRunDetail(detail);
       if (!silent) setSelectedRunID(runID);
-    } catch (error) { if (!silent) notify("error", errorMessage(error)); }
+    } catch (error) { if (loadVersion === runLoadVersion.current && !silent) notify("error", errorMessage(error)); }
   }, [mode, notify]);
 
   useEffect(() => { if (selectedRunID) loadRun(selectedRunID, true); }, [loadRun, selectedRunID]);
@@ -299,10 +326,10 @@ function App() {
     try {
       if (mode === "demo") {
         const item = { ...workspaceForm, id: `workspace-${Date.now()}`, name: workspaceForm.name || workspaceForm.path.split("/").pop(), lastOpenedAt: new Date().toISOString() };
-        setWorkspaces((items) => [item, ...items]); setWorkspaceID(item.id);
+        setWorkspaces((items) => [item, ...items]); selectWorkspace(item.id);
       } else {
         const item = await WorkspaceBinding.AddWorkspace(workspaceForm);
-        setWorkspaces(await WorkspaceBinding.ListWorkspaces()); setWorkspaceID(item.id);
+        setWorkspaces(await WorkspaceBinding.ListWorkspaces()); selectWorkspace(item.id);
       }
       setWorkspaceModal(false); notify("success", "工作目录已加入");
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
@@ -426,7 +453,7 @@ function App() {
         <div className="workspace-block">
           <div className="sidebar-section-label">cwd</div>
           <div className="workspace-list">
-            {workspaces.map((workspace) => <button key={workspace.id} className={`workspace-item ${workspace.id === workspaceID ? "active" : ""}`} onClick={() => setWorkspaceID(workspace.id)}><span><strong>{workspace.name}</strong><small>{workspace.path}</small></span></button>)}
+            {workspaces.map((workspace) => <button key={workspace.id} className={`workspace-item ${workspace.id === workspaceID ? "active" : ""}`} onClick={() => selectWorkspace(workspace.id)}><span><strong>{workspace.name}</strong><small>{workspace.path}</small></span></button>)}
             {!workspaces.length && <div className="sidebar-empty">还没有工作目录</div>}
           </div>
           <button className="add-workspace" onClick={chooseWorkspace}>[ + 加入工作目录 ]</button>
@@ -456,7 +483,7 @@ function App() {
             <div className="section-title"><div><h2>最近运行</h2></div><span>{allRuns.length} runs</span></div>
             <div className="run-list">{allRuns.map((item) => <button key={item.id} className={`run-card ${selectedRunID === item.id ? "selected" : ""}`} onClick={() => { setSelectedRunID(item.id); loadRun(item.id); }}><StatusPill status={item.status} /><h3>{item.task.title}</h3><p>{workflows.find((workflow) => workflow.id === item.workflowId)?.name || item.workflowId} · {formatTime(item.updatedAt)}</p></button>)}{!allRuns.length && <div className="empty-state"><h3>还没有运行记录</h3><p>写下任务目标并选择 Workflow，Oneshot 会在后台调度本地 Agent。</p></div>}</div>
           </section>
-          <aside className="inspector">{runDetail ? <RunInspector detail={runDetail} busy={busy} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} notify={notify} /> : <div className="inspector-empty"><h3>选择一个 Run</h3><p>这里会显示当前步骤、Agent 输出、回边和人工介入操作。</p></div>}</aside>
+          <aside className="inspector">{runDetail ? <RunInspector detail={runDetail} busy={busy} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} notify={notify} /> : <div className="inspector-empty"><h3>{allRuns.length ? "选择一个 Run" : "暂无运行详情"}</h3><p>{allRuns.length ? "这里会显示当前步骤、Agent 输出、回边和人工介入操作。" : "当前工作目录还没有 Run，右侧不会保留其他工作目录的数据。"}</p></div>}</aside>
         </div> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
     </div>
@@ -474,6 +501,7 @@ function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, r
   const currentStep = workflow.steps?.find((step) => step.id === currentNodeID) || workflow.steps?.[0];
   const conversation = buildRunConversation(detail);
   const sessions = runtimeSessionEntries(detail);
+  const visiblePauseReason = run.pauseReason && run.pauseReason !== "workflow_signal" ? run.pauseReason : "";
   const copySessionValue = async (value, label) => {
     try {
       await copyText(value);
@@ -483,37 +511,45 @@ function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, r
     }
   };
   return <>
-    <div className="inspector-header"><div><Kicker>RUN INSPECTOR</Kicker><h2>{detail.task.title}</h2></div><StatusPill status={run.status} active={detail.active} /></div>
-    <div className="run-id-row"><code>{shortID(run.id)}</code><span>{run.transitionCount || 0} / {workflow.policy?.maxTransitions || 20} 次转移</span></div>
-    <div className="current-step"><span>当前步骤</span><div><span className={`runtime-badge ${currentStep?.runtime}`}>{currentStep?.runtime || "—"}</span><strong>{currentStep?.name || run.currentStepId}</strong></div>{run.pauseReason && <p>暂停原因：{run.pauseReason}</p>}{detail.lastError && <p className="error-copy">{detail.lastError}</p>}</div>
-    <div className={`flow-mini ${workflow.mode === "dag" ? "dag-run-map" : ""}`}>
-      {(workflow.steps || []).map((step, index) => { const nodeStatus = dagNodes[step.id]?.status; return <div className={`flow-step ${step.id === currentNodeID ? "current" : ""} ${nodeStatus || ""}`} key={step.id}><div className="flow-node"><span>{index + 1}</span></div><div><strong>{step.name}</strong><small>{step.runtime} · {step.workerId || "local"} · {nodeStatus || step.sandbox || "workspace-write"}</small></div>{nodeStatus && <span className="you-are-here">{nodeStatus.toUpperCase()}</span>}</div>; })}
-    </div>
+    <section className="run-summary">
+      <div className="run-summary-head"><div><h2>{detail.task.title}</h2><StatusPill status={run.status} active={detail.active} /></div><div className="run-summary-stats"><span>{run.transitionCount || 0} / {workflow.policy?.maxTransitions || 20}</span><time>{formatTime(run.updatedAt || run.startedAt)}</time></div></div>
+      <details className="run-summary-details"><summary><span className="run-summary-current">当前：<strong>{currentStep?.name || run.currentStepId}</strong><i>·</i><span className={`runtime-name ${currentStep?.runtime}`}>{currentStep?.runtime || "—"}</span></span><span className="run-summary-recovery">会话与恢复 <CaretRight className="details-caret closed" weight="bold" /><CaretDown className="details-caret opened" weight="bold" /></span></summary><div className="run-summary-detail-body">
+        <div className="run-summary-flow">{(workflow.steps || []).map((step, index) => { const nodeStatus = dagNodes[step.id]?.status; return <div className={`run-summary-step ${step.id === currentNodeID ? "current" : ""}`} key={step.id}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{step.name}</strong><small>{step.runtime} · {step.workerId || "local"} · {nodeStatus || step.sandbox || "workspace-write"}</small></span>{nodeStatus && <em>{nodeStatus}</em>}</div>; })}</div>
+        <div className="run-summary-id"><span>RUN ID</span><code>{run.id}</code></div>
+        {sessions.map((session) => <div className="run-summary-session" key={session.stepID}><div><span className={`runtime-badge ${session.runtime}`}>{session.runtime}</span><strong>{session.stepName}</strong></div><div className="session-value"><span>{session.idLabel}</span><code>{session.sessionID}</code><button type="button" onClick={() => copySessionValue(session.sessionID, "会话 ID")}>[ 复制 ID ]</button></div>{session.command && <div className="session-value command"><span>resume</span><code>{session.command}</code><button type="button" onClick={() => copySessionValue(session.command, "恢复命令")}>[ 复制命令 ]</button></div>}</div>)}
+      </div></details>
+      {(visiblePauseReason || detail.lastError) && <div className="run-summary-notice">{visiblePauseReason && <span>暂停：{visiblePauseReason}</span>}{detail.lastError && <span className="error-copy">{detail.lastError}</span>}</div>}
+    </section>
     <ConversationTimeline items={conversation} active={detail.active} />
-    {sessions.length > 0 && <div className="inspector-section session-recovery"><div className="inspector-section-title"><h3>Agent 会话</h3><span>{sessions.length} SESSIONS</span></div><div className="session-list">{sessions.map((session) => <div className="session-card" key={session.stepID}><div className="session-card-title"><span className={`runtime-badge ${session.runtime}`}>{session.runtime}</span><strong>{session.stepName}</strong></div><div className="session-value"><span>{session.idLabel}</span><code>{session.sessionID}</code><button type="button" onClick={() => copySessionValue(session.sessionID, "会话 ID")}>[ 复制 ID ]</button></div>{session.command && <div className="session-value command"><span>resume</span><code>{session.command}</code><button type="button" onClick={() => copySessionValue(session.command, "恢复命令")}>[ 复制命令 ]</button></div>}</div>)}</div></div>}
-    <div className="run-controls">
+    {["running", "paused"].includes(run.status) && <div className="run-controls">
       {run.status === "running" && <Action tone="danger" disabled={busy === "interrupt"} onClick={() => runAction("interrupt")}>打断并暂停</Action>}
       {run.status === "paused" && <><textarea value={resumeInstruction} onChange={(event) => setResumeInstruction(event.target.value)} placeholder="补充指令（可选），恢复后注入当前步骤…" /><div><Action tone="danger" disabled={busy === "cancel"} onClick={() => runAction("cancel")}>终止</Action><Action tone="primary" disabled={busy === "resume"} onClick={() => runAction("resume")}>恢复运行</Action></div></>}
-      {["completed", "failed", "cancelled"].includes(run.status) && <div className="terminal-note">这个 Run 已结束，完整记录仍保存在本机。</div>}
-    </div>
+    </div>}
   </>;
 }
 
 function ConversationTimeline({ items, active }) {
-  const activityLabel = { reasoning: "过程", tool_use: "工具", tool_result: "结果", file_change: "文件" };
-  return <div className="inspector-section conversation-section">
-    <div className="inspector-section-title"><h3>对话记录</h3><span>{active ? "LIVE" : `${items.filter((item) => item.type === "round").length} ROUNDS`}</span></div>
+  const rounds = items.filter((item) => item.type === "round");
+  return <div className="conversation-section">
     <div className="conversation-list">
       {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
-        <div className="conversation-speaker"><strong>你</strong><span>{item.id === "task" ? "任务目标" : formatTime(item.at)}</span></div>
+        <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label="用户消息" /></span><span className="conversation-message-meta"><time>{formatTime(item.at)}</time></span></div>
         <p>{item.text}</p>
       </div> : <article className="conversation-round" key={item.id}>
-        <header><div><span>第 {item.round} 轮</span><strong>{item.stepName}</strong><span className={`runtime-badge ${item.runtime}`}>{item.runtime}</span></div><div><StatusPill status={item.status} />{item.signal && <code className="round-signal">{item.signal}</code>}<time>{formatTime(item.finishedAt || item.startedAt)}</time></div></header>
-        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={`message-${index}`}><div className="conversation-speaker"><strong>Agent</strong></div><p>{entry.text}</p></div> : <details className="conversation-activity" key={`activity-${index}`}><summary><span>工具与过程</span><b>{entry.events.length} 条</b></summary><div>{entry.events.map((event, eventIndex) => <div className="activity-row" key={`${event.kind}-${eventIndex}`}><span>{activityLabel[event.kind] || event.kind}</span><pre>{event.text}</pre></div>)}</div></details>)}</div>
+        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={`message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label="Agent 消息" /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">第 {item.round} 轮</span><time>{formatTime(entry.at || item.finishedAt || item.startedAt)}</time></span></div><p>{entry.text}</p></div> : <ToolTimelineItem key={`tool-${index}`} entry={entry} running={active && item === rounds[rounds.length - 1] && index === item.items.length - 1 && entry.kind === "tool_use"} failed={item.status === "failed"} />)}</div>
       </article>)}
       {!items.length && <p className="muted-copy">Agent 消息会按执行轮次显示在这里。</p>}
     </div>
   </div>;
+}
+
+function ToolTimelineItem({ entry, running, failed }) {
+  const labels = { tool_use: "TOOL USE", tool_result: "RESULT", file_change: "FILE CHANGE", reasoning: "PROCESS" };
+  const state = failed ? "失败" : running ? "执行中" : entry.kind === "reasoning" ? "过程" : "完成";
+  return <details className={`conversation-tool kind-${entry.kind} ${running ? "running" : ""} ${failed ? "failed" : ""}`}>
+    <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-caret"><CaretRight className="closed" weight="bold" /><CaretDown className="opened" weight="bold" /></span><strong title={entry.text}>{entry.title}</strong><span className="conversation-tool-state">{running && <span className="pulse" />}{state}</span><time>{formatTime(entry.at)}</time></span></summary>
+    <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? "PATH" : entry.kind === "reasoning" ? "PROCESS" : "COMMAND"}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
+  </details>;
 }
 
 async function copyText(value) {
