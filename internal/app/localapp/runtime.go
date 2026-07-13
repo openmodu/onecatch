@@ -215,7 +215,7 @@ func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, config
 		if runtime == agentrun.RuntimeClaude {
 			binary = "claude"
 		} else if runtime == agentrun.RuntimeModu {
-			binary = "modu-code"
+			binary = "modu_code"
 		}
 	}
 	version := ""

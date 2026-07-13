@@ -59,6 +59,35 @@ export function ListWorkspaces() {
     }));
 }
 
+/**
+ * @param {string} id
+ * @returns {$CancellablePromise<workspaces$0.Workspace>}
+ */
+export function OpenWorkspace(id) {
+    return $Call.ByID(4084818892, id).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
+ * @param {string} id
+ * @returns {$CancellablePromise<void>}
+ */
+export function RemoveWorkspace(id) {
+    return $Call.ByID(2133441132, id);
+}
+
+/**
+ * @param {string} id
+ * @param {boolean} pinned
+ * @returns {$CancellablePromise<workspaces$0.Workspace>}
+ */
+export function SetWorkspacePinned(id, pinned) {
+    return $Call.ByID(1575359764, id, pinned).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
 // Private type creation functions
 const $$createType0 = workspaces$0.Workspace.createFrom;
 const $$createType1 = localapp$0.WorkspaceStatus.createFrom;

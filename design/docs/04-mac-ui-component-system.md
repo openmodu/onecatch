@@ -26,6 +26,7 @@ Issue 04-004 将字号进一步收敛为语义可读性层级：micro 11px、cap
 - `Toolbar`：统一 46px editor toolbar 与左右 action slot。
 - `ToggleRow`：统一安全设置行和 on/off 命令状态。
 - `TUISelect`：统一任务、设置和编辑器选择控件。触发器使用单底线与文本 caret；菜单通过 portal 避免被滚动容器裁切，使用无阴影矩形 TUI 列表和 `>` 当前项标记；支持 ArrowUp/ArrowDown、Home/End、Enter/Space、Escape 和外部点击关闭。
+- DAG toolbar 统一使用 `Action` primitive，把自动布局、节点和保存放在同一个 `dag-actions` flex slot；slot 使用固定 10px gap 且 action 不参与压缩。旧的绝对定位 editor footer 不再叠加到 toolbar。
 
 primitive 只负责表现和可访问性，不持有业务状态。
 

@@ -73,3 +73,31 @@ func TestTasksRepoPersistsAcrossReopen(t *testing.T) {
 		t.Fatalf("GetTask(missing) error = %v", err)
 	}
 }
+
+func TestWorkspaceListPrioritizesPinnedThenRecent(t *testing.T) {
+	ctx := context.Background()
+	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".oneshot"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	base := time.Date(2026, 7, 12, 10, 0, 0, 0, time.UTC)
+	items := []domainworkspaces.Workspace{
+		{ID: "recent", Name: "Recent", Path: filepath.Join(t.TempDir(), "recent"), CreatedAt: base, LastOpenedAt: base.Add(2 * time.Hour)},
+		{ID: "pinned", Name: "Pinned", Path: filepath.Join(t.TempDir(), "pinned"), Pinned: true, CreatedAt: base, LastOpenedAt: base},
+		{ID: "older", Name: "Older", Path: filepath.Join(t.TempDir(), "older"), CreatedAt: base, LastOpenedAt: base.Add(time.Hour)},
+		{ID: "hidden", Name: "Hidden", Path: filepath.Join(t.TempDir(), "hidden"), Hidden: true, CreatedAt: base, LastOpenedAt: base.Add(3 * time.Hour)},
+	}
+	for _, item := range items {
+		if err := store.Repos.Tasks.SaveWorkspace(ctx, item); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := store.Repos.Tasks.ListWorkspaces(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0].ID != "pinned" || got[1].ID != "recent" || got[2].ID != "older" {
+		t.Fatalf("ListWorkspaces() order = %+v", got)
+	}
+}

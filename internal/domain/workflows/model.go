@@ -102,6 +102,24 @@ type Run struct {
 	RuntimeSettings        map[string]ResolvedRuntimeSettings `json:"runtimeSettings,omitempty"`
 }
 
+// RunListQuery is a repository-level query over durable Run snapshots. A
+// non-nil TaskIDs slice scopes the result to those tasks; an empty slice then
+// intentionally matches no runs.
+type RunListQuery struct {
+	TaskIDs      []string
+	TitleTaskIDs []string
+	Status       RunStatus
+	Keyword      string
+	Cursor       string
+	Limit        int
+}
+
+type RunPage struct {
+	Items      []Run
+	NextCursor string
+	Total      int
+}
+
 type ResolvedRuntimeSettings struct {
 	EnvironmentAllowlist []string `json:"environmentAllowlist,omitempty"`
 	Provider             string   `json:"provider,omitempty"`

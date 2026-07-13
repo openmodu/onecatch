@@ -217,7 +217,7 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
   const meta = {
     codex: { name: "Codex", command: "codex", description: "留空时从 PATH 自动发现；测试配置只执行 version check，不启动 Agent，也不消耗模型额度。", env: "OPENAI_API_KEY, HTTPS_PROXY" },
     claude: { name: "Claude Code", command: "claude", description: "留空时从 PATH 自动发现；测试配置只执行 version check，不启动 Agent，也不消耗模型额度。", env: "ANTHROPIC_API_KEY, HTTPS_PROXY" },
-    modu: { name: "Modu Code", command: "modu-code", description: "通过 ACP stdio 接入。当前会话只在子进程内有效，Loop 会由 Oneshot 续传任务上下文。测试只检查命令可执行，不请求模型。", env: "OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, OPENAI_BASE_URL" },
+    modu: { name: "Modu Code", command: "modu_code", description: "默认启动 modu_code --acp，并直接复用 ~/.modu/config.toml 中与终端一致的 Provider、模型和凭据；旧 modu-code 仍可手动填写兼容。", env: "可选：仅在需要额外继承环境变量时填写" },
   };
   return <>{["codex", "claude", "modu"].map((id) => {
     const current = status[id] || runtimes.find((item) => item.id === id) || {};

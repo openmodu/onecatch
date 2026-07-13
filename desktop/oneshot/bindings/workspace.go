@@ -35,6 +35,15 @@ func (b *WorkspaceBinding) AddWorkspace(input localapp.AddWorkspaceInput) (domai
 func (b *WorkspaceBinding) ListWorkspaces() ([]domainworkspaces.Workspace, error) {
 	return b.app.ListWorkspaces(context.Background())
 }
+func (b *WorkspaceBinding) OpenWorkspace(id string) (domainworkspaces.Workspace, error) {
+	return b.app.OpenWorkspace(context.Background(), id)
+}
+func (b *WorkspaceBinding) SetWorkspacePinned(id string, pinned bool) (domainworkspaces.Workspace, error) {
+	return b.app.SetWorkspacePinned(context.Background(), id, pinned)
+}
+func (b *WorkspaceBinding) RemoveWorkspace(id string) error {
+	return b.app.RemoveWorkspace(context.Background(), id)
+}
 func (b *WorkspaceBinding) GetWorkspace(id string) (domainworkspaces.Workspace, error) {
 	return b.app.GetWorkspace(context.Background(), id)
 }

@@ -59,6 +59,25 @@ type CreateTaskInput struct {
 	WorkflowID  string `json:"workflowId"`
 }
 
+type ListRunsInput struct {
+	WorkspaceID string `json:"workspaceId"`
+	Status      string `json:"status,omitempty"`
+	Keyword     string `json:"keyword,omitempty"`
+	Cursor      string `json:"cursor,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+}
+
+type RunListItem struct {
+	Run  domainworkflows.Run `json:"run"`
+	Task domaintasks.Task    `json:"task"`
+}
+
+type RunListPage struct {
+	Items      []RunListItem `json:"items"`
+	NextCursor string        `json:"nextCursor,omitempty"`
+	Total      int           `json:"total"`
+}
+
 type WorkflowEventView struct {
 	RunID   string `json:"runId"`
 	Seq     int64  `json:"seq"`
@@ -193,6 +212,7 @@ func (a *App) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (domain
 	workspace := domainworkspaces.Workspace{ID: workspaceID(abs), Name: name, Path: filepath.Clean(abs), DefaultSandbox: sandbox, CreatedAt: now, LastOpenedAt: now}
 	if current, getErr := a.store.Repos.Tasks.GetWorkspace(ctx, workspace.ID); getErr == nil {
 		workspace.CreatedAt = current.CreatedAt
+		workspace.Pinned = current.Pinned
 	}
 	if err := a.store.Repos.Tasks.SaveWorkspace(ctx, workspace); err != nil {
 		return domainworkspaces.Workspace{}, err
@@ -202,6 +222,43 @@ func (a *App) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (domain
 
 func (a *App) ListWorkspaces(ctx context.Context) ([]domainworkspaces.Workspace, error) {
 	return a.store.Repos.Tasks.ListWorkspaces(ctx)
+}
+
+func (a *App) OpenWorkspace(ctx context.Context, id string) (domainworkspaces.Workspace, error) {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return domainworkspaces.Workspace{}, err
+	}
+	workspace.LastOpenedAt = time.Now().UTC()
+	if err := a.store.Repos.Tasks.SaveWorkspace(ctx, workspace); err != nil {
+		return domainworkspaces.Workspace{}, err
+	}
+	return workspace, nil
+}
+
+func (a *App) SetWorkspacePinned(ctx context.Context, id string, pinned bool) (domainworkspaces.Workspace, error) {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return domainworkspaces.Workspace{}, err
+	}
+	workspace.Pinned = pinned
+	if err := a.store.Repos.Tasks.SaveWorkspace(ctx, workspace); err != nil {
+		return domainworkspaces.Workspace{}, err
+	}
+	return workspace, nil
+}
+
+func (a *App) RemoveWorkspace(ctx context.Context, id string) error {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(id))
+	if err != nil {
+		return err
+	}
+	workspace.Hidden = true
+	workspace.Pinned = false
+	if err := a.store.Repos.Tasks.SaveWorkspace(ctx, workspace); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (a *App) GetWorkspace(ctx context.Context, id string) (domainworkspaces.Workspace, error) {
@@ -400,6 +457,52 @@ func (a *App) CancelRun(ctx context.Context, runID string) (domainworkflows.Run,
 
 func (a *App) ListRunsByTask(ctx context.Context, taskID string) ([]domainworkflows.Run, error) {
 	return a.store.Repos.Workflows.ListRunsByTask(ctx, taskID)
+}
+
+func (a *App) ListRuns(ctx context.Context, input ListRunsInput) (RunListPage, error) {
+	workspaceID := strings.TrimSpace(input.WorkspaceID)
+	if _, err := a.GetWorkspace(ctx, workspaceID); err != nil {
+		return RunListPage{}, err
+	}
+	status := domainworkflows.RunStatus(strings.TrimSpace(input.Status))
+	if status != "" {
+		switch status {
+		case domainworkflows.RunReady, domainworkflows.RunRunning, domainworkflows.RunPaused, domainworkflows.RunCompleted, domainworkflows.RunFailed, domainworkflows.RunCancelled:
+		default:
+			return RunListPage{}, coded("run_query_invalid_status", "run status filter is invalid")
+		}
+	}
+	tasks, err := a.store.Repos.Tasks.ListTasks(ctx, workspaceID)
+	if err != nil {
+		return RunListPage{}, err
+	}
+	keyword := strings.ToLower(strings.TrimSpace(input.Keyword))
+	taskIDs := make([]string, 0, len(tasks))
+	titleTaskIDs := make([]string, 0)
+	taskByID := make(map[string]domaintasks.Task, len(tasks))
+	for _, task := range tasks {
+		taskIDs = append(taskIDs, task.ID)
+		taskByID[task.ID] = task
+		if keyword != "" && (strings.Contains(strings.ToLower(task.Title), keyword) || strings.Contains(strings.ToLower(task.ID), keyword)) {
+			titleTaskIDs = append(titleTaskIDs, task.ID)
+		}
+	}
+	page, err := a.store.Repos.Workflows.ListRuns(ctx, domainworkflows.RunListQuery{TaskIDs: taskIDs, TitleTaskIDs: titleTaskIDs, Status: status, Keyword: keyword, Cursor: strings.TrimSpace(input.Cursor), Limit: input.Limit})
+	if errors.Is(err, repoworkflows.ErrInvalidRunCursor) {
+		return RunListPage{}, coded("run_query_invalid_cursor", "run cursor is invalid")
+	}
+	if err != nil {
+		return RunListPage{}, err
+	}
+	items := make([]RunListItem, 0, len(page.Items))
+	for _, run := range page.Items {
+		task, ok := taskByID[run.TaskID]
+		if !ok {
+			continue
+		}
+		items = append(items, RunListItem{Run: run, Task: task})
+	}
+	return RunListPage{Items: items, NextCursor: page.NextCursor, Total: page.Total}, nil
 }
 
 func (a *App) ListRunEvents(ctx context.Context, runID string, afterSeq int64) ([]WorkflowEventView, error) {

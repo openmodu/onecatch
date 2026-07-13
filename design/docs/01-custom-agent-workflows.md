@@ -45,6 +45,7 @@ Workflow 采用“信号驱动的有向步骤图”：步骤定义可接受的 o
   tasks/<task-id>.json
   workflows/<workflow-id>/workflow.json
   runs/<run-id>/run.json
+  runs/index.json
   runs/<run-id>/workflow.json
   runs/<run-id>/SUMMARY.md
   runs/<run-id>/events.jsonl
@@ -59,6 +60,14 @@ Workflow 采用“信号驱动的有向步骤图”：步骤定义可接受的 o
 - Workspace 文件永远留在原目录，应用数据目录不复制项目。
 - Workspace lock 覆盖 Agent 子进程生命周期；包含 PID、run ID、路径 hash 和 startedAt。
 - 启动时发现锁 PID 不存在则标记对应 run 为 interrupted，并清理陈旧锁。
+
+### 3.1 大列表查询
+
+- Workspace JSON 增加可选 `pinned/hidden`；选择 Workspace 时通过应用服务更新 `lastOpenedAt`，列表按 pinned、lastOpenedAt、name 排序。前端默认展示置顶项、最近项和当前项，搜索/“全部”状态再读取同一份完整 Workspace 列表，不引入第二套持久化文件。“从列表移除”只写入 `hidden=true`，历史详情仍可通过原 Workspace ID 读取；重新加入同一路径会解除隐藏。
+- Run repo 新增派生的 `runs/index.json` 和 `ListRuns(RunListQuery)`：保存/更新 Run 时同步维护 ID、Task、Workflow、状态、session 与 updatedAt 摘要；查询先在索引中完成 Workspace TaskID 范围、状态、keyword 与 cursor 过滤，只读取当前页的完整 `run.json`。索引缺失、损坏或目录集合变化时从权威 Run 快照自动重建；旧 `ListRunsByTask` 保留给恢复流程和兼容调用。
+- Wails `TaskRunBinding.ListRuns` 输入 `workspaceId/status/keyword/cursor/limit`，应用服务先读取当前 Workspace 的 Task 摘要，再把允许的 Task IDs 与标题匹配结果传给 Run repo。返回 `items/nextCursor/total`，每个 item 同时包含 Run 与 Task，桌面端不再按 Task 发起 N+1 Run 查询。
+- cursor 由最后一条记录的 `updatedAt + runID` 编码，排序固定为 `updatedAt desc, runID asc`；默认 50、最大 200。非法 cursor 返回 `run_query_invalid_cursor`。
+- 前端以 50 条为一页增量加载，状态/keyword/Workspace 变化会重置 cursor 并清空不再匹配的 Inspector；可见行采用固定高度窗口化渲染，滚动接近底部时加载下一页。
 
 Issue 01-002 不引入数据库。测试可以传入临时 root；生产代码 root 为空时必须解析为 `~/.oneshot/`。列表查询通过枚举目录和读取快照实现；MVP 数据规模以本地个人任务为边界。
 
@@ -306,9 +315,22 @@ Modu Code 使用 JSON-RPC 2.0 LDJSON over stdio，不通过 shell 拼接任务�
 
 Runtime 设置新增可选 `provider`，仅 `modu` 接受 `auto/openai/anthropic/gemini`。非 auto 值在启动时写入 `MODU_CODE_PROVIDER`；默认模型写入 `MODU_CODE_MODEL`。API Key 和 `OPENAI_BASE_URL` 仍只通过已有 environment allowlist 从宿主继承，设置文件不保存 secret 值。binary 留空解析 `modu-code`。
 
+未配置 binary 时优先解析当前 Modu Code 命令 `modu_code`，并以 `--acp` 启动；若当前命令不存在，再回退到旧版 `modu-code`。`HOME` 属于基础继承环境，因此当前命令会直接读取 `~/.modu/config.toml`，保持与终端默认 Provider、模型和凭据一致，不要求用户在 Oneshot 重复配置 API Key。显式 environment allowlist 仅用于额外的环境变量覆盖。若子进程在 ACP 响应前异常退出，进程退出状态与 stderr 是主错误；`unexpected EOF` 仅视为伴随症状，不展示在主错误前。
+
 当前已验证的 Modu Code 版本只在进程内维护 `sessions`，没有 `session/load`，且每次进程都会从 `modu-sess-1` 重新编号。因此 Oneshot 不持久化或展示该短生命周期 ID，不生成恢复命令；Loop 再入和人工恢复会启动新 session，并使用 Orchestrator 已有的 Task、最近 outcomes 与人工补充 prompt 衔接。未来 Modu Code 声明持久 session capability 后，再单独增加 capability negotiation 与恢复语义。
 
-首版只消费 Modu Code 当前实现的 agent text chunk。若 Agent 发出未支持的 ACP 反向请求，runner 返回明确 protocol error，不自动授予文件、终端或权限能力。配置检查只验证 binary 可执行，不启动 provider，因此不消耗模型额度。
+首版消费 Modu Code 当前实现的 agent text chunk，并处理工具权限反向请求。若 Agent 发出其他未支持的 ACP 反向请求，runner 返回明确 protocol error。配置检查只验证 binary 可执行，不启动 provider，因此不消耗模型额度。
+
+### 11.2 Modu ACP 权限反向请求（Issue 01-015）
+
+当前 `modu_code --acp` 会在自身权限规则判定工具需要审批时发送 `session/request_permission` 反向 JSON-RPC。Runner 在等待 `session/prompt` 响应的同一个扫描循环中处理该请求，并使用相同 ID 写回 `{outcome:{optionId}}`；响应后继续读取原 prompt 的 message chunk 与最终结果。
+
+- `read-only`：选择 `reject_once`，Modu 自身判定无需审批的只读工具仍可运行。
+- `workspace-write` / `full`：选择 `allow_once`，不使用 `allow_always`，确保每次风险工具调用都留下独立事件。
+- 请求到达时追加 `tool_use`，响应后追加 `tool_result`，二者保留原始参数/响应供本地诊断。
+- 未知反向方法、缺少匹配选项或非法参数继续作为明确 protocol error 失败，不做宽松兜底。
+
+ACP permission 是工具审批协议，不是操作系统级进程隔离；Modu 的 `workspace-write` 首版依赖 Workflow 授权、任务 prompt 和 Modu 自身权限规则约束，后续若要求强目录边界需单独接入系统 sandbox。
 
 ## 12. 验证计划
 

@@ -3,6 +3,7 @@ package workflows
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -21,6 +22,7 @@ var (
 	ErrDefinitionNotFound = errors.New("workflow definition not found")
 	ErrRunNotFound        = errors.New("workflow run not found")
 	ErrStateConflict      = errors.New("workflow state conflict")
+	ErrInvalidRunCursor   = errors.New("workflow run cursor is invalid")
 )
 
 type WorkflowsRepo interface {
@@ -31,6 +33,7 @@ type WorkflowsRepo interface {
 	GetRun(context.Context, string) (domainworkflows.Run, error)
 	GetRunDefinition(context.Context, string) (domainworkflows.Definition, error)
 	ListRunsByTask(context.Context, string) ([]domainworkflows.Run, error)
+	ListRuns(context.Context, domainworkflows.RunListQuery) (domainworkflows.RunPage, error)
 	UpdateRun(context.Context, domainworkflows.Run, int64) (domainworkflows.Run, error)
 	SaveStepRun(context.Context, domainworkflows.StepRun) error
 	ListStepRuns(context.Context, string) ([]domainworkflows.StepRun, error)
@@ -47,6 +50,20 @@ type workflowsImpl struct {
 	runtimeEvents *runtimeEventStore
 	now           func() time.Time
 	mu            sync.RWMutex
+}
+
+type runIndex struct {
+	Version int             `json:"version"`
+	Items   []runIndexEntry `json:"items"`
+}
+
+type runIndexEntry struct {
+	ID         string                    `json:"id"`
+	TaskID     string                    `json:"taskId"`
+	WorkflowID string                    `json:"workflowId"`
+	Status     domainworkflows.RunStatus `json:"status"`
+	Sessions   map[string]string         `json:"sessions,omitempty"`
+	UpdatedAt  time.Time                 `json:"updatedAt"`
 }
 
 func NewWorkflowsRepo(workflowsRoot, runsRoot string) WorkflowsRepo {
@@ -172,6 +189,7 @@ func (r *workflowsImpl) SaveRun(ctx context.Context, run domainworkflows.Run, de
 	if err := localfile.WriteJSONAtomic(r.runPath(run.ID), run); err != nil {
 		return fmt.Errorf("save workflow run: %w", err)
 	}
+	r.refreshRunIndexLocked(run)
 	return nil
 }
 
@@ -214,6 +232,93 @@ func (r *workflowsImpl) ListRunsByTask(ctx context.Context, taskID string) ([]do
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	runs, err := r.listRunsLocked()
+	if err != nil || taskID == "" {
+		return runs, err
+	}
+	filtered := make([]domainworkflows.Run, 0, len(runs))
+	for _, run := range runs {
+		if run.TaskID == taskID {
+			filtered = append(filtered, run)
+		}
+	}
+	return filtered, nil
+}
+
+func (r *workflowsImpl) ListRuns(ctx context.Context, query domainworkflows.RunListQuery) (domainworkflows.RunPage, error) {
+	if err := ctx.Err(); err != nil {
+		return domainworkflows.RunPage{}, err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	index, err := r.ensureRunIndexLocked()
+	if err != nil {
+		return domainworkflows.RunPage{}, err
+	}
+
+	taskIDs := stringSet(query.TaskIDs)
+	titleTaskIDs := stringSet(query.TitleTaskIDs)
+	keyword := strings.ToLower(strings.TrimSpace(query.Keyword))
+	filtered := make([]runIndexEntry, 0, len(index.Items))
+	for _, run := range index.Items {
+		if query.TaskIDs != nil {
+			if _, ok := taskIDs[run.TaskID]; !ok {
+				continue
+			}
+		}
+		if query.Status != "" && run.Status != query.Status {
+			continue
+		}
+		if keyword != "" && !runMatchesKeyword(run, keyword, titleTaskIDs) {
+			continue
+		}
+		filtered = append(filtered, run)
+	}
+
+	total := len(filtered)
+	if query.Cursor != "" {
+		cursorTime, cursorID, cursorErr := decodeRunCursor(query.Cursor)
+		if cursorErr != nil {
+			return domainworkflows.RunPage{}, ErrInvalidRunCursor
+		}
+		start := sort.Search(len(filtered), func(index int) bool {
+			run := filtered[index]
+			return run.UpdatedAt.Before(cursorTime) || (run.UpdatedAt.Equal(cursorTime) && run.ID > cursorID)
+		})
+		filtered = filtered[start:]
+	}
+
+	limit := query.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 200 {
+		limit = 200
+	}
+	pageEntries := filtered
+	if len(pageEntries) > limit {
+		pageEntries = pageEntries[:limit]
+	}
+	nextCursor := ""
+	if len(filtered) > len(pageEntries) && len(pageEntries) > 0 {
+		nextCursor = encodeRunCursor(pageEntries[len(pageEntries)-1].UpdatedAt, pageEntries[len(pageEntries)-1].ID)
+	}
+	pageItems := make([]domainworkflows.Run, 0, len(pageEntries))
+	for _, entry := range pageEntries {
+		run, getErr := r.getRunLocked(entry.ID)
+		if errors.Is(getErr, ErrRunNotFound) {
+			_ = os.Remove(r.runIndexPath())
+			continue
+		}
+		if getErr != nil {
+			return domainworkflows.RunPage{}, getErr
+		}
+		pageItems = append(pageItems, run)
+	}
+	return domainworkflows.RunPage{Items: pageItems, NextCursor: nextCursor, Total: total}, nil
+}
+
+func (r *workflowsImpl) listRunsLocked() ([]domainworkflows.Run, error) {
 	runDirs, err := os.ReadDir(r.runsRoot)
 	if err != nil {
 		return nil, fmt.Errorf("list workflow run directories: %w", err)
@@ -230,9 +335,7 @@ func (r *workflowsImpl) ListRunsByTask(ctx context.Context, taskID string) ([]do
 		if err != nil {
 			return nil, err
 		}
-		if taskID == "" || run.TaskID == taskID {
-			out = append(out, run)
-		}
+		out = append(out, run)
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
@@ -241,6 +344,135 @@ func (r *workflowsImpl) ListRunsByTask(ctx context.Context, taskID string) ([]do
 		return out[i].UpdatedAt.After(out[j].UpdatedAt)
 	})
 	return out, nil
+}
+
+func (r *workflowsImpl) ensureRunIndexLocked() (runIndex, error) {
+	var index runIndex
+	if err := localfile.ReadJSON(r.runIndexPath(), &index); err != nil || index.Version != 1 {
+		return r.rebuildRunIndexLocked()
+	}
+	entries, err := os.ReadDir(r.runsRoot)
+	if err != nil {
+		return runIndex{}, fmt.Errorf("list workflow run directories for index: %w", err)
+	}
+	directoryIDs := make(map[string]struct{})
+	for _, entry := range entries {
+		if entry.IsDir() && localfile.ValidID(entry.Name()) {
+			directoryIDs[entry.Name()] = struct{}{}
+		}
+	}
+	if len(directoryIDs) != len(index.Items) {
+		return r.rebuildRunIndexLocked()
+	}
+	for _, item := range index.Items {
+		if _, ok := directoryIDs[item.ID]; !ok {
+			return r.rebuildRunIndexLocked()
+		}
+	}
+	sortRunIndex(index.Items)
+	return index, nil
+}
+
+func (r *workflowsImpl) rebuildRunIndexLocked() (runIndex, error) {
+	runs, err := r.listRunsLocked()
+	if err != nil {
+		return runIndex{}, err
+	}
+	index := runIndex{Version: 1, Items: make([]runIndexEntry, 0, len(runs))}
+	for _, run := range runs {
+		index.Items = append(index.Items, runIndexEntryFromRun(run))
+	}
+	if err := localfile.WriteJSONAtomic(r.runIndexPath(), index); err != nil {
+		return runIndex{}, fmt.Errorf("write workflow run index: %w", err)
+	}
+	return index, nil
+}
+
+// refreshRunIndexLocked keeps the derived index cheap without making a Run
+// state transition depend on an auxiliary file. If the index cannot be
+// refreshed it is removed and rebuilt from authoritative run.json files by the
+// next query.
+func (r *workflowsImpl) refreshRunIndexLocked(run domainworkflows.Run) {
+	index, err := r.ensureRunIndexLocked()
+	if err != nil {
+		_ = os.Remove(r.runIndexPath())
+		return
+	}
+	entry := runIndexEntryFromRun(run)
+	found := false
+	for i := range index.Items {
+		if index.Items[i].ID == run.ID {
+			index.Items[i] = entry
+			found = true
+			break
+		}
+	}
+	if !found {
+		index.Items = append(index.Items, entry)
+	}
+	sortRunIndex(index.Items)
+	if err := localfile.WriteJSONAtomic(r.runIndexPath(), index); err != nil {
+		_ = os.Remove(r.runIndexPath())
+	}
+}
+
+func runIndexEntryFromRun(run domainworkflows.Run) runIndexEntry {
+	return runIndexEntry{ID: run.ID, TaskID: run.TaskID, WorkflowID: run.WorkflowID, Status: run.Status, Sessions: run.Sessions, UpdatedAt: run.UpdatedAt}
+}
+
+func sortRunIndex(items []runIndexEntry) {
+	sort.Slice(items, func(i, j int) bool {
+		if items[i].UpdatedAt.Equal(items[j].UpdatedAt) {
+			return items[i].ID < items[j].ID
+		}
+		return items[i].UpdatedAt.After(items[j].UpdatedAt)
+	})
+}
+
+func stringSet(values []string) map[string]struct{} {
+	out := make(map[string]struct{}, len(values))
+	for _, value := range values {
+		out[value] = struct{}{}
+	}
+	return out
+}
+
+func runMatchesKeyword(run runIndexEntry, keyword string, titleTaskIDs map[string]struct{}) bool {
+	if _, ok := titleTaskIDs[run.TaskID]; ok {
+		return true
+	}
+	for _, value := range []string{run.ID, run.TaskID, run.WorkflowID, string(run.Status)} {
+		if strings.Contains(strings.ToLower(value), keyword) {
+			return true
+		}
+	}
+	for _, sessionID := range run.Sessions {
+		if strings.Contains(strings.ToLower(sessionID), keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func encodeRunCursor(updatedAt time.Time, id string) string {
+	value := updatedAt.UTC().Format(time.RFC3339Nano) + "\n" + id
+	return base64.RawURLEncoding.EncodeToString([]byte(value))
+}
+
+func decodeRunCursor(cursor string) (time.Time, string, error) {
+	decoded, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return time.Time{}, "", err
+	}
+	parts := strings.SplitN(string(decoded), "\n", 2)
+	if len(parts) != 2 || !localfile.ValidID(parts[1]) {
+		return time.Time{}, "", ErrInvalidRunCursor
+	}
+	updatedAt, err := time.Parse(time.RFC3339Nano, parts[0])
+	if err != nil {
+		return time.Time{}, "", err
+	}
+	return updatedAt, parts[1], nil
 }
 
 func (r *workflowsImpl) UpdateRun(ctx context.Context, input domainworkflows.Run, expectedRevision int64) (domainworkflows.Run, error) {
@@ -270,6 +502,7 @@ func (r *workflowsImpl) UpdateRun(ctx context.Context, input domainworkflows.Run
 	if err := localfile.WriteJSONAtomic(r.runPath(run.ID), run); err != nil {
 		return domainworkflows.Run{}, fmt.Errorf("update workflow run: %w", err)
 	}
+	r.refreshRunIndexLocked(run)
 	return run, nil
 }
 
@@ -449,6 +682,10 @@ func (r *workflowsImpl) definitionPath(id string) string {
 
 func (r *workflowsImpl) runPath(id string) string {
 	return filepath.Join(r.runsRoot, id, "run.json")
+}
+
+func (r *workflowsImpl) runIndexPath() string {
+	return filepath.Join(r.runsRoot, "index.json")
 }
 
 func (r *workflowsImpl) runDefinitionPath(id string) string {

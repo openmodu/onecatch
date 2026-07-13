@@ -3,6 +3,7 @@ package agentrun
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -199,6 +200,19 @@ func TestModuRunnerSpeaksACPAndAggregatesMessage(t *testing.T) {
 	}
 }
 
+func TestModuRunnerPrefersCurrentBinary(t *testing.T) {
+	directory := t.TempDir()
+	for _, name := range []string{moduBinaryLegacy, moduBinaryDefault} {
+		if err := os.WriteFile(filepath.Join(directory, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", directory)
+	if got := NewModuRunner("").binary; got != filepath.Join(directory, moduBinaryDefault) {
+		t.Fatalf("default binary = %q", got)
+	}
+}
+
 func TestModuRunnerReportsACPError(t *testing.T) {
 	runner := NewModuRunner(stubACPBinary(t, true))
 	var events []Event
@@ -209,6 +223,119 @@ func TestModuRunnerReportsACPError(t *testing.T) {
 	if result.Succeeded || countKind(events, KindError) != 1 {
 		t.Fatalf("result/events = %+v / %+v", result, events)
 	}
+}
+
+func TestModuRunnerPrefersProcessFailureOverUnexpectedEOF(t *testing.T) {
+	bin := stubBinary(t, "", "no API key found", 1)
+	runner := NewModuRunner(bin)
+
+	_, err := runner.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "fail"}, nil)
+	if err == nil || !contains(err.Error(), "no API key found") {
+		t.Fatalf("err = %v", err)
+	}
+	if contains(err.Error(), "unexpected EOF") {
+		t.Fatalf("unexpected EOF obscured process error: %v", err)
+	}
+}
+
+func TestRespondACPReversePermissionUsesSandboxDecision(t *testing.T) {
+	permission := acpEnvelope{
+		JSONRPC: "2.0",
+		ID:      int64Pointer(41),
+		Method:  "session/request_permission",
+		Params: json.RawMessage(`{
+			"toolCall":{"toolCallId":"call-1","title":"bash","kind":"execute","arguments":{"command":"go test ./..."}},
+			"options":[
+				{"optionId":"allow_once","kind":"allow_once"},
+				{"optionId":"reject_once","kind":"reject_once"}
+			]
+		}`),
+	}
+	tests := []struct {
+		name    string
+		sandbox Sandbox
+		want    string
+	}{
+		{name: "workspace write allows once", sandbox: SandboxWorkspaceWrite, want: `"optionId":"allow_once"`},
+		{name: "full allows once", sandbox: SandboxFull, want: `"optionId":"allow_once"`},
+		{name: "read only rejects once", sandbox: SandboxReadOnly, want: `"optionId":"reject_once"`},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var output bytes.Buffer
+			var events []Event
+			if err := respondACPReverseRequest(&output, permission, test.sandbox, collectSink(&events), fixedClock()); err != nil {
+				t.Fatal(err)
+			}
+			if got := output.String(); !contains(got, `"id":41`) || !contains(got, test.want) {
+				t.Fatalf("response = %s", got)
+			}
+			if countKind(events, KindToolUse) != 1 || countKind(events, KindToolResult) != 1 {
+				t.Fatalf("events = %+v", events)
+			}
+		})
+	}
+}
+
+func TestRespondACPReversePermissionRejectsUnknownMethod(t *testing.T) {
+	id := int64(9)
+	err := respondACPReverseRequest(&bytes.Buffer{}, acpEnvelope{ID: &id, Method: "session/unknown"}, SandboxWorkspaceWrite, nil, fixedClock())
+	if err == nil || !contains(err.Error(), "unsupported Modu ACP reverse request") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func int64Pointer(value int64) *int64 { return &value }
+
+func TestModuRunnerHandlesPermissionReverseRequest(t *testing.T) {
+	runner := NewModuRunner(stubACPPermissionBinary(t))
+	runner.now = fixedClock()
+	var events []Event
+	result, err := runner.Run(context.Background(), Request{
+		Workspace: t.TempDir(),
+		Prompt:    "make the change",
+		Sandbox:   SandboxWorkspaceWrite,
+	}, collectSink(&events))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.Succeeded || result.FinalMessage != "permission accepted" {
+		t.Fatalf("result = %+v", result)
+	}
+	if countKind(events, KindToolUse) != 1 || countKind(events, KindToolResult) != 1 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func stubACPPermissionBinary(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	path := filepath.Join(t.TempDir(), "modu_code")
+	script := `#!/bin/sh
+[ "$1" = "--acp" ] || exit 2
+while IFS= read -r line; do
+  case "$line" in
+    *'"id":1'*) printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}' ;;
+    *'"id":2'*) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"sessionId":"modu-sess-1"}}' ;;
+    *'"id":3'*)
+      printf '%s\n' '{"jsonrpc":"2.0","id":41,"method":"session/request_permission","params":{"toolCall":{"toolCallId":"call-1","title":"bash","kind":"execute","arguments":{"command":"go test ./..."}},"options":[{"optionId":"allow_once","kind":"allow_once"},{"optionId":"reject_once","kind":"reject_once"}]}}'
+      IFS= read -r permission
+      case "$permission" in
+        *'"optionId":"allow_once"'*) ;;
+        *) printf '%s\n' '{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"permission response missing"}}'; continue ;;
+      esac
+      printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"modu-sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"permission accepted"}}}}'
+      printf '%s\n' '{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}'
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func stubACPBinary(t *testing.T, promptError bool) string {
@@ -224,6 +351,7 @@ func stubACPBinary(t *testing.T, promptError bool) string {
 		promptReply = `printf '%s\n' '{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"provider failed"}}'`
 	}
 	script := `#!/bin/sh
+[ "$1" = "--acp" ] || { echo "missing --acp" >&2; exit 2; }
 while IFS= read -r line; do
   case "$line" in
     *'"id":1'*) printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}' ;;

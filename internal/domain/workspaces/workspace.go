@@ -17,6 +17,8 @@ type Workspace struct {
 	Name           string    `json:"name"`
 	Path           string    `json:"path"`
 	DefaultSandbox string    `json:"defaultSandbox"`
+	Pinned         bool      `json:"pinned,omitempty"`
+	Hidden         bool      `json:"hidden,omitempty"`
 	CreatedAt      time.Time `json:"createdAt"`
 	LastOpenedAt   time.Time `json:"lastOpenedAt"`
 }

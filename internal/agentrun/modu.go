@@ -13,7 +13,10 @@ import (
 	"time"
 )
 
-const moduBinaryDefault = "modu-code"
+const (
+	moduBinaryDefault = "modu_code"
+	moduBinaryLegacy  = "modu-code"
+)
 
 // ModuRunner drives Modu Code through ACP JSON-RPC 2.0 LDJSON over stdio.
 // The currently supported Modu Code keeps sessions only inside its process,
@@ -26,9 +29,16 @@ type ModuRunner struct {
 
 func NewModuRunner(binary string) *ModuRunner {
 	if binary == "" {
-		binary = moduBinaryDefault
+		binary = defaultModuBinary()
 	}
 	return &ModuRunner{binary: binary, now: time.Now}
+}
+
+func defaultModuBinary() string {
+	if binary, err := exec.LookPath(moduBinaryDefault); err == nil {
+		return binary
+	}
+	return moduBinaryLegacy
 }
 
 func (r *ModuRunner) Runtime() Runtime { return RuntimeModu }
@@ -56,7 +66,9 @@ func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 	if sink == nil {
 		sink = func(Event) {}
 	}
-	cmd := exec.CommandContext(ctx, r.binary)
+	// Current Modu Code exposes ACP explicitly. The legacy modu-code binary
+	// ignores extra arguments, so --acp is backward compatible with both.
+	cmd := exec.CommandContext(ctx, r.binary, "--acp")
 	cmd.Dir = req.Workspace
 	cmd.Env = moduEnvironment(req.Environment, req.Model)
 	if req.InterruptGrace > 0 {
@@ -113,6 +125,12 @@ func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 			if ctx.Err() != nil {
 				return Result{}, ctx.Err()
 			}
+			// An ACP EOF is only a symptom when the child process has already
+			// exited. Surface stderr and the exit status as the primary failure so
+			// users see the actionable provider/authentication error first.
+			if errors.Is(cause, io.ErrUnexpectedEOF) {
+				return Result{}, stopErr
+			}
 			return Result{}, fmt.Errorf("%v; %w", cause, stopErr)
 		}
 		return Result{}, cause
@@ -131,7 +149,10 @@ func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 	if err := request(2, "session/new", map[string]any{"cwd": req.Workspace, "mcpServers": []any{}}); err != nil {
 		return fail(err)
 	}
-	created, err := readACPResponse(scanner, 2, sink, r.now, nil)
+	reverse := func(message acpEnvelope) error {
+		return respondACPReverseRequest(stdin, message, req.Sandbox, sink, r.now)
+	}
+	created, err := readACPResponse(scanner, 2, sink, r.now, nil, reverse)
 	if err != nil {
 		return fail(err)
 	}
@@ -150,7 +171,7 @@ func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 		return fail(err)
 	}
 	var final strings.Builder
-	completed, err := readACPResponse(scanner, 3, sink, r.now, &final)
+	completed, err := readACPResponse(scanner, 3, sink, r.now, &final, reverse)
 	if err != nil {
 		return fail(err)
 	}
@@ -167,7 +188,9 @@ func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 	return result, nil
 }
 
-func readACPResponse(scanner *bufio.Scanner, wanted int64, sink Sink, now nowFunc, final *strings.Builder) (acpEnvelope, error) {
+type acpReverseHandler func(acpEnvelope) error
+
+func readACPResponse(scanner *bufio.Scanner, wanted int64, sink Sink, now nowFunc, final *strings.Builder, reverse ...acpReverseHandler) (acpEnvelope, error) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		var message acpEnvelope
@@ -175,7 +198,13 @@ func readACPResponse(scanner *bufio.Scanner, wanted int64, sink Sink, now nowFun
 			return acpEnvelope{}, fmt.Errorf("decode Modu ACP response: %w", err)
 		}
 		if message.Method != "" && message.ID != nil {
-			return acpEnvelope{}, fmt.Errorf("unsupported Modu ACP reverse request %q", message.Method)
+			if len(reverse) == 0 || reverse[0] == nil {
+				return acpEnvelope{}, fmt.Errorf("unsupported Modu ACP reverse request %q", message.Method)
+			}
+			if err := reverse[0](message); err != nil {
+				return acpEnvelope{}, err
+			}
+			continue
 		}
 		if message.Method == "session/update" {
 			if final != nil {
@@ -210,6 +239,75 @@ func readACPResponse(scanner *bufio.Scanner, wanted int64, sink Sink, now nowFun
 		return acpEnvelope{}, fmt.Errorf("read Modu ACP stream: %w", err)
 	}
 	return acpEnvelope{}, io.ErrUnexpectedEOF
+}
+
+func respondACPReverseRequest(writer io.Writer, message acpEnvelope, sandbox Sandbox, sink Sink, now nowFunc) error {
+	if sink == nil {
+		sink = func(Event) {}
+	}
+	if message.ID == nil {
+		return errors.New("Modu ACP reverse request has no id")
+	}
+	if message.Method != "session/request_permission" {
+		return fmt.Errorf("unsupported Modu ACP reverse request %q", message.Method)
+	}
+	var params struct {
+		ToolCall struct {
+			ToolCallID string          `json:"toolCallId"`
+			Title      string          `json:"title"`
+			Kind       string          `json:"kind"`
+			Arguments  json.RawMessage `json:"arguments"`
+		} `json:"toolCall"`
+		Options []struct {
+			OptionID string `json:"optionId"`
+			Kind     string `json:"kind"`
+		} `json:"options"`
+	}
+	if err := json.Unmarshal(message.Params, &params); err != nil {
+		return fmt.Errorf("decode Modu ACP permission request: %w", err)
+	}
+	allow := sandbox != SandboxReadOnly
+	wanted := []string{"allow_once", "allow"}
+	if !allow {
+		wanted = []string{"reject_once", "deny_once", "deny"}
+	}
+	optionID := ""
+	for _, candidate := range wanted {
+		for _, option := range params.Options {
+			if option.OptionID == candidate || option.Kind == candidate {
+				optionID = option.OptionID
+				break
+			}
+		}
+		if optionID != "" {
+			break
+		}
+	}
+	if optionID == "" {
+		return fmt.Errorf("Modu ACP permission request has no %s option", map[bool]string{true: "allow-once", false: "reject-once"}[allow])
+	}
+	title := strings.TrimSpace(params.ToolCall.Title)
+	if title == "" {
+		title = "Modu tool permission"
+	}
+	raw := string(message.Params)
+	sink(Event{Kind: KindToolUse, Text: title, Raw: raw, At: now()})
+	result := map[string]any{"outcome": map[string]string{"optionId": optionID}}
+	frame := map[string]any{"jsonrpc": "2.0", "id": *message.ID, "result": result}
+	encoded, err := json.Marshal(frame)
+	if err != nil {
+		return fmt.Errorf("encode Modu ACP permission response: %w", err)
+	}
+	encoded = append(encoded, '\n')
+	if _, err := writer.Write(encoded); err != nil {
+		return fmt.Errorf("write Modu ACP permission response: %w", err)
+	}
+	decision := "permission rejected"
+	if allow {
+		decision = "permission allowed once"
+	}
+	sink(Event{Kind: KindToolResult, Text: decision, Raw: string(encoded), At: now()})
+	return nil
 }
 
 func moduEnvironment(environment []string, model string) []string {

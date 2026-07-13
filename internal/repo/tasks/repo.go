@@ -179,9 +179,15 @@ func (r *tasksImpl) listWorkspacesLocked() ([]domainworkspaces.Workspace, error)
 		if err := localfile.ReadJSON(filepath.Join(r.workspacesRoot, entry.Name()), &workspace); err != nil {
 			return nil, fmt.Errorf("read workspace %s: %w", entry.Name(), err)
 		}
+		if workspace.Hidden {
+			continue
+		}
 		out = append(out, workspace)
 	}
 	sort.Slice(out, func(i, j int) bool {
+		if out[i].Pinned != out[j].Pinned {
+			return out[i].Pinned
+		}
 		if out[i].LastOpenedAt.Equal(out[j].LastOpenedAt) {
 			return strings.Compare(out[i].Name, out[j].Name) < 0
 		}

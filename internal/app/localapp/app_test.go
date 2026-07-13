@@ -105,3 +105,69 @@ func TestValidateDefinitionReturnsAllIssues(t *testing.T) {
 		t.Fatal("invalid workflow returned no issues")
 	}
 }
+
+func TestWorkspacePreferencesAndRunListStayWorkspaceScoped(t *testing.T) {
+	root := t.TempDir()
+	store, err := localdata.OpenStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtimes, err := NewRuntimeRegistry(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	git := gitinspect.New("")
+	orchestrator := workflowuc.NewUsecase(store.Repos.Tasks, store.Repos.Workflows, completingEngine{}, workspacelock.New(store.Data.Paths.Locks), git)
+	app := New(store, orchestrator, runtimes, git)
+	defer app.Close()
+	ctx := context.Background()
+	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pinned, err := app.SetWorkspacePinned(ctx, workspace.ID, true)
+	if err != nil || !pinned.Pinned {
+		t.Fatalf("SetWorkspacePinned() = %+v, %v", pinned, err)
+	}
+	beforeOpen := pinned.LastOpenedAt
+	time.Sleep(time.Millisecond)
+	opened, err := app.OpenWorkspace(ctx, workspace.ID)
+	if err != nil || !opened.LastOpenedAt.After(beforeOpen) {
+		t.Fatalf("OpenWorkspace() = %+v, %v", opened, err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "Searchable task", Prompt: "finish"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := orchestrator.StartTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: other.ID, WorkflowID: "single_agent", Title: "Other task", Prompt: "ignore"}); err != nil {
+		t.Fatal(err)
+	}
+	page, err := app.ListRuns(ctx, ListRunsInput{WorkspaceID: workspace.ID, Keyword: "searchable", Limit: 50})
+	if err != nil || len(page.Items) != 1 || page.Items[0].Run.ID != run.ID || page.Items[0].Task.ID != task.ID || page.Total != 1 {
+		t.Fatalf("ListRuns() = %+v, %v", page, err)
+	}
+	if _, err := app.ListRuns(ctx, ListRunsInput{WorkspaceID: workspace.ID, Status: "unknown"}); err == nil {
+		t.Fatal("ListRuns() accepted an invalid status")
+	}
+	if err := app.RemoveWorkspace(ctx, other.ID); err != nil {
+		t.Fatal(err)
+	}
+	workspaces, err := app.ListWorkspaces(ctx)
+	if err != nil || len(workspaces) != 1 || workspaces[0].ID != workspace.ID {
+		t.Fatalf("ListWorkspaces() after remove = %+v, %v", workspaces, err)
+	}
+	if _, err := app.GetWorkspace(ctx, other.ID); err != nil {
+		t.Fatalf("hidden workspace no longer available to history: %v", err)
+	}
+}

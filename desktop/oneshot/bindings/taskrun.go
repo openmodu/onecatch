@@ -30,6 +30,9 @@ func (b *TaskRunBinding) GetRun(runID string) (localapp.RunDetail, error) {
 func (b *TaskRunBinding) ListRunsByTask(taskID string) ([]domainworkflows.Run, error) {
 	return b.app.ListRunsByTask(context.Background(), taskID)
 }
+func (b *TaskRunBinding) ListRuns(input localapp.ListRunsInput) (localapp.RunListPage, error) {
+	return b.app.ListRuns(context.Background(), input)
+}
 func (b *TaskRunBinding) ListRunEvents(runID string, afterSeq int64) ([]localapp.WorkflowEventView, error) {
 	return b.app.ListRunEvents(context.Background(), runID, afterSeq)
 }

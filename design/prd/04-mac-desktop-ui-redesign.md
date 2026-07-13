@@ -37,8 +37,10 @@
 - macOS 普通窗口使用接近现代原生应用的 26pt continuous corner；放大或全屏时取消圆角，恢复窗口时重新应用。
 - 页面主要依赖分隔线、留白和排版分组，不使用卡片墙、渐变背景和大面积阴影。
 - 主动作采用 `[ action ]` 文案形式；危险、警告、成功和运行状态使用固定语义色。
+- 操作按钮默认使用纯文本 TUI 文案，不使用 plus、close、search、pin 等图标；对话事件圆点和 disclosure caret 作为状态/展开标记保留。
 - Workflow 列表为横向信息行，串行和 DAG 编辑器不再以遮罩 modal 呈现。
 - DAG 保留拖拽、连接、删除依赖、节点 Inspector 与校验能力。
+- DAG 顶部操作使用独立、有间距、不可压缩的纯文本 TUI Action；保存动作与节点动作不得重叠或拼接成一块，Inspector 删除动作不使用图标按钮。
 - 设置中心保留独立 draft/save/reset、inline validation、冲突恢复和危险确认。
 - 核心输入、按钮、导航和编辑器必须支持键盘焦点状态。
 - 原型中重复出现的尺寸、间距、字体、控件和分区结构必须由共享 token 与 UI primitive 管理，禁止页面各自复制一套近似值。

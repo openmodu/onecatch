@@ -129,6 +129,8 @@ implement/review --need_human--> $pause
 
 - 检测 Codex、Claude Code、Modu Code 的安装状态和版本/协议可用性。
 - 允许为 runtime 配置 binary path、默认 model 和环境变量白名单；Modu Code 还允许显式选择 Provider。
+- Modu Code 默认复用用户在终端中使用的 `modu_code` 配置，包括 `~/.modu/config.toml` 中的 Provider、模型和凭据；仅在用户显式填写环境变量白名单时额外继承对应变量。ACP 子进程提前失败时，不得用 `unexpected EOF` 等协议症状遮蔽真实原因。
+- Modu Code 发起 `session/request_permission` 时，Oneshot 必须返回 ACP 选项而不是中断 Session：read-only 拒绝需要审批的工具，workspace-write/full 单次允许，并把请求与决定记录为相邻 Tool Use/Tool Result 事件。
 - Modu Code 通过 ACP JSON-RPC/LDJSON 接入，不使用可注入的 shell 命令模板；当前 CLI 不支持跨进程 session 恢复时，Oneshot 必须明确按无原生会话恢复能力运行，不得展示无效恢复命令。
 - runtime 不可用时不得静默换成另一个角色；应暂停并明确提示。
 - CLI 原始事件统一映射为消息、推理、工具、文件变化、用量、结果和错误。
@@ -164,6 +166,10 @@ implement/review --need_human--> $pause
 - Live Inspector 必须按实际发生顺序交错展示 Agent message 与独立 Tool Use；工具详情默认折叠，不能把多次工具调用汇总为一个长日志面板。
 - Run 状态、当前步骤、执行进度和恢复会话应使用一个紧凑摘要，避免重复占用对话空间。
 - “最近运行”和右侧 Run 详情必须同时限定在当前选中的 Workspace；切换工作目录后立即清除旧 Run 选中态，当前目录没有运行记录时右侧只显示空状态，不得保留其他目录的数据。
+- Workspace 较多时，侧栏默认只展示置顶和最近使用的有限集合；用户可以搜索、展开全部列表和切换置顶，当前 Workspace 必须始终可见。
+- 用户可以从 CWD 列表隐藏 Workspace 引用；该操作不删除项目目录、Task 或 Run，重新加入同一路径后恢复历史关联。
+- Run 历史支持按标题、Run ID、runtime session/thread ID 搜索，并按状态筛选；列表使用游标分页和窗口化渲染，不能随本地历史增长而一次读取或渲染全部 Run。
+- Run 搜索、筛选或 Workspace 切换后，如果当前选中 Run 不再属于结果集，右侧 Inspector 必须立即清空，不能自动展示另一条未选择的历史记录。
 - 用户可以查看整个 Run 的时间线和最近 git diff。
 - 提供“单 Agent”“实现 → 审查”内置模板，并允许复制修改。
 - Workflow 只保留当前模板；历史执行使用各 Run 自己的 Workflow 快照查看和恢复。
@@ -174,6 +180,7 @@ implement/review --need_human--> $pause
 
 - `id`、`name`、`path`
 - `defaultSandbox`
+- `pinned`、`hidden`
 - `createdAt`、`lastOpenedAt`
 
 ### 8.2 Task
@@ -234,6 +241,8 @@ implement/review --need_human--> $pause
 - [ ] 用户可以打断、补充指令、恢复或终止 Run。
 - [ ] 用户能查看步骤时间线、文件变化和 git diff。
 - [ ] 切换 Workspace 后，运行列表与 Run 详情保持同一数据范围；无运行记录的 Workspace 不显示上一个 Workspace 的详情。
+- [ ] Workspace 较多时可通过置顶、最近使用和搜索快速切换，选择行为会更新最近使用顺序。
+- [ ] Run 历史支持搜索、状态筛选、游标增量加载和窗口化渲染，千级记录下不会一次渲染全部行。
 - [ ] Wails binding、本地数据模型和技术方案一致。
 
 ## 11. 待确认问题

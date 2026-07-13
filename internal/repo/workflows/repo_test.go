@@ -231,6 +231,67 @@ func TestRuntimeEventStoreSerializesConcurrentAppends(t *testing.T) {
 	}
 }
 
+func TestRunListQueryFiltersSearchesAndPages(t *testing.T) {
+	ctx := context.Background()
+	root := filepath.Join(t.TempDir(), ".oneshot")
+	store, err := localdata.OpenStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	definition, err := store.Repos.Workflows.SaveDefinition(ctx, reviewLoopDefinition())
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 7, 12, 12, 0, 0, 0, time.UTC)
+	runs := []domainworkflows.Run{
+		{ID: "run_a", TaskID: "task_a", WorkflowID: definition.ID, Revision: 1, Status: domainworkflows.RunCompleted, CurrentStepID: "review", Sessions: map[string]string{"review": "thread-alpha"}, StartedAt: base, UpdatedAt: base.Add(3 * time.Minute)},
+		{ID: "run_b", TaskID: "task_b", WorkflowID: definition.ID, Revision: 1, Status: domainworkflows.RunPaused, CurrentStepID: "implement", Sessions: map[string]string{"implement": "thread-beta"}, StartedAt: base, UpdatedAt: base.Add(3 * time.Minute)},
+		{ID: "run_c", TaskID: "task_a", WorkflowID: definition.ID, Revision: 1, Status: domainworkflows.RunFailed, CurrentStepID: "implement", StartedAt: base, UpdatedAt: base.Add(time.Minute)},
+	}
+	for _, run := range runs {
+		if err := store.Repos.Workflows.SaveRun(ctx, run, definition); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	first, err := store.Repos.Workflows.ListRuns(ctx, domainworkflows.RunListQuery{TaskIDs: []string{"task_a", "task_b"}, Limit: 2})
+	if err != nil || len(first.Items) != 2 || first.Items[0].ID != "run_a" || first.Items[1].ID != "run_b" || first.Total != 3 || first.NextCursor == "" {
+		t.Fatalf("ListRuns(first) = %+v, %v", first, err)
+	}
+	second, err := store.Repos.Workflows.ListRuns(ctx, domainworkflows.RunListQuery{TaskIDs: []string{"task_a", "task_b"}, Cursor: first.NextCursor, Limit: 2})
+	if err != nil || len(second.Items) != 1 || second.Items[0].ID != "run_c" || second.Total != 3 || second.NextCursor != "" {
+		t.Fatalf("ListRuns(second) = %+v, %v", second, err)
+	}
+	paused, err := store.Repos.Workflows.ListRuns(ctx, domainworkflows.RunListQuery{TaskIDs: []string{"task_a", "task_b"}, Status: domainworkflows.RunPaused})
+	if err != nil || len(paused.Items) != 1 || paused.Items[0].ID != "run_b" {
+		t.Fatalf("ListRuns(paused) = %+v, %v", paused, err)
+	}
+	bySession, err := store.Repos.Workflows.ListRuns(ctx, domainworkflows.RunListQuery{TaskIDs: []string{"task_a", "task_b"}, Keyword: "ALPHA"})
+	if err != nil || len(bySession.Items) != 1 || bySession.Items[0].ID != "run_a" {
+		t.Fatalf("ListRuns(session) = %+v, %v", bySession, err)
+	}
+	byTitle, err := store.Repos.Workflows.ListRuns(ctx, domainworkflows.RunListQuery{TaskIDs: []string{"task_a", "task_b"}, TitleTaskIDs: []string{"task_b"}, Keyword: "matching title"})
+	if err != nil || len(byTitle.Items) != 1 || byTitle.Items[0].ID != "run_b" {
+		t.Fatalf("ListRuns(title) = %+v, %v", byTitle, err)
+	}
+	emptyScope, err := store.Repos.Workflows.ListRuns(ctx, domainworkflows.RunListQuery{TaskIDs: []string{}})
+	if err != nil || len(emptyScope.Items) != 0 || emptyScope.Total != 0 {
+		t.Fatalf("ListRuns(empty scope) = %+v, %v", emptyScope, err)
+	}
+	if _, err := store.Repos.Workflows.ListRuns(ctx, domainworkflows.RunListQuery{Cursor: "invalid"}); !errors.Is(err, repoworkflows.ErrInvalidRunCursor) {
+		t.Fatalf("ListRuns(invalid cursor) error = %v", err)
+	}
+	indexPath := filepath.Join(root, "runs", "index.json")
+	if err := os.WriteFile(indexPath, []byte("broken"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	rebuilt, err := store.Repos.Workflows.ListRuns(ctx, domainworkflows.RunListQuery{TaskIDs: []string{"task_a", "task_b"}, Limit: 2})
+	if err != nil || len(rebuilt.Items) != 2 || rebuilt.Items[0].ID != "run_a" {
+		t.Fatalf("ListRuns(rebuilt index) = %+v, %v", rebuilt, err)
+	}
+}
+
 func reviewLoopDefinition() domainworkflows.Definition {
 	return domainworkflows.Definition{
 		ID:          "review_loop",

@@ -68,12 +68,22 @@ export function ListRunEvents(runID, afterSeq) {
 }
 
 /**
+ * @param {localapp$0.ListRunsInput} input
+ * @returns {$CancellablePromise<localapp$0.RunListPage>}
+ */
+export function ListRuns(input) {
+    return $Call.ByID(527758150, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType5($result);
+    }));
+}
+
+/**
  * @param {string} taskID
  * @returns {$CancellablePromise<workflows$0.Run[]>}
  */
 export function ListRunsByTask(taskID) {
     return $Call.ByID(71078598, taskID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType6($result);
     }));
 }
 
@@ -83,7 +93,7 @@ export function ListRunsByTask(taskID) {
  */
 export function ListTasks(workspaceID) {
     return $Call.ByID(660765190, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType7($result);
     }));
 }
 
@@ -93,7 +103,7 @@ export function ListTasks(workspaceID) {
  */
 export function PreviewRun(taskID) {
     return $Call.ByID(2734983773, taskID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType8($result);
     }));
 }
 
@@ -125,6 +135,7 @@ const $$createType1 = tasks$0.Task.createFrom;
 const $$createType2 = localapp$0.RunDetail.createFrom;
 const $$createType3 = localapp$0.WorkflowEventView.createFrom;
 const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = $Create.Array($$createType0);
-const $$createType6 = $Create.Array($$createType1);
-const $$createType7 = localapp$0.RunStartPreview.createFrom;
+const $$createType5 = localapp$0.RunListPage.createFrom;
+const $$createType6 = $Create.Array($$createType0);
+const $$createType7 = $Create.Array($$createType1);
+const $$createType8 = localapp$0.RunStartPreview.createFrom;

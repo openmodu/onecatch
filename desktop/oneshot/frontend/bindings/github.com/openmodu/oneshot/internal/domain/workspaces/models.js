@@ -93,6 +93,20 @@ export class Workspace {
              */
             this["defaultSandbox"] = "";
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["pinned"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["hidden"] = undefined;
+        }
         if (!("createdAt" in $$source)) {
             /**
              * @member

@@ -349,6 +349,62 @@ export class DiagnosticsExportInput {
     }
 }
 
+export class ListRunsInput {
+    /**
+     * Creates a new ListRunsInput instance.
+     * @param {Partial<ListRunsInput>} [$$source = {}] - The source object to create the ListRunsInput.
+     */
+    constructor($$source = {}) {
+        if (!("workspaceId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["workspaceId"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["status"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["keyword"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["cursor"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["limit"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ListRunsInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ListRunsInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ListRunsInput(/** @type {Partial<ListRunsInput>} */($$parsedSource));
+    }
+}
+
 export class RunDetail {
     /**
      * Creates a new RunDetail instance.
@@ -461,6 +517,95 @@ export class RunDetail {
     }
 }
 
+export class RunListItem {
+    /**
+     * Creates a new RunListItem instance.
+     * @param {Partial<RunListItem>} [$$source = {}] - The source object to create the RunListItem.
+     */
+    constructor($$source = {}) {
+        if (!("run" in $$source)) {
+            /**
+             * @member
+             * @type {workflows$0.Run}
+             */
+            this["run"] = (new workflows$0.Run());
+        }
+        if (!("task" in $$source)) {
+            /**
+             * @member
+             * @type {tasks$0.Task}
+             */
+            this["task"] = (new tasks$0.Task());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RunListItem instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RunListItem}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType1;
+        const $$createField1_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("run" in $$parsedSource) {
+            $$parsedSource["run"] = $$createField0_0($$parsedSource["run"]);
+        }
+        if ("task" in $$parsedSource) {
+            $$parsedSource["task"] = $$createField1_0($$parsedSource["task"]);
+        }
+        return new RunListItem(/** @type {Partial<RunListItem>} */($$parsedSource));
+    }
+}
+
+export class RunListPage {
+    /**
+     * Creates a new RunListPage instance.
+     * @param {Partial<RunListPage>} [$$source = {}] - The source object to create the RunListPage.
+     */
+    constructor($$source = {}) {
+        if (!("items" in $$source)) {
+            /**
+             * @member
+             * @type {RunListItem[]}
+             */
+            this["items"] = [];
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["nextCursor"] = undefined;
+        }
+        if (!("total" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["total"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RunListPage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RunListPage}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType12;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("items" in $$parsedSource) {
+            $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
+        }
+        return new RunListPage(/** @type {Partial<RunListPage>} */($$parsedSource));
+    }
+}
+
 export class RunStartPreview {
     /**
      * Creates a new RunStartPreview instance.
@@ -568,7 +713,7 @@ export class RuntimeDraftInput {
      * @returns {RuntimeDraftInput}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType11;
+        const $$createField1_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("settings" in $$parsedSource) {
             $$parsedSource["settings"] = $$createField1_0($$parsedSource["settings"]);
@@ -775,7 +920,7 @@ export class StorageUsage {
      * @returns {StorageUsage}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType13;
+        const $$createField2_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("categories" in $$parsedSource) {
             $$parsedSource["categories"] = $$createField2_0($$parsedSource["categories"]);
@@ -814,8 +959,8 @@ export class WorkerStatus {
      * @returns {WorkerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType14;
-        const $$createField1_0 = $$createType15;
+        const $$createField0_0 = $$createType16;
+        const $$createField1_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worker" in $$parsedSource) {
             $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
@@ -921,7 +1066,7 @@ export class WorkspaceStatus {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType3;
-        const $$createField1_0 = $$createType16;
+        const $$createField1_0 = $$createType18;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -945,9 +1090,11 @@ const $$createType7 = WorkflowEventView.createFrom;
 const $$createType8 = $Create.Array($$createType7);
 const $$createType9 = RuntimeEventView.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = settings$0.RuntimeSettings.createFrom;
-const $$createType12 = StorageCategory.createFrom;
-const $$createType13 = $Create.Array($$createType12);
-const $$createType14 = worker$0.Info.createFrom;
-const $$createType15 = worker$0.Health.createFrom;
-const $$createType16 = workspaces$0.GitSnapshot.createFrom;
+const $$createType11 = RunListItem.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = settings$0.RuntimeSettings.createFrom;
+const $$createType14 = StorageCategory.createFrom;
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = worker$0.Info.createFrom;
+const $$createType17 = worker$0.Health.createFrom;
+const $$createType18 = workspaces$0.GitSnapshot.createFrom;
