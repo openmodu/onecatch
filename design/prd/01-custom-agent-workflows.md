@@ -130,7 +130,7 @@ implement/review --need_human--> $pause
 - 检测 Codex、Claude Code、Modu Code 的安装状态和版本/协议可用性。
 - 允许为 runtime 配置 binary path、默认 model 和环境变量白名单；Modu Code 还允许显式选择 Provider。
 - Modu Code 默认复用用户在终端中使用的 `modu_code` 配置，包括 `~/.modu/config.toml` 中的 Provider、模型和凭据；仅在用户显式填写环境变量白名单时额外继承对应变量。ACP 子进程提前失败时，不得用 `unexpected EOF` 等协议症状遮蔽真实原因。
-- Modu Code 发起 `session/request_permission` 时，Oneshot 必须返回 ACP 选项而不是中断 Session：read-only 拒绝需要审批的工具，workspace-write/full 单次允许，并把请求与决定记录为相邻 Tool Use/Tool Result 事件。
+- Modu Code 的 workspace-write/full 使用 `--no-approve` 非交互执行；read-only 保留工具审批并拒绝风险工具。若兼容版本仍发起 `session/request_permission`，Oneshot 必须返回 ACP 选项而不是中断 Session，并把请求与决定记录为相邻 Tool Use/Tool Result 事件。
 - Modu Code 通过 ACP JSON-RPC/LDJSON 接入，不使用可注入的 shell 命令模板；当前 CLI 不支持跨进程 session 恢复时，Oneshot 必须明确按无原生会话恢复能力运行，不得展示无效恢复命令。
 - runtime 不可用时不得静默换成另一个角色；应暂停并明确提示。
 - CLI 原始事件统一映射为消息、推理、工具、文件变化、用量、结果和错误。

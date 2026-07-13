@@ -323,10 +323,10 @@ Runtime 设置新增可选 `provider`，仅 `modu` 接受 `auto/openai/anthropic
 
 ### 11.2 Modu ACP 权限反向请求（Issue 01-015）
 
-当前 `modu_code --acp` 会在自身权限规则判定工具需要审批时发送 `session/request_permission` 反向 JSON-RPC。Runner 在等待 `session/prompt` 响应的同一个扫描循环中处理该请求，并使用相同 ID 写回 `{outcome:{optionId}}`；响应后继续读取原 prompt 的 message chunk 与最终结果。
+Runner 按 Sandbox 构造 Modu 参数：`workspace-write/full` 使用 `modu_code --acp --no-approve`，因为 Workflow 启动本身已经完成授权；`read-only` 只使用 `--acp`，保留 Modu 工具审批。若当前或兼容版本仍发送 `session/request_permission` 反向 JSON-RPC，Runner 在等待 `session/prompt` 响应的同一个扫描循环中处理该请求，并使用相同 ID 写回 `{outcome:{optionId}}`；响应后继续读取原 prompt 的 message chunk 与最终结果。
 
 - `read-only`：选择 `reject_once`，Modu 自身判定无需审批的只读工具仍可运行。
-- `workspace-write` / `full`：选择 `allow_once`，不使用 `allow_always`，确保每次风险工具调用都留下独立事件。
+- `workspace-write` / `full`：正常由 `--no-approve` 避免交互；若仍收到反向请求则选择 `allow_once` 兼容，不使用 `allow_always`。
 - 请求到达时追加 `tool_use`，响应后追加 `tool_result`，二者保留原始参数/响应供本地诊断。
 - 未知反向方法、缺少匹配选项或非法参数继续作为明确 protocol error 失败，不做宽松兜底。
 

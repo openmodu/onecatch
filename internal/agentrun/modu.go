@@ -66,9 +66,11 @@ func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 	if sink == nil {
 		sink = func(Event) {}
 	}
-	// Current Modu Code exposes ACP explicitly. The legacy modu-code binary
-	// ignores extra arguments, so --acp is backward compatible with both.
-	cmd := exec.CommandContext(ctx, r.binary, "--acp")
+	// Current Modu Code exposes ACP explicitly. Writable workflows are already
+	// authorized by Oneshot, so run them non-interactively; read-only workflows
+	// keep approval enabled and reject risky reverse requests below. The legacy
+	// modu-code binary ignores extra arguments, so these remain compatible.
+	cmd := exec.CommandContext(ctx, r.binary, moduCommandArgs(req.Sandbox)...)
 	cmd.Dir = req.Workspace
 	cmd.Env = moduEnvironment(req.Environment, req.Model)
 	if req.InterruptGrace > 0 {
@@ -186,6 +188,14 @@ func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 		return result, err
 	}
 	return result, nil
+}
+
+func moduCommandArgs(sandbox Sandbox) []string {
+	args := []string{"--acp"}
+	if sandbox != SandboxReadOnly {
+		args = append(args, "--no-approve")
+	}
+	return args
 }
 
 type acpReverseHandler func(acpEnvelope) error

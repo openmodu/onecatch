@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 )
@@ -210,6 +211,26 @@ func TestModuRunnerPrefersCurrentBinary(t *testing.T) {
 	t.Setenv("PATH", directory)
 	if got := NewModuRunner("").binary; got != filepath.Join(directory, moduBinaryDefault) {
 		t.Fatalf("default binary = %q", got)
+	}
+}
+
+func TestModuCommandArgsFollowSandbox(t *testing.T) {
+	tests := []struct {
+		name    string
+		sandbox Sandbox
+		want    string
+	}{
+		{name: "default writable", want: "--acp --no-approve"},
+		{name: "workspace write", sandbox: SandboxWorkspaceWrite, want: "--acp --no-approve"},
+		{name: "full", sandbox: SandboxFull, want: "--acp --no-approve"},
+		{name: "read only", sandbox: SandboxReadOnly, want: "--acp"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := strings.Join(moduCommandArgs(test.sandbox), " "); got != test.want {
+				t.Fatalf("args = %q, want %q", got, test.want)
+			}
+		})
 	}
 }
 
