@@ -10,6 +10,7 @@ import {
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
 import { buildRunConversation } from "./runConversation.js";
+import { markResumeAccepted, resumeControlState } from "./runControls.js";
 import { runtimeSessionEntries } from "./sessionCommands.js";
 import { nextWorkflowItemID } from "./workflowIds.js";
 import { buildRunRows, mergeRunItems, sortWorkspaces, virtualRunWindow, workspaceResults } from "./listNavigation.js";
@@ -187,6 +188,7 @@ function App() {
   const [workspaceForm, setWorkspaceForm] = useState({ path: "", name: "", defaultSandbox: "" });
   const [taskForm, setTaskForm] = useState({ title: "", prompt: "", workflowId: "" });
   const [resumeInstruction, setResumeInstruction] = useState("");
+  const [resumePendingRunID, setResumePendingRunID] = useState("");
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState("");
   const [workers, setWorkers] = useState([]);
@@ -198,6 +200,8 @@ function App() {
   const appDialogResolve = useRef(null);
   const runListLoadVersion = useRef(0);
   const runLoadVersion = useRef(0);
+  const runActionPending = useRef("");
+  const selectedRunIDRef = useRef("");
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID);
 
@@ -235,6 +239,7 @@ function App() {
     setSelectedRunID("");
     setRunDetail(null);
     setResumeInstruction("");
+    setResumePendingRunID("");
     setWorkspaceQuery("");
     setWorkspaceSearchOpen(false);
     if (mode === "wails") WorkspaceBinding.OpenWorkspace(nextWorkspaceID).then(() => WorkspaceBinding.ListWorkspaces()).then((items) => setWorkspaces(items || [])).catch((error) => notify("error", errorMessage(error)));
@@ -340,6 +345,15 @@ function App() {
   }, [mode, notify]);
 
   useEffect(() => { if (selectedRunID) loadRun(selectedRunID, true); }, [loadRun, selectedRunID]);
+
+  useEffect(() => { selectedRunIDRef.current = selectedRunID; }, [selectedRunID]);
+
+  useEffect(() => {
+    if (!resumePendingRunID) return;
+    if (selectedRunID !== resumePendingRunID || runDetail?.run?.id !== resumePendingRunID || runDetail.run.status !== "paused" || !runDetail.active) {
+      setResumePendingRunID("");
+    }
+  }, [resumePendingRunID, runDetail?.active, runDetail?.run?.id, runDetail?.run?.status, selectedRunID]);
 
   useEffect(() => {
     if (!selectedRunID || mode !== "wails") return undefined;
@@ -460,8 +474,14 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
+  const composerSubmitKey = (event) => {
+    if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && busy !== "run" && selectedWorkspace) createTaskAndRun();
+  };
+
   const runAction = async (action) => {
-    if (!selectedRunID) return;
+    if (!selectedRunID || runActionPending.current) return;
+    const runID = selectedRunID;
+    runActionPending.current = action;
     setBusy(action);
     try {
       if (mode === "demo") {
@@ -469,13 +489,25 @@ function App() {
         setRunDetail((detail) => ({ ...detail, active: action === "resume", run: { ...detail.run, status: nextStatus, pauseReason: action === "interrupt" ? "interrupted" : "" } }));
         setRunItems((items) => items.map((item) => item.id === selectedRunID ? { ...item, status: nextStatus } : item));
       } else {
-        if (action === "interrupt") await TaskRunBinding.InterruptRun(selectedRunID);
-        if (action === "resume") await TaskRunBinding.ResumeRun(selectedRunID, resumeInstruction);
-        if (action === "cancel") await TaskRunBinding.CancelRun(selectedRunID);
-        window.setTimeout(() => loadRun(selectedRunID, true), 250);
+        if (action === "interrupt") await TaskRunBinding.InterruptRun(runID);
+        if (action === "resume") {
+          await TaskRunBinding.ResumeRun(runID, resumeInstruction);
+          setResumePendingRunID(runID);
+          setRunDetail((detail) => markResumeAccepted(detail, runID));
+        }
+        if (action === "cancel") await TaskRunBinding.CancelRun(runID);
+        window.setTimeout(() => {
+          if (selectedRunIDRef.current === runID) loadRun(runID, true);
+        }, 250);
       }
       if (action === "resume") setResumeInstruction("");
-    } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
+    } catch (error) {
+      if (action === "resume") setResumePendingRunID("");
+      notify("error", errorMessage(error));
+    } finally {
+      runActionPending.current = "";
+      setBusy("");
+    }
   };
 
   const openEditor = (definition) => { const next = copy(definition || loopTemplate); if (!workflows.some((item) => item.id === next.id)) next.policy = { maxTransitions: settings.execution.maxTransitions, maxConsecutiveFailures: settings.execution.maxConsecutiveFailures, stepTimeoutSeconds: settings.execution.stepTimeoutSeconds }; setEditor(next); setValidation([]); };
@@ -557,19 +589,19 @@ function App() {
 
       <main className="main-area">
         <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><span className={`connection ${mode}`}>{mode === "wails" ? "local" : "preview"}</span></div>
-        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} /> : view === "tasks" ? <div className="workspace-grid">
+        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} /> : view === "tasks" ? <div className={`workspace-grid${runDetail ? "" : " no-inspector"}`}>
           <section className="content-column tasks-column">
             <div className="composer">
               <Kicker>new run</Kicker>
-              <input className="title-input" placeholder="这次要完成什么？" value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} />
-              <textarea placeholder="描述目标、约束和验收方式。每个步骤会继承这段任务上下文。" value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} />
+              <input className="title-input" placeholder="这次要完成什么？" value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} />
+              <textarea placeholder="描述目标、约束和验收方式。每个步骤会继承这段任务上下文。" value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} />
               <div className="composer-footer"><label><span>workflow</span><TUISelect ariaLabel="Workflow" value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><Action tone="primary" disabled={busy === "run" || !selectedWorkspace} onClick={createTaskAndRun}>{busy === "run" ? "starting…" : "start run"}</Action></div>
             </div>
             <div className="run-history-head"><div className="section-title"><div><h2>最近运行</h2></div><span>{runTotal} runs</span></div><div className="run-query-bar"><label><span>/</span><input aria-label="搜索运行记录" value={runSearchDraft} onChange={(event) => setRunSearchDraft(event.target.value)} placeholder="搜索标题 / Run / Thread" />{runSearchDraft && <button type="button" aria-label="清空运行搜索" onClick={() => setRunSearchDraft("")}>[ x ]</button>}</label><TUISelect ariaLabel="运行状态" value={runStatus} onChange={setRunStatus} options={runStatusOptions} /></div></div>
             <VirtualRunList items={allRuns} selectedRunID={selectedRunID} workflows={workflows} loading={runLoading} hasMore={Boolean(runNextCursor)} onLoadMore={() => loadRunList({ cursor: runNextCursor })} onSelect={(item) => { setSelectedRunID(item.id); loadRun(item.id); }} emptyFiltered={Boolean(runKeyword || runStatus)} />
-            <div className="run-list-footer">{runLoading ? "正在读取…" : runNextCursor ? `${allRuns.length} / ${runTotal} · 继续滚动加载` : runTotal ? `已显示 ${allRuns.length} 条` : ""}</div>
+            {(runLoading || runNextCursor) && <div className="run-list-footer">{runLoading ? "正在读取…" : `${allRuns.length} / ${runTotal} · 继续滚动加载`}</div>}
           </section>
-          <aside className="inspector">{runDetail ? <RunInspector detail={runDetail} busy={busy} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} notify={notify} /> : <div className="inspector-empty"><h3>{allRuns.length ? "选择一个 Run" : "暂无运行详情"}</h3><p>{allRuns.length ? "这里会显示当前步骤、Agent 输出、回边和人工介入操作。" : "当前工作目录还没有 Run，右侧不会保留其他工作目录的数据。"}</p></div>}</aside>
+          {runDetail && <aside className="inspector"><RunInspector detail={runDetail} busy={busy} resumePending={resumePendingRunID === runDetail.run.id} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} notify={notify} /></aside>}
         </div> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
     </div>
@@ -624,13 +656,14 @@ function VirtualRunList({ items, selectedRunID, workflows, loading, hasMore, onL
   </div></div>;
 }
 
-function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, runAction, notify }) {
+function RunInspector({ detail, busy, resumePending, resumeInstruction, setResumeInstruction, runAction, notify }) {
   const { run, workflow, stepRuns = [], runtimeEvents = [] } = detail;
   const dagNodes = run.nodes || {};
   const currentNodeID = workflow.mode === "dag" ? Object.values(dagNodes).find((node) => node.status === "running" || node.status === "paused")?.stepId : run.currentStepId;
   const currentStep = workflow.steps?.find((step) => step.id === currentNodeID) || workflow.steps?.[0];
   const conversation = buildRunConversation(detail);
   const sessions = runtimeSessionEntries(detail);
+  const resumeControl = resumeControlState(detail, busy, resumePending);
   const visiblePauseReason = run.pauseReason && run.pauseReason !== "workflow_signal" ? run.pauseReason : "";
   const copySessionValue = async (value, label) => {
     try {
@@ -653,31 +686,41 @@ function RunInspector({ detail, busy, resumeInstruction, setResumeInstruction, r
     <ConversationTimeline items={conversation} active={detail.active} />
     {["running", "paused"].includes(run.status) && <div className="run-controls">
       {run.status === "running" && <Action tone="danger" disabled={busy === "interrupt"} onClick={() => runAction("interrupt")}>打断并暂停</Action>}
-      {run.status === "paused" && <><textarea value={resumeInstruction} onChange={(event) => setResumeInstruction(event.target.value)} placeholder="补充指令（可选），恢复后注入当前步骤…" /><div><Action tone="danger" disabled={busy === "cancel"} onClick={() => runAction("cancel")}>终止</Action><Action tone="primary" disabled={busy === "resume"} onClick={() => runAction("resume")}>恢复运行</Action></div></>}
+      {run.status === "paused" && <><textarea value={resumeInstruction} disabled={resumeControl.disabled} onChange={(event) => setResumeInstruction(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !resumeControl.disabled) runAction("resume"); }} placeholder="补充指令（可选），恢复后注入当前步骤…" /><div><Action tone="danger" disabled={busy === "cancel" || detail.active} onClick={() => runAction("cancel")}>终止</Action><Action tone="primary" disabled={resumeControl.disabled} aria-live="polite" onClick={() => runAction("resume")}>{resumeControl.label}</Action></div></>}
     </div>}
   </>;
 }
 
 function ConversationTimeline({ items, active }) {
   const rounds = items.filter((item) => item.type === "round");
+  // Consecutive events often share the same second; repeating the identical
+  // timestamp on every row is noise, so only the first of a same-second run
+  // shows it.
+  let lastTimeLabel = "";
+  const timeLabel = (at) => {
+    const label = formatTime(at);
+    if (!label || label === lastTimeLabel) return "";
+    lastTimeLabel = label;
+    return label;
+  };
   return <div className="conversation-section">
     <div className="conversation-list">
       {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
-        <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label="用户消息" /></span><span className="conversation-message-meta"><time>{formatTime(item.at)}</time></span></div>
+        <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label="用户消息" /></span><span className="conversation-message-meta"><time>{timeLabel(item.at)}</time></span></div>
         <p>{item.text}</p>
       </div> : <article className="conversation-round" key={item.id}>
-        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={`message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label="Agent 消息" /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">第 {item.round} 轮</span><time>{formatTime(entry.at || item.finishedAt || item.startedAt)}</time></span></div><p>{entry.text}</p></div> : <ToolTimelineItem key={`tool-${index}`} entry={entry} running={active && item === rounds[rounds.length - 1] && index === item.items.length - 1 && entry.kind === "tool_use"} failed={item.status === "failed"} />)}</div>
+        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={`message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label="Agent 消息" /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">第 {item.round} 轮</span><time>{timeLabel(entry.at || item.finishedAt || item.startedAt)}</time></span></div><p>{entry.text}</p></div> : <ToolTimelineItem key={`tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={active && item === rounds[rounds.length - 1] && index === item.items.length - 1 && entry.kind === "tool_use"} failed={item.status === "failed"} />)}</div>
       </article>)}
       {!items.length && <p className="muted-copy">Agent 消息会按执行轮次显示在这里。</p>}
     </div>
   </div>;
 }
 
-function ToolTimelineItem({ entry, running, failed }) {
+function ToolTimelineItem({ entry, running, failed, time }) {
   const labels = { tool_use: "TOOL USE", tool_result: "RESULT", file_change: "FILE CHANGE", reasoning: "PROCESS" };
   const state = failed ? "失败" : running ? "执行中" : entry.kind === "reasoning" ? "过程" : "完成";
   return <details className={`conversation-tool kind-${entry.kind} ${running ? "running" : ""} ${failed ? "failed" : ""}`}>
-    <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-caret"><CaretRight className="closed" weight="bold" /><CaretDown className="opened" weight="bold" /></span><strong title={entry.text}>{entry.title}</strong><span className="conversation-tool-state">{running && <span className="pulse" />}{state}</span><time>{formatTime(entry.at)}</time></span></summary>
+    <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-caret"><CaretRight className="closed" weight="bold" /><CaretDown className="opened" weight="bold" /></span><strong title={entry.text}>{entry.title}</strong><span className="conversation-tool-state">{running && <span className="pulse" />}{state}</span><time>{time ?? formatTime(entry.at)}</time></span></summary>
     <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? "PATH" : entry.kind === "reasoning" ? "PROCESS" : "COMMAND"}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
   </details>;
 }
@@ -714,14 +757,14 @@ function WorkflowLibrary({ workflows, runtimes, openEditor }) {
     return `${(workflow.steps || []).map((step) => step.name).join(" → ")}${workflow.steps?.length > 1 ? " ↺" : " → $done"}`;
   };
   return <div className="library-page">
-    <div className="library-hero"><div><Kicker>loops &amp; parallel dag</Kicker><h2>把你的工作方式变成 Workflow</h2></div><div className="hero-actions"><Action onClick={() => openEditor(loopTemplate)}>+ loop</Action><Action tone="primary" onClick={() => openEditor(dagTemplate)}>+ 并行 dag</Action></div></div>
+    <div className="library-hero"><div><Kicker>loops &amp; parallel dag</Kicker><h2>Workflow</h2></div><div className="hero-actions"><Action onClick={() => openEditor(loopTemplate)}>+ loop</Action><Action tone="primary" onClick={() => openEditor(dagTemplate)}>+ 并行 dag</Action></div></div>
     <div className="workflow-grid">{workflows.map((workflow) => <button className="workflow-card" key={workflow.id} onClick={() => openEditor(workflow)}><ModeBadge mode={workflow.mode || "serial"} /><strong>{workflow.name}</strong><span className="workflow-path">{path(workflow)}</span><small>{workflow.steps?.length || 0} {workflow.mode === "dag" ? "nodes · all join" : `${workflow.steps?.length === 1 ? "step" : "steps"} · ${workflow.policy?.maxTransitions || 20} max`}</small><b>[ edit ]</b></button>)}</div>
     <div className="runtime-callout">Workflow 不会自动替换缺失的 runtime，以免破坏角色语义。{runtimes.some((runtime) => !runtime.available) && <strong>存在缺失 Runtime</strong>}</div>
   </div>;
 }
 
 function WorkerPage({ workers, health, checkWorker, deleteWorker, openWorker }) {
-  return <div className="library-page worker-page"><div className="library-hero"><div><span className="kicker">TRUSTED LAN / VPN</span><h2>把 DAG 节点派到另一台机器</h2><p>远端机器需要相同 Workspace ID 的本地 clone。Oneshot 只传 prompt、outcome 和事件，不同步项目文件。</p></div><Action tone="primary" onClick={() => openWorker(null)}>注册 Worker</Action></div><div className="worker-grid">{workers.map((worker) => <article className="worker-card panel" key={worker.id}><div className="worker-card-head"><div className="worker-machine"><span><strong>{worker.name}</strong><small>{worker.id}</small></span></div><span className={`status-pill ${worker.enabled ? "completed" : "cancelled"}`}>{worker.enabled ? "Enabled" : "Disabled"}</span></div><code>{worker.baseUrl}</code><div className="worker-health">{health[worker.id]?.checking ? "正在检查…" : health[worker.id]?.ok ? <>{Object.entries(health[worker.id].runtimes || {}).map(([runtime, ok]) => <span key={runtime} className={ok ? "ok" : "missing"}><i />{runtime}</span>)}</> : health[worker.id]?.error || "尚未检查连接"}</div><div className="worker-actions"><button className="secondary-button compact" onClick={() => checkWorker(worker)}>健康检查</button><button className="secondary-button compact" onClick={() => openWorker(worker)}>编辑</button><button className="text-button danger" onClick={() => deleteWorker(worker.id)}>删除</button></div></article>)}{!workers.length && <div className="empty-state"><h3>还没有远端 Worker</h3><p>先在另一台机器启动 oneshot-worker，再在这里注册地址与共享 token。</p></div>}</div><div className="worker-command panel"><span className="kicker">REMOTE COMMAND</span><code>ONESHOT_WORKER_TOKEN=... oneshot-worker --listen 0.0.0.0:9231 --id mac-mini --workspace workspace-id=/path/to/clone</code><p>建议通过 Tailscale / WireGuard 地址连接，不要把首版 HTTP worker 直接暴露到公网。</p></div></div>;
+  return <div className="library-page worker-page"><div className="library-hero"><div><span className="kicker">TRUSTED LAN / VPN</span><h2>把 DAG 节点派到另一台机器</h2><p>远端机器需要相同 Workspace ID 的本地 clone。Oneshot 只传 prompt、outcome 和事件，不同步项目文件。</p></div><Action tone="primary" onClick={() => openWorker(null)}>注册 Worker</Action></div><div className="worker-grid">{workers.map((worker) => <article className="worker-card panel" key={worker.id}><div className="worker-card-head"><div className="worker-machine"><span><strong>{worker.name}</strong><small>{worker.id}</small></span></div><StatusBadge status={worker.enabled ? "completed" : "cancelled"} className="status-pill">{worker.enabled ? "Enabled" : "Disabled"}</StatusBadge></div><code>{worker.baseUrl}</code><div className="worker-health">{health[worker.id]?.checking ? "正在检查…" : health[worker.id]?.ok ? <>{Object.entries(health[worker.id].runtimes || {}).map(([runtime, ok]) => <span key={runtime} className={ok ? "ok" : "missing"}><i />{runtime}</span>)}</> : health[worker.id]?.error || "尚未检查连接"}</div><div className="worker-actions"><Action onClick={() => checkWorker(worker)}>健康检查</Action><Action onClick={() => openWorker(worker)}>编辑</Action><Action tone="danger" onClick={() => deleteWorker(worker.id)}>删除</Action></div></article>)}{!workers.length && <div className="empty-state"><h3>还没有远端 Worker</h3><p>先在另一台机器启动 oneshot-worker，再在这里注册地址与共享 token。</p></div>}</div><div className="worker-command panel"><span className="kicker">REMOTE COMMAND</span><code>ONESHOT_WORKER_TOKEN=... oneshot-worker --listen 0.0.0.0:9231 --id mac-mini --workspace workspace-id=/path/to/clone</code><p>建议通过 Tailscale / WireGuard 地址连接，不要把首版 HTTP worker 直接暴露到公网。</p></div></div>;
 }
 
 function Modal({ title, subtitle, onClose, children, wide = false }) {
@@ -799,7 +842,7 @@ function DAGWorkflowEditor({ editor, setEditor, validation, validateEditor, save
   };
   const updateSignal = (oldSignal, signal, target) => setStep("transitions", Object.fromEntries(Object.entries(selected.transitions || {}).filter(([key]) => key !== oldSignal).concat([[signal, target]])));
 
-  return <Modal wide title="并行 DAG 画布" subtitle="拖动节点；点击节点右上连接点，再点击目标节点连接点创建依赖" onClose={onClose}><div className="dag-editor-shell"><div className="dag-toolbar"><div className="dag-meta"><input value={editor.id} onChange={(event) => setEditor({ ...editor, id: event.target.value })} /><input value={editor.name} onChange={(event) => setEditor({ ...editor, name: event.target.value })} /></div><div className="dag-actions"><span className="mode-chip dag">DAG · ALL JOIN</span><Action onClick={autoLayout}>自动布局</Action><Action tone="primary" onClick={addNode}>节点</Action><Action tone="primary" disabled={busy === "workflow"} onClick={saveWorkflow}>{busy === "workflow" ? "保存中" : "保存 DAG"}</Action></div></div><div className="dag-workspace"><div className="dag-canvas" ref={canvas} onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}><svg className="dag-edges" viewBox="0 0 900 560" preserveAspectRatio="none">{editor.steps.flatMap((step) => (step.dependsOn || []).map((source) => { const from = positions[source] || { x: 30, y: 30 }; const to = positions[step.id] || { x: 400, y: 200 }; const x1 = from.x + 190, y1 = from.y + 48, x2 = to.x, y2 = to.y + 48; return <g key={`${source}-${step.id}`} className="dag-edge" onClick={() => deleteEdge(source, step.id)}><path d={`M ${x1} ${y1} C ${x1 + 70} ${y1}, ${x2 - 70} ${y2}, ${x2} ${y2}`} /><text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 7}>×</text></g>; }))}</svg>{editor.steps.map((step) => { const point = positions[step.id] || { x: 50, y: 50 }; return <div key={step.id} className={`dag-node-card ${selectedID === step.id ? "selected" : ""} ${connectFrom === step.id ? "connecting" : ""}`} style={{ left: point.x, top: point.y }} onClick={() => setSelectedID(step.id)} onPointerDown={(event) => { if (event.target.closest("button")) return; const rect = event.currentTarget.getBoundingClientRect(); drag.current = { id: step.id, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => moveNode(event, step.id)}><button className="dag-port input" title="连接到这里" onClick={(event) => { event.stopPropagation(); connect(step.id); }} /><div className="dag-node-head"><span className={`runtime-badge ${step.runtime}`}>{step.runtime}</span><small>{step.workerId || "local"}</small></div><strong>{step.name}</strong><p>{(step.dependsOn || []).length ? `等待 ${(step.dependsOn || []).length} 个依赖` : "Root · 可并行"}</p><button className="dag-port output" title="从这里连接" onClick={(event) => { event.stopPropagation(); connect(step.id); }} /></div>; })}<div className="canvas-hint">{connectFrom ? `正在从 ${connectFrom} 连接，点击目标节点连接点` : "拖动节点调整布局 · 点击边上的 × 删除依赖"}</div></div><aside className="dag-inspector">{selected ? <><div className="dag-inspector-title"><div><span className="kicker">NODE INSPECTOR</span><h3>{selected.name}</h3></div><Action className="dag-delete-node" tone="danger" disabled={editor.steps.length <= 1} onClick={deleteNode}>删除节点</Action></div><label>Node ID<input value={selected.id} onChange={(event) => { const next = event.target.value; renameStep(next); setSelectedID(next); }} /></label><label>名称<input value={selected.name} onChange={(event) => setStep("name", event.target.value)} /></label><div className="two-fields"><label>Runtime<TUISelect ariaLabel="Runtime" value={selected.runtime} onChange={(runtime) => setStep("runtime", runtime)} options={runtimes.map((runtime) => ({ value: runtime.id, label: runtime.name }))} /></label><label>Worker<TUISelect ariaLabel="Worker" value={selected.workerId || "local"} onChange={(workerId) => setStep("workerId", workerId)} options={workerOptions.map((worker) => ({ value: worker.id, label: worker.name }))} /></label></div><label>Sandbox<TUISelect ariaLabel="Sandbox" value={selected.sandbox || "read-only"} onChange={(sandbox) => setStep("sandbox", sandbox)} options={[{ value: "read-only", label: "Read only" }, { value: "workspace-write", label: "Workspace write" }, { value: "full", label: "Full access" }]} /></label><label>角色提示<textarea value={selected.rolePrompt} onChange={(event) => setStep("rolePrompt", event.target.value)} /></label><label>节点指令<textarea value={selected.instruction} onChange={(event) => setStep("instruction", event.target.value)} /></label><div className="transition-editor"><span>终点 Signals</span>{Object.entries(selected.transitions || {}).map(([signal, target]) => <div className="transition-row" key={signal}><input value={signal} onChange={(event) => updateSignal(signal, event.target.value, target)} /><span>→</span><TUISelect ariaLabel={`${signal} target`} value={target} onChange={(nextTarget) => updateSignal(signal, signal, nextTarget)} options={[{ value: "$done", label: "$done" }, { value: "$pause", label: "$pause" }, { value: "$fail", label: "$fail" }]} /></div>)}</div></> : null}</aside></div><div className={`dag-validation ${validation.length ? "has-errors" : ""}`}><button className="text-button" onClick={validateEditor}>校验 DAG</button>{validation.length ? validation.map((issue) => <span key={`${issue.path}-${issue.code}`}><code>{issue.path}</code>{issue.message}</span>) : <span>保存前会检查环、未知依赖和并行写冲突。</span>}</div></div></Modal>;
+  return <Modal wide title="并行 DAG 画布" subtitle="拖动节点；点击节点右上连接点，再点击目标节点连接点创建依赖" onClose={onClose}><div className="dag-editor-shell"><div className="dag-toolbar"><div className="dag-meta"><input value={editor.id} onChange={(event) => setEditor({ ...editor, id: event.target.value })} /><input value={editor.name} onChange={(event) => setEditor({ ...editor, name: event.target.value })} /></div><div className="dag-actions"><span className="mode-chip dag">DAG · ALL JOIN</span><Action onClick={autoLayout}>自动布局</Action><Action tone="primary" onClick={addNode}>节点</Action><Action tone="primary" disabled={busy === "workflow"} onClick={saveWorkflow}>{busy === "workflow" ? "保存中" : "保存 DAG"}</Action></div></div><div className="dag-workspace"><div className="dag-canvas" ref={canvas} onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}><svg className="dag-edges" viewBox="0 0 900 560" preserveAspectRatio="none">{editor.steps.flatMap((step) => (step.dependsOn || []).map((source) => { const from = positions[source] || { x: 30, y: 30 }; const to = positions[step.id] || { x: 400, y: 200 }; const x1 = from.x + 190, y1 = from.y + 48, x2 = to.x, y2 = to.y + 48; return <g key={`${source}-${step.id}`} className="dag-edge" onClick={() => deleteEdge(source, step.id)}><path d={`M ${x1} ${y1} C ${x1 + 70} ${y1}, ${x2 - 70} ${y2}, ${x2} ${y2}`} /><text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 7}>×</text></g>; }))}</svg>{editor.steps.map((step) => { const point = positions[step.id] || { x: 50, y: 50 }; return <div key={step.id} className={`dag-node-card ${selectedID === step.id ? "selected" : ""} ${connectFrom === step.id ? "connecting" : ""}`} style={{ left: point.x, top: point.y }} onClick={() => setSelectedID(step.id)} onPointerDown={(event) => { if (event.target.closest("button")) return; const rect = event.currentTarget.getBoundingClientRect(); drag.current = { id: step.id, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => moveNode(event, step.id)}><button className="dag-port input" title="连接到这里" aria-label={`连接到 ${step.name}`} onClick={(event) => { event.stopPropagation(); connect(step.id); }} /><div className="dag-node-head"><span className={`runtime-badge ${step.runtime}`}>{step.runtime}</span><small>{step.workerId || "local"}</small></div><strong>{step.name}</strong><p>{(step.dependsOn || []).length ? `等待 ${(step.dependsOn || []).length} 个依赖` : "Root · 可并行"}</p><button className="dag-port output" title="从这里连接" aria-label={`从 ${step.name} 连接`} onClick={(event) => { event.stopPropagation(); connect(step.id); }} /></div>; })}<div className="canvas-hint">{connectFrom ? `正在从 ${connectFrom} 连接，点击目标节点连接点` : "拖动节点调整布局 · 点击边上的 × 删除依赖"}</div></div><aside className="dag-inspector">{selected ? <><div className="dag-inspector-title"><div><span className="kicker">NODE INSPECTOR</span><h3>{selected.name}</h3></div><Action className="dag-delete-node" tone="danger" disabled={editor.steps.length <= 1} onClick={deleteNode}>删除节点</Action></div><label>Node ID<input value={selected.id} onChange={(event) => { const next = event.target.value; renameStep(next); setSelectedID(next); }} /></label><label>名称<input value={selected.name} onChange={(event) => setStep("name", event.target.value)} /></label><div className="two-fields"><label>Runtime<TUISelect ariaLabel="Runtime" value={selected.runtime} onChange={(runtime) => setStep("runtime", runtime)} options={runtimes.map((runtime) => ({ value: runtime.id, label: runtime.name }))} /></label><label>Worker<TUISelect ariaLabel="Worker" value={selected.workerId || "local"} onChange={(workerId) => setStep("workerId", workerId)} options={workerOptions.map((worker) => ({ value: worker.id, label: worker.name }))} /></label></div><label>Sandbox<TUISelect ariaLabel="Sandbox" value={selected.sandbox || "read-only"} onChange={(sandbox) => setStep("sandbox", sandbox)} options={[{ value: "read-only", label: "Read only" }, { value: "workspace-write", label: "Workspace write" }, { value: "full", label: "Full access" }]} /></label><label>角色提示<textarea value={selected.rolePrompt} onChange={(event) => setStep("rolePrompt", event.target.value)} /></label><label>节点指令<textarea value={selected.instruction} onChange={(event) => setStep("instruction", event.target.value)} /></label><div className="transition-editor"><span>终点 Signals</span>{Object.entries(selected.transitions || {}).map(([signal, target]) => <div className="transition-row" key={signal}><input value={signal} onChange={(event) => updateSignal(signal, event.target.value, target)} /><span>→</span><TUISelect ariaLabel={`${signal} target`} value={target} onChange={(nextTarget) => updateSignal(signal, signal, nextTarget)} options={[{ value: "$done", label: "$done" }, { value: "$pause", label: "$pause" }, { value: "$fail", label: "$fail" }]} /></div>)}</div></> : null}</aside></div><div className={`dag-validation ${validation.length ? "has-errors" : ""}`}><button className="text-button" onClick={validateEditor}>校验 DAG</button>{validation.length ? validation.map((issue) => <span key={`${issue.path}-${issue.code}`}><code>{issue.path}</code>{issue.message}</span>) : <span>保存前会检查环、未知依赖和并行写冲突。</span>}</div></div></Modal>;
 }
 
 export default App;

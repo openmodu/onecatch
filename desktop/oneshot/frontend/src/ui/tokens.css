@@ -249,6 +249,7 @@
 .ui-toggle-row__state { color: var(--acp-text-soft); font: var(--ui-weight-bold) var(--ui-font-11)/1 var(--ui-font-mono); }
 .ui-toggle-row--checked .ui-toggle-row__state { color: var(--acp-good); }
 .ui-toggle-row--danger strong, .ui-toggle-row--danger.ui-toggle-row--checked .ui-toggle-row__state { color: var(--acp-danger); }
+.ui-toggle-row:hover:not(:disabled) { background: color-mix(in oklab, var(--acp-text) 4%, transparent); }
 .ui-toggle-row:disabled { opacity: .48; cursor: not-allowed; }
 
 .ui-toolbar {

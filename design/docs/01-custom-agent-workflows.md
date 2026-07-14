@@ -303,6 +303,7 @@ Bindings 调用本地 application service，不通过 HTTP loopback。所有入�
 - Conversation message header 为左右布局：左侧仅保留圆点与 runtime，右侧固定为轮次元数据和贴近内容边缘的 55px 时间列。Agent 的 `第 N 轮` 直接使用 StepRun 在 timeline 中的 `round`，同一 StepRun 内多条 message 共享轮次；用户消息不虚构轮次。初始 task message 的时间依次读取 task.createdAt、run.startedAt、task.updatedAt、run.updatedAt。
 - Tool caret 位于 summary 首列，闭合显示 `CaretRight`、展开显示 `CaretDown`；summary 列为 `var(--ui-event-marker-size) / minmax(0, 1fr) / 45px / 55px`。圆点和 caret 共用 9px marker 尺寸与正文前景 token，因此左边缘、中心线和主题对比保持一致；所有时间在内容区右边缘对齐。
 - Workspace 切换是任务列表与 Inspector 的一致性边界。前端在选择新 Workspace 时立即清空 `tasks`、`runs`、`selectedRunID`、`runDetail` 和未提交的恢复指令，避免旧 Run 详情短暂或持续串入新目录；Task/Run 异步加载各使用单调递增的请求版本，晚到的旧 Workspace 响应必须丢弃。新运行列表落地后通过 `runPairsContain` 再校验已选 Run，只有仍属于当前列表时才允许保留详情。
+- Run 恢复保持 application service 的异步 dispatch 语义。前端收到 `ResumeRun` 已受理后，将匹配的 Inspector 乐观标记为 active，并用 Run ID 记录 pending resume；按钮显示“恢复中”且保持禁用，active 轮询负责确认持久化快照从 paused 推进。Run 仍在中断收尾时显示“等待停止”，同样不允许提交恢复。pending 在 Run 离开 paused、active 结束、选择发生变化或请求报错时清理；运行控制使用同步 ref 屏蔽重绘前双击，延迟刷新必须再次校验当前 selected Run ID，不能把旧 Inspector 带回当前 Workspace。
 
 ### 11.1 Modu Code ACP Runtime（Issue 01-009）
 
