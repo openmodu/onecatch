@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
 	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
@@ -24,6 +25,7 @@ type TasksRepo interface {
 	SaveTask(context.Context, domaintasks.Task) error
 	GetTask(context.Context, string) (domaintasks.Task, error)
 	ListTasks(context.Context, string) ([]domaintasks.Task, error)
+	DeleteTask(context.Context, string) error
 }
 
 type tasksImpl struct {
@@ -143,6 +145,9 @@ func (r *tasksImpl) ListTasks(ctx context.Context, workspaceID string) ([]domain
 			return nil, fmt.Errorf("read task %s: %w", entry.Name(), err)
 		}
 		if workspaceID == "" || task.WorkspaceID == workspaceID {
+			if !task.DeletedAt.IsZero() {
+				continue
+			}
 			out = append(out, task)
 		}
 	}
@@ -153,6 +158,26 @@ func (r *tasksImpl) ListTasks(ctx context.Context, workspaceID string) ([]domain
 		return out[i].UpdatedAt.After(out[j].UpdatedAt)
 	})
 	return out, nil
+}
+
+func (r *tasksImpl) DeleteTask(ctx context.Context, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !localfile.ValidID(id) {
+		return domaintasks.ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	var task domaintasks.Task
+	if err := localfile.ReadJSON(r.taskPath(id), &task); errors.Is(err, os.ErrNotExist) {
+		return domaintasks.ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	task.DeletedAt = time.Now().UTC()
+	task.UpdatedAt = task.DeletedAt
+	return localfile.WriteJSONAtomic(r.taskPath(id), task)
 }
 
 func (r *tasksImpl) getWorkspaceLocked(id string) (domainworkspaces.Workspace, error) {

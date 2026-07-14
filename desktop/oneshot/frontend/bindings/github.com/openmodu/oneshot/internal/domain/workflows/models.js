@@ -117,6 +117,100 @@ export class Definition {
     }
 }
 
+/**
+ * Instruction is durable human guidance queued while an Agent step is active.
+ * It lives in a file separate from run.json so enqueueing cannot race the Run
+ * revision used by the workflow state machine.
+ */
+export class Instruction {
+    /**
+     * Creates a new Instruction instance.
+     * @param {Partial<Instruction>} [$$source = {}] - The source object to create the Instruction.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("content" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["content"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["attachments"] = undefined;
+        }
+        if (!("status" in $$source)) {
+            /**
+             * @member
+             * @type {InstructionStatus}
+             */
+            this["status"] = InstructionStatus.$zero;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["priority"] = undefined;
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["createdAt"] = null;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["appliedAt"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Instruction instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Instruction}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("attachments" in $$parsedSource) {
+            $$parsedSource["attachments"] = $$createField2_0($$parsedSource["attachments"]);
+        }
+        return new Instruction(/** @type {Partial<Instruction>} */($$parsedSource));
+    }
+}
+
+/**
+ * @readonly
+ * @enum {string}
+ */
+export const InstructionStatus = {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero: "",
+
+    InstructionPending: "pending",
+    InstructionApplied: "applied",
+    InstructionRemoved: "removed",
+};
+
 export class Layout {
     /**
      * Creates a new Layout instance.
@@ -140,7 +234,7 @@ export class Layout {
      * @returns {Layout}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType5;
+        const $$createField0_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("nodes" in $$parsedSource) {
             $$parsedSource["nodes"] = $$createField0_0($$parsedSource["nodes"]);
@@ -353,7 +447,7 @@ export class ResolvedRuntimeSettings {
      * @returns {ResolvedRuntimeSettings}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType6;
+        const $$createField0_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("environmentAllowlist" in $$parsedSource) {
             $$parsedSource["environmentAllowlist"] = $$createField0_0($$parsedSource["environmentAllowlist"]);
@@ -645,7 +739,7 @@ export class Step {
      * @returns {Step}
      */
     static createFrom($$source = {}) {
-        const $$createField6_0 = $$createType6;
+        const $$createField6_0 = $$createType4;
         const $$createField9_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("dependsOn" in $$parsedSource) {
@@ -743,6 +837,27 @@ export class StepRun {
              * @type {time$0.Time | undefined}
              */
             this["finishedAt"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["inputTokens"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["outputTokens"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["durationMs"] = undefined;
         }
         if (/** @type {any} */(false)) {
             /**
@@ -885,9 +1000,9 @@ const $$createType0 = Step.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = Policy.createFrom;
 const $$createType3 = Layout.createFrom;
-const $$createType4 = Point.createFrom;
-const $$createType5 = $Create.Map($Create.Any, $$createType4);
-const $$createType6 = $Create.Array($Create.Any);
+const $$createType4 = $Create.Array($Create.Any);
+const $$createType5 = Point.createFrom;
+const $$createType6 = $Create.Map($Create.Any, $$createType5);
 const $$createType7 = $Create.Map($Create.Any, $Create.Any);
 const $$createType8 = TransitionRecord.createFrom;
 const $$createType9 = $Create.Array($$createType8);

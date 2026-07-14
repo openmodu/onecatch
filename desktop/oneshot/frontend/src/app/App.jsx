@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CaretDown, CaretRight, Circle } from "@phosphor-icons/react";
 import {
+  GitBinding,
   RuntimeBinding,
   SettingsBinding,
   TaskRunBinding,
@@ -17,6 +18,7 @@ import { buildRunRows, mergeRunItems, sortWorkspaces, virtualRunWindow, workspac
 import { Action, Kicker, ModeBadge, StatusBadge, TUISelect, Toolbar, ToolbarSpacer } from "../ui/primitives.jsx";
 
 const statusLabel = {
+  queued: "排队中",
   ready: "等待运行",
   running: "运行中",
   paused: "等待介入",
@@ -30,6 +32,7 @@ const statusLabel = {
 const terminalTarget = { $done: "完成", $pause: "暂停", $fail: "失败" };
 const runStatusOptions = [
   { value: "", label: "全部状态" },
+  { value: "queued", label: "排队中" },
   { value: "running", label: "运行中" },
   { value: "paused", label: "等待介入" },
   { value: "completed", label: "已完成" },
@@ -118,7 +121,8 @@ const demoWorkflows = [
 ];
 const demoWorkers = [{ id: "mac-mini", name: "Mac mini", baseUrl: "http://192.168.1.20:9231", enabled: true, hasToken: true }];
 const demoTasks = [
-  { id: "task_demo", workspaceId: "oneshot-demo", title: "优化本地 Agent 调度流程", prompt: "梳理并改进工作流执行、暂停与恢复体验。", workflowId: "implement_review", status: "paused", updatedAt: demoNow },
+  { id: "task_demo", workspaceId: "oneshot-demo", title: "优化本地 Agent 调度流程", prompt: "梳理并改进工作流执行、暂停与恢复体验。", workflowId: "implement_review", status: "paused", createdAt: demoNow, updatedAt: demoNow },
+  { id: "task_queue_demo", workspaceId: "oneshot-demo", title: "补齐任务页 Git 工作流", prompt: "接通状态、Diff、提交信息生成和推送，并验证异常提示。", workflowId: "single_agent", status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: demoNow, authorized: true }, attachments: [], createdAt: demoNow, updatedAt: demoNow },
 ];
 const demoRun = {
   run: { id: "run_demo", taskId: "task_demo", workflowId: "implement_review", status: "paused", currentStepId: "implement", transitionCount: 2, pauseReason: "workflow_signal", updatedAt: demoNow, history: [
@@ -158,6 +162,16 @@ function formatTime(value) {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 function errorMessage(error) { return String(error?.message || error || "未知错误").replace(/^Error:\s*/, ""); }
+function formatDuration(value = 0) {
+  const milliseconds = Math.max(0, Number(value) || 0);
+  if (milliseconds < 1000) return `${milliseconds}ms`;
+  const seconds = Math.round(milliseconds / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}m ${seconds % 60}s`;
+}
+function formatTokens(value = 0) { return new Intl.NumberFormat("zh-CN").format(Number(value) || 0); }
+function fileName(value = "") { return String(value).split(/[\\/]/).pop() || value; }
 
 function StatusPill({ status, active }) {
   return <StatusBadge status={status || "ready"} className="status-pill">{active && <span className="pulse" />}{statusLabel[status] || status}</StatusBadge>;
@@ -171,6 +185,7 @@ function App() {
   const [workspaceID, setWorkspaceID] = useState("");
   const [workflows, setWorkflows] = useState([]);
   const [runItems, setRunItems] = useState([]);
+	const [tasks, setTasks] = useState([]);
   const [runTotal, setRunTotal] = useState(0);
   const [runNextCursor, setRunNextCursor] = useState("");
   const [runLoading, setRunLoading] = useState(false);
@@ -181,14 +196,18 @@ function App() {
   const [workspaceExpanded, setWorkspaceExpanded] = useState(false);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [selectedRunID, setSelectedRunID] = useState("");
+	const [selectedQueuedTaskID, setSelectedQueuedTaskID] = useState("");
   const [runDetail, setRunDetail] = useState(null);
   const [inspectorHidden, setInspectorHidden] = useState(false);
   const [editor, setEditor] = useState(null);
   const [validation, setValidation] = useState([]);
   const [workspaceModal, setWorkspaceModal] = useState(false);
+	const [taskModal, setTaskModal] = useState(false);
+  const [renameForm, setRenameForm] = useState(null);
   const [workspaceForm, setWorkspaceForm] = useState({ path: "", name: "", defaultSandbox: "" });
-  const [taskForm, setTaskForm] = useState({ title: "", prompt: "", workflowId: "" });
+	const [taskForm, setTaskForm] = useState({ title: "", prompt: "", workflowId: "", executionMode: "immediate", attachmentPaths: [] });
   const [resumeInstruction, setResumeInstruction] = useState("");
+	const [composerAttachments, setComposerAttachments] = useState([]);
   const [resumePendingRunID, setResumePendingRunID] = useState("");
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState("");
@@ -235,9 +254,11 @@ function App() {
     setWorkspaceID(nextWorkspaceID);
     setWorkspaces((items) => sortWorkspaces(items.map((item) => item.id === nextWorkspaceID ? { ...item, lastOpenedAt: new Date().toISOString() } : item)));
     setRunItems([]);
+	setTasks([]);
     setRunTotal(0);
     setRunNextCursor("");
     setSelectedRunID("");
+	setSelectedQueuedTaskID("");
     setRunDetail(null);
     setResumeInstruction("");
     setResumePendingRunID("");
@@ -278,6 +299,7 @@ function App() {
       setWorkspaceID(demoWorkspaces[0].id);
       setTaskForm((current) => ({ ...current, workflowId: "implement_review" }));
       setRunItems([{ ...demoRun.run, task: demoTasks[0] }]);
+	  setTasks(demoTasks);
       setRunTotal(1);
       setSelectedRunID("run_demo");
       setRunDetail(demoRun);
@@ -297,6 +319,13 @@ function App() {
     const loadVersion = ++runListLoadVersion.current;
     setRunLoading(true);
     try {
+      if (runStatus === "queued") {
+        if (loadVersion !== runListLoadVersion.current) return;
+        setRunItems([]);
+        setRunTotal(0);
+        setRunNextCursor("");
+        return;
+      }
       if (mode === "demo") {
         const keyword = runKeyword.toLocaleLowerCase();
         const items = [{ ...demoRun.run, task: demoTasks[0] }].filter((item) => (!runStatus || item.status === runStatus) && (!keyword || `${item.id}\n${item.task.title}\n${Object.values(item.sessions || {}).join("\n")}`.toLocaleLowerCase().includes(keyword)));
@@ -319,18 +348,30 @@ function App() {
     }
   }, [mode, notify, runKeyword, runStatus, workspaceID]);
 
+	const loadTasks = useCallback(async () => {
+		if (!workspaceID || mode === "loading") return;
+		try {
+			setTasks(mode === "demo" ? demoTasks : (await TaskRunBinding.ListTasks(workspaceID)) || []);
+		} catch (error) {
+			notify("error", errorMessage(error));
+		}
+	}, [mode, notify, workspaceID]);
+
   useEffect(() => {
     if (mode === "loading" || !workspaceID) return;
     runListLoadVersion.current += 1;
     runLoadVersion.current += 1;
     setRunItems([]);
+	setTasks([]);
     setRunTotal(0);
     setRunNextCursor("");
     setSelectedRunID("");
+	setSelectedQueuedTaskID("");
     setRunDetail(null);
     setResumeInstruction("");
     loadRunList();
-  }, [loadRunList, mode, runKeyword, runStatus, workspaceID]);
+	loadTasks();
+	}, [loadRunList, loadTasks, mode, runKeyword, runStatus, workspaceID]);
 
   const loadRun = useCallback(async (runID, silent = false) => {
     if (!runID) return;
@@ -363,6 +404,29 @@ function App() {
     }, runDetail?.active || runDetail?.run?.status === "running" ? 900 : 2500);
     return () => window.clearInterval(timer);
   }, [loadRun, mode, runDetail?.active, runDetail?.run?.status, selectedRunID]);
+
+	useEffect(() => {
+		if (!workspaceID || mode !== "wails") return undefined;
+		const timer = window.setInterval(() => {
+			loadTasks();
+			loadRunList();
+		}, runDetail?.active || tasks.some((task) => task.status === "queued" || task.status === "running") ? 1400 : 4500);
+		return () => window.clearInterval(timer);
+	}, [loadRunList, loadTasks, mode, runDetail?.active, tasks, workspaceID]);
+
+  useEffect(() => {
+    if (!selectedQueuedTaskID || mode !== "wails") return undefined;
+    const task = tasks.find((item) => item.id === selectedQueuedTaskID);
+    if (!task || task.status === "queued") return undefined;
+    let cancelled = false;
+    TaskRunBinding.ListRunsByTask(task.id).then((runs) => {
+      if (cancelled || !runs?.[0]) return;
+      setSelectedQueuedTaskID("");
+      setSelectedRunID(runs[0].id);
+      loadRun(runs[0].id);
+    }).catch((error) => { if (!cancelled) notify("error", errorMessage(error)); });
+    return () => { cancelled = true; };
+  }, [loadRun, mode, notify, selectedQueuedTaskID, tasks]);
 
   const chooseWorkspace = async () => {
     if (mode === "demo") { setWorkspaceForm((form) => ({ ...form, path: "/Users/demo/Code/my-project", name: "my-project" })); setWorkspaceModal(true); return; }
@@ -464,16 +528,114 @@ function App() {
     setRunKeyword("");
     try {
       if (mode === "demo") {
-        setRunItems([{ ...demoRun.run, status: "running", task: demoTasks[0] }]); setRunTotal(1); setSelectedRunID("run_demo"); setRunDetail({ ...demoRun, run: { ...demoRun.run, status: "running" }, active: true });
+        if (taskForm.executionMode === "queued") {
+          const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, title: taskForm.title, prompt: taskForm.prompt, workflowId: taskForm.workflowId, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+          setTasks((items) => [...items, queuedTask]); setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(queuedTask.id);
+        } else {
+          const demoTask = { ...demoTasks[0], title: taskForm.title, prompt: taskForm.prompt, workflowId: taskForm.workflowId, updatedAt: new Date().toISOString() };
+          setTasks((items) => items.map((item) => item.id === demoTask.id ? demoTask : item)); setRunItems([{ ...demoRun.run, workflowId: demoTask.workflowId, status: "running", task: demoTask }]); setRunTotal(1); setSelectedQueuedTaskID(""); setSelectedRunID("run_demo"); setRunDetail({ ...demoRun, task: demoTask, run: { ...demoRun.run, workflowId: demoTask.workflowId, status: "running" }, active: true });
+        }
       } else {
-        const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, ...taskForm });
+		const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, title: taskForm.title, prompt: taskForm.prompt, workflowId: taskForm.workflowId, attachmentPaths: taskForm.attachmentPaths });
         const preview = await TaskRunBinding.PreviewRun(task.id);
-        const run = await TaskRunBinding.StartRun(task.id, preview.confirmationToken || "");
-        setRunItems((items) => mergeRunItems([{ ...run, task }], items)); setRunTotal((total) => total + 1); setSelectedRunID(run.id); await loadRun(run.id);
+		if (taskForm.executionMode === "queued") {
+			const queued = await TaskRunBinding.EnqueueTask(task.id, preview.confirmationToken || "");
+			setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(task.id);
+			if (queued.status === "running") {
+				const runs = await TaskRunBinding.ListRunsByTask(task.id);
+				if (runs?.[0]) { setSelectedQueuedTaskID(""); setSelectedRunID(runs[0].id); await loadRun(runs[0].id); }
+			}
+		} else {
+			const run = await TaskRunBinding.StartRun(task.id, preview.confirmationToken || "");
+			setRunItems((items) => mergeRunItems([{ ...run, task }], items)); setRunTotal((total) => total + 1); setSelectedQueuedTaskID(""); setSelectedRunID(run.id); await loadRun(run.id);
+		}
+		await loadTasks(); await loadRunList();
       }
-      setTaskForm((form) => ({ ...form, title: "", prompt: "" })); notify("success", "Run 已启动，Agent 正在后台执行");
+	  setTaskForm((form) => ({ ...form, title: "", prompt: "", attachmentPaths: [] })); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? "任务已加入 Workspace 队列" : "Run 已启动，Agent 正在后台执行");
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
+
+	const chooseAttachments = async (target) => {
+		try {
+			const paths = mode === "demo" ? ["/Users/demo/Desktop/reference.png"] : await WorkspaceBinding.ChooseAttachments();
+			if (!paths?.length) return;
+			if (target === "task") setTaskForm((form) => ({ ...form, attachmentPaths: [...new Set([...(form.attachmentPaths || []), ...paths])].slice(0, 8) }));
+			else setComposerAttachments((items) => [...new Set([...items, ...paths])].slice(0, 8));
+		} catch (error) { notify("error", errorMessage(error)); }
+	};
+
+	const submitWorkbenchComposer = async (modeName = "queue") => {
+		if (!runDetail?.run?.id) { setTaskModal(true); return; }
+		const run = runDetail.run;
+		const content = resumeInstruction.trim();
+		if (!content && !composerAttachments.length && run.status !== "paused") return;
+		setBusy(modeName);
+		try {
+			if (mode === "demo") {
+				if (run.status === "running") {
+					const instruction = { id: `instruction_${Date.now()}`, content: content || "查看附件并继续任务", attachments: [...composerAttachments], status: "pending", priority: modeName === "insert", createdAt: new Date().toISOString() };
+					setRunDetail((detail) => ({ ...detail, instructions: [...(detail.instructions || []), instruction] }));
+				} else if (run.status === "paused") {
+					setRunDetail((detail) => ({ ...detail, active: true, run: { ...detail.run, status: "running", pauseReason: "" } }));
+					setRunItems((items) => items.map((item) => item.id === run.id ? { ...item, status: "running" } : item));
+				}
+			} else if (run.status === "running") {
+				const input = { content, attachmentPaths: composerAttachments };
+				if (modeName === "insert") await TaskRunBinding.InterruptAndInsert(run.id, input);
+				else await TaskRunBinding.EnqueueInstruction(run.id, input);
+			} else if (run.status === "paused") {
+				if (composerAttachments.length) {
+					await TaskRunBinding.EnqueueInstruction(run.id, { content: content || "查看附件并继续任务", attachmentPaths: composerAttachments });
+					await TaskRunBinding.ResumeRun(run.id, "");
+				} else {
+					await TaskRunBinding.ResumeRun(run.id, content);
+				}
+				setResumePendingRunID(run.id);
+			}
+			setResumeInstruction(""); setComposerAttachments([]);
+			window.setTimeout(() => loadRun(run.id, true), 180);
+			notify("success", modeName === "insert" ? "当前轮次将停止，并优先执行这条指令" : run.status === "running" ? "指令已加入下一轮队列" : "Run 正在恢复");
+		} catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
+	};
+
+	const removeQueuedInstruction = async (instructionID) => {
+		if (!runDetail?.run?.id) return;
+		try { if (mode !== "demo") await TaskRunBinding.RemoveInstruction(runDetail.run.id, instructionID); await loadRun(runDetail.run.id, true); }
+		catch (error) { notify("error", errorMessage(error)); }
+	};
+
+  const openRenameTask = () => {
+    const task = runDetail?.task || tasks.find((item) => item.id === selectedQueuedTaskID);
+    if (task) setRenameForm({ taskId: task.id, title: task.title, originalTitle: task.title });
+  };
+
+  const renameSelectedTask = async () => {
+    const title = renameForm?.title.trim();
+    if (!renameForm || !title) { notify("error", "任务名称不能为空"); return; }
+    if (title === renameForm.originalTitle) { setRenameForm(null); return; }
+    setBusy("rename");
+    try {
+      if (mode === "demo") {
+        setTasks((items) => items.map((task) => task.id === renameForm.taskId ? { ...task, title, updatedAt: new Date().toISOString() } : task));
+        setRunItems((items) => items.map((run) => run.task?.id === renameForm.taskId ? { ...run, task: { ...run.task, title } } : run));
+        setRunDetail((detail) => detail?.task?.id === renameForm.taskId ? { ...detail, task: { ...detail.task, title } } : detail);
+      } else {
+        await TaskRunBinding.RenameTask(renameForm.taskId, title);
+        await loadTasks();
+        await loadRunList();
+        if (selectedRunID) await loadRun(selectedRunID, true);
+      }
+      setRenameForm(null);
+      notify("success", "任务名称已更新");
+    } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
+  };
+
+	const deleteSelectedTask = async () => {
+		const task = runDetail?.task || tasks.find((item) => item.id === selectedQueuedTaskID);
+		if (!task || !await requestConfirm({ title: `删除任务“${task.title}”？`, description: "任务会从工作台隐藏，运行中的任务必须先打断。项目文件不会被删除。", confirmLabel: "删除任务", dangerous: true })) return;
+		try { if (mode !== "demo") await TaskRunBinding.DeleteTask(task.id); setSelectedRunID(""); setSelectedQueuedTaskID(""); setRunDetail(null); await loadTasks(); await loadRunList(); }
+		catch (error) { notify("error", errorMessage(error)); }
+	};
 
   const composerSubmitKey = (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && busy !== "run" && selectedWorkspace) createTaskAndRun();
@@ -590,27 +752,170 @@ function App() {
 
       <main className="main-area">
         <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><span className={`connection ${mode}`}>{mode === "wails" ? "local" : "preview"}</span></div>
-        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} /> : view === "tasks" ? <div className={`workspace-grid${runDetail && !inspectorHidden ? "" : " no-inspector"}`}>
-          <section className="content-column tasks-column">
-            <div className="composer">
-              <Kicker>new run</Kicker>
-              <input className="title-input" placeholder="这次要完成什么？" value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} />
-              <textarea placeholder="描述目标、约束和验收方式。每个步骤会继承这段任务上下文。" value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} />
-              <div className="composer-footer"><label><span>workflow</span><TUISelect ariaLabel="Workflow" value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><Action tone="primary" disabled={busy === "run" || !selectedWorkspace} onClick={createTaskAndRun}>{busy === "run" ? "starting…" : "start run"}</Action></div>
-            </div>
-            <div className="run-history-head"><div className="section-title"><div><h2>最近运行</h2></div><span className="section-title-side">{runDetail && inspectorHidden && <button type="button" className="text-button" onClick={() => setInspectorHidden(false)}>[ « 运行详情 ]</button>}{runTotal} runs</span></div><div className="run-query-bar"><label><span>/</span><input aria-label="搜索运行记录" value={runSearchDraft} onChange={(event) => setRunSearchDraft(event.target.value)} placeholder="搜索标题 / Run / Thread" />{runSearchDraft && <button type="button" aria-label="清空运行搜索" onClick={() => setRunSearchDraft("")}>[ x ]</button>}</label><TUISelect ariaLabel="运行状态" value={runStatus} onChange={setRunStatus} options={runStatusOptions} /></div></div>
-            <VirtualRunList items={allRuns} selectedRunID={selectedRunID} workflows={workflows} loading={runLoading} hasMore={Boolean(runNextCursor)} onLoadMore={() => loadRunList({ cursor: runNextCursor })} onSelect={(item) => { setSelectedRunID(item.id); setInspectorHidden(false); loadRun(item.id); }} emptyFiltered={Boolean(runKeyword || runStatus)} />
-            {(runLoading || runNextCursor) && <div className="run-list-footer">{runLoading ? "正在读取…" : `${allRuns.length} / ${runTotal} · 继续滚动加载`}</div>}
-          </section>
-          {runDetail && !inspectorHidden && <aside className="inspector"><RunInspector detail={runDetail} busy={busy} resumePending={resumePendingRunID === runDetail.run.id} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} notify={notify} onCollapse={() => setInspectorHidden(true)} /></aside>}
-        </div> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
+        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} /> : view === "tasks" ? <TaskWorkbench
+          mode={mode}
+          workspaceID={workspaceID}
+          tasks={tasks}
+          runs={allRuns}
+          runDetail={runDetail}
+          selectedRunID={selectedRunID}
+          selectedQueuedTaskID={selectedQueuedTaskID}
+          workflows={workflows}
+          runtimes={runtimes}
+          loading={runLoading}
+          total={runTotal}
+          hasMore={Boolean(runNextCursor)}
+          search={runSearchDraft}
+          status={runStatus}
+          busy={busy}
+          draft={resumeInstruction}
+          attachments={composerAttachments}
+          onSearch={setRunSearchDraft}
+          onStatus={setRunStatus}
+          onNewTask={() => setTaskModal(true)}
+          onLoadMore={() => loadRunList({ cursor: runNextCursor })}
+          onSelectRun={(item) => { setSelectedQueuedTaskID(""); setSelectedRunID(item.id); loadRun(item.id); }}
+          onSelectQueued={(task) => { setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(task.id); }}
+          onDraft={setResumeInstruction}
+          onChooseAttachments={() => chooseAttachments("composer")}
+          onRemoveAttachment={(path) => setComposerAttachments((items) => items.filter((item) => item !== path))}
+          onSubmit={submitWorkbenchComposer}
+          onInterrupt={() => runAction("interrupt")}
+          onCancel={() => runAction("cancel")}
+          onRemoveInstruction={removeQueuedInstruction}
+          onRename={openRenameTask}
+          onDelete={deleteSelectedTask}
+          notify={notify}
+        /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
     </div>
     {workspaceModal && <Modal title="加入工作目录" subtitle="Agent 只会在你授权的目录中工作" onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>目录路径<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>显示名称（可选）<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder="默认使用目录名" /></label><label>默认 Sandbox<TUISelect ariaLabel="默认 Sandbox" value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: "使用设置中的全局默认" }, { value: "read-only", label: "Read only" }, { value: "workspace-write", label: "Workspace write" }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: "Full access（危险）" }] : [])]} /></label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkspaceModal(false)}>[ 取消 ]</button><button className="primary-button" onClick={addWorkspace} disabled={busy === "workspace"}>[ 加入目录 ]</button></div></div></Modal>}
+    {taskModal && <Modal title="新建任务" subtitle="立即运行，或加入当前 Workspace 的 FIFO 队列" onClose={() => setTaskModal(false)}><div className="form-stack task-create-form"><label>任务名称<input autoFocus value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} placeholder="例如：补齐 Buddy 工作台能力" /></label><label>目标与验收<textarea value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} placeholder="描述目标、约束和验收方式。" /></label><label>Workflow<TUISelect ariaLabel="Workflow" value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><label>执行方式<TUISelect ariaLabel="执行方式" value={taskForm.executionMode} onChange={(executionMode) => setTaskForm((form) => ({ ...form, executionMode }))} options={[{ value: "immediate", label: "立即运行" }, { value: "queued", label: "加入 Workspace 队列" }]} /></label><div className="attachment-picker"><span>附件 · 最多 8 个</span><button type="button" className="text-button" onClick={() => chooseAttachments("task")}>[ + 选择文件 ]</button>{taskForm.attachmentPaths?.map((path) => <div className="attachment-chip" key={path}><span title={path}>{fileName(path)}</span><button type="button" onClick={() => setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }))}>×</button></div>)}</div><div className="modal-actions"><button className="secondary-button" onClick={() => setTaskModal(false)}>[ 取消 ]</button><button className="primary-button" onClick={createTaskAndRun} disabled={busy === "run" || !selectedWorkspace}>[ {busy === "run" ? "创建中…" : taskForm.executionMode === "queued" ? "加入队列" : "创建并运行"} ]</button></div></div></Modal>}
+    {renameForm && <Modal title="重命名任务" subtitle="名称会同步更新任务历史和运行详情" onClose={() => busy !== "rename" && setRenameForm(null)}><div className="form-stack"><label>任务名称<input autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing && busy !== "rename") renameSelectedTask(); }} /></label><div className="modal-actions"><button className="secondary-button" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>[ 取消 ]</button><button className="primary-button" disabled={busy === "rename" || !renameForm.title.trim()} onClick={renameSelectedTask}>[ {busy === "rename" ? "保存中…" : "保存名称"} ]</button></div></div></Modal>}
     {workerModal && <Modal title="远端 Worker" subtitle="仅用于受信任 LAN / VPN；token 保存于本机 0600 文件" onClose={() => setWorkerModal(false)}><div className="form-stack"><label>Worker ID<input value={workerForm.id} onChange={(event) => setWorkerForm((form) => ({ ...form, id: event.target.value }))} placeholder="mac-mini" /></label><label>名称<input value={workerForm.name} onChange={(event) => setWorkerForm((form) => ({ ...form, name: event.target.value }))} placeholder="Build Mac mini" /></label><label>Base URL<input value={workerForm.baseUrl} onChange={(event) => setWorkerForm((form) => ({ ...form, baseUrl: event.target.value }))} placeholder="http://192.168.1.20:9231" /></label><label>Bearer token<input type="password" value={workerForm.token} onChange={(event) => setWorkerForm((form) => ({ ...form, token: event.target.value }))} placeholder="更新时留空则保留原 token" /></label><label className="checkbox-label"><input type="checkbox" checked={workerForm.enabled} onChange={(event) => setWorkerForm((form) => ({ ...form, enabled: event.target.checked }))} />启用调度</label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkerModal(false)}>[ 取消 ]</button><button className="primary-button" disabled={busy === "worker"} onClick={saveWorker}>[ 保存 Worker ]</button></div></div></Modal>}
     <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
   </div>;
+}
+
+function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetail, selectedRunID, selectedQueuedTaskID, workflows, runtimes, loading, total, hasMore, search, status, busy, draft, attachments, onSearch, onStatus, onNewTask, onLoadMore, onSelectRun, onSelectQueued, onDraft, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onRename, onDelete, notify }) {
+  const [inspectorTab, setInspectorTab] = useState("status");
+  const scrollRef = useRef(null);
+  const pinnedRef = useRef(true);
+  const selectedQueuedTask = tasks.find((task) => task.id === selectedQueuedTaskID);
+  const selectedTask = runDetail?.task || selectedQueuedTask;
+  const queueTasks = tasks.filter((task) => task.status === "queued").sort((left, right) => new Date(left.queue?.enqueuedAt || left.createdAt) - new Date(right.queue?.enqueuedAt || right.createdAt));
+  const filteredQueued = queueTasks.filter((task) => (!status || status === "queued") && (!search.trim() || `${task.title}\n${task.prompt}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())));
+  const visibleRuns = status === "queued" ? [] : runs;
+  const conversation = runDetail ? buildRunConversation(runDetail) : [];
+  const pendingInstructions = (runDetail?.instructions || []).filter((instruction) => instruction.status === "pending");
+  const conversationSize = conversation.length ? `${conversation.length}:${conversation[conversation.length - 1].items?.length || 0}` : "0";
+
+  useEffect(() => {
+    pinnedRef.current = true;
+    const element = scrollRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [selectedRunID, selectedQueuedTaskID]);
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (element && pinnedRef.current) element.scrollTop = element.scrollHeight;
+  }, [attachments.length, conversationSize, pendingInstructions.length, runDetail?.run?.status]);
+
+  const handleConversationScroll = () => {
+    const element = scrollRef.current;
+    if (element) pinnedRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 90;
+  };
+  const workflowName = selectedTask ? workflows.find((workflow) => workflow.id === selectedTask.workflowId)?.name || selectedTask.workflowId : "";
+  const canSend = Boolean(draft.trim() || attachments.length);
+  const runStatus = runDetail?.run?.status;
+
+  return <div className="task-workbench">
+    <aside className="task-history-pane">
+      <div className="task-history-head"><div><Kicker>task history</Kicker><strong>任务</strong></div><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>+ 新建</Action></div>
+      <div className="task-history-query"><label><span>/</span><input aria-label="搜索任务" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="标题 / Run / Thread" />{search && <button type="button" onClick={() => onSearch("")}>×</button>}</label><TUISelect ariaLabel="任务状态" value={status} onChange={onStatus} options={runStatusOptions} /></div>
+      <div className="task-history-list">
+        {filteredQueued.length > 0 && <div className="task-history-group">Workspace 队列 · {filteredQueued.length}</div>}
+        {filteredQueued.map((task) => <button type="button" className={`task-history-item ${selectedQueuedTaskID === task.id ? "selected" : ""}`} key={task.id} onClick={() => onSelectQueued(task)}><span className="task-history-status"><StatusPill status="queued" /><small>#{queueTasks.findIndex((item) => item.id === task.id) + 1}</small></span><strong>{task.title}</strong><small>{workflowNameFor(workflows, task.workflowId)} · {formatTime(task.updatedAt)}</small></button>)}
+        {visibleRuns.length > 0 && <div className="task-history-group">运行记录 · {total}</div>}
+        {visibleRuns.map((run) => <button type="button" className={`task-history-item ${selectedRunID === run.id ? "selected" : ""}`} key={run.id} onClick={() => onSelectRun(run)}><span className="task-history-status"><StatusPill status={run.status} active={runDetail?.run?.id === run.id && runDetail.active} /></span><strong>{run.task?.title || run.id}</strong><small>{workflowNameFor(workflows, run.workflowId)} · {formatTime(run.updatedAt || run.startedAt)}</small></button>)}
+        {!filteredQueued.length && !visibleRuns.length && !loading && <div className="task-history-empty">{search || status ? "没有匹配的任务" : "还没有任务，先新建一个。"}</div>}
+        {(loading || hasMore) && <button type="button" className="task-history-more" disabled={loading} onClick={onLoadMore}>{loading ? "正在读取…" : `加载更多 · ${visibleRuns.length}/${total}`}</button>}
+      </div>
+    </aside>
+
+    <section className="conversation-workspace">
+      {selectedTask ? <>
+        <header className="conversation-workspace-head"><div><div className="conversation-title-row"><h2>{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p>{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : " · Workspace FIFO"}</p></div><div className="conversation-head-actions"><button type="button" onClick={onRename}>[ 重命名 ]</button><button type="button" className="danger" onClick={onDelete}>[ 删除 ]</button></div></header>
+        <div className="conversation-scroll" ref={scrollRef} onScroll={handleConversationScroll}>
+          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} />{!conversation.length && <div className="workbench-empty"><p>这次运行还没有生成消息。</p></div>}</>}
+        </div>
+        {runDetail && <div className="workbench-composer">
+          {pendingInstructions.length > 0 && <div className="instruction-queue"><span>下一轮指令 · {pendingInstructions.length}</span>{pendingInstructions.map((instruction, index) => <div className={`instruction-item ${instruction.priority ? "priority" : ""}`} key={instruction.id}><b>{instruction.priority ? "优先" : `#${index + 1}`}</b><span>{instruction.content || `${instruction.attachments?.length || 0} 个附件`}</span><button type="button" onClick={() => onRemoveInstruction(instruction.id)}>移除</button></div>)}</div>}
+          {attachments.length > 0 && <div className="composer-attachments">{attachments.map((path) => <span className="attachment-chip" key={path} title={path}>{fileName(path)}<button type="button" onClick={() => onRemoveAttachment(path)}>×</button></span>)}</div>}
+          <textarea value={draft} disabled={!['running', 'paused'].includes(runStatus)} onChange={(event) => onDraft(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && (canSend || runStatus === "paused")) onSubmit("queue"); }} placeholder={runStatus === "running" ? "补充下一轮指令，或打断当前轮次优先插入…" : runStatus === "paused" ? "补充指令并恢复运行…" : "这次运行已经结束"} />
+          <div className="workbench-composer-actions"><button type="button" className="attachment-action" disabled={!['running', 'paused'].includes(runStatus)} onClick={onChooseAttachments}>[ + 附件 ]</button><span>⌘ Enter 提交</span><div>{runStatus === "running" && <><Action disabled={busy === "interrupt"} onClick={onInterrupt}>仅暂停</Action><Action disabled={!canSend || busy === "queue"} onClick={() => onSubmit("queue")}>排到下一轮</Action><Action tone="primary" disabled={!canSend || busy === "insert"} onClick={() => onSubmit("insert")}>打断并插入</Action></>}{runStatus === "paused" && <><Action tone="danger" disabled={busy === "cancel" || runDetail.active} onClick={onCancel}>终止</Action><Action tone="primary" disabled={busy === "queue" || runDetail.active} onClick={() => onSubmit("queue")}>恢复运行</Action></>}</div></div>
+        </div>}
+      </> : <div className="workbench-welcome"><Kicker>local agent workspace</Kicker><h2>把任务、对话和项目状态放在一个页面</h2><p>选择左侧历史任务，或新建任务立即运行 / 加入 FIFO 队列。</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>新建任务</Action></div>}
+    </section>
+
+    <aside className="workbench-inspector">
+      <div className="workbench-tabs">{[["status", "状态"], ["git", "Git"], ["events", "事件"]].map(([value, label]) => <button type="button" className={inspectorTab === value ? "active" : ""} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}</div>
+      <div className="workbench-inspector-body">{inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runtimes={runtimes} notify={notify} /> : <EventInspector detail={runDetail} />}</div>
+    </aside>
+  </div>;
+}
+
+function workflowNameFor(workflows, workflowID) { return workflows.find((workflow) => workflow.id === workflowID)?.name || workflowID; }
+
+function QueuedTaskView({ task, position }) {
+  return <div className="queued-task-view"><div className="queue-orbit"><span>{position}</span></div><Kicker>workspace fifo</Kicker><h3>正在等待前面的任务</h3><p>同一个 Workspace 一次只激活一个排队任务；前序任务完成或终止后会自动启动。</p><dl><div><dt>任务目标</dt><dd>{task.prompt}</dd></div><div><dt>入队时间</dt><dd>{formatTime(task.queue?.enqueuedAt || task.createdAt)}</dd></div><div><dt>附件</dt><dd>{task.attachments?.length || 0} 个</dd></div></dl></div>;
+}
+
+function StatusInspector({ detail, queuedTask, queuePosition }) {
+  if (queuedTask) return <div className="status-inspector"><Kicker>queue status</Kicker><div className="status-hero"><StatusPill status="queued" /><strong>队列第 {queuePosition} 位</strong></div><InspectorRow label="执行方式" value="Workspace FIFO" /><InspectorRow label="已授权" value={queuedTask.queue?.authorized ? "是" : "否"} /><InspectorRow label="入队时间" value={formatTime(queuedTask.queue?.enqueuedAt)} /><InspectorRow label="附件" value={`${queuedTask.attachments?.length || 0} 个`} /></div>;
+  if (!detail) return <p className="inspector-placeholder">选择任务后显示运行状态。</p>;
+  const { run, workflow, stepRuns = [] } = detail;
+  const inputTokens = stepRuns.reduce((sum, step) => sum + (step.inputTokens || 0), 0);
+  const outputTokens = stepRuns.reduce((sum, step) => sum + (step.outputTokens || 0), 0);
+  const duration = stepRuns.reduce((sum, step) => sum + (step.durationMs || 0), 0);
+  const sessions = runtimeSessionEntries(detail);
+  const currentStep = workflow.steps?.find((step) => step.id === run.currentStepId);
+  return <div className="status-inspector"><div className="status-hero"><StatusPill status={run.status} active={detail.active} /><strong>{currentStep?.name || run.currentStepId || "—"}</strong><small>{currentStep?.runtime || "agent"}</small></div><div className="run-metric-grid"><div><span>输入 Token</span><strong>{formatTokens(inputTokens)}</strong></div><div><span>输出 Token</span><strong>{formatTokens(outputTokens)}</strong></div><div><span>Agent 耗时</span><strong>{formatDuration(duration)}</strong></div><div><span>轮次</span><strong>{stepRuns.length}</strong></div></div><section className="inspector-block"><Kicker>workflow</Kicker>{(workflow.steps || []).map((step, index) => { const stepRun = [...stepRuns].reverse().find((item) => item.stepId === step.id); const node = run.nodes?.[step.id]; return <div className={`inspector-flow-row ${step.id === run.currentStepId ? "current" : ""}`} key={step.id}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{step.name}</strong><small>{step.runtime} · {node?.status || stepRun?.status || "pending"}</small></span></div>; })}</section><section className="inspector-block"><Kicker>sessions</Kicker>{sessions.map((session) => <div className="inspector-session" key={session.stepID}><span>{session.runtime} · {session.stepName}</span><code>{session.sessionID}</code></div>)}{!sessions.length && <p>尚未创建可恢复会话。</p>}</section>{(run.pauseReason || detail.lastError) && <section className="inspector-alert">{run.pauseReason && <p>暂停：{run.pauseReason}</p>}{detail.lastError && <p>{detail.lastError}</p>}</section>}</div>;
+}
+
+function InspectorRow({ label, value }) { return <div className="inspector-row"><span>{label}</span><strong>{value || "—"}</strong></div>; }
+
+function GitInspector({ mode, workspaceID, runtimes, notify }) {
+  const [snapshot, setSnapshot] = useState(null);
+  const [diff, setDiff] = useState("");
+  const [staged, setStaged] = useState(false);
+  const [message, setMessage] = useState("");
+  const [runtime, setRuntime] = useState(runtimes.find((item) => item.available)?.id || "codex");
+  const [push, setPush] = useState(false);
+  const [gitBusy, setGitBusy] = useState("");
+  const load = useCallback(async (nextStaged = staged) => {
+    if (!workspaceID) return;
+    try {
+      if (mode === "demo") { setSnapshot({ isRepo: true, branch: "feature/workbench", head: "019f5ed", ahead: 0, behind: 0, files: [{ path: "src/app/App.jsx", index: " ", worktree: "M" }], diffStat: "1 file changed" }); setDiff("diff --git a/src/app/App.jsx b/src/app/App.jsx\n+三栏任务工作台"); return; }
+      const [statusValue, diffValue] = await Promise.all([GitBinding.Status(workspaceID), GitBinding.Diff(workspaceID, nextStaged)]);
+      setSnapshot(statusValue); setDiff(diffValue || "");
+    } catch (error) { notify("error", errorMessage(error)); }
+  }, [mode, notify, staged, workspaceID]);
+  useEffect(() => { load(staged); }, [load, staged]);
+  const stageAll = async () => { setGitBusy("stage"); try { if (mode !== "demo") await GitBinding.StageAll(workspaceID); setStaged(true); await load(true); notify("success", "所有变更已暂存"); } catch (error) { notify("error", errorMessage(error)); } finally { setGitBusy(""); } };
+  const generate = async () => { setGitBusy("generate"); try { const value = mode === "demo" ? "feat: add task workbench" : await GitBinding.GenerateCommitMessage(workspaceID, runtime); setMessage(value); } catch (error) { notify("error", errorMessage(error)); } finally { setGitBusy(""); } };
+  const commit = async () => { if (!message.trim()) { notify("error", "请填写提交信息"); return; } setGitBusy("commit"); try { const result = mode === "demo" ? { commitHash: "019f5ed", pushed: push } : await GitBinding.CommitAndPush({ workspaceId: workspaceID, message: message.trim(), remote: "", push }); notify("success", result.pushed ? `已提交并推送 ${shortID(result.commitHash)}` : `已提交 ${shortID(result.commitHash)}`); setMessage(""); setStaged(false); await load(false); } catch (error) { notify("error", errorMessage(error)); } finally { setGitBusy(""); } };
+  if (snapshot && !snapshot.isRepo) return <p className="inspector-placeholder">当前 Workspace 不是 Git 仓库。</p>;
+  return <div className="git-inspector"><div className="git-head"><div><Kicker>repository</Kicker><strong>{snapshot?.branch || "读取中…"}</strong><small>{snapshot?.head || ""}</small></div><button type="button" onClick={() => load(staged)}>[ 刷新 ]</button></div><div className="git-sync"><span>↑ {snapshot?.ahead || 0}</span><span>↓ {snapshot?.behind || 0}</span><span>{snapshot?.files?.length || 0} files</span></div><div className="git-files">{snapshot?.files?.map((file) => <div key={file.path}><b>{`${file.index || " "}${file.worktree || " "}`}</b><span title={file.path}>{file.path}</span></div>)}{snapshot && !snapshot.files?.length && <p>工作区干净。</p>}</div><div className="git-diff-tabs"><button type="button" className={!staged ? "active" : ""} onClick={() => setStaged(false)}>未暂存</button><button type="button" className={staged ? "active" : ""} onClick={() => setStaged(true)}>已暂存</button><button type="button" disabled={gitBusy === "stage" || !snapshot?.files?.length} onClick={stageAll}>全部暂存</button></div><pre className="git-diff">{diff || "没有可显示的 Diff。"}</pre><div className="commit-box"><div><TUISelect ariaLabel="生成提交信息的 Runtime" value={runtime} onChange={setRuntime} options={runtimes.filter((item) => item.available).map((item) => ({ value: item.id, label: item.name || item.id }))} /><button type="button" disabled={gitBusy === "generate" || !snapshot?.files?.length} onClick={generate}>{gitBusy === "generate" ? "生成中…" : "生成提交信息"}</button></div><textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="feat: describe the change" /><label><input type="checkbox" checked={push} onChange={(event) => setPush(event.target.checked)} /> commit 后推送当前分支</label><Action tone="primary" disabled={gitBusy === "commit" || !message.trim()} onClick={commit}>{gitBusy === "commit" ? "提交中…" : push ? "Commit & Push" : "Commit"}</Action></div></div>;
+}
+
+function EventInspector({ detail }) {
+  if (!detail) return <p className="inspector-placeholder">选择运行后显示过程事件。</p>;
+  return <div className="event-inspector">{[...(detail.events || [])].reverse().map((event) => <article key={`${event.seq}-${event.type}`}><div><b>{event.seq}</b><strong>{event.type}</strong><time>{formatTime(event.at)}</time></div>{event.stepId && <span>{event.stepId}</span>}{event.payload && event.payload !== "{}" && <pre>{prettyPayload(event.payload)}</pre>}</article>)}{!detail.events?.length && <p className="inspector-placeholder">还没有过程事件。</p>}</div>;
+}
+
+function prettyPayload(value) {
+  try { return JSON.stringify(JSON.parse(value), null, 2); } catch { return String(value); }
 }
 
 function VirtualRunList({ items, selectedRunID, workflows, loading, hasMore, onLoadMore, onSelect, emptyFiltered }) {
@@ -665,6 +970,24 @@ function RunInspector({ detail, busy, resumePending, resumeInstruction, setResum
   const conversation = buildRunConversation(detail);
   const sessions = runtimeSessionEntries(detail);
   const resumeControl = resumeControlState(detail, busy, resumePending);
+  const scrollRef = useRef(null);
+  // Pinned-to-latest: default to the newest message; release the pin only
+  // while the user has scrolled away from the bottom.
+  const pinnedRef = useRef(true);
+  const conversationSize = conversation.length ? `${conversation.length}:${conversation[conversation.length - 1].items?.length || 0}` : "0";
+  useEffect(() => {
+    pinnedRef.current = true;
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [run.id]);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el && pinnedRef.current) el.scrollTop = el.scrollHeight;
+  }, [conversationSize, run.status]);
+  const trackScrollPin = () => {
+    const el = scrollRef.current;
+    if (el) pinnedRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
   const visiblePauseReason = run.pauseReason && run.pauseReason !== "workflow_signal" ? run.pauseReason : "";
   const copySessionValue = async (value, label) => {
     try {
@@ -675,7 +998,7 @@ function RunInspector({ detail, busy, resumePending, resumeInstruction, setResum
     }
   };
   return <>
-    <div className="inspector-scroll">
+    <div className="inspector-scroll" ref={scrollRef} onScroll={trackScrollPin}>
     <section className="run-summary">
       <div className="run-summary-head"><div><h2>{detail.task.title}</h2><StatusPill status={run.status} active={detail.active} /></div><div className="run-summary-stats"><span>{run.transitionCount || 0} / {workflow.policy?.maxTransitions || 20}</span><time>{formatTime(run.updatedAt || run.startedAt)}</time><button type="button" className="text-button inspector-collapse" aria-label="收起运行详情" title="收起运行详情" onClick={onCollapse}>[ » ]</button></div></div>
       <details className="run-summary-details"><summary><span className="run-summary-current">当前：<strong>{currentStep?.name || run.currentStepId}</strong><i>·</i><span className={`runtime-name ${currentStep?.runtime}`}>{currentStep?.runtime || "—"}</span></span><span className="run-summary-recovery">会话与恢复 <CaretRight className="details-caret closed" weight="bold" /><CaretDown className="details-caret opened" weight="bold" /></span></summary><div className="run-summary-detail-body">

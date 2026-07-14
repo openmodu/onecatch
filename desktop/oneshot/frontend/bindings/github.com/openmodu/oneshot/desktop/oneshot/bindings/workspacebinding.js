@@ -24,6 +24,15 @@ export function AddWorkspace(input) {
 }
 
 /**
+ * @returns {$CancellablePromise<string[]>}
+ */
+export function ChooseAttachments() {
+    return $Call.ByID(113461064).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * @returns {$CancellablePromise<string>}
  */
 export function ChooseDirectory() {
@@ -46,7 +55,7 @@ export function GetWorkspace(id) {
  */
 export function GetWorkspaceStatus(id) {
     return $Call.ByID(4144964344, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType2($result);
     }));
 }
 
@@ -55,7 +64,7 @@ export function GetWorkspaceStatus(id) {
  */
 export function ListWorkspaces() {
     return $Call.ByID(3513026673).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType3($result);
     }));
 }
 
@@ -90,5 +99,6 @@ export function SetWorkspacePinned(id, pinned) {
 
 // Private type creation functions
 const $$createType0 = workspaces$0.Workspace.createFrom;
-const $$createType1 = localapp$0.WorkspaceStatus.createFrom;
-const $$createType2 = $Create.Array($$createType0);
+const $$createType1 = $Create.Array($Create.Any);
+const $$createType2 = localapp$0.WorkspaceStatus.createFrom;
+const $$createType3 = $Create.Array($$createType0);

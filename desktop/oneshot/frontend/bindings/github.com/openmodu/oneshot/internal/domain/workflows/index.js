@@ -4,6 +4,8 @@
 
 export {
     Definition,
+    Instruction,
+    InstructionStatus,
     Layout,
     NodeState,
     NodeStatus,

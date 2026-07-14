@@ -74,6 +74,14 @@ function resumedInstructions(events) {
   });
 }
 
+function appliedInstructions(instructions) {
+  return (instructions || []).flatMap((instruction, index) => {
+    const text = String(instruction.content || "").trim();
+    if (instruction.status !== "applied" || !text) return [];
+    return [{ type: "user", id: `instruction-${instruction.id || index}`, text, at: instruction.appliedAt || instruction.createdAt || "" }];
+  });
+}
+
 export function buildRunConversation(detail) {
   const workflowSteps = new Map((detail?.workflow?.steps || []).map((step) => [step.id, step]));
   const eventsByStepRun = new Map();
@@ -86,6 +94,7 @@ export function buildRunConversation(detail) {
   const taskText = String(detail?.task?.prompt || "").trim();
   if (taskText) timeline.push({ type: "user", id: "task", text: taskText, at: detail.task.createdAt || detail.run?.startedAt || detail.task.updatedAt || detail.run?.updatedAt || "", sortRank: 0 });
   for (const instruction of resumedInstructions(detail?.events)) timeline.push({ ...instruction, sortRank: 0 });
+  for (const instruction of appliedInstructions(detail?.instructions)) timeline.push({ ...instruction, sortRank: 0 });
   for (const [index, stepRun] of (detail?.stepRuns || []).entries()) {
     const step = workflowSteps.get(stepRun.stepId) || {};
     timeline.push({

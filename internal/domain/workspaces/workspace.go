@@ -24,10 +24,21 @@ type Workspace struct {
 }
 
 type GitSnapshot struct {
-	IsRepo   bool   `json:"isRepo"`
-	Head     string `json:"head,omitempty"`
-	Status   string `json:"status,omitempty"`
-	DiffStat string `json:"diffStat,omitempty"`
+	IsRepo     bool      `json:"isRepo"`
+	Head       string    `json:"head,omitempty"`
+	Branch     string    `json:"branch,omitempty"`
+	Ahead      int       `json:"ahead,omitempty"`
+	Behind     int       `json:"behind,omitempty"`
+	Status     string    `json:"status,omitempty"`
+	DiffStat   string    `json:"diffStat,omitempty"`
+	StagedStat string    `json:"stagedStat,omitempty"`
+	Files      []GitFile `json:"files,omitempty"`
+}
+
+type GitFile struct {
+	Path     string `json:"path"`
+	Index    string `json:"index"`
+	Worktree string `json:"worktree"`
 }
 
 func Validate(workspace Workspace) error {

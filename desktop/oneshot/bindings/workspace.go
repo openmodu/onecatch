@@ -29,6 +29,18 @@ func (b *WorkspaceBinding) ChooseDirectory() (string, error) {
 		PromptForSingleSelection()
 }
 
+func (b *WorkspaceBinding) ChooseAttachments() ([]string, error) {
+	if b.applicationSource == nil || b.applicationSource() == nil {
+		return []string{}, nil
+	}
+	return b.applicationSource().Dialog.OpenFile().
+		CanChooseFiles(true).
+		CanChooseDirectories(false).
+		CanCreateDirectories(false).
+		SetTitle("选择任务附件").
+		PromptForMultipleSelection()
+}
+
 func (b *WorkspaceBinding) AddWorkspace(input localapp.AddWorkspaceInput) (domainworkspaces.Workspace, error) {
 	return b.app.AddWorkspace(context.Background(), input)
 }

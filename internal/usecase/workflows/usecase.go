@@ -42,6 +42,7 @@ type WorkflowRepository interface {
 	ListStepRuns(context.Context, string) ([]domainworkflows.StepRun, error)
 	AppendEvent(context.Context, domainworkflows.WorkflowEvent) (domainworkflows.WorkflowEvent, error)
 	AppendRuntimeEvent(context.Context, string, string, json.RawMessage) (domainworkflows.RuntimeEvent, error)
+	ClaimInstructions(context.Context, string) ([]domainworkflows.Instruction, error)
 	WriteRunSummary(context.Context, string, string) error
 }
 
@@ -362,6 +363,11 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		run.Sessions = make(map[string]string)
 	}
 	for run.Status == domainworkflows.RunRunning {
+		queuedInstruction, err := s.claimInstructionText(ctx, run.ID)
+		if err != nil {
+			return run, err
+		}
+		instruction = joinInstructions(instruction, queuedInstruction)
 		step, ok := findStep(definition, run.CurrentStepID)
 		if !ok {
 			return run, fmt.Errorf("workflow step %q not found", run.CurrentStepID)
@@ -394,7 +400,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			message := fmt.Sprintf("runtime %q is unavailable", step.Runtime)
 			stepRun.Status = domainworkflows.StepRunFailed
 			stepRun.Error = message
-			stepRun.FinishedAt = s.now()
+			finishStepRun(&stepRun, agentrun.Result{}, s.now())
 			if err := s.workflows.SaveStepRun(ctx, stepRun); err != nil {
 				return run, err
 			}
@@ -451,7 +457,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		if ctx.Err() != nil {
 			stepRun.Status = domainworkflows.StepRunInterrupted
 			stepRun.Error = ctx.Err().Error()
-			stepRun.FinishedAt = s.now()
+			finishStepRun(&stepRun, result, s.now())
 			if err := s.workflows.SaveStepRun(context.Background(), stepRun); err != nil {
 				return run, err
 			}
@@ -472,7 +478,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			message := failureMessage(runErr, result.FinalMessage)
 			stepRun.Status = domainworkflows.StepRunFailed
 			stepRun.Error = message
-			stepRun.FinishedAt = s.now()
+			finishStepRun(&stepRun, result, s.now())
 			if err := s.workflows.SaveStepRun(ctx, stepRun); err != nil {
 				return run, err
 			}
@@ -509,7 +515,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		if protocolErr != nil {
 			stepRun.Status = domainworkflows.StepRunFailed
 			stepRun.Error = protocolErr.Error()
-			stepRun.FinishedAt = s.now()
+			finishStepRun(&stepRun, result, s.now())
 			if err := s.workflows.SaveStepRun(ctx, stepRun); err != nil {
 				return run, err
 			}
@@ -540,7 +546,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		stepRun.Status = domainworkflows.StepRunSucceeded
 		stepRun.Signal = outcome.Signal
 		stepRun.Content = outcome.Content
-		stepRun.FinishedAt = s.now()
+		finishStepRun(&stepRun, result, s.now())
 		if err := s.workflows.SaveStepRun(ctx, stepRun); err != nil {
 			return run, err
 		}
@@ -670,6 +676,7 @@ func composePrompt(task domaintasks.Task, definition domainworkflows.Definition,
 		"## Step instruction",
 		step.Instruction,
 	}
+	parts = appendTaskAttachments(parts, task)
 	if strings.TrimSpace(instruction) != "" {
 		parts = append(parts, "", "## Human instruction", instruction)
 	}
@@ -700,6 +707,60 @@ func composePrompt(task domaintasks.Task, definition domainworkflows.Definition,
 		"The signal must be one of the allowed outcomes above. Do not invent a target or another signal.",
 	)
 	return strings.Join(parts, "\n") + "\n"
+}
+
+func (s *Usecase) claimInstructionText(ctx context.Context, runID string) (string, error) {
+	items, err := s.workflows.ClaimInstructions(ctx, runID)
+	if err != nil || len(items) == 0 {
+		return "", err
+	}
+	parts := make([]string, 0, len(items))
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		text := item.Content
+		if len(item.Attachments) > 0 {
+			text += "\nAttachments:\n- " + strings.Join(item.Attachments, "\n- ")
+		}
+		parts = append(parts, text)
+		ids = append(ids, item.ID)
+	}
+	if err := s.appendEvent(ctx, runID, "instruction.applied", "", map[string]any{"instructionIds": ids, "count": len(ids)}); err != nil {
+		return "", err
+	}
+	return strings.Join(parts, "\n\n---\n\n"), nil
+}
+
+func joinInstructions(current, queued string) string {
+	current = strings.TrimSpace(current)
+	queued = strings.TrimSpace(queued)
+	if current == "" {
+		return queued
+	}
+	if queued == "" {
+		return current
+	}
+	return current + "\n\n---\n\n" + queued
+}
+
+func appendTaskAttachments(parts []string, task domaintasks.Task) []string {
+	if len(task.Attachments) == 0 {
+		return parts
+	}
+	parts = append(parts, "", "## Task attachments")
+	for _, attachment := range task.Attachments {
+		parts = append(parts, fmt.Sprintf("- %s: %s", attachment.Name, attachment.StoredPath))
+	}
+	parts = append(parts, "Read these files when they are relevant to the task.")
+	return parts
+}
+
+func finishStepRun(stepRun *domainworkflows.StepRun, result agentrun.Result, finishedAt time.Time) {
+	stepRun.FinishedAt = finishedAt
+	stepRun.InputTokens = result.Usage.InputTokens
+	stepRun.OutputTokens = result.Usage.OutputTokens
+	if !stepRun.StartedAt.IsZero() && finishedAt.After(stepRun.StartedAt) {
+		stepRun.DurationMS = finishedAt.Sub(stepRun.StartedAt).Milliseconds()
+	}
 }
 
 func allowedSandbox(requested, maximum string) agentrun.Sandbox {

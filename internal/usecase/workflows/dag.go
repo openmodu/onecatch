@@ -40,6 +40,11 @@ func (s *Usecase) driveDAG(ctx context.Context, task domaintasks.Task, workspace
 	}
 
 	for run.Status == domainworkflows.RunRunning {
+		queuedInstruction, err := s.claimInstructionText(ctx, run.ID)
+		if err != nil {
+			return run, err
+		}
+		instruction = joinInstructions(instruction, queuedInstruction)
 		ready := readyDAGSteps(definition, run.Nodes)
 		if len(ready) == 0 {
 			if allDAGNodesCompleted(run.Nodes) {
@@ -203,7 +208,7 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 		result, err = s.engine.Run(stepCtx, request, s.runtimeSink(run.ID, stepRun.ID))
 		cancel()
 	}
-	stepRun.FinishedAt = s.now()
+	finishStepRun(&stepRun, result, s.now())
 	stepRun.SessionIDAfter = result.SessionID
 	if err != nil || !result.Succeeded {
 		stepRun.Status, stepRun.Error = domainworkflows.StepRunFailed, failureMessage(err, result.FinalMessage)
@@ -277,6 +282,7 @@ func (s *Usecase) pauseDAG(ctx context.Context, task *domaintasks.Task, definiti
 
 func composeDAGPrompt(task domaintasks.Task, definition domainworkflows.Definition, step domainworkflows.Step, run domainworkflows.Run, instruction string) string {
 	parts := []string{"# Oneshot DAG node", "", "## Task", task.Prompt, "", "## Your role", step.RolePrompt, "", "## Node instruction", step.Instruction}
+	parts = appendTaskAttachments(parts, task)
 	if strings.TrimSpace(instruction) != "" {
 		parts = append(parts, "", "## Human instruction", instruction)
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -58,7 +59,7 @@ func TestTasksRepoPersistsAcrossReopen(t *testing.T) {
 		t.Fatalf("GetWorkspace() = %+v, %v", gotWorkspace, err)
 	}
 	gotTask, err := reopened.Repos.Tasks.GetTask(ctx, task.ID)
-	if err != nil || gotTask != task {
+	if err != nil || !reflect.DeepEqual(gotTask, task) {
 		t.Fatalf("GetTask() = %+v, %v, want %+v", gotTask, err, task)
 	}
 	workspaces, err := reopened.Repos.Tasks.ListWorkspaces(ctx)

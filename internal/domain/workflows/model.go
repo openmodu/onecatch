@@ -183,7 +183,31 @@ type StepRun struct {
 	SessionIDAfter  string        `json:"sessionIdAfter,omitempty"`
 	StartedAt       time.Time     `json:"startedAt"`
 	FinishedAt      time.Time     `json:"finishedAt,omitempty"`
+	InputTokens     int           `json:"inputTokens,omitempty"`
+	OutputTokens    int           `json:"outputTokens,omitempty"`
+	DurationMS      int64         `json:"durationMs,omitempty"`
 	Error           string        `json:"error,omitempty"`
+}
+
+type InstructionStatus string
+
+const (
+	InstructionPending InstructionStatus = "pending"
+	InstructionApplied InstructionStatus = "applied"
+	InstructionRemoved InstructionStatus = "removed"
+)
+
+// Instruction is durable human guidance queued while an Agent step is active.
+// It lives in a file separate from run.json so enqueueing cannot race the Run
+// revision used by the workflow state machine.
+type Instruction struct {
+	ID          string            `json:"id"`
+	Content     string            `json:"content"`
+	Attachments []string          `json:"attachments,omitempty"`
+	Status      InstructionStatus `json:"status"`
+	Priority    bool              `json:"priority,omitempty"`
+	CreatedAt   time.Time         `json:"createdAt"`
+	AppliedAt   time.Time         `json:"appliedAt,omitempty"`
 }
 
 // WorkflowEvent is a durable, high-level state machine event. Runtime stream

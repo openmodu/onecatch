@@ -47,6 +47,18 @@ test("falls back to task update time for the initial user message", () => {
   assert.equal(message.at, "2026-07-11T10:00:05Z");
 });
 
+test("shows applied queued instructions as user turns", () => {
+  const timeline = buildRunConversation({
+    task: { prompt: "先检查问题", createdAt: "2026-07-11T10:00:00Z" },
+    run: {}, workflow: { steps: [] }, events: [], stepRuns: [], runtimeEvents: [],
+    instructions: [
+      { id: "pending", status: "pending", content: "还没执行", createdAt: "2026-07-11T10:01:00Z" },
+      { id: "applied", status: "applied", content: "优先修复测试", appliedAt: "2026-07-11T10:02:00Z" },
+    ],
+  });
+  assert.deepEqual(timeline.map((item) => item.text), ["先检查问题", "优先修复测试"]);
+});
+
 test("keeps tool calls separate and attaches an adjacent tool result", () => {
   const [round] = buildRunConversation({
     task: {}, run: {}, events: [],

@@ -182,6 +182,70 @@ func TestResumeRunUsesSnapshotSessionAndHumanInstruction(t *testing.T) {
 	}
 }
 
+func TestQueuedInstructionsAreClaimedPriorityFirstAtStepBoundary(t *testing.T) {
+	definition := oneStepPauseWorkflow()
+	engine := &scriptedEngine{
+		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true},
+		scripts:   []engineScript{{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"done"}`, "session-1")}},
+	}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	run, err := usecase.StartTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := time.Date(2026, 7, 10, 15, 30, 0, 0, time.UTC)
+	for _, instruction := range []domainworkflows.Instruction{
+		{ID: "normal", Content: "run the ordinary check", CreatedAt: base},
+		{ID: "priority", Content: "fix the urgent failure", Priority: true, CreatedAt: base.Add(time.Second)},
+	} {
+		if _, err := store.Repos.Workflows.EnqueueInstruction(context.Background(), run.ID, instruction); err != nil {
+			t.Fatal(err)
+		}
+	}
+	completed, err := usecase.ExecuteRun(context.Background(), run.ID)
+	if err != nil || completed.Status != domainworkflows.RunCompleted {
+		t.Fatalf("ExecuteRun() = %+v, %v", completed, err)
+	}
+	prompt := engine.calls[0].Prompt
+	if priority, normal := strings.Index(prompt, "fix the urgent failure"), strings.Index(prompt, "run the ordinary check"); priority < 0 || normal < 0 || priority > normal {
+		t.Fatalf("instruction order in prompt = %q", prompt)
+	}
+	instructions, err := store.Repos.Workflows.ListInstructions(context.Background(), run.ID)
+	if err != nil || len(instructions) != 2 || instructions[0].Status != domainworkflows.InstructionApplied || instructions[1].Status != domainworkflows.InstructionApplied {
+		t.Fatalf("ListInstructions() = %+v, %v", instructions, err)
+	}
+	events, err := store.Repos.Workflows.ListEvents(context.Background(), run.ID, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundApplied := false
+	for _, event := range events {
+		foundApplied = foundApplied || event.Type == "instruction.applied"
+	}
+	if !foundApplied {
+		t.Fatalf("instruction.applied event missing: %+v", events)
+	}
+}
+
+func TestStepRunPersistsUsageAndDuration(t *testing.T) {
+	definition := oneStepPauseWorkflow()
+	result := success(`{"signal":"approved","content":"done"}`, "session-usage")
+	result.Usage = agentrun.Usage{InputTokens: 1234, OutputTokens: 321}
+	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true}, scripts: []engineScript{{result: result}}}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	run, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stepRuns, err := store.Repos.Workflows.ListStepRuns(context.Background(), run.ID)
+	if err != nil || len(stepRuns) != 1 {
+		t.Fatalf("ListStepRuns() = %+v, %v", stepRuns, err)
+	}
+	if stepRuns[0].InputTokens != 1234 || stepRuns[0].OutputTokens != 321 || stepRuns[0].DurationMS <= 0 {
+		t.Fatalf("usage and duration = %+v", stepRuns[0])
+	}
+}
+
 func TestUnknownSignalIsRecordedAsFailureAndRetried(t *testing.T) {
 	definition := oneStepPauseWorkflow()
 	engine := &scriptedEngine{

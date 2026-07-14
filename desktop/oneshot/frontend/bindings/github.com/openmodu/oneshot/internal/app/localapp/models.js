@@ -239,6 +239,13 @@ export class CreateTaskInput {
              */
             this["workflowId"] = "";
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["attachmentPaths"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -249,7 +256,11 @@ export class CreateTaskInput {
      * @returns {CreateTaskInput}
      */
     static createFrom($$source = {}) {
+        const $$createField4_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("attachmentPaths" in $$parsedSource) {
+            $$parsedSource["attachmentPaths"] = $$createField4_0($$parsedSource["attachmentPaths"]);
+        }
         return new CreateTaskInput(/** @type {Partial<CreateTaskInput>} */($$parsedSource));
     }
 }
@@ -346,6 +357,129 @@ export class DiagnosticsExportInput {
             $$parsedSource["runIds"] = $$createField1_0($$parsedSource["runIds"]);
         }
         return new DiagnosticsExportInput(/** @type {Partial<DiagnosticsExportInput>} */($$parsedSource));
+    }
+}
+
+export class GitCommitInput {
+    /**
+     * Creates a new GitCommitInput instance.
+     * @param {Partial<GitCommitInput>} [$$source = {}] - The source object to create the GitCommitInput.
+     */
+    constructor($$source = {}) {
+        if (!("workspaceId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["workspaceId"] = "";
+        }
+        if (!("message" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["message"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["remote"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["push"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GitCommitInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {GitCommitInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GitCommitInput(/** @type {Partial<GitCommitInput>} */($$parsedSource));
+    }
+}
+
+export class GitCommitResult {
+    /**
+     * Creates a new GitCommitResult instance.
+     * @param {Partial<GitCommitResult>} [$$source = {}] - The source object to create the GitCommitResult.
+     */
+    constructor($$source = {}) {
+        if (!("commitHash" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["commitHash"] = "";
+        }
+        if (!("pushed" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["pushed"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GitCommitResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {GitCommitResult}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GitCommitResult(/** @type {Partial<GitCommitResult>} */($$parsedSource));
+    }
+}
+
+export class InstructionInput {
+    /**
+     * Creates a new InstructionInput instance.
+     * @param {Partial<InstructionInput>} [$$source = {}] - The source object to create the InstructionInput.
+     */
+    constructor($$source = {}) {
+        if (!("content" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["content"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["attachmentPaths"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InstructionInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {InstructionInput}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("attachmentPaths" in $$parsedSource) {
+            $$parsedSource["attachmentPaths"] = $$createField1_0($$parsedSource["attachmentPaths"]);
+        }
+        return new InstructionInput(/** @type {Partial<InstructionInput>} */($$parsedSource));
     }
 }
 
@@ -460,6 +594,13 @@ export class RunDetail {
              */
             this["runtimeEvents"] = [];
         }
+        if (!("instructions" in $$source)) {
+            /**
+             * @member
+             * @type {workflows$0.Instruction[]}
+             */
+            this["instructions"] = [];
+        }
         if (!("active" in $$source)) {
             /**
              * @member
@@ -491,6 +632,7 @@ export class RunDetail {
         const $$createField4_0 = $$createType6;
         const $$createField5_0 = $$createType8;
         const $$createField6_0 = $$createType10;
+        const $$createField7_0 = $$createType12;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("run" in $$parsedSource) {
             $$parsedSource["run"] = $$createField0_0($$parsedSource["run"]);
@@ -512,6 +654,9 @@ export class RunDetail {
         }
         if ("runtimeEvents" in $$parsedSource) {
             $$parsedSource["runtimeEvents"] = $$createField6_0($$parsedSource["runtimeEvents"]);
+        }
+        if ("instructions" in $$parsedSource) {
+            $$parsedSource["instructions"] = $$createField7_0($$parsedSource["instructions"]);
         }
         return new RunDetail(/** @type {Partial<RunDetail>} */($$parsedSource));
     }
@@ -597,7 +742,7 @@ export class RunListPage {
      * @returns {RunListPage}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType12;
+        const $$createField0_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
@@ -713,7 +858,7 @@ export class RuntimeDraftInput {
      * @returns {RuntimeDraftInput}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType13;
+        const $$createField1_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("settings" in $$parsedSource) {
             $$parsedSource["settings"] = $$createField1_0($$parsedSource["settings"]);
@@ -920,7 +1065,7 @@ export class StorageUsage {
      * @returns {StorageUsage}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType15;
+        const $$createField2_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("categories" in $$parsedSource) {
             $$parsedSource["categories"] = $$createField2_0($$parsedSource["categories"]);
@@ -959,8 +1104,8 @@ export class WorkerStatus {
      * @returns {WorkerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType16;
-        const $$createField1_0 = $$createType17;
+        const $$createField0_0 = $$createType18;
+        const $$createField1_0 = $$createType19;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worker" in $$parsedSource) {
             $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
@@ -1066,7 +1211,7 @@ export class WorkspaceStatus {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType3;
-        const $$createField1_0 = $$createType18;
+        const $$createField1_0 = $$createType20;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -1090,11 +1235,13 @@ const $$createType7 = WorkflowEventView.createFrom;
 const $$createType8 = $Create.Array($$createType7);
 const $$createType9 = RuntimeEventView.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = RunListItem.createFrom;
+const $$createType11 = workflows$0.Instruction.createFrom;
 const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = settings$0.RuntimeSettings.createFrom;
-const $$createType14 = StorageCategory.createFrom;
-const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = worker$0.Info.createFrom;
-const $$createType17 = worker$0.Health.createFrom;
-const $$createType18 = workspaces$0.GitSnapshot.createFrom;
+const $$createType13 = RunListItem.createFrom;
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = settings$0.RuntimeSettings.createFrom;
+const $$createType16 = StorageCategory.createFrom;
+const $$createType17 = $Create.Array($$createType16);
+const $$createType18 = worker$0.Info.createFrom;
+const $$createType19 = worker$0.Health.createFrom;
+const $$createType20 = workspaces$0.GitSnapshot.createFrom;

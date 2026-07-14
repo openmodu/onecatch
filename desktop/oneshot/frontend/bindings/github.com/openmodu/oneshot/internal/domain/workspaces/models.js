@@ -10,6 +10,48 @@ import { Create as $Create } from "@wailsio/runtime";
 // @ts-ignore: Unused imports
 import * as time$0 from "../../../../../../time/models.js";
 
+export class GitFile {
+    /**
+     * Creates a new GitFile instance.
+     * @param {Partial<GitFile>} [$$source = {}] - The source object to create the GitFile.
+     */
+    constructor($$source = {}) {
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("index" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["index"] = "";
+        }
+        if (!("worktree" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["worktree"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GitFile instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {GitFile}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GitFile(/** @type {Partial<GitFile>} */($$parsedSource));
+    }
+}
+
 export class GitSnapshot {
     /**
      * Creates a new GitSnapshot instance.
@@ -35,6 +77,27 @@ export class GitSnapshot {
              * @member
              * @type {string | undefined}
              */
+            this["branch"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["ahead"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["behind"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
             this["status"] = undefined;
         }
         if (/** @type {any} */(false)) {
@@ -43,6 +106,20 @@ export class GitSnapshot {
              * @type {string | undefined}
              */
             this["diffStat"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["stagedStat"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {GitFile[] | undefined}
+             */
+            this["files"] = undefined;
         }
 
         Object.assign(this, $$source);
@@ -54,7 +131,11 @@ export class GitSnapshot {
      * @returns {GitSnapshot}
      */
     static createFrom($$source = {}) {
+        const $$createField8_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("files" in $$parsedSource) {
+            $$parsedSource["files"] = $$createField8_0($$parsedSource["files"]);
+        }
         return new GitSnapshot(/** @type {Partial<GitSnapshot>} */($$parsedSource));
     }
 }
@@ -135,3 +216,7 @@ export class Workspace {
         return new Workspace(/** @type {Partial<Workspace>} */($$parsedSource));
     }
 }
+
+// Private type creation functions
+const $$createType0 = GitFile.createFrom;
+const $$createType1 = $Create.Array($$createType0);

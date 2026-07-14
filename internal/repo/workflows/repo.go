@@ -41,6 +41,10 @@ type WorkflowsRepo interface {
 	ListEvents(context.Context, string, int64, int) ([]domainworkflows.WorkflowEvent, error)
 	AppendRuntimeEvent(context.Context, string, string, json.RawMessage) (domainworkflows.RuntimeEvent, error)
 	ListRuntimeEvents(context.Context, string, string, int64, int) ([]domainworkflows.RuntimeEvent, error)
+	EnqueueInstruction(context.Context, string, domainworkflows.Instruction) (domainworkflows.Instruction, error)
+	ListInstructions(context.Context, string) ([]domainworkflows.Instruction, error)
+	RemoveInstruction(context.Context, string, string) error
+	ClaimInstructions(context.Context, string) ([]domainworkflows.Instruction, error)
 	WriteRunSummary(context.Context, string, string) error
 }
 

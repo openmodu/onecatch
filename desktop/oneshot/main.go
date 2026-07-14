@@ -69,6 +69,7 @@ func main() {
 		Name:        app.Name,
 		Description: app.Description,
 		Services: []application.Service{
+			application.NewService(bindings.NewGitBinding(localApp)),
 			application.NewService(bindings.NewRuntimeBinding(localApp)),
 			application.NewService(bindings.NewSettingsBinding(localApp)),
 			application.NewService(workspaceBinding),

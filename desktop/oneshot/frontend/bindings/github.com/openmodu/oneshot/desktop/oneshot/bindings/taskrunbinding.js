@@ -37,11 +37,52 @@ export function CreateTask(input) {
 }
 
 /**
+ * @param {string} taskID
+ * @returns {$CancellablePromise<void>}
+ */
+export function DeleteTask(taskID) {
+    return $Call.ByID(1400636366, taskID);
+}
+
+/**
+ * @param {string} runID
+ * @param {localapp$0.InstructionInput} input
+ * @returns {$CancellablePromise<workflows$0.Instruction>}
+ */
+export function EnqueueInstruction(runID, input) {
+    return $Call.ByID(1538789322, runID, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType2($result);
+    }));
+}
+
+/**
+ * @param {string} taskID
+ * @param {string} confirmationToken
+ * @returns {$CancellablePromise<tasks$0.Task>}
+ */
+export function EnqueueTask(taskID, confirmationToken) {
+    return $Call.ByID(2138368811, taskID, confirmationToken).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * @param {string} runID
  * @returns {$CancellablePromise<localapp$0.RunDetail>}
  */
 export function GetRun(runID) {
     return $Call.ByID(1098076141, runID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
+}
+
+/**
+ * @param {string} runID
+ * @param {localapp$0.InstructionInput} input
+ * @returns {$CancellablePromise<workflows$0.Instruction>}
+ */
+export function InterruptAndInsert(runID, input) {
+    return $Call.ByID(2407930173, runID, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType2($result);
     }));
 }
@@ -63,7 +104,7 @@ export function InterruptRun(runID) {
  */
 export function ListRunEvents(runID, afterSeq) {
     return $Call.ByID(3352032840, runID, afterSeq).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType5($result);
     }));
 }
 
@@ -73,7 +114,7 @@ export function ListRunEvents(runID, afterSeq) {
  */
 export function ListRuns(input) {
     return $Call.ByID(527758150, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType6($result);
     }));
 }
 
@@ -83,7 +124,7 @@ export function ListRuns(input) {
  */
 export function ListRunsByTask(taskID) {
     return $Call.ByID(71078598, taskID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType7($result);
     }));
 }
 
@@ -93,7 +134,7 @@ export function ListRunsByTask(taskID) {
  */
 export function ListTasks(workspaceID) {
     return $Call.ByID(660765190, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType8($result);
     }));
 }
 
@@ -103,7 +144,37 @@ export function ListTasks(workspaceID) {
  */
 export function PreviewRun(taskID) {
     return $Call.ByID(2734983773, taskID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType9($result);
+    }));
+}
+
+/**
+ * @param {string} workspaceID
+ * @returns {$CancellablePromise<tasks$0.Task[]>}
+ */
+export function QueueSnapshot(workspaceID) {
+    return $Call.ByID(557416803, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType8($result);
+    }));
+}
+
+/**
+ * @param {string} runID
+ * @param {string} instructionID
+ * @returns {$CancellablePromise<void>}
+ */
+export function RemoveInstruction(runID, instructionID) {
+    return $Call.ByID(2230820116, runID, instructionID);
+}
+
+/**
+ * @param {string} taskID
+ * @param {string} title
+ * @returns {$CancellablePromise<tasks$0.Task>}
+ */
+export function RenameTask(taskID, title) {
+    return $Call.ByID(2119797299, taskID, title).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
     }));
 }
 
@@ -132,10 +203,11 @@ export function StartRun(taskID, confirmationToken) {
 // Private type creation functions
 const $$createType0 = workflows$0.Run.createFrom;
 const $$createType1 = tasks$0.Task.createFrom;
-const $$createType2 = localapp$0.RunDetail.createFrom;
-const $$createType3 = localapp$0.WorkflowEventView.createFrom;
-const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = localapp$0.RunListPage.createFrom;
-const $$createType6 = $Create.Array($$createType0);
-const $$createType7 = $Create.Array($$createType1);
-const $$createType8 = localapp$0.RunStartPreview.createFrom;
+const $$createType2 = workflows$0.Instruction.createFrom;
+const $$createType3 = localapp$0.RunDetail.createFrom;
+const $$createType4 = localapp$0.WorkflowEventView.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = localapp$0.RunListPage.createFrom;
+const $$createType7 = $Create.Array($$createType0);
+const $$createType8 = $Create.Array($$createType1);
+const $$createType9 = localapp$0.RunStartPreview.createFrom;

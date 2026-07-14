@@ -18,6 +18,18 @@ func (b *TaskRunBinding) CreateTask(input localapp.CreateTaskInput) (domaintasks
 func (b *TaskRunBinding) ListTasks(workspaceID string) ([]domaintasks.Task, error) {
 	return b.app.ListTasks(context.Background(), workspaceID)
 }
+func (b *TaskRunBinding) RenameTask(taskID, title string) (domaintasks.Task, error) {
+	return b.app.RenameTask(context.Background(), taskID, title)
+}
+func (b *TaskRunBinding) DeleteTask(taskID string) error {
+	return b.app.DeleteTask(context.Background(), taskID)
+}
+func (b *TaskRunBinding) EnqueueTask(taskID, confirmationToken string) (domaintasks.Task, error) {
+	return b.app.EnqueueTask(context.Background(), taskID, confirmationToken)
+}
+func (b *TaskRunBinding) QueueSnapshot(workspaceID string) ([]domaintasks.Task, error) {
+	return b.app.QueueSnapshot(context.Background(), workspaceID)
+}
 func (b *TaskRunBinding) PreviewRun(taskID string) (localapp.RunStartPreview, error) {
 	return b.app.PreviewRun(context.Background(), taskID)
 }
@@ -44,4 +56,13 @@ func (b *TaskRunBinding) ResumeRun(runID, instruction string) (domainworkflows.R
 }
 func (b *TaskRunBinding) CancelRun(runID string) (domainworkflows.Run, error) {
 	return b.app.CancelRun(context.Background(), runID)
+}
+func (b *TaskRunBinding) EnqueueInstruction(runID string, input localapp.InstructionInput) (domainworkflows.Instruction, error) {
+	return b.app.EnqueueInstruction(context.Background(), runID, input)
+}
+func (b *TaskRunBinding) RemoveInstruction(runID, instructionID string) error {
+	return b.app.RemoveInstruction(context.Background(), runID, instructionID)
+}
+func (b *TaskRunBinding) InterruptAndInsert(runID string, input localapp.InstructionInput) (domainworkflows.Instruction, error) {
+	return b.app.InterruptAndInsert(context.Background(), runID, input)
 }

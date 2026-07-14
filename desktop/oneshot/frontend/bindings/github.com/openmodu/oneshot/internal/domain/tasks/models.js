@@ -10,6 +10,161 @@ import { Create as $Create } from "@wailsio/runtime";
 // @ts-ignore: Unused imports
 import * as time$0 from "../../../../../../time/models.js";
 
+export class Attachment {
+    /**
+     * Creates a new Attachment instance.
+     * @param {Partial<Attachment>} [$$source = {}] - The source object to create the Attachment.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["originalPath"] = undefined;
+        }
+        if (!("storedPath" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["storedPath"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["mimeType"] = undefined;
+        }
+        if (!("size" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["size"] = 0;
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["createdAt"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Attachment instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Attachment}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Attachment(/** @type {Partial<Attachment>} */($$parsedSource));
+    }
+}
+
+/**
+ * @readonly
+ * @enum {string}
+ */
+export const ExecutionMode = {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero: "",
+
+    ExecutionImmediate: "immediate",
+    ExecutionQueued: "queued",
+};
+
+export class QueueInfo {
+    /**
+     * Creates a new QueueInfo instance.
+     * @param {Partial<QueueInfo>} [$$source = {}] - The source object to create the QueueInfo.
+     */
+    constructor($$source = {}) {
+        if (!("state" in $$source)) {
+            /**
+             * @member
+             * @type {QueueState}
+             */
+            this["state"] = QueueState.$zero;
+        }
+        if (!("enqueuedAt" in $$source)) {
+            /**
+             * @member
+             * @type {time$0.Time}
+             */
+            this["enqueuedAt"] = null;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["activatedAt"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["activationSource"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["authorized"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new QueueInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {QueueInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new QueueInfo(/** @type {Partial<QueueInfo>} */($$parsedSource));
+    }
+}
+
+/**
+ * @readonly
+ * @enum {string}
+ */
+export const QueueState = {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero: "",
+
+    QueueWaiting: "waiting",
+    QueueActive: "active",
+    QueueSuperseded: "superseded",
+};
+
 /**
  * @readonly
  * @enum {string}
@@ -20,6 +175,7 @@ export const Status = {
      */
     $zero: "",
 
+    StatusQueued: "queued",
     StatusReady: "ready",
     StatusRunning: "running",
     StatusPaused: "paused",
@@ -76,6 +232,34 @@ export class Task {
              */
             this["status"] = Status.$zero;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {ExecutionMode | undefined}
+             */
+            this["executionMode"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {QueueInfo | null | undefined}
+             */
+            this["queue"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {Attachment[] | undefined}
+             */
+            this["attachments"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {time$0.Time | undefined}
+             */
+            this["deletedAt"] = undefined;
+        }
         if (!("createdAt" in $$source)) {
             /**
              * @member
@@ -100,7 +284,21 @@ export class Task {
      * @returns {Task}
      */
     static createFrom($$source = {}) {
+        const $$createField7_0 = $$createType1;
+        const $$createField8_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("queue" in $$parsedSource) {
+            $$parsedSource["queue"] = $$createField7_0($$parsedSource["queue"]);
+        }
+        if ("attachments" in $$parsedSource) {
+            $$parsedSource["attachments"] = $$createField8_0($$parsedSource["attachments"]);
+        }
         return new Task(/** @type {Partial<Task>} */($$parsedSource));
     }
 }
+
+// Private type creation functions
+const $$createType0 = QueueInfo.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = Attachment.createFrom;
+const $$createType3 = $Create.Array($$createType2);

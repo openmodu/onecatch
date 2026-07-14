@@ -53,10 +53,16 @@ type WorkspaceStatus struct {
 }
 
 type CreateTaskInput struct {
-	WorkspaceID string `json:"workspaceId"`
-	Title       string `json:"title"`
-	Prompt      string `json:"prompt"`
-	WorkflowID  string `json:"workflowId"`
+	WorkspaceID     string   `json:"workspaceId"`
+	Title           string   `json:"title"`
+	Prompt          string   `json:"prompt"`
+	WorkflowID      string   `json:"workflowId"`
+	AttachmentPaths []string `json:"attachmentPaths,omitempty"`
+}
+
+type InstructionInput struct {
+	Content         string   `json:"content"`
+	AttachmentPaths []string `json:"attachmentPaths,omitempty"`
 }
 
 type ListRunsInput struct {
@@ -96,15 +102,16 @@ type RuntimeEventView struct {
 }
 
 type RunDetail struct {
-	Run           domainworkflows.Run        `json:"run"`
-	Task          domaintasks.Task           `json:"task"`
-	Workspace     domainworkspaces.Workspace `json:"workspace"`
-	Workflow      domainworkflows.Definition `json:"workflow"`
-	StepRuns      []domainworkflows.StepRun  `json:"stepRuns"`
-	Events        []WorkflowEventView        `json:"events"`
-	RuntimeEvents []RuntimeEventView         `json:"runtimeEvents"`
-	Active        bool                       `json:"active"`
-	LastError     string                     `json:"lastError,omitempty"`
+	Run           domainworkflows.Run           `json:"run"`
+	Task          domaintasks.Task              `json:"task"`
+	Workspace     domainworkspaces.Workspace    `json:"workspace"`
+	Workflow      domainworkflows.Definition    `json:"workflow"`
+	StepRuns      []domainworkflows.StepRun     `json:"stepRuns"`
+	Events        []WorkflowEventView           `json:"events"`
+	RuntimeEvents []RuntimeEventView            `json:"runtimeEvents"`
+	Instructions  []domainworkflows.Instruction `json:"instructions"`
+	Active        bool                          `json:"active"`
+	LastError     string                        `json:"lastError,omitempty"`
 }
 
 type App struct {
@@ -125,6 +132,7 @@ type App struct {
 	cleanupPlans   map[string]cleanupPlan
 	confirmations  map[string]runConfirmation
 	settingsReload func(domainsettings.Settings) error
+	queueMu        sync.Mutex
 }
 
 func New(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitinspect.Inspector) *App {
@@ -360,6 +368,13 @@ func (a *App) RecoverInterruptedRuns(ctx context.Context) error {
 			return mapError(err)
 		}
 	}
+	workspaces, err := a.store.Repos.Tasks.ListWorkspaces(ctx)
+	if err != nil {
+		return err
+	}
+	for _, workspace := range workspaces {
+		a.reconcileWorkspaceQueue(workspace.ID)
+	}
 	return nil
 }
 
@@ -371,7 +386,12 @@ func (a *App) CreateTask(ctx context.Context, input CreateTaskInput) (domaintask
 		return domaintasks.Task{}, err
 	}
 	now := time.Now().UTC()
-	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: strings.TrimSpace(input.Title), Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Status: domaintasks.StatusReady, CreatedAt: now, UpdatedAt: now}
+	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: strings.TrimSpace(input.Title), Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
+	attachments, err := a.persistAttachments(ctx, task, input.AttachmentPaths)
+	if err != nil {
+		return domaintasks.Task{}, err
+	}
+	task.Attachments = attachments
 	if err := a.store.Repos.Tasks.SaveTask(ctx, task); err != nil {
 		return domaintasks.Task{}, coded("task_invalid", err.Error())
 	}
@@ -394,18 +414,7 @@ func (a *App) startRun(ctx context.Context, taskID, confirmationToken string) (d
 	if err := a.validateTaskSecurity(ctx, taskID, confirmationToken); err != nil {
 		return domainworkflows.Run{}, err
 	}
-	definition, resolution, err := a.resolveRunSettings(ctx, taskID)
-	if err != nil {
-		return domainworkflows.Run{}, err
-	}
-	run, err := a.orchestrator.StartTaskResolved(ctx, taskID, definition, resolution)
-	if err != nil {
-		return run, mapError(err)
-	}
-	a.dispatch(run.ID, func(runCtx context.Context) (domainworkflows.Run, error) {
-		return a.orchestrator.ExecuteRun(runCtx, run.ID)
-	})
-	return run, nil
+	return a.startRunAuthorized(ctx, taskID)
 }
 
 func (a *App) ResumeRun(ctx context.Context, runID, instruction string) (domainworkflows.Run, error) {
@@ -452,6 +461,9 @@ func (a *App) CancelRun(ctx context.Context, runID string) (domainworkflows.Run,
 		return domainworkflows.Run{}, coded("run_invalid_state", "interrupt the active run before cancelling it")
 	}
 	run, err := a.orchestrator.CancelRun(ctx, runID)
+	if err == nil {
+		go a.reconcileQueueForRun(runID)
+	}
 	return run, mapError(err)
 }
 
@@ -542,7 +554,11 @@ func (a *App) GetRunDetail(ctx context.Context, runID string) (RunDetail, error)
 	if err != nil {
 		return RunDetail{}, err
 	}
-	detail := RunDetail{Run: run, Task: task, Workspace: workspace, Workflow: workflow, StepRuns: stepRuns, Events: make([]WorkflowEventView, 0, len(events)), RuntimeEvents: []RuntimeEventView{}, Active: a.isActive(runID), LastError: a.lastError(runID)}
+	instructions, err := a.store.Repos.Workflows.ListInstructions(ctx, runID)
+	if err != nil {
+		return RunDetail{}, err
+	}
+	detail := RunDetail{Run: run, Task: task, Workspace: workspace, Workflow: workflow, StepRuns: stepRuns, Events: make([]WorkflowEventView, 0, len(events)), RuntimeEvents: []RuntimeEventView{}, Instructions: instructions, Active: a.isActive(runID), LastError: a.lastError(runID)}
 	for _, event := range events {
 		detail.Events = append(detail.Events, WorkflowEventView{RunID: event.RunID, Seq: event.Seq, Type: event.Type, StepID: event.StepID, Payload: string(event.Payload), At: event.At.Format(time.RFC3339Nano)})
 	}
@@ -576,6 +592,7 @@ func (a *App) dispatch(runID string, execute func(context.Context) (domainworkfl
 			a.lastErrors[runID] = mapError(err).Error()
 		}
 		a.mu.Unlock()
+		a.reconcileQueueForRun(runID)
 	}()
 }
 
