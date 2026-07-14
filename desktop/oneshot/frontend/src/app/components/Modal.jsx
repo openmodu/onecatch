@@ -1,0 +1,6 @@
+import { Action, Toolbar } from "../../ui/primitives.jsx";
+
+export default function Modal({ title, subtitle, onClose, children, wide = false }) {
+  if (wide) return <section className="workflow-editor-surface legacy-wide-editor"><Toolbar className="modal-header editor-toolbar"><Action onClick={onClose}>&lt; 返回</Action><div><h2>{title}</h2><p>{subtitle}</p></div></Toolbar>{children}</section>;
+  return <div className="modal-backdrop"><div className="modal"><div className="modal-header"><div><h2>{title}</h2><p>{subtitle}</p></div><button className="text-button" onClick={onClose}>[ 关闭 ]</button></div>{children}</div></div>;
+}

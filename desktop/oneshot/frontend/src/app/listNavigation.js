@@ -1,6 +1,4 @@
 export const COMPACT_WORKSPACE_LIMIT = 8;
-export const RUN_ROW_HEIGHT = 64;
-export const RUN_GROUP_HEIGHT = 30;
 
 function timestamp(value) {
   const parsed = new Date(value || 0).getTime();
@@ -28,52 +26,32 @@ export function workspaceResults(items = [], { selectedID = "", query = "", expa
   return compact;
 }
 
+export function preserveEqualValue(current, next) {
+  if (Object.is(current, next)) return current;
+  try {
+    return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+  } catch {
+    return next;
+  }
+}
+
+const runID = (item) => item?.id || item?.run?.id;
+
+// Dedupes by run id while reusing the previous object for any row whose content
+// did not change, so memoized rows can skip re-rendering during background
+// polls. Returns the current array unchanged when nothing at all moved.
 export function mergeRunItems(current = [], incoming = [], reset = false) {
+  const previous = new Map(current.map((item) => [runID(item), item]));
   const source = reset ? incoming : [...current, ...incoming];
   const seen = new Set();
-  return source.filter((item) => {
-    const id = item?.id || item?.run?.id;
-    if (!id || seen.has(id)) return false;
+  const merged = [];
+  for (const item of source) {
+    const id = runID(item);
+    if (!id || seen.has(id)) continue;
     seen.add(id);
-    return true;
-  });
-}
-
-function dayKey(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "unknown";
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
-}
-
-export function buildRunRows(items = [], now = new Date()) {
-  const today = dayKey(now);
-  const yesterdayDate = new Date(now);
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1);
-  const yesterday = dayKey(yesterdayDate);
-  const groups = [];
-  let lastGroup = "";
-  for (const item of items) {
-    const key = dayKey(item.updatedAt);
-    const group = key === today ? "today" : key === yesterday ? "yesterday" : "earlier";
-    const label = group === "today" ? "今天" : group === "yesterday" ? "昨天" : "更早";
-    if (lastGroup !== group) {
-      groups.push({ type: "group", key: `group-${group}`, group, label, height: RUN_GROUP_HEIGHT });
-      lastGroup = group;
-    }
-    groups.push({ type: "run", key: item.id, item, height: RUN_ROW_HEIGHT });
+    const existing = previous.get(id);
+    merged.push(existing ? preserveEqualValue(existing, item) : item);
   }
-  return groups;
-}
-
-export function virtualRunWindow(rows = [], scrollTop = 0, viewportHeight = 0, overscan = 160) {
-  const start = Math.max(0, scrollTop - overscan);
-  const end = scrollTop + viewportHeight + overscan;
-  let top = 0;
-  const visible = [];
-  for (const row of rows) {
-    const bottom = top + row.height;
-    if (bottom >= start && top <= end) visible.push({ ...row, top });
-    top = bottom;
-  }
-  return { visible, totalHeight: top };
+  if (merged.length === current.length && merged.every((item, index) => item === current[index])) return current;
+  return merged;
 }
