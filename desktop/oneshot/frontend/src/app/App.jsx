@@ -182,6 +182,7 @@ function App() {
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [selectedRunID, setSelectedRunID] = useState("");
   const [runDetail, setRunDetail] = useState(null);
+  const [inspectorHidden, setInspectorHidden] = useState(false);
   const [editor, setEditor] = useState(null);
   const [validation, setValidation] = useState([]);
   const [workspaceModal, setWorkspaceModal] = useState(false);
@@ -589,7 +590,7 @@ function App() {
 
       <main className="main-area">
         <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><span className={`connection ${mode}`}>{mode === "wails" ? "local" : "preview"}</span></div>
-        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} /> : view === "tasks" ? <div className={`workspace-grid${runDetail ? "" : " no-inspector"}`}>
+        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} /> : view === "tasks" ? <div className={`workspace-grid${runDetail && !inspectorHidden ? "" : " no-inspector"}`}>
           <section className="content-column tasks-column">
             <div className="composer">
               <Kicker>new run</Kicker>
@@ -597,11 +598,11 @@ function App() {
               <textarea placeholder="描述目标、约束和验收方式。每个步骤会继承这段任务上下文。" value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} />
               <div className="composer-footer"><label><span>workflow</span><TUISelect ariaLabel="Workflow" value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><Action tone="primary" disabled={busy === "run" || !selectedWorkspace} onClick={createTaskAndRun}>{busy === "run" ? "starting…" : "start run"}</Action></div>
             </div>
-            <div className="run-history-head"><div className="section-title"><div><h2>最近运行</h2></div><span>{runTotal} runs</span></div><div className="run-query-bar"><label><span>/</span><input aria-label="搜索运行记录" value={runSearchDraft} onChange={(event) => setRunSearchDraft(event.target.value)} placeholder="搜索标题 / Run / Thread" />{runSearchDraft && <button type="button" aria-label="清空运行搜索" onClick={() => setRunSearchDraft("")}>[ x ]</button>}</label><TUISelect ariaLabel="运行状态" value={runStatus} onChange={setRunStatus} options={runStatusOptions} /></div></div>
-            <VirtualRunList items={allRuns} selectedRunID={selectedRunID} workflows={workflows} loading={runLoading} hasMore={Boolean(runNextCursor)} onLoadMore={() => loadRunList({ cursor: runNextCursor })} onSelect={(item) => { setSelectedRunID(item.id); loadRun(item.id); }} emptyFiltered={Boolean(runKeyword || runStatus)} />
+            <div className="run-history-head"><div className="section-title"><div><h2>最近运行</h2></div><span className="section-title-side">{runDetail && inspectorHidden && <button type="button" className="text-button" onClick={() => setInspectorHidden(false)}>[ « 运行详情 ]</button>}{runTotal} runs</span></div><div className="run-query-bar"><label><span>/</span><input aria-label="搜索运行记录" value={runSearchDraft} onChange={(event) => setRunSearchDraft(event.target.value)} placeholder="搜索标题 / Run / Thread" />{runSearchDraft && <button type="button" aria-label="清空运行搜索" onClick={() => setRunSearchDraft("")}>[ x ]</button>}</label><TUISelect ariaLabel="运行状态" value={runStatus} onChange={setRunStatus} options={runStatusOptions} /></div></div>
+            <VirtualRunList items={allRuns} selectedRunID={selectedRunID} workflows={workflows} loading={runLoading} hasMore={Boolean(runNextCursor)} onLoadMore={() => loadRunList({ cursor: runNextCursor })} onSelect={(item) => { setSelectedRunID(item.id); setInspectorHidden(false); loadRun(item.id); }} emptyFiltered={Boolean(runKeyword || runStatus)} />
             {(runLoading || runNextCursor) && <div className="run-list-footer">{runLoading ? "正在读取…" : `${allRuns.length} / ${runTotal} · 继续滚动加载`}</div>}
           </section>
-          {runDetail && <aside className="inspector"><RunInspector detail={runDetail} busy={busy} resumePending={resumePendingRunID === runDetail.run.id} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} notify={notify} /></aside>}
+          {runDetail && !inspectorHidden && <aside className="inspector"><RunInspector detail={runDetail} busy={busy} resumePending={resumePendingRunID === runDetail.run.id} resumeInstruction={resumeInstruction} setResumeInstruction={setResumeInstruction} runAction={runAction} notify={notify} onCollapse={() => setInspectorHidden(true)} /></aside>}
         </div> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
     </div>
@@ -656,7 +657,7 @@ function VirtualRunList({ items, selectedRunID, workflows, loading, hasMore, onL
   </div></div>;
 }
 
-function RunInspector({ detail, busy, resumePending, resumeInstruction, setResumeInstruction, runAction, notify }) {
+function RunInspector({ detail, busy, resumePending, resumeInstruction, setResumeInstruction, runAction, notify, onCollapse }) {
   const { run, workflow, stepRuns = [], runtimeEvents = [] } = detail;
   const dagNodes = run.nodes || {};
   const currentNodeID = workflow.mode === "dag" ? Object.values(dagNodes).find((node) => node.status === "running" || node.status === "paused")?.stepId : run.currentStepId;
@@ -674,8 +675,9 @@ function RunInspector({ detail, busy, resumePending, resumeInstruction, setResum
     }
   };
   return <>
+    <div className="inspector-scroll">
     <section className="run-summary">
-      <div className="run-summary-head"><div><h2>{detail.task.title}</h2><StatusPill status={run.status} active={detail.active} /></div><div className="run-summary-stats"><span>{run.transitionCount || 0} / {workflow.policy?.maxTransitions || 20}</span><time>{formatTime(run.updatedAt || run.startedAt)}</time></div></div>
+      <div className="run-summary-head"><div><h2>{detail.task.title}</h2><StatusPill status={run.status} active={detail.active} /></div><div className="run-summary-stats"><span>{run.transitionCount || 0} / {workflow.policy?.maxTransitions || 20}</span><time>{formatTime(run.updatedAt || run.startedAt)}</time><button type="button" className="text-button inspector-collapse" aria-label="收起运行详情" title="收起运行详情" onClick={onCollapse}>[ » ]</button></div></div>
       <details className="run-summary-details"><summary><span className="run-summary-current">当前：<strong>{currentStep?.name || run.currentStepId}</strong><i>·</i><span className={`runtime-name ${currentStep?.runtime}`}>{currentStep?.runtime || "—"}</span></span><span className="run-summary-recovery">会话与恢复 <CaretRight className="details-caret closed" weight="bold" /><CaretDown className="details-caret opened" weight="bold" /></span></summary><div className="run-summary-detail-body">
         <div className="run-summary-flow">{(workflow.steps || []).map((step, index) => { const nodeStatus = dagNodes[step.id]?.status; return <div className={`run-summary-step ${step.id === currentNodeID ? "current" : ""}`} key={step.id}><b>{String(index + 1).padStart(2, "0")}</b><span><strong>{step.name}</strong><small>{step.runtime} · {step.workerId || "local"} · {nodeStatus || step.sandbox || "workspace-write"}</small></span>{nodeStatus && <em>{nodeStatus}</em>}</div>; })}</div>
         <div className="run-summary-id"><span>RUN ID</span><code>{run.id}</code></div>
@@ -684,9 +686,13 @@ function RunInspector({ detail, busy, resumePending, resumeInstruction, setResum
       {(visiblePauseReason || detail.lastError) && <div className="run-summary-notice">{visiblePauseReason && <span>暂停：{visiblePauseReason}</span>}{detail.lastError && <span className="error-copy">{detail.lastError}</span>}</div>}
     </section>
     <ConversationTimeline items={conversation} active={detail.active} />
+    </div>
     {["running", "paused"].includes(run.status) && <div className="run-controls">
-      {run.status === "running" && <Action tone="danger" disabled={busy === "interrupt"} onClick={() => runAction("interrupt")}>打断并暂停</Action>}
-      {run.status === "paused" && <><textarea value={resumeInstruction} disabled={resumeControl.disabled} onChange={(event) => setResumeInstruction(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && !resumeControl.disabled) runAction("resume"); }} placeholder="补充指令（可选），恢复后注入当前步骤…" /><div><Action tone="danger" disabled={busy === "cancel" || detail.active} onClick={() => runAction("cancel")}>终止</Action><Action tone="primary" disabled={resumeControl.disabled} aria-live="polite" onClick={() => runAction("resume")}>{resumeControl.label}</Action></div></>}
+      <textarea value={resumeInstruction} disabled={run.status === "running" || resumeControl.disabled} onChange={(event) => setResumeInstruction(event.target.value)} onKeyDown={(event) => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && run.status === "paused" && !resumeControl.disabled) runAction("resume"); }} placeholder={run.status === "running" ? "运行中，暂停后可补充指令…" : "补充指令（可选），恢复后注入当前步骤…"} />
+      <div>
+        {run.status === "running" && <Action tone="danger" disabled={busy === "interrupt"} onClick={() => runAction("interrupt")}>打断并暂停</Action>}
+        {run.status === "paused" && <><Action tone="danger" disabled={busy === "cancel" || detail.active} onClick={() => runAction("cancel")}>终止</Action><Action tone="primary" disabled={resumeControl.disabled} aria-live="polite" onClick={() => runAction("resume")}>{resumeControl.label}</Action></>}
+      </div>
     </div>}
   </>;
 }

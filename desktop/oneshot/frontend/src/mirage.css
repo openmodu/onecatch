@@ -99,6 +99,9 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .composer-footer label > span { margin: 0; }
 .composer-footer .ui-select { width: 220px; }
 .section-title { min-height: 42px; margin: 0; padding: 12px 20px 8px; border-bottom: 1px solid var(--acp-line); }
+.section-title-side { display: inline-flex; align-items: center; gap: 10px; }
+.run-summary-stats { display: inline-flex; align-items: center; gap: 8px; }
+.inspector-collapse { padding: 2px 4px; color: var(--acp-text-soft); }
 .section-title h2 { color: var(--acp-text-soft); font-size: var(--ui-font-caption); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .section-title > span { color: var(--acp-text-soft); font-size: var(--ui-font-caption); }
 .tasks-column { min-height: 0; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; overflow: hidden; }
@@ -127,7 +130,12 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .status-pill.completed, .status-pill.succeeded { color: var(--acp-good); background: color-mix(in oklab, var(--acp-good) 10%, transparent); border-color: color-mix(in oklab, var(--acp-good) 38%, transparent); }
 .status-pill.failed, .status-pill.cancelled, .status-pill.interrupted { color: var(--acp-danger); background: color-mix(in oklab, var(--acp-danger) 10%, transparent); border-color: color-mix(in oklab, var(--acp-danger) 38%, transparent); }
 .empty-state { margin: 20px; border-color: var(--acp-line); border-radius: 0; color: var(--acp-text-muted); }
-.inspector { min-height: 0; padding: 0; border-left: 1px solid var(--acp-line); overflow-y: auto; }
+.inspector { min-height: 0; padding: 0; border-left: 1px solid var(--acp-line); display: grid; grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; }
+.inspector-scroll { min-height: 0; overflow-y: auto; }
+/* The fixed footer's border-top is the single divider; strip trailing borders
+   from the scroll content so the seam never doubles up. */
+.inspector-scroll .conversation-list > :last-child { border-bottom: 0; }
+.inspector-scroll .conversation-round:last-child .conversation-round-body > :last-child { border-bottom: 0; }
 .inspector-header { padding: 16px 18px 10px; }
 .inspector-header h2 { margin-top: 7px; font-size: var(--ui-font-heading); line-height: 1.35; }
 .run-id-row { margin: 0; padding: 0 18px 12px; border-bottom: 1px solid var(--acp-line); color: var(--acp-text-soft); font-size: var(--ui-font-meta); }
@@ -200,8 +208,9 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .session-value button { color: var(--acp-accent); }
 .session-value button:hover { color: var(--acp-accent-soft); }
 .event-row { border-left-color: var(--acp-line); }
-.run-controls { bottom: 0; margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--acp-line); background: var(--acp-canvas); }
+.run-controls { position: static; bottom: auto; margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--acp-line); background: var(--acp-canvas); }
 .run-controls > textarea { font-size: var(--ui-font-body); line-height: 1.5; }
+.run-controls > textarea:disabled { opacity: .55; cursor: not-allowed; }
 .terminal-note { font-size: var(--ui-font-meta); }
 .run-controls > div { justify-content: flex-end; }
 
