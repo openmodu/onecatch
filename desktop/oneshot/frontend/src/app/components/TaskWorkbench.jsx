@@ -36,6 +36,7 @@ function conversationSignature(detail) {
     detail.run?.status,
     runtimeEvents.length,
     last ? `${last.stepRunId}:${last.seq}` : "",
+    runtimeEvents.filter((event) => event.streamId).map((event) => `${event.stepRunId}:${event.streamId}:${event.revision || 0}:${event.text?.length || 0}:${event.streaming ? 1 : 0}`).join(","),
     (detail.stepRuns || []).length,
     (detail.stepRuns || []).map((step) => step.status).join(","),
     (detail.events || []).length,
@@ -59,7 +60,7 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
   // eslint-disable-next-line react-hooks/exhaustive-deps -- signature captures every field the builder reads
   const conversation = useMemo(() => (runDetail ? buildRunConversation(runDetail) : []), [signature]);
   const pendingInstructions = useMemo(() => (runDetail?.instructions || []).filter((instruction) => instruction.status === "pending"), [runDetail?.instructions]);
-  const conversationSize = conversation.length ? `${conversation.length}:${conversation[conversation.length - 1].items?.length || 0}` : "0";
+  const conversationSize = `${signature}:${conversation.length}:${conversation[conversation.length - 1]?.items?.length || 0}`;
 
   useEffect(() => {
     pinnedRef.current = true;

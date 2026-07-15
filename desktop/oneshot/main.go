@@ -12,6 +12,7 @@ import (
 	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
 	"github.com/openmodu/oneshot/internal/gitinspect"
 	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
+	"github.com/openmodu/oneshot/internal/runstream"
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/internal/workspacelock"
 	"github.com/openmodu/oneshot/pkg/logger"
@@ -51,6 +52,8 @@ func main() {
 	git := gitinspect.New("")
 	orchestrator := workflowuc.NewUsecase(store.Repos.Tasks, store.Repos.Workflows, runtimes, workspacelock.New(store.Data.Paths.Locks), git)
 	localApp := localapp.New(store, orchestrator, runtimes, git)
+	streamHub := runstream.NewHub()
+	localApp.SetRunStreamHub(streamHub)
 	defer localApp.Close()
 	localApp.SetSettingsReload(func(value domainsettings.Settings) error { return managedLog.Reconfigure(logConfig(value)) })
 	if err := localApp.InitializeSettings(context.Background()); err != nil {
@@ -84,6 +87,10 @@ func main() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+	unsubscribeRunStream := streamHub.Subscribe(func(frame runstream.Frame) {
+		wailsApp.Event.Emit(runstream.EventName, frame)
+	})
+	defer unsubscribeRunStream()
 	menu := wailsApp.NewMenu()
 	menu.AddRole(application.AppMenu)
 	menu.AddRole(application.EditMenu)

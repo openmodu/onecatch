@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Events } from "@wailsio/runtime";
 import {
   RuntimeBinding,
   SettingsBinding,
@@ -19,6 +20,9 @@ import WorkflowLibrary from "./components/workflow/WorkflowLibrary.jsx";
 import WorkflowEditor from "./components/workflow/WorkflowEditor.jsx";
 import WorkerPage from "./components/WorkerPage.jsx";
 import Modal from "./components/Modal.jsx";
+import { applyRuntimeFrames } from "./runtimeStream.js";
+
+const runtimeFrameEvent = "oneshot:runtime-frame";
 
 function App() {
   const [mode, setMode] = useState("loading");
@@ -63,11 +67,17 @@ function App() {
   const runLoadVersion = useRef(0);
   const runActionPending = useRef("");
   const selectedRunIDRef = useRef("");
+  const liveFramesRef = useRef([]);
+  const liveFrameHistoryRef = useRef([]);
+  const liveFrameGenerationRef = useRef(0);
+  const liveFlushTimerRef = useRef(0);
+  const terminalReconcileTimerRef = useRef(0);
   // Latest-value refs so the polling loops can read fresh state without listing
   // `tasks`/`runDetail` as effect deps (which would tear down and rebuild the
   // timer on every tick — a big source of the jank).
   const runDetailRef = useRef(null);
   runDetailRef.current = runDetail;
+  selectedRunIDRef.current = selectedRunID;
   const tasksRef = useRef([]);
   tasksRef.current = tasks;
 
@@ -222,9 +232,25 @@ function App() {
   const loadRun = useCallback(async (runID, silent = false) => {
     if (!runID) return;
     const loadVersion = ++runLoadVersion.current;
+    const liveGeneration = liveFrameGenerationRef.current;
     if (mode === "demo") { setRunDetail((current) => current?.run?.id === runID ? current : demoRun); return; }
     try {
-      const detail = await TaskRunBinding.GetRun(runID);
+      let detail = await TaskRunBinding.GetRun(runID);
+      // GetRun is durable truth; the in-memory snapshot fills the small gap
+      // between the latest 500ms persistence batch and this read. Revisions
+      // make overlap with already-delivered Wails events harmless.
+      try {
+        detail = applyRuntimeFrames(detail, await TaskRunBinding.GetRunStreamSnapshot(runID));
+      } catch {
+        // Streaming is best effort. A durable detail still keeps the run usable
+        // with an older backend or during application shutdown.
+      }
+      // Frames emitted after this load began may race the snapshot response.
+      // Replaying this short revisioned history closes that final window; any
+      // overlap with the snapshot is discarded by applyRuntimeFrames.
+      detail = applyRuntimeFrames(detail, liveFrameHistoryRef.current
+        .filter((entry) => entry.generation > liveGeneration && entry.frame.runId === runID)
+        .map((entry) => entry.frame));
       if (loadVersion !== runLoadVersion.current) return;
       // Keep the same object reference when a poll returns identical data, so an
       // idle refresh (or the fast post-action nudge) triggers no re-render and
@@ -246,7 +272,44 @@ function App() {
 
   useEffect(() => { if (selectedRunID) loadRun(selectedRunID, true); }, [loadRun, selectedRunID]);
 
-  useEffect(() => { selectedRunIDRef.current = selectedRunID; }, [selectedRunID]);
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    const flush = () => {
+      liveFlushTimerRef.current = 0;
+      const frames = liveFramesRef.current;
+      liveFramesRef.current = [];
+      if (!frames.length) return;
+      setRunDetail((current) => applyRuntimeFrames(current, frames));
+    };
+    const off = Events.On(runtimeFrameEvent, (event) => {
+      const frame = event.data;
+      if (!frame || frame.runId !== selectedRunIDRef.current) return;
+      liveFrameGenerationRef.current += 1;
+      liveFrameHistoryRef.current.push({ generation: liveFrameGenerationRef.current, frame });
+      if (liveFrameHistoryRef.current.length > 512) liveFrameHistoryRef.current.splice(0, 256);
+      liveFramesRef.current.push(frame);
+      if (!liveFlushTimerRef.current) liveFlushTimerRef.current = window.setTimeout(flush, 80);
+
+      // Runtime frames update the transcript, while run/step status lives in
+      // durable workflow state. Reconcile promptly at a terminal-looking event
+      // instead of polling the entire growing detail every second.
+      if (["result", "error", "usage"].includes(frame.kind) && frame.phase !== "delta") {
+        window.clearTimeout(terminalReconcileTimerRef.current);
+        terminalReconcileTimerRef.current = window.setTimeout(() => {
+          if (selectedRunIDRef.current === frame.runId) loadRun(frame.runId, true);
+        }, 240);
+      }
+    });
+    return () => {
+      off();
+      window.clearTimeout(liveFlushTimerRef.current);
+      window.clearTimeout(terminalReconcileTimerRef.current);
+      liveFlushTimerRef.current = 0;
+      terminalReconcileTimerRef.current = 0;
+      liveFramesRef.current = [];
+      liveFrameHistoryRef.current = [];
+    };
+  }, [loadRun, mode]);
 
   useEffect(() => {
     if (!resumePendingRunID) return;
@@ -255,13 +318,13 @@ function App() {
     }
   }, [resumePendingRunID, runDetail?.active, runDetail?.run?.id, runDetail?.run?.status, selectedRunID]);
 
-  // Self-scheduling poll for the open run. Cadence adapts from a ref each tick,
-  // so the timer is created once per selection instead of on every state change.
+  // Wails frames carry transcript changes. This slow poll only reconciles
+  // workflow status and recovers from a dropped desktop event.
   useEffect(() => {
     if (!selectedRunID || mode !== "wails") return undefined;
     let stopped = false;
     let timer;
-    const cadence = () => (runDetailRef.current?.active || runDetailRef.current?.run?.status === "running" ? 900 : 2500);
+    const cadence = () => (runDetailRef.current?.active || runDetailRef.current?.run?.status === "running" ? 10_000 : 30_000);
     const tick = async () => {
       await loadRun(selectedRunID, true);
       if (!stopped) timer = window.setTimeout(tick, cadence());

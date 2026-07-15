@@ -6,10 +6,6 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as time$0 from "../../../../../../time/models.js";
-
 /**
  * Definition is an editable workflow template. Each Run persists a complete
  * snapshot so later template edits cannot alter active or historical runs.
@@ -79,14 +75,14 @@ export class Definition {
         if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {time$0.Time | undefined}
+             * @type {string | undefined}
              */
             this["createdAt"] = undefined;
         }
         if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {time$0.Time | undefined}
+             * @type {string | undefined}
              */
             this["updatedAt"] = undefined;
         }
@@ -166,14 +162,14 @@ export class Instruction {
         if (!("createdAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["createdAt"] = null;
+            this["createdAt"] = "0001-01-01T00:00:00.000Z";
         }
         if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {time$0.Time | undefined}
+             * @type {string | undefined}
              */
             this["appliedAt"] = undefined;
         }
@@ -294,14 +290,14 @@ export class NodeState {
         if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {time$0.Time | undefined}
+             * @type {string | undefined}
              */
             this["startedAt"] = undefined;
         }
         if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {time$0.Time | undefined}
+             * @type {string | undefined}
              */
             this["finishedAt"] = undefined;
         }
@@ -560,21 +556,21 @@ export class Run {
         if (!("startedAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["startedAt"] = null;
+            this["startedAt"] = "0001-01-01T00:00:00.000Z";
         }
         if (!("updatedAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["updatedAt"] = null;
+            this["updatedAt"] = "0001-01-01T00:00:00.000Z";
         }
         if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {time$0.Time | undefined}
+             * @type {string | undefined}
              */
             this["completedAt"] = undefined;
         }
@@ -827,14 +823,14 @@ export class StepRun {
         if (!("startedAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["startedAt"] = null;
+            this["startedAt"] = "0001-01-01T00:00:00.000Z";
         }
         if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {time$0.Time | undefined}
+             * @type {string | undefined}
              */
             this["finishedAt"] = undefined;
         }
@@ -850,7 +846,28 @@ export class StepRun {
              * @member
              * @type {number | undefined}
              */
+            this["cachedInputTokens"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["cacheCreationInputTokens"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
             this["outputTokens"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["reasoningOutputTokens"] = undefined;
         }
         if (/** @type {any} */(false)) {
             /**
@@ -934,9 +951,9 @@ export class TransitionRecord {
         if (!("at" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["at"] = null;
+            this["at"] = "0001-01-01T00:00:00.000Z";
         }
 
         Object.assign(this, $$source);

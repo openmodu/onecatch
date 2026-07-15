@@ -1,10 +1,22 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildRunConversation, readableAgentMessage, readableToolTitle } from "./runConversation.js";
+import { buildRunConversation, readableAgentMessage, readableToolTitle, streamingOutcomeContent } from "./runConversation.js";
 
 test("renders outcome JSON as readable content", () => {
   assert.equal(readableAgentMessage('{"signal":"need_human","content":"请授权浏览器后继续"}'), "请授权浏览器后继续");
+  assert.equal(readableAgentMessage('```json\n{"signal":"need_human","content":"请授权浏览器后继续"}\n```'), "请授权浏览器后继续");
+  assert.equal(readableAgentMessage('```\n{"signal":"approved","content":"已完成"}\n```'), "已完成");
+  assert.equal(readableAgentMessage("```json\nnot json\n```"), "```json\nnot json\n```");
   assert.equal(readableAgentMessage("普通回复"), "普通回复");
+});
+
+test("projects content from an incomplete streamed outcome envelope", () => {
+  assert.equal(streamingOutcomeContent('{"signal":"changes_requested","cont'), "");
+  assert.equal(streamingOutcomeContent('{"signal":"changes_requested","content":"正在**修'), "正在**修");
+  assert.equal(streamingOutcomeContent('```json\n{"signal":"approved","content":"第一行\\n第二行\\u4e2d'), "第一行\n第二行中");
+  assert.equal(streamingOutcomeContent("普通 **Markdown**"), null);
+  assert.equal(readableAgentMessage('{"signal":"approved","content":"流式内容'), "{\"signal\":\"approved\",\"content\":\"流式内容");
+  assert.equal(readableAgentMessage('{"signal":"approved","content":"流式内容', true), "流式内容");
 });
 
 test("strips the launcher shell from a tool title", () => {
@@ -96,6 +108,42 @@ test("scopes failure to the tool that failed, not the whole failed step", () => 
   assert.equal(bad.failed, true, "the tool whose result carried is_error failed");
   assert.equal(cutOff.failed, false, "a tool the runtime never answered is unfinished, not failed");
   assert.equal(cutOff.settled, false);
+});
+
+test("a result with no output still settles its tool and carries its failure", () => {
+  const [round] = buildRunConversation({
+    task: {}, run: {}, events: [],
+    workflow: { steps: [{ id: "execute", name: "执行", runtime: "codex" }] },
+    stepRuns: [{ id: "step-1", stepId: "execute", status: "failed" }],
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 1, kind: "tool_use", text: "mkdir build" },
+      { stepRunId: "step-1", seq: 2, kind: "tool_result", text: "" },
+      { stepRunId: "step-1", seq: 3, kind: "tool_use", text: "false" },
+      { stepRunId: "step-1", seq: 4, kind: "tool_result", text: "", failed: true },
+    ],
+  });
+  const [silentOk, silentFail] = round.items;
+  // Empty output must not drop the result: the command still finished.
+  assert.equal(silentOk.settled, true);
+  assert.equal(silentOk.failed, false);
+  assert.equal(silentOk.details.length, 0, "no empty RESULT block is added");
+  // A non-zero exit with no output must keep its failure signal.
+  assert.equal(silentFail.settled, true);
+  assert.equal(silentFail.failed, true);
+});
+
+test("keeps a streaming tool result unsettled until its end frame", () => {
+  const [round] = buildRunConversation({
+    task: {}, run: {}, events: [],
+    workflow: { steps: [{ id: "execute", name: "执行", runtime: "codex" }] },
+    stepRuns: [{ id: "step-1", stepId: "execute", status: "running" }],
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 1, kind: "tool_use", text: "go test ./..." },
+      { stepRunId: "step-1", seq: 2, kind: "tool_result", streamId: "output-1", revision: 3, streaming: true, text: "ok package/a" },
+    ],
+  });
+  assert.equal(round.items[0].settled, false);
+  assert.equal(round.items[0].details[0].text, "ok package/a");
 });
 
 test("falls back to StepRun content when no message event exists", () => {

@@ -18,6 +18,7 @@ import (
 	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
+	"github.com/openmodu/oneshot/internal/runstream"
 )
 
 const (
@@ -80,10 +81,14 @@ type Usecase struct {
 	now               func() time.Time
 	newID             IDGenerator
 	remote            RemoteExecutor
+	streamPublisher   runstream.Publisher
 	maxDAGConcurrency atomic.Int64
 }
 
 func (s *Usecase) SetRemoteExecutor(remote RemoteExecutor) { s.remote = remote }
+func (s *Usecase) SetRunStreamPublisher(publisher runstream.Publisher) {
+	s.streamPublisher = publisher
+}
 func (s *Usecase) SetMaxDAGConcurrency(value int) {
 	if value < 1 {
 		value = 1
@@ -425,7 +430,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		}
 
 		stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
-		var streamErr error
+		collector := s.newRuntimeCollector(run.ID, stepRun.ID)
 		result, runErr := s.engine.Run(stepCtx, agentrun.Request{
 			Runtime:              runtime,
 			Workspace:            workspace.Path,
@@ -436,15 +441,10 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime),
 			Provider:             resolvedRuntimeProvider(run, step.Runtime),
 			InterruptGrace:       time.Duration(run.InterruptGraceSeconds) * time.Second,
-		}, func(event agentrun.Event) {
-			payload, err := json.Marshal(event)
-			if err == nil && streamErr == nil {
-				_, streamErr = s.workflows.AppendRuntimeEvent(context.Background(), run.ID, stepRun.ID, payload)
-			}
-		})
+		}, collector.Sink())
 		cancel()
-		if streamErr != nil && runErr == nil {
-			runErr = fmt.Errorf("persist runtime event: %w", streamErr)
+		if streamErr := collector.Close(); streamErr != nil && runErr == nil {
+			runErr = collectorError(streamErr)
 		}
 		if result.SessionID != "" {
 			run.Sessions[step.ID] = result.SessionID
@@ -757,7 +757,10 @@ func appendTaskAttachments(parts []string, task domaintasks.Task) []string {
 func finishStepRun(stepRun *domainworkflows.StepRun, result agentrun.Result, finishedAt time.Time) {
 	stepRun.FinishedAt = finishedAt
 	stepRun.InputTokens = result.Usage.InputTokens
+	stepRun.CachedInputTokens = result.Usage.CachedInputTokens
+	stepRun.CacheCreationInputTokens = result.Usage.CacheCreationInputTokens
 	stepRun.OutputTokens = result.Usage.OutputTokens
+	stepRun.ReasoningOutputTokens = result.Usage.ReasoningOutputTokens
 	if !stepRun.StartedAt.IsZero() && finishedAt.After(stepRun.StartedAt) {
 		stepRun.DurationMS = finishedAt.Sub(stepRun.StartedAt).Milliseconds()
 	}

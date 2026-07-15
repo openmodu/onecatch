@@ -6,6 +6,7 @@ import (
 	"github.com/openmodu/oneshot/internal/app/localapp"
 	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
+	"github.com/openmodu/oneshot/internal/runstream"
 )
 
 type TaskRunBinding struct{ app *localapp.App }
@@ -38,6 +39,9 @@ func (b *TaskRunBinding) StartRun(taskID, confirmationToken string) (domainworkf
 }
 func (b *TaskRunBinding) GetRun(runID string) (localapp.RunDetail, error) {
 	return b.app.GetRunDetail(context.Background(), runID)
+}
+func (b *TaskRunBinding) GetRunStreamSnapshot(runID string) []runstream.Frame {
+	return b.app.GetRunStreamSnapshot(runID)
 }
 func (b *TaskRunBinding) ListRunsByTask(taskID string) ([]domainworkflows.Run, error) {
 	return b.app.ListRunsByTask(context.Background(), taskID)

@@ -2,6 +2,7 @@ package localapp
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,10 +12,82 @@ import (
 	"github.com/openmodu/oneshot/internal/agentrun"
 	localdata "github.com/openmodu/oneshot/internal/data/local"
 	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
+	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
 	"github.com/openmodu/oneshot/internal/gitinspect"
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/internal/workspacelock"
 )
+
+func runtimeEvent(t *testing.T, seq int64, event agentrun.Event) domainworkflows.RuntimeEvent {
+	t.Helper()
+	payload, err := json.Marshal(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return domainworkflows.RuntimeEvent{Seq: seq, At: event.At, Payload: payload}
+}
+
+func TestFoldRuntimeEventViewsCollapsesDurableStream(t *testing.T) {
+	at := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
+	base := agentrun.Event{Kind: agentrun.KindMessage, StreamID: "message-1", At: at}
+	start := base
+	start.Phase = agentrun.StreamStart
+	first := base
+	first.Phase, first.Revision, first.Text = agentrun.StreamDelta, 1, "hel"
+	second := base
+	second.Phase, second.Revision, second.Text = agentrun.StreamDelta, 2, "lo"
+	end := base
+	end.Phase, end.Revision, end.Text = agentrun.StreamEnd, 3, "hello!"
+	atomic := agentrun.Event{Kind: agentrun.KindUsage, At: at}
+
+	views := foldRuntimeEventViews("step-1", []domainworkflows.RuntimeEvent{
+		runtimeEvent(t, 1, start), runtimeEvent(t, 2, first), runtimeEvent(t, 3, second), runtimeEvent(t, 4, end), runtimeEvent(t, 5, atomic),
+	})
+	if len(views) != 2 {
+		t.Fatalf("views = %+v", views)
+	}
+	if views[0].Seq != 1 || views[0].Text != "hello!" || views[0].Revision != 3 || views[0].Streaming {
+		t.Fatalf("stream view = %+v", views[0])
+	}
+	if views[1].Kind != string(agentrun.KindUsage) || views[1].Seq != 5 {
+		t.Fatalf("atomic view = %+v", views[1])
+	}
+}
+
+func TestEnrichStepRunUsageRecoversHistoricalProviderDetails(t *testing.T) {
+	tests := []struct {
+		name string
+		step domainworkflows.StepRun
+		raw  string
+		want agentrun.Usage
+		kind agentrun.EventKind
+	}{
+		{
+			name: "Codex cached and reasoning subsets",
+			step: domainworkflows.StepRun{InputTokens: 1200, OutputTokens: 42},
+			raw:  `{"type":"turn.completed","usage":{"input_tokens":1200,"cached_input_tokens":900,"output_tokens":42,"reasoning_output_tokens":12}}`,
+			want: agentrun.Usage{InputTokens: 1200, CachedInputTokens: 900, OutputTokens: 42, ReasoningOutputTokens: 12},
+			kind: agentrun.KindUsage,
+		},
+		{
+			name: "Claude input total includes cache creation and reads",
+			step: domainworkflows.StepRun{InputTokens: 7, OutputTokens: 9},
+			raw:  `{"type":"result","usage":{"input_tokens":7,"cache_creation_input_tokens":13,"cache_read_input_tokens":80,"output_tokens":9}}`,
+			want: agentrun.Usage{InputTokens: 100, CachedInputTokens: 80, CacheCreationInputTokens: 13, OutputTokens: 9},
+			kind: agentrun.KindResult,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			at := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
+			items := []domainworkflows.RuntimeEvent{runtimeEvent(t, 1, agentrun.Event{Kind: test.kind, Raw: test.raw, At: at})}
+			enrichStepRunUsage(&test.step, items)
+			if test.step.InputTokens != test.want.InputTokens || test.step.CachedInputTokens != test.want.CachedInputTokens || test.step.CacheCreationInputTokens != test.want.CacheCreationInputTokens || test.step.OutputTokens != test.want.OutputTokens || test.step.ReasoningOutputTokens != test.want.ReasoningOutputTokens {
+				t.Fatalf("step = %+v, want usage %+v", test.step, test.want)
+			}
+		})
+	}
+}
 
 type completingEngine struct{}
 

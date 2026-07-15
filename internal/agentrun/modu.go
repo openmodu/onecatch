@@ -1,14 +1,11 @@
 package agentrun
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -18,10 +15,10 @@ const (
 	moduBinaryLegacy  = "modu-code"
 )
 
-// ModuRunner drives Modu Code through ACP JSON-RPC 2.0 LDJSON over stdio.
-// The currently supported Modu Code keeps sessions only inside its process,
-// so every Run creates a fresh ACP session and intentionally returns no
-// resumable SessionID.
+// ModuRunner drives Modu Code through its non-interactive print mode
+// (`modu_code -p ... -json`), the same role `codex exec --json` serves for
+// Codex. The NDJSON stream includes a persisted session id that later runs can
+// continue with `--resume ID -p ...`.
 type ModuRunner struct {
 	binary string
 	now    nowFunc
@@ -48,276 +45,262 @@ func (r *ModuRunner) Available() bool {
 	return err == nil
 }
 
-type acpEnvelope struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      *int64          `json:"id,omitempty"`
-	Method  string          `json:"method,omitempty"`
-	Params  json.RawMessage `json:"params,omitempty"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *acpError       `json:"error,omitempty"`
-}
-
-type acpError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-}
-
 func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
-	if sink == nil {
-		sink = func(Event) {}
-	}
-	// Current Modu Code exposes ACP explicitly. Writable workflows are already
-	// authorized by Oneshot, so run them non-interactively; read-only workflows
-	// keep approval enabled and reject risky reverse requests below. The legacy
-	// modu-code binary ignores extra arguments, so these remain compatible.
-	cmd := exec.CommandContext(ctx, r.binary, moduCommandArgs(req.Sandbox)...)
+	cmd := exec.CommandContext(ctx, r.binary, moduCommandArgs(req)...)
 	cmd.Dir = req.Workspace
 	cmd.Env = moduEnvironment(req.Environment, req.Model)
 	if req.InterruptGrace > 0 {
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = req.InterruptGrace
 	}
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return Result{}, fmt.Errorf("modu stdin pipe: %w", err)
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return Result{}, fmt.Errorf("modu stdout pipe: %w", err)
-	}
-	var stderr lineCapture
-	cmd.Stderr = &stderr
-	if err := cmd.Start(); err != nil {
-		return Result{}, fmt.Errorf("start %s: %w", cmd.Path, err)
-	}
-
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	request := func(id int64, method string, params any) error {
-		frame := map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}
-		encoded, marshalErr := json.Marshal(frame)
-		if marshalErr != nil {
-			return marshalErr
-		}
-		encoded = append(encoded, '\n')
-		if _, writeErr := stdin.Write(encoded); writeErr != nil {
-			return fmt.Errorf("write ACP %s: %w", method, writeErr)
-		}
-		return nil
-	}
-	stop := func() error {
-		_ = stdin.Close()
-		for scanner.Scan() {
-		}
-		scanErr := scanner.Err()
-		waitErr := cmd.Wait()
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if scanErr != nil && !errors.Is(scanErr, io.ErrClosedPipe) {
-			return fmt.Errorf("read %s stdout: %w", cmd.Path, scanErr)
-		}
-		if waitErr != nil {
-			return fmt.Errorf("%s exited: %w%s", cmd.Path, waitErr, stderr.tail())
-		}
-		return nil
-	}
-	fail := func(cause error) (Result, error) {
-		if stopErr := stop(); stopErr != nil {
-			if ctx.Err() != nil {
-				return Result{}, ctx.Err()
-			}
-			// An ACP EOF is only a symptom when the child process has already
-			// exited. Surface stderr and the exit status as the primary failure so
-			// users see the actionable provider/authentication error first.
-			if errors.Is(cause, io.ErrUnexpectedEOF) {
-				return Result{}, stopErr
-			}
-			return Result{}, fmt.Errorf("%v; %w", cause, stopErr)
-		}
-		return Result{}, cause
-	}
-
-	if err := request(1, "initialize", map[string]any{
-		"protocolVersion":    1,
-		"clientInfo":         map[string]any{"name": "oneshot", "version": "1"},
-		"clientCapabilities": map[string]any{},
-	}); err != nil {
-		return fail(err)
-	}
-	if _, err := readACPResponse(scanner, 1, sink, r.now, nil); err != nil {
-		return fail(err)
-	}
-	if err := request(2, "session/new", map[string]any{"cwd": req.Workspace, "mcpServers": []any{}}); err != nil {
-		return fail(err)
-	}
-	reverse := func(message acpEnvelope) error {
-		return respondACPReverseRequest(stdin, message, req.Sandbox, sink, r.now)
-	}
-	created, err := readACPResponse(scanner, 2, sink, r.now, nil, reverse)
-	if err != nil {
-		return fail(err)
-	}
-	var session struct {
-		SessionID string `json:"sessionId"`
-	}
-	if err := json.Unmarshal(created.Result, &session); err != nil || strings.TrimSpace(session.SessionID) == "" {
-		return fail(errors.New("modu ACP session/new returned no sessionId"))
-	}
-	sink(Event{Kind: KindStarted, Text: "ACP session started", Raw: string(created.Result), At: r.now()})
-
-	if err := request(3, "session/prompt", map[string]any{
-		"sessionId": session.SessionID,
-		"prompt":    []map[string]string{{"type": "text", "text": req.Prompt}},
-	}); err != nil {
-		return fail(err)
-	}
-	var final strings.Builder
-	completed, err := readACPResponse(scanner, 3, sink, r.now, &final, reverse)
-	if err != nil {
-		return fail(err)
-	}
-	message := final.String()
-	if strings.TrimSpace(message) != "" {
-		sink(Event{Kind: KindMessage, Text: message, Raw: string(completed.Result), At: r.now()})
-	}
-	result := Result{FinalMessage: message, Succeeded: true}
-	sink(Event{Kind: KindResult, Text: message, Raw: string(completed.Result), At: r.now()})
-	if err := stop(); err != nil {
-		result.Succeeded = false
-		return result, err
-	}
-	return result, nil
+	cmd.Stdin = nil
+	return streamProcess(ctx, cmd, &moduParser{}, r.now, sink)
 }
 
-func moduCommandArgs(sandbox Sandbox) []string {
-	args := []string{"--acp"}
-	if sandbox != SandboxReadOnly {
+func moduCommandArgs(req Request) []string {
+	args := make([]string, 0, 7)
+	if strings.TrimSpace(req.ResumeSessionID) != "" {
+		args = append(args, "--resume", strings.TrimSpace(req.ResumeSessionID))
+	}
+	args = append(args, "-p", req.Prompt, "-json")
+	if req.Sandbox != SandboxReadOnly {
+		// Writable Oneshot runs are already authorized and cannot stop for an
+		// interactive approval prompt in print mode.
 		args = append(args, "--no-approve")
 	}
 	return args
 }
 
-type acpReverseHandler func(acpEnvelope) error
-
-func readACPResponse(scanner *bufio.Scanner, wanted int64, sink Sink, now nowFunc, final *strings.Builder, reverse ...acpReverseHandler) (acpEnvelope, error) {
-	for scanner.Scan() {
-		line := scanner.Text()
-		var message acpEnvelope
-		if err := json.Unmarshal([]byte(line), &message); err != nil {
-			return acpEnvelope{}, fmt.Errorf("decode Modu ACP response: %w", err)
-		}
-		if message.Method != "" && message.ID != nil {
-			if len(reverse) == 0 || reverse[0] == nil {
-				return acpEnvelope{}, fmt.Errorf("unsupported Modu ACP reverse request %q", message.Method)
-			}
-			if err := reverse[0](message); err != nil {
-				return acpEnvelope{}, err
-			}
-			continue
-		}
-		if message.Method == "session/update" {
-			if final != nil {
-				var params struct {
-					Update struct {
-						SessionUpdate string `json:"sessionUpdate"`
-						Content       struct {
-							Type string `json:"type"`
-							Text string `json:"text"`
-						} `json:"content"`
-					} `json:"update"`
-				}
-				if err := json.Unmarshal(message.Params, &params); err != nil {
-					return acpEnvelope{}, fmt.Errorf("decode Modu ACP update: %w", err)
-				}
-				if params.Update.SessionUpdate == "agent_message_chunk" && params.Update.Content.Type == "text" {
-					final.WriteString(params.Update.Content.Text)
-				}
-			}
-			continue
-		}
-		if message.ID == nil || *message.ID != wanted {
-			continue
-		}
-		if message.Error != nil {
-			sink(Event{Kind: KindError, Text: message.Error.Message, Raw: line, At: now()})
-			return acpEnvelope{}, fmt.Errorf("Modu ACP error %d: %s", message.Error.Code, message.Error.Message)
-		}
-		return message, nil
-	}
-	if err := scanner.Err(); err != nil {
-		return acpEnvelope{}, fmt.Errorf("read Modu ACP stream: %w", err)
-	}
-	return acpEnvelope{}, io.ErrUnexpectedEOF
+// moduParser accumulates terminal state from Modu Code's print-mode NDJSON
+// stream. Its event names mirror pkg/coding_agent/modes in Modu Code.
+type moduParser struct {
+	final             string
+	sessionID         string
+	usage             Usage
+	completed         bool
+	failed            bool
+	messageSeq        int
+	messageOpen       bool
+	textStreaming     bool
+	thinkingStreaming bool
 }
 
-func respondACPReverseRequest(writer io.Writer, message acpEnvelope, sandbox Sandbox, sink Sink, now nowFunc) error {
-	if sink == nil {
-		sink = func(Event) {}
+type moduEnvelope struct {
+	Type       string          `json:"type"`
+	SessionID  string          `json:"sessionId"`
+	Model      string          `json:"model"`
+	Message    json.RawMessage `json:"message"`
+	Stream     moduStreamEvent `json:"streamEvent"`
+	ToolName   string          `json:"toolName"`
+	ToolCallID string          `json:"toolCallId"`
+	Args       json.RawMessage `json:"args"`
+	Result     json.RawMessage `json:"result"`
+	IsError    bool            `json:"isError"`
+}
+
+type moduStreamEvent struct {
+	Type         string `json:"Type"`
+	ContentIndex int    `json:"ContentIndex"`
+	Delta        string `json:"Delta"`
+}
+
+type moduMessage struct {
+	Role         string        `json:"role"`
+	Content      []moduContent `json:"content"`
+	Usage        moduUsage     `json:"usage"`
+	StopReason   string        `json:"stopReason"`
+	ErrorMessage string        `json:"errorMessage"`
+}
+
+type moduContent struct {
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Thinking  string          `json:"thinking"`
+	Name      string          `json:"name"`
+	Arguments json.RawMessage `json:"arguments"`
+}
+
+type moduUsage struct {
+	Input  int `json:"input"`
+	Output int `json:"output"`
+}
+
+func (p *moduParser) parse(line string, at time.Time, sink Sink) {
+	var env moduEnvelope
+	if err := json.Unmarshal([]byte(line), &env); err != nil {
+		sink(Event{Kind: KindReasoning, Text: strings.TrimSpace(line), Raw: line, At: at})
+		return
 	}
-	if message.ID == nil {
-		return errors.New("Modu ACP reverse request has no id")
+
+	switch env.Type {
+	case "session_start":
+		p.sessionID = env.SessionID
+		sink(Event{Kind: KindStarted, Text: env.SessionID, Raw: line, At: at})
+	case "agent_start", "agent_end", "turn_start", "turn_end":
+		// Lifecycle boundaries carry no additional user-facing payload.
+	case "message_start":
+		p.beginMessage()
+	case "message_update":
+		p.handleStreamEvent(env.Stream, line, at, sink)
+	case "message_end":
+		p.handleMessage(env.Message, line, at, sink)
+	case "tool_execution_start":
+		sink(Event{Kind: KindToolUse, Text: moduToolText(env.ToolName, env.Args), Raw: line, At: at})
+	case "tool_execution_update":
+		// Partial tool output is retained raw without pretending the tool has
+		// completed; the terminal result arrives in tool_execution_end.
+		sink(Event{Kind: KindReasoning, Text: moduResultText(env.Result), Raw: line, At: at})
+	case "tool_execution_end":
+		sink(Event{Kind: KindToolResult, Text: moduResultText(env.Result), Raw: line, Failed: env.IsError, At: at})
+	case "interrupt":
+		// Modu also uses this lifecycle event for approval gates. The print
+		// stream omits the interrupt reason, so process/session completion is
+		// the reliable source of the run's terminal state.
+		sink(Event{Kind: KindReasoning, Raw: line, At: at})
+	case "session_end":
+		p.completed = true
+		sink(Event{Kind: KindResult, Text: p.final, Raw: line, At: at})
+	default:
+		// Retain extension and future event types for forward compatibility.
+		sink(Event{Kind: KindReasoning, Raw: line, At: at})
 	}
-	if message.Method != "session/request_permission" {
-		return fmt.Errorf("unsupported Modu ACP reverse request %q", message.Method)
+}
+
+func (p *moduParser) beginMessage() {
+	p.messageSeq++
+	p.messageOpen = true
+	p.textStreaming = false
+	p.thinkingStreaming = false
+}
+
+func (p *moduParser) ensureMessage() {
+	if !p.messageOpen {
+		p.beginMessage()
 	}
-	var params struct {
-		ToolCall struct {
-			ToolCallID string          `json:"toolCallId"`
-			Title      string          `json:"title"`
-			Kind       string          `json:"kind"`
-			Arguments  json.RawMessage `json:"arguments"`
-		} `json:"toolCall"`
-		Options []struct {
-			OptionID string `json:"optionId"`
-			Kind     string `json:"kind"`
-		} `json:"options"`
+}
+
+func (p *moduParser) streamID(kind string) string {
+	p.ensureMessage()
+	return "modu-" + kind + "-" + strconv.Itoa(p.messageSeq)
+}
+
+func (p *moduParser) handleStreamEvent(event moduStreamEvent, line string, at time.Time, sink Sink) {
+	switch event.Type {
+	case "text_start":
+		id := p.streamID("message")
+		if !p.textStreaming {
+			p.textStreaming = true
+			sink(Event{Kind: KindMessage, StreamID: id, Phase: StreamStart, Raw: line, At: at})
+		}
+	case "text_delta":
+		id := p.streamID("message")
+		if !p.textStreaming {
+			p.textStreaming = true
+			sink(Event{Kind: KindMessage, StreamID: id, Phase: StreamStart, Raw: line, At: at})
+		}
+		if event.Delta != "" {
+			sink(Event{Kind: KindMessage, StreamID: id, Phase: StreamDelta, Text: event.Delta, Raw: line, At: at})
+		}
+	case "thinking_start":
+		id := p.streamID("thinking")
+		if !p.thinkingStreaming {
+			p.thinkingStreaming = true
+			sink(Event{Kind: KindReasoning, StreamID: id, Phase: StreamStart, Raw: line, At: at})
+		}
+	case "thinking_delta":
+		id := p.streamID("thinking")
+		if !p.thinkingStreaming {
+			p.thinkingStreaming = true
+			sink(Event{Kind: KindReasoning, StreamID: id, Phase: StreamStart, Raw: line, At: at})
+		}
+		if event.Delta != "" {
+			sink(Event{Kind: KindReasoning, StreamID: id, Phase: StreamDelta, Text: event.Delta, Raw: line, At: at})
+		}
 	}
-	if err := json.Unmarshal(message.Params, &params); err != nil {
-		return fmt.Errorf("decode Modu ACP permission request: %w", err)
+}
+
+func (p *moduParser) handleMessage(raw json.RawMessage, line string, at time.Time, sink Sink) {
+	var message moduMessage
+	if len(raw) == 0 || json.Unmarshal(raw, &message) != nil || message.Role != "assistant" {
+		return
 	}
-	allow := sandbox != SandboxReadOnly
-	wanted := []string{"allow_once", "allow"}
-	if !allow {
-		wanted = []string{"reject_once", "deny_once", "deny"}
+	p.ensureMessage()
+
+	p.usage.InputTokens += message.Usage.Input
+	p.usage.OutputTokens += message.Usage.Output
+	var text, thinking strings.Builder
+	for _, content := range message.Content {
+		switch content.Type {
+		case "text":
+			text.WriteString(content.Text)
+		case "thinking":
+			thinking.WriteString(content.Thinking)
+		}
 	}
-	optionID := ""
-	for _, candidate := range wanted {
-		for _, option := range params.Options {
-			if option.OptionID == candidate || option.Kind == candidate {
-				optionID = option.OptionID
-				break
+	if reasoning := thinking.String(); strings.TrimSpace(reasoning) != "" {
+		if p.thinkingStreaming {
+			sink(Event{Kind: KindReasoning, StreamID: p.streamID("thinking"), Phase: StreamEnd, Text: reasoning, Raw: line, At: at})
+		} else {
+			sink(Event{Kind: KindReasoning, Text: reasoning, Raw: line, At: at})
+		}
+	}
+	if final := text.String(); strings.TrimSpace(final) != "" {
+		p.final = final
+		if p.textStreaming {
+			sink(Event{Kind: KindMessage, StreamID: p.streamID("message"), Phase: StreamEnd, Text: final, Raw: line, At: at})
+		} else {
+			sink(Event{Kind: KindMessage, Text: final, Raw: line, At: at})
+		}
+	}
+	if strings.TrimSpace(message.ErrorMessage) != "" {
+		p.failed = true
+		sink(Event{Kind: KindError, Text: message.ErrorMessage, Raw: line, At: at})
+	}
+	p.messageOpen = false
+	p.textStreaming = false
+	p.thinkingStreaming = false
+}
+
+func moduToolText(name string, args json.RawMessage) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		name = "tool"
+	}
+	arguments := strings.TrimSpace(string(args))
+	if arguments == "" || arguments == "null" {
+		return name
+	}
+	return name + " " + arguments
+}
+
+func moduResultText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var result struct {
+		Content []moduContent `json:"content"`
+	}
+	if json.Unmarshal(raw, &result) == nil {
+		var text strings.Builder
+		for _, content := range result.Content {
+			if content.Type == "text" {
+				text.WriteString(content.Text)
 			}
 		}
-		if optionID != "" {
-			break
+		if text.Len() > 0 {
+			return text.String()
 		}
 	}
-	if optionID == "" {
-		return fmt.Errorf("Modu ACP permission request has no %s option", map[bool]string{true: "allow-once", false: "reject-once"}[allow])
+	return strings.TrimSpace(string(raw))
+}
+
+func (p *moduParser) result() Result {
+	return Result{
+		FinalMessage: p.final,
+		Usage:        p.usage,
+		SessionID:    p.sessionID,
+		Succeeded:    p.completed && !p.failed,
 	}
-	title := strings.TrimSpace(params.ToolCall.Title)
-	if title == "" {
-		title = "Modu tool permission"
-	}
-	raw := string(message.Params)
-	sink(Event{Kind: KindToolUse, Text: title, Raw: raw, At: now()})
-	result := map[string]any{"outcome": map[string]string{"optionId": optionID}}
-	frame := map[string]any{"jsonrpc": "2.0", "id": *message.ID, "result": result}
-	encoded, err := json.Marshal(frame)
-	if err != nil {
-		return fmt.Errorf("encode Modu ACP permission response: %w", err)
-	}
-	encoded = append(encoded, '\n')
-	if _, err := writer.Write(encoded); err != nil {
-		return fmt.Errorf("write Modu ACP permission response: %w", err)
-	}
-	decision := "permission rejected"
-	if allow {
-		decision = "permission allowed once"
-	}
-	sink(Event{Kind: KindToolResult, Text: decision, Raw: string(encoded), At: now()})
-	return nil
 }
 
 func moduEnvironment(environment []string, model string) []string {

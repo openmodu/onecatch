@@ -175,7 +175,15 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .conversation-list > * + * { margin-top: 6px; }
 .conversation-tool > summary { font-size: var(--ui-font-meta); }
 .conversation-user { border-color: var(--acp-line); border-radius: 0; background: var(--acp-canvas); }
-.conversation-user p, .conversation-agent p { color: var(--acp-text); font-size: var(--ui-font-emphasis); }
+.conversation-user .markdown-content, .conversation-agent .markdown-content { color: var(--acp-text); font-size: var(--ui-font-emphasis); }
+.markdown-content blockquote { border-left-color: var(--acp-cyan); color: var(--acp-text-muted); }
+.markdown-content pre, .markdown-content th, .markdown-content td, .markdown-content hr { border-color: var(--acp-line); }
+.markdown-content pre, .markdown-content code { background: color-mix(in oklab, var(--acp-text) 4%, var(--acp-canvas)); color: var(--acp-text); }
+.markdown-content pre code { background: transparent; }
+.markdown-content th { background: color-mix(in oklab, var(--acp-text) 6%, var(--acp-canvas)); }
+.markdown-content a { color: var(--acp-cyan); }
+.markdown-image-placeholder, .markdown-unsafe-link { color: var(--acp-text-soft); }
+.markdown-stream-cursor { background: var(--acp-cyan); }
 .conversation-event-dot.user { color: var(--ui-event-user); filter: drop-shadow(0 0 1px var(--acp-text-muted)); }
 .conversation-event-dot.agent { color: var(--acp-cyan); }
 .conversation-speaker strong, .conversation-speaker time { color: var(--acp-text-soft); font-size: var(--ui-font-caption); }
@@ -452,9 +460,10 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .run-metric-grid > div { padding: 11px 6px; border-right: var(--ui-rule); border-bottom: var(--ui-rule); }
 .run-metric-grid > div:nth-child(2n) { border-right: 0; }
 .run-metric-grid > div:nth-last-child(-n + 2) { border-bottom: 0; }
-.run-metric-grid span, .run-metric-grid strong { display: block; }
+.run-metric-grid span, .run-metric-grid strong, .run-metric-grid small { display: block; }
 .run-metric-grid span { color: var(--acp-text-soft); font-size: var(--ui-font-micro); }
 .run-metric-grid strong { margin-top: 4px; color: var(--acp-text); font-size: var(--ui-font-emphasis); }
+.run-metric-grid small { margin-top: 4px; color: var(--acp-text-soft); font-size: var(--ui-font-micro); line-height: 1.45; }
 .inspector-block { padding: 14px 0; border-bottom: var(--ui-rule); }
 .inspector-block .kicker { display: block; margin-bottom: 9px; }
 .inspector-block > p { margin: 0; color: var(--acp-text-soft); font-size: var(--ui-font-caption); }

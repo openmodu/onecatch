@@ -194,19 +194,23 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 		defer release()
 	}
 	request := agentrun.Request{Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeDAGPrompt(task, definition, step, run, instruction), Model: step.Model, Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: run.Sessions[step.ID], EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second}
+	collector := s.newRuntimeCollector(run.ID, stepRun.ID)
 	var result agentrun.Result
 	if step.WorkerID != "" && step.WorkerID != "local" {
 		if s.remote == nil {
 			err = fmt.Errorf("worker_unavailable: remote executor is not configured")
 		} else {
-			result, err = s.remote.RunRemote(ctx, step.WorkerID, workspace.ID, request, s.runtimeSink(run.ID, stepRun.ID))
+			result, err = s.remote.RunRemote(ctx, step.WorkerID, workspace.ID, request, collector.Sink())
 		}
 	} else if !request.Runtime.Valid() || !s.engine.Available(request.Runtime) {
 		err = fmt.Errorf("runtime_unavailable: runtime %q is unavailable", step.Runtime)
 	} else {
 		stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
-		result, err = s.engine.Run(stepCtx, request, s.runtimeSink(run.ID, stepRun.ID))
+		result, err = s.engine.Run(stepCtx, request, collector.Sink())
 		cancel()
+	}
+	if streamErr := collector.Close(); streamErr != nil && err == nil {
+		err = collectorError(streamErr)
 	}
 	finishStepRun(&stepRun, result, s.now())
 	stepRun.SessionIDAfter = result.SessionID
@@ -224,13 +228,6 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 	_ = s.workflows.SaveStepRun(context.Background(), stepRun)
 	_ = s.recordGit(context.Background(), run.ID, step.ID, "after", workspace.Path)
 	return dagResult{step: step, stepRun: stepRun, result: result, err: err}
-}
-
-func (s *Usecase) runtimeSink(runID, stepRunID string) agentrun.Sink {
-	return func(event agentrun.Event) {
-		payload := mustJSON(event)
-		_, _ = s.workflows.AppendRuntimeEvent(context.Background(), runID, stepRunID, payload)
-	}
 }
 
 func readyDAGSteps(definition domainworkflows.Definition, nodes map[string]domainworkflows.NodeState) []domainworkflows.Step {

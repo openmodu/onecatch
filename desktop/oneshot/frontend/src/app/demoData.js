@@ -9,7 +9,7 @@ export const demoWorkspaces = [
 export const demoRuntimes = [
   { id: "codex", name: "Codex", available: true, version: "codex 0.98.0" },
   { id: "claude", name: "Claude Code", available: true, version: "2.1.4" },
-  { id: "modu", name: "Modu Code", available: true, version: "ACP · executable" },
+  { id: "modu", name: "Modu Code", available: true, version: "Print · NDJSON" },
 ];
 
 export const demoWorkflows = [
@@ -48,10 +48,10 @@ export const demoRun = {
     { stepRunId: "step_1", seq: 2, kind: "tool_use", text: "rg -n \"interrupt|pause\" internal desktop", at: demoNow },
     { stepRunId: "step_1", seq: 3, kind: "tool_result", text: "internal/usecase/workflows/usecase.go:212\ndesktop/oneshot/frontend/src/app/App.jsx:118", at: demoNow },
     { stepRunId: "step_1", seq: 4, kind: "file_change", text: "internal/usecase/workflows/usecase.go", at: demoNow },
-    { stepRunId: "step_1", seq: 5, kind: "message", text: "已完成调度层拆分并补充中断恢复测试。", at: demoNow },
+    { stepRunId: "step_1", seq: 5, kind: "message", text: "## 实现完成\n\n- 已拆分调度层\n- 已补充中断恢复测试\n\n```go\ngo test ./internal/usecase/workflows\n```", at: demoNow },
     { stepRunId: "step_2", seq: 1, kind: "tool_use", text: "go test ./...", at: demoNow },
     { stepRunId: "step_2", seq: 2, kind: "tool_result", text: "ok  github.com/openmodu/oneshot/internal/usecase/workflows", at: demoNow },
-    { stepRunId: "step_2", seq: 3, kind: "message", text: "核心流程正确，但需要补充 UI 中断后的状态反馈。", at: demoNow },
+    { stepRunId: "step_2", seq: 3, kind: "message", text: "### 审查结论\n\n| 项目 | 状态 |\n| --- | --- |\n| 核心流程 | ✅ |\n| 中断反馈 | 待完善 |", at: demoNow },
     { stepRunId: "step_2", seq: 4, kind: "result", text: '{"signal":"changes_requested","content":"建议在暂停区域明确展示恢复后的当前步骤。"}', at: demoNow },
   ],
   active: false,

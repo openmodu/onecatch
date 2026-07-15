@@ -5,6 +5,7 @@ import { runtimeResumeCommand, runtimeSessionEntries } from "./sessionCommands.j
 test("builds recovery commands for supported runtimes", () => {
   assert.equal(runtimeResumeCommand("codex", "thread-123"), "codex resume thread-123");
   assert.equal(runtimeResumeCommand("claude", "session-456"), "claude --resume session-456");
+  assert.equal(runtimeResumeCommand("modu", "session-789"), "modu_code --resume session-789");
   assert.equal(runtimeResumeCommand("custom", "session-789"), "");
 });
 

@@ -6,10 +6,6 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as time$0 from "../../../../../../time/models.js";
-
 export class GitFile {
     /**
      * Creates a new GitFile instance.
@@ -191,16 +187,16 @@ export class Workspace {
         if (!("createdAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["createdAt"] = null;
+            this["createdAt"] = "0001-01-01T00:00:00.000Z";
         }
         if (!("lastOpenedAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["lastOpenedAt"] = null;
+            this["lastOpenedAt"] = "0001-01-01T00:00:00.000Z";
         }
 
         Object.assign(this, $$source);

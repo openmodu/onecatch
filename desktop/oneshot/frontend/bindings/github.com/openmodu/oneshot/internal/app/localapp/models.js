@@ -21,9 +21,6 @@ import * as workspaces$0 from "../../domain/workspaces/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as worker$0 from "../../worker/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as time$0 from "../../../../../../time/models.js";
 
 export class AddWorkspaceInput {
     /**
@@ -104,9 +101,9 @@ export class CleanupPreview {
         if (!("expiresAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["expiresAt"] = null;
+            this["expiresAt"] = "0001-01-01T00:00:00.000Z";
         }
 
         Object.assign(this, $$source);
@@ -288,9 +285,9 @@ export class DiagnosticsExport {
         if (!("createdAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["createdAt"] = null;
+            this["createdAt"] = "0001-01-01T00:00:00.000Z";
         }
 
         Object.assign(this, $$source);
@@ -774,7 +771,7 @@ export class RunStartPreview {
         if (/** @type {any} */(false)) {
             /**
              * @member
-             * @type {time$0.Time | undefined}
+             * @type {string | undefined}
              */
             this["expiresAt"] = undefined;
         }
@@ -899,6 +896,27 @@ export class RuntimeEventView {
              * @member
              * @type {string | undefined}
              */
+            this["streamId"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["revision"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["streaming"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
             this["text"] = undefined;
         }
         if (/** @type {any} */(false)) {
@@ -967,9 +985,9 @@ export class RuntimeInfo {
         if (!("checkedAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["checkedAt"] = null;
+            this["checkedAt"] = "0001-01-01T00:00:00.000Z";
         }
 
         Object.assign(this, $$source);
@@ -1058,9 +1076,9 @@ export class StorageUsage {
         if (!("calculatedAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["calculatedAt"] = null;
+            this["calculatedAt"] = "0001-01-01T00:00:00.000Z";
         }
 
         Object.assign(this, $$source);

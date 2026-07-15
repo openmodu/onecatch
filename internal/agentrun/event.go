@@ -4,14 +4,15 @@
 //
 // Each supported runtime speaks a different wire format on stdout:
 //
-//   - Codex (`codex exec --json`) emits JSONL: thread.started, turn.started,
-//     item.completed{agent_message|command_execution|reasoning|file_change},
-//     turn.completed{usage}.
+//   - Codex app-server emits JSON-RPC notifications including agent-message and
+//     command-output deltas. Older CLIs fall back to `codex exec --json` JSONL.
 //   - Claude Code (`claude -p --output-format stream-json`) emits JSONL:
 //     system{init}, assistant{message.content[]}, user{tool_result},
 //     result{success|error}.
+//   - Modu Code (`modu_code -p ... -json`) emits NDJSON lifecycle, message,
+//     tool execution, and session completion events.
 //
-// Adapters translate both into the [Event] stream below so callers never have
+// Adapters translate all three into the [Event] stream below so callers never have
 // to branch on the underlying runtime.
 package agentrun
 
@@ -21,11 +22,11 @@ import "time"
 type Runtime string
 
 const (
-	// RuntimeCodex drives the OpenAI Codex CLI via `codex exec`.
+	// RuntimeCodex drives the OpenAI Codex CLI via app-server, with exec fallback.
 	RuntimeCodex Runtime = "codex"
 	// RuntimeClaude drives Anthropic's Claude Code via `claude -p`.
 	RuntimeClaude Runtime = "claude"
-	// RuntimeModu drives Modu Code via the Agent Client Protocol over stdio.
+	// RuntimeModu drives Modu Code via its non-interactive print mode.
 	RuntimeModu Runtime = "modu"
 )
 
@@ -65,11 +66,31 @@ const (
 	KindError EventKind = "error"
 )
 
+// StreamPhase describes how an event contributes to one logical, growing UI
+// entry. Empty means the event is atomic and remains backwards compatible with
+// events produced before streaming was introduced.
+type StreamPhase string
+
+const (
+	StreamStart    StreamPhase = "start"
+	StreamDelta    StreamPhase = "delta"
+	StreamSnapshot StreamPhase = "snapshot"
+	StreamEnd      StreamPhase = "end"
+)
+
 // Event is a single normalized step emitted while an agent runs. Raw preserves
 // the original JSON line so nothing is lost, while Kind/Text give callers a
 // runtime-agnostic view suitable for display and persistence.
 type Event struct {
 	Kind EventKind `json:"kind"`
+	// StreamID is stable for all chunks belonging to one logical message,
+	// reasoning block, or tool output. Empty identifies an atomic event.
+	StreamID string `json:"streamId,omitempty"`
+	// Phase controls whether Text starts, appends to, replaces, or completes a
+	// logical stream. Revision is assigned by the orchestration collector after
+	// it batches provider token deltas.
+	Phase    StreamPhase `json:"phase,omitempty"`
+	Revision uint64      `json:"revision,omitempty"`
 	// Text is the human-meaningful payload: message prose, command, file path,
 	// or error description, depending on Kind.
 	Text string `json:"text,omitempty"`
@@ -84,10 +105,15 @@ type Event struct {
 	At time.Time `json:"at"`
 }
 
-// Usage captures token accounting reported by a runtime at turn completion.
+// Usage captures cumulative token accounting for one workflow step. InputTokens
+// includes cache reads and cache creation when a provider reports them
+// separately; the detailed fields are subsets used to explain that total.
 type Usage struct {
-	InputTokens  int `json:"inputTokens"`
-	OutputTokens int `json:"outputTokens"`
+	InputTokens              int `json:"inputTokens"`
+	CachedInputTokens        int `json:"cachedInputTokens,omitempty"`
+	CacheCreationInputTokens int `json:"cacheCreationInputTokens,omitempty"`
+	OutputTokens             int `json:"outputTokens"`
+	ReasoningOutputTokens    int `json:"reasoningOutputTokens,omitempty"`
 }
 
 // Result is the terminal outcome of a completed run.
