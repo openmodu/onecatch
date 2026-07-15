@@ -35,6 +35,7 @@ func main() {
 	tokenEnv := flag.String("token-env", "ONESHOT_WORKER_TOKEN", "environment variable containing the token")
 	codex := flag.String("codex-binary", "", "Codex binary override")
 	claude := flag.String("claude-binary", "", "Claude binary override")
+	maxConcurrency := flag.Int("max-concurrency", 4, "maximum simultaneous runs (<=0 uses the default)")
 	flag.Var(workspaces, "workspace", "workspace mapping id=/absolute/path (repeatable)")
 	flag.Parse()
 	secret := strings.TrimSpace(*token)
@@ -59,7 +60,7 @@ func main() {
 		workspaces[workspaceID] = absolute
 	}
 	engine := agentrun.NewEngine(agentrun.Config{CodexBinary: *codex, ClaudeBinary: *claude})
-	service := worker.NewServer(*id, *name, secret, workspaces, engine)
+	service := worker.NewServer(*id, *name, secret, workspaces, engine, *maxConcurrency)
 	server := &http.Server{Addr: *listen, Handler: service.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 35 * time.Minute, WriteTimeout: 35 * time.Minute, IdleTimeout: 60 * time.Second}
 	log.Printf("oneshot worker %s listening on %s", *id, *listen)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

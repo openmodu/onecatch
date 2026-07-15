@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
 )
@@ -20,6 +21,32 @@ func (fakeEngine) Available(runtime agentrun.Runtime) bool { return runtime == a
 func (fakeEngine) Run(_ context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: request.Workspace})
 	return agentrun.Result{Succeeded: true, SessionID: "remote-session", FinalMessage: `{"signal":"completed","content":"remote done"}`}, nil
+}
+
+// blockingEngine streams one event, signals it started, then blocks until
+// either the run context is cancelled (a real interrupt) or release is closed
+// (a test-cleanup backstop so a blocked run never hangs server.Close).
+type blockingEngine struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func newBlockingEngine(t *testing.T) blockingEngine {
+	engine := blockingEngine{started: make(chan struct{}), release: make(chan struct{})}
+	t.Cleanup(func() { close(engine.release) })
+	return engine
+}
+
+func (blockingEngine) Available(agentrun.Runtime) bool { return true }
+func (e blockingEngine) Run(ctx context.Context, _ agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
+	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: "working"})
+	close(e.started)
+	select {
+	case <-ctx.Done():
+		return agentrun.Result{Succeeded: false, FinalMessage: "stopped"}, ctx.Err()
+	case <-e.release:
+		return agentrun.Result{Succeeded: false, FinalMessage: "released"}, nil
+	}
 }
 
 func TestRegistryMasksTokenAndUsesPrivateFile(t *testing.T) {
@@ -43,8 +70,8 @@ func TestRegistryMasksTokenAndUsesPrivateFile(t *testing.T) {
 	}
 }
 
-func TestServerAuthenticatesAndExecutesMappedWorkspace(t *testing.T) {
-	server := httptest.NewServer(NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, fakeEngine{}).Handler())
+func TestServerAuthenticatesAndStreamsMappedWorkspace(t *testing.T) {
+	server := httptest.NewServer(NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, fakeEngine{}, 0).Handler())
 	defer server.Close()
 	unauthorized, err := http.Get(server.URL + "/v1/health")
 	if err != nil {
@@ -60,13 +87,90 @@ func TestServerAuthenticatesAndExecutesMappedWorkspace(t *testing.T) {
 	if err != nil || !health.Runtimes["codex"] || health.Runtimes["claude"] {
 		t.Fatalf("health = %+v, %v", health, err)
 	}
-	response, err := client.Execute(context.Background(), config, ExecuteRequest{WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Sandbox: agentrun.SandboxReadOnly, Prompt: "review"})
-	if err != nil || !response.Result.Succeeded || len(response.Events) != 1 || response.Events[0].Text != "/tmp/project" {
-		t.Fatalf("execute = %+v, %v", response, err)
+	var events []agentrun.Event
+	result, err := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-1", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Sandbox: agentrun.SandboxReadOnly, Prompt: "review"}, func(e agentrun.Event) { events = append(events, e) })
+	if err != nil || !result.Succeeded || len(events) != 1 || events[0].Text != "/tmp/project" {
+		t.Fatalf("execute result=%+v events=%+v err=%v", result, events, err)
 	}
-	_, err = client.Execute(context.Background(), config, ExecuteRequest{WorkspaceID: "missing", Runtime: agentrun.RuntimeCodex, Prompt: "review"})
+	_, err = client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-2", WorkspaceID: "missing", Runtime: agentrun.RuntimeCodex, Prompt: "review"}, nil)
 	var remote RemoteError
 	if !errors.As(err, &remote) || remote.Code != "worker_workspace_unmapped" {
 		t.Fatalf("unmapped error = %v", err)
 	}
+	// A run needs a valid id so an interrupt can address it later.
+	_, err = client.Execute(context.Background(), config, ExecuteRequest{WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Prompt: "review"}, nil)
+	if !errors.As(err, &remote) || remote.Code != "worker_invalid_request" {
+		t.Fatalf("missing run id error = %v", err)
+	}
+}
+
+func TestInterruptStopsAnInFlightRun(t *testing.T) {
+	engine := newBlockingEngine(t)
+	server := httptest.NewServer(NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, engine, 0).Handler())
+	defer server.Close()
+	client := NewClient()
+	config := Config{ID: "remote-1", BaseURL: server.URL, Token: "secret", Enabled: true}
+
+	firstEvent := make(chan agentrun.Event, 1)
+	resultCh := make(chan agentrun.Result, 1)
+	go func() {
+		result, _ := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-live", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Sandbox: agentrun.SandboxReadOnly, Prompt: "long"}, func(e agentrun.Event) {
+			select {
+			case firstEvent <- e:
+			default:
+			}
+		})
+		resultCh <- result
+	}()
+
+	// Receiving the event proves the response is streamed: the engine emits it,
+	// then blocks — so a buffered protocol could not have delivered it yet.
+	select {
+	case event := <-firstEvent:
+		if event.Text != "working" {
+			t.Fatalf("streamed event = %+v", event)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("no event streamed before completion")
+	}
+	if err := client.Interrupt(context.Background(), config, "run-live"); err != nil {
+		t.Fatalf("interrupt: %v", err)
+	}
+	select {
+	case result := <-resultCh:
+		if result.FinalMessage != "stopped" {
+			t.Fatalf("interrupted result = %+v", result)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("run did not stop after interrupt")
+	}
+	// Interrupting an unknown run is a safely-ignorable not-found.
+	err := client.Interrupt(context.Background(), config, "ghost")
+	var remote RemoteError
+	if !errors.As(err, &remote) || remote.Code != "worker_run_not_found" {
+		t.Fatalf("ghost interrupt = %v", err)
+	}
+}
+
+func TestServerRejectsWhenAtCapacity(t *testing.T) {
+	engine := newBlockingEngine(t)
+	server := httptest.NewServer(NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, engine, 1).Handler())
+	defer server.Close()
+	client := NewClient()
+	config := Config{ID: "remote-1", BaseURL: server.URL, Token: "secret", Enabled: true}
+
+	go func() {
+		_, _ = client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-hold", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Sandbox: agentrun.SandboxReadOnly, Prompt: "hold"}, nil)
+	}()
+	select {
+	case <-engine.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("holding run never started")
+	}
+	_, err := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-extra", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Sandbox: agentrun.SandboxReadOnly, Prompt: "extra"}, nil)
+	var remote RemoteError
+	if !errors.As(err, &remote) || remote.Code != "worker_busy" {
+		t.Fatalf("capacity error = %v", err)
+	}
+	_ = client.Interrupt(context.Background(), config, "run-hold")
 }

@@ -43,17 +43,28 @@ type Health struct {
 }
 
 type ExecuteRequest struct {
-	WorkspaceID     string           `json:"workspaceId"`
-	Runtime         agentrun.Runtime `json:"runtime"`
-	Model           string           `json:"model,omitempty"`
-	Sandbox         agentrun.Sandbox `json:"sandbox"`
-	Prompt          string           `json:"prompt"`
-	ResumeSessionID string           `json:"resumeSessionId,omitempty"`
+	// RunID correlates this execution with an interrupt call. The coordinator
+	// generates it; the worker keys its in-flight run registry on it so
+	// POST /v1/runs/{runID}/interrupt can find and stop the right run.
+	RunID                 string           `json:"runId"`
+	WorkspaceID           string           `json:"workspaceId"`
+	Runtime               agentrun.Runtime `json:"runtime"`
+	Model                 string           `json:"model,omitempty"`
+	Sandbox               agentrun.Sandbox `json:"sandbox"`
+	Prompt                string           `json:"prompt"`
+	ResumeSessionID       string           `json:"resumeSessionId,omitempty"`
+	InterruptGraceSeconds int              `json:"interruptGraceSeconds,omitempty"`
 }
 
-type ExecuteResponse struct {
-	Result agentrun.Result  `json:"result"`
-	Events []agentrun.Event `json:"events"`
+// Frame is one line of the NDJSON execute stream. Exactly one field is set: a
+// run emits many Event frames as work happens, then a single terminal frame —
+// Result on completion (or graceful interrupt) or Error on failure. Streaming
+// the events as they occur, rather than buffering them into one response, is
+// what lets the coordinator's UI show a remote run live, the same as a local one.
+type Frame struct {
+	Event  *agentrun.Event  `json:"event,omitempty"`
+	Result *agentrun.Result `json:"result,omitempty"`
+	Error  *RemoteError     `json:"error,omitempty"`
 }
 
 type RemoteError struct {
