@@ -3,7 +3,6 @@ package agentrun
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -80,7 +79,7 @@ const codexStream = `{"type":"thread.started","thread_id":"thread-abc"}
 {"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"echo hi > out.txt"}}
 {"type":"item.completed","item":{"id":"item_2","type":"file_change","path":"out.txt"}}
 {"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"Done. Wrote out.txt."}}
-{"type":"turn.completed","usage":{"input_tokens":1200,"output_tokens":42}}`
+{"type":"turn.completed","usage":{"input_tokens":1200,"cached_input_tokens":900,"output_tokens":42,"reasoning_output_tokens":12}}`
 
 func TestCodexRunnerParsesStream(t *testing.T) {
 	bin := stubBinary(t, codexStream, "", 0)
@@ -101,7 +100,7 @@ func TestCodexRunnerParsesStream(t *testing.T) {
 	if res.SessionID != "thread-abc" {
 		t.Fatalf("SessionID = %q", res.SessionID)
 	}
-	if res.Usage.InputTokens != 1200 || res.Usage.OutputTokens != 42 {
+	if res.Usage.InputTokens != 1200 || res.Usage.CachedInputTokens != 900 || res.Usage.OutputTokens != 42 || res.Usage.ReasoningOutputTokens != 12 {
 		t.Fatalf("Usage = %+v", res.Usage)
 	}
 	if got := countKind(events, KindMessage); got != 1 {
@@ -118,10 +117,127 @@ func TestCodexRunnerParsesStream(t *testing.T) {
 	}
 }
 
+func TestCodexRunnerEmitsCommandOutputAndExitStatus(t *testing.T) {
+	// Each command surfaces twice on the wire — item.started then item.completed.
+	// Only the terminal event should produce a row, carrying the output and an
+	// exit-code-driven pass/fail.
+	stream := `{"type":"thread.started","thread_id":"t1"}
+{"type":"turn.started"}
+{"type":"item.started","item":{"id":"i1","type":"command_execution","command":"go test ./...","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"i1","type":"command_execution","command":"go test ./...","status":"completed","aggregated_output":"ok  pkg  0.1s\n","exit_code":0}}
+{"type":"item.started","item":{"id":"i2","type":"command_execution","command":"go vet ./...","status":"in_progress"}}
+{"type":"item.completed","item":{"id":"i2","type":"command_execution","command":"go vet ./...","status":"completed","aggregated_output":"vet: bad\n","exit_code":1}}
+{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}`
+	bin := stubBinary(t, stream, "", 0)
+	r := NewCodexRunner(bin)
+	r.now = fixedClock()
+
+	var events []Event
+	if _, err := r.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "go"}, collectSink(&events)); err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	// Two commands, each emitted once (item.started must not double them).
+	if got := countKind(events, KindToolUse); got != 2 {
+		t.Fatalf("tool_use events = %d, want 2", got)
+	}
+	var results []Event
+	for _, event := range events {
+		if event.Kind == KindToolResult {
+			results = append(results, event)
+		}
+	}
+	if len(results) != 2 {
+		t.Fatalf("tool_result events = %d, want 2", len(results))
+	}
+	if results[0].Failed || results[0].Text != "ok  pkg  0.1s\n" {
+		t.Errorf("exit-0 command: got failed=%v text=%q", results[0].Failed, results[0].Text)
+	}
+	if !results[1].Failed || results[1].Text != "vet: bad\n" {
+		t.Errorf("exit-1 command: got failed=%v text=%q", results[1].Failed, results[1].Text)
+	}
+}
+
+func TestCodexRunnerStreamsAppServerMessagesAndCommandOutput(t *testing.T) {
+	bin := stubCodexAppServerBinary(t)
+	runner := NewCodexRunner(bin)
+	runner.now = fixedClock()
+	var events []Event
+
+	result, err := runner.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "implement it", Sandbox: SandboxWorkspaceWrite}, collectSink(&events))
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if !result.Succeeded || result.SessionID != "thread-live" || result.FinalMessage != "Hello" {
+		t.Fatalf("result = %+v", result)
+	}
+	if result.Usage.InputTokens != 17 || result.Usage.CachedInputTokens != 11 || result.Usage.OutputTokens != 5 || result.Usage.ReasoningOutputTokens != 2 {
+		t.Fatalf("usage = %+v", result.Usage)
+	}
+
+	var messages, outputs []Event
+	for _, event := range events {
+		switch event.StreamID {
+		case "codex-message-message-1":
+			messages = append(messages, event)
+		case "codex-tool-output-command-1":
+			outputs = append(outputs, event)
+		}
+	}
+	if len(messages) != 4 || messages[0].Phase != StreamStart || messages[1].Text != "Hel" || messages[2].Text != "lo" || messages[3].Phase != StreamEnd || messages[3].Text != "Hello" {
+		t.Fatalf("message stream = %+v", messages)
+	}
+	if len(outputs) != 3 || outputs[0].Phase != StreamStart || outputs[1].Text != "ok\n" || outputs[2].Phase != StreamEnd || outputs[2].Text != "ok\n" {
+		t.Fatalf("command output stream = %+v", outputs)
+	}
+	if countKind(events, KindToolUse) != 1 || countKind(events, KindUsage) != 1 {
+		t.Fatalf("events = %+v", events)
+	}
+}
+
+func stubCodexAppServerBinary(t *testing.T) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	path := filepath.Join(t.TempDir(), "codex")
+	script := `#!/bin/sh
+[ "$1" = "app-server" ] || { echo "unexpected legacy fallback" >&2; exit 9; }
+while IFS= read -r line; do
+  case "$line" in
+    *'"id":1'*)
+      printf '%s\n' '{"id":1,"result":{}}'
+      ;;
+    *'"id":2'*)
+      printf '%s\n' '{"id":2,"result":{"thread":{"id":"thread-live"}}}'
+      ;;
+    *'"id":3'*)
+      printf '%s\n' '{"id":3,"result":{"turn":{"id":"turn-live","status":"inProgress"}}}'
+      printf '%s\n' '{"method":"item/started","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"message-1","type":"agentMessage","text":""}}}'
+      printf '%s\n' '{"method":"item/agentMessage/delta","params":{"threadId":"thread-live","turnId":"turn-live","itemId":"message-1","delta":"Hel"}}'
+      printf '%s\n' '{"method":"item/agentMessage/delta","params":{"threadId":"thread-live","turnId":"turn-live","itemId":"message-1","delta":"lo"}}'
+      printf '%s\n' '{"method":"item/completed","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"message-1","type":"agentMessage","text":"Hello"}}}'
+      printf '%s\n' '{"method":"item/started","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"command-1","type":"commandExecution","command":"go test ./...","status":"inProgress"}}}'
+      printf '%s\n' '{"method":"item/commandExecution/outputDelta","params":{"threadId":"thread-live","turnId":"turn-live","itemId":"command-1","delta":"ok\n"}}'
+      printf '%s\n' '{"method":"item/completed","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"command-1","type":"commandExecution","command":"go test ./...","status":"completed","aggregatedOutput":"ok\n","exitCode":0}}}'
+      printf '%s\n' '{"method":"thread/tokenUsage/updated","params":{"threadId":"thread-live","turnId":"turn-live","tokenUsage":{"last":{"inputTokens":3,"cachedInputTokens":2,"outputTokens":1,"reasoningOutputTokens":0},"total":{"inputTokens":17,"cachedInputTokens":11,"outputTokens":5,"reasoningOutputTokens":2}}}}'
+      printf '%s\n' '{"method":"turn/completed","params":{"threadId":"thread-live","turn":{"id":"turn-live","status":"completed"}}}'
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write Codex app-server stub: %v", err)
+	}
+	return path
+}
+
 const claudeStream = `{"type":"system","subtype":"init","session_id":"sess-xyz","model":"claude-haiku-4-5"}
 {"type":"assistant","message":{"content":[{"type":"thinking","thinking":"plan"}],"usage":{"input_tokens":10,"output_tokens":2}}}
 {"type":"assistant","message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"out.txt"}}]}}
 {"type":"user","message":{"content":[{"type":"tool_result","content":"ok"}]}}
+{"type":"stream_event","event":{"type":"message_start","message":{"id":"msg-1"}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Created "}}}
+{"type":"stream_event","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"out.txt."}}}
 {"type":"assistant","message":{"content":[{"type":"text","text":"Created out.txt."}]}}
 {"type":"result","subtype":"success","is_error":false,"result":"Created out.txt.","session_id":"sess-xyz","usage":{"input_tokens":10,"output_tokens":61}}`
 
@@ -152,6 +268,37 @@ func TestClaudeRunnerParsesStream(t *testing.T) {
 	}
 	if got := countKind(events, KindResult); got != 1 {
 		t.Fatalf("result events = %d, want 1", got)
+	}
+}
+
+func TestClaudeRunnerEmitsTextDeltasWithAuthoritativeEnd(t *testing.T) {
+	bin := stubBinary(t, claudeStream, "", 0)
+	r := NewClaudeRunner(bin)
+	var events []Event
+	if _, err := r.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "go"}, collectSink(&events)); err != nil {
+		t.Fatal(err)
+	}
+	var streamed []Event
+	for _, event := range events {
+		if strings.HasPrefix(event.StreamID, "claude-message-") {
+			streamed = append(streamed, event)
+		}
+	}
+	if len(streamed) != 4 || streamed[0].Phase != StreamStart || streamed[1].Text != "Created " || streamed[2].Text != "out.txt." || streamed[3].Phase != StreamEnd || streamed[3].Text != "Created out.txt." {
+		t.Fatalf("streamed = %+v", streamed)
+	}
+}
+
+func TestClaudeRunnerIncludesCacheUsageInInputTotal(t *testing.T) {
+	stream := `{"type":"system","subtype":"init","session_id":"s-cache"}
+{"type":"result","subtype":"success","is_error":false,"result":"done","session_id":"s-cache","usage":{"input_tokens":7,"cache_creation_input_tokens":13,"cache_read_input_tokens":80,"output_tokens":9}}`
+	runner := NewClaudeRunner(stubBinary(t, stream, "", 0))
+	result, err := runner.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "go"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Usage.InputTokens != 100 || result.Usage.CachedInputTokens != 80 || result.Usage.CacheCreationInputTokens != 13 || result.Usage.OutputTokens != 9 {
+		t.Fatalf("usage = %+v", result.Usage)
 	}
 }
 
@@ -209,8 +356,24 @@ func TestClaudeRunnerReportsAgentFailure(t *testing.T) {
 	}
 }
 
-func TestModuRunnerSpeaksACPAndAggregatesMessage(t *testing.T) {
-	bin := stubACPBinary(t, false)
+const moduStream = `{"type":"session_start","sessionId":"modu-sess-1","model":"custom-model"}
+{"type":"agent_start"}
+{"type":"turn_start"}
+{"type":"message_start","message":{"role":"assistant"}}
+{"type":"message_update","streamEvent":{"Type":"thinking_delta","Delta":"checking"},"message":"checking"}
+{"type":"message_update","streamEvent":{"Type":"text_delta","ContentIndex":1,"Delta":"I will "},"message":"I will "}
+{"type":"message_update","streamEvent":{"Type":"text_delta","ContentIndex":1,"Delta":"update it."},"message":"update it."}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"thinking","thinking":"checking"},{"type":"text","text":"I will update it."}],"usage":{"input":12,"output":4}}}
+{"type":"tool_execution_start","toolName":"bash","toolCallId":"tool-1","args":{"command":"go test ./..."}}
+{"type":"tool_execution_end","toolName":"bash","toolCallId":"tool-1","result":{"content":[{"type":"text","text":"ok"}]},"isError":false}
+{"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"ok"}]}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"usage":{"input":20,"output":6}}}
+{"type":"turn_end"}
+{"type":"agent_end"}
+{"type":"session_end"}`
+
+func TestModuRunnerUsesPrintModeAndParsesStream(t *testing.T) {
+	bin := stubModuPrintBinary(t, moduStream)
 	runner := NewModuRunner(bin)
 	runner.now = fixedClock()
 
@@ -224,14 +387,35 @@ func TestModuRunnerSpeaksACPAndAggregatesMessage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run error: %v", err)
 	}
-	if !result.Succeeded || result.FinalMessage != "custom-model: done" {
+	if !result.Succeeded || result.FinalMessage != "Done." {
 		t.Fatalf("result = %+v", result)
 	}
-	if result.SessionID != "" {
-		t.Fatalf("short-lived Modu session must not be exposed, got %q", result.SessionID)
+	if result.SessionID != "modu-sess-1" {
+		t.Fatalf("SessionID = %q", result.SessionID)
 	}
-	if countKind(events, KindStarted) != 1 || countKind(events, KindMessage) != 1 || countKind(events, KindResult) != 1 {
+	if result.Usage.InputTokens != 32 || result.Usage.OutputTokens != 10 {
+		t.Fatalf("Usage = %+v", result.Usage)
+	}
+	if countKind(events, KindStarted) != 1 || countKind(events, KindMessage) != 5 || countKind(events, KindToolUse) != 1 || countKind(events, KindToolResult) != 1 || countKind(events, KindResult) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+}
+
+func TestModuRunnerEmitsTextDeltasWithAuthoritativeEnd(t *testing.T) {
+	bin := stubModuPrintBinary(t, moduStream)
+	runner := NewModuRunner(bin)
+	var events []Event
+	if _, err := runner.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "finish the task"}, collectSink(&events)); err != nil {
+		t.Fatal(err)
+	}
+	var streamed []Event
+	for _, event := range events {
+		if event.StreamID == "modu-message-1" {
+			streamed = append(streamed, event)
+		}
+	}
+	if len(streamed) != 4 || streamed[0].Phase != StreamStart || streamed[1].Text != "I will " || streamed[2].Text != "update it." || streamed[3].Phase != StreamEnd || streamed[3].Text != "I will update it." {
+		t.Fatalf("streamed = %+v", streamed)
 	}
 }
 
@@ -248,39 +432,43 @@ func TestModuRunnerPrefersCurrentBinary(t *testing.T) {
 	}
 }
 
-func TestModuCommandArgsFollowSandbox(t *testing.T) {
+func TestModuCommandArgsUsePrintModeAndResume(t *testing.T) {
 	tests := []struct {
-		name    string
-		sandbox Sandbox
-		want    string
+		name string
+		req  Request
+		want string
 	}{
-		{name: "default writable", want: "--acp --no-approve"},
-		{name: "workspace write", sandbox: SandboxWorkspaceWrite, want: "--acp --no-approve"},
-		{name: "full", sandbox: SandboxFull, want: "--acp --no-approve"},
-		{name: "read only", sandbox: SandboxReadOnly, want: "--acp"},
+		{name: "default writable", req: Request{Prompt: "fix tests"}, want: "-p fix tests -json --no-approve"},
+		{name: "workspace write", req: Request{Prompt: "fix tests", Sandbox: SandboxWorkspaceWrite}, want: "-p fix tests -json --no-approve"},
+		{name: "full", req: Request{Prompt: "fix tests", Sandbox: SandboxFull}, want: "-p fix tests -json --no-approve"},
+		{name: "read only", req: Request{Prompt: "inspect", Sandbox: SandboxReadOnly}, want: "-p inspect -json"},
+		{name: "resume", req: Request{Prompt: "continue", ResumeSessionID: " session-42 "}, want: "--resume session-42 -p continue -json --no-approve"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			if got := strings.Join(moduCommandArgs(test.sandbox), " "); got != test.want {
+			if got := strings.Join(moduCommandArgs(test.req), " "); got != test.want {
 				t.Fatalf("args = %q, want %q", got, test.want)
 			}
 		})
 	}
 }
 
-func TestModuRunnerReportsACPError(t *testing.T) {
-	runner := NewModuRunner(stubACPBinary(t, true))
+func TestModuRunnerReportsAgentFailure(t *testing.T) {
+	stream := `{"type":"session_start","sessionId":"modu-sess-1","model":"custom-model"}
+{"type":"message_end","message":{"role":"assistant","errorMessage":"provider failed"}}
+{"type":"session_end"}`
+	runner := NewModuRunner(stubBinary(t, stream, "", 0))
 	var events []Event
 	result, err := runner.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "fail"}, collectSink(&events))
-	if err == nil || !contains(err.Error(), "provider failed") {
-		t.Fatalf("err = %v", err)
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
 	}
-	if result.Succeeded || countKind(events, KindError) != 1 {
+	if result.Succeeded || countKind(events, KindError) != 1 || result.SessionID != "modu-sess-1" {
 		t.Fatalf("result/events = %+v / %+v", result, events)
 	}
 }
 
-func TestModuRunnerPrefersProcessFailureOverUnexpectedEOF(t *testing.T) {
+func TestModuRunnerReportsProcessFailure(t *testing.T) {
 	bin := stubBinary(t, "", "no API key found", 1)
 	runner := NewModuRunner(bin)
 
@@ -288,135 +476,25 @@ func TestModuRunnerPrefersProcessFailureOverUnexpectedEOF(t *testing.T) {
 	if err == nil || !contains(err.Error(), "no API key found") {
 		t.Fatalf("err = %v", err)
 	}
-	if contains(err.Error(), "unexpected EOF") {
-		t.Fatalf("unexpected EOF obscured process error: %v", err)
-	}
 }
 
-func TestRespondACPReversePermissionUsesSandboxDecision(t *testing.T) {
-	permission := acpEnvelope{
-		JSONRPC: "2.0",
-		ID:      int64Pointer(41),
-		Method:  "session/request_permission",
-		Params: json.RawMessage(`{
-			"toolCall":{"toolCallId":"call-1","title":"bash","kind":"execute","arguments":{"command":"go test ./..."}},
-			"options":[
-				{"optionId":"allow_once","kind":"allow_once"},
-				{"optionId":"reject_once","kind":"reject_once"}
-			]
-		}`),
-	}
-	tests := []struct {
-		name    string
-		sandbox Sandbox
-		want    string
-	}{
-		{name: "workspace write allows once", sandbox: SandboxWorkspaceWrite, want: `"optionId":"allow_once"`},
-		{name: "full allows once", sandbox: SandboxFull, want: `"optionId":"allow_once"`},
-		{name: "read only rejects once", sandbox: SandboxReadOnly, want: `"optionId":"reject_once"`},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			var output bytes.Buffer
-			var events []Event
-			if err := respondACPReverseRequest(&output, permission, test.sandbox, collectSink(&events), fixedClock()); err != nil {
-				t.Fatal(err)
-			}
-			if got := output.String(); !contains(got, `"id":41`) || !contains(got, test.want) {
-				t.Fatalf("response = %s", got)
-			}
-			if countKind(events, KindToolUse) != 1 || countKind(events, KindToolResult) != 1 {
-				t.Fatalf("events = %+v", events)
-			}
-		})
-	}
-}
-
-func TestRespondACPReversePermissionRejectsUnknownMethod(t *testing.T) {
-	id := int64(9)
-	err := respondACPReverseRequest(&bytes.Buffer{}, acpEnvelope{ID: &id, Method: "session/unknown"}, SandboxWorkspaceWrite, nil, fixedClock())
-	if err == nil || !contains(err.Error(), "unsupported Modu ACP reverse request") {
-		t.Fatalf("err = %v", err)
-	}
-}
-
-func int64Pointer(value int64) *int64 { return &value }
-
-func TestModuRunnerHandlesPermissionReverseRequest(t *testing.T) {
-	runner := NewModuRunner(stubACPPermissionBinary(t))
-	runner.now = fixedClock()
-	var events []Event
-	result, err := runner.Run(context.Background(), Request{
-		Workspace: t.TempDir(),
-		Prompt:    "make the change",
-		Sandbox:   SandboxWorkspaceWrite,
-	}, collectSink(&events))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !result.Succeeded || result.FinalMessage != "permission accepted" {
-		t.Fatalf("result = %+v", result)
-	}
-	if countKind(events, KindToolUse) != 1 || countKind(events, KindToolResult) != 1 {
-		t.Fatalf("events = %+v", events)
-	}
-}
-
-func stubACPPermissionBinary(t *testing.T) string {
+func stubModuPrintBinary(t *testing.T, output string) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("stub binary uses a POSIX shell script")
 	}
 	path := filepath.Join(t.TempDir(), "modu_code")
 	script := `#!/bin/sh
-[ "$1" = "--acp" ] || exit 2
-while IFS= read -r line; do
-  case "$line" in
-    *'"id":1'*) printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}' ;;
-    *'"id":2'*) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"sessionId":"modu-sess-1"}}' ;;
-    *'"id":3'*)
-      printf '%s\n' '{"jsonrpc":"2.0","id":41,"method":"session/request_permission","params":{"toolCall":{"toolCallId":"call-1","title":"bash","kind":"execute","arguments":{"command":"go test ./..."}},"options":[{"optionId":"allow_once","kind":"allow_once"},{"optionId":"reject_once","kind":"reject_once"}]}}'
-      IFS= read -r permission
-      case "$permission" in
-        *'"optionId":"allow_once"'*) ;;
-        *) printf '%s\n' '{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"permission response missing"}}'; continue ;;
-      esac
-      printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"modu-sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"permission accepted"}}}}'
-      printf '%s\n' '{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}'
-      ;;
-  esac
-done
+[ "$1" = "-p" ] || { echo "missing -p" >&2; exit 2; }
+[ "$2" = "finish the task" ] || { echo "wrong prompt" >&2; exit 2; }
+[ "$3" = "-json" ] || { echo "missing -json" >&2; exit 2; }
+[ "$4" = "--no-approve" ] || { echo "missing --no-approve" >&2; exit 2; }
+cat <<'ONESHOT_EOF'
+` + output + `
+ONESHOT_EOF
 `
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-func stubACPBinary(t *testing.T, promptError bool) string {
-	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("stub binary uses a POSIX shell script")
-	}
-	path := filepath.Join(t.TempDir(), "modu-code")
-	promptReply := `printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"modu-sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"'"$MODU_CODE_MODEL"': "}}}}'` + "\n" +
-		`printf '%s\n' '{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"modu-sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"done"}}}}'` + "\n" +
-		`printf '%s\n' '{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}'`
-	if promptError {
-		promptReply = `printf '%s\n' '{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"provider failed"}}'`
-	}
-	script := `#!/bin/sh
-[ "$1" = "--acp" ] || { echo "missing --acp" >&2; exit 2; }
-while IFS= read -r line; do
-  case "$line" in
-    *'"id":1'*) printf '%s\n' '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1}}' ;;
-    *'"id":2'*) printf '%s\n' '{"jsonrpc":"2.0","id":2,"result":{"sessionId":"modu-sess-1"}}' ;;
-    *'"id":3'*) ` + promptReply + ` ;;
-  esac
-done
-`
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatalf("write ACP stub: %v", err)
+		t.Fatalf("write Modu print stub: %v", err)
 	}
 	return path
 }

@@ -1,6 +1,12 @@
-import { memo } from "react";
+import { lazy, memo, Suspense } from "react";
 import { CaretDown, CaretRight, Circle } from "@phosphor-icons/react";
 import { formatTime } from "../format.js";
+
+const MarkdownContent = lazy(() => import("./MarkdownContent.jsx"));
+
+function MessageBody({ content, streaming = false }) {
+  return <Suspense fallback={<div className="markdown-content markdown-loading">{content}</div>}><MarkdownContent content={content} streaming={streaming} /></Suspense>;
+}
 
 function ToolTimelineItem({ entry, running, stalled, time }) {
   const labels = { tool_use: "TOOL USE", tool_result: "RESULT", file_change: "FILE CHANGE", reasoning: "PROCESS" };
@@ -37,9 +43,9 @@ function ConversationTimeline({ items, active }) {
     <div className="conversation-list">
       {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
         <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label="用户消息" /></span><span className="conversation-message-meta"><time>{timeLabel(item.at)}</time></span></div>
-        <p>{item.text}</p>
+        <MessageBody content={item.text} />
       </div> : <article className="conversation-round" key={item.id}>
-        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={`message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label="Agent 消息" /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">第 {item.round} 轮</span><time>{timeLabel(entry.at || item.finishedAt || item.startedAt)}</time></span></div><p>{entry.text}</p></div> : <ToolTimelineItem key={`tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={isRunning(item, entry, index)} stalled={isStalled(item, entry, isRunning(item, entry, index))} />)}</div>
+        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={entry.id || `message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label="Agent 消息" /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">第 {item.round} 轮</span><time>{timeLabel(entry.at || item.finishedAt || item.startedAt)}</time></span></div><MessageBody content={entry.text} streaming={entry.streaming} /></div> : <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={isRunning(item, entry, index)} stalled={isStalled(item, entry, isRunning(item, entry, index))} />)}</div>
       </article>)}
       {!items.length && <p className="muted-copy">Agent 消息会按执行轮次显示在这里。</p>}
     </div>

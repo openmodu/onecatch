@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -41,6 +42,9 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 		"--output-format", "stream-json",
 		// stream-json requires --verbose to emit per-step events.
 		"--verbose",
+		// Include raw content_block_delta events so text and thinking can be
+		// rendered while the model is still generating them.
+		"--include-partial-messages",
 	}
 	if req.ResumeSessionID != "" {
 		// Continue a prior conversation, preserving its context.
@@ -69,21 +73,38 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 
 // claudeParser accumulates terminal state from Claude Code's stream-json.
 type claudeParser struct {
-	final     string
-	sessionID string
-	usage     Usage
-	succeeded bool
-	done      bool
+	final             string
+	sessionID         string
+	usage             Usage
+	succeeded         bool
+	done              bool
+	messageSeq        int
+	messageOpen       bool
+	textStreaming     bool
+	thinkingStreaming bool
 }
 
 type claudeEnvelope struct {
-	Type      string        `json:"type"`
-	Subtype   string        `json:"subtype"`
-	SessionID string        `json:"session_id"`
-	Message   claudeMessage `json:"message"`
-	Result    string        `json:"result"`
-	IsError   bool          `json:"is_error"`
-	Usage     claudeUsage   `json:"usage"`
+	Type      string            `json:"type"`
+	Subtype   string            `json:"subtype"`
+	SessionID string            `json:"session_id"`
+	Message   claudeMessage     `json:"message"`
+	Result    string            `json:"result"`
+	IsError   bool              `json:"is_error"`
+	Usage     claudeUsage       `json:"usage"`
+	Event     claudeStreamEvent `json:"event"`
+}
+
+type claudeStreamEvent struct {
+	Type  string            `json:"type"`
+	Index int               `json:"index"`
+	Delta claudeStreamDelta `json:"delta"`
+}
+
+type claudeStreamDelta struct {
+	Type     string `json:"type"`
+	Text     string `json:"text"`
+	Thinking string `json:"thinking"`
 }
 
 type claudeMessage struct {
@@ -102,8 +123,19 @@ type claudeContent struct {
 }
 
 type claudeUsage struct {
-	InputTokens  int `json:"input_tokens"`
-	OutputTokens int `json:"output_tokens"`
+	InputTokens              int `json:"input_tokens"`
+	CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+	OutputTokens             int `json:"output_tokens"`
+}
+
+func (u claudeUsage) usage() Usage {
+	return Usage{
+		InputTokens:              u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens,
+		CachedInputTokens:        u.CacheReadInputTokens,
+		CacheCreationInputTokens: u.CacheCreationInputTokens,
+		OutputTokens:             u.OutputTokens,
+	}
 }
 
 func (p *claudeParser) parse(line string, at time.Time, sink Sink) {
@@ -122,6 +154,8 @@ func (p *claudeParser) parse(line string, at time.Time, sink Sink) {
 		// Other system events (hooks, thinking-token meters) are progress noise.
 	case "assistant":
 		p.handleAssistant(env.Message, line, at, sink)
+	case "stream_event":
+		p.handleStreamEvent(env.Event, line, at, sink)
 	case "user":
 		p.handleToolResults(env.Message, line, at, sink)
 	case "result":
@@ -131,21 +165,83 @@ func (p *claudeParser) parse(line string, at time.Time, sink Sink) {
 	}
 }
 
+func (p *claudeParser) beginMessage() {
+	p.messageSeq++
+	p.messageOpen = true
+	p.textStreaming = false
+	p.thinkingStreaming = false
+}
+
+func (p *claudeParser) ensureMessage() {
+	if !p.messageOpen {
+		p.beginMessage()
+	}
+}
+
+func (p *claudeParser) streamID(kind string) string {
+	p.ensureMessage()
+	return "claude-" + kind + "-" + strconv.Itoa(p.messageSeq)
+}
+
+func (p *claudeParser) handleStreamEvent(event claudeStreamEvent, line string, at time.Time, sink Sink) {
+	switch event.Type {
+	case "message_start":
+		p.beginMessage()
+	case "content_block_delta":
+		switch event.Delta.Type {
+		case "text_delta":
+			id := p.streamID("message")
+			if !p.textStreaming {
+				p.textStreaming = true
+				sink(Event{Kind: KindMessage, StreamID: id, Phase: StreamStart, Raw: line, At: at})
+			}
+			if event.Delta.Text != "" {
+				sink(Event{Kind: KindMessage, StreamID: id, Phase: StreamDelta, Text: event.Delta.Text, Raw: line, At: at})
+			}
+		case "thinking_delta":
+			id := p.streamID("thinking")
+			if !p.thinkingStreaming {
+				p.thinkingStreaming = true
+				sink(Event{Kind: KindReasoning, StreamID: id, Phase: StreamStart, Raw: line, At: at})
+			}
+			if event.Delta.Thinking != "" {
+				sink(Event{Kind: KindReasoning, StreamID: id, Phase: StreamDelta, Text: event.Delta.Thinking, Raw: line, At: at})
+			}
+		}
+	}
+}
+
 func (p *claudeParser) handleAssistant(msg claudeMessage, line string, at time.Time, sink Sink) {
+	p.ensureMessage()
+	var text, thinking strings.Builder
 	for _, c := range msg.Content {
 		switch c.Type {
 		case "text":
-			if strings.TrimSpace(c.Text) == "" {
-				continue
-			}
-			p.final = c.Text
-			sink(Event{Kind: KindMessage, Text: c.Text, Raw: line, At: at})
+			text.WriteString(c.Text)
 		case "thinking":
-			sink(Event{Kind: KindReasoning, Text: c.Thinking, Raw: line, At: at})
+			thinking.WriteString(c.Thinking)
 		case "tool_use":
 			sink(Event{Kind: KindToolUse, Text: claudeToolText(c), Raw: line, At: at})
 		}
 	}
+	if value := thinking.String(); strings.TrimSpace(value) != "" {
+		if p.thinkingStreaming {
+			sink(Event{Kind: KindReasoning, StreamID: p.streamID("thinking"), Phase: StreamEnd, Text: value, Raw: line, At: at})
+		} else {
+			sink(Event{Kind: KindReasoning, Text: value, Raw: line, At: at})
+		}
+	}
+	if value := text.String(); strings.TrimSpace(value) != "" {
+		p.final = value
+		if p.textStreaming {
+			sink(Event{Kind: KindMessage, StreamID: p.streamID("message"), Phase: StreamEnd, Text: value, Raw: line, At: at})
+		} else {
+			sink(Event{Kind: KindMessage, Text: value, Raw: line, At: at})
+		}
+	}
+	p.messageOpen = false
+	p.textStreaming = false
+	p.thinkingStreaming = false
 }
 
 func (p *claudeParser) handleToolResults(msg claudeMessage, line string, at time.Time, sink Sink) {
@@ -158,7 +254,7 @@ func (p *claudeParser) handleToolResults(msg claudeMessage, line string, at time
 
 func (p *claudeParser) handleResult(env claudeEnvelope, line string, at time.Time, sink Sink) {
 	p.done = true
-	p.usage = Usage{InputTokens: env.Usage.InputTokens, OutputTokens: env.Usage.OutputTokens}
+	p.usage = env.Usage.usage()
 	if env.Result != "" {
 		p.final = env.Result
 	}

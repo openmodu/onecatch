@@ -6,10 +6,6 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as time$0 from "../../../../../../time/models.js";
-
 export class ExecutionSettings {
     /**
      * Creates a new ExecutionSettings instance.
@@ -261,9 +257,9 @@ export class Settings {
         if (!("updatedAt" in $$source)) {
             /**
              * @member
-             * @type {time$0.Time}
+             * @type {string}
              */
-            this["updatedAt"] = null;
+            this["updatedAt"] = "0001-01-01T00:00:00.000Z";
         }
 
         Object.assign(this, $$source);

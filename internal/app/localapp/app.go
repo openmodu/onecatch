@@ -27,6 +27,7 @@ import (
 	"github.com/openmodu/oneshot/internal/gitinspect"
 	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
 	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
+	"github.com/openmodu/oneshot/internal/runstream"
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/internal/worker"
 	"github.com/openmodu/oneshot/internal/workspacelock"
@@ -97,6 +98,9 @@ type RuntimeEventView struct {
 	StepRunID string `json:"stepRunId"`
 	Seq       int64  `json:"seq"`
 	Kind      string `json:"kind"`
+	StreamID  string `json:"streamId,omitempty"`
+	Revision  uint64 `json:"revision,omitempty"`
+	Streaming bool   `json:"streaming,omitempty"`
 	Text      string `json:"text,omitempty"`
 	Failed    bool   `json:"failed,omitempty"`
 	At        string `json:"at"`
@@ -134,6 +138,7 @@ type App struct {
 	confirmations  map[string]runConfirmation
 	settingsReload func(domainsettings.Settings) error
 	queueMu        sync.Mutex
+	runStreams     *runstream.Hub
 }
 
 func New(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitinspect.Inspector) *App {
@@ -162,6 +167,18 @@ func (a *App) Close() error {
 }
 
 func (a *App) DataRoot() string { return a.store.Data.Paths.Root }
+
+func (a *App) SetRunStreamHub(hub *runstream.Hub) {
+	a.runStreams = hub
+	a.orchestrator.SetRunStreamPublisher(hub)
+}
+
+func (a *App) GetRunStreamSnapshot(runID string) []runstream.Frame {
+	if a.runStreams == nil {
+		return []runstream.Frame{}
+	}
+	return a.runStreams.Snapshot(runID)
+}
 
 func (a *App) ListRuntimes() []RuntimeInfo                      { return a.runtimes.List() }
 func (a *App) CheckRuntime(runtime string) (RuntimeInfo, error) { return a.runtimes.Check(runtime) }
@@ -563,18 +580,127 @@ func (a *App) GetRunDetail(ctx context.Context, runID string) (RunDetail, error)
 	for _, event := range events {
 		detail.Events = append(detail.Events, WorkflowEventView{RunID: event.RunID, Seq: event.Seq, Type: event.Type, StepID: event.StepID, Payload: string(event.Payload), At: event.At.Format(time.RFC3339Nano)})
 	}
-	for _, stepRun := range stepRuns {
+	for stepIndex, stepRun := range stepRuns {
 		items, listErr := a.store.Repos.Workflows.ListRuntimeEvents(ctx, runID, stepRun.ID, 0, 10_000)
 		if listErr != nil {
 			return RunDetail{}, listErr
 		}
-		for _, item := range items {
-			var event agentrun.Event
-			_ = json.Unmarshal(item.Payload, &event)
-			detail.RuntimeEvents = append(detail.RuntimeEvents, RuntimeEventView{StepRunID: stepRun.ID, Seq: item.Seq, Kind: string(event.Kind), Text: event.Text, Failed: event.Failed, At: item.At.Format(time.RFC3339Nano)})
-		}
+		enrichStepRunUsage(&detail.StepRuns[stepIndex], items)
+		detail.RuntimeEvents = append(detail.RuntimeEvents, foldRuntimeEventViews(stepRun.ID, items)...)
 	}
 	return detail, nil
+}
+
+// enrichStepRunUsage derives the cache breakdown for runs written before the
+// detailed fields were added. Runtime event Raw values already retain the
+// provider's terminal usage object, so this is a read-only compatibility layer
+// rather than a risky migration of users' JSONL history.
+func enrichStepRunUsage(stepRun *domainworkflows.StepRun, items []domainworkflows.RuntimeEvent) {
+	for index := len(items) - 1; index >= 0; index-- {
+		var event agentrun.Event
+		if json.Unmarshal(items[index].Payload, &event) != nil || event.Raw == "" {
+			continue
+		}
+		usage, ok := usageFromRuntimeRaw(event.Raw)
+		if !ok {
+			continue
+		}
+		if usage.InputTokens > stepRun.InputTokens {
+			stepRun.InputTokens = usage.InputTokens
+		}
+		if usage.OutputTokens > stepRun.OutputTokens {
+			stepRun.OutputTokens = usage.OutputTokens
+		}
+		if usage.CachedInputTokens > stepRun.CachedInputTokens {
+			stepRun.CachedInputTokens = usage.CachedInputTokens
+		}
+		if usage.CacheCreationInputTokens > stepRun.CacheCreationInputTokens {
+			stepRun.CacheCreationInputTokens = usage.CacheCreationInputTokens
+		}
+		if usage.ReasoningOutputTokens > stepRun.ReasoningOutputTokens {
+			stepRun.ReasoningOutputTokens = usage.ReasoningOutputTokens
+		}
+		return
+	}
+}
+
+func usageFromRuntimeRaw(raw string) (agentrun.Usage, bool) {
+	var envelope struct {
+		Type  string `json:"type"`
+		Usage struct {
+			InputTokens              int `json:"input_tokens"`
+			CachedInputTokens        int `json:"cached_input_tokens"`
+			CacheCreationInputTokens int `json:"cache_creation_input_tokens"`
+			CacheReadInputTokens     int `json:"cache_read_input_tokens"`
+			OutputTokens             int `json:"output_tokens"`
+			ReasoningOutputTokens    int `json:"reasoning_output_tokens"`
+		} `json:"usage"`
+	}
+	if json.Unmarshal([]byte(raw), &envelope) != nil {
+		return agentrun.Usage{}, false
+	}
+	switch envelope.Type {
+	case "turn.completed":
+		return agentrun.Usage{
+			InputTokens:           envelope.Usage.InputTokens,
+			CachedInputTokens:     envelope.Usage.CachedInputTokens,
+			OutputTokens:          envelope.Usage.OutputTokens,
+			ReasoningOutputTokens: envelope.Usage.ReasoningOutputTokens,
+		}, true
+	case "result":
+		return agentrun.Usage{
+			InputTokens:              envelope.Usage.InputTokens + envelope.Usage.CacheCreationInputTokens + envelope.Usage.CacheReadInputTokens,
+			CachedInputTokens:        envelope.Usage.CacheReadInputTokens,
+			CacheCreationInputTokens: envelope.Usage.CacheCreationInputTokens,
+			OutputTokens:             envelope.Usage.OutputTokens,
+		}, true
+	default:
+		return agentrun.Usage{}, false
+	}
+}
+
+func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEvent) []RuntimeEventView {
+	views := make([]RuntimeEventView, 0, len(items))
+	streamIndexes := make(map[string]int)
+	for _, item := range items {
+		var event agentrun.Event
+		if json.Unmarshal(item.Payload, &event) != nil {
+			continue
+		}
+		at := item.At
+		if !event.At.IsZero() {
+			at = event.At
+		}
+		view := RuntimeEventView{StepRunID: stepRunID, Seq: item.Seq, Kind: string(event.Kind), StreamID: event.StreamID, Revision: event.Revision, Text: event.Text, Failed: event.Failed, At: at.Format(time.RFC3339Nano)}
+		if event.StreamID == "" || event.Phase == "" {
+			views = append(views, view)
+			continue
+		}
+		index, exists := streamIndexes[event.StreamID]
+		if !exists {
+			view.Streaming = event.Phase != agentrun.StreamEnd
+			if event.Phase == agentrun.StreamStart {
+				view.Text = ""
+			}
+			streamIndexes[event.StreamID] = len(views)
+			views = append(views, view)
+			continue
+		}
+		current := views[index]
+		switch event.Phase {
+		case agentrun.StreamDelta:
+			current.Text += event.Text
+		case agentrun.StreamSnapshot, agentrun.StreamEnd:
+			current.Text = event.Text
+		}
+		current.Kind = string(event.Kind)
+		current.Revision = event.Revision
+		current.Streaming = event.Phase != agentrun.StreamEnd
+		current.Failed = current.Failed || event.Failed
+		current.At = view.At
+		views[index] = current
+	}
+	return views
 }
 
 func (a *App) dispatch(runID string, execute func(context.Context) (domainworkflows.Run, error)) {
@@ -586,6 +712,11 @@ func (a *App) dispatch(runID string, execute func(context.Context) (domainworkfl
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
+		defer func() {
+			if a.runStreams != nil {
+				a.runStreams.ClearRun(runID)
+			}
+		}()
 		_, err := execute(runCtx)
 		a.mu.Lock()
 		delete(a.active, runID)

@@ -2,6 +2,7 @@ export function runtimeResumeCommand(runtime, sessionID) {
   if (!sessionID) return "";
   if (runtime === "codex") return `codex resume ${sessionID}`;
   if (runtime === "claude") return `claude --resume ${sessionID}`;
+  if (runtime === "modu") return `modu_code --resume ${sessionID}`;
   return "";
 }
 

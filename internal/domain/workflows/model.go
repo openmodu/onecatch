@@ -172,21 +172,24 @@ const (
 
 // StepRun is one attempt to execute one workflow step.
 type StepRun struct {
-	ID              string        `json:"id"`
-	RunID           string        `json:"runId"`
-	StepID          string        `json:"stepId"`
-	Attempt         int           `json:"attempt"`
-	Status          StepRunStatus `json:"status"`
-	Signal          string        `json:"signal,omitempty"`
-	Content         string        `json:"content,omitempty"`
-	SessionIDBefore string        `json:"sessionIdBefore,omitempty"`
-	SessionIDAfter  string        `json:"sessionIdAfter,omitempty"`
-	StartedAt       time.Time     `json:"startedAt"`
-	FinishedAt      time.Time     `json:"finishedAt,omitempty"`
-	InputTokens     int           `json:"inputTokens,omitempty"`
-	OutputTokens    int           `json:"outputTokens,omitempty"`
-	DurationMS      int64         `json:"durationMs,omitempty"`
-	Error           string        `json:"error,omitempty"`
+	ID                       string        `json:"id"`
+	RunID                    string        `json:"runId"`
+	StepID                   string        `json:"stepId"`
+	Attempt                  int           `json:"attempt"`
+	Status                   StepRunStatus `json:"status"`
+	Signal                   string        `json:"signal,omitempty"`
+	Content                  string        `json:"content,omitempty"`
+	SessionIDBefore          string        `json:"sessionIdBefore,omitempty"`
+	SessionIDAfter           string        `json:"sessionIdAfter,omitempty"`
+	StartedAt                time.Time     `json:"startedAt"`
+	FinishedAt               time.Time     `json:"finishedAt,omitempty"`
+	InputTokens              int           `json:"inputTokens,omitempty"`
+	CachedInputTokens        int           `json:"cachedInputTokens,omitempty"`
+	CacheCreationInputTokens int           `json:"cacheCreationInputTokens,omitempty"`
+	OutputTokens             int           `json:"outputTokens,omitempty"`
+	ReasoningOutputTokens    int           `json:"reasoningOutputTokens,omitempty"`
+	DurationMS               int64         `json:"durationMs,omitempty"`
+	Error                    string        `json:"error,omitempty"`
 }
 
 type InstructionStatus string

@@ -230,7 +230,7 @@ func TestQueuedInstructionsAreClaimedPriorityFirstAtStepBoundary(t *testing.T) {
 func TestStepRunPersistsUsageAndDuration(t *testing.T) {
 	definition := oneStepPauseWorkflow()
 	result := success(`{"signal":"approved","content":"done"}`, "session-usage")
-	result.Usage = agentrun.Usage{InputTokens: 1234, OutputTokens: 321}
+	result.Usage = agentrun.Usage{InputTokens: 1234, CachedInputTokens: 900, CacheCreationInputTokens: 40, OutputTokens: 321, ReasoningOutputTokens: 123}
 	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true}, scripts: []engineScript{{result: result}}}
 	usecase, store, task := setupUsecase(t, definition, engine)
 	run, err := usecase.ExecuteTask(context.Background(), task.ID)
@@ -241,7 +241,7 @@ func TestStepRunPersistsUsageAndDuration(t *testing.T) {
 	if err != nil || len(stepRuns) != 1 {
 		t.Fatalf("ListStepRuns() = %+v, %v", stepRuns, err)
 	}
-	if stepRuns[0].InputTokens != 1234 || stepRuns[0].OutputTokens != 321 || stepRuns[0].DurationMS <= 0 {
+	if stepRuns[0].InputTokens != 1234 || stepRuns[0].CachedInputTokens != 900 || stepRuns[0].CacheCreationInputTokens != 40 || stepRuns[0].OutputTokens != 321 || stepRuns[0].ReasoningOutputTokens != 123 || stepRuns[0].DurationMS <= 0 {
 		t.Fatalf("usage and duration = %+v", stepRuns[0])
 	}
 }

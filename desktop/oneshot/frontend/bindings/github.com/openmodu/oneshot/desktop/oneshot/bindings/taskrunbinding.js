@@ -15,6 +15,9 @@ import * as tasks$0 from "../../../internal/domain/tasks/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as workflows$0 from "../../../internal/domain/workflows/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as runstream$0 from "../../../internal/runstream/models.js";
 
 /**
  * @param {string} runID
@@ -78,6 +81,16 @@ export function GetRun(runID) {
 
 /**
  * @param {string} runID
+ * @returns {$CancellablePromise<runstream$0.Frame[]>}
+ */
+export function GetRunStreamSnapshot(runID) {
+    return $Call.ByID(3157096981, runID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType5($result);
+    }));
+}
+
+/**
+ * @param {string} runID
  * @param {localapp$0.InstructionInput} input
  * @returns {$CancellablePromise<workflows$0.Instruction>}
  */
@@ -104,7 +117,7 @@ export function InterruptRun(runID) {
  */
 export function ListRunEvents(runID, afterSeq) {
     return $Call.ByID(3352032840, runID, afterSeq).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType7($result);
     }));
 }
 
@@ -114,7 +127,7 @@ export function ListRunEvents(runID, afterSeq) {
  */
 export function ListRuns(input) {
     return $Call.ByID(527758150, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType8($result);
     }));
 }
 
@@ -124,7 +137,7 @@ export function ListRuns(input) {
  */
 export function ListRunsByTask(taskID) {
     return $Call.ByID(71078598, taskID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType9($result);
     }));
 }
 
@@ -134,7 +147,7 @@ export function ListRunsByTask(taskID) {
  */
 export function ListTasks(workspaceID) {
     return $Call.ByID(660765190, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType10($result);
     }));
 }
 
@@ -144,7 +157,7 @@ export function ListTasks(workspaceID) {
  */
 export function PreviewRun(taskID) {
     return $Call.ByID(2734983773, taskID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType9($result);
+        return $$createType11($result);
     }));
 }
 
@@ -154,7 +167,7 @@ export function PreviewRun(taskID) {
  */
 export function QueueSnapshot(workspaceID) {
     return $Call.ByID(557416803, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType10($result);
     }));
 }
 
@@ -205,9 +218,11 @@ const $$createType0 = workflows$0.Run.createFrom;
 const $$createType1 = tasks$0.Task.createFrom;
 const $$createType2 = workflows$0.Instruction.createFrom;
 const $$createType3 = localapp$0.RunDetail.createFrom;
-const $$createType4 = localapp$0.WorkflowEventView.createFrom;
+const $$createType4 = runstream$0.Frame.createFrom;
 const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = localapp$0.RunListPage.createFrom;
-const $$createType7 = $Create.Array($$createType0);
-const $$createType8 = $Create.Array($$createType1);
-const $$createType9 = localapp$0.RunStartPreview.createFrom;
+const $$createType6 = localapp$0.WorkflowEventView.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = localapp$0.RunListPage.createFrom;
+const $$createType9 = $Create.Array($$createType0);
+const $$createType10 = $Create.Array($$createType1);
+const $$createType11 = localapp$0.RunStartPreview.createFrom;

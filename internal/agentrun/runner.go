@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"sync"
 	"time"
 )
 
@@ -157,12 +158,15 @@ func streamProcess(ctx context.Context, cmd *exec.Cmd, parser lineParser, now no
 // lineCapture is an io.Writer that retains the tail of a stream so process
 // failures can include the agent's stderr without buffering it unbounded.
 type lineCapture struct {
+	mu  sync.Mutex
 	buf []byte
 }
 
 const stderrTailMax = 4 * 1024
 
 func (c *lineCapture) Write(p []byte) (int, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.buf = append(c.buf, p...)
 	if len(c.buf) > stderrTailMax {
 		c.buf = c.buf[len(c.buf)-stderrTailMax:]
@@ -171,6 +175,8 @@ func (c *lineCapture) Write(p []byte) (int, error) {
 }
 
 func (c *lineCapture) tail() string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if len(c.buf) == 0 {
 		return ""
 	}

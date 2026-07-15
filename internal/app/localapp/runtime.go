@@ -221,7 +221,7 @@ func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, config
 	version := ""
 	if available {
 		if runtime == agentrun.RuntimeModu {
-			version = "ACP · executable"
+			version = "Print · NDJSON"
 			return RuntimeInfo{ID: string(runtime), Name: name, Available: true, Version: version, CheckedAt: time.Now().UTC()}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
