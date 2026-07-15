@@ -76,6 +76,10 @@ type Event struct {
 	// Raw is the original JSONL line from the runtime, retained for debugging
 	// and forward compatibility with fields we do not yet model.
 	Raw string `json:"raw,omitempty"`
+	// Failed reports that this individual event is an error: a tool that
+	// returned an error, not a run that ended badly. A step can fail while most
+	// of its tool calls succeeded, so callers must not infer one from the other.
+	Failed bool `json:"failed,omitempty"`
 	// At is when the engine observed the event.
 	At time.Time `json:"at"`
 }

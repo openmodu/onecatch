@@ -46,11 +46,17 @@ function roundItems(events, fallbackText, fallbackError) {
       lastTool = null;
       continue;
     }
+    // A tool's outcome is its own, not its step's: a step can fail on a token
+    // limit while every command in it succeeded. `failed` therefore only ever
+    // comes from the runtime's per-result error flag, and `settled` records
+    // whether the call ever came back at all.
     if (event.kind === "tool_result" && lastTool) {
       lastTool.details.push({ kind: event.kind, text: event.text, at: event.at });
+      lastTool.settled = true;
+      if (event.failed) lastTool.failed = true;
       continue;
     }
-    const tool = { type: "tool", kind: event.kind, title: readableToolTitle(event.text), text: event.text, at: event.at, details: [] };
+    const tool = { type: "tool", kind: event.kind, title: readableToolTitle(event.text), text: event.text, at: event.at, details: [], failed: Boolean(event.failed), settled: event.kind !== "tool_use" };
     items.push(tool);
     lastTool = event.kind === "tool_use" ? tool : null;
   }

@@ -98,6 +98,7 @@ type RuntimeEventView struct {
 	Seq       int64  `json:"seq"`
 	Kind      string `json:"kind"`
 	Text      string `json:"text,omitempty"`
+	Failed    bool   `json:"failed,omitempty"`
 	At        string `json:"at"`
 }
 
@@ -570,7 +571,7 @@ func (a *App) GetRunDetail(ctx context.Context, runID string) (RunDetail, error)
 		for _, item := range items {
 			var event agentrun.Event
 			_ = json.Unmarshal(item.Payload, &event)
-			detail.RuntimeEvents = append(detail.RuntimeEvents, RuntimeEventView{StepRunID: stepRun.ID, Seq: item.Seq, Kind: string(event.Kind), Text: event.Text, At: item.At.Format(time.RFC3339Nano)})
+			detail.RuntimeEvents = append(detail.RuntimeEvents, RuntimeEventView{StepRunID: stepRun.ID, Seq: item.Seq, Kind: string(event.Kind), Text: event.Text, Failed: event.Failed, At: item.At.Format(time.RFC3339Nano)})
 		}
 	}
 	return detail, nil

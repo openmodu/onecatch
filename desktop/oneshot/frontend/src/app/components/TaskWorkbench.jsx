@@ -44,7 +44,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetail, selectedRunID, selectedQueuedTaskID, workflows, runtimes, loading, total, hasMore, search, status, busy, attachments, onSearch, onStatus, onNewTask, onLoadMore, onSelectRun, onSelectQueued, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onRename, onDelete, notify }) {
+export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetail, selectedRunID, selectedQueuedTaskID, workflows, loading, total, hasMore, search, status, busy, attachments, onSearch, onStatus, onNewTask, onLoadMore, onSelectRun, onSelectQueued, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onRename, onDelete, notify }) {
   const [inspectorTab, setInspectorTab] = useState("status");
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
@@ -116,7 +116,7 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
 
     <aside className="workbench-inspector">
       <div className="workbench-tabs">{[["status", "状态"], ["git", "Git"], ["events", "事件"]].map(([value, label]) => <button type="button" className={inspectorTab === value ? "active" : ""} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}</div>
-      <div className="workbench-inspector-body">{inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runtimes={runtimes} notify={notify} /> : <EventInspector detail={runDetail} />}</div>
+      <div className="workbench-inspector-body">{inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} notify={notify} /> : <EventInspector detail={runDetail} />}</div>
     </aside>
   </div>;
 }

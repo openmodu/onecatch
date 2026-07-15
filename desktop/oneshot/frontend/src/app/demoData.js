@@ -46,11 +46,13 @@ export const demoRun = {
   runtimeEvents: [
     { stepRunId: "step_1", seq: 1, kind: "started", text: "019f4b11-codex-demo", at: demoNow },
     { stepRunId: "step_1", seq: 2, kind: "tool_use", text: "rg -n \"interrupt|pause\" internal desktop", at: demoNow },
-    { stepRunId: "step_1", seq: 3, kind: "file_change", text: "internal/usecase/workflows/usecase.go", at: demoNow },
-    { stepRunId: "step_1", seq: 4, kind: "message", text: "已完成调度层拆分并补充中断恢复测试。", at: demoNow },
+    { stepRunId: "step_1", seq: 3, kind: "tool_result", text: "internal/usecase/workflows/usecase.go:212\ndesktop/oneshot/frontend/src/app/App.jsx:118", at: demoNow },
+    { stepRunId: "step_1", seq: 4, kind: "file_change", text: "internal/usecase/workflows/usecase.go", at: demoNow },
+    { stepRunId: "step_1", seq: 5, kind: "message", text: "已完成调度层拆分并补充中断恢复测试。", at: demoNow },
     { stepRunId: "step_2", seq: 1, kind: "tool_use", text: "go test ./...", at: demoNow },
-    { stepRunId: "step_2", seq: 2, kind: "message", text: "核心流程正确，但需要补充 UI 中断后的状态反馈。", at: demoNow },
-    { stepRunId: "step_2", seq: 3, kind: "result", text: '{"signal":"changes_requested","content":"建议在暂停区域明确展示恢复后的当前步骤。"}', at: demoNow },
+    { stepRunId: "step_2", seq: 2, kind: "tool_result", text: "ok  github.com/openmodu/oneshot/internal/usecase/workflows", at: demoNow },
+    { stepRunId: "step_2", seq: 3, kind: "message", text: "核心流程正确，但需要补充 UI 中断后的状态反馈。", at: demoNow },
+    { stepRunId: "step_2", seq: 4, kind: "result", text: '{"signal":"changes_requested","content":"建议在暂停区域明确展示恢复后的当前步骤。"}', at: demoNow },
   ],
   active: false,
 };

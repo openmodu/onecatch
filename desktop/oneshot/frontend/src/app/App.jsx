@@ -628,7 +628,6 @@ function App() {
           selectedRunID={selectedRunID}
           selectedQueuedTaskID={selectedQueuedTaskID}
           workflows={workflows}
-          runtimes={runtimes}
           loading={runLoading}
           total={runTotal}
           hasMore={Boolean(runNextCursor)}

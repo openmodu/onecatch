@@ -901,6 +901,13 @@ export class RuntimeEventView {
              */
             this["text"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["failed"] = undefined;
+        }
         if (!("at" in $$source)) {
             /**
              * @member

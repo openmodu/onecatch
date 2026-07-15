@@ -98,6 +98,7 @@ type claudeContent struct {
 	Name     string          `json:"name"`
 	Input    json.RawMessage `json:"input"`
 	Content  json.RawMessage `json:"content"`
+	IsError  bool            `json:"is_error"`
 }
 
 type claudeUsage struct {
@@ -150,7 +151,7 @@ func (p *claudeParser) handleAssistant(msg claudeMessage, line string, at time.T
 func (p *claudeParser) handleToolResults(msg claudeMessage, line string, at time.Time, sink Sink) {
 	for _, c := range msg.Content {
 		if c.Type == "tool_result" {
-			sink(Event{Kind: KindToolResult, Text: string(c.Content), Raw: line, At: at})
+			sink(Event{Kind: KindToolResult, Text: string(c.Content), Raw: line, Failed: c.IsError, At: at})
 		}
 	}
 }

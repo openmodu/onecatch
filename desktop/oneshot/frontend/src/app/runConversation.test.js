@@ -77,6 +77,27 @@ test("keeps tool calls separate and attaches an adjacent tool result", () => {
   assert.equal(round.items[2].details.length, 0);
 });
 
+test("scopes failure to the tool that failed, not the whole failed step", () => {
+  const [round] = buildRunConversation({
+    task: {}, run: {}, events: [],
+    workflow: { steps: [{ id: "execute", name: "执行", runtime: "claude" }] },
+    stepRuns: [{ id: "step-1", stepId: "execute", status: "failed" }],
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 1, kind: "tool_use", text: "git status --short" },
+      { stepRunId: "step-1", seq: 2, kind: "tool_result", text: "M App.jsx" },
+      { stepRunId: "step-1", seq: 3, kind: "tool_use", text: "Read missing.js" },
+      { stepRunId: "step-1", seq: 4, kind: "tool_result", text: "File does not exist.", failed: true },
+      { stepRunId: "step-1", seq: 5, kind: "tool_use", text: "npm test" },
+    ],
+  });
+  const [ok, bad, cutOff] = round.items;
+  assert.equal(ok.failed, false, "a tool that returned a result did not fail");
+  assert.equal(ok.settled, true);
+  assert.equal(bad.failed, true, "the tool whose result carried is_error failed");
+  assert.equal(cutOff.failed, false, "a tool the runtime never answered is unfinished, not failed");
+  assert.equal(cutOff.settled, false);
+});
+
 test("falls back to StepRun content when no message event exists", () => {
   const [round] = buildRunConversation({
     task: {}, run: {}, events: [], runtimeEvents: [],

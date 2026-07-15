@@ -155,6 +155,40 @@ func TestClaudeRunnerParsesStream(t *testing.T) {
 	}
 }
 
+func TestClaudeRunnerMarksOnlyTheFailingToolResult(t *testing.T) {
+	stream := `{"type":"system","subtype":"init","session_id":"s1"}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Bash","input":{"command":"git status"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":"clean","is_error":false}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"missing.js"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","content":"File does not exist.","is_error":true}]}}
+{"type":"result","subtype":"error_max_turns","is_error":true,"result":"hit turn limit","session_id":"s1"}`
+	bin := stubBinary(t, stream, "", 0)
+	r := NewClaudeRunner(bin)
+	r.now = fixedClock()
+
+	var events []Event
+	if _, err := r.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "go"}, collectSink(&events)); err != nil {
+		t.Fatalf("unexpected process error: %v", err)
+	}
+	var results []Event
+	for _, event := range events {
+		if event.Kind == KindToolResult {
+			results = append(results, event)
+		}
+	}
+	if len(results) != 2 {
+		t.Fatalf("tool_result events = %d, want 2", len(results))
+	}
+	// The run ends on error_max_turns, but the first tool still succeeded — the
+	// step's fate must not be stamped onto the calls it made.
+	if results[0].Failed {
+		t.Errorf("succeeding tool_result marked failed: %+v", results[0])
+	}
+	if !results[1].Failed {
+		t.Errorf("failing tool_result not marked failed: %+v", results[1])
+	}
+}
+
 func TestClaudeRunnerReportsAgentFailure(t *testing.T) {
 	stream := `{"type":"system","subtype":"init","session_id":"s1"}
 {"type":"result","subtype":"error_max_turns","is_error":true,"result":"hit turn limit","session_id":"s1"}`
