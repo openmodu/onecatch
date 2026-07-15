@@ -428,6 +428,7 @@ details[open] > summary .opened { display: block; }
 .settings-title h2 { margin: 5px 0 0; font-size: var(--ui-font-display); letter-spacing: -.04em; }
 .settings-title p { margin: 6px 0 0; color: #7d8980; font: 400 var(--ui-font-caption) "DM Mono", monospace; }
 .settings-title-actions { display: flex; align-items: center; gap: 13px; }
+.settings-language-select { min-width: 132px; }
 .settings-sync-state { color: #728077; font-size: var(--ui-font-caption); }
 .settings-sync-state::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #42bf79; vertical-align: 1px; }
 .setting-card { padding: 21px; margin-bottom: 14px; }

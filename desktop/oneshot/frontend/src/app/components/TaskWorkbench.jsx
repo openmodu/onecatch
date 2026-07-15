@@ -1,4 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Action, Kicker, TUISelect } from "../../ui/primitives.jsx";
 import { formatTime, shortID } from "../format.js";
 import { runStatusOptions } from "../constants.js";
@@ -59,6 +60,7 @@ function conversationSignature(detail) {
 }
 
 export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetail, selectedRunID, selectedQueuedTaskID, workflows, loading, total, hasMore, search, status, busy, attachments, onSearch, onStatus, onNewTask, onLoadMore, onSelectRun, onSelectQueued, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onRename, onDelete, notify }) {
+  const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
   const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
   const [compactViewport, setCompactViewport] = useState(initialCompactViewport);
@@ -73,7 +75,7 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
 
   const signature = conversationSignature(runDetail);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- signature captures every field the builder reads
-  const conversation = useMemo(() => (runDetail ? buildRunConversation(runDetail) : []), [signature]);
+  const conversation = useMemo(() => (runDetail ? buildRunConversation(runDetail, t) : []), [signature, i18n.resolvedLanguage, t]);
   const pendingInstructions = useMemo(() => (runDetail?.instructions || []).filter((instruction) => instruction.status === "pending"), [runDetail?.instructions]);
   const conversationSize = `${signature}:${conversation.length}:${conversation[conversation.length - 1]?.items?.length || 0}`;
 
@@ -118,23 +120,23 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
 
   return <div className={`task-workbench ${inspectorCollapsed ? "inspector-collapsed" : ""}`}>
     <aside className="task-history-pane">
-      <div className="task-history-head"><div><Kicker>task history</Kicker><strong>任务</strong></div><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>+ 新建</Action></div>
-      <div className="task-history-query"><label><span>/</span><input aria-label="搜索任务" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="标题 / Run / Thread" />{search && <button type="button" onClick={() => onSearch("")}>×</button>}</label><TUISelect ariaLabel="任务状态" value={status} onChange={onStatus} options={runStatusOptions} /></div>
+      <div className="task-history-head"><div><Kicker>{t("task.history")}</Kicker><strong>{t("task.tasks")}</strong></div><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>+ {t("task.new")}</Action></div>
+      <div className="task-history-query"><label><span>/</span><input aria-label={t("task.search")} value={search} onChange={(event) => onSearch(event.target.value)} placeholder={t("task.searchPlaceholder")} />{search && <button type="button" onClick={() => onSearch("")}>×</button>}</label><TUISelect ariaLabel={t("task.status")} value={status} onChange={onStatus} options={runStatusOptions(t)} /></div>
       <div className="task-history-list">
-        {filteredQueued.length > 0 && <div className="task-history-group">Workspace 队列 · {filteredQueued.length}</div>}
+        {filteredQueued.length > 0 && <div className="task-history-group">{t("task.workspaceQueue", { count: filteredQueued.length })}</div>}
         {filteredQueued.map((task) => <QueuedHistoryRow key={task.id} task={task} selected={selectedQueuedTaskID === task.id} position={queueTasks.findIndex((item) => item.id === task.id) + 1} workflowName={workflowNameFor(workflows, task.workflowId)} onSelect={onSelectQueued} />)}
-        {visibleRuns.length > 0 && <div className="task-history-group">运行记录 · {total}</div>}
+        {visibleRuns.length > 0 && <div className="task-history-group">{t("task.runHistory", { count: total })}</div>}
         {visibleRuns.map((run) => <RunHistoryRow key={run.id} run={run} selected={selectedRunID === run.id} active={runDetail?.run?.id === run.id && runDetail.active} workflowName={workflowNameFor(workflows, run.workflowId)} onSelect={onSelectRun} />)}
-        {!filteredQueued.length && !visibleRuns.length && !loading && <div className="task-history-empty">{search || status ? "没有匹配的任务" : "还没有任务，先新建一个。"}</div>}
-        {(loading || hasMore) && <button type="button" className="task-history-more" disabled={loading} onClick={onLoadMore}>{loading ? "正在读取…" : `加载更多 · ${visibleRuns.length}/${total}`}</button>}
+        {!filteredQueued.length && !visibleRuns.length && !loading && <div className="task-history-empty">{search || status ? t("task.noMatches") : t("task.empty")}</div>}
+        {(loading || hasMore) && <button type="button" className="task-history-more" disabled={loading} onClick={onLoadMore}>{loading ? t("task.loading") : t("task.loadMore", { visible: visibleRuns.length, total })}</button>}
       </div>
     </aside>
 
     <section className="conversation-workspace">
       {selectedTask ? <>
-        <header className="conversation-workspace-head"><div><div className="conversation-title-row"><h2>{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p>{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : " · Workspace FIFO"}</p></div><div className="conversation-head-actions"><button type="button" onClick={onRename}>[ 重命名 ]</button><button type="button" className="danger" onClick={onDelete}>[ 删除 ]</button></div></header>
+        <header className="conversation-workspace-head"><div><div className="conversation-title-row"><h2>{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p>{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : ` · ${t("task.workspaceFIFO")}`}</p></div><div className="conversation-head-actions"><button type="button" onClick={onRename}>[ {t("task.rename")} ]</button><button type="button" className="danger" onClick={onDelete}>[ {t("task.delete")} ]</button></div></header>
         <div className="conversation-scroll" ref={scrollRef} onScroll={handleConversationScroll}>
-          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} />{!conversation.length && <div className="workbench-empty"><p>这次运行还没有生成消息。</p></div>}</>}
+          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} />{!conversation.length && <div className="workbench-empty"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
         {runDetail && <Composer
           runStatus={runStatus}
@@ -149,11 +151,11 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
           onCancel={onCancel}
           onSubmit={onSubmit}
         />}
-      </> : <div className="workbench-welcome"><Kicker>local agent workspace</Kicker><h2>把任务、对话和项目状态放在一个页面</h2><p>选择左侧历史任务，或新建任务立即运行 / 加入 FIFO 队列。</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>新建任务</Action></div>}
+      </> : <div className="workbench-welcome"><Kicker>{t("task.welcomeKicker")}</Kicker><h2>{t("task.welcomeTitle")}</h2><p>{t("task.welcomeDescription")}</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>{t("task.newTask")}</Action></div>}
     </section>
 
-    <aside className={`workbench-inspector ${inspectorCollapsed ? "collapsed" : ""}`} aria-label="运行检查器">
-      {inspectorCollapsed ? <div className="workbench-inspector-rail"><button type="button" aria-label="展开状态栏" aria-expanded="false" aria-controls="workbench-inspector-content" title="展开状态栏" onClick={toggleInspector}><span aria-hidden="true">‹</span><strong>状态栏</strong></button></div> : <div className="workbench-tabs">{[["status", "状态"], ["git", "Git"], ["events", "事件"]].map(([value, label]) => <button type="button" className={inspectorTab === value ? "active" : ""} aria-pressed={inspectorTab === value} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}<button type="button" className="workbench-inspector-toggle" aria-label="折叠状态栏" aria-expanded="true" aria-controls="workbench-inspector-content" title="折叠状态栏" onClick={toggleInspector}><span aria-hidden="true">›</span></button></div>}
+    <aside className={`workbench-inspector ${inspectorCollapsed ? "collapsed" : ""}`} aria-label={t("inspector.aria")}>
+      {inspectorCollapsed ? <div className="workbench-inspector-rail"><button type="button" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><span aria-hidden="true">‹</span><strong>{t("inspector.rail")}</strong></button></div> : <div className="workbench-tabs">{[["status", t("inspector.status")], ["git", t("inspector.git")], ["events", t("inspector.events")]].map(([value, label]) => <button type="button" className={inspectorTab === value ? "active" : ""} aria-pressed={inspectorTab === value} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}<button type="button" className="workbench-inspector-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={toggleInspector}><span aria-hidden="true">›</span></button></div>}
       <div className="workbench-inspector-body" id="workbench-inspector-content" hidden={inspectorCollapsed}>{!inspectorCollapsed && (inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} notify={notify} /> : <EventInspector detail={runDetail} />)}</div>
     </aside>
   </div>;

@@ -1,4 +1,5 @@
 import { lazy, memo, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { CaretDown, CaretRight, Circle } from "@phosphor-icons/react";
 import { formatTime } from "../format.js";
 
@@ -9,12 +10,13 @@ function MessageBody({ content, streaming = false }) {
 }
 
 function ToolTimelineItem({ entry, running, stalled, time }) {
-  const labels = { tool_use: "TOOL USE", tool_result: "RESULT", file_change: "FILE CHANGE", reasoning: "PROCESS" };
+  const { t } = useTranslation();
+  const labels = { tool_use: t("timeline.toolUse"), tool_result: t("timeline.result"), file_change: t("timeline.fileChange"), reasoning: t("timeline.process") };
   const failed = Boolean(entry.failed);
-  const state = failed ? "失败" : running ? "执行中" : stalled ? "未完成" : entry.kind === "reasoning" ? "过程" : "完成";
+  const state = failed ? t("timeline.failed") : running ? t("timeline.executing") : stalled ? t("timeline.incomplete") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.done");
   return <details className={`conversation-tool kind-${entry.kind} ${running ? "running" : ""} ${failed ? "failed" : ""} ${stalled ? "stalled" : ""}`}>
     <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-caret"><CaretRight className="closed" weight="bold" /><CaretDown className="opened" weight="bold" /></span><strong title={entry.text}>{entry.title}</strong><span className="conversation-tool-state">{running && <span className="pulse" />}{state}</span><time>{time ?? formatTime(entry.at)}</time></span></summary>
-    <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? "PATH" : entry.kind === "reasoning" ? "PROCESS" : "COMMAND"}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
+    <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? t("timeline.path") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.command")}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
   </details>;
 }
 
@@ -22,6 +24,7 @@ function ToolTimelineItem({ entry, running, stalled, time }) {
 // not rebuild it unless `items`/`active` actually change, hence memo() paired
 // with the memoized conversation array the parent feeds in.
 function ConversationTimeline({ items, active }) {
+  const { t } = useTranslation();
   const rounds = items.filter((item) => item.type === "round");
   // Consecutive events often share the same second; repeating the identical
   // timestamp on every row is noise, so only the first of a same-second run
@@ -42,12 +45,12 @@ function ConversationTimeline({ items, active }) {
   return <div className="conversation-section">
     <div className="conversation-list">
       {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
-        <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label="用户消息" /></span><span className="conversation-message-meta"><time>{timeLabel(item.at)}</time></span></div>
+        <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label={t("timeline.userMessage")} /></span><span className="conversation-message-meta"><time>{timeLabel(item.at)}</time></span></div>
         <MessageBody content={item.text} />
       </div> : <article className="conversation-round" key={item.id}>
-        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={entry.id || `message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label="Agent 消息" /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">第 {item.round} 轮</span><time>{timeLabel(entry.at || item.finishedAt || item.startedAt)}</time></span></div><MessageBody content={entry.text} streaming={entry.streaming} /></div> : <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={isRunning(item, entry, index)} stalled={isStalled(item, entry, isRunning(item, entry, index))} />)}</div>
+        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={entry.id || `message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label={t("timeline.agentMessage")} /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">{t("timeline.round", { count: item.round })}</span><time>{timeLabel(entry.at || item.finishedAt || item.startedAt)}</time></span></div><MessageBody content={entry.text} streaming={entry.streaming} /></div> : <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={isRunning(item, entry, index)} stalled={isStalled(item, entry, isRunning(item, entry, index))} />)}</div>
       </article>)}
-      {!items.length && <p className="muted-copy">Agent 消息会按执行轮次显示在这里。</p>}
+      {!items.length && <p className="muted-copy">{t("timeline.empty")}</p>}
     </div>
   </div>;
 }

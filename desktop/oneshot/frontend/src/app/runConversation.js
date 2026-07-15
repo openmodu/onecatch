@@ -1,6 +1,7 @@
 const assistantKinds = new Set(["message", "result", "error"]);
 const hiddenKinds = new Set(["started", "usage"]);
 const jsonEscapes = { '"': '"', "\\": "\\", "/": "/", b: "\b", f: "\f", n: "\n", r: "\r", t: "\t" };
+const defaultTranslate = (_key, options) => options.defaultValue;
 
 function readJSONString(source, start) {
   let value = "";
@@ -105,24 +106,24 @@ export function readableAgentMessage(value, streaming = false) {
   return text;
 }
 
-export function readableToolTitle(value) {
+export function readableToolTitle(value, translate = defaultTranslate) {
   const firstLine = String(value || "").trim().split("\n")[0];
-  if (!firstLine) return "无内容";
+  if (!firstLine) return translate("timeline.noContent", { defaultValue: "无内容" });
   const shell = firstLine.match(/(?:^|\s)(?:\S*\/)?(?:zsh|bash|sh)\s+-lc\s+/);
   let command = shell ? firstLine.slice((shell.index || 0) + shell[0].length).trim() : firstLine;
   for (let index = 0; index < 2; index += 1) {
     if ((command.startsWith('"') && command.endsWith('"')) || (command.startsWith("'") && command.endsWith("'"))) command = command.slice(1, -1).trim();
   }
   const sedTarget = command.match(/\bsed\s+-n\s+['"][^'"]+['"]\s+['"]([^'"]+)['"]/);
-  if (sedTarget) return `读取 ${sedTarget[1].split("/").pop()}`;
-  if (/^(?:npm|pnpm|yarn|bun)\b/.test(command)) return `运行 ${command}`;
-  if (/^git\s+(?:diff|status|show|log)\b/.test(command)) return `检查 ${command}`;
-  if (/^(?:rg|grep)\b/.test(command)) return `搜索 ${command}`;
-  if (/^find\b/.test(command)) return `查找 ${command}`;
+  if (sedTarget) return translate("timeline.readCommand", { name: sedTarget[1].split("/").pop(), defaultValue: `读取 ${sedTarget[1].split("/").pop()}` });
+  if (/^(?:npm|pnpm|yarn|bun)\b/.test(command)) return translate("timeline.runCommand", { command, defaultValue: `运行 ${command}` });
+  if (/^git\s+(?:diff|status|show|log)\b/.test(command)) return translate("timeline.inspectCommand", { command, defaultValue: `检查 ${command}` });
+  if (/^(?:rg|grep)\b/.test(command)) return translate("timeline.searchCommand", { command, defaultValue: `搜索 ${command}` });
+  if (/^find\b/.test(command)) return translate("timeline.findCommand", { command, defaultValue: `查找 ${command}` });
   return command || firstLine;
 }
 
-function roundItems(events, fallbackText, fallbackError) {
+function roundItems(events, fallbackText, fallbackError, translate) {
   const items = [];
   const seenMessages = new Set();
   let lastTool = null;
@@ -149,7 +150,7 @@ function roundItems(events, fallbackText, fallbackError) {
       lastTool = null;
       continue;
     }
-    const tool = { type: "tool", id: event.streamId || `${event.kind}-${event.seq}`, kind: event.kind, title: readableToolTitle(event.text), text: event.text, streaming: Boolean(event.streaming), at: event.at, details: [], failed: Boolean(event.failed), settled: event.kind !== "tool_use" };
+    const tool = { type: "tool", id: event.streamId || `${event.kind}-${event.seq}`, kind: event.kind, title: readableToolTitle(event.text, translate), text: event.text, streaming: Boolean(event.streaming), at: event.at, details: [], failed: Boolean(event.failed), settled: event.kind !== "tool_use" };
     items.push(tool);
     lastTool = event.kind === "tool_use" ? tool : null;
   }
@@ -181,7 +182,7 @@ function appliedInstructions(instructions) {
   });
 }
 
-export function buildRunConversation(detail) {
+export function buildRunConversation(detail, translate = defaultTranslate) {
   const workflowSteps = new Map((detail?.workflow?.steps || []).map((step) => [step.id, step]));
   const eventsByStepRun = new Map();
   for (const event of detail?.runtimeEvents || []) {
@@ -207,7 +208,7 @@ export function buildRunConversation(detail) {
       signal: stepRun.signal,
       startedAt: stepRun.startedAt,
       finishedAt: stepRun.finishedAt,
-      items: roundItems(eventsByStepRun.get(stepRun.id) || [], stepRun.content, stepRun.error),
+      items: roundItems(eventsByStepRun.get(stepRun.id) || [], stepRun.content, stepRun.error, translate),
       at: stepRun.startedAt || "",
       sortRank: 1,
     });

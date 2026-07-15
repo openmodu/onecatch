@@ -6,7 +6,7 @@ export function runtimeResumeCommand(runtime, sessionID) {
   return "";
 }
 
-export function runtimeSessionEntries(detail) {
+export function runtimeSessionEntries(detail, translate = (_key, options) => options.defaultValue) {
   const workflowSteps = detail?.workflow?.steps || [];
   const runSessions = detail?.run?.sessions || {};
   const latestByStep = new Map();
@@ -22,7 +22,7 @@ export function runtimeSessionEntries(detail) {
       stepName: step.name || step.id,
       runtime: step.runtime,
       sessionID,
-      idLabel: step.runtime === "codex" ? "thread id" : "session id",
+      idLabel: step.runtime === "codex" ? translate("inspector.threadID", { defaultValue: "thread id" }) : translate("inspector.sessionID", { defaultValue: "session id" }),
       command: runtimeResumeCommand(step.runtime, sessionID),
     }];
   });

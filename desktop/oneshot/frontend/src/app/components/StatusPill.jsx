@@ -1,6 +1,8 @@
+import { useTranslation } from "react-i18next";
 import { StatusBadge } from "../../ui/primitives.jsx";
-import { statusLabel } from "../constants.js";
+import { statusKey } from "../constants.js";
 
 export default function StatusPill({ status, active }) {
-  return <StatusBadge status={status || "ready"} className="status-pill">{active && <span className="pulse" />}{statusLabel[status] || status}</StatusBadge>;
+  const { t } = useTranslation();
+  return <StatusBadge status={status || "ready"} className="status-pill">{active && <span className="pulse" />}{t(statusKey(status), { defaultValue: status || t("status.ready") })}</StatusBadge>;
 }

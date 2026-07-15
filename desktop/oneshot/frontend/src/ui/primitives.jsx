@@ -129,9 +129,10 @@ export function TUISelect({ value, onChange, options = [], ariaLabel, disabled =
 }
 
 export function ToggleRow({ checked, onChange, label, description, dangerous = false, disabled = false }) {
+  const { t } = useTranslation();
   return <button type="button" role="switch" aria-checked={Boolean(checked)} disabled={disabled} className={`ui-toggle-row ${checked ? "ui-toggle-row--checked" : ""} ${dangerous ? "ui-toggle-row--danger" : ""}`.trim()} onClick={() => onChange(!checked)}>
     <span><strong>{label}</strong><small>{description}</small></span>
-    <span className="ui-toggle-row__state">[ {checked ? "on" : "off"} ]</span>
+    <span className="ui-toggle-row__state">[ {checked ? t("common.enabled") : t("common.disabled")} ]</span>
   </button>;
 }
 
@@ -144,3 +145,4 @@ export function ToolbarSpacer() {
 }
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";

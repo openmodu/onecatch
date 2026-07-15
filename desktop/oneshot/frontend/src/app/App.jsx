@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
 import {
   RuntimeBinding,
@@ -25,6 +26,7 @@ import { applyRuntimeFrames } from "./runtimeStream.js";
 const runtimeFrameEvent = "oneshot:runtime-frame";
 
 function App() {
+  const { t } = useTranslation();
   const [mode, setMode] = useState("loading");
   const [view, setView] = useState("tasks");
   const [runtimes, setRuntimes] = useState([]);
@@ -373,8 +375,8 @@ function App() {
   }, [mode, notify]);
 
   const addWorkspace = async () => {
-    if (!workspaceForm.path.trim()) { notify("error", "请输入工作目录路径"); return; }
-    if (workspaceForm.defaultSandbox === "full" && !await requestConfirm({ title: "以 Full access 加入工作目录？", description: "Agent 可以在这个工作目录之外读取和写入。只应对完全信任的项目和 Workflow 使用。", detail: "这会成为该工作目录的新 Run 默认权限。", confirmLabel: "确认 Full access", dangerous: true })) return;
+    if (!workspaceForm.path.trim()) { notify("error", t("app.workspacePathRequired")); return; }
+    if (workspaceForm.defaultSandbox === "full" && !await requestConfirm({ title: t("app.fullWorkspaceTitle"), description: t("app.fullWorkspaceDescription"), detail: t("app.fullWorkspaceDetail"), confirmLabel: t("app.confirmFullAccess"), dangerous: true })) return;
     setBusy("workspace");
     try {
       if (mode === "demo") {
@@ -384,7 +386,7 @@ function App() {
         const item = await WorkspaceBinding.AddWorkspace(workspaceForm);
         setWorkspaces(await WorkspaceBinding.ListWorkspaces()); selectWorkspace(item.id);
       }
-      setWorkspaceModal(false); notify("success", "工作目录已加入");
+      setWorkspaceModal(false); notify("success", t("app.workspaceAdded"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
@@ -403,7 +405,7 @@ function App() {
   }, [mode, notify]);
 
   const removeWorkspace = useCallback(async (workspace) => {
-    if (!await requestConfirm({ title: `从列表移除“${workspace.name}”？`, description: "只移除工作台中的目录引用，不删除项目文件、Task 或 Run 历史。以后重新加入同一路径会恢复历史关联。", detail: workspace.path, confirmLabel: "从列表移除", dangerous: true })) return;
+    if (!await requestConfirm({ title: t("app.removeWorkspaceTitle", { name: workspace.name }), description: t("app.removeWorkspaceDescription"), detail: workspace.path, confirmLabel: t("sidebar.removeFromList"), dangerous: true })) return;
     try {
       if (mode !== "demo") await WorkspaceBinding.RemoveWorkspace(workspace.id);
       const remaining = mode === "demo" ? workspaces.filter((item) => item.id !== workspace.id) : sortWorkspaces(await WorkspaceBinding.ListWorkspaces());
@@ -421,19 +423,19 @@ function App() {
           setRunDetail(null);
         }
       }
-      notify("success", "已从 CWD 列表移除，磁盘文件未改动");
+      notify("success", t("app.workspaceRemoved"));
     } catch (error) {
       notify("error", errorMessage(error));
     }
   }, [mode, notify, requestConfirm, selectWorkspace, workspaceID, workspaces]);
 
   const saveWorker = async () => {
-    if (!workerForm.id.trim() || !workerForm.name.trim() || !workerForm.baseUrl.trim()) { notify("error", "请填写 Worker ID、名称和地址"); return; }
+    if (!workerForm.id.trim() || !workerForm.name.trim() || !workerForm.baseUrl.trim()) { notify("error", t("app.workerFieldsRequired")); return; }
     setBusy("worker");
     try {
       if (mode === "demo") setWorkers((items) => [...items.filter((item) => item.id !== workerForm.id), { ...workerForm, hasToken: Boolean(workerForm.token) }]);
       else { await WorkerBinding.SaveWorker(workerForm); setWorkers(await WorkerBinding.ListWorkers()); }
-      setWorkerModal(false); notify("success", "Worker 已保存，token 不会在列表接口返回");
+      setWorkerModal(false); notify("success", t("app.workerSaved"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
@@ -447,7 +449,7 @@ function App() {
 
   const deleteWorker = async (id) => {
     const worker = workers.find((item) => item.id === id);
-    if (!await requestConfirm({ title: `删除 Worker“${worker?.name || id}”？`, description: "本机保存的 Worker 地址和 token 会被删除，但历史 Run 与事件记录会继续保留。", confirmLabel: "删除 Worker", dangerous: true })) return;
+    if (!await requestConfirm({ title: t("app.deleteWorkerTitle", { name: worker?.name || id }), description: t("app.deleteWorkerDescription"), confirmLabel: t("app.deleteWorker"), dangerous: true })) return;
     try {
       if (mode === "demo") setWorkers((items) => items.filter((item) => item.id !== id));
       else { await WorkerBinding.DeleteWorker(id); setWorkers(await WorkerBinding.ListWorkers()); }
@@ -455,9 +457,9 @@ function App() {
   };
 
   const createTaskAndRun = async () => {
-    if (!workspaceID || !taskForm.title.trim() || !taskForm.prompt.trim() || !taskForm.workflowId) { notify("error", "请填写标题、任务目标并选择 Workflow"); return; }
+    if (!workspaceID || !taskForm.title.trim() || !taskForm.prompt.trim() || !taskForm.workflowId) { notify("error", t("app.taskFieldsRequired")); return; }
     const selectedWorkflow = workflows.find((item) => item.id === taskForm.workflowId);
-    if (selectedWorkflow?.steps?.some((step) => step.sandbox === "full") && !await requestConfirm({ title: "启动包含 Full access 的 Run？", description: "这个 Workflow 的 Agent 可以在工作目录之外执行读写。请确认任务内容和 Workflow 都可信。", detail: `Workflow：${selectedWorkflow.name}`, confirmLabel: "确认并启动", dangerous: true })) return;
+    if (selectedWorkflow?.steps?.some((step) => step.sandbox === "full") && !await requestConfirm({ title: t("app.fullRunTitle"), description: t("app.fullRunDescription"), detail: t("app.workflowDetail", { name: selectedWorkflow.name }), confirmLabel: t("app.confirmStart"), dangerous: true })) return;
     setBusy("run");
     setRunStatus("");
     setRunSearchDraft("");
@@ -487,7 +489,7 @@ function App() {
         }
         await loadTasks(); await loadRunList();
       }
-      setTaskForm((form) => ({ ...form, title: "", prompt: "", attachmentPaths: [] })); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? "任务已加入 Workspace 队列" : "Run 已启动，Agent 正在后台执行");
+      setTaskForm((form) => ({ ...form, title: "", prompt: "", attachmentPaths: [] })); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? t("app.taskQueued") : t("app.runStarted"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
@@ -510,7 +512,7 @@ function App() {
     try {
       if (mode === "demo") {
         if (run.status === "running") {
-          const instruction = { id: `instruction_${Date.now()}`, content: content || "查看附件并继续任务", attachments: [...composerAttachments], status: "pending", priority: modeName === "insert", createdAt: new Date().toISOString() };
+          const instruction = { id: `instruction_${Date.now()}`, content: content || t("composer.attachmentInstruction"), attachments: [...composerAttachments], status: "pending", priority: modeName === "insert", createdAt: new Date().toISOString() };
           setRunDetail((detail) => ({ ...detail, instructions: [...(detail.instructions || []), instruction] }));
         } else if (run.status === "paused") {
           setRunDetail((detail) => ({ ...detail, active: true, run: { ...detail.run, status: "running", pauseReason: "" } }));
@@ -522,7 +524,7 @@ function App() {
         else await TaskRunBinding.EnqueueInstruction(run.id, input);
       } else if (run.status === "paused") {
         if (composerAttachments.length) {
-          await TaskRunBinding.EnqueueInstruction(run.id, { content: content || "查看附件并继续任务", attachmentPaths: composerAttachments });
+          await TaskRunBinding.EnqueueInstruction(run.id, { content: content || t("composer.attachmentInstruction"), attachmentPaths: composerAttachments });
           await TaskRunBinding.ResumeRun(run.id, "");
         } else {
           await TaskRunBinding.ResumeRun(run.id, content);
@@ -531,7 +533,7 @@ function App() {
       }
       setComposerAttachments([]);
       window.setTimeout(() => loadRun(run.id, true), 180);
-      notify("success", modeName === "insert" ? "当前轮次将停止，并优先执行这条指令" : run.status === "running" ? "指令已加入下一轮队列" : "Run 正在恢复");
+      notify("success", modeName === "insert" ? t("app.instructionInserted") : run.status === "running" ? t("app.instructionQueued") : t("app.runResuming"));
       return true;
     } catch (error) { notify("error", errorMessage(error)); return false; } finally { setBusy(""); }
   };
@@ -549,7 +551,7 @@ function App() {
 
   const renameSelectedTask = async () => {
     const title = renameForm?.title.trim();
-    if (!renameForm || !title) { notify("error", "任务名称不能为空"); return; }
+    if (!renameForm || !title) { notify("error", t("task.nameRequired")); return; }
     if (title === renameForm.originalTitle) { setRenameForm(null); return; }
     setBusy("rename");
     try {
@@ -564,13 +566,13 @@ function App() {
         if (selectedRunID) await loadRun(selectedRunID, true);
       }
       setRenameForm(null);
-      notify("success", "任务名称已更新");
+      notify("success", t("app.taskRenamed"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
   const deleteSelectedTask = async () => {
     const task = runDetail?.task || tasks.find((item) => item.id === selectedQueuedTaskID);
-    if (!task || !await requestConfirm({ title: `删除任务“${task.title}”？`, description: "任务会从工作台隐藏，运行中的任务必须先打断。项目文件不会被删除。", confirmLabel: "删除任务", dangerous: true })) return;
+    if (!task || !await requestConfirm({ title: t("app.deleteTaskTitle", { name: task.title }), description: t("app.deleteTaskDescription"), confirmLabel: t("app.deleteTask"), dangerous: true })) return;
     try { if (mode !== "demo") await TaskRunBinding.DeleteTask(task.id); setSelectedRunID(""); setSelectedQueuedTaskID(""); setRunDetail(null); await loadTasks(); await loadRunList(); }
     catch (error) { notify("error", errorMessage(error)); }
   };
@@ -623,8 +625,8 @@ function App() {
     if (!editor) return [];
     if (mode === "demo") {
       const issues = [];
-      if (!/^[a-z][a-z0-9_-]*$/.test(editor.id)) issues.push({ path: "id", message: "必须是小写标识符" });
-      if (!editor.steps?.length) issues.push({ path: "steps", message: "至少需要一个步骤" });
+      if (!/^[a-z][a-z0-9_-]*$/.test(editor.id)) issues.push({ path: "id", message: t("workflow.lowercaseID") });
+      if (!editor.steps?.length) issues.push({ path: "steps", message: t("workflow.stepRequired") });
       setValidation(issues); return issues;
     }
     const issues = await WorkflowBinding.ValidateDefinition(editor); setValidation(issues || []); return issues || [];
@@ -632,8 +634,8 @@ function App() {
 
   const saveWorkflow = async () => {
     const issues = await validateEditor();
-    if (issues.length) { notify("error", `有 ${issues.length} 个配置问题，请先修正`); return; }
-    if (editor.steps.some((step) => step.sandbox === "full") && !await requestConfirm({ title: "保存包含 Full access 的 Workflow？", description: "这个 Workflow 包含可在工作目录之外读写的节点。保存后每次启动仍会再次确认。", detail: `Workflow：${editor.name || editor.id}`, confirmLabel: "确认并保存", dangerous: true })) return;
+    if (issues.length) { notify("error", t("workflow.configIssues", { count: issues.length })); return; }
+    if (editor.steps.some((step) => step.sandbox === "full") && !await requestConfirm({ title: t("app.fullWorkflowTitle"), description: t("app.fullWorkflowDescription"), detail: t("app.workflowDetail", { name: editor.name || editor.id }), confirmLabel: t("app.confirmSave"), dangerous: true })) return;
     setBusy("workflow");
     try {
       let saved = editor;
@@ -642,23 +644,23 @@ function App() {
         saved = exists ? await WorkflowBinding.UpdateDefinition(editor.id, editor) : await WorkflowBinding.CreateDefinition(editor);
         setWorkflows(await WorkflowBinding.ListDefinitions());
       } else setWorkflows((items) => [...items.filter((item) => item.id !== editor.id), editor]);
-      setTaskForm((form) => ({ ...form, workflowId: saved.id })); setEditor(null); notify("success", "Workflow 已保存到 ~/.oneshot/");
+      setTaskForm((form) => ({ ...form, workflowId: saved.id })); setEditor(null); notify("success", t("app.workflowSaved"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
   const visibleWorkspaces = useMemo(() => workspaceResults(workspaces, { selectedID: workspaceID, query: workspaceQuery, expanded: workspaceExpanded }), [workspaceExpanded, workspaceID, workspaceQuery, workspaces]);
   const goView = useCallback((next) => { setEditor(null); setView(next); }, []);
-  const commandText = view === "settings" ? "settings @ ~/.oneshot" : selectedWorkspace ? `${selectedWorkspace.name} @ ${selectedWorkspace.path}` : "选择一个工作目录";
+  const commandText = view === "settings" ? `${t("sidebar.settings")} @ ~/.oneshot` : selectedWorkspace ? `${selectedWorkspace.name} @ ${selectedWorkspace.path}` : t("app.selectWorkspace");
 
   const toggleWorkspaceSearch = useCallback(() => { setWorkspaceSearchOpen((open) => !open); if (workspaceSearchOpen) setWorkspaceQuery(""); }, [workspaceSearchOpen]);
   const toggleWorkspaceExpanded = useCallback(() => setWorkspaceExpanded((expanded) => !expanded), []);
   const selectRun = useCallback((item) => { setSelectedQueuedTaskID(""); setSelectedRunID(item.id); loadRun(item.id); }, [loadRun]);
   const selectQueued = useCallback((task) => { setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(task.id); }, []);
 
-  if (mode === "loading") return <div className="loading-screen"><div className="brand-mark">1</div><span>正在打开本地工作台…</span></div>;
+  if (mode === "loading") return <div className="loading-screen"><div className="brand-mark">1</div><span>{t("task.opening")}</span></div>;
 
   return <div className="app-frame">
-    <header className="mac-titlebar" aria-label="Oneshot window"><span aria-hidden="true" /><strong>Oneshot</strong><span /></header>
+    <header className="mac-titlebar" aria-label={t("app.windowAria")}><span aria-hidden="true" /><strong>Oneshot</strong><span /></header>
     <div className="app-shell">
       <Sidebar
         workspaces={workspaces}
@@ -681,7 +683,7 @@ function App() {
       />
 
       <main className="main-area">
-        <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><span className={`connection ${mode}`}>{mode === "wails" ? "local" : "preview"}</span></div>
+        <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><span className={`connection ${mode}`}>{mode === "wails" ? t("common.local") : t("common.preview")}</span></div>
         {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} /> : view === "tasks" ? <TaskWorkbench
           mode={mode}
           workspaceID={workspaceID}
@@ -716,10 +718,10 @@ function App() {
         /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
     </div>
-    {workspaceModal && <Modal title="加入工作目录" subtitle="Agent 只会在你授权的目录中工作" onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>目录路径<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>显示名称（可选）<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder="默认使用目录名" /></label><label>默认 Sandbox<TUISelect ariaLabel="默认 Sandbox" value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: "使用设置中的全局默认" }, { value: "read-only", label: "Read only" }, { value: "workspace-write", label: "Workspace write" }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: "Full access（危险）" }] : [])]} /></label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkspaceModal(false)}>[ 取消 ]</button><button className="primary-button" onClick={addWorkspace} disabled={busy === "workspace"}>[ 加入目录 ]</button></div></div></Modal>}
-    {taskModal && <Modal title="新建任务" subtitle="立即运行，或加入当前 Workspace 的 FIFO 队列" onClose={() => setTaskModal(false)}><div className="form-stack task-create-form"><label>任务名称<input autoFocus value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} placeholder="例如：补齐 Buddy 工作台能力" /></label><label>目标与验收<textarea value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} placeholder="描述目标、约束和验收方式。" /></label><label>Workflow<TUISelect ariaLabel="Workflow" value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><label>执行方式<TUISelect ariaLabel="执行方式" value={taskForm.executionMode} onChange={(executionMode) => setTaskForm((form) => ({ ...form, executionMode }))} options={[{ value: "immediate", label: "立即运行" }, { value: "queued", label: "加入 Workspace 队列" }]} /></label><div className="attachment-picker"><span>附件 · 最多 8 个</span><button type="button" className="text-button" onClick={() => chooseAttachments("task")}>[ + 选择文件 ]</button>{taskForm.attachmentPaths?.map((path) => <div className="attachment-chip" key={path}><span title={path}>{fileName(path)}</span><button type="button" onClick={() => setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }))}>×</button></div>)}</div><div className="modal-actions"><button className="secondary-button" onClick={() => setTaskModal(false)}>[ 取消 ]</button><button className="primary-button" onClick={createTaskAndRun} disabled={busy === "run" || !selectedWorkspace}>[ {busy === "run" ? "创建中…" : taskForm.executionMode === "queued" ? "加入队列" : "创建并运行"} ]</button></div></div></Modal>}
-    {renameForm && <Modal title="重命名任务" subtitle="名称会同步更新任务历史和运行详情" onClose={() => busy !== "rename" && setRenameForm(null)}><div className="form-stack"><label>任务名称<input autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing && busy !== "rename") renameSelectedTask(); }} /></label><div className="modal-actions"><button className="secondary-button" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>[ 取消 ]</button><button className="primary-button" disabled={busy === "rename" || !renameForm.title.trim()} onClick={renameSelectedTask}>[ {busy === "rename" ? "保存中…" : "保存名称"} ]</button></div></div></Modal>}
-    {workerModal && <Modal title="远端 Worker" subtitle="仅用于受信任 LAN / VPN；token 保存于本机 0600 文件" onClose={() => setWorkerModal(false)}><div className="form-stack"><label>Worker ID<input value={workerForm.id} onChange={(event) => setWorkerForm((form) => ({ ...form, id: event.target.value }))} placeholder="mac-mini" /></label><label>名称<input value={workerForm.name} onChange={(event) => setWorkerForm((form) => ({ ...form, name: event.target.value }))} placeholder="Build Mac mini" /></label><label>Base URL<input value={workerForm.baseUrl} onChange={(event) => setWorkerForm((form) => ({ ...form, baseUrl: event.target.value }))} placeholder="http://192.168.1.20:9231" /></label><label>Bearer token<input type="password" value={workerForm.token} onChange={(event) => setWorkerForm((form) => ({ ...form, token: event.target.value }))} placeholder="更新时留空则保留原 token" /></label><label className="checkbox-label"><input type="checkbox" checked={workerForm.enabled} onChange={(event) => setWorkerForm((form) => ({ ...form, enabled: event.target.checked }))} />启用调度</label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkerModal(false)}>[ 取消 ]</button><button className="primary-button" disabled={busy === "worker"} onClick={saveWorker}>[ 保存 Worker ]</button></div></div></Modal>}
+    {workspaceModal && <Modal title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>{t("workspace.path")}<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>{t("workspace.displayName")}<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder={t("workspace.defaultName")} /></label><label>{t("workspace.defaultSandbox")}<TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} /></label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkspaceModal(false)}>[ {t("common.cancel")} ]</button><button className="primary-button" onClick={addWorkspace} disabled={busy === "workspace"}>[ {t("workspace.add")} ]</button></div></div></Modal>}
+    {taskModal && <Modal title={t("task.createTitle")} subtitle={t("task.createSubtitle")} onClose={() => setTaskModal(false)}><div className="form-stack task-create-form"><label>{t("task.name")}<input autoFocus value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.namePlaceholder")} /></label><label>{t("task.goal")}<textarea value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.goalPlaceholder")} /></label><label>{t("task.workflow")}<TUISelect ariaLabel={t("task.workflow")} value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><label>{t("task.executionMode")}<TUISelect ariaLabel={t("task.executionMode")} value={taskForm.executionMode} onChange={(executionMode) => setTaskForm((form) => ({ ...form, executionMode }))} options={[{ value: "immediate", label: t("task.runNow") }, { value: "queued", label: t("task.joinQueue") }]} /></label><div className="attachment-picker"><span>{t("task.attachmentsLimit")}</span><button type="button" className="text-button" onClick={() => chooseAttachments("task")}>[ + {t("task.chooseFiles")} ]</button>{taskForm.attachmentPaths?.map((path) => <div className="attachment-chip" key={path}><span title={path}>{fileName(path)}</span><button type="button" onClick={() => setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }))}>×</button></div>)}</div><div className="modal-actions"><button className="secondary-button" onClick={() => setTaskModal(false)}>[ {t("common.cancel")} ]</button><button className="primary-button" onClick={createTaskAndRun} disabled={busy === "run" || !selectedWorkspace}>[ {busy === "run" ? t("task.creating") : taskForm.executionMode === "queued" ? t("task.joinQueue") : t("task.createAndRun")} ]</button></div></div></Modal>}
+    {renameForm && <Modal title={t("task.renameTitle")} subtitle={t("task.renameSubtitle")} onClose={() => busy !== "rename" && setRenameForm(null)}><div className="form-stack"><label>{t("task.name")}<input autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing && busy !== "rename") renameSelectedTask(); }} /></label><div className="modal-actions"><button className="secondary-button" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>[ {t("common.cancel")} ]</button><button className="primary-button" disabled={busy === "rename" || !renameForm.title.trim()} onClick={renameSelectedTask}>[ {busy === "rename" ? t("common.saving") : t("task.saveName")} ]</button></div></div></Modal>}
+    {workerModal && <Modal title={t("worker.modalTitle")} subtitle={t("worker.modalSubtitle")} onClose={() => setWorkerModal(false)}><div className="form-stack"><label>{t("worker.id")}<input value={workerForm.id} onChange={(event) => setWorkerForm((form) => ({ ...form, id: event.target.value }))} placeholder="mac-mini" /></label><label>{t("worker.name")}<input value={workerForm.name} onChange={(event) => setWorkerForm((form) => ({ ...form, name: event.target.value }))} placeholder="Build Mac mini" /></label><label>{t("worker.baseUrl")}<input value={workerForm.baseUrl} onChange={(event) => setWorkerForm((form) => ({ ...form, baseUrl: event.target.value }))} placeholder="http://192.168.1.20:9231" /></label><label>{t("worker.bearerToken")}<input type="password" value={workerForm.token} onChange={(event) => setWorkerForm((form) => ({ ...form, token: event.target.value }))} placeholder={t("worker.keepToken")} /></label><label className="checkbox-label"><input type="checkbox" checked={workerForm.enabled} onChange={(event) => setWorkerForm((form) => ({ ...form, enabled: event.target.checked }))} />{t("worker.enableScheduling")}</label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkerModal(false)}>[ {t("common.cancel")} ]</button><button className="primary-button" disabled={busy === "worker"} onClick={saveWorker}>[ {t("worker.save")} ]</button></div></div></Modal>}
     <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
   </div>;
