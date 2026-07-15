@@ -86,6 +86,32 @@ type Usecase struct {
 }
 
 func (s *Usecase) SetRemoteExecutor(remote RemoteExecutor) { s.remote = remote }
+
+// localStep reports whether a step runs on this machine rather than a remote
+// worker. An empty WorkerID and the sentinel "local" both mean local.
+func localStep(step domainworkflows.Step) bool {
+	return step.WorkerID == "" || step.WorkerID == "local"
+}
+
+// dispatchStep runs one step and streams its events to sink, choosing local or
+// remote execution from step.WorkerID. It is the single decision point both the
+// serial and DAG executors share, so a workflow behaves the same whichever mode
+// runs it: a local step honours the step timeout, a remote step is handed to the
+// worker (whose own runtime availability and timeouts govern it).
+func (s *Usecase) dispatchStep(ctx context.Context, definition domainworkflows.Definition, step domainworkflows.Step, workspaceID string, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
+	if !localStep(step) {
+		if s.remote == nil {
+			return agentrun.Result{}, fmt.Errorf("worker_unavailable: remote executor is not configured")
+		}
+		return s.remote.RunRemote(ctx, step.WorkerID, workspaceID, request, sink)
+	}
+	if !request.Runtime.Valid() || !s.engine.Available(request.Runtime) {
+		return agentrun.Result{}, fmt.Errorf("runtime_unavailable: runtime %q is unavailable", step.Runtime)
+	}
+	stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
+	defer cancel()
+	return s.engine.Run(stepCtx, request, sink)
+}
 func (s *Usecase) SetRunStreamPublisher(publisher runstream.Publisher) {
 	s.streamPublisher = publisher
 }
@@ -401,7 +427,10 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		}
 
 		runtime := agentrun.Runtime(step.Runtime)
-		if !runtime.Valid() || !s.engine.Available(runtime) {
+		// Only local steps are gated on this machine's runtimes; a remote step's
+		// runtime lives on its worker, and dispatchStep surfaces a missing worker
+		// or runtime as a run failure instead.
+		if localStep(step) && (!runtime.Valid() || !s.engine.Available(runtime)) {
 			message := fmt.Sprintf("runtime %q is unavailable", step.Runtime)
 			stepRun.Status = domainworkflows.StepRunFailed
 			stepRun.Error = message
@@ -429,9 +458,8 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			return run, nil
 		}
 
-		stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
 		collector := s.newRuntimeCollector(run.ID, stepRun.ID)
-		result, runErr := s.engine.Run(stepCtx, agentrun.Request{
+		request := agentrun.Request{
 			Runtime:              runtime,
 			Workspace:            workspace.Path,
 			Prompt:               composePrompt(task, definition, step, run, instruction),
@@ -441,8 +469,8 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime),
 			Provider:             resolvedRuntimeProvider(run, step.Runtime),
 			InterruptGrace:       time.Duration(run.InterruptGraceSeconds) * time.Second,
-		}, collector.Sink())
-		cancel()
+		}
+		result, runErr := s.dispatchStep(ctx, definition, step, workspace.ID, request, collector.Sink())
 		if streamErr := collector.Close(); streamErr != nil && runErr == nil {
 			runErr = collectorError(streamErr)
 		}

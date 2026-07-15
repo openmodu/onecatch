@@ -123,8 +123,8 @@ func Validate(input Definition) error {
 		if step.Sandbox != "" && step.Sandbox != "read-only" && step.Sandbox != "workspace-write" && step.Sandbox != "full" {
 			add(path+".sandbox", "invalid_value", "must be read-only, workspace-write or full")
 		}
-		if def.Mode == ModeDAG && step.WorkerID != "local" && sandboxWrites(step.Sandbox) {
-			add(path+".sandbox", "remote_write_unsupported", "remote DAG nodes must be read-only until workspace synchronization is configured")
+		if step.WorkerID != "local" && sandboxWrites(step.Sandbox) {
+			add(path+".sandbox", "remote_write_unsupported", "remote steps must be read-only until workspace synchronization is configured")
 		}
 		if len(step.Transitions) == 0 {
 			add(path+".transitions", "required", "must contain at least one signal")

@@ -186,7 +186,7 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 	}
 	var release func() error
 	var err error
-	if step.Sandbox != "read-only" && (step.WorkerID == "" || step.WorkerID == "local") {
+	if step.Sandbox != "read-only" && localStep(step) {
 		release, err = s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
 		if err != nil {
 			return dagResult{step: step, stepRun: stepRun, err: err}
@@ -195,20 +195,7 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 	}
 	request := agentrun.Request{Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeDAGPrompt(task, definition, step, run, instruction), Model: step.Model, Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: run.Sessions[step.ID], EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second}
 	collector := s.newRuntimeCollector(run.ID, stepRun.ID)
-	var result agentrun.Result
-	if step.WorkerID != "" && step.WorkerID != "local" {
-		if s.remote == nil {
-			err = fmt.Errorf("worker_unavailable: remote executor is not configured")
-		} else {
-			result, err = s.remote.RunRemote(ctx, step.WorkerID, workspace.ID, request, collector.Sink())
-		}
-	} else if !request.Runtime.Valid() || !s.engine.Available(request.Runtime) {
-		err = fmt.Errorf("runtime_unavailable: runtime %q is unavailable", step.Runtime)
-	} else {
-		stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
-		result, err = s.engine.Run(stepCtx, request, collector.Sink())
-		cancel()
-	}
+	result, err := s.dispatchStep(ctx, definition, step, workspace.ID, request, collector.Sink())
 	if streamErr := collector.Close(); streamErr != nil && err == nil {
 		err = collectorError(streamErr)
 	}
