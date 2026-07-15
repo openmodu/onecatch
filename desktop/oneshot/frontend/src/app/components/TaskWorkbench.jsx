@@ -3,6 +3,7 @@ import { Action, Kicker, TUISelect } from "../../ui/primitives.jsx";
 import { formatTime, shortID } from "../format.js";
 import { runStatusOptions } from "../constants.js";
 import { buildRunConversation } from "../runConversation.js";
+import { INSPECTOR_COMPACT_QUERY, readInspectorPreference, resolveInspectorCollapsed, writeInspectorPreference } from "../inspectorLayout.js";
 import StatusPill from "./StatusPill.jsx";
 import QueuedTaskView from "./QueuedTaskView.jsx";
 import ConversationTimeline from "./ConversationTimeline.jsx";
@@ -12,6 +13,18 @@ import GitInspector from "./inspectors/GitInspector.jsx";
 import EventInspector from "./inspectors/EventInspector.jsx";
 
 function workflowNameFor(workflows, workflowID) { return workflows.find((workflow) => workflow.id === workflowID)?.name || workflowID; }
+
+function initialInspectorPreference() {
+  try {
+    return typeof window === "undefined" ? null : readInspectorPreference(window.localStorage);
+  } catch {
+    return null;
+  }
+}
+
+function initialCompactViewport() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(INSPECTOR_COMPACT_QUERY).matches;
+}
 
 // Rows are memoized on primitive/ref-stable props (the run objects keep their
 // reference across polls via mergeRunItems), so a background refresh only
@@ -47,6 +60,8 @@ function conversationSignature(detail) {
 
 export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetail, selectedRunID, selectedQueuedTaskID, workflows, loading, total, hasMore, search, status, busy, attachments, onSearch, onStatus, onNewTask, onLoadMore, onSelectRun, onSelectQueued, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onRename, onDelete, notify }) {
   const [inspectorTab, setInspectorTab] = useState("status");
+  const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
+  const [compactViewport, setCompactViewport] = useState(initialCompactViewport);
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
 
@@ -71,6 +86,18 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
     const element = scrollRef.current;
     if (element && pinnedRef.current) element.scrollTop = element.scrollHeight;
   }, [attachments.length, conversationSize, pendingInstructions.length, runDetail?.run?.status]);
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia(INSPECTOR_COMPACT_QUERY);
+    const update = (event) => setCompactViewport(event.matches);
+    setCompactViewport(media.matches);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    media.addListener?.(update);
+    return () => media.removeListener?.(update);
+  }, []);
 
   const handleConversationScroll = () => {
     const element = scrollRef.current;
@@ -78,8 +105,18 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
   };
   const workflowName = selectedTask ? workflowNameFor(workflows, selectedTask.workflowId) : "";
   const runStatus = runDetail?.run?.status;
+  const inspectorCollapsed = resolveInspectorCollapsed(inspectorPreference, compactViewport);
+  const toggleInspector = () => {
+    const next = !inspectorCollapsed;
+    setInspectorPreference(next);
+    try {
+      writeInspectorPreference(window.localStorage, next);
+    } catch {
+      // Storage is best effort; the current session should still respond.
+    }
+  };
 
-  return <div className="task-workbench">
+  return <div className={`task-workbench ${inspectorCollapsed ? "inspector-collapsed" : ""}`}>
     <aside className="task-history-pane">
       <div className="task-history-head"><div><Kicker>task history</Kicker><strong>任务</strong></div><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>+ 新建</Action></div>
       <div className="task-history-query"><label><span>/</span><input aria-label="搜索任务" value={search} onChange={(event) => onSearch(event.target.value)} placeholder="标题 / Run / Thread" />{search && <button type="button" onClick={() => onSearch("")}>×</button>}</label><TUISelect ariaLabel="任务状态" value={status} onChange={onStatus} options={runStatusOptions} /></div>
@@ -115,9 +152,9 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
       </> : <div className="workbench-welcome"><Kicker>local agent workspace</Kicker><h2>把任务、对话和项目状态放在一个页面</h2><p>选择左侧历史任务，或新建任务立即运行 / 加入 FIFO 队列。</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>新建任务</Action></div>}
     </section>
 
-    <aside className="workbench-inspector">
-      <div className="workbench-tabs">{[["status", "状态"], ["git", "Git"], ["events", "事件"]].map(([value, label]) => <button type="button" className={inspectorTab === value ? "active" : ""} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}</div>
-      <div className="workbench-inspector-body">{inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} notify={notify} /> : <EventInspector detail={runDetail} />}</div>
+    <aside className={`workbench-inspector ${inspectorCollapsed ? "collapsed" : ""}`} aria-label="运行检查器">
+      {inspectorCollapsed ? <div className="workbench-inspector-rail"><button type="button" aria-label="展开状态栏" aria-expanded="false" aria-controls="workbench-inspector-content" title="展开状态栏" onClick={toggleInspector}><span aria-hidden="true">‹</span><strong>状态栏</strong></button></div> : <div className="workbench-tabs">{[["status", "状态"], ["git", "Git"], ["events", "事件"]].map(([value, label]) => <button type="button" className={inspectorTab === value ? "active" : ""} aria-pressed={inspectorTab === value} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}<button type="button" className="workbench-inspector-toggle" aria-label="折叠状态栏" aria-expanded="true" aria-controls="workbench-inspector-content" title="折叠状态栏" onClick={toggleInspector}><span aria-hidden="true">›</span></button></div>}
+      <div className="workbench-inspector-body" id="workbench-inspector-content" hidden={inspectorCollapsed}>{!inspectorCollapsed && (inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} notify={notify} /> : <EventInspector detail={runDetail} />)}</div>
     </aside>
   </div>;
 }
