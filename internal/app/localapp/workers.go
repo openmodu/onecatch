@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
+	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
 	"github.com/openmodu/oneshot/internal/worker"
 )
 
@@ -30,6 +31,16 @@ func (a *App) CheckWorker(ctx context.Context, id string) (WorkerStatus, error) 
 		return WorkerStatus{}, err
 	}
 	return WorkerStatus{Worker: worker.Info{ID: config.ID, Name: config.Name, BaseURL: config.BaseURL, Enabled: config.Enabled, HasToken: config.Token != "", CreatedAt: config.CreatedAt, UpdatedAt: config.UpdatedAt}, Health: health}, nil
+}
+
+// WorkerGitStatus reads the git state of a workspace on a remote worker, so the
+// desktop Git panel can show what a remotely executed step changed.
+func (a *App) WorkerGitStatus(ctx context.Context, workerID, workspaceID string) (domainworkspaces.GitSnapshot, error) {
+	config, err := a.workers.Get(ctx, workerID)
+	if err != nil {
+		return domainworkspaces.GitSnapshot{}, coded("worker_not_found", "worker was not found")
+	}
+	return a.workerClient.GitStatus(ctx, config, workspaceID)
 }
 
 type remoteExecutor struct {

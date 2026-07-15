@@ -13,11 +13,19 @@ import (
 	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
+	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
 )
 
 type Engine interface {
 	Available(agentrun.Runtime) bool
 	Run(ctx context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error)
+}
+
+// GitInspector reads the git state of a workspace directory. It is optional: a
+// worker without one simply does not serve the git endpoint. It exists so the
+// coordinator can show what a remote step changed, since files never sync back.
+type GitInspector interface {
+	Inspect(ctx context.Context, workspace string) (domainworkspaces.GitSnapshot, error)
 }
 
 // defaultMaxConcurrency caps simultaneous runs when the operator does not set
@@ -34,11 +42,16 @@ type Server struct {
 	workspaces map[string]string
 	locks      map[string]*sync.RWMutex
 	engine     Engine
+	git        GitInspector
 	slots      chan struct{}
 
 	mu      sync.Mutex
 	running map[string]context.CancelFunc
 }
+
+// SetGitInspector enables the read-only git status endpoint. Without it, that
+// endpoint reports the capability as unavailable.
+func (s *Server) SetGitInspector(git GitInspector) { s.git = git }
 
 // NewServer builds a worker HTTP server. maxConcurrency <= 0 uses
 // defaultMaxConcurrency.
@@ -67,7 +80,26 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/health", s.authorize(s.health))
 	mux.HandleFunc("POST /v1/execute", s.authorize(s.execute))
 	mux.HandleFunc("POST /v1/runs/{runID}/interrupt", s.authorize(s.interrupt))
+	mux.HandleFunc("GET /v1/workspaces/{workspaceID}/git", s.authorize(s.workspaceGit))
 	return mux
+}
+
+func (s *Server) workspaceGit(writer http.ResponseWriter, request *http.Request) {
+	if s.git == nil {
+		writeError(writer, http.StatusNotImplemented, "worker_git_unsupported", "git inspection is not enabled on this worker")
+		return
+	}
+	workspace, ok := s.workspaces[request.PathValue("workspaceID")]
+	if !ok {
+		writeError(writer, http.StatusConflict, "worker_workspace_unmapped", "workspace is not mapped on this worker")
+		return
+	}
+	snapshot, err := s.git.Inspect(request.Context(), workspace)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "worker_git_failed", "git inspection failed")
+		return
+	}
+	writeJSON(writer, http.StatusOK, snapshot)
 }
 
 func (s *Server) authorize(next http.HandlerFunc) http.HandlerFunc {

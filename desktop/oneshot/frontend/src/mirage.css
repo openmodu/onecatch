@@ -495,6 +495,7 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .inspector-row strong { color: var(--acp-text); font-size: var(--ui-font-caption); }
 
 .git-inspector { padding: 14px; }
+.git-source { margin-bottom: 10px; }
 .git-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
 .git-head strong, .git-head small { display: block; }
 .git-head strong { margin-top: 5px; color: var(--acp-text); }

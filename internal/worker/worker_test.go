@@ -13,7 +13,15 @@ import (
 	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
+	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
 )
+
+type fakeGit struct{ path string }
+
+func (g *fakeGit) Inspect(_ context.Context, workspace string) (domainworkspaces.GitSnapshot, error) {
+	g.path = workspace
+	return domainworkspaces.GitSnapshot{IsRepo: true, Branch: "main", Files: []domainworkspaces.GitFile{{Path: "a.go", Worktree: "M"}}}, nil
+}
 
 type fakeEngine struct{}
 
@@ -149,6 +157,35 @@ func TestInterruptStopsAnInFlightRun(t *testing.T) {
 	var remote RemoteError
 	if !errors.As(err, &remote) || remote.Code != "worker_run_not_found" {
 		t.Fatalf("ghost interrupt = %v", err)
+	}
+}
+
+func TestWorkerGitStatus(t *testing.T) {
+	worker := NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, fakeEngine{}, 0)
+	server := httptest.NewServer(worker.Handler())
+	defer server.Close()
+	client := NewClient()
+	config := Config{ID: "remote-1", BaseURL: server.URL, Token: "secret", Enabled: true}
+
+	// Without an inspector the capability is reported as unavailable.
+	_, err := client.GitStatus(context.Background(), config, "project")
+	var remote RemoteError
+	if !errors.As(err, &remote) || remote.Code != "worker_git_unsupported" {
+		t.Fatalf("git without inspector = %v", err)
+	}
+
+	git := &fakeGit{}
+	worker.SetGitInspector(git)
+	snapshot, err := client.GitStatus(context.Background(), config, "project")
+	if err != nil || !snapshot.IsRepo || snapshot.Branch != "main" || len(snapshot.Files) != 1 {
+		t.Fatalf("git status = %+v, %v", snapshot, err)
+	}
+	if git.path != "/tmp/project" {
+		t.Fatalf("inspected path = %q, want the mapped workspace", git.path)
+	}
+	_, err = client.GitStatus(context.Background(), config, "missing")
+	if !errors.As(err, &remote) || remote.Code != "worker_workspace_unmapped" {
+		t.Fatalf("git unmapped = %v", err)
 	}
 }
 
