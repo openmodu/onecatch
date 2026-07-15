@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import remarkGfm from "remark-gfm";
@@ -13,6 +14,7 @@ function SafeLink({ href = "", children, node: _node, ...props }) {
 // sanitizer constrains the generated tree, and images are represented without
 // fetching their URLs from the desktop webview.
 function MarkdownContent({ content, streaming = false, className = "" }) {
+  const { t } = useTranslation();
   return <div className={`markdown-content ${streaming ? "streaming" : ""} ${className}`.trim()} aria-busy={streaming || undefined}>
     <ReactMarkdown
       skipHtml
@@ -20,7 +22,7 @@ function MarkdownContent({ content, streaming = false, className = "" }) {
       rehypePlugins={[rehypeSanitize]}
       components={{
         a: SafeLink,
-        img: ({ alt = "" }) => <span className="markdown-image-placeholder">[图片{alt ? `：${alt}` : ""}]</span>,
+        img: ({ alt = "" }) => <span className="markdown-image-placeholder">{t("markdown.image", { alt: alt ? `: ${alt}` : "" })}</span>,
       }}
     >{String(content || "")}</ReactMarkdown>
     {streaming && <span className="markdown-stream-cursor" aria-hidden="true" />}
