@@ -2,6 +2,9 @@ package localapp
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
 	"github.com/openmodu/oneshot/internal/worker"
@@ -39,14 +42,54 @@ func (e remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID str
 	if err != nil || !config.Enabled {
 		return agentrun.Result{}, worker.RemoteError{Code: "worker_not_found", Message: "worker is missing or disabled"}
 	}
-	response, err := e.client.Execute(ctx, config, worker.ExecuteRequest{WorkspaceID: workspaceID, Runtime: request.Runtime, Model: request.Model, Sandbox: request.Sandbox, Prompt: request.Prompt, ResumeSessionID: request.ResumeSessionID})
+	runID, err := newRunID()
 	if err != nil {
 		return agentrun.Result{}, err
 	}
-	for _, event := range response.Events {
-		if sink != nil {
-			sink(event)
+
+	// The streaming POST is deliberately detached from ctx. A cancel must become
+	// a graceful interrupt — SIGINT plus grace on the remote agent, so it can
+	// flush its final events down the open stream — not a hard connection reset
+	// that discards them. A backstop hard-cancels if the worker never closes.
+	streamCtx, cancelStream := context.WithCancel(context.Background())
+	defer cancelStream()
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-done:
+			return
+		case <-ctx.Done():
 		}
+		interruptCtx, cancelInterrupt := context.WithTimeout(context.Background(), 8*time.Second)
+		_ = e.client.Interrupt(interruptCtx, config, runID)
+		cancelInterrupt()
+		grace := request.InterruptGrace + 5*time.Second
+		timer := time.NewTimer(grace)
+		defer timer.Stop()
+		select {
+		case <-done:
+		case <-timer.C:
+			cancelStream()
+		}
+	}()
+
+	return e.client.Execute(streamCtx, config, worker.ExecuteRequest{
+		RunID:                 runID,
+		WorkspaceID:           workspaceID,
+		Runtime:               request.Runtime,
+		Model:                 request.Model,
+		Sandbox:               request.Sandbox,
+		Prompt:                request.Prompt,
+		ResumeSessionID:       request.ResumeSessionID,
+		InterruptGraceSeconds: int(request.InterruptGrace / time.Second),
+	}, sink)
+}
+
+func newRunID() (string, error) {
+	buffer := make([]byte, 16)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
 	}
-	return response.Result, nil
+	return hex.EncodeToString(buffer), nil
 }
