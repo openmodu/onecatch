@@ -427,6 +427,23 @@ func TestExecuteDAGDispatchesConfiguredRemoteNode(t *testing.T) {
 	}
 }
 
+func TestExecuteSerialDispatchesConfiguredRemoteStep(t *testing.T) {
+	// A serial workflow step with a WorkerID must route to the worker, not pause
+	// on local runtime availability — the engine here has no local runtimes.
+	definition := domainworkflows.Definition{ID: "remote_serial", Name: "Remote Serial", Mode: domainworkflows.ModeSerial, EntryStepID: "review", Policy: domainworkflows.Policy{MaxTransitions: 5, MaxConsecutiveFailures: 2, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{{ID: "review", Name: "Remote review", Runtime: "codex", WorkerID: "mac-mini", Sandbox: "read-only", RolePrompt: "Review", Instruction: "Review remotely", Transitions: map[string]string{"completed": domainworkflows.TargetDone}}}}
+	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{}}
+	usecase, _, task := setupUsecase(t, definition, engine)
+	remote := &fakeRemoteExecutor{}
+	usecase.SetRemoteExecutor(remote)
+	run, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil || run.Status != domainworkflows.RunCompleted {
+		t.Fatalf("remote serial = %+v, %v", run, err)
+	}
+	if remote.workerID != "mac-mini" || remote.workspaceID != "ws_1" || len(engine.calls) != 0 {
+		t.Fatalf("remote dispatch = %+v, local calls = %d", remote, len(engine.calls))
+	}
+}
+
 func reviewLoop() domainworkflows.Definition {
 	return domainworkflows.Definition{
 		ID: "review_loop", Name: "Review Loop", EntryStepID: "implement",
