@@ -368,7 +368,8 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 
 /* Task workbench: history, full conversation, and live project context share
    one fixed-height surface so the composer never scrolls out of reach. */
-.task-workbench { min-width: 0; min-height: 0; flex: 1; display: grid; grid-template-columns: 224px minmax(360px, 1fr) 310px; overflow: hidden; }
+.task-workbench { --task-history-width: 224px; --task-inspector-width: 310px; --task-inspector-rail-width: 32px; min-width: 0; min-height: 0; flex: 1; display: grid; grid-template-columns: var(--task-history-width) minmax(360px, 1fr) var(--task-inspector-width); overflow: hidden; transition: grid-template-columns 160ms ease; }
+.task-workbench.inspector-collapsed { grid-template-columns: var(--task-history-width) minmax(360px, 1fr) var(--task-inspector-rail-width); }
 .task-history-pane, .conversation-workspace, .workbench-inspector { min-width: 0; min-height: 0; }
 .task-history-pane { display: grid; grid-template-rows: auto auto minmax(0, 1fr); border-right: var(--ui-rule); background: color-mix(in oklab, var(--acp-panel) 24%, transparent); }
 .task-history-head { min-height: 62px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: var(--ui-rule); }
@@ -445,11 +446,18 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .workbench-welcome p { margin: 0 0 22px; line-height: 1.7; }
 
 .workbench-inspector { display: grid; grid-template-rows: 42px minmax(0, 1fr); border-left: var(--ui-rule); background: color-mix(in oklab, var(--acp-panel) 24%, transparent); }
-.workbench-tabs { display: grid; grid-template-columns: repeat(3, 1fr); border-bottom: var(--ui-rule); }
+.workbench-inspector.collapsed { grid-template-rows: minmax(0, 1fr); }
+.workbench-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) 32px; border-bottom: var(--ui-rule); }
 .workbench-tabs button { border: 0; border-right: var(--ui-rule); background: transparent; color: var(--acp-text-soft); font-size: var(--ui-font-caption); cursor: pointer; }
 .workbench-tabs button:last-child { border-right: 0; }
 .workbench-tabs button:hover { color: var(--acp-text); }
 .workbench-tabs button.active { color: var(--acp-accent); box-shadow: inset 0 -2px var(--acp-accent); }
+.workbench-inspector-toggle { font-size: var(--ui-font-title) !important; }
+.workbench-inspector-rail { min-height: 0; }
+.workbench-inspector-rail button { width: 100%; height: 100%; display: grid; grid-template-rows: 32px minmax(0, 1fr); justify-items: center; padding: 5px 0 10px; border: 0; background: transparent; color: var(--acp-text-soft); cursor: pointer; }
+.workbench-inspector-rail button:hover { background: color-mix(in oklab, var(--acp-text) 4%, transparent); color: var(--acp-accent); }
+.workbench-inspector-rail button > span { font-size: var(--ui-font-title); line-height: 1; }
+.workbench-inspector-rail button > strong { align-self: start; color: inherit; font-size: var(--ui-font-micro); font-weight: 700; letter-spacing: .12em; writing-mode: vertical-rl; }
 .workbench-inspector-body { min-height: 0; overflow-y: auto; }
 .inspector-placeholder { margin: 0; padding: 20px 16px; color: var(--acp-text-soft); font-size: var(--ui-font-caption); line-height: 1.6; }
 .status-inspector { padding: 14px; }
@@ -517,12 +525,17 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 @media (max-width: 1100px) {
   .app-shell { grid-template-columns: 190px minmax(0, 1fr); }
   .workspace-grid { grid-template-columns: minmax(420px, 1fr) 340px; }
-  .task-workbench { grid-template-columns: 202px minmax(340px, 1fr) 280px; }
+  .task-workbench { --task-history-width: 202px; --task-inspector-width: 280px; grid-template-columns: var(--task-history-width) minmax(340px, 1fr) var(--task-inspector-width); }
+  .task-workbench.inspector-collapsed { grid-template-columns: var(--task-history-width) minmax(340px, 1fr) var(--task-inspector-rail-width); }
   .workbench-composer-actions { display: grid; grid-template-columns: auto minmax(0, 1fr); }
   .workbench-composer-actions > span { justify-self: end; }
   .workbench-composer-actions > div { grid-column: 1 / -1; width: 100%; margin-left: 0; justify-content: flex-end; flex-wrap: wrap; }
   .workflow-card { grid-template-columns: 62px 170px minmax(160px, 1fr) 110px 56px; gap: 12px; }
   .editor-layout, .dag-workspace { grid-template-columns: minmax(0, 1fr) 280px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-workbench { transition: none; }
 }
 
 @media (max-width: 860px) {
