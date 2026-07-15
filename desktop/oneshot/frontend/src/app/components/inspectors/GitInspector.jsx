@@ -16,7 +16,7 @@ function fileState(file, t) {
 // Git is intentionally read-only here. The inspector answers one question:
 // what changed in this workspace? Mutating operations stay in the user's Git
 // client or terminal, where staging and partial commits remain explicit.
-function GitInspector({ mode, workspaceID, notify }) {
+function GitInspector({ mode, workspaceID, runWorkerID = "", notify }) {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -32,9 +32,12 @@ function GitInspector({ mode, workspaceID, notify }) {
       .catch(() => setWorkers([]));
   }, [mode]);
 
-  // A worker maps only some workspace ids; reset to local when the workspace
-  // changes so we never query a worker for a workspace it does not have.
-  useEffect(() => { setSource("local"); }, [workspaceID]);
+  // Follow the run: default to the worker its latest step ran on, but only when
+  // that worker is registered here (so we never query one we cannot reach) and
+  // fall back to local otherwise. The user can still override with the selector.
+  useEffect(() => {
+    setSource(runWorkerID && workers.some((entry) => entry.id === runWorkerID) ? runWorkerID : "local");
+  }, [runWorkerID, workspaceID, workers]);
 
   const load = useCallback(async () => {
     if (!workspaceID) {

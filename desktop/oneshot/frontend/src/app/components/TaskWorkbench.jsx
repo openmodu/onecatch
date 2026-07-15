@@ -15,6 +15,17 @@ import EventInspector from "./inspectors/EventInspector.jsx";
 
 function workflowNameFor(workflows, workflowID) { return workflows.find((workflow) => workflow.id === workflowID)?.name || workflowID; }
 
+// The worker the run's latest step executed on, or "" when it ran locally. The
+// Git panel uses it to auto-show the machine that actually holds the changes,
+// since a remote step's edits live only on its worker's clone.
+function activeWorkerID(runDetail) {
+  const steps = runDetail?.workflow?.steps || [];
+  const stepRuns = runDetail?.stepRuns || [];
+  const stepID = stepRuns[stepRuns.length - 1]?.stepId || runDetail?.run?.currentStepId;
+  const workerID = steps.find((step) => step.id === stepID)?.workerId;
+  return workerID && workerID !== "local" ? workerID : "";
+}
+
 function initialInspectorPreference() {
   try {
     return typeof window === "undefined" ? null : readInspectorPreference(window.localStorage);
@@ -107,6 +118,7 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
   };
   const workflowName = selectedTask ? workflowNameFor(workflows, selectedTask.workflowId) : "";
   const runStatus = runDetail?.run?.status;
+  const runWorkerID = useMemo(() => activeWorkerID(runDetail), [runDetail]);
   const inspectorCollapsed = resolveInspectorCollapsed(inspectorPreference, compactViewport);
   const toggleInspector = () => {
     const next = !inspectorCollapsed;
@@ -156,7 +168,7 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
 
     <aside className={`workbench-inspector ${inspectorCollapsed ? "collapsed" : ""}`} aria-label={t("inspector.aria")}>
       {inspectorCollapsed ? <div className="workbench-inspector-rail"><button type="button" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><span aria-hidden="true">‹</span><strong>{t("inspector.rail")}</strong></button></div> : <div className="workbench-tabs">{[["status", t("inspector.status")], ["git", t("inspector.git")], ["events", t("inspector.events")]].map(([value, label]) => <button type="button" className={inspectorTab === value ? "active" : ""} aria-pressed={inspectorTab === value} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}<button type="button" className="workbench-inspector-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={toggleInspector}><span aria-hidden="true">›</span></button></div>}
-      <div className="workbench-inspector-body" id="workbench-inspector-content" hidden={inspectorCollapsed}>{!inspectorCollapsed && (inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} notify={notify} /> : <EventInspector detail={runDetail} />)}</div>
+      <div className="workbench-inspector-body" id="workbench-inspector-content" hidden={inspectorCollapsed}>{!inspectorCollapsed && (inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={runWorkerID} notify={notify} /> : <EventInspector detail={runDetail} />)}</div>
     </aside>
   </div>;
 }
