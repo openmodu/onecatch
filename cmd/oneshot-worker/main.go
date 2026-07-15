@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
+	"github.com/openmodu/oneshot/internal/gitinspect"
 	"github.com/openmodu/oneshot/internal/worker"
 )
 
@@ -61,6 +62,7 @@ func main() {
 	}
 	engine := agentrun.NewEngine(agentrun.Config{CodexBinary: *codex, ClaudeBinary: *claude})
 	service := worker.NewServer(*id, *name, secret, workspaces, engine, *maxConcurrency)
+	service.SetGitInspector(gitinspect.New(""))
 	server := &http.Server{Addr: *listen, Handler: service.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 35 * time.Minute, WriteTimeout: 35 * time.Minute, IdleTimeout: 60 * time.Second}
 	log.Printf("oneshot worker %s listening on %s", *id, *listen)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {

@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
+	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
 )
 
 // maxFrameBytes bounds a single NDJSON line. It matches the runtime event
@@ -80,6 +82,16 @@ func (c *Client) Execute(ctx context.Context, config Config, input ExecuteReques
 		return agentrun.Result{}, RemoteError{Code: "worker_stream_broken", Message: err.Error()}
 	}
 	return agentrun.Result{}, RemoteError{Code: "worker_stream_incomplete", Message: "stream ended before a terminal frame"}
+}
+
+// GitStatus reads the git state of a mapped workspace on the worker, so the
+// coordinator can show what a remote step changed without syncing files.
+func (c *Client) GitStatus(ctx context.Context, config Config, workspaceID string) (domainworkspaces.GitSnapshot, error) {
+	var snapshot domainworkspaces.GitSnapshot
+	if err := c.do(ctx, config, http.MethodGet, "/v1/workspaces/"+url.PathEscape(workspaceID)+"/git", nil, &snapshot); err != nil {
+		return domainworkspaces.GitSnapshot{}, err
+	}
+	return snapshot, nil
 }
 
 // Interrupt asks the worker to gracefully stop an in-flight run. A run that has

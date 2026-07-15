@@ -11,6 +11,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as localapp$0 from "../../../internal/app/localapp/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as workspaces$0 from "../../../internal/domain/workspaces/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as worker$0 from "../../../internal/worker/models.js";
 
 /**
@@ -50,7 +53,19 @@ export function SaveWorker(input) {
     }));
 }
 
+/**
+ * @param {string} id
+ * @param {string} workspaceID
+ * @returns {$CancellablePromise<workspaces$0.GitSnapshot>}
+ */
+export function WorkerGitStatus(id, workspaceID) {
+    return $Call.ByID(2243598250, id, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
+}
+
 // Private type creation functions
 const $$createType0 = localapp$0.WorkerStatus.createFrom;
 const $$createType1 = worker$0.Info.createFrom;
 const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = workspaces$0.GitSnapshot.createFrom;
