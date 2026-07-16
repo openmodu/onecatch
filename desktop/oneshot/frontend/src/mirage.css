@@ -404,7 +404,14 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .conversation-head-actions button { padding: 5px; border: 0; background: transparent; color: var(--acp-text-soft); font-size: var(--ui-font-micro); cursor: pointer; }
 .conversation-head-actions button:hover { color: var(--acp-accent); }
 .conversation-head-actions button.danger:hover { color: var(--acp-danger); }
-.conversation-scroll { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; }
+.conversation-scroll { min-width: 0; min-height: 0; flex: 1; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.conversation-scroll .conversation-section,
+.conversation-scroll .conversation-list,
+.conversation-scroll .conversation-user,
+.conversation-scroll .conversation-round,
+.conversation-scroll .conversation-round-body,
+.conversation-scroll .conversation-agent,
+.conversation-scroll .conversation-tool { min-width: 0; max-width: 100%; }
 .conversation-scroll .conversation-list > :last-child { border-bottom: 0; }
 .workbench-empty { padding: 28px; color: var(--acp-text-soft); text-align: center; }
 .workbench-composer { flex: 0 0 auto; padding: 10px 12px 12px; border-top: var(--ui-rule); background: color-mix(in oklab, var(--acp-panel) 42%, var(--acp-canvas)); }
