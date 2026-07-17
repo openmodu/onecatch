@@ -22,8 +22,11 @@ export {
     RuntimeDraftInput,
     RuntimeEventView,
     RuntimeInfo,
+    SearchTasksInput,
     StorageCategory,
     StorageUsage,
+    TaskSearchItem,
+    TaskSearchPage,
     WorkerStatus,
     WorkflowEventView,
     WorkspaceStatus

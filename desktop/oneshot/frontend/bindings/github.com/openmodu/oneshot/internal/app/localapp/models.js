@@ -1004,6 +1004,41 @@ export class RuntimeInfo {
     }
 }
 
+export class SearchTasksInput {
+    /**
+     * Creates a new SearchTasksInput instance.
+     * @param {Partial<SearchTasksInput>} [$$source = {}] - The source object to create the SearchTasksInput.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["keyword"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["limit"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SearchTasksInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SearchTasksInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SearchTasksInput(/** @type {Partial<SearchTasksInput>} */($$parsedSource));
+    }
+}
+
 export class StorageCategory {
     /**
      * Creates a new StorageCategory instance.
@@ -1099,6 +1134,99 @@ export class StorageUsage {
     }
 }
 
+export class TaskSearchItem {
+    /**
+     * Creates a new TaskSearchItem instance.
+     * @param {Partial<TaskSearchItem>} [$$source = {}] - The source object to create the TaskSearchItem.
+     */
+    constructor($$source = {}) {
+        if (!("task" in $$source)) {
+            /**
+             * @member
+             * @type {tasks$0.Task}
+             */
+            this["task"] = (new tasks$0.Task());
+        }
+        if (!("workspace" in $$source)) {
+            /**
+             * @member
+             * @type {workspaces$0.Workspace}
+             */
+            this["workspace"] = (new workspaces$0.Workspace());
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {workflows$0.Run | null | undefined}
+             */
+            this["latestRun"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskSearchItem instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TaskSearchItem}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType2;
+        const $$createField1_0 = $$createType3;
+        const $$createField2_0 = $$createType18;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("task" in $$parsedSource) {
+            $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
+        }
+        if ("workspace" in $$parsedSource) {
+            $$parsedSource["workspace"] = $$createField1_0($$parsedSource["workspace"]);
+        }
+        if ("latestRun" in $$parsedSource) {
+            $$parsedSource["latestRun"] = $$createField2_0($$parsedSource["latestRun"]);
+        }
+        return new TaskSearchItem(/** @type {Partial<TaskSearchItem>} */($$parsedSource));
+    }
+}
+
+export class TaskSearchPage {
+    /**
+     * Creates a new TaskSearchPage instance.
+     * @param {Partial<TaskSearchPage>} [$$source = {}] - The source object to create the TaskSearchPage.
+     */
+    constructor($$source = {}) {
+        if (!("items" in $$source)) {
+            /**
+             * @member
+             * @type {TaskSearchItem[]}
+             */
+            this["items"] = [];
+        }
+        if (!("total" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["total"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskSearchPage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TaskSearchPage}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType20;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("items" in $$parsedSource) {
+            $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
+        }
+        return new TaskSearchPage(/** @type {Partial<TaskSearchPage>} */($$parsedSource));
+    }
+}
+
 export class WorkerStatus {
     /**
      * Creates a new WorkerStatus instance.
@@ -1129,8 +1257,8 @@ export class WorkerStatus {
      * @returns {WorkerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType18;
-        const $$createField1_0 = $$createType19;
+        const $$createField0_0 = $$createType21;
+        const $$createField1_0 = $$createType22;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worker" in $$parsedSource) {
             $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
@@ -1236,7 +1364,7 @@ export class WorkspaceStatus {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType3;
-        const $$createField1_0 = $$createType20;
+        const $$createField1_0 = $$createType23;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -1267,6 +1395,9 @@ const $$createType14 = $Create.Array($$createType13);
 const $$createType15 = settings$0.RuntimeSettings.createFrom;
 const $$createType16 = StorageCategory.createFrom;
 const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = worker$0.Info.createFrom;
-const $$createType19 = worker$0.Health.createFrom;
-const $$createType20 = workspaces$0.GitSnapshot.createFrom;
+const $$createType18 = $Create.Nullable($$createType1);
+const $$createType19 = TaskSearchItem.createFrom;
+const $$createType20 = $Create.Array($$createType19);
+const $$createType21 = worker$0.Info.createFrom;
+const $$createType22 = worker$0.Health.createFrom;
+const $$createType23 = workspaces$0.GitSnapshot.createFrom;

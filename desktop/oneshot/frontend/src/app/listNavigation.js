@@ -26,6 +26,21 @@ export function workspaceResults(items = [], { selectedID = "", query = "", expa
   return compact;
 }
 
+export function workspaceSections(items = [], { selectedID = "", query = "", expanded = false, limit = COMPACT_WORKSPACE_LIMIT } = {}) {
+  const sorted = sortWorkspaces(items);
+  const needle = query.trim().toLocaleLowerCase();
+  const filtered = needle ? sorted.filter((item) => `${item.name || ""}\n${item.path || ""}`.toLocaleLowerCase().includes(needle)) : sorted;
+  const pinned = filtered.filter((item) => item.pinned);
+  const projects = filtered.filter((item) => !item.pinned);
+  if (needle || expanded || projects.length <= limit) return { pinned, projects };
+  const compact = projects.slice(0, limit);
+  if (selectedID && !compact.some((item) => item.id === selectedID)) {
+    const selected = projects.find((item) => item.id === selectedID);
+    if (selected) compact[compact.length - 1] = selected;
+  }
+  return { pinned, projects: compact };
+}
+
 export function preserveEqualValue(current, next) {
   if (Object.is(current, next)) return current;
   try {

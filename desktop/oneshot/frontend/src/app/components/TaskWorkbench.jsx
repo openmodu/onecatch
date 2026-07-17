@@ -1,8 +1,7 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Action, Kicker, TUISelect } from "../../ui/primitives.jsx";
-import { formatTime, shortID } from "../format.js";
-import { runStatusOptions } from "../constants.js";
+import { Action, Kicker } from "../../ui/primitives.jsx";
+import { shortID } from "../format.js";
 import { buildRunConversation } from "../runConversation.js";
 import { INSPECTOR_COMPACT_QUERY, readInspectorPreference, resolveInspectorCollapsed, writeInspectorPreference } from "../inspectorLayout.js";
 import StatusPill from "./StatusPill.jsx";
@@ -38,17 +37,6 @@ function initialCompactViewport() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(INSPECTOR_COMPACT_QUERY).matches;
 }
 
-// Rows are memoized on primitive/ref-stable props (the run objects keep their
-// reference across polls via mergeRunItems), so a background refresh only
-// re-renders the row that actually changed instead of the whole history list.
-const RunHistoryRow = memo(function RunHistoryRow({ run, selected, active, workflowName, onSelect }) {
-  return <button type="button" className={`task-history-item ${selected ? "selected" : ""}`} onClick={() => onSelect(run)}><span className="task-history-status"><StatusPill status={run.status} active={active} /></span><strong>{run.task?.title || run.id}</strong><small>{workflowName} · {formatTime(run.updatedAt || run.startedAt)}</small></button>;
-});
-
-const QueuedHistoryRow = memo(function QueuedHistoryRow({ task, selected, position, workflowName, onSelect }) {
-  return <button type="button" className={`task-history-item ${selected ? "selected" : ""}`} onClick={() => onSelect(task)}><span className="task-history-status"><StatusPill status="queued" /><small>#{position}</small></span><strong>{task.title}</strong><small>{workflowName} · {formatTime(task.updatedAt)}</small></button>;
-});
-
 // Cheap fingerprint of everything buildRunConversation reads, so a poll tick
 // that returns a fresh `runDetail` object with identical content does not force
 // the (potentially hundreds of rows) timeline to be rebuilt and reconciled.
@@ -70,7 +58,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetail, selectedRunID, selectedQueuedTaskID, workflows, loading, total, hasMore, search, status, busy, attachments, onSearch, onStatus, onNewTask, onLoadMore, onSelectRun, onSelectQueued, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onRename, onDelete, notify }) {
+export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, attachments, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onRename, onDelete, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
   const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
@@ -81,8 +69,6 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
   const selectedQueuedTask = useMemo(() => tasks.find((task) => task.id === selectedQueuedTaskID), [tasks, selectedQueuedTaskID]);
   const selectedTask = runDetail?.task || selectedQueuedTask;
   const queueTasks = useMemo(() => tasks.filter((task) => task.status === "queued").sort((left, right) => new Date(left.queue?.enqueuedAt || left.createdAt) - new Date(right.queue?.enqueuedAt || right.createdAt)), [tasks]);
-  const filteredQueued = useMemo(() => queueTasks.filter((task) => (!status || status === "queued") && (!search.trim() || `${task.title}\n${task.prompt}`.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase()))), [queueTasks, status, search]);
-  const visibleRuns = status === "queued" ? [] : runs;
 
   const signature = conversationSignature(runDetail);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- signature captures every field the builder reads
@@ -131,22 +117,9 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
   };
 
   return <div className={`task-workbench ${inspectorCollapsed ? "inspector-collapsed" : ""}`}>
-    <aside className="task-history-pane">
-      <div className="task-history-head"><div><Kicker>{t("task.history")}</Kicker><strong>{t("task.tasks")}</strong></div><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>+ {t("task.new")}</Action></div>
-      <div className="task-history-query"><label><span>/</span><input aria-label={t("task.search")} value={search} onChange={(event) => onSearch(event.target.value)} placeholder={t("task.searchPlaceholder")} />{search && <button type="button" onClick={() => onSearch("")}>×</button>}</label><TUISelect ariaLabel={t("task.status")} value={status} onChange={onStatus} options={runStatusOptions(t)} /></div>
-      <div className="task-history-list">
-        {filteredQueued.length > 0 && <div className="task-history-group">{t("task.workspaceQueue", { count: filteredQueued.length })}</div>}
-        {filteredQueued.map((task) => <QueuedHistoryRow key={task.id} task={task} selected={selectedQueuedTaskID === task.id} position={queueTasks.findIndex((item) => item.id === task.id) + 1} workflowName={workflowNameFor(workflows, task.workflowId)} onSelect={onSelectQueued} />)}
-        {visibleRuns.length > 0 && <div className="task-history-group">{t("task.runHistory", { count: total })}</div>}
-        {visibleRuns.map((run) => <RunHistoryRow key={run.id} run={run} selected={selectedRunID === run.id} active={runDetail?.run?.id === run.id && runDetail.active} workflowName={workflowNameFor(workflows, run.workflowId)} onSelect={onSelectRun} />)}
-        {!filteredQueued.length && !visibleRuns.length && !loading && <div className="task-history-empty">{search || status ? t("task.noMatches") : t("task.empty")}</div>}
-        {(loading || hasMore) && <button type="button" className="task-history-more" disabled={loading} onClick={onLoadMore}>{loading ? t("task.loading") : t("task.loadMore", { visible: visibleRuns.length, total })}</button>}
-      </div>
-    </aside>
-
     <section className="conversation-workspace">
       {selectedTask ? <>
-        <header className="conversation-workspace-head"><div><div className="conversation-title-row"><h2>{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p>{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : ` · ${t("task.workspaceFIFO")}`}</p></div><div className="conversation-head-actions"><button type="button" onClick={onRename}>[ {t("task.rename")} ]</button><button type="button" className="danger" onClick={onDelete}>[ {t("task.delete")} ]</button></div></header>
+        <header className="conversation-workspace-head"><div><div className="conversation-title-row"><h2>{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p>{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : ` · ${t("task.workspaceFIFO")}`}</p></div><div className="conversation-head-actions"><Action size="compact" tone="muted" onClick={onRename}>{t("task.rename")}</Action><Action size="compact" tone="danger" onClick={onDelete}>{t("task.delete")}</Action></div></header>
         <div className="conversation-scroll" ref={scrollRef} onScroll={handleConversationScroll}>
           {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} />{!conversation.length && <div className="workbench-empty"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
@@ -167,7 +140,7 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runs, runDetai
     </section>
 
     <aside className={`workbench-inspector ${inspectorCollapsed ? "collapsed" : ""}`} aria-label={t("inspector.aria")}>
-      {inspectorCollapsed ? <div className="workbench-inspector-rail"><button type="button" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><span aria-hidden="true">‹</span><strong>{t("inspector.rail")}</strong></button></div> : <div className="workbench-tabs">{[["status", t("inspector.status")], ["git", t("inspector.git")], ["events", t("inspector.events")]].map(([value, label]) => <button type="button" className={inspectorTab === value ? "active" : ""} aria-pressed={inspectorTab === value} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}<button type="button" className="workbench-inspector-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={toggleInspector}><span aria-hidden="true">›</span></button></div>}
+      {inspectorCollapsed ? <div className="workbench-inspector-rail"><button type="button" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><span aria-hidden="true">‹</span><strong>{t("inspector.rail")}</strong></button></div> : <div className="workbench-tabs">{[["status", t("inspector.status")], ["git", t("inspector.git")], ["events", t("inspector.events")]].map(([value, label]) => <button type="button" className={inspectorTab === value ? "active" : ""} aria-pressed={inspectorTab === value} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}<Action size="compact" tone="muted" className="workbench-inspector-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={toggleInspector}>{t("inspector.collapse")}</Action></div>}
       <div className="workbench-inspector-body" id="workbench-inspector-content" hidden={inspectorCollapsed}>{!inspectorCollapsed && (inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={runWorkerID} notify={notify} /> : <EventInspector detail={runDetail} />)}</div>
     </aside>
   </div>;

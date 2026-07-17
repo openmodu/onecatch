@@ -133,6 +133,90 @@ func newLocalTestApp(t *testing.T, engine workflowuc.Engine) (*App, *localdata.S
 	return app, store
 }
 
+func TestBuiltinWorkflowCanBeRenamedAndDeletedWithoutBeingReseeded(t *testing.T) {
+	app, _ := newLocalTestApp(t, completingEngine{})
+	ctx := context.Background()
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "rename workflow", Prompt: "keep this task runnable"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := builtinDefinitions()[0]
+	updated.ID = "my_single_agent"
+	updated.Name = "My Single Agent"
+	if _, err := app.UpdateDefinition(ctx, "single_agent", updated); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.GetDefinition(ctx, "single_agent"); errorCode(err) != "workflow_not_found" {
+		t.Fatalf("renamed builtin was recreated: %v", err)
+	}
+	migratedTask, err := app.store.Repos.Tasks.GetTask(ctx, task.ID)
+	if err != nil || migratedTask.WorkflowID != updated.ID {
+		t.Fatalf("task workflow reference = %q, %v", migratedTask.WorkflowID, err)
+	}
+	if err := app.DeleteDefinition(ctx, updated.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.GetDefinition(ctx, updated.ID); errorCode(err) != "workflow_not_found" {
+		t.Fatalf("deleted builtin was recreated: %v", err)
+	}
+}
+
+func TestSearchTasksReturnsMatchesAcrossVisibleWorkspaces(t *testing.T) {
+	app, _ := newLocalTestApp(t, completingEngine{})
+	ctx := context.Background()
+	alpha, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir(), Name: "Alpha Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	beta, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir(), Name: "Beta Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: alpha.ID, WorkflowID: "single_agent", Title: "first task", Prompt: "search the workspace name"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.StartRun(ctx, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	second, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: beta.ID, WorkflowID: "single_agent", Title: "second task", Prompt: "find me globally"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := app.SearchTasks(ctx, SearchTasksInput{Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if all.Total != 2 || len(all.Items) != 1 {
+		t.Fatalf("limited search = %+v", all)
+	}
+	byTitle, err := app.SearchTasks(ctx, SearchTasksInput{Keyword: "SECOND", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byTitle.Items) != 1 || byTitle.Items[0].Task.ID != second.ID || byTitle.Items[0].Workspace.ID != beta.ID {
+		t.Fatalf("title search = %+v", byTitle)
+	}
+	byWorkspace, err := app.SearchTasks(ctx, SearchTasksInput{Keyword: "alpha project", Limit: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byWorkspace.Items) != 1 || byWorkspace.Items[0].Task.ID != first.ID || byWorkspace.Items[0].LatestRun == nil {
+		t.Fatalf("workspace search = %+v", byWorkspace)
+	}
+}
+
 func TestDesktopApplicationServiceCreatesAndExecutesRun(t *testing.T) {
 	root := t.TempDir()
 	store, err := localdata.OpenStore(root)

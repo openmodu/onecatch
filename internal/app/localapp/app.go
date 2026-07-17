@@ -31,6 +31,7 @@ import (
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/internal/worker"
 	"github.com/openmodu/oneshot/internal/workspacelock"
+	"github.com/openmodu/oneshot/pkg/localfile"
 )
 
 type Error struct {
@@ -59,6 +60,22 @@ type CreateTaskInput struct {
 	Prompt          string   `json:"prompt"`
 	WorkflowID      string   `json:"workflowId"`
 	AttachmentPaths []string `json:"attachmentPaths,omitempty"`
+}
+
+type SearchTasksInput struct {
+	Keyword string `json:"keyword,omitempty"`
+	Limit   int    `json:"limit,omitempty"`
+}
+
+type TaskSearchItem struct {
+	Task      domaintasks.Task           `json:"task"`
+	Workspace domainworkspaces.Workspace `json:"workspace"`
+	LatestRun *domainworkflows.Run       `json:"latestRun,omitempty"`
+}
+
+type TaskSearchPage struct {
+	Items []TaskSearchItem `json:"items"`
+	Total int              `json:"total"`
 }
 
 type InstructionInput struct {
@@ -317,6 +334,81 @@ func (a *App) ValidateDefinition(input domainworkflows.Definition) []domainworkf
 }
 
 func (a *App) SaveDefinition(ctx context.Context, input domainworkflows.Definition) (domainworkflows.Definition, error) {
+	input, err := a.prepareDefinition(ctx, input)
+	if err != nil {
+		return domainworkflows.Definition{}, err
+	}
+	definition, err := a.store.Repos.Workflows.SaveDefinition(ctx, input)
+	if err != nil {
+		return domainworkflows.Definition{}, mapDefinitionError(err)
+	}
+	return definition, nil
+}
+
+func (a *App) CreateDefinition(ctx context.Context, input domainworkflows.Definition) (domainworkflows.Definition, error) {
+	if _, err := a.store.Repos.Workflows.GetDefinition(ctx, input.ID); err == nil {
+		return domainworkflows.Definition{}, coded("workflow_already_exists", "a workflow with this ID already exists")
+	} else if !errors.Is(err, repoworkflows.ErrDefinitionNotFound) {
+		return domainworkflows.Definition{}, err
+	}
+	return a.SaveDefinition(ctx, input)
+}
+
+func (a *App) UpdateDefinition(ctx context.Context, currentID string, input domainworkflows.Definition) (domainworkflows.Definition, error) {
+	input, err := a.prepareDefinition(ctx, input)
+	if err != nil {
+		return domainworkflows.Definition{}, err
+	}
+	var previous domainworkflows.Definition
+	var taskReferences []domaintasks.Task
+	if currentID != input.ID {
+		previous, err = a.store.Repos.Workflows.GetDefinition(ctx, currentID)
+		if err != nil {
+			return domainworkflows.Definition{}, mapDefinitionError(err)
+		}
+		taskReferences, err = a.store.Repos.Tasks.ListTasks(ctx, "")
+		if err != nil {
+			return domainworkflows.Definition{}, err
+		}
+	}
+	definition, err := a.store.Repos.Workflows.UpdateDefinition(ctx, currentID, input)
+	if err != nil {
+		return domainworkflows.Definition{}, mapDefinitionError(err)
+	}
+	if currentID != definition.ID {
+		var migrated []domaintasks.Task
+		for _, task := range taskReferences {
+			if task.WorkflowID != currentID {
+				continue
+			}
+			original := task
+			task.WorkflowID = definition.ID
+			if err := a.store.Repos.Tasks.SaveTask(ctx, task); err != nil {
+				rollbackErrors := []error{err}
+				if _, rollbackErr := a.store.Repos.Workflows.UpdateDefinition(ctx, definition.ID, previous); rollbackErr != nil {
+					rollbackErrors = append(rollbackErrors, rollbackErr)
+				}
+				for _, migratedTask := range migrated {
+					if rollbackErr := a.store.Repos.Tasks.SaveTask(ctx, migratedTask); rollbackErr != nil {
+						rollbackErrors = append(rollbackErrors, rollbackErr)
+					}
+				}
+				return domainworkflows.Definition{}, fmt.Errorf("migrate workflow task references: %w", errors.Join(rollbackErrors...))
+			}
+			migrated = append(migrated, original)
+		}
+	}
+	return definition, nil
+}
+
+func (a *App) DeleteDefinition(ctx context.Context, id string) error {
+	if err := a.store.Repos.Workflows.DeleteDefinition(ctx, id); err != nil {
+		return mapDefinitionError(err)
+	}
+	return nil
+}
+
+func (a *App) prepareDefinition(ctx context.Context, input domainworkflows.Definition) (domainworkflows.Definition, error) {
 	settings, err := a.settings.Get(ctx)
 	if err != nil {
 		return domainworkflows.Definition{}, mapSettingsError(err)
@@ -333,15 +425,21 @@ func (a *App) SaveDefinition(ctx context.Context, input domainworkflows.Definiti
 	if err := validateDefinitionSettings(input, settings); err != nil {
 		return domainworkflows.Definition{}, err
 	}
-	definition, err := a.store.Repos.Workflows.SaveDefinition(ctx, input)
-	if err != nil {
-		var issues domainworkflows.ValidationErrors
-		if errors.As(err, &issues) {
-			return domainworkflows.Definition{}, coded("workflow_invalid_definition", err.Error())
-		}
-		return domainworkflows.Definition{}, err
+	return input, nil
+}
+
+func mapDefinitionError(err error) error {
+	var issues domainworkflows.ValidationErrors
+	if errors.As(err, &issues) {
+		return coded("workflow_invalid_definition", err.Error())
 	}
-	return definition, nil
+	if errors.Is(err, repoworkflows.ErrDefinitionNotFound) {
+		return coded("workflow_not_found", "workflow was not found")
+	}
+	if errors.Is(err, repoworkflows.ErrDefinitionExists) {
+		return coded("workflow_already_exists", "a workflow with this ID already exists")
+	}
+	return err
 }
 
 func (a *App) ListDefinitions(ctx context.Context) ([]domainworkflows.Definition, error) {
@@ -357,6 +455,12 @@ func (a *App) GetDefinition(ctx context.Context, id string) (domainworkflows.Def
 }
 
 func (a *App) EnsureBuiltinDefinitions(ctx context.Context) error {
+	marker := filepath.Join(a.store.Data.Paths.Workflows, ".builtins-v1")
+	if _, err := os.Stat(marker); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	for _, definition := range builtinDefinitions() {
 		if _, err := a.store.Repos.Workflows.GetDefinition(ctx, definition.ID); err == nil {
 			continue
@@ -365,7 +469,7 @@ func (a *App) EnsureBuiltinDefinitions(ctx context.Context) error {
 			return err
 		}
 	}
-	return nil
+	return localfile.WriteTextAtomic(marker, "seeded\n")
 }
 
 // RecoverInterruptedRuns repairs the narrow crash window between persisting a
@@ -418,6 +522,61 @@ func (a *App) CreateTask(ctx context.Context, input CreateTaskInput) (domaintask
 
 func (a *App) ListTasks(ctx context.Context, workspaceID string) ([]domaintasks.Task, error) {
 	return a.store.Repos.Tasks.ListTasks(ctx, workspaceID)
+}
+
+func (a *App) SearchTasks(ctx context.Context, input SearchTasksInput) (TaskSearchPage, error) {
+	workspaces, err := a.store.Repos.Tasks.ListWorkspaces(ctx)
+	if err != nil {
+		return TaskSearchPage{}, err
+	}
+	workspaceByID := make(map[string]domainworkspaces.Workspace, len(workspaces))
+	for _, workspace := range workspaces {
+		workspaceByID[workspace.ID] = workspace
+	}
+	tasks, err := a.store.Repos.Tasks.ListTasks(ctx, "")
+	if err != nil {
+		return TaskSearchPage{}, err
+	}
+	keyword := strings.ToLower(strings.TrimSpace(input.Keyword))
+	matches := make([]domaintasks.Task, 0, len(tasks))
+	for _, task := range tasks {
+		workspace, visible := workspaceByID[task.WorkspaceID]
+		if !visible {
+			continue
+		}
+		if keyword != "" {
+			haystack := strings.ToLower(strings.Join([]string{task.Title, task.ID, task.Prompt, workspace.Name, workspace.Path}, "\n"))
+			if !strings.Contains(haystack, keyword) {
+				continue
+			}
+		}
+		matches = append(matches, task)
+	}
+	total := len(matches)
+	limit := input.Limit
+	if limit <= 0 {
+		limit = 50
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	if len(matches) > limit {
+		matches = matches[:limit]
+	}
+	items := make([]TaskSearchItem, 0, len(matches))
+	for _, task := range matches {
+		runs, listErr := a.store.Repos.Workflows.ListRunsByTask(ctx, task.ID)
+		if listErr != nil {
+			return TaskSearchPage{}, listErr
+		}
+		item := TaskSearchItem{Task: task, Workspace: workspaceByID[task.WorkspaceID]}
+		if len(runs) > 0 {
+			latest := runs[0]
+			item.LatestRun = &latest
+		}
+		items = append(items, item)
+	}
+	return TaskSearchPage{Items: items, Total: total}, nil
 }
 
 func (a *App) StartRun(ctx context.Context, taskID string) (domainworkflows.Run, error) {

@@ -22,6 +22,14 @@ export function CreateDefinition(input) {
 
 /**
  * @param {string} id
+ * @returns {$CancellablePromise<void>}
+ */
+export function DeleteDefinition(id) {
+    return $Call.ByID(1203332191, id);
+}
+
+/**
+ * @param {string} id
  * @returns {$CancellablePromise<workflows$0.Definition>}
  */
 export function GetDefinition(id) {

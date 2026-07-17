@@ -172,6 +172,52 @@ func TestWorkflowRepoPersistsRunSnapshotAndEvents(t *testing.T) {
 	}
 }
 
+func TestWorkflowRepoRenamesAndDeletesDefinitions(t *testing.T) {
+	ctx := context.Background()
+	store, err := localdata.OpenStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := store.Repos.Workflows.SaveDefinition(ctx, reviewLoopDefinition())
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflict := reviewLoopDefinition()
+	conflict.ID = "other_loop"
+	conflict.Name = "Other Loop"
+	if _, err := store.Repos.Workflows.SaveDefinition(ctx, conflict); err != nil {
+		t.Fatal(err)
+	}
+
+	renamed := original
+	renamed.ID = "renamed_loop"
+	renamed.Name = "Renamed Loop"
+	saved, err := store.Repos.Workflows.UpdateDefinition(ctx, original.ID, renamed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.ID != renamed.ID || saved.Name != renamed.Name || !saved.CreatedAt.Equal(original.CreatedAt) {
+		t.Fatalf("renamed definition = %+v", saved)
+	}
+	if _, err := store.Repos.Workflows.GetDefinition(ctx, original.ID); !errors.Is(err, repoworkflows.ErrDefinitionNotFound) {
+		t.Fatalf("old definition lookup error = %v", err)
+	}
+	if _, err := store.Repos.Workflows.GetDefinition(ctx, renamed.ID); err != nil {
+		t.Fatalf("new definition lookup error = %v", err)
+	}
+
+	renamed.ID = conflict.ID
+	if _, err := store.Repos.Workflows.UpdateDefinition(ctx, saved.ID, renamed); !errors.Is(err, repoworkflows.ErrDefinitionExists) {
+		t.Fatalf("conflicting rename error = %v", err)
+	}
+	if err := store.Repos.Workflows.DeleteDefinition(ctx, saved.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Repos.Workflows.GetDefinition(ctx, saved.ID); !errors.Is(err, repoworkflows.ErrDefinitionNotFound) {
+		t.Fatalf("deleted definition lookup error = %v", err)
+	}
+}
+
 func TestRuntimeEventStoreRejectsUnsafeIDsAndCorruption(t *testing.T) {
 	ctx := context.Background()
 	root := filepath.Join(t.TempDir(), ".oneshot")

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeRunItems, preserveEqualValue, workspaceResults } from "./listNavigation.js";
+import { mergeRunItems, preserveEqualValue, workspaceResults, workspaceSections } from "./listNavigation.js";
 
 test("compact workspaces keep pinned, recent and the current selection", () => {
   const items = Array.from({ length: 10 }, (_, index) => ({ id: `ws-${index}`, name: `Workspace ${index}`, path: `/tmp/${index}`, pinned: index === 3, lastOpenedAt: new Date(2026, 0, index + 1).toISOString() }));
@@ -10,6 +10,15 @@ test("compact workspaces keep pinned, recent and the current selection", () => {
   assert.equal(compact.some((item) => item.id === "ws-0"), true);
   assert.deepEqual(workspaceResults(items, { query: "/tmp/8" }).map((item) => item.id), ["ws-8"]);
   assert.equal(workspaceResults(items, { expanded: true }).length, 10);
+});
+
+test("sidebar separates pinned projects from the compact project list", () => {
+  const items = Array.from({ length: 10 }, (_, index) => ({ id: `ws-${index}`, name: `Workspace ${index}`, path: `/tmp/${index}`, pinned: index < 2, lastOpenedAt: new Date(2026, 0, 10 - index).toISOString() }));
+  const compact = workspaceSections(items, { selectedID: "ws-9", limit: 3 });
+  assert.deepEqual(compact.pinned.map((item) => item.id), ["ws-0", "ws-1"]);
+  assert.equal(compact.projects.length, 3);
+  assert.equal(compact.projects.some((item) => item.id === "ws-9"), true);
+  assert.equal(workspaceSections(items, { expanded: true }).projects.length, 8);
 });
 
 test("run page merge removes duplicate run IDs", () => {

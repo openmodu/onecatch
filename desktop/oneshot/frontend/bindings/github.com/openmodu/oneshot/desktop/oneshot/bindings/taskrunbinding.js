@@ -203,6 +203,16 @@ export function ResumeRun(runID, instruction) {
 }
 
 /**
+ * @param {localapp$0.SearchTasksInput} input
+ * @returns {$CancellablePromise<localapp$0.TaskSearchPage>}
+ */
+export function SearchTasks(input) {
+    return $Call.ByID(679640066, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType12($result);
+    }));
+}
+
+/**
  * @param {string} taskID
  * @param {string} confirmationToken
  * @returns {$CancellablePromise<workflows$0.Run>}
@@ -226,3 +236,4 @@ const $$createType8 = localapp$0.RunListPage.createFrom;
 const $$createType9 = $Create.Array($$createType0);
 const $$createType10 = $Create.Array($$createType1);
 const $$createType11 = localapp$0.RunStartPreview.createFrom;
+const $$createType12 = localapp$0.TaskSearchPage.createFrom;
