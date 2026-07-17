@@ -20,6 +20,7 @@ import (
 
 var (
 	ErrDefinitionNotFound = errors.New("workflow definition not found")
+	ErrDefinitionExists   = errors.New("workflow definition already exists")
 	ErrRunNotFound        = errors.New("workflow run not found")
 	ErrStateConflict      = errors.New("workflow state conflict")
 	ErrInvalidRunCursor   = errors.New("workflow run cursor is invalid")
@@ -27,6 +28,8 @@ var (
 
 type WorkflowsRepo interface {
 	SaveDefinition(context.Context, domainworkflows.Definition) (domainworkflows.Definition, error)
+	UpdateDefinition(context.Context, string, domainworkflows.Definition) (domainworkflows.Definition, error)
+	DeleteDefinition(context.Context, string) error
 	GetDefinition(context.Context, string) (domainworkflows.Definition, error)
 	ListDefinitions(context.Context) ([]domainworkflows.Definition, error)
 	SaveRun(context.Context, domainworkflows.Run, domainworkflows.Definition) error
@@ -110,6 +113,70 @@ func (r *workflowsImpl) SaveDefinition(ctx context.Context, input domainworkflow
 		return domainworkflows.Definition{}, fmt.Errorf("save workflow definition: %w", err)
 	}
 	return def, nil
+}
+
+// UpdateDefinition updates the definition currently stored under currentID.
+// When input.ID changes, the definition is moved to the new ID without
+// rewriting immutable run snapshots that already captured the old definition.
+func (r *workflowsImpl) UpdateDefinition(ctx context.Context, currentID string, input domainworkflows.Definition) (domainworkflows.Definition, error) {
+	if err := ctx.Err(); err != nil {
+		return domainworkflows.Definition{}, err
+	}
+	if !localfile.ValidID(currentID) {
+		return domainworkflows.Definition{}, ErrDefinitionNotFound
+	}
+	def := domainworkflows.Normalize(input)
+	if err := domainworkflows.Validate(def); err != nil {
+		return domainworkflows.Definition{}, err
+	}
+	if !localfile.ValidID(def.ID) {
+		return domainworkflows.Definition{}, errors.New("workflow definition ID is unsafe")
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	current, err := r.getDefinitionLocked(currentID)
+	if err != nil {
+		return domainworkflows.Definition{}, err
+	}
+	if currentID != def.ID {
+		if _, err := r.getDefinitionLocked(def.ID); err == nil {
+			return domainworkflows.Definition{}, ErrDefinitionExists
+		} else if !errors.Is(err, ErrDefinitionNotFound) {
+			return domainworkflows.Definition{}, err
+		}
+	}
+
+	def.CreatedAt = current.CreatedAt
+	def.UpdatedAt = r.now().UTC()
+	if err := localfile.WriteJSONAtomic(r.definitionPath(def.ID), def); err != nil {
+		return domainworkflows.Definition{}, fmt.Errorf("update workflow definition: %w", err)
+	}
+	if currentID != def.ID {
+		if err := os.RemoveAll(r.definitionDir(currentID)); err != nil {
+			_ = os.RemoveAll(r.definitionDir(def.ID))
+			return domainworkflows.Definition{}, fmt.Errorf("remove previous workflow definition: %w", err)
+		}
+	}
+	return def, nil
+}
+
+func (r *workflowsImpl) DeleteDefinition(ctx context.Context, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !localfile.ValidID(id) {
+		return ErrDefinitionNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, err := r.getDefinitionLocked(id); err != nil {
+		return err
+	}
+	if err := os.RemoveAll(r.definitionDir(id)); err != nil {
+		return fmt.Errorf("delete workflow definition: %w", err)
+	}
+	return nil
 }
 
 func (r *workflowsImpl) GetDefinition(ctx context.Context, id string) (domainworkflows.Definition, error) {
@@ -681,7 +748,11 @@ func (r *workflowsImpl) getRunLocked(id string) (domainworkflows.Run, error) {
 }
 
 func (r *workflowsImpl) definitionPath(id string) string {
-	return filepath.Join(r.workflowsRoot, id, "workflow.json")
+	return filepath.Join(r.definitionDir(id), "workflow.json")
+}
+
+func (r *workflowsImpl) definitionDir(id string) string {
+	return filepath.Join(r.workflowsRoot, id)
 }
 
 func (r *workflowsImpl) runPath(id string) string {

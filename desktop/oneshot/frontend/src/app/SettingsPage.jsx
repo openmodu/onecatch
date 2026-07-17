@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
-import { Action, Field, NumberField, SettingPanel as SettingCard, TUISelect, ToggleRow as Toggle } from "../ui/primitives.jsx";
+import { Action, Field, NumberField, SettingPanel as SettingCard, SettingsModule, TUISelect, ToggleRow as Toggle } from "../ui/primitives.jsx";
 
 const sectionMeta = (t) => ["runtime", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const message = (error, t) => String(error?.message || error || t("common.unknownError")).replace(/^Error:\s*/, "");
 const bytes = (value = 0) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : value < 1073741824 ? `${(value / 1048576).toFixed(1)} MB` : `${(value / 1073741824).toFixed(1)} GB`;
 const sectionKey = (section) => section === "runtime" ? "runtimes" : section;
+const runtimeIds = ["codex", "claude", "modu"];
 
 export const demoSettings = {
   schemaVersion: 1, revision: 1,
@@ -191,12 +192,17 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     </aside>
     <section className="settings-content">
       <div className="settings-title">
-        <div><span className="kicker">{t("settings.localSettings")}</span><h2>{activeMeta.label}</h2><p>{activeMeta.description} · {t("settings.revision", { revision: value?.revision || 1 })}</p></div>
-        <div className="settings-title-actions"><TUISelect className="settings-language-select" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={(language) => i18n.changeLanguage(language)} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} /><span className="settings-sync-state">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span><Action onClick={reset}>{t("settings.reset")}</Action></div>
+        <div><span className="kicker">{t("settings.localSettings")}</span><h2>{activeMeta.label}</h2><p>{activeMeta.description}</p></div>
+        <div className="settings-title-actions"><span className="settings-sync-state">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span><Action onClick={reset}>{t("settings.reset")}</Action></div>
       </div>
       {conflict && <div className="settings-banner conflict" role="alert"><div><strong>{t("settings.conflictTitle")}</strong><span>{t("settings.conflictDescription")}</span></div><Action onClick={reload}>{t("settings.reload")}</Action></div>}
       {validationErrors.length > 0 && <div className="settings-banner invalid" role="alert"><div><strong>{t("settings.validationCount", { count: validationErrors.length })}</strong><span>{t("settings.validationDescription")}</span></div></div>}
-      {section === "runtime" && <RuntimeSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} />}
+      {section === "runtime" && <>
+        <InterfaceSettings i18n={i18n} />
+        <SettingsModule className="settings-runtime-module" title={t("settings.agentRuntimes")} description={t("settings.agentRuntimesDescription")}>
+          <RuntimeSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} />
+        </SettingsModule>
+      </>}
       {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
       {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
       {section === "storage" && <StorageSettings value={draft.storage} setValue={(next) => setSectionValue("storage", next)} errors={errorsByField} security={draft.security} diagnosticOptions={diagnosticOptions} setDiagnosticOptions={setDiagnosticOptions} usage={usage} usageLoading={usageLoading} refreshUsage={refreshUsage} preview={preview} previewCleanup={previewCleanup} executeCleanup={executeCleanup} reveal={() => mode === "wails" && SettingsBinding.RevealDataRoot()} diagnosticPath={diagnosticPath} setDiagnosticPath={setDiagnosticPath} exportDiagnostics={exportDiagnostics} />}
@@ -210,6 +216,16 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
   </div>;
 }
 
+function InterfaceSettings({ i18n }) {
+  const { t } = useTranslation();
+  return <SettingsModule className="settings-interface-module" title={t("settings.interface")} description={t("settings.interfaceDescription")}>
+    <div className="settings-option-row">
+      <div><h4>{t("settings.language")}</h4><p>{t("settings.languageDescription")}</p></div>
+      <TUISelect className="settings-language-select" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={(language) => i18n.changeLanguage(language)} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} />
+    </div>
+  </SettingsModule>;
+}
+
 function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
   const { t, i18n } = useTranslation();
   const update = (id, field, next) => setValue({ ...value, [id]: { ...value[id], [field]: next } });
@@ -218,10 +234,10 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
     claude: { name: "Claude Code", command: "claude", description: t("settings.runtimeDescription"), env: "ANTHROPIC_API_KEY, HTTPS_PROXY" },
     modu: { name: "Modu Code", command: "modu_code", description: t("settings.moduDescription"), env: t("settings.optionalEnv") },
   };
-  return <>{["codex", "claude", "modu"].map((id) => {
+  return <>{runtimeIds.map((id) => {
     const current = status[id] || runtimes.find((item) => item.id === id) || {};
     const statusText = current.checking ? t("settings.checkingCommand") : current.available ? `${current.version || t("common.available")}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN")}` : ""}` : current.error || t("settings.notDetected");
-    return <SettingCard className="runtime-setting-card" key={id} title={meta[id].name} description={meta[id].description} aside={<span className={`setting-status ${current.available ? "ok" : current.error ? "bad" : ""}`}><i />{statusText}</span>}>
+    return <SettingCard className="runtime-setting-card" headingLevel={4} key={id} title={meta[id].name} description={meta[id].description} aside={<span className={`setting-status ${current.available ? "ok" : current.error ? "bad" : ""}`}><i />{statusText}</span>}>
       <div className="settings-grid">
         <Field label={t("settings.binaryPath")} hint={t("settings.useCommand", { command: meta[id].command })} error={errors[`${id}.binary`]}><input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={meta[id].command} /></Field>
         <Field label={t("settings.defaultModel")} hint={t("settings.runtimeDecides")} error={errors[`${id}.defaultModel`]}><input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} /></Field>
@@ -236,7 +252,7 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
 function ExecutionSettings({ value, setValue, errors }) {
   const { t } = useTranslation();
   const number = (key, next) => setValue({ ...value, [key]: Number(next) });
-  return <SettingCard title={t("settings.executionPolicy")} description={t("settings.executionPolicyDescription")}>
+  return <SettingsModule title={t("settings.executionPolicy")} description={t("settings.executionPolicyDescription")} bodyClassName="settings-module-content">
     <div className="settings-grid execution-grid">
       <NumberField field="maxTransitions" label={t("settings.maxTransitions")} hint="1–10000" value={value.maxTransitions} error={errors.maxTransitions} onChange={(next) => number("maxTransitions", next)} />
       <NumberField field="maxConsecutiveFailures" label={t("settings.maxFailures")} hint="1–100" value={value.maxConsecutiveFailures} error={errors.maxConsecutiveFailures} onChange={(next) => number("maxConsecutiveFailures", next)} />
@@ -245,21 +261,21 @@ function ExecutionSettings({ value, setValue, errors }) {
       <NumberField field="interruptGraceSeconds" label={t("settings.interruptGrace")} hint={t("settings.secondsRange", { min: 1, max: 60 })} value={value.interruptGraceSeconds} error={errors.interruptGraceSeconds} onChange={(next) => number("interruptGraceSeconds", next)} />
       <Field label={t("workspace.defaultSandbox")} hint={t("settings.noGlobalFullAccess")}><TUISelect ariaLabel={t("workspace.defaultSandbox")} value={value.defaultSandbox} onChange={(defaultSandbox) => setValue({ ...value, defaultSandbox })} options={[{ value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }]} /></Field>
     </div>
-  </SettingCard>;
+  </SettingsModule>;
 }
 
 function SecuritySettings({ value, setValue, confirmFullAccess }) {
   const { t } = useTranslation();
   const toggle = (key) => (checked) => setValue({ ...value, [key]: checked });
   return <>
-    <SettingCard title={t("settings.executionAuth")} description={t("settings.executionAuthDescription")}>
+    <SettingsModule title={t("settings.executionAuth")} description={t("settings.executionAuthDescription")} bodyClassName="settings-module-content settings-toggle-list">
       <Toggle checked={value.allowFullSandbox} onChange={confirmFullAccess} label={t("settings.allowFullAccess")} description={t("settings.fullAccessDanger")} dangerous />
       <Toggle checked={value.confirmFullSandboxEveryRun} onChange={toggle("confirmFullSandboxEveryRun")} label={t("settings.confirmEveryRun")} description={value.allowFullSandbox ? t("settings.confirmEveryRunEnabled") : t("settings.confirmEveryRunDisabled")} disabled={!value.allowFullSandbox} />
-    </SettingCard>
-    <SettingCard title={t("settings.diagnosticPrivacy")} description={t("settings.diagnosticPrivacyDescription")}>
+    </SettingsModule>
+    <SettingsModule title={t("settings.diagnosticPrivacy")} description={t("settings.diagnosticPrivacyDescription")} bodyClassName="settings-module-content settings-toggle-list">
       <Toggle checked={value.diagnosticsIncludePrompt} onChange={toggle("diagnosticsIncludePrompt")} label={t("settings.allowPrompt")} description={t("settings.confirmOnExport")} />
       <Toggle checked={value.diagnosticsIncludeRawEvents} onChange={toggle("diagnosticsIncludeRawEvents")} label={t("settings.allowRawEvents")} description={t("settings.rawEventsDescription")} />
-    </SettingCard>
+    </SettingsModule>
   </>;
 }
 
@@ -267,16 +283,16 @@ function StorageSettings({ value, setValue, errors, security, diagnosticOptions,
   const { t, i18n } = useTranslation();
   const number = (key, next) => setValue({ ...value, [key]: Number(next) });
   return <>
-    <SettingCard title={t("settings.localData")} description={t("settings.localDataDescription")} aside={<Action tone="cyan" onClick={refreshUsage} disabled={usageLoading}>{usageLoading ? t("settings.calculating") : t("settings.recalculate")}</Action>}>
+    <SettingsModule title={t("settings.localData")} description={t("settings.localDataDescription")} aside={<Action tone="cyan" onClick={refreshUsage} disabled={usageLoading}>{usageLoading ? t("settings.calculating") : t("settings.recalculate")}</Action>} bodyClassName="settings-module-content">
       <div className="data-root-row"><div><span>{t("settings.dataRoot")}</span><code>~/.oneshot/</code></div><Action onClick={reveal}>{t("settings.revealFinder")}</Action></div>
       {usage ? <><div className="usage-total">{bytes(usage.totalBytes)} <small>{t("settings.totalUsage")}</small></div><div className="usage-bars">{(usage.categories || []).map((item) => <div key={item.name}><span>{item.name}</span><b>{bytes(item.bytes)}</b><i style={{ width: `${Math.max(3, item.bytes / Math.max(usage.totalBytes, 1) * 100)}%` }} /></div>)}</div><p className="storage-calculated-at">{t("settings.lastCalculated", { time: usage.calculatedAt ? new Date(usage.calculatedAt).toLocaleString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN") : t("settings.justNow") })}</p></> : <div className="settings-inline-empty">{usageLoading ? t("settings.calculatingUsage") : t("settings.noUsage")}</div>}
-    </SettingCard>
-    <SettingCard title={t("settings.historyCleanup")} description={t("settings.historyCleanupDescription")}>
+    </SettingsModule>
+    <SettingsModule title={t("settings.historyCleanup")} description={t("settings.historyCleanupDescription")} bodyClassName="settings-module-content">
       <Field label={t("settings.retention")} hint={t("settings.keepForeverDefault")}><TUISelect ariaLabel={t("settings.retention")} value={value.completedRunRetentionDays} onChange={(retentionDays) => { number("completedRunRetentionDays", retentionDays); setPreview(null); }} options={[{ value: 0, label: t("settings.keepForever") }, { value: 30, label: t("common.daysCount", { count: 30 }) }, { value: 90, label: t("common.daysCount", { count: 90 }) }, { value: 180, label: t("common.daysCount", { count: 180 }) }]} /></Field>
       <div className="settings-actions"><Action tone="muted" disabled={!value.completedRunRetentionDays} onClick={previewCleanup}>{t("settings.previewCleanup")}</Action></div>
       {preview?.token && <div className="cleanup-preview" role="status"><div><span className="kicker">{t("settings.cleanupPreview")}</span><strong>{t("settings.historicalRuns", { count: preview.count })}</strong><p>{t("settings.estimatedRelease", { size: bytes(preview.estimatedBytes) })}</p></div><Action tone="danger" disabled={!preview.count} onClick={executeCleanup}>{t("settings.irreversibleCleanup")}</Action></div>}
-    </SettingCard>
-    <SettingCard title={t("settings.logRotation")} description={t("settings.logRotationDescription")}>
+    </SettingsModule>
+    <SettingsModule title={t("settings.logRotation")} description={t("settings.logRotationDescription")} bodyClassName="settings-module-content">
       <div className="settings-grid">
         <Field label={t("settings.logLevel")} hint={t("settings.recommendedInfo")}><TUISelect ariaLabel={t("settings.logLevel")} value={value.logLevel} onChange={(logLevel) => setValue({ ...value, logLevel })} options={["error", "warn", "info", "debug"]} /></Field>
         <NumberField field="logMaxSizeMB" label={t("settings.logFileSize")} hint="1–1024 MB" value={value.logMaxSizeMB} error={errors.logMaxSizeMB} onChange={(next) => number("logMaxSizeMB", next)} />
@@ -284,13 +300,13 @@ function StorageSettings({ value, setValue, errors, security, diagnosticOptions,
         <NumberField field="logMaxAgeDays" label={t("settings.logRetention")} hint={t("settings.daysRange", { min: 1, max: 365 })} value={value.logMaxAgeDays} error={errors.logMaxAgeDays} onChange={(next) => number("logMaxAgeDays", next)} />
       </div>
       {value.logLevel === "debug" && <div className="settings-note warning"><strong>{t("settings.debugWarning")}</strong><span>{t("settings.debugAdvice")}</span></div>}
-    </SettingCard>
-    <SettingCard title={t("settings.exportDiagnostics")} description={t("settings.exportDiagnosticsDescription")}>
+    </SettingsModule>
+    <SettingsModule title={t("settings.exportDiagnostics")} description={t("settings.exportDiagnosticsDescription")} bodyClassName="settings-module-content settings-toggle-list">
       <Field label={t("settings.zipPath")} hint={t("settings.zipPathHint")}><input value={diagnosticPath} onChange={(event) => setDiagnosticPath(event.target.value)} placeholder="/Users/me/Desktop/oneshot-diagnostics.zip" /></Field>
       <Toggle checked={diagnosticOptions.includePrompt} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includePrompt: checked })} label={t("settings.includePrompt")} description={security.diagnosticsIncludePrompt ? t("settings.confirmOnExport") : t("settings.authorizeSecurity")} disabled={!security.diagnosticsIncludePrompt} />
       <Toggle checked={diagnosticOptions.includeRawEvents} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includeRawEvents: checked })} label={t("settings.includeRawEvents")} description={security.diagnosticsIncludeRawEvents ? t("settings.confirmOnExport") : t("settings.authorizeSecurity")} disabled={!security.diagnosticsIncludeRawEvents} />
       <div className="settings-actions"><Action onClick={exportDiagnostics}>{t("settings.exportZip")}</Action></div>
-    </SettingCard>
+    </SettingsModule>
   </>;
 }
 
@@ -298,13 +314,12 @@ function ExperimentalSettings({ draft, saved, setValue, workersPanel }) {
   const { t } = useTranslation();
   return <>
     <div className="settings-boundary" role="note"><span className="kicker">{t("settings.experimentalBoundary")}</span><strong>{t("settings.remoteTrustedOnly")}</strong><p>{t("settings.remoteBoundaryDescription")}</p></div>
-    <SettingCard title={t("settings.remoteScheduling")} description={t("settings.remoteSchedulingDescription")}>
+    <SettingsModule title={t("settings.remoteScheduling")} description={t("settings.remoteSchedulingDescription")} bodyClassName="settings-module-content settings-toggle-list">
       <Toggle checked={draft.remoteWorkersEnabled} onChange={(checked) => setValue({ ...draft, remoteWorkersEnabled: checked })} label={t("settings.enableRemoteWorker")} description={t("settings.enableRemoteDescription")} />
-    </SettingCard>
+    </SettingsModule>
     {draft.remoteWorkersEnabled && saved.remoteWorkersEnabled && workersPanel}
     {draft.remoteWorkersEnabled && !saved.remoteWorkersEnabled && <div className="settings-pending panel"><strong>{t("settings.enableAfterSave")}</strong><span>{t("settings.enableAfterSaveDescription")}</span></div>}
     {!draft.remoteWorkersEnabled && saved.remoteWorkersEnabled && <div className="settings-pending panel"><strong>{t("settings.disableAfterSave")}</strong><span>{t("settings.disableAfterSaveDescription")}</span></div>}
-    {!draft.remoteWorkersEnabled && !saved.remoteWorkersEnabled && <div className="settings-disabled panel"><strong>{t("settings.remoteDisabled")}</strong><span>{t("settings.remoteDisabledDescription")}</span></div>}
   </>;
 }
 

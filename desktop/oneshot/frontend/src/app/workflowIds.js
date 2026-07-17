@@ -13,3 +13,11 @@ export function nextWorkflowItemID(prefix, steps) {
   while (ids.has(`${marker}${next}`)) next += 1;
   return `${marker}${next}`;
 }
+
+export function nextWorkflowDefinitionID(base, definitions) {
+  const ids = new Set((definitions || []).map((definition) => definition.id));
+  if (!ids.has(base)) return base;
+  let suffix = 2;
+  while (ids.has(`${base}_${suffix}`)) suffix += 1;
+  return `${base}_${suffix}`;
+}

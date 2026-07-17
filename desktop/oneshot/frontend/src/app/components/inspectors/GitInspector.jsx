@@ -81,7 +81,7 @@ function GitInspector({ mode, workspaceID, runWorkerID = "", notify }) {
     {workers.length > 0 && <div className="git-source"><TUISelect ariaLabel={t("inspector.source")} value={source} onChange={setSource} options={sourceOptions} /></div>}
     <div className="git-head">
       <div><Kicker>{t("inspector.repository")}</Kicker><strong>{snapshot?.branch || t("common.loading")}</strong><small>{snapshot?.head ? shortID(snapshot.head) : ""}</small></div>
-      <Action bracket={false} tone="muted" className="git-refresh" disabled={refreshing} aria-label={t("inspector.refreshGit")} onClick={load}>{refreshing ? t("common.refreshing") : t("common.refresh")}</Action>
+      <Action tone="muted" className="git-refresh" disabled={refreshing} aria-label={t("inspector.refreshGit")} onClick={load}>{refreshing ? t("common.refreshing") : t("common.refresh")}</Action>
     </div>
     <div className="git-sync" aria-label={t("inspector.gitSync")}>
       <span>↑ {snapshot?.ahead || 0}</span>

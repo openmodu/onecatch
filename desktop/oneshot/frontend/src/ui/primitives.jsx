@@ -1,5 +1,5 @@
-export function Action({ children, tone = "accent", bracket = true, className = "", type = "button", ...props }) {
-  return <button type={type} className={`ui-action ui-action--${tone} ${className}`.trim()} {...props}>{bracket ? <>[ {children} ]</> : children}</button>;
+export function Action({ children, tone = "accent", size = "regular", className = "", type = "button", ...props }) {
+  return <button type={type} className={`ui-action ui-action--${tone} ui-action--${size} ${className}`.trim()} {...props}>{children}</button>;
 }
 
 export function Kicker({ children, className = "" }) {
@@ -14,9 +14,10 @@ export function ModeBadge({ mode = "serial", children }) {
   return <StatusBadge status={mode}>{children || mode}</StatusBadge>;
 }
 
-export function Panel({ title, description, aside, children, className = "" }) {
+export function Panel({ title, description, aside, children, className = "", headingLevel = 3 }) {
+  const Heading = `h${Math.min(6, Math.max(1, headingLevel))}`;
   return <section className={`ui-panel ${className}`.trim()}>
-    {(title || aside) && <div className="ui-panel__head"><h3 className="ui-panel__title">{title}</h3>{aside}</div>}
+    {(title || aside) && <div className="ui-panel__head"><Heading className="ui-panel__title">{title}</Heading>{aside}</div>}
     {description && <p className="ui-panel__description">{description}</p>}
     {children}
   </section>;
@@ -24,6 +25,13 @@ export function Panel({ title, description, aside, children, className = "" }) {
 
 export function SettingPanel(props) {
   return <Panel {...props} className={`setting-card ${props.className || ""}`.trim()} />;
+}
+
+export function SettingsModule({ title, description, aside, children, className = "", bodyClassName = "" }) {
+  return <section className={`settings-module ${className}`.trim()}>
+    <div className="settings-module-head"><div><h3>{title}</h3>{description && <p>{description}</p>}</div>{aside}</div>
+    <div className={`settings-module-body ${bodyClassName}`.trim()}>{children}</div>
+  </section>;
 }
 
 export function Field({ label, hint, error, helpId, className = "", children }) {
@@ -130,10 +138,10 @@ export function TUISelect({ value, onChange, options = [], ariaLabel, disabled =
 
 export function ToggleRow({ checked, onChange, label, description, dangerous = false, disabled = false }) {
   const { t } = useTranslation();
-  return <button type="button" role="switch" aria-checked={Boolean(checked)} disabled={disabled} className={`ui-toggle-row ${checked ? "ui-toggle-row--checked" : ""} ${dangerous ? "ui-toggle-row--danger" : ""}`.trim()} onClick={() => onChange(!checked)}>
+  return <div className={`ui-toggle-row ${checked ? "ui-toggle-row--checked" : ""} ${dangerous ? "ui-toggle-row--danger" : ""} ${disabled ? "ui-toggle-row--disabled" : ""}`.trim()}>
     <span><strong>{label}</strong><small>{description}</small></span>
-    <span className="ui-toggle-row__state">[ {checked ? t("common.enabled") : t("common.disabled")} ]</span>
-  </button>;
+    <button type="button" role="switch" aria-checked={Boolean(checked)} disabled={disabled} className="ui-toggle-row__state" onClick={() => onChange(!checked)}>{checked ? t("common.enabled") : t("common.disabled")}</button>
+  </div>;
 }
 
 export function Toolbar({ children, className = "" }) {

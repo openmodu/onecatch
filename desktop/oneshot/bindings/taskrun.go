@@ -19,6 +19,9 @@ func (b *TaskRunBinding) CreateTask(input localapp.CreateTaskInput) (domaintasks
 func (b *TaskRunBinding) ListTasks(workspaceID string) ([]domaintasks.Task, error) {
 	return b.app.ListTasks(context.Background(), workspaceID)
 }
+func (b *TaskRunBinding) SearchTasks(input localapp.SearchTasksInput) (localapp.TaskSearchPage, error) {
+	return b.app.SearchTasks(context.Background(), input)
+}
 func (b *TaskRunBinding) RenameTask(taskID, title string) (domaintasks.Task, error) {
 	return b.app.RenameTask(context.Background(), taskID, title)
 }

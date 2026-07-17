@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { nextWorkflowItemID } from "./workflowIds.js";
+import { nextWorkflowDefinitionID, nextWorkflowItemID } from "./workflowIds.js";
 
 test("serial step IDs remain unique after deletion", () => {
   const steps = [{ id: "step_1" }, { id: "step_3" }];
@@ -15,4 +15,10 @@ test("DAG node IDs remain unique after deletion", () => {
 test("non-numeric IDs do not affect the generated sequence", () => {
   const steps = [{ id: "node_review" }, { id: "other_99" }];
   assert.equal(nextWorkflowItemID("node", steps), "node_1");
+});
+
+test("workflow definition IDs are suffixed when a template ID already exists", () => {
+  assert.equal(nextWorkflowDefinitionID("my_loop", [{ id: "other" }]), "my_loop");
+  assert.equal(nextWorkflowDefinitionID("my_loop", [{ id: "my_loop" }]), "my_loop_2");
+  assert.equal(nextWorkflowDefinitionID("my_loop", [{ id: "my_loop" }, { id: "my_loop_2" }, { id: "my_loop_4" }]), "my_loop_3");
 });

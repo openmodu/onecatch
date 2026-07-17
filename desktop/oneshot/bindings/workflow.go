@@ -15,11 +15,13 @@ func (b *WorkflowBinding) ValidateDefinition(input domainworkflows.Definition) [
 	return b.app.ValidateDefinition(input)
 }
 func (b *WorkflowBinding) CreateDefinition(input domainworkflows.Definition) (domainworkflows.Definition, error) {
-	return b.app.SaveDefinition(context.Background(), input)
+	return b.app.CreateDefinition(context.Background(), input)
 }
 func (b *WorkflowBinding) UpdateDefinition(id string, input domainworkflows.Definition) (domainworkflows.Definition, error) {
-	input.ID = id
-	return b.app.SaveDefinition(context.Background(), input)
+	return b.app.UpdateDefinition(context.Background(), id, input)
+}
+func (b *WorkflowBinding) DeleteDefinition(id string) error {
+	return b.app.DeleteDefinition(context.Background(), id)
 }
 func (b *WorkflowBinding) ListDefinitions() ([]domainworkflows.Definition, error) {
 	return b.app.ListDefinitions(context.Background())

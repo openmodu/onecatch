@@ -10,8 +10,8 @@ import {
   WorkerBinding,
 } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
-import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceResults } from "./listNavigation.js";
-import { TUISelect } from "../ui/primitives.jsx";
+import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceSections } from "./listNavigation.js";
+import { Action, TUISelect } from "../ui/primitives.jsx";
 import { copy, errorMessage, fileName } from "./format.js";
 import { loopTemplate } from "./templates.js";
 import { demoRun, demoRuntimes, demoTasks, demoWorkers, demoWorkflows, demoWorkspaces } from "./demoData.js";
@@ -22,6 +22,7 @@ import WorkflowEditor from "./components/workflow/WorkflowEditor.jsx";
 import WorkerPage from "./components/WorkerPage.jsx";
 import Modal from "./components/Modal.jsx";
 import { applyRuntimeFrames } from "./runtimeStream.js";
+import { nextWorkflowDefinitionID } from "./workflowIds.js";
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
 
@@ -41,13 +42,16 @@ function App() {
   const [runStatus, setRunStatus] = useState("");
   const [runSearchDraft, setRunSearchDraft] = useState("");
   const [runKeyword, setRunKeyword] = useState("");
-  const [workspaceQuery, setWorkspaceQuery] = useState("");
+  const [globalSearchQuery, setGlobalSearchQuery] = useState("");
+  const [globalTaskItems, setGlobalTaskItems] = useState([]);
+  const [globalTaskSearchLoading, setGlobalTaskSearchLoading] = useState(false);
   const [workspaceExpanded, setWorkspaceExpanded] = useState(false);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [selectedRunID, setSelectedRunID] = useState("");
   const [selectedQueuedTaskID, setSelectedQueuedTaskID] = useState("");
   const [runDetail, setRunDetail] = useState(null);
   const [editor, setEditor] = useState(null);
+  const [editorSourceID, setEditorSourceID] = useState("");
   const [validation, setValidation] = useState([]);
   const [workspaceModal, setWorkspaceModal] = useState(false);
   const [taskModal, setTaskModal] = useState(false);
@@ -67,6 +71,7 @@ function App() {
   const appDialogResolve = useRef(null);
   const runListLoadVersion = useRef(0);
   const runLoadVersion = useRef(0);
+  const globalTaskSearchVersion = useRef(0);
   const runActionPending = useRef("");
   const selectedRunIDRef = useRef("");
   const liveFramesRef = useRef([]);
@@ -105,7 +110,7 @@ function App() {
   const selectWorkspace = useCallback((nextWorkspaceID) => {
     if (!nextWorkspaceID) return;
     if (nextWorkspaceID === workspaceID) {
-      setWorkspaceQuery("");
+      setGlobalSearchQuery("");
       setWorkspaceSearchOpen(false);
       return;
     }
@@ -121,7 +126,7 @@ function App() {
     setSelectedQueuedTaskID("");
     setRunDetail(null);
     setResumePendingRunID("");
-    setWorkspaceQuery("");
+    setGlobalSearchQuery("");
     setWorkspaceSearchOpen(false);
     if (mode === "wails") WorkspaceBinding.OpenWorkspace(nextWorkspaceID).then(() => WorkspaceBinding.ListWorkspaces()).then((items) => setWorkspaces(items || [])).catch((error) => notify("error", errorMessage(error)));
   }, [mode, notify, workspaceID]);
@@ -171,6 +176,32 @@ function App() {
     const timer = window.setTimeout(() => setRunKeyword(runSearchDraft.trim()), 220);
     return () => window.clearTimeout(timer);
   }, [runSearchDraft]);
+
+  useEffect(() => {
+    if (!workspaceSearchOpen || mode === "loading") return undefined;
+    const loadVersion = ++globalTaskSearchVersion.current;
+    const timer = window.setTimeout(async () => {
+      setGlobalTaskSearchLoading(true);
+      try {
+        if (mode === "demo") {
+          const keyword = globalSearchQuery.trim().toLocaleLowerCase();
+          const workspaceByID = new Map(demoWorkspaces.map((workspace) => [workspace.id, workspace]));
+          const items = demoTasks.map((task) => ({ task, workspace: workspaceByID.get(task.workspaceId), latestRun: demoRun.run.taskId === task.id ? demoRun.run : null }))
+            .filter((item) => item.workspace && (!keyword || `${item.task.title}\n${item.task.prompt}\n${item.workspace.name}\n${item.workspace.path}`.toLocaleLowerCase().includes(keyword)))
+            .slice(0, 50);
+          if (loadVersion === globalTaskSearchVersion.current) setGlobalTaskItems(items);
+          return;
+        }
+        const page = await TaskRunBinding.SearchTasks({ keyword: globalSearchQuery.trim(), limit: 50 });
+        if (loadVersion === globalTaskSearchVersion.current) setGlobalTaskItems(page.items || []);
+      } catch (error) {
+        if (loadVersion === globalTaskSearchVersion.current) notify("error", errorMessage(error));
+      } finally {
+        if (loadVersion === globalTaskSearchVersion.current) setGlobalTaskSearchLoading(false);
+      }
+    }, 140);
+    return () => window.clearTimeout(timer);
+  }, [globalSearchQuery, mode, notify, workspaceSearchOpen]);
 
   const loadRunList = useCallback(async ({ cursor = "" } = {}) => {
     const append = Boolean(cursor);
@@ -606,7 +637,14 @@ function App() {
     }
   };
 
-  const openEditor = (definition) => { const next = copy(definition || loopTemplate); if (!workflows.some((item) => item.id === next.id)) next.policy = { maxTransitions: settings.execution.maxTransitions, maxConsecutiveFailures: settings.execution.maxConsecutiveFailures, stepTimeoutSeconds: settings.execution.stepTimeoutSeconds }; setEditor(next); setValidation([]); };
+  const openEditor = (definition, isNew = false) => {
+    const next = copy(definition || loopTemplate);
+    if (isNew) next.id = nextWorkflowDefinitionID(next.id, workflows);
+    if (isNew || !workflows.some((item) => item.id === next.id)) next.policy = { maxTransitions: settings.execution.maxTransitions, maxConsecutiveFailures: settings.execution.maxConsecutiveFailures, stepTimeoutSeconds: settings.execution.stepTimeoutSeconds };
+    setEditorSourceID(isNew ? "" : next.id);
+    setEditor(next);
+    setValidation([]);
+  };
 
   const updateStep = (index, field, value) => setEditor((current) => ({ ...current, steps: current.steps.map((step, i) => i === index ? { ...step, [field]: value } : step) }));
   const updateTransition = (stepIndex, oldSignal, signal, target) => setEditor((current) => {
@@ -623,13 +661,18 @@ function App() {
 
   const validateEditor = async () => {
     if (!editor) return [];
+    const duplicateID = workflows.some((item) => item.id === editor.id && item.id !== editorSourceID);
+    let issues;
     if (mode === "demo") {
-      const issues = [];
+      issues = [];
       if (!/^[a-z][a-z0-9_-]*$/.test(editor.id)) issues.push({ path: "id", message: t("workflow.lowercaseID") });
       if (!editor.steps?.length) issues.push({ path: "steps", message: t("workflow.stepRequired") });
-      setValidation(issues); return issues;
+    } else {
+      issues = await WorkflowBinding.ValidateDefinition(editor) || [];
     }
-    const issues = await WorkflowBinding.ValidateDefinition(editor); setValidation(issues || []); return issues || [];
+    if (duplicateID) issues = [...issues, { path: "id", code: "duplicate", message: t("workflow.idExists") }];
+    setValidation(issues);
+    return issues;
   };
 
   const saveWorkflow = async () => {
@@ -640,19 +683,35 @@ function App() {
     try {
       let saved = editor;
       if (mode !== "demo") {
-        const exists = workflows.some((item) => item.id === editor.id);
-        saved = exists ? await WorkflowBinding.UpdateDefinition(editor.id, editor) : await WorkflowBinding.CreateDefinition(editor);
+        saved = editorSourceID ? await WorkflowBinding.UpdateDefinition(editorSourceID, editor) : await WorkflowBinding.CreateDefinition(editor);
         setWorkflows(await WorkflowBinding.ListDefinitions());
-      } else setWorkflows((items) => [...items.filter((item) => item.id !== editor.id), editor]);
-      setTaskForm((form) => ({ ...form, workflowId: saved.id })); setEditor(null); notify("success", t("app.workflowSaved"));
+      } else setWorkflows((items) => [...items.filter((item) => item.id !== editor.id && item.id !== editorSourceID), editor]);
+      setTaskForm((form) => ({ ...form, workflowId: saved.id })); setEditor(null); setEditorSourceID(""); notify("success", t("app.workflowSaved"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
-  const visibleWorkspaces = useMemo(() => workspaceResults(workspaces, { selectedID: workspaceID, query: workspaceQuery, expanded: workspaceExpanded }), [workspaceExpanded, workspaceID, workspaceQuery, workspaces]);
-  const goView = useCallback((next) => { setEditor(null); setView(next); }, []);
+  const deleteWorkflow = async (workflow) => {
+    if (!await requestConfirm({ title: t("app.deleteWorkflowTitle", { name: workflow.name }), description: t("app.deleteWorkflowDescription"), detail: t("app.workflowDetail", { name: workflow.name || workflow.id }), confirmLabel: t("app.deleteWorkflow"), dangerous: true })) return;
+    setBusy("delete-workflow");
+    try {
+      let items;
+      if (mode === "demo") items = workflows.filter((item) => item.id !== workflow.id);
+      else {
+        await WorkflowBinding.DeleteDefinition(workflow.id);
+        items = await WorkflowBinding.ListDefinitions();
+      }
+      setWorkflows(items);
+      setTaskForm((form) => form.workflowId === workflow.id ? { ...form, workflowId: items[0]?.id || "" } : form);
+      notify("success", t("app.workflowDeleted"));
+    } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
+  };
+
+  const sidebarWorkspaces = useMemo(() => workspaceSections(workspaces, { selectedID: workspaceID, query: "", expanded: workspaceExpanded }), [workspaceExpanded, workspaceID, workspaces]);
+  const goView = useCallback((next) => { setEditor(null); setEditorSourceID(""); setView(next); }, []);
   const commandText = view === "settings" ? `${t("sidebar.settings")} @ ~/.oneshot` : selectedWorkspace ? `${selectedWorkspace.name} @ ${selectedWorkspace.path}` : t("app.selectWorkspace");
 
-  const toggleWorkspaceSearch = useCallback(() => { setWorkspaceSearchOpen((open) => !open); if (workspaceSearchOpen) setWorkspaceQuery(""); }, [workspaceSearchOpen]);
+  const toggleWorkspaceSearch = useCallback(() => setWorkspaceSearchOpen((open) => !open), []);
+  const clearSidebarSearch = useCallback(() => { setGlobalSearchQuery(""); setGlobalTaskItems([]); }, []);
   const toggleWorkspaceExpanded = useCallback(() => setWorkspaceExpanded((expanded) => !expanded), []);
   const selectRun = useCallback((item) => { setSelectedQueuedTaskID(""); setSelectedRunID(item.id); loadRun(item.id); }, [loadRun]);
   const selectQueued = useCallback((task) => { setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(task.id); }, []);
@@ -665,47 +724,52 @@ function App() {
       <Sidebar
         workspaces={workspaces}
         workspaceID={workspaceID}
-        visibleWorkspaces={visibleWorkspaces}
-        workspaceQuery={workspaceQuery}
+        pinnedWorkspaces={sidebarWorkspaces.pinned}
+        projectWorkspaces={sidebarWorkspaces.projects}
+        searchQuery={globalSearchQuery}
+        searchTaskItems={globalTaskItems}
+        searchLoading={globalTaskSearchLoading}
         workspaceExpanded={workspaceExpanded}
         workspaceSearchOpen={workspaceSearchOpen}
-        runtimes={runtimes}
+        tasks={tasks}
+        runs={runItems}
+        selectedRunID={selectedRunID}
+        selectedQueuedTaskID={selectedQueuedTaskID}
+        runLoading={runLoading}
+        runTotal={runTotal}
+        runHasMore={Boolean(runNextCursor)}
+        taskSearch={runSearchDraft}
+        taskStatus={runStatus}
         view={view}
         editor={editor}
         onToggleSearch={toggleWorkspaceSearch}
-        onQueryChange={setWorkspaceQuery}
+        onClearSearch={clearSidebarSearch}
+        onSearchQueryChange={setGlobalSearchQuery}
         onSelectWorkspace={selectWorkspace}
         onTogglePinned={toggleWorkspacePinned}
         onRemoveWorkspace={removeWorkspace}
         onToggleExpanded={toggleWorkspaceExpanded}
         onAddWorkspace={chooseWorkspace}
+        onNewTask={() => setTaskModal(true)}
+        onLoadMoreRuns={() => loadRunList({ cursor: runNextCursor })}
+        onSelectRun={selectRun}
+        onSelectQueued={selectQueued}
         onGoView={goView}
       />
 
       <main className="main-area">
         <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><span className={`connection ${mode}`}>{mode === "wails" ? t("common.local") : t("common.preview")}</span></div>
-        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => setEditor(null)} /> : view === "tasks" ? <TaskWorkbench
+        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} /> : view === "tasks" ? <TaskWorkbench
           mode={mode}
           workspaceID={workspaceID}
           tasks={tasks}
-          runs={runItems}
           runDetail={runDetail}
           selectedRunID={selectedRunID}
           selectedQueuedTaskID={selectedQueuedTaskID}
           workflows={workflows}
-          loading={runLoading}
-          total={runTotal}
-          hasMore={Boolean(runNextCursor)}
-          search={runSearchDraft}
-          status={runStatus}
           busy={busy}
           attachments={composerAttachments}
-          onSearch={setRunSearchDraft}
-          onStatus={setRunStatus}
           onNewTask={() => setTaskModal(true)}
-          onLoadMore={() => loadRunList({ cursor: runNextCursor })}
-          onSelectRun={selectRun}
-          onSelectQueued={selectQueued}
           onChooseAttachments={() => chooseAttachments("composer")}
           onRemoveAttachment={(path) => setComposerAttachments((items) => items.filter((item) => item !== path))}
           onSubmit={submitWorkbenchComposer}
@@ -715,13 +779,13 @@ function App() {
           onRename={openRenameTask}
           onDelete={deleteSelectedTask}
           notify={notify}
-        /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
+        /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "http://", token: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
     </div>
-    {workspaceModal && <Modal title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>{t("workspace.path")}<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>{t("workspace.displayName")}<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder={t("workspace.defaultName")} /></label><label>{t("workspace.defaultSandbox")}<TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} /></label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkspaceModal(false)}>[ {t("common.cancel")} ]</button><button className="primary-button" onClick={addWorkspace} disabled={busy === "workspace"}>[ {t("workspace.add")} ]</button></div></div></Modal>}
-    {taskModal && <Modal title={t("task.createTitle")} subtitle={t("task.createSubtitle")} onClose={() => setTaskModal(false)}><div className="form-stack task-create-form"><label>{t("task.name")}<input autoFocus value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.namePlaceholder")} /></label><label>{t("task.goal")}<textarea value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.goalPlaceholder")} /></label><label>{t("task.workflow")}<TUISelect ariaLabel={t("task.workflow")} value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><label>{t("task.executionMode")}<TUISelect ariaLabel={t("task.executionMode")} value={taskForm.executionMode} onChange={(executionMode) => setTaskForm((form) => ({ ...form, executionMode }))} options={[{ value: "immediate", label: t("task.runNow") }, { value: "queued", label: t("task.joinQueue") }]} /></label><div className="attachment-picker"><span>{t("task.attachmentsLimit")}</span><button type="button" className="text-button" onClick={() => chooseAttachments("task")}>[ + {t("task.chooseFiles")} ]</button>{taskForm.attachmentPaths?.map((path) => <div className="attachment-chip" key={path}><span title={path}>{fileName(path)}</span><button type="button" onClick={() => setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }))}>×</button></div>)}</div><div className="modal-actions"><button className="secondary-button" onClick={() => setTaskModal(false)}>[ {t("common.cancel")} ]</button><button className="primary-button" onClick={createTaskAndRun} disabled={busy === "run" || !selectedWorkspace}>[ {busy === "run" ? t("task.creating") : taskForm.executionMode === "queued" ? t("task.joinQueue") : t("task.createAndRun")} ]</button></div></div></Modal>}
-    {renameForm && <Modal title={t("task.renameTitle")} subtitle={t("task.renameSubtitle")} onClose={() => busy !== "rename" && setRenameForm(null)}><div className="form-stack"><label>{t("task.name")}<input autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing && busy !== "rename") renameSelectedTask(); }} /></label><div className="modal-actions"><button className="secondary-button" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>[ {t("common.cancel")} ]</button><button className="primary-button" disabled={busy === "rename" || !renameForm.title.trim()} onClick={renameSelectedTask}>[ {busy === "rename" ? t("common.saving") : t("task.saveName")} ]</button></div></div></Modal>}
-    {workerModal && <Modal title={t("worker.modalTitle")} subtitle={t("worker.modalSubtitle")} onClose={() => setWorkerModal(false)}><div className="form-stack"><label>{t("worker.id")}<input value={workerForm.id} onChange={(event) => setWorkerForm((form) => ({ ...form, id: event.target.value }))} placeholder="mac-mini" /></label><label>{t("worker.name")}<input value={workerForm.name} onChange={(event) => setWorkerForm((form) => ({ ...form, name: event.target.value }))} placeholder="Build Mac mini" /></label><label>{t("worker.baseUrl")}<input value={workerForm.baseUrl} onChange={(event) => setWorkerForm((form) => ({ ...form, baseUrl: event.target.value }))} placeholder="http://192.168.1.20:9231" /></label><label>{t("worker.bearerToken")}<input type="password" value={workerForm.token} onChange={(event) => setWorkerForm((form) => ({ ...form, token: event.target.value }))} placeholder={t("worker.keepToken")} /></label><label className="checkbox-label"><input type="checkbox" checked={workerForm.enabled} onChange={(event) => setWorkerForm((form) => ({ ...form, enabled: event.target.checked }))} />{t("worker.enableScheduling")}</label><div className="modal-actions"><button className="secondary-button" onClick={() => setWorkerModal(false)}>[ {t("common.cancel")} ]</button><button className="primary-button" disabled={busy === "worker"} onClick={saveWorker}>[ {t("worker.save")} ]</button></div></div></Modal>}
+    {workspaceModal && <Modal title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>{t("workspace.path")}<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>{t("workspace.displayName")}<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder={t("workspace.defaultName")} /></label><label>{t("workspace.defaultSandbox")}<TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} /></label><div className="modal-actions"><Action tone="muted" onClick={() => setWorkspaceModal(false)}>{t("common.cancel")}</Action><Action tone="primary" onClick={addWorkspace} disabled={busy === "workspace"}>{t("workspace.add")}</Action></div></div></Modal>}
+    {taskModal && <Modal title={t("task.createTitle")} subtitle={t("task.createSubtitle")} onClose={() => setTaskModal(false)}><div className="form-stack task-create-form"><label>{t("task.name")}<input autoFocus value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.namePlaceholder")} /></label><label>{t("task.goal")}<textarea value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.goalPlaceholder")} /></label><label>{t("task.workflow")}<TUISelect ariaLabel={t("task.workflow")} value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><label>{t("task.executionMode")}<TUISelect ariaLabel={t("task.executionMode")} value={taskForm.executionMode} onChange={(executionMode) => setTaskForm((form) => ({ ...form, executionMode }))} options={[{ value: "immediate", label: t("task.runNow") }, { value: "queued", label: t("task.joinQueue") }]} /></label><div className="attachment-picker"><span>{t("task.attachmentsLimit")}</span><Action size="compact" onClick={() => chooseAttachments("task")}>+ {t("task.chooseFiles")}</Action>{taskForm.attachmentPaths?.map((path) => <div className="attachment-chip" key={path}><span title={path}>{fileName(path)}</span><Action size="compact" tone="danger" onClick={() => setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }))}>{t("common.remove")}</Action></div>)}</div><div className="modal-actions"><Action tone="muted" onClick={() => setTaskModal(false)}>{t("common.cancel")}</Action><Action tone="primary" onClick={createTaskAndRun} disabled={busy === "run" || !selectedWorkspace}>{busy === "run" ? t("task.creating") : taskForm.executionMode === "queued" ? t("task.joinQueue") : t("task.createAndRun")}</Action></div></div></Modal>}
+    {renameForm && <Modal title={t("task.renameTitle")} subtitle={t("task.renameSubtitle")} onClose={() => busy !== "rename" && setRenameForm(null)}><div className="form-stack"><label>{t("task.name")}<input autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing && busy !== "rename") renameSelectedTask(); }} /></label><div className="modal-actions"><Action tone="muted" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>{t("common.cancel")}</Action><Action tone="primary" disabled={busy === "rename" || !renameForm.title.trim()} onClick={renameSelectedTask}>{busy === "rename" ? t("common.saving") : t("task.saveName")}</Action></div></div></Modal>}
+    {workerModal && <Modal title={t("worker.modalTitle")} subtitle={t("worker.modalSubtitle")} onClose={() => setWorkerModal(false)}><div className="form-stack"><label>{t("worker.id")}<input value={workerForm.id} onChange={(event) => setWorkerForm((form) => ({ ...form, id: event.target.value }))} placeholder="mac-mini" /></label><label>{t("worker.name")}<input value={workerForm.name} onChange={(event) => setWorkerForm((form) => ({ ...form, name: event.target.value }))} placeholder="Build Mac mini" /></label><label>{t("worker.baseUrl")}<input value={workerForm.baseUrl} onChange={(event) => setWorkerForm((form) => ({ ...form, baseUrl: event.target.value }))} placeholder="http://192.168.1.20:9231" /></label><label>{t("worker.bearerToken")}<input type="password" value={workerForm.token} onChange={(event) => setWorkerForm((form) => ({ ...form, token: event.target.value }))} placeholder={t("worker.keepToken")} /></label><label className="checkbox-label"><input type="checkbox" checked={workerForm.enabled} onChange={(event) => setWorkerForm((form) => ({ ...form, enabled: event.target.checked }))} />{t("worker.enableScheduling")}</label><div className="modal-actions"><Action tone="muted" onClick={() => setWorkerModal(false)}>{t("common.cancel")}</Action><Action tone="primary" disabled={busy === "worker"} onClick={saveWorker}>{t("worker.save")}</Action></div></div></Modal>}
     <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
   </div>;

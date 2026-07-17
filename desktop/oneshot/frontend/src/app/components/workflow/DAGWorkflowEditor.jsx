@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Action, TUISelect } from "../../../ui/primitives.jsx";
 import { nextWorkflowItemID } from "../../workflowIds.js";
 import Modal from "../Modal.jsx";
+import WorkflowIdentityFields from "./WorkflowIdentityFields.jsx";
 
 export default function DAGWorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, runtimes, workers, defaultSandbox, allowFullSandbox, onClose }) {
   const { t } = useTranslation();
@@ -60,7 +61,7 @@ export default function DAGWorkflowEditor({ editor, setEditor, validation, valid
   return <Modal wide title={t("workflow.dagCanvas")} subtitle={t("workflow.dagCanvasSubtitle")} onClose={onClose}>
     <div className="dag-editor-shell">
       <div className="dag-toolbar">
-        <div className="dag-meta"><input value={editor.id} onChange={(event) => setEditor({ ...editor, id: event.target.value })} /><input value={editor.name} onChange={(event) => setEditor({ ...editor, name: event.target.value })} /></div>
+        <WorkflowIdentityFields editor={editor} setEditor={setEditor} validation={validation} />
         <div className="dag-actions"><span className="mode-chip dag">DAG · {t("workflow.allJoin")}</span><Action onClick={autoLayout}>{t("workflow.autoLayout")}</Action><Action tone="primary" onClick={addNode}>{t("workflow.node")}</Action><Action tone="primary" disabled={busy === "workflow"} onClick={saveWorkflow}>{busy === "workflow" ? t("common.saving") : t("workflow.saveDag")}</Action></div>
       </div>
       <div className="dag-workspace">
@@ -91,7 +92,7 @@ export default function DAGWorkflowEditor({ editor, setEditor, validation, valid
           <div className="transition-editor"><span>{t("workflow.terminalSignals")}</span>{Object.entries(selected.transitions || {}).map(([signal, target]) => <div className="transition-row" key={signal}><input value={signal} onChange={(event) => updateSignal(signal, event.target.value, target)} /><span>→</span><TUISelect ariaLabel={`${signal} target`} value={target} onChange={(nextTarget) => updateSignal(signal, signal, nextTarget)} options={[{ value: "$done", label: "$done" }, { value: "$pause", label: "$pause" }, { value: "$fail", label: "$fail" }]} /></div>)}</div>
         </> : null}</aside>
       </div>
-      <div className={`dag-validation ${validation.length ? "has-errors" : ""}`}><button className="text-button" onClick={validateEditor}>{t("workflow.validateDag")}</button>{validation.length ? validation.map((issue) => <span key={`${issue.path}-${issue.code}`}><code>{issue.path}</code>{issue.message}</span>) : <span>{t("workflow.dagValidationHint")}</span>}</div>
+      <div className={`dag-validation ${validation.length ? "has-errors" : ""}`}><Action size="compact" onClick={validateEditor}>{t("workflow.validateDag")}</Action>{validation.length ? validation.map((issue) => <span key={`${issue.path}-${issue.code}`}><code>{issue.path}</code>{issue.message}</span>) : <span>{t("workflow.dagValidationHint")}</span>}</div>
     </div>
   </Modal>;
 }
