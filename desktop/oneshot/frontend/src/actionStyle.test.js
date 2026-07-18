@@ -46,6 +46,9 @@ test("workspace actions use a compact project menu and tasks stay visually light
   assert.match(sidebar, /className="add-workspace"[^>]*>\{t\("sidebar\.addProject"\)\}/);
   assert.match(sidebar, /<Folder(?:Open|Simple)\b/);
   assert.doesNotMatch(sidebar, /<StatusPill\b|project-task-time|project-task-heading/);
+  assert.doesNotMatch(sidebar, /<Info\b/, "selected tasks must use a TUI marker instead of an info icon");
+  assert.match(sidebar, /className="project-task-marker"[^>]*>\{selected \? "\*" : ""\}/);
+  assert.match(sidebar, /aria-current=\{selected \? "page" : undefined\}/);
   assert.match(css, /\.workspace-row-actions\s*\{[^}]*display:\s*none[^}]*\}/s);
   assert.match(css, /\.workspace-row\.active \.workspace-row-actions[^}]*\{\s*display:\s*flex;/s);
   assert.match(css, /\.workspace-context-menu\s*\{[^}]*position:\s*fixed[^}]*width:\s*176px[^}]*\}/s);
@@ -53,6 +56,7 @@ test("workspace actions use a compact project menu and tasks stay visually light
   assert.match(css, /\.workspace-row\.active\s*\{[^}]*background:\s*transparent[^}]*box-shadow:\s*none[^}]*\}/s, "active project containers must not tint the whole task list");
   assert.match(css, /\.workspace-row\.active > \.workspace-item\s*\{[^}]*background:/s, "active project background must stay on the project row");
   assert.match(css, /\.project-task-item\.selected\s*\{[^}]*box-shadow:\s*none[^}]*\}/s, "selected tasks must not use a leading accent rail");
+  assert.match(css, /\.project-task-panel\s*\{[^}]*margin:\s*1px 4px 7px 18px[^}]*\}/s, "nested tasks must keep a compact TUI indent");
 });
 
 test("sidebar reserves its footer for navigation and exposes a resize separator", async () => {
@@ -73,7 +77,19 @@ test("workflow and settings share one expandable footer menu", async () => {
   assert.match(sidebar, /role="menuitem"[^>]*onClick=\{\(\) => goToSecondaryView\("workflows"\)\}/);
   assert.match(sidebar, /role="menuitem"[^>]*onClick=\{\(\) => goToSecondaryView\("settings"\)\}/);
   assert.match(css, /\.primary-nav\s*\{[^}]*position:\s*relative[^}]*\}/s);
+  assert.match(css, /\.primary-nav \.secondary-navigation-trigger\s*\{[^}]*border-radius:\s*0[^}]*background:\s*transparent[^}]*\}/s, "the footer menu must remain an edge-aligned TUI row");
+  assert.doesNotMatch(sidebar, /<(?:List|GitBranch|GearSix)\b/, "footer navigation must stay text-first");
   assert.match(css, /\.secondary-navigation-menu\s*\{[^}]*position:\s*absolute[^}]*bottom:\s*calc\(100% \+ 6px\)[^}]*\}/s);
+});
+
+test("appearance controls use text-first TUI geometry", async () => {
+  const settings = await readFile(path.join(sourceRoot, "app", "SettingsPage.jsx"), "utf8");
+  const css = await readFile(path.join(sourceRoot, "mirage.css"), "utf8");
+  assert.doesNotMatch(settings, /from "@phosphor-icons\/react"/, "appearance settings must not import decorative icons");
+  assert.match(settings, /className="appearance-mode-picker"[^>]*role="radiogroup"/);
+  assert.match(settings, /className="appearance-accent-picker"[^>]*role="radiogroup"/);
+  assert.match(css, /\.appearance-accent\s*\{[^}]*border-radius:\s*0[^}]*\}/s);
+  assert.doesNotMatch(css, /\.appearance-accent\s*\{[^}]*border-radius:\s*50%/s);
 });
 
 test("sidebar orders global search, pinned projects, projects, and nested tasks", async () => {

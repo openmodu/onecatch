@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 import { Action, Field, NumberField, SettingPanel as SettingCard, SettingsModule, TUISelect, ToggleRow as Toggle } from "../ui/primitives.jsx";
+import { accentThemes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
 
 const sectionMeta = (t) => ["runtime", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -218,10 +219,24 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
 
 function InterfaceSettings({ i18n }) {
   const { t } = useTranslation();
+  const [appearance, setAppearance] = useState(readAppearance);
+  const updateAppearance = (change) => setAppearance((current) => saveAppearance({ ...current, ...change }));
   return <SettingsModule className="settings-interface-module" title={t("settings.interface")} description={t("settings.interfaceDescription")}>
     <div className="settings-option-row">
       <div><h4>{t("settings.language")}</h4><p>{t("settings.languageDescription")}</p></div>
       <TUISelect className="settings-language-select" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={(language) => i18n.changeLanguage(language)} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} />
+    </div>
+    <div className="settings-option-row appearance-mode-row">
+      <div><h4>{t("settings.colorMode")}</h4><p>{t("settings.colorModeDescription")}</p></div>
+      <div className="appearance-mode-picker" role="radiogroup" aria-label={t("settings.colorMode")}>
+        {themeModes.map((mode) => <button type="button" role="radio" aria-checked={appearance.theme === mode} className={appearance.theme === mode ? "active" : ""} key={mode} onClick={() => updateAppearance({ theme: mode })}>{t(`settings.colorMode.${mode}`)}</button>)}
+      </div>
+    </div>
+    <div className="settings-option-row appearance-accent-row">
+      <div><h4>{t("settings.themeColor")}</h4><p>{t("settings.themeColorDescription")}</p></div>
+      <div className="appearance-accent-picker" role="radiogroup" aria-label={t("settings.themeColor")}>
+        {accentThemes.map((accent) => <button type="button" role="radio" aria-checked={appearance.accent === accent} className={`appearance-accent appearance-accent--${accent} ${appearance.accent === accent ? "active" : ""}`} key={accent} onClick={() => updateAppearance({ accent })}>{t(`settings.themeColor.${accent}`)}</button>)}
+      </div>
     </div>
   </SettingsModule>;
 }
