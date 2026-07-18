@@ -41,6 +41,12 @@ type GitFile struct {
 	Worktree string `json:"worktree"`
 }
 
+type GitBranch struct {
+	Name     string `json:"name"`
+	Current  bool   `json:"current"`
+	Upstream string `json:"upstream,omitempty"`
+}
+
 func Validate(workspace Workspace) error {
 	if strings.TrimSpace(workspace.ID) == "" || strings.TrimSpace(workspace.Name) == "" || !filepath.IsAbs(workspace.Path) {
 		return ErrInvalid

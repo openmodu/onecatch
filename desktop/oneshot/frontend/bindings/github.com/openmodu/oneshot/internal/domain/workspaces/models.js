@@ -6,6 +6,48 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+export class GitBranch {
+    /**
+     * Creates a new GitBranch instance.
+     * @param {Partial<GitBranch>} [$$source = {}] - The source object to create the GitBranch.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("current" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["current"] = false;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["upstream"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GitBranch instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {GitBranch}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GitBranch(/** @type {Partial<GitBranch>} */($$parsedSource));
+    }
+}
+
 export class GitFile {
     /**
      * Creates a new GitFile instance.
