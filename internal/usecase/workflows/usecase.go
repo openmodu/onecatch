@@ -460,15 +460,18 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 
 		collector := s.newRuntimeCollector(run.ID, stepRun.ID)
 		request := agentrun.Request{
-			Runtime:              runtime,
-			Workspace:            workspace.Path,
-			Prompt:               composePrompt(task, definition, step, run, instruction),
-			Model:                step.Model,
-			Sandbox:              allowedSandbox(step.Sandbox, workspace.DefaultSandbox),
-			ResumeSessionID:      run.Sessions[step.ID],
-			EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime),
-			Provider:             resolvedRuntimeProvider(run, step.Runtime),
-			InterruptGrace:       time.Duration(run.InterruptGraceSeconds) * time.Second,
+			Runtime:                 runtime,
+			Workspace:               workspace.Path,
+			Prompt:                  composePrompt(task, definition, step, run, instruction),
+			Model:                   step.Model,
+			ReasoningEffort:         resolvedReasoningEffort(run, step.Runtime),
+			ServiceTier:             resolvedServiceTier(run, step.Runtime),
+			Sandbox:                 allowedSandbox(step.Sandbox, workspace.DefaultSandbox),
+			ResumeSessionID:         run.Sessions[step.ID],
+			EnvironmentAllowlist:    resolvedEnvironmentAllowlist(run, step.Runtime),
+			Provider:                resolvedRuntimeProvider(run, step.Runtime),
+			InterruptGrace:          time.Duration(run.InterruptGraceSeconds) * time.Second,
+			RuntimeDefaultsResolved: true,
 		}
 		result, runErr := s.dispatchStep(ctx, definition, step, workspace.ID, request, collector.Sink())
 		if streamErr := collector.Close(); streamErr != nil && runErr == nil {
@@ -637,6 +640,20 @@ func resolvedRuntimeProvider(run domainworkflows.Run, runtime string) string {
 		return ""
 	}
 	return run.RuntimeSettings[runtime].Provider
+}
+
+func resolvedReasoningEffort(run domainworkflows.Run, runtime string) string {
+	if run.RuntimeSettings == nil {
+		return ""
+	}
+	return run.RuntimeSettings[runtime].ReasoningEffort
+}
+
+func resolvedServiceTier(run domainworkflows.Run, runtime string) string {
+	if run.RuntimeSettings == nil {
+		return ""
+	}
+	return run.RuntimeSettings[runtime].ServiceTier
 }
 
 func (s *Usecase) loadTaskContext(ctx context.Context, taskID string) (domaintasks.Task, domainworkspaces.Workspace, domainworkflows.Definition, error) {

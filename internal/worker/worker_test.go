@@ -31,6 +31,17 @@ func (fakeEngine) Run(_ context.Context, request agentrun.Request, sink agentrun
 	return agentrun.Result{Succeeded: true, SessionID: "remote-session", FinalMessage: `{"signal":"completed","content":"remote done"}`}, nil
 }
 
+type capturingEngine struct{ requests chan agentrun.Request }
+
+func (capturingEngine) Available(runtime agentrun.Runtime) bool {
+	return runtime == agentrun.RuntimeCodex
+}
+func (e capturingEngine) Run(_ context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
+	e.requests <- request
+	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: request.Workspace})
+	return agentrun.Result{Succeeded: true, SessionID: "remote-session", FinalMessage: `{"signal":"completed","content":"remote done"}`}, nil
+}
+
 // blockingEngine streams one event, signals it started, then blocks until
 // either the run context is cancelled (a real interrupt) or release is closed
 // (a test-cleanup backstop so a blocked run never hangs server.Close).
@@ -79,7 +90,8 @@ func TestRegistryMasksTokenAndUsesPrivateFile(t *testing.T) {
 }
 
 func TestServerAuthenticatesAndStreamsMappedWorkspace(t *testing.T) {
-	server := httptest.NewServer(NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, fakeEngine{}, 0).Handler())
+	engine := capturingEngine{requests: make(chan agentrun.Request, 1)}
+	server := httptest.NewServer(NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, engine, 0).Handler())
 	defer server.Close()
 	unauthorized, err := http.Get(server.URL + "/v1/health")
 	if err != nil {
@@ -96,9 +108,13 @@ func TestServerAuthenticatesAndStreamsMappedWorkspace(t *testing.T) {
 		t.Fatalf("health = %+v, %v", health, err)
 	}
 	var events []agentrun.Event
-	result, err := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-1", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Sandbox: agentrun.SandboxReadOnly, Prompt: "review"}, func(e agentrun.Event) { events = append(events, e) })
+	result, err := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-1", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Model: "gpt-test", ReasoningEffort: "high", ServiceTier: "priority", Sandbox: agentrun.SandboxReadOnly, Prompt: "review"}, func(e agentrun.Event) { events = append(events, e) })
 	if err != nil || !result.Succeeded || len(events) != 1 || events[0].Text != "/tmp/project" {
 		t.Fatalf("execute result=%+v events=%+v err=%v", result, events, err)
+	}
+	request := <-engine.requests
+	if request.Model != "gpt-test" || request.ReasoningEffort != "high" || request.ServiceTier != "priority" {
+		t.Fatalf("remote model settings = %+v", request)
 	}
 	_, err = client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-2", WorkspaceID: "missing", Runtime: agentrun.RuntimeCodex, Prompt: "review"}, nil)
 	var remote RemoteError

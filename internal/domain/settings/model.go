@@ -34,6 +34,8 @@ type Settings struct {
 type RuntimeSettings struct {
 	Binary               string   `json:"binary,omitempty"`
 	DefaultModel         string   `json:"defaultModel,omitempty"`
+	ReasoningEffort      string   `json:"reasoningEffort,omitempty"`
+	ServiceTier          string   `json:"serviceTier,omitempty"`
 	Provider             string   `json:"provider,omitempty"`
 	EnvironmentAllowlist []string `json:"environmentAllowlist,omitempty"`
 }
@@ -141,6 +143,8 @@ func Normalize(input Settings) (Settings, error) {
 	for id, runtime := range input.Runtimes {
 		runtime.Binary = strings.TrimSpace(runtime.Binary)
 		runtime.DefaultModel = strings.TrimSpace(runtime.DefaultModel)
+		runtime.ReasoningEffort = strings.ToLower(strings.TrimSpace(runtime.ReasoningEffort))
+		runtime.ServiceTier = strings.ToLower(strings.TrimSpace(runtime.ServiceTier))
 		runtime.Provider = strings.ToLower(strings.TrimSpace(runtime.Provider))
 		runtime.EnvironmentAllowlist = normalizeKeys(runtime.EnvironmentAllowlist)
 		input.Runtimes[id] = runtime
@@ -148,7 +152,10 @@ func Normalize(input Settings) (Settings, error) {
 	return input, nil
 }
 
-var environmentKey = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,127}$`)
+var (
+	environmentKey = regexp.MustCompile(`^[A-Z_][A-Z0-9_]{0,127}$`)
+	serviceTierKey = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
+)
 
 func Validate(input Settings) error {
 	if input.SchemaVersion != CurrentSchemaVersion {
@@ -161,8 +168,18 @@ func Validate(input Settings) error {
 		if id != "codex" && id != "claude" && id != "modu" {
 			return fmt.Errorf("unknown runtime %q", id)
 		}
-		if strings.ContainsAny(runtime.Binary+runtime.DefaultModel+runtime.Provider, "\r\n\x00") {
+		if strings.ContainsAny(runtime.Binary+runtime.DefaultModel+runtime.ReasoningEffort+runtime.ServiceTier+runtime.Provider, "\r\n\x00") {
 			return fmt.Errorf("runtime %s contains control characters", id)
+		}
+		if id == "codex" {
+			if !contains([]string{"", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}, runtime.ReasoningEffort) {
+				return errors.New("codex reasoning effort is invalid")
+			}
+			if runtime.ServiceTier != "" && !serviceTierKey.MatchString(runtime.ServiceTier) {
+				return errors.New("codex service tier is invalid")
+			}
+		} else if runtime.ReasoningEffort != "" || runtime.ServiceTier != "" {
+			return fmt.Errorf("runtime %s does not support Codex model settings", id)
 		}
 		if id == "modu" {
 			if !contains([]string{"", "auto", "openai", "anthropic", "gemini"}, runtime.Provider) {

@@ -41,6 +41,159 @@ func (r *CodexRunner) Available() bool {
 	return err == nil
 }
 
+type CodexServiceTier struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+type CodexModelInfo struct {
+	ID                     string             `json:"id"`
+	Model                  string             `json:"model"`
+	DisplayName            string             `json:"displayName"`
+	Description            string             `json:"description,omitempty"`
+	DefaultReasoningEffort string             `json:"defaultReasoningEffort"`
+	ReasoningEfforts       []string           `json:"reasoningEfforts"`
+	ServiceTiers           []CodexServiceTier `json:"serviceTiers,omitempty"`
+	DefaultServiceTier     string             `json:"defaultServiceTier,omitempty"`
+	IsDefault              bool               `json:"isDefault"`
+}
+
+type CodexConfiguration struct {
+	Model           string           `json:"model,omitempty"`
+	ReasoningEffort string           `json:"reasoningEffort,omitempty"`
+	ServiceTier     string           `json:"serviceTier,omitempty"`
+	Models          []CodexModelInfo `json:"models"`
+}
+
+// InspectConfiguration reads Codex's effective configuration and model catalog
+// through app-server without starting a thread or consuming model quota.
+func (r *CodexRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (CodexConfiguration, error) {
+	cmd := exec.CommandContext(ctx, r.binary, "app-server", "--listen", "stdio://")
+	if cwd != "" {
+		cmd.Dir = cwd
+	}
+	cmd.Env = environment
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return CodexConfiguration{}, fmt.Errorf("Codex app-server stdin: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return CodexConfiguration{}, fmt.Errorf("Codex app-server stdout: %w", err)
+	}
+	var stderr lineCapture
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return CodexConfiguration{}, fmt.Errorf("start Codex app-server: %w", err)
+	}
+	defer stopCodexAppServer(cmd, stdin)
+
+	encoder := json.NewEncoder(stdin)
+	if err := encoder.Encode(map[string]any{
+		"id": 1, "method": "initialize",
+		"params": map[string]any{
+			"clientInfo":   map[string]string{"name": "oneshot", "title": "Oneshot", "version": "0.1.0"},
+			"capabilities": map[string]any{"experimentalApi": true, "requestAttestation": false},
+		},
+	}); err != nil {
+		return CodexConfiguration{}, fmt.Errorf("initialize Codex app-server: %w", err)
+	}
+
+	var configuration CodexConfiguration
+	gotConfig, gotModels := false, false
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var envelope codexAppEnvelope
+		if json.Unmarshal([]byte(line), &envelope) != nil {
+			continue
+		}
+		if envelope.Method != "" && len(envelope.ID) > 0 {
+			_ = respondUnsupportedCodexRequest(encoder, envelope)
+			continue
+		}
+		switch responseID(envelope.ID) {
+		case 1:
+			if len(envelope.Error) > 0 {
+				return CodexConfiguration{}, fmt.Errorf("initialize Codex app-server: %s", envelope.Error)
+			}
+			if err := encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
+				return CodexConfiguration{}, err
+			}
+			if err := encoder.Encode(map[string]any{"id": 2, "method": "config/read", "params": map[string]any{"includeLayers": false}}); err != nil {
+				return CodexConfiguration{}, err
+			}
+			if err := encoder.Encode(map[string]any{"id": 3, "method": "model/list", "params": map[string]any{"includeHidden": false}}); err != nil {
+				return CodexConfiguration{}, err
+			}
+		case 2:
+			if len(envelope.Error) > 0 {
+				return CodexConfiguration{}, fmt.Errorf("read Codex configuration: %s", envelope.Error)
+			}
+			var response struct {
+				Config struct {
+					Model           string `json:"model"`
+					ReasoningEffort string `json:"model_reasoning_effort"`
+					ServiceTier     string `json:"service_tier"`
+				} `json:"config"`
+			}
+			if err := json.Unmarshal(envelope.Result, &response); err != nil {
+				return CodexConfiguration{}, fmt.Errorf("decode Codex configuration: %w", err)
+			}
+			configuration.Model = response.Config.Model
+			configuration.ReasoningEffort = response.Config.ReasoningEffort
+			configuration.ServiceTier = response.Config.ServiceTier
+			gotConfig = true
+		case 3:
+			if len(envelope.Error) > 0 {
+				return CodexConfiguration{}, fmt.Errorf("list Codex models: %s", envelope.Error)
+			}
+			var response struct {
+				Data []struct {
+					ID                     string `json:"id"`
+					Model                  string `json:"model"`
+					DisplayName            string `json:"displayName"`
+					Description            string `json:"description"`
+					DefaultReasoningEffort string `json:"defaultReasoningEffort"`
+					SupportedEfforts       []struct {
+						ReasoningEffort string `json:"reasoningEffort"`
+					} `json:"supportedReasoningEfforts"`
+					ServiceTiers       []CodexServiceTier `json:"serviceTiers"`
+					DefaultServiceTier string             `json:"defaultServiceTier"`
+					IsDefault          bool               `json:"isDefault"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(envelope.Result, &response); err != nil {
+				return CodexConfiguration{}, fmt.Errorf("decode Codex models: %w", err)
+			}
+			configuration.Models = make([]CodexModelInfo, 0, len(response.Data))
+			for _, item := range response.Data {
+				model := CodexModelInfo{ID: item.ID, Model: item.Model, DisplayName: item.DisplayName, Description: item.Description, DefaultReasoningEffort: item.DefaultReasoningEffort, ServiceTiers: item.ServiceTiers, DefaultServiceTier: item.DefaultServiceTier, IsDefault: item.IsDefault}
+				for _, effort := range item.SupportedEfforts {
+					model.ReasoningEfforts = append(model.ReasoningEfforts, effort.ReasoningEffort)
+				}
+				configuration.Models = append(configuration.Models, model)
+			}
+			gotModels = true
+		}
+		if gotConfig && gotModels {
+			return configuration, nil
+		}
+	}
+	if err := scanner.Err(); err != nil && ctx.Err() == nil {
+		return CodexConfiguration{}, fmt.Errorf("read Codex app-server: %w", err)
+	}
+	if ctx.Err() != nil {
+		return CodexConfiguration{}, ctx.Err()
+	}
+	return CodexConfiguration{}, fmt.Errorf("Codex app-server ended before configuration was available%s", stderr.tail())
+}
+
 func (r *CodexRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
 	result, err := r.runAppServer(ctx, req, sink)
 	if !errors.Is(err, errCodexAppServerUnavailable) {
@@ -71,6 +224,19 @@ func (r *CodexRunner) runExec(ctx context.Context, req Request, sink Sink) (Resu
 	}
 	if req.Model != "" {
 		args = append(args, "-m", req.Model)
+	}
+	if req.ReasoningEffort != "" {
+		args = append(args, "-c", `model_reasoning_effort="`+req.ReasoningEffort+`"`)
+	}
+	if req.ServiceTier != "" {
+		tier := req.ServiceTier
+		if tier == "standard" {
+			tier = "default"
+		}
+		args = append(args, "-c", `service_tier="`+tier+`"`)
+		if req.ServiceTier == "fast" {
+			args = append(args, "-c", "features.fast_mode=true")
+		}
 	}
 	args = append(args, req.Prompt)
 
@@ -169,7 +335,11 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 	if sink == nil {
 		sink = func(Event) {}
 	}
-	cmd := exec.CommandContext(ctx, r.binary, "app-server", "--listen", "stdio://")
+	commandArgs := []string{"app-server", "--listen", "stdio://"}
+	if req.ServiceTier == "fast" {
+		commandArgs = append(commandArgs, "-c", "features.fast_mode=true")
+	}
+	cmd := exec.CommandContext(ctx, r.binary, commandArgs...)
 	cmd.Dir = req.Workspace
 	cmd.Env = req.Environment
 	if req.InterruptGrace > 0 {
@@ -235,6 +405,13 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 			if req.Model != "" {
 				params["model"] = req.Model
 			}
+			if req.ServiceTier != "" {
+				if req.ServiceTier == "standard" {
+					params["serviceTier"] = nil
+				} else {
+					params["serviceTier"] = req.ServiceTier
+				}
+			}
 			if err := encoder.Encode(map[string]any{"id": 2, "method": method, "params": params}); err != nil {
 				return Result{}, err
 			}
@@ -258,9 +435,23 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 			threadStarted = true
 			state.sessionID = response.Thread.ID
 			sink(Event{Kind: KindStarted, Text: response.Thread.ID, Raw: line, At: r.now()})
+			turnParams := map[string]any{"threadId": response.Thread.ID, "input": []map[string]string{{"type": "text", "text": req.Prompt}}}
+			if req.Model != "" {
+				turnParams["model"] = req.Model
+			}
+			if req.ReasoningEffort != "" {
+				turnParams["effort"] = req.ReasoningEffort
+			}
+			if req.ServiceTier != "" {
+				if req.ServiceTier == "standard" {
+					turnParams["serviceTier"] = nil
+				} else {
+					turnParams["serviceTier"] = req.ServiceTier
+				}
+			}
 			if err := encoder.Encode(map[string]any{
 				"id": 3, "method": "turn/start",
-				"params": map[string]any{"threadId": response.Thread.ID, "input": []map[string]string{{"type": "text", "text": req.Prompt}}},
+				"params": turnParams,
 			}); err != nil {
 				return Result{}, err
 			}

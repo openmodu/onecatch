@@ -415,6 +415,8 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .runtime-setting-card .setting-status { max-width: 300px; padding: 4px 8px; border: 1px solid var(--acp-line); background: var(--acp-ink); }
 .runtime-setting-card .setting-status i { display: block; }
 .runtime-setting-card .settings-actions { margin-top: 10px; padding-top: 0; border-top: 0; }
+.codex-config-state { margin: 0 0 12px; padding: 8px 10px; border-left: 2px solid var(--acp-cyan); background: color-mix(in oklab, var(--acp-cyan) 6%, transparent); color: var(--acp-text-muted); font-size: var(--ui-font-micro); line-height: 1.5; }
+.codex-config-state.bad { border-left-color: var(--acp-danger); background: color-mix(in oklab, var(--acp-danger) 6%, transparent); color: var(--acp-danger); }
 .setting-card-head { margin: 0 0 12px; padding: 0; border: 0; }
 .setting-card-head h3 { font-size: var(--ui-font-body); }
 .setting-card-head p { margin-top: 5px; color: var(--acp-text-soft); font-size: var(--ui-font-caption); }

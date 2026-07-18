@@ -60,8 +60,16 @@ func (r *RuntimeRegistry) Run(ctx context.Context, request agentrun.Request, sin
 	runtimeSettings := r.settings[string(request.Runtime)]
 	interruptGrace := r.interruptGrace
 	r.mu.RUnlock()
-	if request.Model == "" {
-		request.Model = runtimeSettings.DefaultModel
+	if !request.RuntimeDefaultsResolved {
+		if request.Model == "" {
+			request.Model = runtimeSettings.DefaultModel
+		}
+		if request.ReasoningEffort == "" {
+			request.ReasoningEffort = runtimeSettings.ReasoningEffort
+		}
+		if request.ServiceTier == "" {
+			request.ServiceTier = runtimeSettings.ServiceTier
+		}
 	}
 	allowlist := runtimeSettings.EnvironmentAllowlist
 	if request.EnvironmentAllowlist != nil {

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/desktop/oneshot/bindings/index.js";
 import { Action, Field, NumberField, SettingPanel as SettingCard, SettingsModule, TUISelect, ToggleRow as Toggle } from "../ui/primitives.jsx";
 import { accentThemes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
+import { codexEffortValues, codexServiceTierValues, selectedCodexModel } from "./codexRuntimeOptions.js";
 
 const sectionMeta = (t) => ["runtime", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -13,7 +14,7 @@ const runtimeIds = ["codex", "claude", "modu"];
 
 export const demoSettings = {
   schemaVersion: 1, revision: 1,
-  runtimes: { codex: { binary: "", defaultModel: "", environmentAllowlist: [] }, claude: { binary: "", defaultModel: "", environmentAllowlist: [] }, modu: { binary: "", defaultModel: "", provider: "auto", environmentAllowlist: [] } },
+  runtimes: { codex: { binary: "", defaultModel: "", reasoningEffort: "", serviceTier: "", environmentAllowlist: [] }, claude: { binary: "", defaultModel: "", environmentAllowlist: [] }, modu: { binary: "", defaultModel: "", provider: "auto", environmentAllowlist: [] } },
   execution: { maxTransitions: 20, maxConsecutiveFailures: 3, stepTimeoutSeconds: 1800, maxLocalDAGConcurrency: 4, interruptGraceSeconds: 10, defaultSandbox: "workspace-write" },
   security: { allowFullSandbox: false, confirmFullSandboxEveryRun: true, diagnosticsIncludePrompt: false, diagnosticsIncludeRawEvents: false },
   storage: { completedRunRetentionDays: 0, logLevel: "info", logMaxSizeMB: 20, logMaxBackups: 5, logMaxAgeDays: 14 },
@@ -73,6 +74,8 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
   const [draft, setDraft] = useState(() => clone(value || demoSettings));
   const [saving, setSaving] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState({});
+  const [codexConfiguration, setCodexConfiguration] = useState({ loading: false, data: null, error: "" });
+  const codexAutoChecked = useRef(false);
   const [usage, setUsage] = useState(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -139,8 +142,31 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     try {
       const result = mode === "demo" ? { available: true, version: "preview", checkedAt: new Date().toISOString() } : await SettingsBinding.CheckRuntimeDraft({ runtime: id, settings: draft.runtimes[id] });
       setRuntimeStatus((current) => ({ ...current, [id]: result }));
-    } catch (error) { setRuntimeStatus((current) => ({ ...current, [id]: { available: false, error: message(error, t) } })); }
+    } catch (error) {
+      setRuntimeStatus((current) => ({ ...current, [id]: { available: false, error: message(error, t) } }));
+      if (id === "codex") setCodexConfiguration((current) => ({ ...current, loading: false, error: message(error, t) }));
+      return;
+    }
+    if (id !== "codex") return;
+    setCodexConfiguration((current) => ({ ...current, loading: true, error: "" }));
+    try {
+      const data = mode === "demo" ? {
+        model: "gpt-5.6-sol", reasoningEffort: "medium", serviceTier: "",
+        models: [
+          { id: "gpt-5.6-sol", model: "gpt-5.6-sol", displayName: "GPT-5.6-Sol", description: "Complex, open-ended work", defaultReasoningEffort: "low", reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"], serviceTiers: [{ id: "fast", name: "Fast", description: "1.5× speed" }], isDefault: true },
+          { id: "gpt-5.6-terra", model: "gpt-5.6-terra", displayName: "GPT-5.6-Terra", description: "Everyday workhorse", defaultReasoningEffort: "medium", reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"], serviceTiers: [{ id: "fast", name: "Fast", description: "1.5× speed" }] },
+        ],
+      } : await SettingsBinding.InspectCodexConfiguration(draft.runtimes.codex);
+      setCodexConfiguration({ loading: false, data, error: "" });
+    } catch (error) {
+      setCodexConfiguration((current) => ({ ...current, loading: false, error: message(error, t) }));
+    }
   };
+  useEffect(() => {
+    if (section !== "runtime" || codexAutoChecked.current) return;
+    codexAutoChecked.current = true;
+    checkRuntime("codex");
+  }, [section]);
   const refreshUsage = async () => {
     setUsageLoading(true);
     try {
@@ -201,7 +227,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       {section === "runtime" && <>
         <InterfaceSettings i18n={i18n} />
         <SettingsModule className="settings-runtime-module" title={t("settings.agentRuntimes")} description={t("settings.agentRuntimesDescription")}>
-          <RuntimeSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} />
+          <RuntimeSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} />
         </SettingsModule>
       </>}
       {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
@@ -241,7 +267,7 @@ function InterfaceSettings({ i18n }) {
   </SettingsModule>;
 }
 
-function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
+function RuntimeSettings({ value, setValue, status, runtimes, check, errors, codexConfiguration }) {
   const { t, i18n } = useTranslation();
   const update = (id, field, next) => setValue({ ...value, [id]: { ...value[id], [field]: next } });
   const meta = {
@@ -252,14 +278,42 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors }) {
   return <>{runtimeIds.map((id) => {
     const current = status[id] || runtimes.find((item) => item.id === id) || {};
     const statusText = current.checking ? t("settings.checkingCommand") : current.available ? `${current.version || t("common.available")}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN")}` : ""}` : current.error || t("settings.notDetected");
+    const codexData = codexConfiguration.data;
+    const codexModel = id === "codex" ? selectedCodexModel(codexData, value.codex?.defaultModel) : null;
+    const effortValues = id === "codex" ? codexEffortValues(codexData, value.codex?.defaultModel, value.codex?.reasoningEffort) : [];
+    const serviceTierValues = id === "codex" ? codexServiceTierValues(codexData, value.codex?.defaultModel, value.codex?.serviceTier) : [];
+    const modelOptions = id === "codex" ? [
+      { value: "", label: t("settings.useCodexConfig"), meta: codexData?.model || t("settings.runtimeDefault") },
+      ...(codexData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.model })),
+    ] : [];
+    if (id === "codex" && value.codex?.defaultModel && !modelOptions.some((option) => option.value === value.codex.defaultModel)) modelOptions.push({ value: value.codex.defaultModel, label: value.codex.defaultModel, meta: t("settings.savedCustomValue") });
+    const detectedEffort = codexData?.reasoningEffort || codexModel?.defaultReasoningEffort || t("settings.runtimeDefault");
+    const detectedTier = codexData?.serviceTier || t("settings.speed.standard");
+    const tierDetails = new Map((codexModel?.serviceTiers || []).map((tier) => [tier.id, tier]));
+    const updateCodexModel = (defaultModel) => {
+      const nextModel = selectedCodexModel(codexData, defaultModel);
+      const supportedEfforts = nextModel?.reasoningEfforts || [];
+      const supportedTiers = ["standard", ...(nextModel?.serviceTiers || []).map((tier) => tier.id)];
+      setValue({ ...value, codex: {
+        ...value.codex,
+        defaultModel,
+        reasoningEffort: value.codex?.reasoningEffort && supportedEfforts.length && !supportedEfforts.includes(value.codex.reasoningEffort) ? "" : value.codex?.reasoningEffort || "",
+        serviceTier: value.codex?.serviceTier && supportedTiers.length > 1 && !supportedTiers.includes(value.codex.serviceTier) ? "" : value.codex?.serviceTier || "",
+      } });
+    };
     return <SettingCard className="runtime-setting-card" headingLevel={4} key={id} title={meta[id].name} description={meta[id].description} aside={<span className={`setting-status ${current.available ? "ok" : current.error ? "bad" : ""}`}><i />{statusText}</span>}>
+      {id === "codex" && (codexConfiguration.loading || codexData || codexConfiguration.error) && <div className={`codex-config-state ${codexConfiguration.error ? "bad" : ""}`} role={codexConfiguration.error ? "alert" : "status"}>
+        {codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })}
+      </div>}
       <div className="settings-grid">
         <Field label={t("settings.binaryPath")} hint={t("settings.useCommand", { command: meta[id].command })} error={errors[`${id}.binary`]}><input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={meta[id].command} /></Field>
-        <Field label={t("settings.defaultModel")} hint={t("settings.runtimeDecides")} error={errors[`${id}.defaultModel`]}><input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} /></Field>
+        <Field label={t("settings.defaultModel")} hint={id === "codex" && codexData ? t("settings.codexDetectedValue", { value: codexData.model || t("settings.runtimeDefault") }) : t("settings.runtimeDecides")} error={errors[`${id}.defaultModel`]}>{id === "codex" && codexData?.models?.length ? <TUISelect ariaLabel={t("settings.defaultModel")} value={value[id]?.defaultModel || ""} onChange={updateCodexModel} options={modelOptions} /> : <input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} />}</Field>
+        {id === "codex" && <Field label={t("settings.reasoningEffort")} hint={t("settings.codexDetectedValue", { value: detectedEffort })} error={errors[`${id}.reasoningEffort`]}><TUISelect ariaLabel={t("settings.reasoningEffort")} value={value.codex?.reasoningEffort || ""} onChange={(reasoningEffort) => update("codex", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedEffort }, ...(codexData && effortValues.length ? effortValues : ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]).map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></Field>}
+        {id === "codex" && <Field label={t("settings.speed")} hint={t("settings.codexDetectedValue", { value: detectedTier })} error={errors[`${id}.serviceTier`]}><TUISelect ariaLabel={t("settings.speed")} value={value.codex?.serviceTier || ""} onChange={(serviceTier) => update("codex", "serviceTier", serviceTier)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedTier }, ...(codexData ? serviceTierValues : ["standard", "fast", "priority", "flex"]).map((tier) => ({ value: tier, label: t(`settings.speed.${tier}`, { defaultValue: tierDetails.get(tier)?.name || tier }), meta: tierDetails.get(tier)?.description || tier }))]} /></Field>}
         {id === "modu" && <Field label={t("common.provider")} hint={t("settings.providerHint")} error={errors[`${id}.provider`]}><TUISelect ariaLabel={t("common.provider")} value={value[id]?.provider || "auto"} onChange={(provider) => update(id, "provider", provider)} options={[{ value: "auto", label: t("settings.autoDetect") }, { value: "openai", label: "OpenAI / Compatible" }, { value: "anthropic", label: "Anthropic" }, { value: "gemini", label: "Gemini" }]} /></Field>}
         <Field className="full" label={t("settings.envAllowlist")} hint={t("settings.envAllowlistHint")} error={errors[`${id}.environmentAllowlist`]}><input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder={meta[id].env} /></Field>
       </div>
-      <div className="settings-actions"><Action tone="cyan" disabled={current.checking} onClick={() => check(id)}>{current.checking ? t("settings.checking") : t("settings.testConfig")}</Action></div>
+      <div className="settings-actions"><Action tone="cyan" disabled={current.checking || (id === "codex" && codexConfiguration.loading)} onClick={() => check(id)}>{current.checking || (id === "codex" && codexConfiguration.loading) ? t("settings.checking") : id === "codex" ? t("settings.refreshCodexConfig") : t("settings.testConfig")}</Action></div>
     </SettingCard>;
   })}</>;
 }
@@ -347,6 +401,8 @@ function validateSection(section, draft, t) {
       const runtime = draft.runtimes[id];
       if (/[\r\n\0]/.test(runtime.binary || "")) add(`${id}.binary`, t("settings.validation.pathCharacters"));
       if (/[\r\n\0]/.test(runtime.defaultModel || "")) add(`${id}.defaultModel`, t("settings.validation.modelCharacters"));
+      if (id === "codex" && !["", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(runtime.reasoningEffort || "")) add(`${id}.reasoningEffort`, t("settings.validation.invalidReasoningEffort"));
+      if (id === "codex" && runtime.serviceTier && !/^[a-z0-9][a-z0-9_-]{0,63}$/.test(runtime.serviceTier)) add(`${id}.serviceTier`, t("settings.validation.invalidServiceTier"));
       const invalid = (runtime.environmentAllowlist || []).find((key) => !/^[A-Z_][A-Z0-9_]{0,127}$/.test(key) || forbidden(key));
       if (invalid) add(`${id}.environmentAllowlist`, t("settings.validation.invalidEnv", { key: invalid }));
       if (id === "modu" && !["", "auto", "openai", "anthropic", "gemini"].includes(runtime.provider || "")) add(`${id}.provider`, t("settings.validation.invalidProvider"));

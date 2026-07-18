@@ -194,6 +194,110 @@ func TestCodexRunnerStreamsAppServerMessagesAndCommandOutput(t *testing.T) {
 	}
 }
 
+func TestCodexRunnerPassesModelSettingsToAppServer(t *testing.T) {
+	bin := stubCodexAppServerBinary(t)
+	capture := filepath.Join(t.TempDir(), "requests.jsonl")
+	runner := NewCodexRunner(bin)
+	request := Request{
+		Workspace: t.TempDir(), Prompt: "implement it", Sandbox: SandboxWorkspaceWrite,
+		Model: "gpt-test", ReasoningEffort: "high", ServiceTier: "priority",
+		Environment: append(os.Environ(), "ONESHOT_CODEX_CAPTURE="+capture),
+	}
+	if _, err := runner.Run(context.Background(), request, nil); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := string(payload)
+	for _, expected := range []string{`"method":"thread/start"`, `"model":"gpt-test"`, `"serviceTier":"priority"`, `"method":"turn/start"`, `"effort":"high"`} {
+		if !strings.Contains(value, expected) {
+			t.Fatalf("app-server requests missing %s: %s", expected, value)
+		}
+	}
+
+	standardCapture := filepath.Join(t.TempDir(), "standard.jsonl")
+	request.ServiceTier = "standard"
+	request.Environment = append(os.Environ(), "ONESHOT_CODEX_CAPTURE="+standardCapture)
+	if _, err := runner.Run(context.Background(), request, nil); err != nil {
+		t.Fatal(err)
+	}
+	standardPayload, err := os.ReadFile(standardCapture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(standardPayload), `"serviceTier":null`) {
+		t.Fatalf("standard tier was not reset: %s", standardPayload)
+	}
+}
+
+func TestCodexRunnerPassesModelSettingsToExecFallback(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "codex")
+	capture := filepath.Join(dir, "args.txt")
+	script := `#!/bin/sh
+if [ "$1" = "app-server" ]; then exit 1; fi
+printf '%s\n' "$@" > "$ONESHOT_CODEX_CAPTURE"
+cat <<'ONESHOT_EOF'
+` + codexStream + `
+ONESHOT_EOF
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewCodexRunner(bin)
+	_, err := runner.Run(context.Background(), Request{
+		Workspace: t.TempDir(), Prompt: "go", Model: "gpt-test", ReasoningEffort: "xhigh", ServiceTier: "fast",
+		Environment: append(os.Environ(), "ONESHOT_CODEX_CAPTURE="+capture),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := string(payload)
+	for _, expected := range []string{"gpt-test", `model_reasoning_effort="xhigh"`, `service_tier="fast"`, "features.fast_mode=true"} {
+		if !strings.Contains(value, expected) {
+			t.Fatalf("exec args missing %q: %s", expected, value)
+		}
+	}
+}
+
+func TestCodexRunnerInspectsConfiguration(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	bin := filepath.Join(t.TempDir(), "codex")
+	script := `#!/bin/sh
+while IFS= read -r line; do
+  case "$line" in
+    *'"method":"initialize"'*) printf '%s\n' '{"id":1,"result":{}}' ;;
+    *'"method":"config/read"'*) printf '%s\n' '{"id":2,"result":{"config":{"model":"gpt-test","model_reasoning_effort":"high","service_tier":"priority"},"origins":{}}}' ;;
+    *'"method":"model/list"'*) printf '%s\n' '{"id":3,"result":{"data":[{"id":"gpt-test","model":"gpt-test","displayName":"GPT Test","description":"Test model","hidden":false,"supportedReasoningEfforts":[{"reasoningEffort":"low","description":"Fast"},{"reasoningEffort":"high","description":"Deep"}],"defaultReasoningEffort":"low","serviceTiers":[{"id":"priority","name":"Priority","description":"Faster"}],"defaultServiceTier":null,"isDefault":true}]}}' ;;
+  esac
+done
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configuration, err := NewCodexRunner(bin).InspectConfiguration(context.Background(), t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.Model != "gpt-test" || configuration.ReasoningEffort != "high" || configuration.ServiceTier != "priority" {
+		t.Fatalf("configuration = %+v", configuration)
+	}
+	if len(configuration.Models) != 1 || configuration.Models[0].DisplayName != "GPT Test" || len(configuration.Models[0].ReasoningEfforts) != 2 || len(configuration.Models[0].ServiceTiers) != 1 {
+		t.Fatalf("models = %+v", configuration.Models)
+	}
+}
+
 func stubCodexAppServerBinary(t *testing.T) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -203,6 +307,7 @@ func stubCodexAppServerBinary(t *testing.T) string {
 	script := `#!/bin/sh
 [ "$1" = "app-server" ] || { echo "unexpected legacy fallback" >&2; exit 9; }
 while IFS= read -r line; do
+  [ -n "$ONESHOT_CODEX_CAPTURE" ] && printf '%s\n' "$line" >> "$ONESHOT_CODEX_CAPTURE"
   case "$line" in
     *'"id":1'*)
       printf '%s\n' '{"id":1,"result":{}}'
