@@ -6,6 +6,193 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+export class CodexConfiguration {
+    /**
+     * Creates a new CodexConfiguration instance.
+     * @param {Partial<CodexConfiguration>} [$$source = {}] - The source object to create the CodexConfiguration.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["model"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["reasoningEffort"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["serviceTier"] = undefined;
+        }
+        if (!("models" in $$source)) {
+            /**
+             * @member
+             * @type {CodexModelInfo[]}
+             */
+            this["models"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CodexConfiguration instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CodexConfiguration}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("models" in $$parsedSource) {
+            $$parsedSource["models"] = $$createField3_0($$parsedSource["models"]);
+        }
+        return new CodexConfiguration(/** @type {Partial<CodexConfiguration>} */($$parsedSource));
+    }
+}
+
+export class CodexModelInfo {
+    /**
+     * Creates a new CodexModelInfo instance.
+     * @param {Partial<CodexModelInfo>} [$$source = {}] - The source object to create the CodexModelInfo.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("model" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["model"] = "";
+        }
+        if (!("displayName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["displayName"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["description"] = undefined;
+        }
+        if (!("defaultReasoningEffort" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["defaultReasoningEffort"] = "";
+        }
+        if (!("reasoningEfforts" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["reasoningEfforts"] = [];
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {CodexServiceTier[] | undefined}
+             */
+            this["serviceTiers"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["defaultServiceTier"] = undefined;
+        }
+        if (!("isDefault" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["isDefault"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CodexModelInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CodexModelInfo}
+     */
+    static createFrom($$source = {}) {
+        const $$createField5_0 = $$createType2;
+        const $$createField6_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("reasoningEfforts" in $$parsedSource) {
+            $$parsedSource["reasoningEfforts"] = $$createField5_0($$parsedSource["reasoningEfforts"]);
+        }
+        if ("serviceTiers" in $$parsedSource) {
+            $$parsedSource["serviceTiers"] = $$createField6_0($$parsedSource["serviceTiers"]);
+        }
+        return new CodexModelInfo(/** @type {Partial<CodexModelInfo>} */($$parsedSource));
+    }
+}
+
+export class CodexServiceTier {
+    /**
+     * Creates a new CodexServiceTier instance.
+     * @param {Partial<CodexServiceTier>} [$$source = {}] - The source object to create the CodexServiceTier.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["description"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CodexServiceTier instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CodexServiceTier}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CodexServiceTier(/** @type {Partial<CodexServiceTier>} */($$parsedSource));
+    }
+}
+
 /**
  * EventKind is the normalized category of a streamed run event. It is the
  * common denominator across every supported runtime.
@@ -83,3 +270,10 @@ export const StreamPhase = {
     StreamSnapshot: "snapshot",
     StreamEnd: "end",
 };
+
+// Private type creation functions
+const $$createType0 = CodexModelInfo.createFrom;
+const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = $Create.Array($Create.Any);
+const $$createType3 = CodexServiceTier.createFrom;
+const $$createType4 = $Create.Array($$createType3);

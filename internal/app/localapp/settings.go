@@ -3,9 +3,11 @@ package localapp
 import (
 	"context"
 	"errors"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/openmodu/oneshot/internal/agentrun"
 	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
 	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
 	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
@@ -110,6 +112,27 @@ func (a *App) CheckRuntimeDraft(input RuntimeDraftInput) (RuntimeInfo, error) {
 		return status, coded("runtime_draft_unavailable", "binary is not executable")
 	}
 	return status, nil
+}
+
+func (a *App) InspectCodexConfiguration(ctx context.Context, input domainsettings.RuntimeSettings) (agentrun.CodexConfiguration, error) {
+	settings := domainsettings.Defaults()
+	settings.Runtimes["codex"] = input
+	normalized, err := domainsettings.Normalize(settings)
+	if err != nil {
+		return agentrun.CodexConfiguration{}, coded("settings_invalid", err.Error())
+	}
+	if err := domainsettings.Validate(normalized); err != nil {
+		return agentrun.CodexConfiguration{}, coded("settings_invalid", err.Error())
+	}
+	input = normalized.Runtimes["codex"]
+	status, err := a.runtimes.CheckDraft("codex", input)
+	if err != nil || !status.Available {
+		return agentrun.CodexConfiguration{}, coded("runtime_draft_unavailable", "Codex binary is not executable")
+	}
+	home, _ := os.UserHomeDir()
+	inspectCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	return agentrun.NewCodexRunner(input.Binary).InspectConfiguration(inspectCtx, home, allowedEnvironment(input.EnvironmentAllowlist))
 }
 
 func (a *App) updateSettings(ctx context.Context, expected int64, mutate func(*domainsettings.Settings)) (domainsettings.Settings, error) {
@@ -270,7 +293,12 @@ func (a *App) resolveRunSettings(ctx context.Context, taskID string) (domainwork
 		if id == "modu" && provider == "" {
 			provider = "auto"
 		}
-		runtimeSettings[id] = domainworkflows.ResolvedRuntimeSettings{EnvironmentAllowlist: append([]string{}, item.EnvironmentAllowlist...), Provider: provider}
+		runtimeSettings[id] = domainworkflows.ResolvedRuntimeSettings{
+			EnvironmentAllowlist: append([]string{}, item.EnvironmentAllowlist...),
+			Provider:             provider,
+			ReasoningEffort:      item.ReasoningEffort,
+			ServiceTier:          item.ServiceTier,
+		}
 	}
 	return definition, workflowuc.RunResolution{MaxLocalDAGConcurrency: settings.Execution.MaxLocalDAGConcurrency, InterruptGraceSeconds: settings.Execution.InterruptGraceSeconds, RuntimeSettings: runtimeSettings}, nil
 }

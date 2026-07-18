@@ -37,6 +37,11 @@ type Request struct {
 	Prompt string
 	// Model optionally overrides the runtime's default model.
 	Model string
+	// ReasoningEffort optionally overrides the Codex model's reasoning effort.
+	ReasoningEffort string
+	// ServiceTier optionally selects Codex speed/processing tier. "standard"
+	// explicitly resets app-server runs to the model's standard tier.
+	ServiceTier string
 	// Provider optionally selects a runtime provider. It is currently consumed
 	// by Modu Code and ignored by runtimes with a fixed provider.
 	Provider string
@@ -55,6 +60,9 @@ type Request struct {
 	EnvironmentAllowlist []string
 	// InterruptGrace controls how long a cancelled process may exit cleanly.
 	InterruptGrace time.Duration
+	// RuntimeDefaultsResolved means the caller already froze runtime defaults
+	// into a durable run snapshot. The registry must not apply newer settings.
+	RuntimeDefaultsResolved bool
 }
 
 // Sink receives normalized events as they stream from the agent. It is called

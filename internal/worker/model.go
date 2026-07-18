@@ -50,6 +50,8 @@ type ExecuteRequest struct {
 	WorkspaceID           string           `json:"workspaceId"`
 	Runtime               agentrun.Runtime `json:"runtime"`
 	Model                 string           `json:"model,omitempty"`
+	ReasoningEffort       string           `json:"reasoningEffort,omitempty"`
+	ServiceTier           string           `json:"serviceTier,omitempty"`
 	Sandbox               agentrun.Sandbox `json:"sandbox"`
 	Prompt                string           `json:"prompt"`
 	ResumeSessionID       string           `json:"resumeSessionId,omitempty"`

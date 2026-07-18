@@ -3,6 +3,7 @@ package bindings
 import (
 	"context"
 
+	"github.com/openmodu/oneshot/internal/agentrun"
 	"github.com/openmodu/oneshot/internal/app/localapp"
 	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
 )
@@ -33,6 +34,9 @@ func (b *SettingsBinding) ResetSettingsSection(section string, expectedRevision 
 }
 func (b *SettingsBinding) CheckRuntimeDraft(input localapp.RuntimeDraftInput) (localapp.RuntimeInfo, error) {
 	return b.app.CheckRuntimeDraft(input)
+}
+func (b *SettingsBinding) InspectCodexConfiguration(input domainsettings.RuntimeSettings) (agentrun.CodexConfiguration, error) {
+	return b.app.InspectCodexConfiguration(context.Background(), input)
 }
 func (b *SettingsBinding) GetStorageUsage() (localapp.StorageUsage, error) {
 	return b.app.GetStorageUsage()

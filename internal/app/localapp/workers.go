@@ -90,6 +90,8 @@ func (e remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID str
 		WorkspaceID:           workspaceID,
 		Runtime:               request.Runtime,
 		Model:                 request.Model,
+		ReasoningEffort:       request.ReasoningEffort,
+		ServiceTier:           request.ServiceTier,
 		Sandbox:               request.Sandbox,
 		Prompt:                request.Prompt,
 		ResumeSessionID:       request.ResumeSessionID,

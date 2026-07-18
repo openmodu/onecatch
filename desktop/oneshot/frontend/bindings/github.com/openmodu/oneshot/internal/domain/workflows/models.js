@@ -433,6 +433,20 @@ export class ResolvedRuntimeSettings {
              */
             this["provider"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["reasoningEffort"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["serviceTier"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }

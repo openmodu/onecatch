@@ -123,6 +123,8 @@ type RunPage struct {
 type ResolvedRuntimeSettings struct {
 	EnvironmentAllowlist []string `json:"environmentAllowlist,omitempty"`
 	Provider             string   `json:"provider,omitempty"`
+	ReasoningEffort      string   `json:"reasoningEffort,omitempty"`
+	ServiceTier          string   `json:"serviceTier,omitempty"`
 }
 
 type NodeStatus string

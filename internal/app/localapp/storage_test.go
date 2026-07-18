@@ -161,6 +161,8 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	}
 	runtime := settings.Runtimes["codex"]
 	runtime.DefaultModel = "snapshot-model"
+	runtime.ReasoningEffort = "xhigh"
+	runtime.ServiceTier = "priority"
 	runtime.EnvironmentAllowlist = []string{"ONESHOT_TEST_ENV"}
 	settings.Runtimes["codex"] = runtime
 	modu := settings.Runtimes["modu"]
@@ -197,6 +199,9 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	}
 	if got := run.RuntimeSettings["codex"].EnvironmentAllowlist; len(got) != 1 || got[0] != "ONESHOT_TEST_ENV" {
 		t.Fatalf("environment snapshot = %#v", got)
+	}
+	if got := run.RuntimeSettings["codex"]; got.ReasoningEffort != "xhigh" || got.ServiceTier != "priority" {
+		t.Fatalf("Codex model settings snapshot = %#v", got)
 	}
 	if got := run.RuntimeSettings["modu"].Provider; got != "anthropic" {
 		t.Fatalf("modu provider snapshot = %q", got)

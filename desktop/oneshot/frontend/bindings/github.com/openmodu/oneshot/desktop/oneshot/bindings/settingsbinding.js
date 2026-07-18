@@ -8,6 +8,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as agentrun$0 from "../../../internal/agentrun/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as localapp$0 from "../../../internal/app/localapp/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -62,12 +65,22 @@ export function GetStorageUsage() {
 }
 
 /**
+ * @param {settings$0.RuntimeSettings} input
+ * @returns {$CancellablePromise<agentrun$0.CodexConfiguration>}
+ */
+export function InspectCodexConfiguration(input) {
+    return $Call.ByID(1994002900, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType5($result);
+    }));
+}
+
+/**
  * @param {localapp$0.CleanupPreviewInput} input
  * @returns {$CancellablePromise<localapp$0.CleanupPreview>}
  */
 export function PreviewCleanup(input) {
     return $Call.ByID(840909829, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType6($result);
     }));
 }
 
@@ -150,4 +163,5 @@ const $$createType1 = localapp$0.CleanupResult.createFrom;
 const $$createType2 = localapp$0.DiagnosticsExport.createFrom;
 const $$createType3 = settings$0.Settings.createFrom;
 const $$createType4 = localapp$0.StorageUsage.createFrom;
-const $$createType5 = localapp$0.CleanupPreview.createFrom;
+const $$createType5 = agentrun$0.CodexConfiguration.createFrom;
+const $$createType6 = localapp$0.CleanupPreview.createFrom;

@@ -63,6 +63,31 @@ func TestValidateRejectsInvalidRuntimeProvider(t *testing.T) {
 	}
 }
 
+func TestNormalizeAndValidateCodexModelSettings(t *testing.T) {
+	input := Defaults()
+	input.Runtimes["codex"] = RuntimeSettings{ReasoningEffort: " XHIGH ", ServiceTier: " Priority "}
+	got, err := Normalize(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Runtimes["codex"].ReasoningEffort != "xhigh" || got.Runtimes["codex"].ServiceTier != "priority" {
+		t.Fatalf("codex settings = %+v", got.Runtimes["codex"])
+	}
+	if err := Validate(got); err != nil {
+		t.Fatal(err)
+	}
+
+	got.Runtimes["codex"] = RuntimeSettings{ReasoningEffort: "impossible"}
+	if err := Validate(got); err == nil {
+		t.Fatal("invalid Codex reasoning effort was accepted")
+	}
+	got = Defaults()
+	got.Runtimes["claude"] = RuntimeSettings{ServiceTier: "fast"}
+	if err := Validate(got); err == nil {
+		t.Fatal("Codex model settings were accepted for Claude")
+	}
+}
+
 func TestValidateRejectsDangerousEnvironmentKeys(t *testing.T) {
 	for _, key := range []string{"PATH", "DYLD_INSERT_LIBRARIES", "LD_PRELOAD", "bad-key"} {
 		input := Defaults()

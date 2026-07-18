@@ -192,6 +192,8 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 		Workspace:       workspace,
 		Prompt:          input.Prompt,
 		Model:           input.Model,
+		ReasoningEffort: input.ReasoningEffort,
+		ServiceTier:     input.ServiceTier,
 		Sandbox:         input.Sandbox,
 		ResumeSessionID: input.ResumeSessionID,
 		InterruptGrace:  time.Duration(input.InterruptGraceSeconds) * time.Second,
