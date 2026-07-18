@@ -23,6 +23,18 @@ func (b *GitBinding) StageAll(workspaceID string) error {
 	return b.app.GitStageAll(context.Background(), workspaceID)
 }
 
+func (b *GitBinding) ListBranches(workspaceID string) ([]domainworkspaces.GitBranch, error) {
+	return b.app.GitListBranches(context.Background(), workspaceID)
+}
+
+func (b *GitBinding) SwitchBranch(workspaceID, name string) (domainworkspaces.GitSnapshot, error) {
+	return b.app.GitSwitchBranch(context.Background(), workspaceID, name)
+}
+
+func (b *GitBinding) CreateBranch(workspaceID, name string) (domainworkspaces.GitSnapshot, error) {
+	return b.app.GitCreateBranch(context.Background(), workspaceID, name)
+}
+
 func (b *GitBinding) GenerateCommitMessage(workspaceID, runtime string) (string, error) {
 	return b.app.GenerateCommitMessage(context.Background(), workspaceID, runtime)
 }

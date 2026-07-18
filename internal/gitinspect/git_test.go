@@ -51,6 +51,36 @@ func TestInspectNonRepositoryAndRepositoryStatus(t *testing.T) {
 	if err != nil || len(hash) < 7 {
 		t.Fatalf("Commit() = %q, %v", hash, err)
 	}
+	initial, err := inspector.Inspect(context.Background(), repo)
+	if err != nil || initial.Branch == "" {
+		t.Fatalf("initial branch = %q, %v", initial.Branch, err)
+	}
+	if err := inspector.CreateBranch(context.Background(), repo, "feature/branch-management"); err != nil {
+		t.Fatal(err)
+	}
+	branches, err := inspector.ListBranches(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundCurrent := false
+	for _, branch := range branches {
+		foundCurrent = foundCurrent || branch.Name == "feature/branch-management" && branch.Current
+	}
+	if len(branches) != 2 || !foundCurrent {
+		t.Fatalf("branches = %+v", branches)
+	}
+	if err := inspector.SwitchBranch(context.Background(), repo, initial.Branch); err != nil {
+		t.Fatal(err)
+	}
+	if err := inspector.SwitchBranch(context.Background(), repo, "missing"); err == nil {
+		t.Fatal("SwitchBranch() accepted a missing branch")
+	}
+	if err := inspector.CreateBranch(context.Background(), repo, "feature/branch-management"); err == nil {
+		t.Fatal("CreateBranch() accepted a duplicate branch")
+	}
+	if err := inspector.CreateBranch(context.Background(), repo, "invalid branch"); err == nil {
+		t.Fatal("CreateBranch() accepted an invalid branch name")
+	}
 	if _, err := inspector.Commit(context.Background(), repo, "invalid\nmessage"); err == nil {
 		t.Fatal("Commit() accepted a multi-line message")
 	}

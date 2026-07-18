@@ -47,6 +47,36 @@ func (a *App) GitStageAll(ctx context.Context, workspaceID string) error {
 	return a.git.StageAll(ctx, workspace.Path)
 }
 
+func (a *App) GitListBranches(ctx context.Context, workspaceID string) ([]domainworkspaces.GitBranch, error) {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
+	if err != nil {
+		return nil, err
+	}
+	return a.git.ListBranches(ctx, workspace.Path)
+}
+
+func (a *App) GitSwitchBranch(ctx context.Context, workspaceID, name string) (domainworkspaces.GitSnapshot, error) {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
+	if err != nil {
+		return domainworkspaces.GitSnapshot{}, err
+	}
+	if err := a.git.SwitchBranch(ctx, workspace.Path, name); err != nil {
+		return domainworkspaces.GitSnapshot{}, err
+	}
+	return a.git.Inspect(ctx, workspace.Path)
+}
+
+func (a *App) GitCreateBranch(ctx context.Context, workspaceID, name string) (domainworkspaces.GitSnapshot, error) {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
+	if err != nil {
+		return domainworkspaces.GitSnapshot{}, err
+	}
+	if err := a.git.CreateBranch(ctx, workspace.Path, name); err != nil {
+		return domainworkspaces.GitSnapshot{}, err
+	}
+	return a.git.Inspect(ctx, workspace.Path)
+}
+
 func (a *App) GenerateCommitMessage(ctx context.Context, workspaceID, requestedRuntime string) (string, error) {
 	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
 	if err != nil {

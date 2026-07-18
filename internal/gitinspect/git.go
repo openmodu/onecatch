@@ -84,6 +84,67 @@ func (i *Inspector) StageAll(ctx context.Context, workspace string) error {
 	return err
 }
 
+func (i *Inspector) ListBranches(ctx context.Context, workspace string) ([]domainworkspaces.GitBranch, error) {
+	output, err := i.run(ctx, workspace, "branch", "--format=%(refname:short)%00%(HEAD)%00%(upstream:short)")
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimRight(output, "\r\n"), "\n")
+	branches := make([]domainworkspaces.GitBranch, 0, len(lines))
+	for _, line := range lines {
+		parts := strings.SplitN(strings.TrimSuffix(line, "\r"), "\x00", 3)
+		if len(parts) < 2 || parts[0] == "" {
+			continue
+		}
+		branch := domainworkspaces.GitBranch{Name: parts[0], Current: strings.TrimSpace(parts[1]) == "*"}
+		if len(parts) == 3 {
+			branch.Upstream = strings.TrimSpace(parts[2])
+		}
+		branches = append(branches, branch)
+	}
+	return branches, nil
+}
+
+func (i *Inspector) SwitchBranch(ctx context.Context, workspace, name string) error {
+	name, err := i.validBranchName(ctx, workspace, name)
+	if err != nil {
+		return err
+	}
+	branches, err := i.ListBranches(ctx, workspace)
+	if err != nil {
+		return err
+	}
+	for _, branch := range branches {
+		if branch.Name != name {
+			continue
+		}
+		if branch.Current {
+			return nil
+		}
+		_, err = i.run(ctx, workspace, "switch", "--", name)
+		return err
+	}
+	return fmt.Errorf("git branch %q does not exist", name)
+}
+
+func (i *Inspector) CreateBranch(ctx context.Context, workspace, name string) error {
+	name, err := i.validBranchName(ctx, workspace, name)
+	if err != nil {
+		return err
+	}
+	branches, err := i.ListBranches(ctx, workspace)
+	if err != nil {
+		return err
+	}
+	for _, branch := range branches {
+		if branch.Name == name {
+			return fmt.Errorf("git branch %q already exists", name)
+		}
+	}
+	_, err = i.run(ctx, workspace, "switch", "-c", name)
+	return err
+}
+
 func (i *Inspector) Commit(ctx context.Context, workspace, message string) (string, error) {
 	message = strings.TrimSpace(message)
 	if message == "" || strings.ContainsAny(message, "\r\n\x00") {
@@ -116,6 +177,17 @@ func (i *Inspector) aheadBehind(ctx context.Context, workspace string) (int, int
 	var behind, ahead int
 	_, _ = fmt.Sscanf(strings.TrimSpace(value), "%d %d", &behind, &ahead)
 	return ahead, behind
+}
+
+func (i *Inspector) validBranchName(ctx context.Context, workspace, name string) (string, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || strings.ContainsAny(name, "\r\n\x00") {
+		return "", errors.New("git branch name is invalid")
+	}
+	if _, err := i.run(ctx, workspace, "check-ref-format", "--branch", name); err != nil {
+		return "", errors.New("git branch name is invalid")
+	}
+	return name, nil
 }
 
 func parseStatus(value string) []domainworkspaces.GitFile {

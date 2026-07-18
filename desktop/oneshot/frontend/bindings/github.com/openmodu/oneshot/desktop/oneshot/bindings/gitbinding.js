@@ -25,6 +25,17 @@ export function CommitAndPush(input) {
 
 /**
  * @param {string} workspaceID
+ * @param {string} name
+ * @returns {$CancellablePromise<workspaces$0.GitSnapshot>}
+ */
+export function CreateBranch(workspaceID, name) {
+    return $Call.ByID(1798780230, workspaceID, name).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * @param {string} workspaceID
  * @param {boolean} staged
  * @returns {$CancellablePromise<string>}
  */
@@ -39,6 +50,16 @@ export function Diff(workspaceID, staged) {
  */
 export function GenerateCommitMessage(workspaceID, runtime) {
     return $Call.ByID(2783831323, workspaceID, runtime);
+}
+
+/**
+ * @param {string} workspaceID
+ * @returns {$CancellablePromise<workspaces$0.GitBranch[]>}
+ */
+export function ListBranches(workspaceID) {
+    return $Call.ByID(4256904358, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
 }
 
 /**
@@ -59,6 +80,19 @@ export function Status(workspaceID) {
     }));
 }
 
+/**
+ * @param {string} workspaceID
+ * @param {string} name
+ * @returns {$CancellablePromise<workspaces$0.GitSnapshot>}
+ */
+export function SwitchBranch(workspaceID, name) {
+    return $Call.ByID(3152225842, workspaceID, name).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
 // Private type creation functions
 const $$createType0 = localapp$0.GitCommitResult.createFrom;
 const $$createType1 = workspaces$0.GitSnapshot.createFrom;
+const $$createType2 = workspaces$0.GitBranch.createFrom;
+const $$createType3 = $Create.Array($$createType2);
