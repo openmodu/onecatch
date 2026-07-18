@@ -1,6 +1,6 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { DotsThree, FolderOpen, FolderSimple, GearSix, GitBranch, Info, List, MagnifyingGlass, Plus, PushPin, Trash } from "@phosphor-icons/react";
+import { DotsThree, FolderOpen, FolderSimple, MagnifyingGlass, Plus, PushPin, Trash } from "@phosphor-icons/react";
 import { Action } from "../../ui/primitives.jsx";
 import {
   SIDEBAR_DEFAULT_WIDTH,
@@ -295,12 +295,12 @@ function Sidebar({
             if (entry.kind === "queued") {
               const task = entry.item;
               const selected = selectedQueuedTaskID === task.id;
-              return <button type="button" className={`project-task-item ${selected ? "selected" : ""}`} title={task.title} key={entry.key} onClick={() => openQueuedTask(task)}><span className="project-task-title">{task.title}</span>{selected && <Info size={16} weight="bold" aria-hidden="true" />}</button>;
+              return <button type="button" className={`project-task-item ${selected ? "selected" : ""}`} title={task.title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openQueuedTask(task)}><span className="project-task-marker" aria-hidden="true">{selected ? "*" : ""}</span><span className="project-task-title">{task.title}</span></button>;
             }
             const run = entry.item;
             const title = run.task?.title || run.id;
             const selected = selectedRunID === run.id;
-            return <button type="button" className={`project-task-item ${selected ? "selected" : ""}`} title={title} key={entry.key} onClick={() => openRun(run)}><span className="project-task-title">{title}</span>{selected && <Info size={16} weight="bold" aria-hidden="true" />}</button>;
+            return <button type="button" className={`project-task-item ${selected ? "selected" : ""}`} title={title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openRun(run)}><span className="project-task-marker" aria-hidden="true">{selected ? "*" : ""}</span><span className="project-task-title">{title}</span></button>;
           })}
           {!taskEntries.length && !runLoading && <div className="project-task-empty">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
           {runLoading && !taskEntries.length && <div className="project-task-empty">{t("task.loading")}</div>}
@@ -331,10 +331,10 @@ function Sidebar({
     <nav className="primary-nav">
       <div className="secondary-navigation" ref={secondaryNavigation}>
         {secondaryNavigationOpen && <div className="secondary-navigation-menu" id="sidebar-secondary-navigation" role="menu" aria-label={t("sidebar.menu")}>
-          <button ref={firstSecondaryNavigationItem} role="menuitem" className={view === "workflows" || editor ? "active" : ""} onClick={() => goToSecondaryView("workflows")}><GitBranch size={17} aria-hidden="true" /><b>{t("sidebar.workflows")}</b></button>
-          <button role="menuitem" className={view === "settings" && !editor ? "active" : ""} onClick={() => goToSecondaryView("settings")}><GearSix size={17} aria-hidden="true" /><b>{t("sidebar.settings")}</b></button>
+          <button ref={firstSecondaryNavigationItem} role="menuitem" className={view === "workflows" || editor ? "active" : ""} onClick={() => goToSecondaryView("workflows")}><b>{t("sidebar.workflows")}</b></button>
+          <button role="menuitem" className={view === "settings" && !editor ? "active" : ""} onClick={() => goToSecondaryView("settings")}><b>{t("sidebar.settings")}</b></button>
         </div>}
-        <button ref={secondaryNavigationTrigger} className={`secondary-navigation-trigger ${view === "workflows" || view === "settings" || editor ? "active" : ""}`} aria-label={t("sidebar.menu")} aria-haspopup="menu" aria-expanded={secondaryNavigationOpen} aria-controls="sidebar-secondary-navigation" onClick={() => setSecondaryNavigationOpen((open) => !open)}><List size={17} aria-hidden="true" /><b>{t("sidebar.menu")}</b></button>
+        <button ref={secondaryNavigationTrigger} className={`secondary-navigation-trigger ${view === "workflows" || view === "settings" || editor ? "active" : ""}`} aria-label={t("sidebar.menu")} aria-haspopup="menu" aria-expanded={secondaryNavigationOpen} aria-controls="sidebar-secondary-navigation" onClick={() => setSecondaryNavigationOpen((open) => !open)}><span className="secondary-navigation-marker" aria-hidden="true">&gt;</span><b>{t("sidebar.menu")}</b></button>
       </div>
     </nav>
     {workspaceSearchOpen && <Suspense fallback={null}><CommandPalette open query={searchQuery} taskResults={searchTaskItems} loading={searchLoading} workspaces={workspaces} onQueryChange={onSearchQueryChange} onClose={closeSearch} onOpenTask={openTaskFromSearch} onOpenWorkspace={openWorkspaceFromSearch} onNewTask={() => { onGoView("tasks"); onNewTask(); }} onAddWorkspace={onAddWorkspace} onOpenSettings={() => onGoView("settings")} /></Suspense>}
