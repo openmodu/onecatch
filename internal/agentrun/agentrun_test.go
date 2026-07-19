@@ -258,6 +258,78 @@ const claudeStream = `{"type":"system","subtype":"init","session_id":"sess-xyz",
 {"type":"assistant","message":{"content":[{"type":"text","text":"Created out.txt."}]}}
 {"type":"result","subtype":"success","is_error":false,"result":"Created out.txt.","session_id":"sess-xyz","usage":{"input_tokens":10,"output_tokens":61}}`
 
+func TestClaudeRunnerInspectsModelOptions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	path := filepath.Join(t.TempDir(), "claude")
+	script := `#!/bin/sh
+[ "$1" = "--help" ] || { echo "expected --help" >&2; exit 2; }
+cat <<'ONESHOT_EOF'
+Options:
+  --effort <level>  Effort level for the current session (low, medium, high, xhigh, max)
+  --model <model>  Model for the current session. Provide an alias for the latest
+                   model (e.g. 'fable', 'opus', or 'sonnet') or a model's full
+                   name (e.g. 'claude-fable-5').
+  -n, --name <name>  Session name
+ONESHOT_EOF
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configuration, err := NewClaudeRunner(path).InspectConfiguration(context.Background(), t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configuration.Models) != 4 {
+		t.Fatalf("models = %+v", configuration.Models)
+	}
+	if got := configuration.Models[0]; got.Model != "fable" || got.DisplayName != "Fable" || !got.Alias {
+		t.Fatalf("first model = %+v", got)
+	}
+	if got := configuration.Models[3]; got.Model != "claude-fable-5" || got.Alias {
+		t.Fatalf("full model = %+v", got)
+	}
+	if got := strings.Join(configuration.Efforts, ","); got != "low,medium,high,xhigh,max" {
+		t.Fatalf("efforts = %q", got)
+	}
+}
+
+func TestClaudeRunnerPassesSelectedModel(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "claude")
+	capture := filepath.Join(dir, "args.txt")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > "$ONESHOT_CLAUDE_CAPTURE"
+cat <<'ONESHOT_EOF'
+` + claudeStream + `
+ONESHOT_EOF
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewClaudeRunner(path).Run(context.Background(), Request{
+		Workspace: dir, Prompt: "go", Model: "opus", ReasoningEffort: "high",
+		Environment: append(os.Environ(), "ONESHOT_CLAUDE_CAPTURE="+capture),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), "--model\nopus\n") {
+		t.Fatalf("Claude args = %q", payload)
+	}
+	if !strings.Contains(string(payload), "--effort\nhigh\n") {
+		t.Fatalf("Claude args = %q", payload)
+	}
+}
+
 func TestClaudeRunnerParsesStream(t *testing.T) {
 	bin := stubBinary(t, claudeStream, "", 0)
 	r := NewClaudeRunner(bin)

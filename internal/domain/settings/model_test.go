@@ -82,9 +82,17 @@ func TestNormalizeAndValidateCodexModelSettings(t *testing.T) {
 		t.Fatal("invalid Codex reasoning effort was accepted")
 	}
 	got = Defaults()
+	got.Runtimes["claude"] = RuntimeSettings{ReasoningEffort: "high"}
+	if err := Validate(got); err != nil {
+		t.Fatalf("Claude Code reasoning effort was rejected: %v", err)
+	}
+	got.Runtimes["claude"] = RuntimeSettings{ReasoningEffort: "ultra"}
+	if err := Validate(got); err == nil {
+		t.Fatal("invalid Claude Code reasoning effort was accepted")
+	}
 	got.Runtimes["claude"] = RuntimeSettings{ServiceTier: "fast"}
 	if err := Validate(got); err == nil {
-		t.Fatal("Codex model settings were accepted for Claude")
+		t.Fatal("Codex service tier was accepted for Claude")
 	}
 }
 

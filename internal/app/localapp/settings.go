@@ -135,6 +135,27 @@ func (a *App) InspectCodexConfiguration(ctx context.Context, input domainsetting
 	return agentrun.NewCodexRunner(input.Binary).InspectConfiguration(inspectCtx, home, allowedEnvironment(input.EnvironmentAllowlist))
 }
 
+func (a *App) InspectClaudeConfiguration(ctx context.Context, input domainsettings.RuntimeSettings) (agentrun.ClaudeConfiguration, error) {
+	settings := domainsettings.Defaults()
+	settings.Runtimes["claude"] = input
+	normalized, err := domainsettings.Normalize(settings)
+	if err != nil {
+		return agentrun.ClaudeConfiguration{}, coded("settings_invalid", err.Error())
+	}
+	if err := domainsettings.Validate(normalized); err != nil {
+		return agentrun.ClaudeConfiguration{}, coded("settings_invalid", err.Error())
+	}
+	input = normalized.Runtimes["claude"]
+	status, err := a.runtimes.CheckDraft("claude", input)
+	if err != nil || !status.Available {
+		return agentrun.ClaudeConfiguration{}, coded("runtime_draft_unavailable", "Claude Code binary is not executable")
+	}
+	home, _ := os.UserHomeDir()
+	inspectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return agentrun.NewClaudeRunner(input.Binary).InspectConfiguration(inspectCtx, home, allowedEnvironment(input.EnvironmentAllowlist))
+}
+
 func (a *App) updateSettings(ctx context.Context, expected int64, mutate func(*domainsettings.Settings)) (domainsettings.Settings, error) {
 	current, err := a.settings.Get(ctx)
 	if err != nil {
