@@ -99,7 +99,7 @@ type nowFunc func() time.Time
 // forwarding normalized events to sink. stderr is captured and, on a non-zero
 // exit, folded into the returned error so failures are diagnosable.
 //
-// It is the shared spine of every adapter: adapters only build the command and
+// It is the shared spine of the JSONL adapters: they only build the command and
 // supply a parser.
 func streamProcess(ctx context.Context, cmd *exec.Cmd, parser lineParser, now nowFunc, sink Sink) (Result, error) {
 	if now == nil {

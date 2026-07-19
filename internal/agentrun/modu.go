@@ -16,9 +16,8 @@ const (
 )
 
 // ModuRunner drives Modu Code through its non-interactive print mode
-// (`modu_code -p ... -json`), the same role `codex exec --json` serves for
-// Codex. The NDJSON stream includes a persisted session id that later runs can
-// continue with `--resume ID -p ...`.
+// (`modu_code -p ... -json`). The NDJSON stream includes a persisted session id
+// that later runs can continue with `--resume ID -p ...`.
 type ModuRunner struct {
 	binary string
 	now    nowFunc

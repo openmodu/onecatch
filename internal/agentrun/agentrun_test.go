@@ -73,90 +73,6 @@ func countKind(events []Event, kind EventKind) int {
 	return n
 }
 
-const codexStream = `{"type":"thread.started","thread_id":"thread-abc"}
-{"type":"turn.started"}
-{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"thinking about it"}}
-{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"echo hi > out.txt"}}
-{"type":"item.completed","item":{"id":"item_2","type":"file_change","path":"out.txt"}}
-{"type":"item.completed","item":{"id":"item_3","type":"agent_message","text":"Done. Wrote out.txt."}}
-{"type":"turn.completed","usage":{"input_tokens":1200,"cached_input_tokens":900,"output_tokens":42,"reasoning_output_tokens":12}}`
-
-func TestCodexRunnerParsesStream(t *testing.T) {
-	bin := stubBinary(t, codexStream, "", 0)
-	r := NewCodexRunner(bin)
-	r.now = fixedClock()
-
-	var events []Event
-	res, err := r.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "go"}, collectSink(&events))
-	if err != nil {
-		t.Fatalf("Run error: %v", err)
-	}
-	if !res.Succeeded {
-		t.Fatalf("expected success, got %+v", res)
-	}
-	if res.FinalMessage != "Done. Wrote out.txt." {
-		t.Fatalf("FinalMessage = %q", res.FinalMessage)
-	}
-	if res.SessionID != "thread-abc" {
-		t.Fatalf("SessionID = %q", res.SessionID)
-	}
-	if res.Usage.InputTokens != 1200 || res.Usage.CachedInputTokens != 900 || res.Usage.OutputTokens != 42 || res.Usage.ReasoningOutputTokens != 12 {
-		t.Fatalf("Usage = %+v", res.Usage)
-	}
-	if got := countKind(events, KindMessage); got != 1 {
-		t.Fatalf("message events = %d, want 1", got)
-	}
-	if got := countKind(events, KindToolUse); got != 1 {
-		t.Fatalf("tool_use events = %d, want 1", got)
-	}
-	if got := countKind(events, KindFileChange); got != 1 {
-		t.Fatalf("file_change events = %d, want 1", got)
-	}
-	if got := countKind(events, KindStarted); got != 1 {
-		t.Fatalf("started events = %d, want 1", got)
-	}
-}
-
-func TestCodexRunnerEmitsCommandOutputAndExitStatus(t *testing.T) {
-	// Each command surfaces twice on the wire — item.started then item.completed.
-	// Only the terminal event should produce a row, carrying the output and an
-	// exit-code-driven pass/fail.
-	stream := `{"type":"thread.started","thread_id":"t1"}
-{"type":"turn.started"}
-{"type":"item.started","item":{"id":"i1","type":"command_execution","command":"go test ./...","status":"in_progress"}}
-{"type":"item.completed","item":{"id":"i1","type":"command_execution","command":"go test ./...","status":"completed","aggregated_output":"ok  pkg  0.1s\n","exit_code":0}}
-{"type":"item.started","item":{"id":"i2","type":"command_execution","command":"go vet ./...","status":"in_progress"}}
-{"type":"item.completed","item":{"id":"i2","type":"command_execution","command":"go vet ./...","status":"completed","aggregated_output":"vet: bad\n","exit_code":1}}
-{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}`
-	bin := stubBinary(t, stream, "", 0)
-	r := NewCodexRunner(bin)
-	r.now = fixedClock()
-
-	var events []Event
-	if _, err := r.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "go"}, collectSink(&events)); err != nil {
-		t.Fatalf("Run error: %v", err)
-	}
-	// Two commands, each emitted once (item.started must not double them).
-	if got := countKind(events, KindToolUse); got != 2 {
-		t.Fatalf("tool_use events = %d, want 2", got)
-	}
-	var results []Event
-	for _, event := range events {
-		if event.Kind == KindToolResult {
-			results = append(results, event)
-		}
-	}
-	if len(results) != 2 {
-		t.Fatalf("tool_result events = %d, want 2", len(results))
-	}
-	if results[0].Failed || results[0].Text != "ok  pkg  0.1s\n" {
-		t.Errorf("exit-0 command: got failed=%v text=%q", results[0].Failed, results[0].Text)
-	}
-	if !results[1].Failed || results[1].Text != "vet: bad\n" {
-		t.Errorf("exit-1 command: got failed=%v text=%q", results[1].Failed, results[1].Text)
-	}
-}
-
 func TestCodexRunnerStreamsAppServerMessagesAndCommandOutput(t *testing.T) {
 	bin := stubCodexAppServerBinary(t)
 	runner := NewCodexRunner(bin)
@@ -232,40 +148,36 @@ func TestCodexRunnerPassesModelSettingsToAppServer(t *testing.T) {
 	}
 }
 
-func TestCodexRunnerPassesModelSettingsToExecFallback(t *testing.T) {
+func TestCodexRunnerDoesNotFallbackWhenAppServerIsUnavailable(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("stub binary uses a POSIX shell script")
 	}
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "codex")
-	capture := filepath.Join(dir, "args.txt")
+	capture := filepath.Join(dir, "invocations.txt")
 	script := `#!/bin/sh
-if [ "$1" = "app-server" ]; then exit 1; fi
-printf '%s\n' "$@" > "$ONESHOT_CODEX_CAPTURE"
-cat <<'ONESHOT_EOF'
-` + codexStream + `
-ONESHOT_EOF
+printf '%s\n' "$*" >> "$ONESHOT_CODEX_CAPTURE"
+echo 'app-server unavailable' >&2
+exit 1
 `
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	runner := NewCodexRunner(bin)
-	_, err := runner.Run(context.Background(), Request{
-		Workspace: t.TempDir(), Prompt: "go", Model: "gpt-test", ReasoningEffort: "xhigh", ServiceTier: "fast",
+
+	_, err := NewCodexRunner(bin).Run(context.Background(), Request{
+		Workspace:   dir,
+		Prompt:      "must not run through exec",
 		Environment: append(os.Environ(), "ONESHOT_CODEX_CAPTURE="+capture),
 	}, nil)
-	if err != nil {
-		t.Fatal(err)
+	if err == nil || !strings.Contains(err.Error(), "app-server unavailable") {
+		t.Fatalf("error = %v", err)
 	}
-	payload, err := os.ReadFile(capture)
-	if err != nil {
-		t.Fatal(err)
+	payload, readErr := os.ReadFile(capture)
+	if readErr != nil {
+		t.Fatal(readErr)
 	}
-	value := string(payload)
-	for _, expected := range []string{"gpt-test", `model_reasoning_effort="xhigh"`, `service_tier="fast"`, "features.fast_mode=true"} {
-		if !strings.Contains(value, expected) {
-			t.Fatalf("exec args missing %q: %s", expected, value)
-		}
+	if got := strings.TrimSpace(string(payload)); got != "app-server --listen stdio://" {
+		t.Fatalf("Codex invocations = %q", got)
 	}
 }
 
@@ -305,7 +217,7 @@ func stubCodexAppServerBinary(t *testing.T) string {
 	}
 	path := filepath.Join(t.TempDir(), "codex")
 	script := `#!/bin/sh
-[ "$1" = "app-server" ] || { echo "unexpected legacy fallback" >&2; exit 9; }
+[ "$1" = "app-server" ] || { echo "expected app-server" >&2; exit 9; }
 while IFS= read -r line; do
   [ -n "$ONESHOT_CODEX_CAPTURE" ] && printf '%s\n' "$line" >> "$ONESHOT_CODEX_CAPTURE"
   case "$line" in
@@ -624,7 +536,7 @@ func TestRunnerDrainsStdoutAfterOversizedLine(t *testing.T) {
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestOversizedLineHelperProcess")
 	cmd.Env = append(os.Environ(), "ONESHOT_OVERSIZED_LINE_HELPER=1")
 
-	_, err := streamProcess(ctx, cmd, &codexParser{}, fixedClock(), nil)
+	_, err := streamProcess(ctx, cmd, &claudeParser{}, fixedClock(), nil)
 	if err == nil {
 		t.Fatal("expected oversized stdout line to fail")
 	}
@@ -653,7 +565,7 @@ func TestEngineUnknownRuntime(t *testing.T) {
 }
 
 func TestEngineRoutesByRuntime(t *testing.T) {
-	codexBin := stubBinary(t, codexStream, "", 0)
+	codexBin := stubBinary(t, "", "", 0)
 	claudeBin := stubBinary(t, claudeStream, "", 0)
 	codex := NewCodexRunner(codexBin)
 	codex.now = fixedClock()
@@ -671,7 +583,7 @@ func TestEngineRoutesByRuntime(t *testing.T) {
 }
 
 func TestEngineAvailableRuntimes(t *testing.T) {
-	codexBin := stubBinary(t, codexStream, "", 0)
+	codexBin := stubBinary(t, "", "", 0)
 	codex := NewCodexRunner(codexBin)
 	// claude points at a nonexistent binary -> unavailable.
 	claude := NewClaudeRunner(filepath.Join(t.TempDir(), "does-not-exist"))

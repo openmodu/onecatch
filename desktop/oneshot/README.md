@@ -5,7 +5,7 @@ orchestrator 与 Codex / Claude Code / Modu Code runtime，不依赖 `oneshot-se
 
 ## 流式输出
 
-- Codex 优先使用 app-server 的消息与命令输出 delta，旧版 CLI 自动回退到 `codex exec --json`。
+- Codex 通过 app-server 输出消息与命令 delta；本地 Codex CLI 必须支持 app-server。
 - Claude Code 使用 `stream-json --include-partial-messages`，Modu Code 使用 print-mode NDJSON。
 - provider token 会在后端合并成约 80ms 的增量帧，通过 Wails 事件发送；JSONL 仍是持久化事实源，页面重连时用 revision 快照补偿。
 - Agent 与用户正文按 GFM Markdown 渲染。原始 HTML 不执行、远程图片不自动加载，工具日志保持原始等宽文本。

@@ -16,9 +16,8 @@ import (
 // codexBinaryDefault is the CLI invoked when no override is configured.
 const codexBinaryDefault = "codex"
 
-// CodexRunner prefers the app-server JSON-RPC protocol so text and command
-// output deltas are available. Older binaries fall back to `codex exec --json`
-// before a thread is created, preventing accidental duplicate prompts.
+// CodexRunner drives Codex through the app-server JSON-RPC protocol so text and
+// command output deltas are available.
 type CodexRunner struct {
 	// binary is the codex executable; overridable for tests.
 	binary string
@@ -195,64 +194,8 @@ func (r *CodexRunner) InspectConfiguration(ctx context.Context, cwd string, envi
 }
 
 func (r *CodexRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
-	result, err := r.runAppServer(ctx, req, sink)
-	if !errors.Is(err, errCodexAppServerUnavailable) {
-		return result, err
-	}
-	// Older Codex builds do not expose app-server. Falling back is safe only
-	// before the app-server handshake creates a thread, so the prompt cannot be
-	// executed twice.
-	return r.runExec(ctx, req, sink)
+	return r.runAppServer(ctx, req, sink)
 }
-
-func (r *CodexRunner) runExec(ctx context.Context, req Request, sink Sink) (Result, error) {
-	var args []string
-	if req.ResumeSessionID != "" {
-		// `codex exec resume` accepts a narrower flag set than a fresh exec:
-		// no --sandbox / -C. The sandbox is set via a config override and the
-		// working directory comes from the process cwd (cmd.Dir below), which
-		// also lets codex match the recorded session by cwd.
-		args = []string{"exec", "resume", req.ResumeSessionID, "--json", "--skip-git-repo-check",
-			"-c", "sandbox_mode=" + string(codexSandbox(req.Sandbox))}
-	} else {
-		args = []string{"exec", "--json",
-			// Workspaces are bare task directories, not git repos.
-			"--skip-git-repo-check",
-			"--sandbox", string(codexSandbox(req.Sandbox)),
-			"-C", req.Workspace,
-		}
-	}
-	if req.Model != "" {
-		args = append(args, "-m", req.Model)
-	}
-	if req.ReasoningEffort != "" {
-		args = append(args, "-c", `model_reasoning_effort="`+req.ReasoningEffort+`"`)
-	}
-	if req.ServiceTier != "" {
-		tier := req.ServiceTier
-		if tier == "standard" {
-			tier = "default"
-		}
-		args = append(args, "-c", `service_tier="`+tier+`"`)
-		if req.ServiceTier == "fast" {
-			args = append(args, "-c", "features.fast_mode=true")
-		}
-	}
-	args = append(args, req.Prompt)
-
-	cmd := exec.CommandContext(ctx, r.binary, args...)
-	cmd.Dir = req.Workspace
-	cmd.Env = req.Environment
-	if req.InterruptGrace > 0 {
-		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
-		cmd.WaitDelay = req.InterruptGrace
-	}
-	// Closing stdin avoids codex blocking on "reading additional input".
-	cmd.Stdin = nil
-	return streamProcess(ctx, cmd, &codexParser{}, r.now, sink)
-}
-
-var errCodexAppServerUnavailable = errors.New("Codex app-server is unavailable")
 
 type codexAppEnvelope struct {
 	ID     json.RawMessage `json:"id"`
@@ -357,7 +300,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 	var stderr lineCapture
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return Result{}, fmt.Errorf("%w: %v", errCodexAppServerUnavailable, err)
+		return Result{}, fmt.Errorf("start Codex app-server: %w", err)
 	}
 	defer stopCodexAppServer(cmd, stdin)
 
@@ -390,7 +333,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 		}
 		if responseID(envelope.ID) == 1 {
 			if len(envelope.Error) > 0 {
-				return Result{}, fmt.Errorf("%w: initialize failed: %s", errCodexAppServerUnavailable, envelope.Error)
+				return Result{}, fmt.Errorf("initialize Codex app-server: %s", envelope.Error)
 			}
 			initialized = true
 			if err := encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
@@ -477,7 +420,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 		return state.result(), ctx.Err()
 	}
 	if !initialized || !threadStarted {
-		return Result{}, fmt.Errorf("%w%s", errCodexAppServerUnavailable, stderr.tail())
+		return Result{}, fmt.Errorf("Codex app-server ended before thread started%s", stderr.tail())
 	}
 	if !state.completed && !state.failed {
 		return state.result(), fmt.Errorf("Codex app-server ended before turn completion%s", stderr.tail())
@@ -553,9 +496,8 @@ func (s *codexAppState) handleNotification(method string, raw json.RawMessage, l
 	case "item/completed":
 		s.handleItemCompleted(params.Item, line, at, sink)
 	case "thread/tokenUsage/updated":
-		// `total` accumulates every model call in the agent turn and matches the
-		// legacy `codex exec` turn.completed usage. `last` is only one sampling
-		// call and would severely undercount tool-heavy steps.
+		// `total` accumulates every model call in the agent turn. `last` is only
+		// one sampling call and would severely undercount tool-heavy steps.
 		breakdown := params.TokenUsage.Total
 		if breakdown.empty() {
 			breakdown = params.TokenUsage.Last
@@ -689,124 +631,5 @@ func codexSandbox(s Sandbox) string {
 		return "danger-full-access"
 	default:
 		return "workspace-write"
-	}
-}
-
-// codexParser accumulates terminal state from the codex JSONL stream.
-type codexParser struct {
-	final     string
-	sessionID string
-	usage     Usage
-	completed bool
-}
-
-type codexEnvelope struct {
-	Type     string          `json:"type"`
-	ThreadID string          `json:"thread_id"`
-	Item     codexItem       `json:"item"`
-	Usage    codexUsage      `json:"usage"`
-	Error    json.RawMessage `json:"error"`
-}
-
-type codexItem struct {
-	Type    string `json:"type"`
-	Text    string `json:"text"`
-	Command string `json:"command"`
-	Path    string `json:"path"`
-	// Populated on a command_execution's terminal event. Status is one of
-	// in_progress/completed/failed; AggregatedOutput is the combined
-	// stdout+stderr; ExitCode is a pointer so a real 0 is distinguishable from
-	// "not reported".
-	Status           string `json:"status"`
-	AggregatedOutput string `json:"aggregated_output"`
-	ExitCode         *int   `json:"exit_code"`
-}
-
-// commandFailed reports whether a finished command_execution ended badly. A
-// non-zero exit is the primary signal; status=="failed" covers commands codex
-// could not even launch, where no exit code is reported.
-func (i codexItem) commandFailed() bool {
-	return i.Status == "failed" || (i.ExitCode != nil && *i.ExitCode != 0)
-}
-
-type codexUsage struct {
-	InputTokens           int `json:"input_tokens"`
-	CachedInputTokens     int `json:"cached_input_tokens"`
-	OutputTokens          int `json:"output_tokens"`
-	ReasoningOutputTokens int `json:"reasoning_output_tokens"`
-}
-
-func (p *codexParser) parse(line string, at time.Time, sink Sink) {
-	var env codexEnvelope
-	if err := json.Unmarshal([]byte(line), &env); err != nil {
-		// Codex occasionally prints non-JSON banner lines; preserve them as
-		// raw reasoning rather than failing the run.
-		sink(Event{Kind: KindReasoning, Text: strings.TrimSpace(line), Raw: line, At: at})
-		return
-	}
-
-	switch env.Type {
-	case "thread.started":
-		p.sessionID = env.ThreadID
-		sink(Event{Kind: KindStarted, Text: env.ThreadID, Raw: line, At: at})
-	case "turn.started":
-		// Turn boundaries carry no user-facing payload.
-	case "item.completed":
-		p.handleItem(env.Item, line, at, sink, true)
-	case "item.updated":
-		p.handleItem(env.Item, line, at, sink, false)
-	case "turn.completed":
-		p.usage = Usage{InputTokens: env.Usage.InputTokens, CachedInputTokens: env.Usage.CachedInputTokens, OutputTokens: env.Usage.OutputTokens, ReasoningOutputTokens: env.Usage.ReasoningOutputTokens}
-		p.completed = true
-		sink(Event{Kind: KindUsage, Raw: line, At: at})
-	case "error", "turn.failed", "thread.error":
-		p.completed = false
-		sink(Event{Kind: KindError, Text: codexErrorText(env, line), Raw: line, At: at})
-	default:
-		// Unknown event types are retained raw so nothing is silently lost.
-		sink(Event{Kind: KindReasoning, Raw: line, At: at})
-	}
-}
-
-func (p *codexParser) handleItem(item codexItem, line string, at time.Time, sink Sink, terminal bool) {
-	switch item.Type {
-	case "agent_message", "assistant_message":
-		p.final = item.Text
-		sink(Event{Kind: KindMessage, Text: item.Text, Raw: line, At: at})
-	case "reasoning":
-		sink(Event{Kind: KindReasoning, Text: item.Text, Raw: line, At: at})
-	case "command_execution":
-		// Codex reports a command across started/updated/completed phases. Act
-		// only on the terminal event, emitting the invocation immediately
-		// followed by its captured output, so the timeline shows one row whose
-		// RESULT holds the command's output and whose state reflects its exit
-		// code — rather than a bare command with the output silently dropped.
-		if !terminal {
-			return
-		}
-		sink(Event{Kind: KindToolUse, Text: item.Command, Raw: line, At: at})
-		sink(Event{Kind: KindToolResult, Text: item.AggregatedOutput, Raw: line, Failed: item.commandFailed(), At: at})
-	case "local_shell_call":
-		sink(Event{Kind: KindToolUse, Text: item.Command, Raw: line, At: at})
-	case "file_change", "patch_apply":
-		sink(Event{Kind: KindFileChange, Text: item.Path, Raw: line, At: at})
-	default:
-		sink(Event{Kind: KindToolResult, Text: item.Text, Raw: line, At: at})
-	}
-}
-
-func codexErrorText(env codexEnvelope, line string) string {
-	if len(env.Error) > 0 {
-		return strings.Trim(string(env.Error), `"`)
-	}
-	return line
-}
-
-func (p *codexParser) result() Result {
-	return Result{
-		FinalMessage: p.final,
-		Usage:        p.usage,
-		SessionID:    p.sessionID,
-		Succeeded:    p.completed,
 	}
 }
