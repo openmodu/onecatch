@@ -178,8 +178,15 @@ func Validate(input Settings) error {
 			if runtime.ServiceTier != "" && !serviceTierKey.MatchString(runtime.ServiceTier) {
 				return errors.New("codex service tier is invalid")
 			}
+		} else if id == "claude" {
+			if !contains([]string{"", "low", "medium", "high", "xhigh", "max"}, runtime.ReasoningEffort) {
+				return errors.New("Claude Code reasoning effort is invalid")
+			}
+			if runtime.ServiceTier != "" {
+				return errors.New("Claude Code does not support service tier settings")
+			}
 		} else if runtime.ReasoningEffort != "" || runtime.ServiceTier != "" {
-			return fmt.Errorf("runtime %s does not support Codex model settings", id)
+			return fmt.Errorf("runtime %s does not support reasoning or service tier settings", id)
 		}
 		if id == "modu" {
 			if !contains([]string{"", "auto", "openai", "anthropic", "gemini"}, runtime.Provider) {

@@ -165,6 +165,9 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	runtime.ServiceTier = "priority"
 	runtime.EnvironmentAllowlist = []string{"ONESHOT_TEST_ENV"}
 	settings.Runtimes["codex"] = runtime
+	claude := settings.Runtimes["claude"]
+	claude.ReasoningEffort = "high"
+	settings.Runtimes["claude"] = claude
 	modu := settings.Runtimes["modu"]
 	modu.Provider = "anthropic"
 	settings.Runtimes["modu"] = modu
@@ -202,6 +205,9 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	}
 	if got := run.RuntimeSettings["codex"]; got.ReasoningEffort != "xhigh" || got.ServiceTier != "priority" {
 		t.Fatalf("Codex model settings snapshot = %#v", got)
+	}
+	if got := run.RuntimeSettings["claude"].ReasoningEffort; got != "high" {
+		t.Fatalf("Claude Code effort snapshot = %q", got)
 	}
 	if got := run.RuntimeSettings["modu"].Provider; got != "anthropic" {
 		t.Fatalf("modu provider snapshot = %q", got)

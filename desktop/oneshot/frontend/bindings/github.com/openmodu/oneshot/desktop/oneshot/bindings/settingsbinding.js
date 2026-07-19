@@ -66,11 +66,21 @@ export function GetStorageUsage() {
 
 /**
  * @param {settings$0.RuntimeSettings} input
+ * @returns {$CancellablePromise<agentrun$0.ClaudeConfiguration>}
+ */
+export function InspectClaudeConfiguration(input) {
+    return $Call.ByID(2235574453, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType5($result);
+    }));
+}
+
+/**
+ * @param {settings$0.RuntimeSettings} input
  * @returns {$CancellablePromise<agentrun$0.CodexConfiguration>}
  */
 export function InspectCodexConfiguration(input) {
     return $Call.ByID(1994002900, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType6($result);
     }));
 }
 
@@ -80,7 +90,7 @@ export function InspectCodexConfiguration(input) {
  */
 export function PreviewCleanup(input) {
     return $Call.ByID(840909829, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType7($result);
     }));
 }
 
@@ -163,5 +173,6 @@ const $$createType1 = localapp$0.CleanupResult.createFrom;
 const $$createType2 = localapp$0.DiagnosticsExport.createFrom;
 const $$createType3 = settings$0.Settings.createFrom;
 const $$createType4 = localapp$0.StorageUsage.createFrom;
-const $$createType5 = agentrun$0.CodexConfiguration.createFrom;
-const $$createType6 = localapp$0.CleanupPreview.createFrom;
+const $$createType5 = agentrun$0.ClaudeConfiguration.createFrom;
+const $$createType6 = agentrun$0.CodexConfiguration.createFrom;
+const $$createType7 = localapp$0.CleanupPreview.createFrom;

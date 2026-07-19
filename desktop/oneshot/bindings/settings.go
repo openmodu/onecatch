@@ -38,6 +38,9 @@ func (b *SettingsBinding) CheckRuntimeDraft(input localapp.RuntimeDraftInput) (l
 func (b *SettingsBinding) InspectCodexConfiguration(input domainsettings.RuntimeSettings) (agentrun.CodexConfiguration, error) {
 	return b.app.InspectCodexConfiguration(context.Background(), input)
 }
+func (b *SettingsBinding) InspectClaudeConfiguration(input domainsettings.RuntimeSettings) (agentrun.ClaudeConfiguration, error) {
+	return b.app.InspectClaudeConfiguration(context.Background(), input)
+}
 func (b *SettingsBinding) GetStorageUsage() (localapp.StorageUsage, error) {
 	return b.app.GetStorageUsage()
 }

@@ -6,6 +6,91 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+export class ClaudeConfiguration {
+    /**
+     * Creates a new ClaudeConfiguration instance.
+     * @param {Partial<ClaudeConfiguration>} [$$source = {}] - The source object to create the ClaudeConfiguration.
+     */
+    constructor($$source = {}) {
+        if (!("models" in $$source)) {
+            /**
+             * @member
+             * @type {ClaudeModelInfo[]}
+             */
+            this["models"] = [];
+        }
+        if (!("efforts" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["efforts"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ClaudeConfiguration instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ClaudeConfiguration}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType1;
+        const $$createField1_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("models" in $$parsedSource) {
+            $$parsedSource["models"] = $$createField0_0($$parsedSource["models"]);
+        }
+        if ("efforts" in $$parsedSource) {
+            $$parsedSource["efforts"] = $$createField1_0($$parsedSource["efforts"]);
+        }
+        return new ClaudeConfiguration(/** @type {Partial<ClaudeConfiguration>} */($$parsedSource));
+    }
+}
+
+export class ClaudeModelInfo {
+    /**
+     * Creates a new ClaudeModelInfo instance.
+     * @param {Partial<ClaudeModelInfo>} [$$source = {}] - The source object to create the ClaudeModelInfo.
+     */
+    constructor($$source = {}) {
+        if (!("model" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["model"] = "";
+        }
+        if (!("displayName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["displayName"] = "";
+        }
+        if (!("alias" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["alias"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ClaudeModelInfo instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ClaudeModelInfo}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ClaudeModelInfo(/** @type {Partial<ClaudeModelInfo>} */($$parsedSource));
+    }
+}
+
 export class CodexConfiguration {
     /**
      * Creates a new CodexConfiguration instance.
@@ -50,7 +135,7 @@ export class CodexConfiguration {
      * @returns {CodexConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType1;
+        const $$createField3_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
             $$parsedSource["models"] = $$createField3_0($$parsedSource["models"]);
@@ -139,7 +224,7 @@ export class CodexModelInfo {
      */
     static createFrom($$source = {}) {
         const $$createField5_0 = $$createType2;
-        const $$createField6_0 = $$createType4;
+        const $$createField6_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("reasoningEfforts" in $$parsedSource) {
             $$parsedSource["reasoningEfforts"] = $$createField5_0($$parsedSource["reasoningEfforts"]);
@@ -272,8 +357,10 @@ export const StreamPhase = {
 };
 
 // Private type creation functions
-const $$createType0 = CodexModelInfo.createFrom;
+const $$createType0 = ClaudeModelInfo.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = $Create.Array($Create.Any);
-const $$createType3 = CodexServiceTier.createFrom;
+const $$createType3 = CodexModelInfo.createFrom;
 const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = CodexServiceTier.createFrom;
+const $$createType6 = $Create.Array($$createType5);

@@ -3,8 +3,10 @@ package agentrun
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -36,6 +38,93 @@ func (r *ClaudeRunner) Available() bool {
 	return err == nil
 }
 
+type ClaudeModelInfo struct {
+	Model       string `json:"model"`
+	DisplayName string `json:"displayName"`
+	Alias       bool   `json:"alias"`
+}
+
+type ClaudeConfiguration struct {
+	Models  []ClaudeModelInfo `json:"models"`
+	Efforts []string          `json:"efforts"`
+}
+
+// InspectConfiguration discovers the model aliases advertised by the installed
+// Claude Code CLI. Claude Code does not expose a model-list command, so this
+// reads --help without starting a session or consuming model quota.
+func (r *ClaudeRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (ClaudeConfiguration, error) {
+	cmd := exec.CommandContext(ctx, r.binary, "--help")
+	if cwd != "" {
+		cmd.Dir = cwd
+	}
+	cmd.Env = environment
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return ClaudeConfiguration{}, fmt.Errorf("read Claude Code model options: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	models := parseClaudeModelOptions(string(output))
+	if len(models) == 0 {
+		return ClaudeConfiguration{}, fmt.Errorf("Claude Code did not advertise any model aliases")
+	}
+	return ClaudeConfiguration{Models: models, Efforts: parseClaudeEffortOptions(string(output))}, nil
+}
+
+var claudeQuotedModel = regexp.MustCompile(`'([A-Za-z0-9][A-Za-z0-9._:-]*)'`)
+
+func parseClaudeModelOptions(help string) []ClaudeModelInfo {
+	seen := make(map[string]struct{})
+	models := make([]ClaudeModelInfo, 0)
+	for _, match := range claudeQuotedModel.FindAllStringSubmatch(claudeHelpOptionSection(help, "--model <model>"), -1) {
+		model := match[1]
+		if _, ok := seen[model]; ok {
+			continue
+		}
+		seen[model] = struct{}{}
+		alias := !strings.HasPrefix(model, "claude-")
+		displayName := model
+		if alias {
+			displayName = strings.ToUpper(model[:1]) + model[1:]
+		}
+		models = append(models, ClaudeModelInfo{Model: model, DisplayName: displayName, Alias: alias})
+	}
+	return models
+}
+
+func parseClaudeEffortOptions(help string) []string {
+	section := claudeHelpOptionSection(help, "--effort <level>")
+	efforts := make([]string, 0, 5)
+	for _, effort := range []string{"low", "medium", "high", "xhigh", "max"} {
+		if regexp.MustCompile(`\b` + effort + `\b`).MatchString(section) {
+			efforts = append(efforts, effort)
+		}
+	}
+	return efforts
+}
+
+func claudeHelpOptionSection(help, option string) string {
+	lines := strings.Split(help, "\n")
+	var section strings.Builder
+	collecting := false
+	for _, line := range lines {
+		if !collecting {
+			index := strings.Index(line, option)
+			if index < 0 {
+				continue
+			}
+			collecting = true
+			section.WriteString(line[index+len(option):])
+			section.WriteByte('\n')
+			continue
+		}
+		if strings.HasPrefix(line, "  -") {
+			break
+		}
+		section.WriteString(line)
+		section.WriteByte('\n')
+	}
+	return section.String()
+}
+
 func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
 	args := []string{
 		"-p", req.Prompt,
@@ -57,6 +146,9 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 	}
 	if req.Model != "" {
 		args = append(args, "--model", req.Model)
+	}
+	if req.ReasoningEffort != "" {
+		args = append(args, "--effort", req.ReasoningEffort)
 	}
 
 	cmd := exec.CommandContext(ctx, r.binary, args...)
