@@ -5,7 +5,7 @@
 // Each supported runtime speaks a different wire format on stdout:
 //
 //   - Codex app-server emits JSON-RPC notifications including agent-message and
-//     command-output deltas. Older CLIs fall back to `codex exec --json` JSONL.
+//     command-output deltas.
 //   - Claude Code (`claude -p --output-format stream-json`) emits JSONL:
 //     system{init}, assistant{message.content[]}, user{tool_result},
 //     result{success|error}.
@@ -22,7 +22,7 @@ import "time"
 type Runtime string
 
 const (
-	// RuntimeCodex drives the OpenAI Codex CLI via app-server, with exec fallback.
+	// RuntimeCodex drives the OpenAI Codex CLI via app-server.
 	RuntimeCodex Runtime = "codex"
 	// RuntimeClaude drives Anthropic's Claude Code via `claude -p`.
 	RuntimeClaude Runtime = "claude"
