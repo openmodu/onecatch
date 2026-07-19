@@ -128,6 +128,11 @@ function roundItems(events, fallbackText, fallbackError, translate) {
   const seenMessages = new Set();
   const permissions = new Map();
   let lastTool = null;
+  // Tool calls in a parallel batch all start before any of them return, so the
+  // "most recent tool_use" is not the call a result belongs to. When the
+  // runtime tags events with a call id (streamId) we pair by that; otherwise we
+  // fall back to the most recent tool_use for runtimes that emit no id.
+  const pendingToolsById = new Map();
   for (const event of [...events].sort((a, b) => a.seq - b.seq)) {
     if (hiddenKinds.has(event.kind)) continue;
     if (event.kind === "permission_request" && event.permission?.id) {
@@ -148,11 +153,15 @@ function roundItems(events, fallbackText, fallbackError, translate) {
     // whether the call ever came back at all. This is checked before the
     // empty-text guard below because a result carries those two signals even
     // when the command printed nothing — a silent success or a launch failure.
-    if (event.kind === "tool_result" && lastTool) {
-      if (event.text) lastTool.details.push({ kind: event.kind, text: event.text, at: event.at });
-      lastTool.settled = !event.streaming;
-      if (event.failed) lastTool.failed = true;
-      continue;
+    if (event.kind === "tool_result") {
+      const target = (event.streamId && pendingToolsById.get(event.streamId)) || lastTool;
+      if (target) {
+        if (event.text) target.details.push({ kind: event.kind, text: event.text, at: event.at });
+        target.settled = !event.streaming;
+        if (event.failed) target.failed = true;
+        if (!event.streaming && event.streamId) pendingToolsById.delete(event.streamId);
+        continue;
+      }
     }
     if (!event.text) continue;
     if (assistantKinds.has(event.kind)) {
@@ -165,7 +174,12 @@ function roundItems(events, fallbackText, fallbackError, translate) {
     }
     const tool = { type: "tool", id: event.streamId || `${event.kind}-${event.seq}`, kind: event.kind, title: readableToolTitle(event.text, translate), text: event.text, streaming: Boolean(event.streaming), at: event.at, details: [], failed: Boolean(event.failed), settled: event.kind !== "tool_use" };
     items.push(tool);
-    lastTool = event.kind === "tool_use" ? tool : null;
+    if (event.kind === "tool_use") {
+      lastTool = tool;
+      if (event.streamId) pendingToolsById.set(event.streamId, tool);
+    } else {
+      lastTool = null;
+    }
   }
   if (!items.some((item) => item.type === "message")) {
     const text = readableAgentMessage(fallbackText || fallbackError);

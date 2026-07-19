@@ -144,13 +144,16 @@ func (p *moduParser) parse(line string, at time.Time, sink Sink) {
 	case "message_end":
 		p.handleMessage(env.Message, line, at, sink)
 	case "tool_execution_start":
-		sink(Event{Kind: KindToolUse, Text: moduToolText(env.ToolName, env.Args), Raw: line, At: at})
+		// StreamID carries the tool call id so a result can be paired with its
+		// own call. Parallel batches emit every start before any end, so a
+		// positional match would settle only the last call in the batch.
+		sink(Event{Kind: KindToolUse, StreamID: env.ToolCallID, Text: moduToolText(env.ToolName, env.Args), Raw: line, At: at})
 	case "tool_execution_update":
 		// Partial tool output is retained raw without pretending the tool has
 		// completed; the terminal result arrives in tool_execution_end.
 		sink(Event{Kind: KindReasoning, Text: moduResultText(env.Result), Raw: line, At: at})
 	case "tool_execution_end":
-		sink(Event{Kind: KindToolResult, Text: moduResultText(env.Result), Raw: line, Failed: env.IsError, At: at})
+		sink(Event{Kind: KindToolResult, StreamID: env.ToolCallID, Text: moduResultText(env.Result), Raw: line, Failed: env.IsError, At: at})
 	case "interrupt":
 		// Modu also uses this lifecycle event for approval gates. The print
 		// stream omits the interrupt reason, so process/session completion is

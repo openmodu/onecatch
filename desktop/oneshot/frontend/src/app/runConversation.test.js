@@ -146,6 +146,32 @@ test("keeps a streaming tool result unsettled until its end frame", () => {
   assert.equal(round.items[0].details[0].text, "ok package/a");
 });
 
+test("settles every call in a parallel batch by id, not just the last started", () => {
+  // A parallel tool batch emits all its starts before any of its ends, and the
+  // ends arrive out of start order. Pairing by "most recent tool_use" would
+  // settle only the last call; pairing by streamId settles each on its own.
+  const [round] = buildRunConversation({
+    task: {}, run: {}, events: [],
+    workflow: { steps: [{ id: "execute", name: "执行", runtime: "modu" }] },
+    stepRuns: [{ id: "step-1", stepId: "execute", status: "succeeded" }],
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 1, kind: "tool_use", streamId: "call-a", text: "read git-commit/SKILL.md" },
+      { stepRunId: "step-1", seq: 2, kind: "tool_use", streamId: "call-b", text: "read git-push/SKILL.md" },
+      { stepRunId: "step-1", seq: 3, kind: "tool_use", streamId: "call-c", text: "read git-branch/SKILL.md" },
+      { stepRunId: "step-1", seq: 4, kind: "tool_result", streamId: "call-c", text: "branch skill" },
+      { stepRunId: "step-1", seq: 5, kind: "tool_result", streamId: "call-a", text: "commit skill" },
+      { stepRunId: "step-1", seq: 6, kind: "tool_result", streamId: "call-b", text: "push skill" },
+    ],
+  });
+  const [a, b, c] = round.items;
+  assert.equal(a.settled, true, "the first-started call settles from its own result");
+  assert.equal(b.settled, true, "the middle call settles from its own result");
+  assert.equal(c.settled, true);
+  assert.equal(a.details[0].text, "commit skill", "each result lands on its own call");
+  assert.equal(b.details[0].text, "push skill");
+  assert.equal(c.details[0].text, "branch skill");
+});
+
 test("falls back to StepRun content when no message event exists", () => {
   const [round] = buildRunConversation({
     task: {}, run: {}, events: [], runtimeEvents: [],
