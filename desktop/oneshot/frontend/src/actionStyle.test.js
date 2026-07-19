@@ -92,6 +92,16 @@ test("appearance controls use text-first TUI geometry", async () => {
   assert.doesNotMatch(css, /\.appearance-accent\s*\{[^}]*border-radius:\s*50%/s);
 });
 
+test("select options keep long labels and metadata from overlapping", async () => {
+  const primitives = await readFile(path.join(sourceRoot, "ui", "primitives.jsx"), "utf8");
+  const css = await readFile(path.join(sourceRoot, "ui", "tokens.css"), "utf8");
+  assert.match(primitives, /className="ui-select__label"[^>]*title=\{option\.label\}/);
+  assert.match(primitives, /<small title=\{option\.meta\}>\{option\.meta\}<\/small>/);
+  assert.match(css, /\.ui-select__option\s*\{[^}]*display:\s*flex[^}]*\}/s);
+  assert.match(css, /\.ui-select__label\s*\{[^}]*min-width:\s*0[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap[^}]*\}/s);
+  assert.match(css, /\.ui-select__option small\s*\{[^}]*max-width:\s*42%[^}]*overflow:\s*hidden[^}]*text-overflow:\s*ellipsis[^}]*white-space:\s*nowrap[^}]*\}/s);
+});
+
 test("sidebar orders global search, pinned projects, projects, and nested tasks", async () => {
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
