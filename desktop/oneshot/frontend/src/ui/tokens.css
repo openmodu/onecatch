@@ -276,12 +276,13 @@
   color: var(--acp-text);
   font: var(--ui-weight-medium) var(--ui-font-meta)/1.35 var(--ui-font-mono);
 }
-.ui-select__option { min-height: 36px; display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; gap: var(--ui-space-2); padding: 7px var(--ui-control-padding-x); cursor: pointer; }
+.ui-select__option { min-height: 36px; display: flex; align-items: center; gap: var(--ui-space-2); padding: 7px var(--ui-control-padding-x); cursor: pointer; }
 .ui-select__option.active { background: color-mix(in oklab, var(--acp-accent-soft) 12%, transparent); }
 .ui-select__option.selected { color: var(--acp-good); }
 .ui-select__option.disabled { color: var(--acp-text-soft); opacity: .5; cursor: not-allowed; }
-.ui-select__mark { color: var(--acp-good); font-weight: var(--ui-weight-bold); }
-.ui-select__option small { color: var(--acp-text-soft); font-size: var(--ui-font-micro); }
+.ui-select__mark { flex: 0 0 14px; color: var(--acp-good); font-weight: var(--ui-weight-bold); }
+.ui-select__label { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-select__option small { min-width: 0; max-width: 42%; flex: 0 1 auto; overflow: hidden; color: var(--acp-text-soft); font-size: var(--ui-font-micro); text-align: right; text-overflow: ellipsis; white-space: nowrap; }
 
 .ui-toggle-row {
   width: 100%;
