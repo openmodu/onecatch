@@ -14,6 +14,11 @@ tasks:
     cmds:
       - task: darwin:build
 
+  package:
+    desc: Build and package a signed macOS application ZIP
+    cmds:
+      - task: darwin:package
+
   run:
     cmds:
       - task: darwin:run

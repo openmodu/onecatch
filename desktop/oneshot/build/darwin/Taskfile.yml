@@ -22,6 +22,13 @@ tasks:
       CGO_ENABLED: 1
       MACOSX_DEPLOYMENT_TARGET: "12.0"
 
+  package:
+    desc: Build an app bundle and distributable ZIP
+    deps:
+      - task: build
+    cmds:
+      - ./build/darwin/package.sh
+
   run:
     deps:
       - task: build
