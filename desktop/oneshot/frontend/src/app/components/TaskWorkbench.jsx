@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Action, Kicker } from "../../ui/primitives.jsx";
 import { shortID } from "../format.js";
@@ -58,7 +58,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, permissionBusy, attachments, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, onRename, onDelete, notify }) {
+function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, permissionBusy, attachments, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, onRename, onDelete, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
   const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
@@ -145,3 +145,5 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, sel
     </aside>
   </div>;
 }
+
+export default memo(TaskWorkbench);

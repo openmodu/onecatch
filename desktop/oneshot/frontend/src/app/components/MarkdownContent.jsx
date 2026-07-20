@@ -20,7 +20,19 @@ function SafeLink({ href = "", children, node: _node, ...props }) {
 // fetching their URLs from the desktop webview.
 function MarkdownContent({ content, streaming = false, className = "" }) {
   const { t } = useTranslation();
-  return <div className={`markdown-content ${streaming ? "streaming" : ""} ${className}`.trim()} aria-busy={streaming || undefined}>
+  const text = String(content || "");
+  // While a message streams, its full text is re-fed here on every ~80ms flush.
+  // Running the whole remark/rehype pipeline that often (and re-parsing an
+  // ever-longer string) is the single biggest source of streaming jank, so the
+  // in-flight message renders as cheap pre-wrapped plain text. Markdown is
+  // parsed exactly once, when the message settles.
+  if (streaming) {
+    return <div className={`markdown-content markdown-plain streaming ${className}`.trim()} aria-busy>
+      {text}
+      <span className="markdown-stream-cursor" aria-hidden="true" />
+    </div>;
+  }
+  return <div className={`markdown-content ${className}`.trim()}>
     <ReactMarkdown
       skipHtml
       remarkPlugins={[remarkGfm]}
@@ -29,8 +41,7 @@ function MarkdownContent({ content, streaming = false, className = "" }) {
         a: SafeLink,
         img: ({ alt = "" }) => <span className="markdown-image-placeholder">{t("markdown.image", { alt: alt ? `: ${alt}` : "" })}</span>,
       }}
-    >{String(content || "")}</ReactMarkdown>
-    {streaming && <span className="markdown-stream-cursor" aria-hidden="true" />}
+    >{text}</ReactMarkdown>
   </div>;
 }
 

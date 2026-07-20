@@ -209,7 +209,29 @@ function appliedInstructions(instructions) {
   });
 }
 
+// A round only changes while its step is live. This fingerprint captures every
+// field roundItems reads, so a finished round is rebuilt zero times: the cache
+// hands back the exact same object reference on every poll/stream frame, which
+// lets the memoized round component skip it entirely and keeps streaming from
+// re-reconciling the whole (potentially hundreds of rows) transcript.
+function roundFingerprint(stepRun, events) {
+  const parts = [stepRun.status, stepRun.attempt, stepRun.signal, events.length, stepRun.startedAt, stepRun.finishedAt];
+  for (const event of events) {
+    if (event.streaming || event.streamId) parts.push(`${event.seq}:${event.streamId || ""}:${event.revision || 0}:${event.text ? event.text.length : 0}:${event.streaming ? 1 : 0}`);
+  }
+  return parts.join("|");
+}
+
+let cachedTranslate = defaultTranslate;
+const roundCache = new Map();
+
 export function buildRunConversation(detail, translate = defaultTranslate) {
+  // Cached rounds carry already-translated labels, so a language switch must
+  // start from a clean slate.
+  if (translate !== cachedTranslate) {
+    cachedTranslate = translate;
+    roundCache.clear();
+  }
   const workflowSteps = new Map((detail?.workflow?.steps || []).map((step) => [step.id, step]));
   const eventsByStepRun = new Map();
   for (const event of detail?.runtimeEvents || []) {
@@ -222,9 +244,18 @@ export function buildRunConversation(detail, translate = defaultTranslate) {
   if (taskText) timeline.push({ type: "user", id: "task", text: taskText, at: detail.task.createdAt || detail.run?.startedAt || detail.task.updatedAt || detail.run?.updatedAt || "", sortRank: 0 });
   for (const instruction of resumedInstructions(detail?.events)) timeline.push({ ...instruction, sortRank: 0 });
   for (const instruction of appliedInstructions(detail?.instructions)) timeline.push({ ...instruction, sortRank: 0 });
+  const liveStepRuns = new Set();
   for (const [index, stepRun] of (detail?.stepRuns || []).entries()) {
     const step = workflowSteps.get(stepRun.stepId) || {};
-    timeline.push({
+    const events = eventsByStepRun.get(stepRun.id) || [];
+    const fingerprint = `${index}|${step.name || stepRun.stepId}|${step.runtime || "agent"}|${roundFingerprint(stepRun, events)}`;
+    liveStepRuns.add(stepRun.id);
+    const cached = roundCache.get(stepRun.id);
+    if (cached && cached.fingerprint === fingerprint) {
+      timeline.push(cached.round);
+      continue;
+    }
+    const round = {
       type: "round",
       id: stepRun.id,
       round: index + 1,
@@ -235,10 +266,17 @@ export function buildRunConversation(detail, translate = defaultTranslate) {
       signal: stepRun.signal,
       startedAt: stepRun.startedAt,
       finishedAt: stepRun.finishedAt,
-      items: roundItems(eventsByStepRun.get(stepRun.id) || [], stepRun.content, stepRun.error, translate),
+      items: roundItems(events, stepRun.content, stepRun.error, translate),
       at: stepRun.startedAt || "",
       sortRank: 1,
-    });
+    };
+    roundCache.set(stepRun.id, { fingerprint, round });
+    timeline.push(round);
+  }
+  // Drop cache entries for runs the caller has navigated away from so the map
+  // does not grow without bound across every run the session opens.
+  for (const key of roundCache.keys()) {
+    if (!liveStepRuns.has(key)) roundCache.delete(key);
   }
   return timeline.sort((a, b) => {
     const timeDifference = new Date(a.at || 0).getTime() - new Date(b.at || 0).getTime();
