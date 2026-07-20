@@ -197,7 +197,7 @@ details[open] > summary .opened { display: block; }
 .conversation-message-meta time { width: var(--ui-event-time-width); text-align: right; }
 .conversation-round-index { color: #78837b; font: 500 var(--ui-font-micro) "DM Mono", monospace; white-space: nowrap; }
 .markdown-content { width: 100%; min-width: 0; max-width: 100%; color: #29332d; font-size: var(--ui-font-emphasis); font-weight: 400; line-height: 1.65; overflow-x: hidden; overflow-wrap: anywhere; word-break: break-word; user-select: text; }
-.markdown-loading { white-space: pre-wrap; }
+.markdown-loading, .markdown-plain { white-space: pre-wrap; }
 .markdown-content > :first-child { margin-top: 0; }
 .markdown-content > :last-child { margin-bottom: 0; }
 .markdown-content p { margin: 0 0 .72em; white-space: pre-wrap; }

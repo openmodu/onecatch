@@ -88,6 +88,15 @@ function App() {
   selectedRunIDRef.current = selectedRunID;
   const tasksRef = useRef([]);
   tasksRef.current = tasks;
+  // Handlers passed down to memoized children read these instead of closing over
+  // the fast-changing state directly, so the callbacks stay reference-stable and
+  // the children's memo() actually holds across the 80ms streaming cadence.
+  const selectedQueuedTaskIDRef = useRef("");
+  selectedQueuedTaskIDRef.current = selectedQueuedTaskID;
+  const composerAttachmentsRef = useRef([]);
+  composerAttachmentsRef.current = composerAttachments;
+  const runNextCursorRef = useRef("");
+  runNextCursorRef.current = runNextCursor;
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID);
 
@@ -525,38 +534,40 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
-  const chooseAttachments = async (target) => {
+  const chooseAttachments = useCallback(async (target) => {
     try {
       const paths = mode === "demo" ? ["/Users/demo/Desktop/reference.png"] : await WorkspaceBinding.ChooseAttachments();
       if (!paths?.length) return;
       if (target === "task") setTaskForm((form) => ({ ...form, attachmentPaths: [...new Set([...(form.attachmentPaths || []), ...paths])].slice(0, 8) }));
       else setComposerAttachments((items) => [...new Set([...items, ...paths])].slice(0, 8));
     } catch (error) { notify("error", errorMessage(error)); }
-  };
+  }, [mode, notify]);
 
   // Returns true when the submit was accepted so the composer can clear its
   // local draft; false keeps whatever the user typed.
-  const submitWorkbenchComposer = async (modeName = "queue", content = "") => {
-    if (!runDetail?.run?.id) { setTaskModal(true); return false; }
-    const run = runDetail.run;
-    if (!content && !composerAttachments.length && run.status !== "paused") return false;
+  const submitWorkbenchComposer = useCallback(async (modeName = "queue", content = "") => {
+    const runDetailNow = runDetailRef.current;
+    if (!runDetailNow?.run?.id) { setTaskModal(true); return false; }
+    const run = runDetailNow.run;
+    const attachments = composerAttachmentsRef.current;
+    if (!content && !attachments.length && run.status !== "paused") return false;
     setBusy(modeName);
     try {
       if (mode === "demo") {
         if (run.status === "running") {
-          const instruction = { id: `instruction_${Date.now()}`, content: content || t("composer.attachmentInstruction"), attachments: [...composerAttachments], status: "pending", priority: modeName === "insert", createdAt: new Date().toISOString() };
+          const instruction = { id: `instruction_${Date.now()}`, content: content || t("composer.attachmentInstruction"), attachments: [...attachments], status: "pending", priority: modeName === "insert", createdAt: new Date().toISOString() };
           setRunDetail((detail) => ({ ...detail, instructions: [...(detail.instructions || []), instruction] }));
         } else if (run.status === "paused") {
           setRunDetail((detail) => ({ ...detail, active: true, run: { ...detail.run, status: "running", pauseReason: "" } }));
           setRunItems((items) => items.map((item) => item.id === run.id ? { ...item, status: "running" } : item));
         }
       } else if (run.status === "running") {
-        const input = { content, attachmentPaths: composerAttachments };
+        const input = { content, attachmentPaths: attachments };
         if (modeName === "insert") await TaskRunBinding.InterruptAndInsert(run.id, input);
         else await TaskRunBinding.EnqueueInstruction(run.id, input);
       } else if (run.status === "paused") {
-        if (composerAttachments.length) {
-          await TaskRunBinding.EnqueueInstruction(run.id, { content: content || t("composer.attachmentInstruction"), attachmentPaths: composerAttachments });
+        if (attachments.length) {
+          await TaskRunBinding.EnqueueInstruction(run.id, { content: content || t("composer.attachmentInstruction"), attachmentPaths: attachments });
           await TaskRunBinding.ResumeRun(run.id, "");
         } else {
           await TaskRunBinding.ResumeRun(run.id, content);
@@ -568,16 +579,17 @@ function App() {
       notify("success", modeName === "insert" ? t("app.instructionInserted") : run.status === "running" ? t("app.instructionQueued") : t("app.runResuming"));
       return true;
     } catch (error) { notify("error", errorMessage(error)); return false; } finally { setBusy(""); }
-  };
+  }, [loadRun, mode, notify, t]);
 
-  const removeQueuedInstruction = async (instructionID) => {
-    if (!runDetail?.run?.id) return;
-    try { if (mode !== "demo") await TaskRunBinding.RemoveInstruction(runDetail.run.id, instructionID); await loadRun(runDetail.run.id, true); }
+  const removeQueuedInstruction = useCallback(async (instructionID) => {
+    const runID = runDetailRef.current?.run?.id;
+    if (!runID) return;
+    try { if (mode !== "demo") await TaskRunBinding.RemoveInstruction(runID, instructionID); await loadRun(runID, true); }
     catch (error) { notify("error", errorMessage(error)); }
-  };
+  }, [loadRun, mode, notify]);
 
-  const respondPermission = async (requestID, decision) => {
-    const runID = runDetail?.run?.id;
+  const respondPermission = useCallback(async (requestID, decision) => {
+    const runID = runDetailRef.current?.run?.id;
     if (!runID || !requestID) return;
     setPermissionBusy(requestID);
     try {
@@ -588,12 +600,12 @@ function App() {
     } finally {
       setPermissionBusy("");
     }
-  };
+  }, [loadRun, mode, notify]);
 
-  const openRenameTask = () => {
-    const task = runDetail?.task || tasks.find((item) => item.id === selectedQueuedTaskID);
+  const openRenameTask = useCallback(() => {
+    const task = runDetailRef.current?.task || tasksRef.current.find((item) => item.id === selectedQueuedTaskIDRef.current);
     if (task) setRenameForm({ taskId: task.id, title: task.title, originalTitle: task.title });
-  };
+  }, []);
 
   const renameSelectedTask = async () => {
     const title = renameForm?.title.trim();
@@ -616,27 +628,27 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
-  const deleteSelectedTask = async () => {
-    const task = runDetail?.task || tasks.find((item) => item.id === selectedQueuedTaskID);
+  const deleteSelectedTask = useCallback(async () => {
+    const task = runDetailRef.current?.task || tasksRef.current.find((item) => item.id === selectedQueuedTaskIDRef.current);
     if (!task || !await requestConfirm({ title: t("app.deleteTaskTitle", { name: task.title }), description: t("app.deleteTaskDescription"), confirmLabel: t("app.deleteTask"), dangerous: true })) return;
     try { if (mode !== "demo") await TaskRunBinding.DeleteTask(task.id); setSelectedRunID(""); setSelectedQueuedTaskID(""); setRunDetail(null); await loadTasks(); await loadRunList(); }
     catch (error) { notify("error", errorMessage(error)); }
-  };
+  }, [loadRunList, loadTasks, mode, notify, requestConfirm, t]);
 
   const composerSubmitKey = (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && busy !== "run" && selectedWorkspace) createTaskAndRun();
   };
 
-  const runAction = async (action) => {
-    if (!selectedRunID || runActionPending.current) return;
-    const runID = selectedRunID;
+  const runAction = useCallback(async (action) => {
+    const runID = selectedRunIDRef.current;
+    if (!runID || runActionPending.current) return;
     runActionPending.current = action;
     setBusy(action);
     try {
       if (mode === "demo") {
         const nextStatus = action === "interrupt" ? "paused" : "cancelled";
         setRunDetail((detail) => ({ ...detail, active: false, run: { ...detail.run, status: nextStatus, pauseReason: action === "interrupt" ? "interrupted" : "" } }));
-        setRunItems((items) => items.map((item) => item.id === selectedRunID ? { ...item, status: nextStatus } : item));
+        setRunItems((items) => items.map((item) => item.id === runID ? { ...item, status: nextStatus } : item));
       } else {
         if (action === "interrupt") await TaskRunBinding.InterruptRun(runID);
         if (action === "cancel") await TaskRunBinding.CancelRun(runID);
@@ -650,7 +662,7 @@ function App() {
       runActionPending.current = "";
       setBusy("");
     }
-  };
+  }, [loadRun, mode, notify]);
 
   const openEditor = (definition, isNew = false) => {
     const next = copy(definition || loopTemplate);
@@ -730,6 +742,15 @@ function App() {
   const toggleWorkspaceExpanded = useCallback(() => setWorkspaceExpanded((expanded) => !expanded), []);
   const selectRun = useCallback((item) => { setSelectedQueuedTaskID(""); setSelectedRunID(item.id); loadRun(item.id); }, [loadRun]);
   const selectQueued = useCallback((task) => { setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(task.id); }, []);
+  // Stable handler identities keep the memoized Sidebar/TaskWorkbench from
+  // re-rendering on every unrelated App state change (toasts, busy flips, the
+  // 80ms streaming cadence).
+  const openTaskModal = useCallback(() => setTaskModal(true), []);
+  const loadMoreRuns = useCallback(() => loadRunList({ cursor: runNextCursorRef.current }), [loadRunList]);
+  const chooseComposerAttachments = useCallback(() => chooseAttachments("composer"), [chooseAttachments]);
+  const removeComposerAttachment = useCallback((path) => setComposerAttachments((items) => items.filter((item) => item !== path)), []);
+  const interruptRun = useCallback(() => runAction("interrupt"), [runAction]);
+  const cancelRun = useCallback(() => runAction("cancel"), [runAction]);
 
   if (mode === "loading") return <div className="loading-screen"><div className="brand-mark">1</div><span>{t("task.opening")}</span></div>;
 
@@ -765,8 +786,8 @@ function App() {
         onRemoveWorkspace={removeWorkspace}
         onToggleExpanded={toggleWorkspaceExpanded}
         onAddWorkspace={chooseWorkspace}
-        onNewTask={() => setTaskModal(true)}
-        onLoadMoreRuns={() => loadRunList({ cursor: runNextCursor })}
+        onNewTask={openTaskModal}
+        onLoadMoreRuns={loadMoreRuns}
         onSelectRun={selectRun}
         onSelectQueued={selectQueued}
         onGoView={goView}
@@ -785,12 +806,12 @@ function App() {
           busy={busy}
           permissionBusy={permissionBusy}
           attachments={composerAttachments}
-          onNewTask={() => setTaskModal(true)}
-          onChooseAttachments={() => chooseAttachments("composer")}
-          onRemoveAttachment={(path) => setComposerAttachments((items) => items.filter((item) => item !== path))}
+          onNewTask={openTaskModal}
+          onChooseAttachments={chooseComposerAttachments}
+          onRemoveAttachment={removeComposerAttachment}
           onSubmit={submitWorkbenchComposer}
-          onInterrupt={() => runAction("interrupt")}
-          onCancel={() => runAction("cancel")}
+          onInterrupt={interruptRun}
+          onCancel={cancelRun}
           onRemoveInstruction={removeQueuedInstruction}
           onPermissionDecision={respondPermission}
           onRename={openRenameTask}

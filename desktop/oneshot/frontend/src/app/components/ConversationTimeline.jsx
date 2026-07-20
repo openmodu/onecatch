@@ -10,6 +10,19 @@ function MessageBody({ content, streaming = false }) {
   return <Suspense fallback={<div className="markdown-content markdown-loading">{content}</div>}><MarkdownContent content={content} streaming={streaming} /></Suspense>;
 }
 
+// Consecutive events often share the same second; repeating the identical
+// timestamp on every row is noise. Each caller keeps its own de-duper so the
+// label only shows on the first of a same-second run.
+function createTimeLabeler() {
+  let last = "";
+  return (at) => {
+    const label = formatTime(at);
+    if (!label || label === last) return "";
+    last = label;
+    return label;
+  };
+}
+
 function ToolTimelineItem({ entry, running, stalled, time }) {
   const { t } = useTranslation();
   const labels = { tool_use: t("timeline.toolUse"), tool_result: t("timeline.result"), file_change: t("timeline.fileChange"), reasoning: t("timeline.process") };
@@ -37,36 +50,46 @@ function PermissionTimelineItem({ entry, busy, onDecision, time }) {
   </section>;
 }
 
+// One round of the transcript. `buildRunConversation` hands back a stable object
+// reference for any round whose step has finished, so memo() short-circuits every
+// finished round on a stream/poll frame — only the live round is reconciled.
+const ConversationRound = memo(function ConversationRound({ round, active, permissionBusy, onPermissionDecision }) {
+  const { t } = useTranslation();
+  const timeLabel = createTimeLabeler();
+  // A tool reports its own outcome (entry.failed) whenever the runtime answered
+  // it. Only when it never answered do we fall back to the step: a step that
+  // succeeded left nothing unfinished behind — Codex just does not emit a result
+  // event per command — while a step that died mid-flight did.
+  const lastIndex = round.items.length - 1;
+  return <article className="conversation-round">
+    <div className="conversation-round-body">{round.items.map((entry, index) => {
+      if (entry.type === "message") {
+        return <div className={`conversation-agent ${entry.tone}`} key={entry.id || `message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label={t("timeline.agentMessage")} /><strong>{round.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">{t("timeline.round", { count: round.round })}</span><time>{timeLabel(entry.at || round.finishedAt || round.startedAt)}</time></span></div><MessageBody content={entry.text} streaming={entry.streaming} /></div>;
+      }
+      if (entry.type === "permission") {
+        return <PermissionTimelineItem key={entry.id} entry={entry} busy={permissionBusy === entry.request?.id} onDecision={onPermissionDecision} time={timeLabel(entry.at)} />;
+      }
+      const running = Boolean(active) && index === lastIndex && entry.kind === "tool_use";
+      const stalled = !entry.settled && !running && round.status !== "succeeded";
+      return <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={running} stalled={stalled} />;
+    })}</div>
+  </article>;
+});
+
 // The timeline can grow to hundreds of rows; poll-driven parent re-renders must
 // not rebuild it unless `items`/`active` actually change, hence memo() paired
 // with the memoized conversation array the parent feeds in.
 function ConversationTimeline({ items, active, permissionBusy = "", onPermissionDecision }) {
   const { t } = useTranslation();
   const rounds = items.filter((item) => item.type === "round");
-  // Consecutive events often share the same second; repeating the identical
-  // timestamp on every row is noise, so only the first of a same-second run
-  // shows it.
-  let lastTimeLabel = "";
-  const timeLabel = (at) => {
-    const label = formatTime(at);
-    if (!label || label === lastTimeLabel) return "";
-    lastTimeLabel = label;
-    return label;
-  };
-  // A tool reports its own outcome (entry.failed) whenever the runtime answered
-  // it. Only when it never answered do we fall back to the step: a step that
-  // succeeded left nothing unfinished behind — Codex just does not emit a result
-  // event per command — while a step that died mid-flight did.
-  const isRunning = (round, entry, index) => Boolean(active) && round === rounds[rounds.length - 1] && index === round.items.length - 1 && entry.kind === "tool_use";
-  const isStalled = (round, entry, running) => !entry.settled && !running && round.status !== "succeeded";
+  const lastRound = rounds[rounds.length - 1];
+  const userTimeLabel = createTimeLabeler();
   return <div className="conversation-section">
     <div className="conversation-list">
       {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
-        <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label={t("timeline.userMessage")} /></span><span className="conversation-message-meta"><time>{timeLabel(item.at)}</time></span></div>
+        <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label={t("timeline.userMessage")} /></span><span className="conversation-message-meta"><time>{userTimeLabel(item.at)}</time></span></div>
         <MessageBody content={item.text} />
-      </div> : <article className="conversation-round" key={item.id}>
-        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={entry.id || `message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label={t("timeline.agentMessage")} /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">{t("timeline.round", { count: item.round })}</span><time>{timeLabel(entry.at || item.finishedAt || item.startedAt)}</time></span></div><MessageBody content={entry.text} streaming={entry.streaming} /></div> : entry.type === "permission" ? <PermissionTimelineItem key={entry.id} entry={entry} busy={permissionBusy === entry.request?.id} onDecision={onPermissionDecision} time={timeLabel(entry.at)} /> : <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={isRunning(item, entry, index)} stalled={isStalled(item, entry, isRunning(item, entry, index))} />)}</div>
-      </article>)}
+      </div> : <ConversationRound key={item.id} round={item} active={Boolean(active) && item === lastRound} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />)}
       {!items.length && <p className="muted-copy">{t("timeline.empty")}</p>}
     </div>
   </div>;
