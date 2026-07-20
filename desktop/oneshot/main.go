@@ -24,6 +24,9 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+//go:embed build/appicon.png
+var appIcon []byte
+
 func main() {
 	log := logger.MustNew(logger.Config{Service: "oneshot-desktop"})
 	defer logger.Sync(log)
@@ -71,6 +74,7 @@ func main() {
 	wailsApp = application.New(application.Options{
 		Name:        app.Name,
 		Description: app.Description,
+		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(bindings.NewGitBinding(localApp)),
 			application.NewService(bindings.NewRuntimeBinding(localApp)),
