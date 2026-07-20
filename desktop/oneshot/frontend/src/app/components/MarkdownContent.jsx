@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { Browser } from "@wailsio/runtime";
 import { useTranslation } from "react-i18next";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
@@ -7,7 +8,11 @@ import remarkGfm from "remark-gfm";
 function SafeLink({ href = "", children, node: _node, ...props }) {
   const external = /^(?:https?:|mailto:)/i.test(href);
   if (!external && !href.startsWith("#")) return <span className="markdown-unsafe-link" title={href}>{children}</span>;
-  return <a {...props} href={href} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined}>{children}</a>;
+  const openExternal = external ? (event) => {
+    event.preventDefault();
+    void Browser.OpenURL(href).catch((error) => console.error("Failed to open external link", error));
+  } : undefined;
+  return <a {...props} href={href} onClick={openExternal} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined}>{children}</a>;
 }
 
 // Agent output is untrusted. ReactMarkdown does not enable raw HTML, the
