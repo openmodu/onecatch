@@ -154,3 +154,21 @@ test("falls back to StepRun content when no message event exists", () => {
   });
   assert.equal(round.items[0].text, "审查完成");
 });
+
+test("keeps an interactive permission card and applies its decision", () => {
+  const detail = {
+    task: { prompt: "research", createdAt: "2026-07-11T10:00:00Z" },
+    run: { id: "run-1" },
+    workflow: { steps: [{ id: "review", name: "Review", runtime: "claude" }] },
+    stepRuns: [{ id: "step-1", stepId: "review", status: "running", attempt: 1, startedAt: "2026-07-11T10:00:01Z" }],
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 1, kind: "permission_request", permission: { id: "p1", toolName: "WebFetch", input: { url: "https://v3.wails.io" } }, at: "2026-07-11T10:00:02Z" },
+      { stepRunId: "step-1", seq: 2, kind: "permission_resolved", permission: { id: "p1", toolName: "WebFetch" }, permissionDecision: "allow", at: "2026-07-11T10:00:03Z" },
+    ],
+  };
+  const conversation = buildRunConversation(detail);
+  const permission = conversation.find((item) => item.type === "round").items[0];
+  assert.equal(permission.type, "permission");
+  assert.equal(permission.request.toolName, "WebFetch");
+  assert.equal(permission.decision, "allow");
+});

@@ -460,6 +460,8 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 
 		collector := s.newRuntimeCollector(run.ID, stepRun.ID)
 		request := agentrun.Request{
+			RunID:                   run.ID,
+			StepRunID:               stepRun.ID,
 			Runtime:                 runtime,
 			Workspace:               workspace.Path,
 			Prompt:                  composePrompt(task, definition, step, run, instruction),

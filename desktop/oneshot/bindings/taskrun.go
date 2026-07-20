@@ -55,6 +55,9 @@ func (b *TaskRunBinding) ListRuns(input localapp.ListRunsInput) (localapp.RunLis
 func (b *TaskRunBinding) ListRunEvents(runID string, afterSeq int64) ([]localapp.WorkflowEventView, error) {
 	return b.app.ListRunEvents(context.Background(), runID, afterSeq)
 }
+func (b *TaskRunBinding) RespondPermission(input localapp.PermissionDecisionInput) error {
+	return b.app.RespondPermission(input)
+}
 func (b *TaskRunBinding) InterruptRun(runID string) (domainworkflows.Run, error) {
 	return b.app.InterruptRun(context.Background(), runID)
 }

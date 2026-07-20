@@ -360,6 +360,51 @@ func TestClaudeRunnerParsesStream(t *testing.T) {
 	}
 }
 
+func TestClaudeRunnerRoundTripsInteractivePermission(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	dir := t.TempDir()
+	path := filepath.Join(dir, "claude")
+	capture := filepath.Join(dir, "control.jsonl")
+	script := `#!/bin/sh
+IFS= read -r prompt
+printf '%s\n' '{"type":"system","subtype":"init","session_id":"permission-session"}'
+printf '%s\n' '{"type":"control_request","request_id":"permission-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","input":{"url":"https://v3.wails.io/guides/mobile/"},"permission_suggestions":[{"type":"addRules","rules":[{"toolName":"WebFetch","ruleContent":"domain:v3.wails.io"}],"behavior":"allow","destination":"session"}],"title":"Fetch v3.wails.io","display_name":"Fetch URL","tool_use_id":"tool-1"}}'
+IFS= read -r response
+printf '%s\n%s\n' "$prompt" "$response" > "$ONESHOT_CLAUDE_CAPTURE"
+printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","session_id":"permission-session","usage":{"input_tokens":2,"output_tokens":1}}'
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var events []Event
+	result, err := NewClaudeRunner(path).Run(context.Background(), Request{
+		Workspace: dir, Prompt: "research Wails mobile", Sandbox: SandboxReadOnly,
+		Environment: append(os.Environ(), "ONESHOT_CLAUDE_CAPTURE="+capture),
+		PermissionHandler: func(_ context.Context, request PermissionRequest) (PermissionDecision, error) {
+			if request.ID != "permission-1" || request.ToolName != "WebFetch" || request.Input["url"] != "https://v3.wails.io/guides/mobile/" {
+				t.Fatalf("permission request = %+v", request)
+			}
+			return PermissionDecision{Behavior: "allow", DecisionClassification: "user_temporary"}, nil
+		},
+	}, collectSink(&events))
+	if err != nil || !result.Succeeded {
+		t.Fatalf("Run = %+v, %v", result, err)
+	}
+	payload, err := os.ReadFile(capture)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(payload)), "\n")
+	if len(lines) != 2 || !strings.Contains(lines[0], `"text":"research Wails mobile"`) || !strings.Contains(lines[1], `"request_id":"permission-1"`) || !strings.Contains(lines[1], `"behavior":"allow"`) {
+		t.Fatalf("control exchange = %q", payload)
+	}
+	if countKind(events, KindPermissionRequest) != 1 || countKind(events, KindPermissionResolved) != 1 {
+		t.Fatalf("permission events = %+v", events)
+	}
+}
+
 func TestClaudeRunnerEmitsTextDeltasWithAuthoritativeEnd(t *testing.T) {
 	bin := stubBinary(t, claudeStream, "", 0)
 	r := NewClaudeRunner(bin)

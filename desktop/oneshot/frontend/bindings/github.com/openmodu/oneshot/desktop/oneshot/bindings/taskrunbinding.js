@@ -192,6 +192,14 @@ export function RenameTask(taskID, title) {
 }
 
 /**
+ * @param {localapp$0.PermissionDecisionInput} input
+ * @returns {$CancellablePromise<void>}
+ */
+export function RespondPermission(input) {
+    return $Call.ByID(292824806, input);
+}
+
+/**
  * @param {string} runID
  * @param {string} instruction
  * @returns {$CancellablePromise<workflows$0.Run>}

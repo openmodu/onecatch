@@ -1,6 +1,7 @@
 package agentrun
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -126,14 +127,28 @@ func claudeHelpOptionSection(help, option string) string {
 }
 
 func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
+	interactivePermissions := req.Sandbox == SandboxReadOnly && req.PermissionHandler != nil
 	args := []string{
-		"-p", req.Prompt,
 		"--output-format", "stream-json",
 		// stream-json requires --verbose to emit per-step events.
 		"--verbose",
 		// Include raw content_block_delta events so text and thinking can be
 		// rendered while the model is still generating them.
 		"--include-partial-messages",
+	}
+	if interactivePermissions {
+		// Claude's Agent SDK uses this bidirectional JSONL control channel for
+		// can_use_tool requests. The CLI flag is intentionally compatible with
+		// the SDK transport even though it is not advertised in --help.
+		args = append(args,
+			"--input-format", "stream-json",
+			"--permission-prompt-tool", "stdio",
+			// Preserve the product's read-only contract even when a user can
+			// approve network access from the permission card.
+			"--disallowedTools", "Bash,Edit,Write,NotebookEdit",
+		)
+	} else {
+		args = append([]string{"-p", req.Prompt}, args...)
 	}
 	if req.ResumeSessionID != "" {
 		// Continue a prior conversation, preserving its context.
@@ -159,8 +174,170 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = req.InterruptGrace
 	}
+	if interactivePermissions {
+		return r.runInteractive(ctx, cmd, req, sink)
+	}
 	cmd.Stdin = nil
 	return streamProcess(ctx, cmd, &claudeParser{}, r.now, sink)
+}
+
+type claudeControlEnvelope struct {
+	Type      string               `json:"type"`
+	RequestID string               `json:"request_id"`
+	Request   claudeControlRequest `json:"request"`
+}
+
+type claudeControlRequest struct {
+	Subtype                 string             `json:"subtype"`
+	ToolName                string             `json:"tool_name"`
+	Input                   map[string]any     `json:"input"`
+	PermissionSuggestions   []PermissionUpdate `json:"permission_suggestions"`
+	DecisionReason          string             `json:"decision_reason"`
+	Title                   string             `json:"title"`
+	DisplayName             string             `json:"display_name"`
+	Description             string             `json:"description"`
+	ToolUseID               string             `json:"tool_use_id"`
+	SuppressAlwaysAllowRule bool               `json:"suppress_always_allow_rule"`
+	RequiresUserInteraction bool               `json:"requires_user_interaction"`
+}
+
+type claudeControlResponse struct {
+	Type     string                    `json:"type"`
+	Response claudeControlResponseBody `json:"response"`
+}
+
+type claudeControlResponseBody struct {
+	Subtype   string             `json:"subtype"`
+	RequestID string             `json:"request_id"`
+	Response  PermissionDecision `json:"response,omitempty"`
+	Error     string             `json:"error,omitempty"`
+}
+
+type claudeInputMessage struct {
+	Type            string                 `json:"type"`
+	SessionID       string                 `json:"session_id"`
+	Message         claudeInputMessageBody `json:"message"`
+	ParentToolUseID *string                `json:"parent_tool_use_id"`
+}
+
+type claudeInputMessageBody struct {
+	Role    string               `json:"role"`
+	Content []claudeInputContent `json:"content"`
+}
+
+type claudeInputContent struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+func (r *ClaudeRunner) runInteractive(ctx context.Context, cmd *exec.Cmd, req Request, sink Sink) (Result, error) {
+	if sink == nil {
+		sink = func(Event) {}
+	}
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return Result{}, fmt.Errorf("Claude Code stdin: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return Result{}, fmt.Errorf("Claude Code stdout: %w", err)
+	}
+	var stderr lineCapture
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return Result{}, fmt.Errorf("start %s: %w", cmd.Path, err)
+	}
+	encoder := json.NewEncoder(stdin)
+	if err := encoder.Encode(claudeInputMessage{
+		Type: "user", SessionID: "", ParentToolUseID: nil,
+		Message: claudeInputMessageBody{Role: "user", Content: []claudeInputContent{{Type: "text", Text: req.Prompt}}},
+	}); err != nil {
+		_ = stdin.Close()
+		_ = cmd.Wait()
+		return Result{}, fmt.Errorf("write Claude Code prompt: %w", err)
+	}
+
+	parser := &claudeParser{}
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	stdinClosed := false
+	closeStdin := func() {
+		if !stdinClosed {
+			stdinClosed = true
+			_ = stdin.Close()
+		}
+	}
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" {
+			continue
+		}
+		var control claudeControlEnvelope
+		if json.Unmarshal([]byte(line), &control) == nil && control.Type == "control_request" {
+			if err := r.handlePermissionControl(ctx, encoder, control, line, req.PermissionHandler, sink); err != nil {
+				closeStdin()
+				_ = cmd.Wait()
+				return parser.result(), err
+			}
+			continue
+		}
+		parser.parse(line, r.now(), sink)
+		var envelope struct {
+			Type string `json:"type"`
+		}
+		if json.Unmarshal([]byte(line), &envelope) == nil && envelope.Type == "result" {
+			closeStdin()
+		}
+	}
+	closeStdin()
+	if err := scanner.Err(); err != nil {
+		_ = cmd.Wait()
+		return parser.result(), fmt.Errorf("scan %s output: %w", cmd.Path, err)
+	}
+	if err := cmd.Wait(); err != nil {
+		if ctx.Err() != nil {
+			return parser.result(), ctx.Err()
+		}
+		return parser.result(), fmt.Errorf("%s failed: %w%s", cmd.Path, err, stderr.tail())
+	}
+	return parser.result(), nil
+}
+
+func (r *ClaudeRunner) handlePermissionControl(ctx context.Context, encoder *json.Encoder, control claudeControlEnvelope, raw string, handler func(context.Context, PermissionRequest) (PermissionDecision, error), sink Sink) error {
+	if control.Request.Subtype != "can_use_tool" {
+		return encoder.Encode(claudeControlResponse{Type: "control_response", Response: claudeControlResponseBody{Subtype: "error", RequestID: control.RequestID, Error: "unsupported control request subtype: " + control.Request.Subtype}})
+	}
+	request := PermissionRequest{
+		ID: control.RequestID, ToolUseID: control.Request.ToolUseID, ToolName: control.Request.ToolName,
+		Input: control.Request.Input, Suggestions: control.Request.PermissionSuggestions,
+		Title: control.Request.Title, DisplayName: control.Request.DisplayName, Description: control.Request.Description,
+		DecisionReason: control.Request.DecisionReason, SuppressAlwaysAllow: control.Request.SuppressAlwaysAllowRule,
+		RequiresUserInteraction: control.Request.RequiresUserInteraction,
+	}
+	text := request.Title
+	if text == "" {
+		text = "Claude wants to use " + request.ToolName
+	}
+	sink(Event{Kind: KindPermissionRequest, Text: text, Raw: raw, Permission: &request, At: r.now()})
+	decision, err := handler(ctx, request)
+	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		decision = PermissionDecision{Behavior: "deny", Message: err.Error(), DecisionClassification: "user_reject"}
+	}
+	if decision.Behavior != "allow" && decision.Behavior != "deny" {
+		decision = PermissionDecision{Behavior: "deny", Message: "invalid permission decision", DecisionClassification: "user_reject"}
+	}
+	if decision.Behavior == "deny" && decision.Message == "" {
+		decision.Message = "Permission denied by user"
+	}
+	decision.ToolUseID = request.ToolUseID
+	if err := encoder.Encode(claudeControlResponse{Type: "control_response", Response: claudeControlResponseBody{Subtype: "success", RequestID: control.RequestID, Response: decision}}); err != nil {
+		return fmt.Errorf("write Claude Code permission response: %w", err)
+	}
+	sink(Event{Kind: KindPermissionResolved, Text: decision.Behavior, Permission: &request, PermissionDecision: decision.Behavior, At: r.now()})
+	return nil
 }
 
 // claudeParser accumulates terminal state from Claude Code's stream-json.

@@ -126,9 +126,22 @@ export function readableToolTitle(value, translate = defaultTranslate) {
 function roundItems(events, fallbackText, fallbackError, translate) {
   const items = [];
   const seenMessages = new Set();
+  const permissions = new Map();
   let lastTool = null;
   for (const event of [...events].sort((a, b) => a.seq - b.seq)) {
     if (hiddenKinds.has(event.kind)) continue;
+    if (event.kind === "permission_request" && event.permission?.id) {
+      const permission = { type: "permission", id: `permission-${event.permission.id}`, request: event.permission, decision: "", at: event.at };
+      permissions.set(event.permission.id, permission);
+      items.push(permission);
+      lastTool = null;
+      continue;
+    }
+    if (event.kind === "permission_resolved" && event.permission?.id) {
+      const permission = permissions.get(event.permission.id);
+      if (permission) permission.decision = event.permissionDecision || event.text || "deny";
+      continue;
+    }
     // A tool's outcome is its own, not its step's: a step can fail on a token
     // limit while every command in it succeeded. `failed` therefore only ever
     // comes from the runtime's per-result error flag, and `settled` records

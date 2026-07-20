@@ -9,5 +9,15 @@ export {
     CodexModelInfo,
     CodexServiceTier,
     EventKind,
+    PermissionRequest,
     StreamPhase
 } from "./models.js";
+
+import * as $models from "./models.js";
+
+/**
+ * PermissionUpdate is a provider-authored rule update. Claude supplies these
+ * suggestions for an "always allow" decision; keeping the structure opaque
+ * lets newer CLI versions add rule variants without requiring an app release.
+ * @typedef {$models.PermissionUpdate} PermissionUpdate
+ */

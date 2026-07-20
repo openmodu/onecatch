@@ -64,7 +64,43 @@ const (
 	KindResult EventKind = "result"
 	// KindError carries a runtime or parse error encountered mid-stream.
 	KindError EventKind = "error"
+	// KindPermissionRequest asks the host application to approve or deny a
+	// tool call while the runtime remains blocked on that decision.
+	KindPermissionRequest EventKind = "permission_request"
+	// KindPermissionResolved records the decision returned to the runtime.
+	KindPermissionResolved EventKind = "permission_resolved"
 )
+
+// PermissionUpdate is a provider-authored rule update. Claude supplies these
+// suggestions for an "always allow" decision; keeping the structure opaque
+// lets newer CLI versions add rule variants without requiring an app release.
+type PermissionUpdate map[string]any
+
+// PermissionRequest is the runtime-neutral payload shown by the desktop
+// approval card. ID identifies the blocking control request, while ToolUseID
+// identifies the eventual tool call in the provider transcript.
+type PermissionRequest struct {
+	ID                      string             `json:"id"`
+	ToolUseID               string             `json:"toolUseId,omitempty"`
+	ToolName                string             `json:"toolName"`
+	Input                   map[string]any     `json:"input,omitempty"`
+	Suggestions             []PermissionUpdate `json:"suggestions,omitempty"`
+	Title                   string             `json:"title,omitempty"`
+	DisplayName             string             `json:"displayName,omitempty"`
+	Description             string             `json:"description,omitempty"`
+	DecisionReason          string             `json:"decisionReason,omitempty"`
+	SuppressAlwaysAllow     bool               `json:"suppressAlwaysAllow,omitempty"`
+	RequiresUserInteraction bool               `json:"requiresUserInteraction,omitempty"`
+}
+
+// PermissionDecision is returned by the host after the user responds.
+type PermissionDecision struct {
+	Behavior               string             `json:"behavior"`
+	Message                string             `json:"message,omitempty"`
+	UpdatedPermissions     []PermissionUpdate `json:"updatedPermissions,omitempty"`
+	DecisionClassification string             `json:"decisionClassification,omitempty"`
+	ToolUseID              string             `json:"toolUseID,omitempty"`
+}
 
 // StreamPhase describes how an event contributes to one logical, growing UI
 // entry. Empty means the event is atomic and remains backwards compatible with
@@ -101,6 +137,10 @@ type Event struct {
 	// returned an error, not a run that ended badly. A step can fail while most
 	// of its tool calls succeeded, so callers must not infer one from the other.
 	Failed bool `json:"failed,omitempty"`
+	// Permission is populated for permission_request and permission_resolved
+	// events. PermissionDecision is "allow" or "deny" on the resolved event.
+	Permission         *PermissionRequest `json:"permission,omitempty"`
+	PermissionDecision string             `json:"permissionDecision,omitempty"`
 	// At is when the engine observed the event.
 	At time.Time `json:"at"`
 }

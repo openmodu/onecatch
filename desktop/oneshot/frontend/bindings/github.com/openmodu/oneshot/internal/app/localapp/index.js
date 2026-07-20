@@ -14,6 +14,7 @@ export {
     GitCommitResult,
     InstructionInput,
     ListRunsInput,
+    PermissionDecisionInput,
     RunDetail,
     RunListItem,
     RunListPage,

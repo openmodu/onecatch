@@ -62,6 +62,7 @@ function App() {
   const [resumePendingRunID, setResumePendingRunID] = useState("");
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState("");
+  const [permissionBusy, setPermissionBusy] = useState("");
   const [workers, setWorkers] = useState([]);
   const [workerHealth, setWorkerHealth] = useState({});
   const [workerModal, setWorkerModal] = useState(false);
@@ -575,6 +576,20 @@ function App() {
     catch (error) { notify("error", errorMessage(error)); }
   };
 
+  const respondPermission = async (requestID, decision) => {
+    const runID = runDetail?.run?.id;
+    if (!runID || !requestID) return;
+    setPermissionBusy(requestID);
+    try {
+      if (mode !== "demo") await TaskRunBinding.RespondPermission({ runId: runID, requestId: requestID, decision });
+      window.setTimeout(() => loadRun(runID, true), 120);
+    } catch (error) {
+      notify("error", errorMessage(error));
+    } finally {
+      setPermissionBusy("");
+    }
+  };
+
   const openRenameTask = () => {
     const task = runDetail?.task || tasks.find((item) => item.id === selectedQueuedTaskID);
     if (task) setRenameForm({ taskId: task.id, title: task.title, originalTitle: task.title });
@@ -768,6 +783,7 @@ function App() {
           selectedQueuedTaskID={selectedQueuedTaskID}
           workflows={workflows}
           busy={busy}
+          permissionBusy={permissionBusy}
           attachments={composerAttachments}
           onNewTask={() => setTaskModal(true)}
           onChooseAttachments={() => chooseAttachments("composer")}
@@ -776,6 +792,7 @@ function App() {
           onInterrupt={() => runAction("interrupt")}
           onCancel={() => runAction("cancel")}
           onRemoveInstruction={removeQueuedInstruction}
+          onPermissionDecision={respondPermission}
           onRename={openRenameTask}
           onDelete={deleteSelectedTask}
           notify={notify}

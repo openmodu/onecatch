@@ -8,6 +8,9 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as agentrun$0 from "../../agentrun/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as settings$0 from "../../domain/settings/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -536,6 +539,48 @@ export class ListRunsInput {
     }
 }
 
+export class PermissionDecisionInput {
+    /**
+     * Creates a new PermissionDecisionInput instance.
+     * @param {Partial<PermissionDecisionInput>} [$$source = {}] - The source object to create the PermissionDecisionInput.
+     */
+    constructor($$source = {}) {
+        if (!("runId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["runId"] = "";
+        }
+        if (!("requestId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["requestId"] = "";
+        }
+        if (!("decision" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["decision"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PermissionDecisionInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PermissionDecisionInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PermissionDecisionInput(/** @type {Partial<PermissionDecisionInput>} */($$parsedSource));
+    }
+}
+
 export class RunDetail {
     /**
      * Creates a new RunDetail instance.
@@ -926,6 +971,20 @@ export class RuntimeEventView {
              */
             this["failed"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {agentrun$0.PermissionRequest | null | undefined}
+             */
+            this["permission"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["permissionDecision"] = undefined;
+        }
         if (!("at" in $$source)) {
             /**
              * @member
@@ -943,7 +1002,11 @@ export class RuntimeEventView {
      * @returns {RuntimeEventView}
      */
     static createFrom($$source = {}) {
+        const $$createField8_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("permission" in $$parsedSource) {
+            $$parsedSource["permission"] = $$createField8_0($$parsedSource["permission"]);
+        }
         return new RuntimeEventView(/** @type {Partial<RuntimeEventView>} */($$parsedSource));
     }
 }
@@ -1125,7 +1188,7 @@ export class StorageUsage {
      * @returns {StorageUsage}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType17;
+        const $$createField2_0 = $$createType19;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("categories" in $$parsedSource) {
             $$parsedSource["categories"] = $$createField2_0($$parsedSource["categories"]);
@@ -1173,7 +1236,7 @@ export class TaskSearchItem {
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType2;
         const $$createField1_0 = $$createType3;
-        const $$createField2_0 = $$createType18;
+        const $$createField2_0 = $$createType20;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("task" in $$parsedSource) {
             $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
@@ -1218,7 +1281,7 @@ export class TaskSearchPage {
      * @returns {TaskSearchPage}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType20;
+        const $$createField0_0 = $$createType22;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
@@ -1257,8 +1320,8 @@ export class WorkerStatus {
      * @returns {WorkerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType21;
-        const $$createField1_0 = $$createType22;
+        const $$createField0_0 = $$createType23;
+        const $$createField1_0 = $$createType24;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worker" in $$parsedSource) {
             $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
@@ -1364,7 +1427,7 @@ export class WorkspaceStatus {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType3;
-        const $$createField1_0 = $$createType23;
+        const $$createField1_0 = $$createType25;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -1393,11 +1456,13 @@ const $$createType12 = $Create.Array($$createType11);
 const $$createType13 = RunListItem.createFrom;
 const $$createType14 = $Create.Array($$createType13);
 const $$createType15 = settings$0.RuntimeSettings.createFrom;
-const $$createType16 = StorageCategory.createFrom;
-const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = $Create.Nullable($$createType1);
-const $$createType19 = TaskSearchItem.createFrom;
-const $$createType20 = $Create.Array($$createType19);
-const $$createType21 = worker$0.Info.createFrom;
-const $$createType22 = worker$0.Health.createFrom;
-const $$createType23 = workspaces$0.GitSnapshot.createFrom;
+const $$createType16 = agentrun$0.PermissionRequest.createFrom;
+const $$createType17 = $Create.Nullable($$createType16);
+const $$createType18 = StorageCategory.createFrom;
+const $$createType19 = $Create.Array($$createType18);
+const $$createType20 = $Create.Nullable($$createType1);
+const $$createType21 = TaskSearchItem.createFrom;
+const $$createType22 = $Create.Array($$createType21);
+const $$createType23 = worker$0.Info.createFrom;
+const $$createType24 = worker$0.Health.createFrom;
+const $$createType25 = workspaces$0.GitSnapshot.createFrom;
