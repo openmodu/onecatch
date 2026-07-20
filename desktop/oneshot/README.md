@@ -27,6 +27,30 @@ Workspace、Task、Workflow、Run 和事件默认持久化在 `~/.oneshot/`。
 wails3 build DEV=true
 ```
 
+生产构建并生成 macOS `.app` ZIP：
+
+```bash
+wails3 task package
+```
+
+安装包输出到 `bin/Oneshot-<version>-<commit>-<arch>.zip`。默认使用 ad-hoc
+签名，适合内部测试；没有 Apple 开发者证书时，首次启动仍需在 Finder 中右键选择“打开”。
+
+使用 Developer ID 证书签名：
+
+```bash
+SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" wails3 task package
+```
+
+可通过环境变量覆盖版本号和输出路径：
+
+```bash
+VERSION=0.1.0 OUTPUT_ZIP=bin/Oneshot-0.1.0-arm64.zip wails3 task package
+```
+
+脚本只负责构建、组装、签名和压缩。公开分发前还需使用 Apple notary service
+完成公证；仅使用 Developer ID 签名不能替代公证。
+
 ## 目录
 
 ```text
