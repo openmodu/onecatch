@@ -28,6 +28,8 @@ var assets embed.FS
 var appIcon []byte
 
 func main() {
+	prepareCommandEnvironment()
+
 	log := logger.MustNew(logger.Config{Service: "oneshot-desktop"})
 	defer logger.Sync(log)
 
