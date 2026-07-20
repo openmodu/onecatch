@@ -34,6 +34,24 @@ tasks:
     cmds:
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true
 
+  generate:icons:
+    summary: Regenerates the macOS icon assets from the selected source image
+    dir: build
+    sources:
+      - appicon-source.png
+      - render_appicon.swift
+      - appicon.icon/icon.json
+    generates:
+      - appicon.png
+      - appicon.icon/Assets/oneshot_icon_final.png
+      - darwin/Assets.car
+      - darwin/icons.icns
+    cmds:
+      - swift render_appicon.swift appicon-source.png appicon.png
+      - cp appicon.png appicon.icon/Assets/oneshot_icon_final.png
+      - wails3 generate icons -iconcomposerinput appicon.icon -macassetdir darwin
+      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns
+
   build:frontend:
     dir: frontend
     cmds:
