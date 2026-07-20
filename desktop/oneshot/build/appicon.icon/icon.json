@@ -1,15 +1,15 @@
 {
   "fill" : {
-    "solid" : "srgb:0.06667,0.09020,0.08235,1.00000"
+    "solid" : "srgb:0.00000,0.00000,0.00000,0.00000"
   },
   "groups" : [
     {
       "layers" : [
         {
-          "image-name" : "oneshot_icon_vector.svg",
-          "name" : "oneshot_icon_vector",
+          "image-name" : "oneshot_icon_final.png",
+          "name" : "oneshot_icon_final",
           "position" : {
-            "scale" : 0.82,
+            "scale" : 1,
             "translation-in-points" : [
               0,
               0
