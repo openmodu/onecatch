@@ -63,6 +63,14 @@ type Request struct {
 	// RuntimeDefaultsResolved means the caller already froze runtime defaults
 	// into a durable run snapshot. The registry must not apply newer settings.
 	RuntimeDefaultsResolved bool
+	// RunID and StepRunID associate interactive runtime requests with their
+	// durable workflow records. They are intentionally optional for standalone
+	// helpers that do not expose approval UI.
+	RunID     string
+	StepRunID string
+	// PermissionHandler blocks until the host approves or denies a tool call.
+	// It is never serialized to a remote worker.
+	PermissionHandler func(context.Context, PermissionRequest) (PermissionDecision, error)
 }
 
 // Sink receives normalized events as they stream from the agent. It is called

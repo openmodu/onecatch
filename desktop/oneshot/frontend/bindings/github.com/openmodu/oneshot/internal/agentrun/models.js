@@ -335,7 +335,136 @@ export const EventKind = {
      * KindError carries a runtime or parse error encountered mid-stream.
      */
     KindError: "error",
+
+    /**
+     * KindPermissionRequest asks the host application to approve or deny a
+     * tool call while the runtime remains blocked on that decision.
+     */
+    KindPermissionRequest: "permission_request",
+
+    /**
+     * KindPermissionResolved records the decision returned to the runtime.
+     */
+    KindPermissionResolved: "permission_resolved",
 };
+
+/**
+ * PermissionRequest is the runtime-neutral payload shown by the desktop
+ * approval card. ID identifies the blocking control request, while ToolUseID
+ * identifies the eventual tool call in the provider transcript.
+ */
+export class PermissionRequest {
+    /**
+     * Creates a new PermissionRequest instance.
+     * @param {Partial<PermissionRequest>} [$$source = {}] - The source object to create the PermissionRequest.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["toolUseId"] = undefined;
+        }
+        if (!("toolName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["toolName"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {{ [_ in string]?: any } | undefined}
+             */
+            this["input"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {PermissionUpdate[] | undefined}
+             */
+            this["suggestions"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["title"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["displayName"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["description"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["decisionReason"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["suppressAlwaysAllow"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["requiresUserInteraction"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PermissionRequest instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PermissionRequest}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType7;
+        const $$createField4_0 = $$createType9;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("input" in $$parsedSource) {
+            $$parsedSource["input"] = $$createField3_0($$parsedSource["input"]);
+        }
+        if ("suggestions" in $$parsedSource) {
+            $$parsedSource["suggestions"] = $$createField4_0($$parsedSource["suggestions"]);
+        }
+        return new PermissionRequest(/** @type {Partial<PermissionRequest>} */($$parsedSource));
+    }
+}
+
+/**
+ * PermissionUpdate is a provider-authored rule update. Claude supplies these
+ * suggestions for an "always allow" decision; keeping the structure opaque
+ * lets newer CLI versions add rule variants without requiring an app release.
+ * @typedef {{ [_ in string]?: any }} PermissionUpdate
+ */
 
 /**
  * StreamPhase describes how an event contributes to one logical, growing UI
@@ -364,3 +493,11 @@ const $$createType3 = CodexModelInfo.createFrom;
 const $$createType4 = $Create.Array($$createType3);
 const $$createType5 = CodexServiceTier.createFrom;
 const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = $Create.Map($Create.Any, $Create.Any);
+var $$createType8 = /** @type {(...args: any[]) => any} */(function $$initCreateType8(...args) {
+    if ($$createType8 === $$initCreateType8) {
+        $$createType8 = $$createType7;
+    }
+    return $$createType8(...args);
+});
+const $$createType9 = $Create.Array($$createType8);

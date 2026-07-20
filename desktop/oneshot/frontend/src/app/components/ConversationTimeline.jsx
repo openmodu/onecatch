@@ -2,6 +2,7 @@ import { lazy, memo, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { CaretDown, CaretRight, Circle } from "@phosphor-icons/react";
 import { formatTime } from "../format.js";
+import { Action } from "../../ui/primitives.jsx";
 
 const MarkdownContent = lazy(() => import("./MarkdownContent.jsx"));
 
@@ -20,10 +21,26 @@ function ToolTimelineItem({ entry, running, stalled, time }) {
   </details>;
 }
 
+function PermissionTimelineItem({ entry, busy, onDecision, time }) {
+  const { t } = useTranslation();
+  const request = entry.request || {};
+  const pending = !entry.decision;
+  const canAlwaysAllow = pending && !request.suppressAlwaysAllow && (request.suggestions || []).length > 0;
+  const input = Object.keys(request.input || {}).length ? JSON.stringify(request.input, null, 2) : "";
+  const status = pending ? t("timeline.permissionWaiting") : entry.decision === "allow" ? t("timeline.permissionAllowed") : t("timeline.permissionDenied");
+  return <section className={`conversation-permission ${pending ? "pending" : entry.decision}`}>
+    <div className="conversation-permission-head"><div><span>{request.displayName || request.toolName || t("timeline.permissionRequest")}</span><strong>{request.title || t("timeline.permissionTitle", { tool: request.toolName || "Claude" })}</strong></div><div><b>{status}</b><time>{time ?? formatTime(entry.at)}</time></div></div>
+    {(request.description || request.decisionReason) && <p>{request.description || request.decisionReason}</p>}
+    {input && <details><summary>{t("timeline.permissionDetails")}</summary><pre>{input}</pre></details>}
+    {pending && !request.requiresUserInteraction && <div className="conversation-permission-actions"><Action size="compact" tone="danger" disabled={busy} onClick={() => onDecision?.(request.id, "deny")}>{t("timeline.permissionDeny")}</Action><Action size="compact" disabled={busy} onClick={() => onDecision?.(request.id, "allow_once")}>{t("timeline.permissionAllowOnce")}</Action>{canAlwaysAllow && <Action size="compact" tone="primary" disabled={busy} onClick={() => onDecision?.(request.id, "allow_always")}>{t("timeline.permissionAllowAlways")}</Action>}</div>}
+    {pending && request.requiresUserInteraction && <p className="conversation-permission-note">{t("timeline.permissionOpenClaude")}</p>}
+  </section>;
+}
+
 // The timeline can grow to hundreds of rows; poll-driven parent re-renders must
 // not rebuild it unless `items`/`active` actually change, hence memo() paired
 // with the memoized conversation array the parent feeds in.
-function ConversationTimeline({ items, active }) {
+function ConversationTimeline({ items, active, permissionBusy = "", onPermissionDecision }) {
   const { t } = useTranslation();
   const rounds = items.filter((item) => item.type === "round");
   // Consecutive events often share the same second; repeating the identical
@@ -48,7 +65,7 @@ function ConversationTimeline({ items, active }) {
         <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label={t("timeline.userMessage")} /></span><span className="conversation-message-meta"><time>{timeLabel(item.at)}</time></span></div>
         <MessageBody content={item.text} />
       </div> : <article className="conversation-round" key={item.id}>
-        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={entry.id || `message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label={t("timeline.agentMessage")} /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">{t("timeline.round", { count: item.round })}</span><time>{timeLabel(entry.at || item.finishedAt || item.startedAt)}</time></span></div><MessageBody content={entry.text} streaming={entry.streaming} /></div> : <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={isRunning(item, entry, index)} stalled={isStalled(item, entry, isRunning(item, entry, index))} />)}</div>
+        <div className="conversation-round-body">{item.items.map((entry, index) => entry.type === "message" ? <div className={`conversation-agent ${entry.tone}`} key={entry.id || `message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label={t("timeline.agentMessage")} /><strong>{item.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">{t("timeline.round", { count: item.round })}</span><time>{timeLabel(entry.at || item.finishedAt || item.startedAt)}</time></span></div><MessageBody content={entry.text} streaming={entry.streaming} /></div> : entry.type === "permission" ? <PermissionTimelineItem key={entry.id} entry={entry} busy={permissionBusy === entry.request?.id} onDecision={onPermissionDecision} time={timeLabel(entry.at)} /> : <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={isRunning(item, entry, index)} stalled={isStalled(item, entry, isRunning(item, entry, index))} />)}</div>
       </article>)}
       {!items.length && <p className="muted-copy">{t("timeline.empty")}</p>}
     </div>

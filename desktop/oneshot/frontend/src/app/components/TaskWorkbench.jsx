@@ -58,7 +58,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, attachments, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onRename, onDelete, notify }) {
+export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, permissionBusy, attachments, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, onRename, onDelete, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
   const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
@@ -121,7 +121,7 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, sel
       {selectedTask ? <>
         <header className="conversation-workspace-head"><div><div className="conversation-title-row"><h2>{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p>{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : ` · ${t("task.workspaceFIFO")}`}</p></div><div className="conversation-head-actions"><Action size="compact" tone="muted" onClick={onRename}>{t("task.rename")}</Action><Action size="compact" tone="danger" onClick={onDelete}>{t("task.delete")}</Action></div></header>
         <div className="conversation-scroll" ref={scrollRef} onScroll={handleConversationScroll}>
-          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} />{!conversation.length && <div className="workbench-empty"><p>{t("task.noMessages")}</p></div>}</>}
+          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />{!conversation.length && <div className="workbench-empty"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
         {runDetail && <Composer
           runStatus={runStatus}

@@ -259,6 +259,12 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .conversation-tool[open] { background: color-mix(in oklab, var(--acp-text) 1.5%, var(--acp-canvas)); }
 .conversation-tool-body { border-left-color: var(--acp-cyan); }
 .conversation-tool-body pre { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, var(--acp-canvas)); color: var(--acp-text-muted); }
+.conversation-permission { border-color: var(--acp-line); border-left-color: var(--acp-warn); background: color-mix(in oklab, var(--acp-warn) 7%, var(--acp-canvas)); }
+.conversation-permission-head span, .conversation-permission-head b, .conversation-permission time, .conversation-permission details summary { color: var(--acp-warn); }
+.conversation-permission-head strong, .conversation-permission p { color: var(--acp-text); }
+.conversation-permission pre { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, var(--acp-canvas)); color: var(--acp-text-muted); }
+.conversation-permission.allow { border-left-color: var(--acp-good); background: color-mix(in oklab, var(--acp-good) 6%, var(--acp-canvas)); }
+.conversation-permission.deny { border-left-color: var(--acp-danger); background: color-mix(in oklab, var(--acp-danger) 6%, var(--acp-canvas)); }
 .session-card { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, transparent); }
 .session-value { border-top-color: var(--acp-line); }
 .session-value > span { color: var(--acp-text-soft); }

@@ -101,6 +101,22 @@ export class Frame {
              */
             this["failed"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * Permission is populated for permission_request and permission_resolved
+             * events. PermissionDecision is "allow" or "deny" on the resolved event.
+             * @member
+             * @type {agentrun$0.PermissionRequest | null | undefined}
+             */
+            this["permission"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["permissionDecision"] = undefined;
+        }
         if (!("at" in $$source)) {
             /**
              * At is when the engine observed the event.
@@ -119,7 +135,15 @@ export class Frame {
      * @returns {Frame}
      */
     static createFrom($$source = {}) {
+        const $$createField10_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("permission" in $$parsedSource) {
+            $$parsedSource["permission"] = $$createField10_0($$parsedSource["permission"]);
+        }
         return new Frame(/** @type {Partial<Frame>} */($$parsedSource));
     }
 }
+
+// Private type creation functions
+const $$createType0 = agentrun$0.PermissionRequest.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);

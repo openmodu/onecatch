@@ -16,6 +16,8 @@ function frameEvent(frame) {
     streaming: frame.phase !== "end",
     text: frame.phase === "start" ? "" : String(frame.text || ""),
     failed: Boolean(frame.failed),
+    ...(frame.permission ? { permission: frame.permission } : {}),
+    ...(frame.permissionDecision ? { permissionDecision: frame.permissionDecision } : {}),
     at: frame.at || "",
   };
 }

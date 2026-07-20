@@ -34,16 +34,25 @@ type RuntimeInfo struct {
 // RuntimeRegistry is a hot-swappable Engine. The orchestrator keeps this
 // pointer while users update local CLI paths from the desktop application.
 type RuntimeRegistry struct {
-	mu             sync.RWMutex
-	config         RuntimeConfig
-	settings       map[string]domainsettings.RuntimeSettings
-	interruptGrace time.Duration
-	engine         *agentrun.Engine
+	mu                 sync.RWMutex
+	config             RuntimeConfig
+	settings           map[string]domainsettings.RuntimeSettings
+	interruptGrace     time.Duration
+	engine             *agentrun.Engine
+	permissionMu       sync.Mutex
+	pendingPermissions map[string]*pendingPermission
+}
+
+type pendingPermission struct {
+	runID     string
+	stepRunID string
+	request   agentrun.PermissionRequest
+	response  chan agentrun.PermissionDecision
 }
 
 func NewRuntimeRegistry(root string) (*RuntimeRegistry, error) {
 	_ = root
-	registry := &RuntimeRegistry{}
+	registry := &RuntimeRegistry{pendingPermissions: make(map[string]*pendingPermission)}
 	registry.replace(RuntimeConfig{})
 	return registry, nil
 }
@@ -88,7 +97,69 @@ func (r *RuntimeRegistry) Run(ctx context.Context, request agentrun.Request, sin
 	if request.InterruptGrace <= 0 {
 		request.InterruptGrace = interruptGrace
 	}
+	if request.Runtime == agentrun.RuntimeClaude && request.RunID != "" && request.PermissionHandler == nil {
+		runID, stepRunID := request.RunID, request.StepRunID
+		request.PermissionHandler = func(ctx context.Context, permission agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {
+			return r.awaitPermission(ctx, runID, stepRunID, permission)
+		}
+	}
 	return engine.Run(ctx, request, sink)
+}
+
+func (r *RuntimeRegistry) awaitPermission(ctx context.Context, runID, stepRunID string, request agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {
+	pending := &pendingPermission{runID: runID, stepRunID: stepRunID, request: request, response: make(chan agentrun.PermissionDecision, 1)}
+	r.permissionMu.Lock()
+	r.pendingPermissions[request.ID] = pending
+	r.permissionMu.Unlock()
+	defer func() {
+		r.permissionMu.Lock()
+		if r.pendingPermissions[request.ID] == pending {
+			delete(r.pendingPermissions, request.ID)
+		}
+		r.permissionMu.Unlock()
+	}()
+	select {
+	case decision := <-pending.response:
+		return decision, nil
+	case <-ctx.Done():
+		return agentrun.PermissionDecision{}, ctx.Err()
+	}
+}
+
+// ResolvePermission delivers a desktop decision to the Claude process that is
+// blocked on requestID. The run check prevents one task card from answering a
+// request belonging to another concurrently running workflow.
+func (r *RuntimeRegistry) ResolvePermission(runID, requestID, decision string) error {
+	r.permissionMu.Lock()
+	pending := r.pendingPermissions[requestID]
+	if pending == nil || pending.runID != runID {
+		r.permissionMu.Unlock()
+		return coded("permission_not_pending", "permission request is no longer pending")
+	}
+	var response agentrun.PermissionDecision
+	switch decision {
+	case "allow_once":
+		response = agentrun.PermissionDecision{Behavior: "allow", DecisionClassification: "user_temporary"}
+	case "allow_always":
+		if pending.request.SuppressAlwaysAllow || len(pending.request.Suggestions) == 0 {
+			r.permissionMu.Unlock()
+			return coded("permission_persistent_unavailable", "this request cannot be permanently allowed")
+		}
+		response = agentrun.PermissionDecision{Behavior: "allow", UpdatedPermissions: pending.request.Suggestions, DecisionClassification: "user_permanent"}
+	case "deny":
+		response = agentrun.PermissionDecision{Behavior: "deny", Message: "Permission denied by user", DecisionClassification: "user_reject"}
+	default:
+		r.permissionMu.Unlock()
+		return coded("permission_decision_invalid", "permission decision must be allow_once, allow_always or deny")
+	}
+	select {
+	case pending.response <- response:
+		r.permissionMu.Unlock()
+		return nil
+	default:
+		r.permissionMu.Unlock()
+		return coded("permission_not_pending", "permission request was already answered")
+	}
 }
 
 func (r *RuntimeRegistry) List() []RuntimeInfo {
