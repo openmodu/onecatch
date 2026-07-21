@@ -294,7 +294,18 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors, cod
     claude: { name: "Claude Code", command: "claude", description: t("settings.runtimeDescription"), env: "ANTHROPIC_API_KEY, HTTPS_PROXY" },
     modu: { name: "Modu Code", command: "modu_code", description: t("settings.moduDescription"), env: t("settings.optionalEnv") },
   };
-  return <>{runtimeIds.map((id) => {
+  return <>
+    <aside className="runtime-path-help" aria-labelledby="runtime-path-help-title">
+      <div className="runtime-path-help-copy">
+        <strong id="runtime-path-help-title">{t("settings.runtimePathHelpTitle")}</strong>
+        <p>{t("settings.runtimePathHelpDescription")}</p>
+      </div>
+      <div className="runtime-path-help-groups">
+        <div><span>{t("settings.runtimePathHelpCommands")}</span><code>command -v codex</code><code>command -v claude</code><code>command -v modu_code</code></div>
+        <div><span>{t("settings.runtimePathHelpExamples")}</span><code>/opt/homebrew/bin/codex</code><code>/usr/local/bin/codex</code><code>/Users/yourname/.local/bin/claude</code><code>/Users/yourname/go/bin/modu_code</code></div>
+      </div>
+    </aside>
+    {runtimeIds.map((id) => {
     const current = status[id] || runtimes.find((item) => item.id === id) || {};
     const statusText = current.checking ? t("settings.checkingCommand") : current.available ? `${current.version || t("common.available")}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN")}` : ""}` : current.error || t("settings.notDetected");
     const codexData = codexConfiguration.data;
