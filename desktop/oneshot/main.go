@@ -12,6 +12,8 @@ import (
 	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
 	"github.com/openmodu/oneshot/internal/gitinspect"
 	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
+	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
+	"github.com/openmodu/oneshot/internal/runstate"
 	"github.com/openmodu/oneshot/internal/runstream"
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/internal/workspacelock"
@@ -37,6 +39,12 @@ func main() {
 	if err != nil {
 		log.Fatal("open local store", zap.Error(err))
 	}
+	// Decorate the workflow repository so every bounded-state mutation (run,
+	// step run, instruction) marks the run dirty. Both the orchestrator and the
+	// desktop app read store.Repos.Workflows below, so wrapping it here makes
+	// their writes push without threading the hub through either constructor.
+	runStateHub := runstate.NewHub()
+	store.Repos.Workflows = repoworkflows.WithNotifier(store.Repos.Workflows, runStateHub)
 	settingsValue, err := settingsrepo.NewSettingsRepo(store.Data.Paths.Root).Get(context.Background())
 	if err != nil {
 		log.Fatal("open settings", zap.Error(err))
@@ -59,6 +67,8 @@ func main() {
 	localApp := localapp.New(store, orchestrator, runtimes, git)
 	streamHub := runstream.NewHub()
 	localApp.SetRunStreamHub(streamHub)
+	localApp.SetRunStateHub(runStateHub)
+	defer runStateHub.Close()
 	defer localApp.Close()
 	localApp.SetSettingsReload(func(value domainsettings.Settings) error { return managedLog.Reconfigure(logConfig(value)) })
 	if err := localApp.InitializeSettings(context.Background()); err != nil {
@@ -97,6 +107,9 @@ func main() {
 		wailsApp.Event.Emit(runstream.EventName, frame)
 	})
 	defer unsubscribeRunStream()
+	runStateHub.SetEmitter(func(view runstate.View) {
+		wailsApp.Event.Emit(runstate.EventName, view)
+	})
 	menu := wailsApp.NewMenu()
 	menu.AddRole(application.AppMenu)
 	menu.AddRole(application.EditMenu)

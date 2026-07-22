@@ -96,3 +96,20 @@ export function applyRuntimeFrames(detail, incoming) {
 export function applyRuntimeFrame(detail, frame) {
   return applyRuntimeFrames(detail, [frame]);
 }
+
+// Merges a pushed run-state view (the bounded half: run + step runs +
+// instructions + active) into the detail loaded by GetRun, preserving the
+// unbounded transcript (runtimeEvents/events), which arrives separately as
+// runstream frames. Returns the same reference when the view targets a
+// different run or nothing changed, so an idle push causes no re-render.
+export function applyRunState(detail, view) {
+  if (!detail || !view || view.runId !== detail.run?.id) return detail;
+  const nextRun = view.run || detail.run;
+  const nextStepRuns = view.stepRuns || detail.stepRuns || [];
+  const nextInstructions = view.instructions || detail.instructions || [];
+  const nextActive = Boolean(view.active);
+  // A pushed run revision can lag a value the frontend just wrote optimistically
+  // (or one an in-flight GetRun already returned). Never move the run backwards.
+  if (Number(nextRun.revision || 0) < Number(detail.run?.revision || 0)) return detail;
+  return { ...detail, run: nextRun, stepRuns: nextStepRuns, instructions: nextInstructions, active: nextActive };
+}

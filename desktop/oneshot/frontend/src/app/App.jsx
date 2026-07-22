@@ -21,10 +21,11 @@ import WorkflowLibrary from "./components/workflow/WorkflowLibrary.jsx";
 import WorkflowEditor from "./components/workflow/WorkflowEditor.jsx";
 import WorkerPage from "./components/WorkerPage.jsx";
 import Modal from "./components/Modal.jsx";
-import { applyRuntimeFrames } from "./runtimeStream.js";
+import { applyRunState, applyRuntimeFrames } from "./runtimeStream.js";
 import { nextWorkflowDefinitionID } from "./workflowIds.js";
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
+const runStateEvent = "oneshot:run-state";
 
 function App() {
   const { t } = useTranslation();
@@ -79,7 +80,6 @@ function App() {
   const liveFrameHistoryRef = useRef([]);
   const liveFrameGenerationRef = useRef(0);
   const liveFlushTimerRef = useRef(0);
-  const terminalReconcileTimerRef = useRef(0);
   // Latest-value refs so the polling loops can read fresh state without listing
   // `tasks`/`runDetail` as effect deps (which would tear down and rebuild the
   // timer on every tick — a big source of the jank).
@@ -323,27 +323,30 @@ function App() {
       if (liveFrameHistoryRef.current.length > 512) liveFrameHistoryRef.current.splice(0, 256);
       liveFramesRef.current.push(frame);
       if (!liveFlushTimerRef.current) liveFlushTimerRef.current = window.setTimeout(flush, 80);
-
-      // Runtime frames update the transcript, while run/step status lives in
-      // durable workflow state. Reconcile promptly at a terminal-looking event
-      // instead of polling the entire growing detail every second.
-      if (["result", "error", "usage"].includes(frame.kind) && frame.phase !== "delta") {
-        window.clearTimeout(terminalReconcileTimerRef.current);
-        terminalReconcileTimerRef.current = window.setTimeout(() => {
-          if (selectedRunIDRef.current === frame.runId) loadRun(frame.runId, true);
-        }, 240);
-      }
+      // Run/step status no longer needs a transcript re-read here: the backend
+      // pushes the bounded run state on the oneshot:run-state channel below.
     });
     return () => {
       off();
       window.clearTimeout(liveFlushTimerRef.current);
-      window.clearTimeout(terminalReconcileTimerRef.current);
       liveFlushTimerRef.current = 0;
-      terminalReconcileTimerRef.current = 0;
       liveFramesRef.current = [];
       liveFrameHistoryRef.current = [];
     };
-  }, [loadRun, mode]);
+  }, [mode]);
+
+  // The bounded half of a run — status, step runs, instructions, active — is
+  // pushed from Go whenever it changes, so the UI header/inspector/composer stay
+  // live without ever re-reading the (unbounded) transcript on a timer.
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    const off = Events.On(runStateEvent, (event) => {
+      const view = event.data;
+      if (!view || view.runId !== selectedRunIDRef.current) return;
+      setRunDetail((current) => applyRunState(current, view));
+    });
+    return () => off();
+  }, [mode]);
 
   useEffect(() => {
     if (!resumePendingRunID) return;
@@ -352,19 +355,21 @@ function App() {
     }
   }, [resumePendingRunID, runDetail?.active, runDetail?.run?.id, runDetail?.run?.status, selectedRunID]);
 
-  // Wails frames carry transcript changes. This slow poll only reconciles
-  // workflow status and recovers from a dropped desktop event.
+  // Desktop events are best-effort. Instead of continuously polling to recover a
+  // dropped run-state push, reconcile once when the window regains focus or
+  // becomes visible again — the only moments a stale header would be seen.
   useEffect(() => {
     if (!selectedRunID || mode !== "wails") return undefined;
-    let stopped = false;
-    let timer;
-    const cadence = () => (runDetailRef.current?.active || runDetailRef.current?.run?.status === "running" ? 10_000 : 30_000);
-    const tick = async () => {
-      await loadRun(selectedRunID, true);
-      if (!stopped) timer = window.setTimeout(tick, cadence());
+    const reconcile = () => {
+      if (document.visibilityState === "hidden") return;
+      if (selectedRunIDRef.current) loadRun(selectedRunIDRef.current, true);
     };
-    timer = window.setTimeout(tick, cadence());
-    return () => { stopped = true; window.clearTimeout(timer); };
+    window.addEventListener("focus", reconcile);
+    document.addEventListener("visibilitychange", reconcile);
+    return () => {
+      window.removeEventListener("focus", reconcile);
+      document.removeEventListener("visibilitychange", reconcile);
+    };
   }, [loadRun, mode, selectedRunID]);
 
   // Self-scheduling poll for the task queue + run list, same ref-driven cadence.
