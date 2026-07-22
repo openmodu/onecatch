@@ -834,7 +834,9 @@ func (a *App) GetRunDetail(ctx context.Context, runID string) (RunDetail, error)
 
 // transcriptEventBudget caps how many runtime events opening a run reads. It is
 // a soft budget: whole rounds are loaded, and the newest round always is.
-const transcriptEventBudget = 400
+// A var rather than a const only so benchmarks can replay the unbounded read
+// this replaced through the exact same code path; nothing reassigns it at run time.
+var transcriptEventBudget = 400
 
 // GetStepRunTranscript loads one older round on demand, for the "load earlier"
 // affordance the truncated transcript renders.
