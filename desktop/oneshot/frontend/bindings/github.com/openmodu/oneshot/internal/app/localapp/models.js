@@ -657,6 +657,25 @@ export class RunDetail {
              */
             this["lastError"] = undefined;
         }
+        if (!("loadedStepRunIds" in $$source)) {
+            /**
+             * LoadedStepRunIDs lists the step runs whose transcript RuntimeEvents
+             * actually contains. Opening a long run only reads the most recent rounds,
+             * so the UI can render the rest as a "load earlier" affordance instead of
+             * silently showing them as empty.
+             * @member
+             * @type {string[]}
+             */
+            this["loadedStepRunIds"] = [];
+        }
+        if (!("transcriptTruncated" in $$source)) {
+            /**
+             * TranscriptTruncated reports that at least one older round was skipped.
+             * @member
+             * @type {boolean}
+             */
+            this["transcriptTruncated"] = false;
+        }
 
         Object.assign(this, $$source);
     }
@@ -675,6 +694,7 @@ export class RunDetail {
         const $$createField5_0 = $$createType8;
         const $$createField6_0 = $$createType10;
         const $$createField7_0 = $$createType12;
+        const $$createField10_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("run" in $$parsedSource) {
             $$parsedSource["run"] = $$createField0_0($$parsedSource["run"]);
@@ -699,6 +719,9 @@ export class RunDetail {
         }
         if ("instructions" in $$parsedSource) {
             $$parsedSource["instructions"] = $$createField7_0($$parsedSource["instructions"]);
+        }
+        if ("loadedStepRunIds" in $$parsedSource) {
+            $$parsedSource["loadedStepRunIds"] = $$createField10_0($$parsedSource["loadedStepRunIds"]);
         }
         return new RunDetail(/** @type {Partial<RunDetail>} */($$parsedSource));
     }

@@ -26,6 +26,8 @@ import { nextWorkflowDefinitionID } from "./workflowIds.js";
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
 const runStateEvent = "oneshot:run-state";
+// How many older rounds one "load earlier" click pulls in.
+const EARLIER_ROUND_BATCH = 3;
 
 function App() {
   const { t } = useTranslation();
@@ -595,6 +597,33 @@ function App() {
     }
   };
 
+  // Loads the newest few of the not-yet-loaded rounds — the ones adjacent to
+  // what is already on screen — so repeated clicks walk backwards through the
+  // transcript instead of pulling the whole history at once.
+  const loadEarlierRounds = async (stepRunIDs) => {
+    const runID = runDetail?.run?.id;
+    if (!runID || !stepRunIDs?.length || mode === "demo") return;
+    const batch = stepRunIDs.slice(-EARLIER_ROUND_BATCH);
+    try {
+      const loaded = await Promise.all(batch.map((stepRunID) => TaskRunBinding.GetStepRunTranscript(runID, stepRunID)));
+      setRunDetail((detail) => {
+        if (!detail || detail.run?.id !== runID) return detail;
+        const already = new Set(detail.loadedStepRunIds || []);
+        const added = [];
+        const events = [];
+        batch.forEach((stepRunID, index) => {
+          if (already.has(stepRunID)) return;
+          added.push(stepRunID);
+          events.push(...(loaded[index] || []));
+        });
+        if (!added.length) return detail;
+        return { ...detail, runtimeEvents: [...events, ...(detail.runtimeEvents || [])], loadedStepRunIds: [...(detail.loadedStepRunIds || []), ...added] };
+      });
+    } catch (error) {
+      notify("error", errorMessage(error));
+    }
+  };
+
   const openRenameTask = () => {
     const task = runDetail?.task || tasks.find((item) => item.id === selectedQueuedTaskID);
     if (task) setRenameForm({ taskId: task.id, title: task.title, originalTitle: task.title });
@@ -798,6 +827,7 @@ function App() {
           onCancel={() => runAction("cancel")}
           onRemoveInstruction={removeQueuedInstruction}
           onPermissionDecision={respondPermission}
+          onLoadEarlier={loadEarlierRounds}
           onRename={openRenameTask}
           onDelete={deleteSelectedTask}
           notify={notify}

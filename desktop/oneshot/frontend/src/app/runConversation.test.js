@@ -198,3 +198,44 @@ test("keeps an interactive permission card and applies its decision", () => {
   assert.equal(permission.request.toolName, "WebFetch");
   assert.equal(permission.decision, "allow");
 });
+
+const paginatedDetail = (loadedStepRunIds) => ({
+  task: { prompt: "做点事", createdAt: "2026-07-22T00:00:00Z" },
+  stepRuns: [
+    { id: "s1", stepId: "a", status: "succeeded", startedAt: "2026-07-22T00:01:00Z" },
+    { id: "s2", stepId: "a", status: "succeeded", startedAt: "2026-07-22T00:02:00Z" },
+    { id: "s3", stepId: "a", status: "running", startedAt: "2026-07-22T00:03:00Z" },
+  ],
+  runtimeEvents: [{ stepRunId: "s3", seq: 1, kind: "message", text: "最新一轮", streamId: "m1" }],
+  loadedStepRunIds,
+});
+
+test("collapses unloaded rounds into one truncation marker", () => {
+  const timeline = buildRunConversation(paginatedDetail(["s3"]));
+  const markers = timeline.filter((item) => item.type === "truncated");
+  assert.equal(markers.length, 1, "one marker for the contiguous unloaded prefix");
+  assert.equal(markers[0].count, 2);
+  assert.deepEqual(markers[0].stepRunIds, ["s1", "s2"]);
+
+  const rounds = timeline.filter((item) => item.type === "round");
+  assert.equal(rounds.length, 1, "unloaded rounds are not rendered as empty rounds");
+  assert.equal(rounds[0].id, "s3");
+
+  // The marker sits after the task prompt but before the loaded round.
+  const order = timeline.map((item) => item.type);
+  assert.deepEqual(order, ["user", "truncated", "round"]);
+});
+
+test("emits no truncation marker once every round is loaded", () => {
+  const timeline = buildRunConversation(paginatedDetail(["s1", "s2", "s3"]));
+  assert.equal(timeline.filter((item) => item.type === "truncated").length, 0);
+  assert.equal(timeline.filter((item) => item.type === "round").length, 3);
+});
+
+test("treats a detail without loadedStepRunIds as fully loaded", () => {
+  const detail = paginatedDetail(undefined);
+  delete detail.loadedStepRunIds;
+  const timeline = buildRunConversation(detail);
+  assert.equal(timeline.filter((item) => item.type === "truncated").length, 0);
+  assert.equal(timeline.filter((item) => item.type === "round").length, 3, "older backends stay compatible");
+});
