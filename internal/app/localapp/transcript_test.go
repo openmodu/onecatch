@@ -59,9 +59,20 @@ func seedRunWithRounds(t *testing.T, app *App, roundCount, eventsPerRound int) s
 	return run.ID
 }
 
+// pinTranscriptBudget makes a test independent of the shipped default so the
+// budget can be retuned without rewriting the expectations here.
+func pinTranscriptBudget(t *testing.T, bytes int) {
+	t.Helper()
+	original := transcriptByteBudget
+	transcriptByteBudget = bytes
+	t.Cleanup(func() { transcriptByteBudget = original })
+}
+
 func TestGetRunDetailLoadsOnlyRecentRoundsAndReportsTruncation(t *testing.T) {
 	app, _ := newLocalTestApp(t, completingEngine{})
-	// 10 rounds x 100 events is far over the 400-event budget.
+	// 10 rounds of ~100 small events each, against a budget that only a couple
+	// of rounds can fill.
+	pinTranscriptBudget(t, 4*1024)
 	runID := seedRunWithRounds(t, app, 10, 100)
 
 	detail, err := app.GetRunDetail(context.Background(), runID)
@@ -91,6 +102,7 @@ func TestGetRunDetailLoadsOnlyRecentRoundsAndReportsTruncation(t *testing.T) {
 
 func TestGetRunDetailKeepsShortTranscriptWhole(t *testing.T) {
 	app, _ := newLocalTestApp(t, completingEngine{})
+	pinTranscriptBudget(t, 256*1024)
 	runID := seedRunWithRounds(t, app, 3, 10)
 
 	detail, err := app.GetRunDetail(context.Background(), runID)
@@ -123,5 +135,47 @@ func TestGetStepRunTranscriptLoadsASkippedRound(t *testing.T) {
 		if event.StepRunID != "step_00" {
 			t.Fatalf("unexpected step run in transcript: %q", event.StepRunID)
 		}
+	}
+}
+
+func TestBoundedWorkflowEventsKeepsResumesAndNewestTail(t *testing.T) {
+	var events []domainworkflows.WorkflowEvent
+	for seq := 1; seq <= 100; seq++ {
+		eventType := "step.finished"
+		// Two resumes sit in the oldest part of the log, well outside any tail.
+		if seq == 3 || seq == 7 {
+			eventType = "run.resumed"
+		}
+		events = append(events, domainworkflows.WorkflowEvent{RunID: "r", Seq: int64(seq), Type: eventType})
+	}
+
+	kept := boundedWorkflowEvents(events, 10)
+	if len(kept) != 12 {
+		t.Fatalf("expected 10 tail events plus 2 resumes, got %d", len(kept))
+	}
+	for index := 1; index < len(kept); index++ {
+		if kept[index].Seq <= kept[index-1].Seq {
+			t.Fatalf("events must stay in Seq order: %v", kept)
+		}
+	}
+	resumes := 0
+	for _, event := range kept {
+		if event.Type == "run.resumed" {
+			resumes++
+		}
+	}
+	if resumes != 2 {
+		t.Fatalf("both old run.resumed events must survive, got %d", resumes)
+	}
+	// The newest event is always present; the inspector reads newest-first.
+	if kept[len(kept)-1].Seq != 100 {
+		t.Fatalf("newest event must be kept, got %d", kept[len(kept)-1].Seq)
+	}
+}
+
+func TestBoundedWorkflowEventsPassesShortLogThrough(t *testing.T) {
+	events := []domainworkflows.WorkflowEvent{{Seq: 1}, {Seq: 2}}
+	if got := boundedWorkflowEvents(events, 200); len(got) != 2 {
+		t.Fatalf("a short log must pass through untouched, got %d", len(got))
 	}
 }

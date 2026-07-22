@@ -32,8 +32,8 @@ func BenchmarkGetRunDetail(b *testing.B) {
 		{15, 200}, // 3k events
 		{30, 300}, // 9k events
 	}
-	original := transcriptEventBudget
-	b.Cleanup(func() { transcriptEventBudget = original })
+	original := transcriptByteBudget
+	b.Cleanup(func() { transcriptByteBudget = original })
 
 	for _, shape := range shapes {
 		app, runID := benchSeed(b, shape.rounds, shape.events)
@@ -41,7 +41,7 @@ func BenchmarkGetRunDetail(b *testing.B) {
 		name := fmt.Sprintf("%drounds_x%devents", shape.rounds, shape.events)
 
 		b.Run("bounded/"+name, func(b *testing.B) {
-			transcriptEventBudget = original
+			transcriptByteBudget = original
 			b.ReportAllocs()
 			for b.Loop() {
 				if _, err := app.GetRunDetail(ctx, runID); err != nil {
@@ -50,7 +50,7 @@ func BenchmarkGetRunDetail(b *testing.B) {
 			}
 		})
 		b.Run("unbounded/"+name, func(b *testing.B) {
-			transcriptEventBudget = math.MaxInt32 // the pre-pagination behaviour
+			transcriptByteBudget = math.MaxInt32 // the pre-pagination behaviour
 			b.ReportAllocs()
 			for b.Loop() {
 				if _, err := app.GetRunDetail(ctx, runID); err != nil {
@@ -58,6 +58,6 @@ func BenchmarkGetRunDetail(b *testing.B) {
 				}
 			}
 		})
-		transcriptEventBudget = original
+		transcriptByteBudget = original
 	}
 }
