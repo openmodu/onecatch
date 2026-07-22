@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -52,8 +53,8 @@ func TestRealDataOpenRunCost(t *testing.T) {
 		unboundB int
 	}
 	var rows []row
-	original := transcriptEventBudget
-	defer func() { transcriptEventBudget = original }()
+	original := transcriptByteBudget
+	defer func() { transcriptByteBudget = original }()
 
 	for _, workspace := range workspaces {
 		page, err := app.ListRuns(ctx, ListRunsInput{WorkspaceID: workspace.ID, Limit: 200})
@@ -62,7 +63,7 @@ func TestRealDataOpenRunCost(t *testing.T) {
 		}
 		for _, item := range page.Items {
 			measure := func(budget int) (time.Duration, int, RunDetail) {
-				transcriptEventBudget = budget
+				transcriptByteBudget = budget
 				// Warm the page cache so we measure steady-state, not first read.
 				if _, err := app.GetRunDetail(ctx, item.Run.ID); err != nil {
 					t.Fatalf("GetRunDetail warmup %s: %v", item.Run.ID, err)
@@ -86,7 +87,15 @@ func TestRealDataOpenRunCost(t *testing.T) {
 				}
 				return best, len(payload), detail
 			}
-			bDur, bBytes, bDetail := measure(original)
+			budget := original
+			if override := os.Getenv("ONESHOT_E2E_BUDGET"); override != "" {
+				parsed, err := strconv.Atoi(override)
+				if err != nil {
+					t.Fatalf("bad ONESHOT_E2E_BUDGET: %v", err)
+				}
+				budget = parsed
+			}
+			bDur, bBytes, bDetail := measure(budget)
 			uDur, uBytes, uDetail := measure(1 << 30)
 			if dir := os.Getenv("ONESHOT_E2E_DUMP"); dir != "" {
 				payload, _ := json.Marshal(uDetail)

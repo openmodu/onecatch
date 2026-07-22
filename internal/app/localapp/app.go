@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -150,6 +151,8 @@ type RunDetail struct {
 	LoadedStepRunIDs []string `json:"loadedStepRunIds"`
 	// TranscriptTruncated reports that at least one older round was skipped.
 	TranscriptTruncated bool `json:"transcriptTruncated"`
+	// EventsTruncated reports that older workflow events were left out of Events.
+	EventsTruncated bool `json:"eventsTruncated,omitempty"`
 }
 
 type App struct {
@@ -794,16 +797,17 @@ func (a *App) GetRunDetail(ctx context.Context, runID string) (RunDetail, error)
 	if err != nil {
 		return RunDetail{}, err
 	}
-	detail := RunDetail{Run: run, Task: task, Workspace: workspace, Workflow: workflow, StepRuns: stepRuns, Events: make([]WorkflowEventView, 0, len(events)), RuntimeEvents: []RuntimeEventView{}, Instructions: instructions, Active: a.isActive(runID), LastError: a.lastError(runID)}
-	for _, event := range events {
+	detail := RunDetail{Run: run, Task: task, Workspace: workspace, Workflow: workflow, StepRuns: stepRuns, Events: []WorkflowEventView{}, RuntimeEvents: []RuntimeEventView{}, Instructions: instructions, Active: a.isActive(runID), LastError: a.lastError(runID)}
+	for _, event := range boundedWorkflowEvents(events, workflowEventBudget) {
 		detail.Events = append(detail.Events, WorkflowEventView{RunID: event.RunID, Seq: event.Seq, Type: event.Type, StepID: event.StepID, Payload: string(event.Payload), At: event.At.Format(time.RFC3339Nano)})
 	}
+	detail.EventsTruncated = len(detail.Events) < len(events)
 	// Each step run keeps its own events.jsonl, so loading only the most recent
 	// rounds means the older files are never opened. Opening a long-running run
 	// therefore costs a bounded read instead of one proportional to the entire
 	// history. Walk newest-first to spend the budget on what the user sees.
 	loaded := make(map[string][]domainworkflows.RuntimeEvent, len(stepRuns))
-	budget := transcriptEventBudget
+	budget := transcriptByteBudget
 	for index := len(stepRuns) - 1; index >= 0; index-- {
 		stepRun := stepRuns[index]
 		// The newest round is always loaded whole: a partially rendered live
@@ -818,7 +822,7 @@ func (a *App) GetRunDetail(ctx context.Context, runID string) (RunDetail, error)
 		}
 		enrichStepRunUsage(&detail.StepRuns[index], items)
 		loaded[stepRun.ID] = items
-		budget -= len(items)
+		budget -= transcriptBytes(items)
 	}
 	// Emit in step-run order so the transcript stays chronological.
 	for _, stepRun := range stepRuns {
@@ -832,11 +836,73 @@ func (a *App) GetRunDetail(ctx context.Context, runID string) (RunDetail, error)
 	return detail, nil
 }
 
-// transcriptEventBudget caps how many runtime events opening a run reads. It is
-// a soft budget: whole rounds are loaded, and the newest round always is.
-// A var rather than a const only so benchmarks can replay the unbounded read
-// this replaced through the exact same code path; nothing reassigns it at run time.
-var transcriptEventBudget = 400
+// boundedWorkflowEvents trims the workflow event log to what the UI actually
+// consumes. Only two things read it: the timeline, which needs run.resumed
+// events (the user instructions a resume carried) at any age, and the Events
+// inspector tab, which lists newest-first. Measured on real data, this log was
+// ~48% of the payload of opening a run — larger than the transcript the
+// transcript budget was busy bounding — because it was always sent whole.
+//
+// Returned in Seq order, keeping every run.resumed plus the newest `budget`
+// others.
+func boundedWorkflowEvents(events []domainworkflows.WorkflowEvent, budget int) []domainworkflows.WorkflowEvent {
+	if budget <= 0 || len(events) <= budget {
+		return events
+	}
+	kept := make([]domainworkflows.WorkflowEvent, 0, budget)
+	remaining := budget
+	for index := len(events) - 1; index >= 0; index-- {
+		if events[index].Type == "run.resumed" {
+			continue // taken unconditionally in the merge below
+		}
+		if remaining == 0 {
+			continue
+		}
+		remaining--
+		kept = append(kept, events[index])
+	}
+	for _, event := range events {
+		if event.Type == "run.resumed" {
+			kept = append(kept, event)
+		}
+	}
+	sort.Slice(kept, func(i, j int) bool { return kept[i].Seq < kept[j].Seq })
+	return kept
+}
+
+// workflowEventBudget caps how many workflow events opening a run ships. The
+// inspector that reads them shows the newest first, so the tail is what a reader
+// ever looks at. A var so tests can pin it; nothing reassigns it at run time.
+var workflowEventBudget = 200
+
+// transcriptBytes is what a round costs to ship, which is what the budget is
+// really trying to bound. Payload is the stored JSON, so its length is the
+// payload the webview will have to receive and parse.
+func transcriptBytes(items []domainworkflows.RuntimeEvent) int {
+	total := 0
+	for _, item := range items {
+		total += len(item.Payload)
+	}
+	return total
+}
+
+// transcriptByteBudget caps how much transcript opening a run reads. It is a
+// soft budget: whole rounds are loaded, and the newest round always is.
+//
+// Bytes, not event count: real runs hold few but very large events (measured at
+// ~2KB average, with single rounds over 700KB), so an event-count budget let the
+// largest transcripts through untouched while bounding nothing that mattered.
+//
+// The figure counts stored bytes, which run roughly 4x the bytes finally sent:
+// the log holds every 500ms streaming delta as its own line and folding collapses
+// them. Measured against real data, 1MB stored (~250KB sent) leaves every normal
+// run whole and only bites a genuinely runaway history — a safety valve, not a
+// routine trim. Bounding the workflow event log (boundedWorkflowEvents) is what
+// actually shrinks a normal payload.
+//
+// A var rather than a const so tests and benchmarks can pin it; nothing
+// reassigns it at run time.
+var transcriptByteBudget = 1024 * 1024
 
 // GetStepRunTranscript loads one older round on demand, for the "load earlier"
 // affordance the truncated transcript renders.
