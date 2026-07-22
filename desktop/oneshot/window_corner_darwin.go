@@ -138,6 +138,31 @@ static void oneshotInstallTitlebarDoubleClick(NSWindow *window) {
 	[handler release];
 }
 
+static BOOL oneshotAcceptsFirstMouse(id self, SEL _cmd, NSEvent *event) {
+	return YES;
+}
+
+// Wails' WebviewWindow lets the window itself become key/main/first responder,
+// but never overrides NSView's default acceptsFirstMouse (NO). AppKit's default
+// behaviour is: the first click on an unfocused window only activates it; the
+// click is not delivered to whatever is underneath. Since this window's entire
+// content is one WKWebView, that means every input and every button needs a
+// second click after the app regained focus (Cmd-Tab, clicking the title bar,
+// switching from another app) — the very first click just wakes the window up.
+// This is a known upstream gap (wails GitHub #3783). Overriding the method at
+// the WKWebView class level makes the activating click also count as a real
+// one. class_addMethod is a documented no-op if the class already implements
+// the selector, so calling this on every corner-radius pass (window
+// maximize/fullscreen toggles) is harmless. Scoped to this process: WKWebView
+// is a shared framework class, but this app only ever creates one instance.
+static void oneshotEnableClickToFocus(NSWindow *window) {
+	WKWebView *webView = oneshotFindWebView(window.contentView);
+	if (webView == nil) {
+		return;
+	}
+	class_addMethod([webView class], @selector(acceptsFirstMouse:), (IMP)oneshotAcceptsFirstMouse, "c@:@");
+}
+
 static void oneshotSetWindowCornerRadius(void *handle, double radius) {
 	NSWindow *window = (__bridge NSWindow *)handle;
 	if (window == nil || window.contentView == nil) {
@@ -145,6 +170,7 @@ static void oneshotSetWindowCornerRadius(void *handle, double radius) {
 	}
 	oneshotInstallTitlebarDoubleClick(window);
 	oneshotInstallAppearanceObserver(window);
+	oneshotEnableClickToFocus(window);
 	oneshotMatchBackgroundToCanvas(window);
 
 	NSView *frame = window.contentView.superview;
