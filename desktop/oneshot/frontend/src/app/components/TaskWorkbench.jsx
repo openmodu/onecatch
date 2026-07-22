@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Action, Kicker } from "../../ui/primitives.jsx";
 import { shortID } from "../format.js";
@@ -58,13 +58,17 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, permissionBusy, attachments, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, onRename, onDelete, notify }) {
+export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, permissionBusy, attachments, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, onLoadEarlier, onRename, onDelete, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
   const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
   const [compactViewport, setCompactViewport] = useState(initialCompactViewport);
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  // Set just before older rounds are prepended, so the layout effect below can
+  // keep the reader on the same content instead of letting it jump.
+  const scrollAnchorRef = useRef(null);
 
   const selectedQueuedTask = useMemo(() => tasks.find((task) => task.id === selectedQueuedTaskID), [tasks, selectedQueuedTaskID]);
   const selectedTask = runDetail?.task || selectedQueuedTask;
@@ -81,6 +85,17 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, sel
     const element = scrollRef.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [selectedRunID, selectedQueuedTaskID]);
+  // Runs before the auto-scroll effect below, which is skipped while unpinned.
+  // Restoring by the scrollHeight delta keeps the first previously-visible row
+  // exactly where it was after older rounds are inserted above it.
+  useLayoutEffect(() => {
+    const anchor = scrollAnchorRef.current;
+    if (!anchor) return;
+    scrollAnchorRef.current = null;
+    const element = scrollRef.current;
+    if (!element) return;
+    element.scrollTop = anchor.scrollTop + (element.scrollHeight - anchor.scrollHeight);
+  }, [conversationSize]);
   useEffect(() => {
     const element = scrollRef.current;
     if (element && pinnedRef.current) element.scrollTop = element.scrollHeight;
@@ -97,6 +112,20 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, sel
     media.addListener?.(update);
     return () => media.removeListener?.(update);
   }, []);
+
+  const handleLoadEarlier = async (stepRunIds) => {
+    const element = scrollRef.current;
+    if (element) scrollAnchorRef.current = { scrollHeight: element.scrollHeight, scrollTop: element.scrollTop };
+    // Older content lands above the viewport; jumping to the bottom afterwards
+    // would throw away exactly what the user asked to see.
+    pinnedRef.current = false;
+    setLoadingEarlier(true);
+    try {
+      await onLoadEarlier?.(stepRunIds);
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
 
   const handleConversationScroll = () => {
     const element = scrollRef.current;
@@ -121,7 +150,7 @@ export default function TaskWorkbench({ mode, workspaceID, tasks, runDetail, sel
       {selectedTask ? <>
         <header className="conversation-workspace-head"><div><div className="conversation-title-row"><h2>{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p>{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : ` · ${t("task.workspaceFIFO")}`}</p></div><div className="conversation-head-actions"><Action size="compact" tone="muted" onClick={onRename}>{t("task.rename")}</Action><Action size="compact" tone="danger" onClick={onDelete}>{t("task.delete")}</Action></div></header>
         <div className="conversation-scroll" ref={scrollRef} onScroll={handleConversationScroll}>
-          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />{!conversation.length && <div className="workbench-empty"><p>{t("task.noMessages")}</p></div>}</>}
+          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} loadingEarlier={loadingEarlier} onLoadEarlier={handleLoadEarlier} />{!conversation.length && <div className="workbench-empty"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
         {runDetail && <Composer
           runStatus={runStatus}

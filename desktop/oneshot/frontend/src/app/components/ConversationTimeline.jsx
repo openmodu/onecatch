@@ -40,7 +40,17 @@ function PermissionTimelineItem({ entry, busy, onDecision, time }) {
 // The timeline can grow to hundreds of rows; poll-driven parent re-renders must
 // not rebuild it unless `items`/`active` actually change, hence memo() paired
 // with the memoized conversation array the parent feeds in.
-function ConversationTimeline({ items, active, permissionBusy = "", onPermissionDecision }) {
+function TruncatedTimelineItem({ entry, loading, onLoadEarlier }) {
+  const { t } = useTranslation();
+  return <div className="conversation-truncated">
+    <span>{t("timeline.earlierRounds", { count: entry.count })}</span>
+    <Action size="compact" tone="muted" disabled={loading} onClick={() => onLoadEarlier?.(entry.stepRunIds)}>
+      {loading ? t("timeline.loadingEarlier") : t("timeline.loadEarlier")}
+    </Action>
+  </div>;
+}
+
+function ConversationTimeline({ items, active, permissionBusy = "", onPermissionDecision, loadingEarlier = false, onLoadEarlier }) {
   const { t } = useTranslation();
   const rounds = items.filter((item) => item.type === "round");
   // Consecutive events often share the same second; repeating the identical
@@ -61,7 +71,7 @@ function ConversationTimeline({ items, active, permissionBusy = "", onPermission
   const isStalled = (round, entry, running) => !entry.settled && !running && round.status !== "succeeded";
   return <div className="conversation-section">
     <div className="conversation-list">
-      {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
+      {items.map((item) => item.type === "truncated" ? <TruncatedTimelineItem key={item.id} entry={item} loading={loadingEarlier} onLoadEarlier={onLoadEarlier} /> : item.type === "user" ? <div className="conversation-user" key={item.id}>
         <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label={t("timeline.userMessage")} /></span><span className="conversation-message-meta"><time>{timeLabel(item.at)}</time></span></div>
         <MessageBody content={item.text} />
       </div> : <article className="conversation-round" key={item.id}>

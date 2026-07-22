@@ -143,6 +143,13 @@ type RunDetail struct {
 	Instructions  []domainworkflows.Instruction `json:"instructions"`
 	Active        bool                          `json:"active"`
 	LastError     string                        `json:"lastError,omitempty"`
+	// LoadedStepRunIDs lists the step runs whose transcript RuntimeEvents
+	// actually contains. Opening a long run only reads the most recent rounds,
+	// so the UI can render the rest as a "load earlier" affordance instead of
+	// silently showing them as empty.
+	LoadedStepRunIDs []string `json:"loadedStepRunIds"`
+	// TranscriptTruncated reports that at least one older round was skipped.
+	TranscriptTruncated bool `json:"transcriptTruncated"`
 }
 
 type App struct {
@@ -791,15 +798,52 @@ func (a *App) GetRunDetail(ctx context.Context, runID string) (RunDetail, error)
 	for _, event := range events {
 		detail.Events = append(detail.Events, WorkflowEventView{RunID: event.RunID, Seq: event.Seq, Type: event.Type, StepID: event.StepID, Payload: string(event.Payload), At: event.At.Format(time.RFC3339Nano)})
 	}
-	for stepIndex, stepRun := range stepRuns {
+	// Each step run keeps its own events.jsonl, so loading only the most recent
+	// rounds means the older files are never opened. Opening a long-running run
+	// therefore costs a bounded read instead of one proportional to the entire
+	// history. Walk newest-first to spend the budget on what the user sees.
+	loaded := make(map[string][]domainworkflows.RuntimeEvent, len(stepRuns))
+	budget := transcriptEventBudget
+	for index := len(stepRuns) - 1; index >= 0; index-- {
+		stepRun := stepRuns[index]
+		// The newest round is always loaded whole: a partially rendered live
+		// round would be worse than a slightly over-budget read.
+		if budget <= 0 && index != len(stepRuns)-1 {
+			detail.TranscriptTruncated = true
+			continue
+		}
 		items, listErr := a.store.Repos.Workflows.ListRuntimeEvents(ctx, runID, stepRun.ID, 0, 10_000)
 		if listErr != nil {
 			return RunDetail{}, listErr
 		}
-		enrichStepRunUsage(&detail.StepRuns[stepIndex], items)
+		enrichStepRunUsage(&detail.StepRuns[index], items)
+		loaded[stepRun.ID] = items
+		budget -= len(items)
+	}
+	// Emit in step-run order so the transcript stays chronological.
+	for _, stepRun := range stepRuns {
+		items, ok := loaded[stepRun.ID]
+		if !ok {
+			continue
+		}
+		detail.LoadedStepRunIDs = append(detail.LoadedStepRunIDs, stepRun.ID)
 		detail.RuntimeEvents = append(detail.RuntimeEvents, foldRuntimeEventViews(stepRun.ID, items)...)
 	}
 	return detail, nil
+}
+
+// transcriptEventBudget caps how many runtime events opening a run reads. It is
+// a soft budget: whole rounds are loaded, and the newest round always is.
+const transcriptEventBudget = 400
+
+// GetStepRunTranscript loads one older round on demand, for the "load earlier"
+// affordance the truncated transcript renders.
+func (a *App) GetStepRunTranscript(ctx context.Context, runID, stepRunID string) ([]RuntimeEventView, error) {
+	items, err := a.store.Repos.Workflows.ListRuntimeEvents(ctx, runID, stepRunID, 0, 10_000)
+	if err != nil {
+		return nil, err
+	}
+	return foldRuntimeEventViews(stepRunID, items), nil
 }
 
 // enrichStepRunUsage derives the cache breakdown for runs written before the

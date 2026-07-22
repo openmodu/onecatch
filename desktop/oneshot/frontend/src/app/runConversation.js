@@ -222,7 +222,27 @@ export function buildRunConversation(detail, translate = defaultTranslate) {
   if (taskText) timeline.push({ type: "user", id: "task", text: taskText, at: detail.task.createdAt || detail.run?.startedAt || detail.task.updatedAt || detail.run?.updatedAt || "", sortRank: 0 });
   for (const instruction of resumedInstructions(detail?.events)) timeline.push({ ...instruction, sortRank: 0 });
   for (const instruction of appliedInstructions(detail?.instructions)) timeline.push({ ...instruction, sortRank: 0 });
+  // Opening a long run only loads the most recent rounds. The skipped ones are
+  // always a contiguous prefix, so they collapse into a single marker the
+  // timeline renders as "load earlier" — rendering them as empty rounds would
+  // read as data loss.
+  const loadedStepRunIDs = detail?.loadedStepRunIds ? new Set(detail.loadedStepRunIds) : null;
+  const unloadedStepRuns = [];
+  for (const stepRun of detail?.stepRuns || []) {
+    if (loadedStepRunIDs && !loadedStepRunIDs.has(stepRun.id)) unloadedStepRuns.push(stepRun);
+  }
+  if (unloadedStepRuns.length) {
+    timeline.push({
+      type: "truncated",
+      id: "truncated-transcript",
+      count: unloadedStepRuns.length,
+      stepRunIds: unloadedStepRuns.map((stepRun) => stepRun.id),
+      at: unloadedStepRuns[0].startedAt || "",
+      sortRank: 1,
+    });
+  }
   for (const [index, stepRun] of (detail?.stepRuns || []).entries()) {
+    if (loadedStepRunIDs && !loadedStepRunIDs.has(stepRun.id)) continue;
     const step = workflowSteps.get(stepRun.stepId) || {};
     timeline.push({
       type: "round",

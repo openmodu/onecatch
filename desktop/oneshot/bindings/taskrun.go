@@ -46,6 +46,9 @@ func (b *TaskRunBinding) GetRun(runID string) (localapp.RunDetail, error) {
 func (b *TaskRunBinding) GetRunStreamSnapshot(runID string) []runstream.Frame {
 	return b.app.GetRunStreamSnapshot(runID)
 }
+func (b *TaskRunBinding) GetStepRunTranscript(runID, stepRunID string) ([]localapp.RuntimeEventView, error) {
+	return b.app.GetStepRunTranscript(context.Background(), runID, stepRunID)
+}
 func (b *TaskRunBinding) ListRunsByTask(taskID string) ([]domainworkflows.Run, error) {
 	return b.app.ListRunsByTask(context.Background(), taskID)
 }
