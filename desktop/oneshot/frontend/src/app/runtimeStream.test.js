@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyRuntimeFrame, applyRuntimeFrames } from "./runtimeStream.js";
+import { applyRunState, applyRuntimeFrame, applyRuntimeFrames } from "./runtimeStream.js";
 
 const detail = () => ({ run: { id: "run-1" }, runtimeEvents: [] });
 
@@ -53,4 +53,39 @@ test("coalesces a large delta batch without growing event rows", () => {
   assert.equal(next.runtimeEvents.length, 1);
   assert.equal(next.runtimeEvents[0].text.length, 1_000);
   assert.equal(next.runtimeEvents[0].revision, 1_000);
+});
+
+test("applyRunState merges bounded state and preserves the transcript", () => {
+  const current = {
+    run: { id: "run-1", status: "running", revision: 3 },
+    task: { id: "task-1" },
+    stepRuns: [{ id: "s1", status: "running" }],
+    runtimeEvents: [{ streamId: "m1", text: "keep me" }],
+    instructions: [],
+    active: true,
+  };
+  const next = applyRunState(current, {
+    runId: "run-1",
+    run: { id: "run-1", status: "completed", revision: 4 },
+    stepRuns: [{ id: "s1", status: "succeeded" }],
+    instructions: [{ id: "i1", status: "pending" }],
+    active: false,
+  });
+  assert.equal(next.run.status, "completed");
+  assert.equal(next.stepRuns[0].status, "succeeded");
+  assert.equal(next.instructions.length, 1);
+  assert.equal(next.active, false);
+  assert.deepEqual(next.runtimeEvents, current.runtimeEvents, "transcript is untouched");
+  assert.equal(next.task.id, "task-1", "unrelated fields survive");
+});
+
+test("applyRunState ignores a view for a different run", () => {
+  const current = { run: { id: "run-1", revision: 1 } };
+  assert.strictEqual(applyRunState(current, { runId: "run-2", run: { id: "run-2" } }), current);
+});
+
+test("applyRunState never moves the run revision backwards", () => {
+  const current = { run: { id: "run-1", status: "completed", revision: 5 }, stepRuns: [], instructions: [] };
+  const stale = applyRunState(current, { runId: "run-1", run: { id: "run-1", status: "running", revision: 4 }, active: true });
+  assert.strictEqual(stale, current, "a stale push is dropped");
 });

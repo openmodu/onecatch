@@ -27,6 +27,7 @@ import (
 	"github.com/openmodu/oneshot/internal/gitinspect"
 	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
 	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
+	"github.com/openmodu/oneshot/internal/runstate"
 	"github.com/openmodu/oneshot/internal/runstream"
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/internal/worker"
@@ -164,6 +165,7 @@ type App struct {
 	settingsReload func(domainsettings.Settings) error
 	queueMu        sync.Mutex
 	runStreams     *runstream.Hub
+	runStates      *runstate.Hub
 }
 
 func New(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitinspect.Inspector) *App {
@@ -196,6 +198,44 @@ func (a *App) DataRoot() string { return a.store.Data.Paths.Root }
 func (a *App) SetRunStreamHub(hub *runstream.Hub) {
 	a.runStreams = hub
 	a.orchestrator.SetRunStreamPublisher(hub)
+}
+
+// SetRunStateHub installs the push channel for the bounded half of a run's
+// state. The hub only ever calls back into RunStateView, which reads run, step
+// runs and instructions — never the transcript — so a push stays cheap however
+// long the run has been going.
+func (a *App) SetRunStateHub(hub *runstate.Hub) {
+	a.runStates = hub
+	if hub == nil {
+		return
+	}
+	hub.SetResolver(a.RunStateView)
+}
+
+// RunStateView assembles the pushed slice of a run. It returns false when the
+// run has been deleted between the notification and this read.
+func (a *App) RunStateView(runID string) (runstate.View, bool) {
+	ctx, cancel := context.WithTimeout(a.rootCtx, 5*time.Second)
+	defer cancel()
+	run, err := a.store.Repos.Workflows.GetRun(ctx, runID)
+	if err != nil {
+		return runstate.View{}, false
+	}
+	stepRuns, err := a.store.Repos.Workflows.ListStepRuns(ctx, runID)
+	if err != nil {
+		return runstate.View{}, false
+	}
+	instructions, err := a.store.Repos.Workflows.ListInstructions(ctx, runID)
+	if err != nil {
+		return runstate.View{}, false
+	}
+	return runstate.View{
+		RunID:        runID,
+		Run:          run,
+		StepRuns:     stepRuns,
+		Instructions: instructions,
+		Active:       a.isActive(runID),
+	}, true
 }
 
 func (a *App) GetRunStreamSnapshot(runID string) []runstream.Frame {
