@@ -1,7 +1,15 @@
 import { memo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CheckCircle, CircleNotch, WarningCircle } from "@phosphor-icons/react";
 import { LOCK_PHASE } from "../lockSignal.js";
+
+// The traffic light maps the three phases onto the colour everyone already
+// reads across a room: red = stop and deal with it, amber = work in progress,
+// green = all clear. Exactly one lamp is lit per phase; the rest go dark.
+const LAMPS = [
+  { key: "red", phase: LOCK_PHASE.waiting },
+  { key: "amber", phase: LOCK_PHASE.working },
+  { key: "green", phase: LOCK_PHASE.done },
+];
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -36,12 +44,13 @@ function LockScreen({ signal, workspaceName, onExit }) {
   const headline = phase === LOCK_PHASE.waiting ? t("lock.needsAttention")
     : phase === LOCK_PHASE.working ? t("lock.working")
       : t("lock.allDone");
-  const Icon = phase === LOCK_PHASE.waiting ? WarningCircle : phase === LOCK_PHASE.working ? CircleNotch : CheckCircle;
 
   return <div className={`lock-screen phase-${phase}`} role="dialog" aria-modal="true" aria-label={t("lock.title")} onClick={onExit}>
     <div className="lock-clock" aria-hidden="true">{clock}</div>
     <div className="lock-core" onClick={(event) => event.stopPropagation()}>
-      <div className="lock-mark"><Icon size={54} weight={phase === LOCK_PHASE.working ? "bold" : "fill"} className={phase === LOCK_PHASE.working ? "spin" : ""} aria-hidden="true" /></div>
+      <div className="lock-signal" role="img" aria-label={headline}>
+        {LAMPS.map((lamp) => <span key={lamp.key} className={`lock-lamp lamp-${lamp.key} ${lamp.phase === phase ? "lit" : ""}`} aria-hidden="true" />)}
+      </div>
       <h1>{headline}</h1>
       {workspaceName && <p className="lock-workspace">{workspaceName}</p>}
 
