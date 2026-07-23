@@ -649,53 +649,57 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 }
 
 /* ---- Standby lock screen ---------------------------------------------------
-   A calm, glanceable overlay that covers the workspace. Canvas-coloured so it
-   matches the app and native window; colour comes only from the phase accent. */
+   A screensaver-style overlay: pure black (OLED-friendly, always dark whatever
+   the app theme), the traffic light on the left and the readout on the right so
+   nothing ever needs to scroll. */
 .command-lock { position: relative; display: inline-flex; align-items: center; gap: 5px; margin-left: 10px; padding: 3px 7px; border: 1px solid var(--acp-line); border-radius: 7px; background: transparent; color: var(--acp-text-muted); cursor: pointer; -webkit-app-region: no-drag; }
 .command-lock:hover { color: var(--acp-text); border-color: var(--acp-text-soft); }
 .command-lock-badge { font-style: normal; min-width: 15px; height: 15px; padding: 0 4px; display: inline-grid; place-items: center; border-radius: 99px; background: var(--green); color: #0f1f16; font-size: 10px; font-weight: 700; }
 
-.lock-screen { position: fixed; z-index: 200; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 34px 20px; background: var(--acp-canvas, #f5f5f0); color: var(--acp-text); cursor: pointer; animation: lock-in .28s ease-out; }
+.lock-screen { position: fixed; z-index: 200; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: space-between; gap: 20px; padding: 30px 40px; background: #000; color: #f4f4f4; cursor: pointer; animation: lock-in .28s ease-out; --sb-muted: rgba(255,255,255,.52); --sb-soft: rgba(255,255,255,.34); --sb-line: rgba(255,255,255,.14); --sb-panel: rgba(255,255,255,.045); }
 @keyframes lock-in { from { opacity: 0; } }
 
-.lock-clock { flex: 0 0 auto; text-align: center; font: 500 var(--ui-font-title)/1 var(--ui-font-mono); letter-spacing: .08em; color: var(--acp-text-soft); }
+.lock-clock { flex: 0 0 auto; font: 500 clamp(18px, 2.6vh, 26px)/1 var(--ui-font-mono); letter-spacing: .1em; color: var(--sb-soft); }
 
-.lock-core { flex: 1 1 auto; min-height: 0; overflow-y: auto; cursor: default; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 14px 0; max-width: 460px; width: 100%; text-align: center; }
+/* Left-right stage: traffic light | readout. Vertically centred, no scroll. */
+.lock-stage { flex: 1 1 auto; min-height: 0; cursor: default; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: clamp(40px, 7vw, 96px); width: 100%; }
 
-/* Big traffic light — the hero of the standby screen. A dark housing with three
-   stacked lamps; only the current phase's lamp is lit and glowing. */
-.lock-signal { display: flex; flex-direction: column; gap: clamp(16px, 3.4vh, 30px); padding: clamp(20px, 3.6vh, 34px) clamp(20px, 3.4vh, 32px); border-radius: 44px; background: #14171c; box-shadow: inset 0 0 0 2px rgba(255,255,255,.05), 0 26px 60px rgba(0,0,0,.34); }
-.lock-lamp { width: clamp(80px, 12vh, 128px); height: clamp(80px, 12vh, 128px); border-radius: 50%; background: var(--lamp-off); box-shadow: inset 0 3px 8px rgba(0,0,0,.6), inset 0 0 0 2px rgba(255,255,255,.04); transition: background .4s ease, box-shadow .4s ease, opacity .4s ease; opacity: .5; }
-.lamp-red { --lamp-on: #ff4d4d; --lamp-off: #3a1414; }
-.lamp-amber { --lamp-on: #ffb020; --lamp-off: #3a2a10; }
-.lamp-green { --lamp-on: #2fd06f; --lamp-off: #123322; }
-.lock-lamp.lit { background: radial-gradient(circle at 42% 38%, color-mix(in srgb, var(--lamp-on) 82%, #fff), var(--lamp-on) 70%); opacity: 1; box-shadow: 0 0 34px 4px color-mix(in srgb, var(--lamp-on) 60%, transparent), 0 0 90px 10px color-mix(in srgb, var(--lamp-on) 34%, transparent), inset 0 2px 6px rgba(255,255,255,.4); }
+/* The traffic light — hero, left. Dark housing, three stacked lamps; only the
+   current phase's lamp is lit and glowing. Sized off viewport height. */
+.lock-signal { flex: 0 0 auto; display: flex; flex-direction: column; gap: clamp(14px, 2.8vh, 26px); padding: clamp(18px, 3vh, 30px) clamp(18px, 2.8vh, 28px); border-radius: clamp(34px, 6vh, 52px); background: #0c0c0d; box-shadow: inset 0 0 0 2px rgba(255,255,255,.05), 0 30px 70px rgba(0,0,0,.6); }
+.lock-lamp { width: clamp(84px, 15vh, 168px); height: clamp(84px, 15vh, 168px); border-radius: 50%; background: var(--lamp-off); box-shadow: inset 0 3px 8px rgba(0,0,0,.7), inset 0 0 0 2px rgba(255,255,255,.04); transition: background .4s ease, box-shadow .4s ease, opacity .4s ease; opacity: .45; }
+.lamp-red { --lamp-on: #ff4d4d; --lamp-off: #2c0f0f; }
+.lamp-amber { --lamp-on: #ffb020; --lamp-off: #2c2009; }
+.lamp-green { --lamp-on: #2fd06f; --lamp-off: #0d2818; }
+.lock-lamp.lit { background: radial-gradient(circle at 42% 38%, color-mix(in srgb, var(--lamp-on) 82%, #fff), var(--lamp-on) 70%); opacity: 1; box-shadow: 0 0 40px 6px color-mix(in srgb, var(--lamp-on) 62%, transparent), 0 0 110px 16px color-mix(in srgb, var(--lamp-on) 36%, transparent), inset 0 2px 6px rgba(255,255,255,.4); }
 .phase-working .lamp-amber.lit { animation: lock-lamp-pulse 1.5s ease-in-out infinite; }
-@keyframes lock-lamp-pulse { 50% { box-shadow: 0 0 22px 2px color-mix(in srgb, var(--lamp-on) 44%, transparent), 0 0 60px 6px color-mix(in srgb, var(--lamp-on) 24%, transparent), inset 0 2px 6px rgba(255,255,255,.4); opacity: .72; } }
+@keyframes lock-lamp-pulse { 50% { box-shadow: 0 0 26px 3px color-mix(in srgb, var(--lamp-on) 44%, transparent), 0 0 70px 8px color-mix(in srgb, var(--lamp-on) 24%, transparent), inset 0 2px 6px rgba(255,255,255,.4); opacity: .72; } }
 
-.lock-core h1 { margin: 0; font-size: clamp(var(--ui-font-display), 5vh, 44px); letter-spacing: -.03em; color: var(--acp-text); }
-.lock-workspace { margin: -6px 0 0; font: 500 var(--ui-font-caption) var(--ui-font-mono); letter-spacing: .04em; color: var(--acp-text-soft); }
+/* Readout — right, left-aligned, oversized type. */
+.lock-info { flex: 0 1 auto; min-width: 0; max-width: 560px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
+.lock-info h1 { margin: 0; font-size: clamp(44px, 9vh, 92px); font-weight: 800; line-height: .98; letter-spacing: -.03em; color: #fff; }
+.lock-workspace { margin: 0; font: 500 clamp(14px, 2vh, 18px) var(--ui-font-mono); letter-spacing: .06em; color: var(--sb-soft); }
 
-.lock-counts { display: flex; gap: 10px; margin-top: 6px; }
-.lock-count { min-width: 78px; padding: 12px 10px; border: 1px solid var(--acp-line); border-radius: 12px; background: color-mix(in oklab, var(--acp-panel) 60%, transparent); display: flex; flex-direction: column; gap: 3px; }
-.lock-count b { font-size: var(--ui-font-hero); font-weight: 700; color: var(--acp-text); }
-.lock-count span { font-size: var(--ui-font-caption); color: var(--acp-text-soft); }
-.lock-count.flag { border-color: var(--orange); }
+.lock-counts { display: flex; gap: 14px; margin-top: 4px; }
+.lock-count { min-width: clamp(96px, 9vw, 128px); padding: 16px 14px; border: 1px solid var(--sb-line); border-radius: 16px; background: var(--sb-panel); display: flex; flex-direction: column; gap: 4px; }
+.lock-count b { font-size: clamp(30px, 5vh, 48px); font-weight: 800; line-height: 1; color: #fff; }
+.lock-count span { font-size: clamp(13px, 1.7vh, 16px); color: var(--sb-muted); }
+.lock-count.flag { border-color: var(--orange); background: color-mix(in srgb, var(--orange) 12%, transparent); }
 .lock-count.flag b { color: var(--orange); }
 
-.lock-list { list-style: none; margin: 8px 0 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 4px; }
-.lock-list li { display: flex; align-items: center; gap: 9px; padding: 8px 11px; border: 1px solid var(--acp-line); border-radius: 9px; text-align: left; }
-.lock-list li.lock-more { justify-content: center; border-style: dashed; color: var(--acp-text-soft); font-size: var(--ui-font-caption); }
-.lock-dot { flex: 0 0 auto; width: 7px; height: 7px; border-radius: 50%; background: var(--acp-text-soft); }
-.lock-list li.status-running .lock-dot { background: var(--green); animation: lock-pulse 1.4s ease-in-out infinite; }
-.lock-list li.status-queued .lock-dot { background: var(--acp-text-soft); }
+.lock-list { list-style: none; margin: 4px 0 0; padding: 0; width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.lock-list li { display: flex; align-items: center; gap: 11px; padding: 11px 15px; border: 1px solid var(--sb-line); border-radius: 11px; }
+.lock-list li.lock-more { justify-content: center; border-style: dashed; color: var(--sb-soft); font-size: clamp(13px, 1.7vh, 15px); }
+.lock-dot { flex: 0 0 auto; width: 9px; height: 9px; border-radius: 50%; background: var(--sb-soft); }
+.lock-list li.status-running .lock-dot { background: #2fd06f; animation: lock-pulse 1.4s ease-in-out infinite; }
+.lock-list li.status-queued .lock-dot { background: var(--sb-soft); }
 .lock-list li.status-paused .lock-dot { background: var(--orange); }
 @keyframes lock-pulse { 50% { opacity: .35; } }
-.lock-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--ui-font-caption); color: var(--acp-text); }
-.lock-item-status { flex: 0 0 auto; font: 500 var(--ui-font-10, 11px) var(--ui-font-mono); color: var(--acp-text-soft); }
+.lock-item-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: clamp(15px, 2vh, 19px); color: #ededed; }
+.lock-item-status { flex: 0 0 auto; font: 500 clamp(12px, 1.6vh, 14px) var(--ui-font-mono); color: var(--sb-soft); }
 
-.lock-exit { margin-top: 12px; padding: 8px 16px; border: 1px solid var(--acp-line); border-radius: 9px; background: transparent; color: var(--acp-text-muted); cursor: pointer; font-size: var(--ui-font-caption); }
-.lock-exit:hover { color: var(--acp-text); border-color: var(--acp-text-soft); }
-.lock-hint { flex: 0 0 auto; text-align: center; font-size: var(--ui-font-caption); color: var(--acp-text-soft); }
+.lock-exit { margin-top: 8px; padding: 10px 20px; border: 1px solid var(--sb-line); border-radius: 11px; background: transparent; color: var(--sb-muted); cursor: pointer; font-size: clamp(13px, 1.7vh, 15px); }
+.lock-exit:hover { color: #fff; border-color: var(--sb-soft); }
+.lock-hint { flex: 0 0 auto; font-size: clamp(12px, 1.6vh, 14px); color: var(--sb-soft); }
 
-@media (prefers-reduced-motion: reduce) { .lock-screen, .lock-mark .spin, .lock-list li.status-running .lock-dot { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .lock-screen, .lock-list li.status-running .lock-dot, .phase-working .lamp-amber.lit { animation: none; } }

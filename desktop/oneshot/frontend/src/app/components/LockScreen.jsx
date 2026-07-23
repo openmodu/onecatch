@@ -47,29 +47,32 @@ function LockScreen({ signal, workspaceName, onExit }) {
 
   return <div className={`lock-screen phase-${phase}`} role="dialog" aria-modal="true" aria-label={t("lock.title")} onClick={onExit}>
     <div className="lock-clock" aria-hidden="true">{clock}</div>
-    <div className="lock-core" onClick={(event) => event.stopPropagation()}>
+    <div className="lock-stage" onClick={(event) => event.stopPropagation()}>
       <div className="lock-signal" role="img" aria-label={headline}>
         {LAMPS.map((lamp) => <span key={lamp.key} className={`lock-lamp lamp-${lamp.key} ${lamp.phase === phase ? "lit" : ""}`} aria-hidden="true" />)}
       </div>
-      <h1>{headline}</h1>
-      {workspaceName && <p className="lock-workspace">{workspaceName}</p>}
 
-      <div className="lock-counts" aria-label={t("lock.title")}>
-        <div className="lock-count"><b>{signal.running}</b><span>{t("lock.running")}</span></div>
-        <div className="lock-count"><b>{signal.queued}</b><span>{t("lock.queued")}</span></div>
-        <div className={`lock-count ${signal.paused > 0 ? "flag" : ""}`}><b>{signal.paused}</b><span>{t("lock.paused")}</span></div>
+      <div className="lock-info">
+        <h1>{headline}</h1>
+        {workspaceName && <p className="lock-workspace">{workspaceName}</p>}
+
+        <div className="lock-counts" aria-label={t("lock.title")}>
+          <div className="lock-count"><b>{signal.running}</b><span>{t("lock.running")}</span></div>
+          <div className="lock-count"><b>{signal.queued}</b><span>{t("lock.queued")}</span></div>
+          <div className={`lock-count ${signal.paused > 0 ? "flag" : ""}`}><b>{signal.paused}</b><span>{t("lock.paused")}</span></div>
+        </div>
+
+        {signal.items.length > 0 && <ul className="lock-list">
+          {signal.items.slice(0, 4).map((item) => <li key={item.id} className={`status-${item.status}`}>
+            <span className="lock-dot" aria-hidden="true" />
+            <span className="lock-item-title" title={item.title}>{item.title}</span>
+            <span className="lock-item-status">{t(`lock.state.${item.status}`)}</span>
+          </li>)}
+          {signal.items.length > 4 && <li className="lock-more">{t("lock.andMore", { count: signal.items.length - 4 })}</li>}
+        </ul>}
+
+        <button type="button" className="lock-exit" onClick={onExit}>{t("lock.exit")}</button>
       </div>
-
-      {signal.items.length > 0 && <ul className="lock-list">
-        {signal.items.slice(0, 6).map((item) => <li key={item.id} className={`status-${item.status}`}>
-          <span className="lock-dot" aria-hidden="true" />
-          <span className="lock-item-title" title={item.title}>{item.title}</span>
-          <span className="lock-item-status">{t(`lock.state.${item.status}`)}</span>
-        </li>)}
-        {signal.items.length > 6 && <li className="lock-more">{t("lock.andMore", { count: signal.items.length - 6 })}</li>}
-      </ul>}
-
-      <button type="button" className="lock-exit" onClick={onExit}>{t("lock.exit")}</button>
     </div>
     <div className="lock-hint" aria-hidden="true">{t("lock.dismissHint")}</div>
   </div>;
