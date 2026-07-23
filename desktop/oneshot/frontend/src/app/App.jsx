@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { LockSimple } from "@phosphor-icons/react";
 import { Events } from "@wailsio/runtime";
 import {
   RuntimeBinding,
@@ -23,6 +24,9 @@ import WorkerPage from "./components/WorkerPage.jsx";
 import Modal from "./components/Modal.jsx";
 import { applyRunState, applyRuntimeFrames } from "./runtimeStream.js";
 import { nextWorkflowDefinitionID } from "./workflowIds.js";
+import LockScreen from "./components/LockScreen.jsx";
+import { buildLockSignal, completionEdge, LOCK_PHASE } from "./lockSignal.js";
+import { notifyStandby } from "./standbyNotify.js";
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
 const runStateEvent = "oneshot:run-state";
@@ -63,6 +67,7 @@ function App() {
   const [resumePendingRunID, setResumePendingRunID] = useState("");
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState("");
+  const [locked, setLocked] = useState(false);
   const [permissionBusy, setPermissionBusy] = useState("");
   const [workers, setWorkers] = useState([]);
   const [workerHealth, setWorkerHealth] = useState({});
@@ -757,6 +762,40 @@ function App() {
   const interruptRun = useCallback(() => runAction("interrupt"), [runAction]);
   const cancelRun = useCallback(() => runAction("cancel"), [runAction]);
 
+  // Standby lock: one glanceable aggregate over the whole workspace, derived
+  // from state that already updates live (tasks poll + run-state push).
+  const lockSignal = useMemo(() => buildLockSignal(tasks, runItems), [tasks, runItems]);
+  const enterLock = useCallback(() => setLocked(true), []);
+  const exitLock = useCallback(() => setLocked(false), []);
+
+  // Fire a system notification on the meaningful edges even if the window is
+  // behind another app: work finished, or a run now needs you. Watching the
+  // signal (not the lock) means the ping arrives whether or not you locked.
+  const previousSignalRef = useRef(null);
+  useEffect(() => {
+    if (mode === "loading") return;
+    const edge = completionEdge(previousSignalRef.current, lockSignal);
+    previousSignalRef.current = lockSignal;
+    if (!edge) return;
+    if (edge === LOCK_PHASE.done) notifyStandby(t("lock.notifyDoneTitle"), t("lock.notifyDoneBody"));
+    else if (edge === LOCK_PHASE.waiting) notifyStandby(t("lock.notifyWaitingTitle"), t("lock.notifyWaitingBody"));
+  }, [lockSignal, mode, t]);
+
+  // Cmd/Ctrl+L toggles standby; Escape is handled inside the overlay. Ignored
+  // while typing so it never eats an L in a prompt.
+  useEffect(() => {
+    if (mode === "loading") return undefined;
+    const onKey = (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLocaleLowerCase() !== "l") return;
+      const tag = event.target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || event.target?.isContentEditable) return;
+      event.preventDefault();
+      setLocked((value) => !value);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mode]);
+
   if (mode === "loading") return <div className="loading-screen"><div className="brand-mark">1</div><span>{t("task.opening")}</span></div>;
 
   return <div className="app-frame">
@@ -799,7 +838,7 @@ function App() {
       />
 
       <main className="main-area">
-        <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><span className={`connection ${mode}`}>{mode === "wails" ? t("common.local") : t("common.preview")}</span></div>
+        <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><button type="button" className="command-lock" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}><LockSimple size={13} weight="bold" aria-hidden="true" />{lockSignal.active > 0 && <em className="command-lock-badge">{lockSignal.active}</em>}</button><span className={`connection ${mode}`}>{mode === "wails" ? t("common.local") : t("common.preview")}</span></div>
         {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} /> : view === "tasks" ? <TaskWorkbench
           mode={mode}
           workspaceID={workspaceID}
@@ -831,6 +870,7 @@ function App() {
     {workerModal && <Modal title={t("worker.modalTitle")} subtitle={t("worker.modalSubtitle")} onClose={() => setWorkerModal(false)}><div className="form-stack"><label>{t("worker.id")}<input value={workerForm.id} onChange={(event) => setWorkerForm((form) => ({ ...form, id: event.target.value }))} placeholder="mac-mini" /></label><label>{t("worker.name")}<input value={workerForm.name} onChange={(event) => setWorkerForm((form) => ({ ...form, name: event.target.value }))} placeholder="Build Mac mini" /></label><label>{t("worker.baseUrl")}<input value={workerForm.baseUrl} onChange={(event) => setWorkerForm((form) => ({ ...form, baseUrl: event.target.value }))} placeholder="http://192.168.1.20:9231" /></label><label>{t("worker.bearerToken")}<input type="password" value={workerForm.token} onChange={(event) => setWorkerForm((form) => ({ ...form, token: event.target.value }))} placeholder={t("worker.keepToken")} /></label><label className="checkbox-label"><input type="checkbox" checked={workerForm.enabled} onChange={(event) => setWorkerForm((form) => ({ ...form, enabled: event.target.checked }))} />{t("worker.enableScheduling")}</label><div className="modal-actions"><Action tone="muted" onClick={() => setWorkerModal(false)}>{t("common.cancel")}</Action><Action tone="primary" disabled={busy === "worker"} onClick={saveWorker}>{t("worker.save")}</Action></div></div></Modal>}
     <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
+    {locked && <LockScreen signal={lockSignal} workspaceName={selectedWorkspace?.name || ""} onExit={exitLock} />}
   </div>;
 }
 
