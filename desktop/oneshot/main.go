@@ -3,7 +3,9 @@ package main
 import (
 	"context"
 	"embed"
+	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/openmodu/oneshot/desktop/oneshot/app"
 	"github.com/openmodu/oneshot/desktop/oneshot/bindings"
@@ -20,6 +22,7 @@ import (
 	"github.com/openmodu/oneshot/pkg/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"go.uber.org/zap"
 )
 
@@ -28,6 +31,18 @@ var assets embed.FS
 
 //go:embed build/appicon.png
 var appIcon []byte
+
+// runningAsBundle reports whether the executable lives inside a macOS .app
+// bundle. It mirrors what the notification service's Startup requires (a bundle
+// identifier, present only in a packaged app), so it gates registering that
+// service without importing its private bundle check.
+func runningAsBundle() bool {
+	exe, err := os.Executable()
+	if err != nil {
+		return false
+	}
+	return strings.Contains(exe, ".app/Contents/MacOS/")
+}
 
 func main() {
 	prepareCommandEnvironment()
@@ -83,19 +98,31 @@ func main() {
 	var wailsApp *application.App
 	workspaceBinding := bindings.NewWorkspaceBinding(localApp, func() *application.App { return wailsApp })
 
+	// The macOS notification service hard-fails its Startup without a bundle
+	// identifier, which would abort app launch. It only has one when running
+	// from a signed .app bundle, so register it (and hand it to the notifier
+	// binding) only then; a raw dev binary keeps a nil notifier that no-ops.
+	services := []application.Service{
+		application.NewService(bindings.NewGitBinding(localApp)),
+		application.NewService(bindings.NewRuntimeBinding(localApp)),
+		application.NewService(bindings.NewSettingsBinding(localApp)),
+		application.NewService(workspaceBinding),
+		application.NewService(bindings.NewWorkflowBinding(localApp)),
+		application.NewService(bindings.NewTaskRunBinding(localApp)),
+		application.NewService(bindings.NewWorkerBinding(localApp)),
+	}
+	var notifier *notifications.NotificationService
+	if runningAsBundle() {
+		notifier = notifications.New()
+		services = append(services, application.NewService(notifier))
+	}
+	services = append(services, application.NewService(bindings.NewNotifyBinding(notifier)))
+
 	wailsApp = application.New(application.Options{
 		Name:        app.Name,
 		Description: app.Description,
 		Icon:        appIcon,
-		Services: []application.Service{
-			application.NewService(bindings.NewGitBinding(localApp)),
-			application.NewService(bindings.NewRuntimeBinding(localApp)),
-			application.NewService(bindings.NewSettingsBinding(localApp)),
-			application.NewService(workspaceBinding),
-			application.NewService(bindings.NewWorkflowBinding(localApp)),
-			application.NewService(bindings.NewTaskRunBinding(localApp)),
-			application.NewService(bindings.NewWorkerBinding(localApp)),
-		},
+		Services:    services,
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
 		},
