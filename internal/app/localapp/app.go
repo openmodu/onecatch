@@ -920,6 +920,7 @@ func (a *App) dispatch(runID string, execute func(context.Context) (domainworkfl
 	delete(a.lastErrors, runID)
 	a.active[runID] = cancel
 	a.mu.Unlock()
+	a.markRunStateDirty(runID)
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
@@ -935,8 +936,24 @@ func (a *App) dispatch(runID string, execute func(context.Context) (domainworkfl
 			a.lastErrors[runID] = mapError(err).Error()
 		}
 		a.mu.Unlock()
+		// active is repository-adjacent state (isActive reads it directly) but
+		// lives outside the WorkflowRepository the notifier decorates, so its
+		// transitions need their own push. Without this, a paused run's Resume
+		// button stays disabled for the run's InterruptGrace window (10s by
+		// default) after the underlying goroutine actually stops — the run
+		// already reports status "paused", but active only flips to false here,
+		// and nothing else re-reads it until the window regains focus. From the
+		// user's side that reads as "the button needs two clicks": the first
+		// lands on a still-disabled button before this fires.
+		a.markRunStateDirty(runID)
 		a.reconcileQueueForRun(runID)
 	}()
+}
+
+func (a *App) markRunStateDirty(runID string) {
+	if a.runStates != nil {
+		a.runStates.MarkDirty(runID)
+	}
 }
 
 func (a *App) isActive(runID string) bool {
