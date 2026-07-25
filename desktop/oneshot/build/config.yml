@@ -56,7 +56,10 @@ dev_mode:
       type: blocking
     - cmd: wails3 task common:dev:frontend
       type: background
-    - cmd: ./bin/oneshot
+    # Wails runs the GUI in a separate foreground process group on macOS, so
+    # Ctrl+C reaches this shell instead of the watcher. Relay it to the watcher,
+    # which then shuts down both the app and the Vite background process.
+    - cmd: "trap 'kill -INT \"$PPID\"' INT TERM; ./bin/oneshot"
       type: primary
 
 # File Associations
