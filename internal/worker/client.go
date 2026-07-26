@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,7 +23,26 @@ const maxFrameBytes = 8 * 1024 * 1024
 
 type Client struct{ http *http.Client }
 
-func NewClient() *Client { return &Client{http: &http.Client{Timeout: 35 * time.Minute}} }
+type legacyExecuteRequest struct {
+	RunID                 string           `json:"runId"`
+	WorkspaceID           string           `json:"workspaceId"`
+	Runtime               agentrun.Runtime `json:"runtime"`
+	Model                 string           `json:"model,omitempty"`
+	ReasoningEffort       string           `json:"reasoningEffort,omitempty"`
+	ServiceTier           string           `json:"serviceTier,omitempty"`
+	Sandbox               agentrun.Sandbox `json:"sandbox"`
+	Prompt                string           `json:"prompt"`
+	ResumeSessionID       string           `json:"resumeSessionId,omitempty"`
+	InterruptGraceSeconds int              `json:"interruptGraceSeconds,omitempty"`
+}
+
+const (
+	controlRequestTimeout = 15 * time.Second
+	streamShutdownGrace   = 2 * time.Minute
+	legacyRunTimeout      = 35 * time.Minute
+)
+
+func NewClient() *Client { return &Client{http: &http.Client{}} }
 
 func (c *Client) Health(ctx context.Context, config Config) (Health, error) {
 	var health Health
@@ -41,20 +61,50 @@ func (c *Client) Execute(ctx context.Context, config Config, input ExecuteReques
 	if err != nil {
 		return agentrun.Result{}, err
 	}
-	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint(config, "/v1/execute"), bytes.NewReader(payload))
-	if err != nil {
-		return agentrun.Result{}, err
+	streamCtx := ctx
+	cancel := func() {}
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		timeout := legacyRunTimeout
+		if input.TimeoutSeconds > 0 {
+			timeout = time.Duration(input.TimeoutSeconds) * time.Second
+		}
+		streamCtx, cancel = context.WithTimeout(ctx, timeout+streamShutdownGrace)
 	}
-	request.Header.Set("Authorization", "Bearer "+config.Token)
-	request.Header.Set("Content-Type", "application/json")
-	response, err := c.http.Do(request)
+	defer cancel()
+	response, err := c.openExecute(streamCtx, config, payload)
 	if err != nil {
 		return agentrun.Result{}, RemoteError{Code: "worker_unavailable", Message: err.Error()}
 	}
-	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return agentrun.Result{}, decodeRemoteError(response)
+		remoteErr := decodeRemoteError(response)
+		_ = response.Body.Close()
+		// The previous protocol rejected newly added fields because it decoded
+		// requests strictly. Retry the exact pre-extension shape only when the
+		// worker reports a decode failure; no execution has started at this point.
+		var remote RemoteError
+		if errors.As(remoteErr, &remote) && remote.Code == "worker_invalid_request" && remote.Message == "invalid execute request" {
+			legacyPayload, marshalErr := json.Marshal(legacyExecuteRequest{
+				RunID: input.RunID, WorkspaceID: input.WorkspaceID, Runtime: input.Runtime,
+				Model: input.Model, ReasoningEffort: input.ReasoningEffort, ServiceTier: input.ServiceTier,
+				Sandbox: input.Sandbox, Prompt: input.Prompt, ResumeSessionID: input.ResumeSessionID,
+				InterruptGraceSeconds: input.InterruptGraceSeconds,
+			})
+			if marshalErr != nil {
+				return agentrun.Result{}, marshalErr
+			}
+			response, err = c.openExecute(streamCtx, config, legacyPayload)
+			if err != nil {
+				return agentrun.Result{}, RemoteError{Code: "worker_unavailable", Message: err.Error()}
+			}
+			if response.StatusCode < 200 || response.StatusCode >= 300 {
+				defer response.Body.Close()
+				return agentrun.Result{}, decodeRemoteError(response)
+			}
+		} else {
+			return agentrun.Result{}, remoteErr
+		}
 	}
+	defer response.Body.Close()
 
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxFrameBytes)
@@ -84,6 +134,16 @@ func (c *Client) Execute(ctx context.Context, config Config, input ExecuteReques
 	return agentrun.Result{}, RemoteError{Code: "worker_stream_incomplete", Message: "stream ended before a terminal frame"}
 }
 
+func (c *Client) openExecute(ctx context.Context, config Config, payload []byte) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint(config, "/v1/execute"), bytes.NewReader(payload))
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Authorization", "Bearer "+config.Token)
+	request.Header.Set("Content-Type", "application/json")
+	return c.http.Do(request)
+}
+
 // GitStatus reads the git state of a mapped workspace on the worker, so the
 // coordinator can show what a remote step changed without syncing files.
 func (c *Client) GitStatus(ctx context.Context, config Config, workspaceID string) (domainworkspaces.GitSnapshot, error) {
@@ -102,6 +162,11 @@ func (c *Client) Interrupt(ctx context.Context, config Config, runID string) err
 }
 
 func (c *Client) do(ctx context.Context, config Config, method, path string, input, output any) error {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, controlRequestTimeout)
+		defer cancel()
+	}
 	var body io.Reader
 	if input != nil {
 		payload, err := json.Marshal(input)

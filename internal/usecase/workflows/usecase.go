@@ -96,20 +96,20 @@ func localStep(step domainworkflows.Step) bool {
 // dispatchStep runs one step and streams its events to sink, choosing local or
 // remote execution from step.WorkerID. It is the single decision point both the
 // serial and DAG executors share, so a workflow behaves the same whichever mode
-// runs it: a local step honours the step timeout, a remote step is handed to the
-// worker (whose own runtime availability and timeouts govern it).
+// runs it. Both paths share the workflow step timeout; the remote executor also
+// forwards the remaining deadline so the worker can enforce it independently.
 func (s *Usecase) dispatchStep(ctx context.Context, definition domainworkflows.Definition, step domainworkflows.Step, workspaceID string, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
+	stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
+	defer cancel()
 	if !localStep(step) {
 		if s.remote == nil {
 			return agentrun.Result{}, fmt.Errorf("worker_unavailable: remote executor is not configured")
 		}
-		return s.remote.RunRemote(ctx, step.WorkerID, workspaceID, request, sink)
+		return s.remote.RunRemote(stepCtx, step.WorkerID, workspaceID, request, sink)
 	}
 	if !request.Runtime.Valid() || !s.engine.Available(request.Runtime) {
 		return agentrun.Result{}, fmt.Errorf("runtime_unavailable: runtime %q is unavailable", step.Runtime)
 	}
-	stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
-	defer cancel()
 	return s.engine.Run(stepCtx, request, sink)
 }
 func (s *Usecase) SetRunStreamPublisher(publisher runstream.Publisher) {

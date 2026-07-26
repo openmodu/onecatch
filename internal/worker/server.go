@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -143,6 +144,14 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 		writeError(writer, http.StatusConflict, "worker_runtime_unavailable", "runtime is unavailable on this worker")
 		return
 	}
+	runTimeout := 35 * time.Minute
+	if input.TimeoutSeconds < 0 || time.Duration(input.TimeoutSeconds)*time.Second > MaxRunDuration {
+		writeError(writer, http.StatusBadRequest, "worker_invalid_request", "timeout must be omitted or between 1 second and 24 hours")
+		return
+	}
+	if input.TimeoutSeconds > 0 {
+		runTimeout = time.Duration(input.TimeoutSeconds) * time.Second
+	}
 	select {
 	case s.slots <- struct{}{}:
 		defer func() { <-s.slots }()
@@ -158,7 +167,7 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 	}
 
 	// Register a cancellable context so an interrupt call can stop this run.
-	runCtx, cancel := context.WithCancel(request.Context())
+	runCtx, cancel := context.WithTimeout(request.Context(), runTimeout)
 	defer cancel()
 	s.track(input.RunID, cancel)
 	defer s.untrack(input.RunID)
@@ -187,17 +196,28 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 		}
 	}
 
-	result, runErr := s.engine.Run(runCtx, agentrun.Request{
-		Runtime:         input.Runtime,
-		Workspace:       workspace,
-		Prompt:          input.Prompt,
-		Model:           input.Model,
-		ReasoningEffort: input.ReasoningEffort,
-		ServiceTier:     input.ServiceTier,
-		Sandbox:         input.Sandbox,
-		ResumeSessionID: input.ResumeSessionID,
-		InterruptGrace:  time.Duration(input.InterruptGraceSeconds) * time.Second,
-	}, func(event agentrun.Event) {
+	runRequest := agentrun.Request{
+		Runtime:                 input.Runtime,
+		Workspace:               workspace,
+		Prompt:                  input.Prompt,
+		Model:                   input.Model,
+		ReasoningEffort:         input.ReasoningEffort,
+		ServiceTier:             input.ServiceTier,
+		Provider:                input.Provider,
+		Sandbox:                 input.Sandbox,
+		ResumeSessionID:         input.ResumeSessionID,
+		Environment:             workerEnvironment(input.EnvironmentAllowlist),
+		EnvironmentAllowlist:    append([]string{}, input.EnvironmentAllowlist...),
+		InterruptGrace:          time.Duration(input.InterruptGraceSeconds) * time.Second,
+		RuntimeDefaultsResolved: true,
+	}
+	if input.Runtime == agentrun.RuntimeClaude {
+		// A worker has no trusted channel back to the coordinator's approval UI.
+		// Use Claude's interactive transport so permission requests terminate
+		// deterministically and remain visible in the event stream.
+		runRequest.PermissionHandler = denyRemotePermission
+	}
+	result, runErr := s.engine.Run(runCtx, runRequest, func(event agentrun.Event) {
 		e := event
 		send(Frame{Event: &e})
 	})
@@ -214,6 +234,33 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 	default:
 		send(Frame{Result: &result})
 	}
+}
+
+func denyRemotePermission(_ context.Context, _ agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {
+	return agentrun.PermissionDecision{
+		Behavior:               "deny",
+		Message:                "interactive permission approval is unavailable on a remote worker",
+		DecisionClassification: "user_reject",
+	}, nil
+}
+
+func workerEnvironment(allowlist []string) []string {
+	if allowlist == nil {
+		return nil
+	}
+	keys := append([]string{"PATH", "HOME", "TMPDIR", "USER", "LANG", "LC_ALL"}, allowlist...)
+	seen := make(map[string]struct{}, len(keys))
+	environment := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		if value, ok := os.LookupEnv(key); ok {
+			environment = append(environment, key+"="+value)
+		}
+	}
+	return environment
 }
 
 func (s *Server) interrupt(writer http.ResponseWriter, request *http.Request) {

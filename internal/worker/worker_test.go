@@ -90,6 +90,7 @@ func TestRegistryMasksTokenAndUsesPrivateFile(t *testing.T) {
 }
 
 func TestServerAuthenticatesAndStreamsMappedWorkspace(t *testing.T) {
+	t.Setenv("ONESHOT_WORKER_TEST_ENV", "remote-value")
 	engine := capturingEngine{requests: make(chan agentrun.Request, 1)}
 	server := httptest.NewServer(NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, engine, 0).Handler())
 	defer server.Close()
@@ -108,13 +109,16 @@ func TestServerAuthenticatesAndStreamsMappedWorkspace(t *testing.T) {
 		t.Fatalf("health = %+v, %v", health, err)
 	}
 	var events []agentrun.Event
-	result, err := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-1", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Model: "gpt-test", ReasoningEffort: "high", ServiceTier: "priority", Sandbox: agentrun.SandboxReadOnly, Prompt: "review"}, func(e agentrun.Event) { events = append(events, e) })
+	result, err := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-1", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Model: "gpt-test", ReasoningEffort: "high", ServiceTier: "priority", Provider: "anthropic", Sandbox: agentrun.SandboxReadOnly, Prompt: "review", EnvironmentAllowlist: []string{"ONESHOT_WORKER_TEST_ENV"}, TimeoutSeconds: 60}, func(e agentrun.Event) { events = append(events, e) })
 	if err != nil || !result.Succeeded || len(events) != 1 || events[0].Text != "/tmp/project" {
 		t.Fatalf("execute result=%+v events=%+v err=%v", result, events, err)
 	}
 	request := <-engine.requests
-	if request.Model != "gpt-test" || request.ReasoningEffort != "high" || request.ServiceTier != "priority" {
+	if request.Model != "gpt-test" || request.ReasoningEffort != "high" || request.ServiceTier != "priority" || request.Provider != "anthropic" || !request.RuntimeDefaultsResolved {
 		t.Fatalf("remote model settings = %+v", request)
+	}
+	if !containsEnvironment(request.Environment, "ONESHOT_WORKER_TEST_ENV=remote-value") {
+		t.Fatalf("remote environment = %#v", request.Environment)
 	}
 	_, err = client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-2", WorkspaceID: "missing", Runtime: agentrun.RuntimeCodex, Prompt: "review"}, nil)
 	var remote RemoteError
@@ -125,6 +129,63 @@ func TestServerAuthenticatesAndStreamsMappedWorkspace(t *testing.T) {
 	_, err = client.Execute(context.Background(), config, ExecuteRequest{WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Prompt: "review"}, nil)
 	if !errors.As(err, &remote) || remote.Code != "worker_invalid_request" {
 		t.Fatalf("missing run id error = %v", err)
+	}
+}
+
+func TestServerEnforcesRunTimeout(t *testing.T) {
+	engine := newBlockingEngine(t)
+	server := httptest.NewServer(NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, engine, 1).Handler())
+	defer server.Close()
+	client := NewClient()
+	config := Config{ID: "remote-1", BaseURL: server.URL, Token: "secret", Enabled: true}
+
+	startedAt := time.Now()
+	_, err := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-timeout", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Sandbox: agentrun.SandboxReadOnly, Prompt: "long", TimeoutSeconds: 1}, nil)
+	var remote RemoteError
+	if !errors.As(err, &remote) || remote.Code != "worker_execution_failed" {
+		t.Fatalf("timeout error = %v", err)
+	}
+	if elapsed := time.Since(startedAt); elapsed > 3*time.Second {
+		t.Fatalf("timeout took %s", elapsed)
+	}
+}
+
+func TestClientFallsBackToPreviousExecuteShape(t *testing.T) {
+	attempts := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		attempts++
+		var input legacyExecuteRequest
+		decoder := json.NewDecoder(request.Body)
+		decoder.DisallowUnknownFields()
+		if err := decoder.Decode(&input); err != nil {
+			writeError(writer, http.StatusBadRequest, "worker_invalid_request", "invalid execute request")
+			return
+		}
+		if input.RunID != "run-legacy" || input.WorkspaceID != "project" {
+			t.Errorf("legacy request = %+v", input)
+		}
+		writer.Header().Set("Content-Type", "application/x-ndjson")
+		_ = json.NewEncoder(writer).Encode(Frame{Result: &agentrun.Result{Succeeded: true, FinalMessage: "legacy done"}})
+	}))
+	defer server.Close()
+
+	result, err := NewClient().Execute(context.Background(), Config{BaseURL: server.URL, Token: "secret"}, ExecuteRequest{
+		RunID: "run-legacy", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex,
+		Sandbox: agentrun.SandboxReadOnly, Prompt: "review", TimeoutSeconds: 60,
+		EnvironmentAllowlist: []string{"TOKEN"},
+	}, nil)
+	if err != nil || !result.Succeeded || result.FinalMessage != "legacy done" {
+		t.Fatalf("fallback result = %+v, %v", result, err)
+	}
+	if attempts != 2 {
+		t.Fatalf("attempts = %d, want 2", attempts)
+	}
+}
+
+func TestRemotePermissionRequestsAreDenied(t *testing.T) {
+	decision, err := denyRemotePermission(context.Background(), agentrun.PermissionRequest{ID: "permission-1"})
+	if err != nil || decision.Behavior != "deny" || !strings.Contains(decision.Message, "unavailable") {
+		t.Fatalf("decision = %+v, %v", decision, err)
 	}
 }
 
@@ -226,4 +287,13 @@ func TestServerRejectsWhenAtCapacity(t *testing.T) {
 		t.Fatalf("capacity error = %v", err)
 	}
 	_ = client.Interrupt(context.Background(), config, "run-hold")
+}
+
+func containsEnvironment(environment []string, value string) bool {
+	for _, item := range environment {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }

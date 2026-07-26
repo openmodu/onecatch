@@ -8,6 +8,8 @@ import (
 	"github.com/openmodu/oneshot/internal/agentrun"
 )
 
+const MaxRunDuration = 24 * time.Hour
+
 type Config struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
@@ -52,9 +54,12 @@ type ExecuteRequest struct {
 	Model                 string           `json:"model,omitempty"`
 	ReasoningEffort       string           `json:"reasoningEffort,omitempty"`
 	ServiceTier           string           `json:"serviceTier,omitempty"`
+	Provider              string           `json:"provider,omitempty"`
 	Sandbox               agentrun.Sandbox `json:"sandbox"`
 	Prompt                string           `json:"prompt"`
 	ResumeSessionID       string           `json:"resumeSessionId,omitempty"`
+	EnvironmentAllowlist  []string         `json:"environmentAllowlist"`
+	TimeoutSeconds        int              `json:"timeoutSeconds,omitempty"`
 	InterruptGraceSeconds int              `json:"interruptGraceSeconds,omitempty"`
 }
 

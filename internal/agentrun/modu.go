@@ -47,7 +47,7 @@ func (r *ModuRunner) Available() bool {
 func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
 	cmd := exec.CommandContext(ctx, r.binary, moduCommandArgs(req)...)
 	cmd.Dir = req.Workspace
-	cmd.Env = moduEnvironment(req.Environment, req.Model)
+	cmd.Env = moduEnvironment(req.Environment, req.Model, req.Provider)
 	if req.InterruptGrace > 0 {
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = req.InterruptGrace
@@ -305,7 +305,7 @@ func (p *moduParser) result() Result {
 	}
 }
 
-func moduEnvironment(environment []string, model string) []string {
+func moduEnvironment(environment []string, model, provider string) []string {
 	if environment == nil {
 		environment = os.Environ()
 	} else {
@@ -313,6 +313,12 @@ func moduEnvironment(environment []string, model string) []string {
 	}
 	if strings.TrimSpace(model) != "" {
 		environment = setEnvironmentValue(environment, "MODU_CODE_MODEL", strings.TrimSpace(model))
+	}
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	if provider == "auto" {
+		environment = removeEnvironmentValue(environment, "MODU_CODE_PROVIDER")
+	} else if provider != "" {
+		environment = setEnvironmentValue(environment, "MODU_CODE_PROVIDER", provider)
 	}
 	return environment
 }
@@ -326,4 +332,15 @@ func setEnvironmentValue(environment []string, key, value string) []string {
 		}
 	}
 	return append(environment, prefix+value)
+}
+
+func removeEnvironmentValue(environment []string, key string) []string {
+	prefix := key + "="
+	filtered := environment[:0]
+	for _, item := range environment {
+		if !strings.HasPrefix(item, prefix) {
+			filtered = append(filtered, item)
+		}
+	}
+	return filtered
 }

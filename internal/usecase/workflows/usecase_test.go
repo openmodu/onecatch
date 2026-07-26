@@ -404,10 +404,12 @@ func TestDAGRunSnapshotLimitsConcurrencyWithoutBreakingJoin(t *testing.T) {
 type fakeRemoteExecutor struct {
 	workerID    string
 	workspaceID string
+	hasDeadline bool
 }
 
-func (e *fakeRemoteExecutor) RunRemote(_ context.Context, workerID, workspaceID string, _ agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
+func (e *fakeRemoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID string, _ agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	e.workerID, e.workspaceID = workerID, workspaceID
+	_, e.hasDeadline = ctx.Deadline()
 	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: "remote event"})
 	return success(`{"signal":"completed","content":"remote complete"}`, "remote-session"), nil
 }
@@ -422,7 +424,7 @@ func TestExecuteDAGDispatchesConfiguredRemoteNode(t *testing.T) {
 	if err != nil || run.Status != domainworkflows.RunCompleted {
 		t.Fatalf("remote DAG = %+v, %v", run, err)
 	}
-	if remote.workerID != "mac-mini" || remote.workspaceID != "ws_1" || len(engine.calls) != 0 {
+	if remote.workerID != "mac-mini" || remote.workspaceID != "ws_1" || !remote.hasDeadline || len(engine.calls) != 0 {
 		t.Fatalf("remote dispatch = %+v, local calls = %d", remote, len(engine.calls))
 	}
 }
@@ -439,7 +441,7 @@ func TestExecuteSerialDispatchesConfiguredRemoteStep(t *testing.T) {
 	if err != nil || run.Status != domainworkflows.RunCompleted {
 		t.Fatalf("remote serial = %+v, %v", run, err)
 	}
-	if remote.workerID != "mac-mini" || remote.workspaceID != "ws_1" || len(engine.calls) != 0 {
+	if remote.workerID != "mac-mini" || remote.workspaceID != "ws_1" || !remote.hasDeadline || len(engine.calls) != 0 {
 		t.Fatalf("remote dispatch = %+v, local calls = %d", remote, len(engine.calls))
 	}
 }

@@ -7,6 +7,7 @@ PROJECT_DIR=$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)
 APP_NAME=Oneshot
 EXECUTABLE_NAME=oneshot
 BINARY="$PROJECT_DIR/bin/$EXECUTABLE_NAME"
+WORKER_BINARY="$PROJECT_DIR/bin/oneshot-worker"
 INFO_PLIST="$SCRIPT_DIR/Info.plist"
 ASSETS_CAR="$SCRIPT_DIR/Assets.car"
 ICON_FILE="$SCRIPT_DIR/icons.icns"
@@ -23,7 +24,7 @@ if [ ! -x "$PLIST_BUDDY" ]; then
     exit 1
 fi
 
-for input in "$BINARY" "$INFO_PLIST" "$ASSETS_CAR" "$ICON_FILE"; do
+for input in "$BINARY" "$WORKER_BINARY" "$INFO_PLIST" "$ASSETS_CAR" "$ICON_FILE"; do
     if [ ! -f "$input" ]; then
         echo "error: required build input not found: $input" >&2
         exit 1
@@ -31,6 +32,10 @@ for input in "$BINARY" "$INFO_PLIST" "$ASSETS_CAR" "$ICON_FILE"; do
 done
 if [ ! -x "$BINARY" ]; then
     echo "error: built binary is not executable: $BINARY" >&2
+    exit 1
+fi
+if [ ! -x "$WORKER_BINARY" ]; then
+    echo "error: built worker is not executable: $WORKER_BINARY" >&2
     exit 1
 fi
 
@@ -54,9 +59,10 @@ trap cleanup EXIT HUP INT TERM
 
 APP_BUNDLE="$STAGING_ROOT/$APP_NAME.app"
 CONTENTS="$APP_BUNDLE/Contents"
-mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources" "$(dirname -- "$OUTPUT_ZIP")"
+mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources/bin" "$(dirname -- "$OUTPUT_ZIP")"
 
 install -m 0755 "$BINARY" "$CONTENTS/MacOS/$EXECUTABLE_NAME"
+install -m 0755 "$WORKER_BINARY" "$CONTENTS/Resources/bin/oneshot-worker"
 install -m 0644 "$INFO_PLIST" "$CONTENTS/Info.plist"
 install -m 0644 "$ASSETS_CAR" "$CONTENTS/Resources/Assets.car"
 install -m 0644 "$ICON_FILE" "$CONTENTS/Resources/icons.icns"

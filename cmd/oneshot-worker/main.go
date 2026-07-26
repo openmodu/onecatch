@@ -36,6 +36,7 @@ func main() {
 	tokenEnv := flag.String("token-env", "ONESHOT_WORKER_TOKEN", "environment variable containing the token")
 	codex := flag.String("codex-binary", "", "Codex binary override")
 	claude := flag.String("claude-binary", "", "Claude binary override")
+	modu := flag.String("modu-binary", "", "Modu Code binary override")
 	maxConcurrency := flag.Int("max-concurrency", 4, "maximum simultaneous runs (<=0 uses the default)")
 	flag.Var(workspaces, "workspace", "workspace mapping id=/absolute/path (repeatable)")
 	flag.Parse()
@@ -60,10 +61,10 @@ func main() {
 		}
 		workspaces[workspaceID] = absolute
 	}
-	engine := agentrun.NewEngine(agentrun.Config{CodexBinary: *codex, ClaudeBinary: *claude})
+	engine := agentrun.NewEngine(agentrun.Config{CodexBinary: *codex, ClaudeBinary: *claude, ModuBinary: *modu})
 	service := worker.NewServer(*id, *name, secret, workspaces, engine, *maxConcurrency)
 	service.SetGitInspector(gitinspect.New(""))
-	server := &http.Server{Addr: *listen, Handler: service.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 35 * time.Minute, WriteTimeout: 35 * time.Minute, IdleTimeout: 60 * time.Second}
+	server := &http.Server{Addr: *listen, Handler: service.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: time.Minute, WriteTimeout: worker.MaxRunDuration + 2*time.Minute, IdleTimeout: 60 * time.Second}
 	log.Printf("oneshot worker %s listening on %s", *id, *listen)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -584,6 +585,17 @@ func TestModuCommandArgsUsePrintModeAndResume(t *testing.T) {
 				t.Fatalf("args = %q, want %q", got, test.want)
 			}
 		})
+	}
+}
+
+func TestModuEnvironmentAppliesProvider(t *testing.T) {
+	environment := moduEnvironment([]string{"PATH=/bin", "MODU_CODE_PROVIDER=openai"}, "custom-model", "anthropic")
+	if !slices.Contains(environment, "MODU_CODE_MODEL=custom-model") || !slices.Contains(environment, "MODU_CODE_PROVIDER=anthropic") {
+		t.Fatalf("environment = %#v", environment)
+	}
+	environment = moduEnvironment(environment, "", "auto")
+	if slices.Contains(environment, "MODU_CODE_PROVIDER=anthropic") {
+		t.Fatalf("auto provider did not clear override: %#v", environment)
 	}
 }
 

@@ -92,11 +92,28 @@ func (e remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID str
 		Model:                 request.Model,
 		ReasoningEffort:       request.ReasoningEffort,
 		ServiceTier:           request.ServiceTier,
+		Provider:              request.Provider,
 		Sandbox:               request.Sandbox,
 		Prompt:                request.Prompt,
 		ResumeSessionID:       request.ResumeSessionID,
+		EnvironmentAllowlist:  append([]string{}, request.EnvironmentAllowlist...),
+		TimeoutSeconds:        remainingSeconds(ctx),
 		InterruptGraceSeconds: int(request.InterruptGrace / time.Second),
 	}, sink)
+}
+
+func remainingSeconds(ctx context.Context) int {
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		return 24 * 60 * 60
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 {
+		return 1
+	}
+	// Round up so transport latency does not shorten the configured workflow
+	// timeout by almost a full second.
+	return int((remaining + time.Second - 1) / time.Second)
 }
 
 func newRunID() (string, error) {

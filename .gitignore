@@ -5,6 +5,5 @@
 /desktop/oneshot/frontend/.node_modules/
 /desktop/oneshot/bin/
 /desktop/oneshot/.task/
-/config/oneshot-server.yaml
 .DS_Store
 .modu_code/

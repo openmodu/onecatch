@@ -1,7 +1,7 @@
 # Oneshot Desktop
 
 Wails v3 本地 Agent 调度桌面端。应用进程直接组装本地 store、Workflow
-orchestrator 与 Codex / Claude Code / Modu Code runtime，不依赖 `oneshot-server`、登录或远端 API。
+orchestrator 与 Codex / Claude Code / Modu Code runtime，不依赖后台服务、登录或远端 API。
 
 ## 流式输出
 
@@ -33,8 +33,10 @@ wails3 build DEV=true
 wails3 task package
 ```
 
-安装包输出到 `bin/Oneshot-<version>-<commit>-<arch>.zip`。默认使用 ad-hoc
-签名，适合内部测试；没有 Apple 开发者证书时，首次启动仍需在 Finder 中右键选择“打开”。
+安装包输出到 `bin/Oneshot-<version>-<commit>-<arch>.zip`。应用内同时包含
+`Contents/Resources/bin/oneshot-worker`，可以复制到另一台同架构 Mac 上运行。
+默认使用 ad-hoc 签名，适合内部测试；没有 Apple 开发者证书时，首次启动仍需在
+Finder 中右键选择“打开”。
 
 使用 Developer ID 证书签名：
 

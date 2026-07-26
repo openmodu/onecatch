@@ -9,7 +9,7 @@ Oneshot 是一个 local-first 的桌面 Agent 调度编排工具。用户可以�
 ## 目录
 
 ```text
-cmd/                    进程入口，目前只有 server
+cmd/                    远端 Worker 进程入口
 clients/oneshot/        Oneshot HTTP SDK
 desktop/oneshot/        Wails v3 桌面端
 internal/domain/        领域对象和值对象
@@ -24,81 +24,39 @@ design/                 PRD、issue、设计文档和 prototype
 
 ## 开发
 
-运行后端：
-
-```bash
-go run ./cmd/oneshot-server
-```
-
-后端默认会尝试读取 `config/oneshot-server.yaml`；文件不存在时使用内置默认值。可以从示例创建本地配置：
-
-```bash
-cp config/oneshot-server.example.yaml config/oneshot-server.yaml
-```
-
-也可以通过 `ONESHOT_CONFIG` 指定配置文件路径：
-
-```bash
-ONESHOT_CONFIG=/etc/oneshot/server.yaml go run ./cmd/oneshot-server
-```
-
-配置文件示例：
-
-```yaml
-http:
-  addr: ":8080"
-
-mysql:
-  addr: "192.168.5.250:43029"
-  user: "root"
-  password: "<password>"
-  database: ""
-
-logger:
-  service: "oneshot-server"
-  level: "info"
-  format: "json"
-  file: "logs/oneshot-server.log"
-  max_size_mb: 100
-  max_backups: 7
-  max_age_days: 30
-  compress: true
-  development: false
-  disable_stdout: false
-```
-
-环境变量会覆盖配置文件。配置 MySQL 后也可以这样运行后端：
-
-```bash
-ONESHOT_MYSQL_ADDR=192.168.5.250:43029 \
-ONESHOT_MYSQL_USER=root \
-ONESHOT_MYSQL_PASSWORD='<password>' \
-go run ./cmd/oneshot-server
-```
-
-也可以直接提供 `ONESHOT_MYSQL_DSN`。未配置 MySQL 时，后端保持当前内存 repo 开发模式。
-
-日志也可以通过环境变量覆盖：
-
-```bash
-ONESHOT_LOG_LEVEL=debug \
-ONESHOT_LOG_FORMAT=json \
-ONESHOT_LOG_FILE=logs/oneshot-server.log \
-ONESHOT_LOG_MAX_SIZE_MB=100 \
-ONESHOT_LOG_MAX_BACKUPS=7 \
-ONESHOT_LOG_MAX_AGE_DAYS=30 \
-ONESHOT_LOG_COMPRESS=true \
-go run ./cmd/oneshot-server
-```
-
-未配置 `ONESHOT_LOG_FILE` 时只输出到 stdout；配置后会同时输出到 stdout 和轮转文件。
-
 运行桌面端：
 
 ```bash
 cd desktop/oneshot
 wails3 dev -config ./build/config.yml
 ```
+
+## 远端 Worker
+
+远端 Worker 适合受信任的局域网或 VPN。它不复制项目文件：协调端和远端机器必须各自准备代码副本，并使用相同的 Workspace ID。远端步骤目前只允许 `read-only`，写入和合并仍由协调端执行。
+
+在远端机器启动 Worker：
+
+```bash
+go build -o oneshot-worker ./cmd/oneshot-worker
+ONESHOT_WORKER_TOKEN='<shared-token>' ./oneshot-worker \
+  --listen 0.0.0.0:9231 \
+  --id mac-mini \
+  --name 'Build Mac mini' \
+  --workspace workspace-id=/absolute/path/to/clone
+```
+
+`--workspace` 可以重复指定。Codex、Claude Code 和 Modu Code 默认从 `PATH` 查找，也可以分别用 `--codex-binary`、`--claude-binary` 和 `--modu-binary` 覆盖。
+
+在桌面端打开“设置 → 远端 Worker”，启用远端调度，保存后注册 Worker 地址和相同的 Token。健康检查通过后，串行 Workflow 和 DAG 节点都可以选择该 Worker；切换到远端时，编辑器会把节点调整为 `read-only`。
+
+生产安装包把 macOS Worker 放在：
+
+```text
+Oneshot.app/Contents/Resources/bin/oneshot-worker
+```
+
+不要把 Worker 的明文 HTTP 端口直接暴露到公网。需要跨网络连接时，使用 Tailscale、WireGuard 等受信任隧道。当前协议没有 TLS/mTLS、设备配对和文件同步；远端 Claude 权限请求会明确拒绝并回传事件，不会等待桌面端审批。
 
 检查：
 
