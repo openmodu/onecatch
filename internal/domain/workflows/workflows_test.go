@@ -312,24 +312,21 @@ func TestValidateDAGRejectsCycleAndParallelWrites(t *testing.T) {
 
 	remoteWrite := dagDefinition()
 	remoteWrite.Steps[2].WorkerID = "mac-mini"
-	assertValidationCode(t, Validate(remoteWrite), "remote_write_unsupported")
+	if err := Validate(remoteWrite); err != nil {
+		t.Fatalf("serialized remote write should be valid, got %v", err)
+	}
 }
 
-func TestValidateRejectsRemoteWriteInAnyMode(t *testing.T) {
-	// A remote step's writes are stranded on the worker until workspace sync
-	// exists, so the read-only requirement applies to serial workflows too, not
-	// only DAG.
+func TestValidateAllowsRemoteWorkspaceWriteButRejectsFullSandbox(t *testing.T) {
 	serialWrite := reviewLoopDefinition()
 	serialWrite.Steps[0].WorkerID = "mac-mini"
 	serialWrite.Steps[0].Sandbox = "workspace-write"
-	assertValidationCode(t, Validate(serialWrite), "remote_write_unsupported")
-
-	serialRead := reviewLoopDefinition()
-	serialRead.Steps[0].WorkerID = "mac-mini"
-	serialRead.Steps[0].Sandbox = "read-only"
-	if err := Validate(serialRead); err != nil {
-		t.Fatalf("remote read-only serial step should be valid, got %v", err)
+	if err := Validate(serialWrite); err != nil {
+		t.Fatalf("remote workspace-write serial step should be valid, got %v", err)
 	}
+
+	serialWrite.Steps[0].Sandbox = "full"
+	assertValidationCode(t, Validate(serialWrite), "remote_full_unsupported")
 }
 
 func assertValidationCode(t *testing.T, err error, code string) {

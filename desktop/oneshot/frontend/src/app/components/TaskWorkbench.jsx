@@ -14,15 +14,15 @@ import EventInspector from "./inspectors/EventInspector.jsx";
 
 function workflowNameFor(workflows, workflowID) { return workflows.find((workflow) => workflow.id === workflowID)?.name || workflowID; }
 
-// The worker the run's latest step executed on, or "" when it ran locally. The
-// Git panel uses it to auto-show the machine that actually holds the changes,
-// since a remote step's edits live only on its worker's clone.
+// Read-only remote steps may inspect worker-local state, so follow that clone.
+// Writable remote steps synchronize their patch back and clean the worker;
+// those must default to local so the Git panel shows the delivered changes.
 function activeWorkerID(runDetail) {
   const steps = runDetail?.workflow?.steps || [];
   const stepRuns = runDetail?.stepRuns || [];
   const stepID = stepRuns[stepRuns.length - 1]?.stepId || runDetail?.run?.currentStepId;
-  const workerID = steps.find((step) => step.id === stepID)?.workerId;
-  return workerID && workerID !== "local" ? workerID : "";
+  const step = steps.find((item) => item.id === stepID);
+  return step?.sandbox === "read-only" && step.workerId && step.workerId !== "local" ? step.workerId : "";
 }
 
 function initialInspectorPreference() {

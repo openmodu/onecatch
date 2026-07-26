@@ -114,6 +114,9 @@ func Validate(input Definition) error {
 		if !identifierPattern.MatchString(step.WorkerID) {
 			add(path+".workerId", "invalid_identifier", "must be a lowercase identifier")
 		}
+		if step.WorkerID != "local" && step.Sandbox == "full" {
+			add(path+".sandbox", "remote_full_unsupported", "remote workers can synchronize workspace-write changes only")
+		}
 		if strings.TrimSpace(step.RolePrompt) == "" {
 			add(path+".rolePrompt", "required", "is required")
 		}
@@ -122,9 +125,6 @@ func Validate(input Definition) error {
 		}
 		if step.Sandbox != "" && step.Sandbox != "read-only" && step.Sandbox != "workspace-write" && step.Sandbox != "full" {
 			add(path+".sandbox", "invalid_value", "must be read-only, workspace-write or full")
-		}
-		if step.WorkerID != "local" && sandboxWrites(step.Sandbox) {
-			add(path+".sandbox", "remote_write_unsupported", "remote steps must be read-only until workspace synchronization is configured")
 		}
 		if len(step.Transitions) == 0 {
 			add(path+".transitions", "required", "must contain at least one signal")

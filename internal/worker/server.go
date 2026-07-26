@@ -22,9 +22,8 @@ type Engine interface {
 	Run(ctx context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error)
 }
 
-// GitInspector reads the git state of a workspace directory. It is optional: a
-// worker without one simply does not serve the git endpoint. It exists so the
-// coordinator can show what a remote step changed, since files never sync back.
+// GitInspector reads the operational git state of a workspace directory. It is
+// optional: a worker without one simply does not serve the git endpoint.
 type GitInspector interface {
 	Inspect(ctx context.Context, workspace string) (domainworkspaces.GitSnapshot, error)
 }
@@ -46,8 +45,27 @@ type Server struct {
 	git        GitInspector
 	slots      chan struct{}
 
-	mu      sync.Mutex
-	running map[string]context.CancelFunc
+	mu       sync.Mutex
+	running  map[string]*runState
+	patches  map[string]pendingPatch
+	acked    map[string]string
+	ackOrder []string
+}
+
+type runState struct {
+	cancel      context.CancelFunc
+	permissions map[string]*pendingPermission
+}
+
+type pendingPermission struct {
+	request  agentrun.PermissionRequest
+	response chan agentrun.PermissionDecision
+}
+
+type pendingPatch struct {
+	workspaceID string
+	workspace   string
+	patch       WorkspacePatch
 }
 
 // SetGitInspector enables the read-only git status endpoint. Without it, that
@@ -72,7 +90,9 @@ func NewServer(id, name, token string, workspaces map[string]string, engine Engi
 		locks:      locks,
 		engine:     engine,
 		slots:      make(chan struct{}, maxConcurrency),
-		running:    make(map[string]context.CancelFunc),
+		running:    make(map[string]*runState),
+		patches:    make(map[string]pendingPatch),
+		acked:      make(map[string]string),
 	}
 }
 
@@ -81,6 +101,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/health", s.authorize(s.health))
 	mux.HandleFunc("POST /v1/execute", s.authorize(s.execute))
 	mux.HandleFunc("POST /v1/runs/{runID}/interrupt", s.authorize(s.interrupt))
+	mux.HandleFunc("POST /v1/runs/{runID}/permissions/{requestID}", s.authorize(s.respondPermission))
+	mux.HandleFunc("POST /v1/runs/{runID}/patch/ack", s.authorize(s.ackPatch))
 	mux.HandleFunc("GET /v1/workspaces/{workspaceID}/git", s.authorize(s.workspaceGit))
 	return mux
 }
@@ -115,7 +137,11 @@ func (s *Server) authorize(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
-	writeJSON(writer, http.StatusOK, Health{WorkerID: s.id, Name: s.name, Runtimes: map[string]bool{"codex": s.engine.Available(agentrun.RuntimeCodex), "claude": s.engine.Available(agentrun.RuntimeClaude), "modu": s.engine.Available(agentrun.RuntimeModu)}})
+	writeJSON(writer, http.StatusOK, Health{
+		WorkerID: s.id, Name: s.name, ProtocolVersion: 2,
+		Runtimes:     map[string]bool{"codex": s.engine.Available(agentrun.RuntimeCodex), "claude": s.engine.Available(agentrun.RuntimeClaude), "modu": s.engine.Available(agentrun.RuntimeModu)},
+		Capabilities: map[string]bool{"interactivePermissions": true, "workspaceSync": true},
+	})
 }
 
 // execute streams the run as NDJSON: one Frame per line. Pre-flight failures
@@ -144,6 +170,10 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 		writeError(writer, http.StatusConflict, "worker_runtime_unavailable", "runtime is unavailable on this worker")
 		return
 	}
+	if input.Sandbox == agentrun.SandboxFull {
+		writeError(writer, http.StatusConflict, "worker_full_sandbox_unsupported", "remote workers can synchronize workspace-write changes only")
+		return
+	}
 	runTimeout := 35 * time.Minute
 	if input.TimeoutSeconds < 0 || time.Duration(input.TimeoutSeconds)*time.Second > MaxRunDuration {
 		writeError(writer, http.StatusBadRequest, "worker_invalid_request", "timeout must be omitted or between 1 second and 24 hours")
@@ -169,7 +199,11 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 	// Register a cancellable context so an interrupt call can stop this run.
 	runCtx, cancel := context.WithTimeout(request.Context(), runTimeout)
 	defer cancel()
-	s.track(input.RunID, cancel)
+	state, tracked := s.track(input.RunID, cancel)
+	if !tracked {
+		writeError(writer, http.StatusConflict, "worker_run_exists", "run id is already in flight")
+		return
+	}
 	defer s.untrack(input.RunID)
 
 	workspaceLock := s.locks[input.WorkspaceID]
@@ -179,6 +213,14 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 	} else {
 		workspaceLock.Lock()
 		defer workspaceLock.Unlock()
+		if !input.SyncChanges || input.BaseRevision == "" {
+			writeError(writer, http.StatusConflict, "worker_write_sync_required", "writable remote runs require workspace synchronization")
+			return
+		}
+		if err := validateWorkspaceBaseline(request.Context(), workspace, input.BaseRevision); err != nil {
+			writeError(writer, http.StatusConflict, err.Code, err.Message)
+			return
+		}
 	}
 
 	writer.Header().Set("Content-Type", "application/x-ndjson")
@@ -212,15 +254,32 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 		RuntimeDefaultsResolved: true,
 	}
 	if input.Runtime == agentrun.RuntimeClaude {
-		// A worker has no trusted channel back to the coordinator's approval UI.
-		// Use Claude's interactive transport so permission requests terminate
-		// deterministically and remain visible in the event stream.
-		runRequest.PermissionHandler = denyRemotePermission
+		runRequest.PermissionHandler = func(ctx context.Context, permission agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {
+			return s.awaitPermission(ctx, state, permission)
+		}
 	}
 	result, runErr := s.engine.Run(runCtx, runRequest, func(event agentrun.Event) {
+		if event.Kind == agentrun.KindPermissionRequest && event.Permission != nil {
+			s.registerPermission(state, *event.Permission)
+		}
 		e := event
 		send(Frame{Event: &e})
 	})
+	if input.Sandbox != agentrun.SandboxReadOnly {
+		patchCtx, cancelPatch := context.WithTimeout(context.Background(), 2*time.Minute)
+		patch, patchErr := buildWorkspacePatch(patchCtx, workspace, input.BaseRevision)
+		cancelPatch()
+		if patchErr != nil {
+			send(Frame{Error: patchErr})
+			return
+		}
+		if patch != nil {
+			s.mu.Lock()
+			s.patches[input.RunID] = pendingPatch{workspaceID: input.WorkspaceID, workspace: workspace, patch: *patch}
+			s.mu.Unlock()
+			send(Frame{Patch: patch})
+		}
+	}
 
 	switch {
 	case request.Context().Err() != nil:
@@ -236,12 +295,56 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 	}
 }
 
-func denyRemotePermission(_ context.Context, _ agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {
-	return agentrun.PermissionDecision{
-		Behavior:               "deny",
-		Message:                "interactive permission approval is unavailable on a remote worker",
-		DecisionClassification: "user_reject",
-	}, nil
+func (s *Server) ackPatch(writer http.ResponseWriter, request *http.Request) {
+	var input PatchAckRequest
+	decoder := json.NewDecoder(io.LimitReader(request.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil || input.Digest == "" {
+		writeError(writer, http.StatusBadRequest, "worker_patch_ack_invalid", "invalid patch acknowledgement")
+		return
+	}
+	runID := request.PathValue("runID")
+	s.mu.Lock()
+	pending, ok := s.patches[runID]
+	ackedDigest := s.acked[runID]
+	s.mu.Unlock()
+	if !ok && ackedDigest == input.Digest {
+		writer.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if !ok || pending.patch.Digest != input.Digest {
+		writeError(writer, http.StatusNotFound, "worker_patch_not_found", "no matching patch is awaiting acknowledgement")
+		return
+	}
+	lock := s.locks[pending.workspaceID]
+	lock.Lock()
+	defer lock.Unlock()
+	current, err := buildWorkspacePatch(request.Context(), pending.workspace, pending.patch.BaseRevision)
+	if err != nil {
+		writeError(writer, http.StatusConflict, err.Code, err.Message)
+		return
+	}
+	if current == nil || current.Digest != pending.patch.Digest {
+		writeError(writer, http.StatusConflict, "worker_patch_changed", "remote workspace changed after patch delivery; changes were preserved")
+		return
+	}
+	if cleanupErr := cleanWorkspace(request.Context(), pending.workspace, pending.patch); cleanupErr != nil {
+		writeError(writer, http.StatusInternalServerError, cleanupErr.Code, cleanupErr.Message)
+		return
+	}
+	s.mu.Lock()
+	if stored, exists := s.patches[runID]; exists && stored.patch.Digest == input.Digest {
+		delete(s.patches, runID)
+		s.acked[runID] = input.Digest
+		s.ackOrder = append(s.ackOrder, runID)
+		if len(s.ackOrder) > 1024 {
+			expired := s.ackOrder[0]
+			s.ackOrder = s.ackOrder[1:]
+			delete(s.acked, expired)
+		}
+	}
+	s.mu.Unlock()
+	writer.WriteHeader(http.StatusNoContent)
 }
 
 func workerEnvironment(allowlist []string) []string {
@@ -266,25 +369,113 @@ func workerEnvironment(allowlist []string) []string {
 func (s *Server) interrupt(writer http.ResponseWriter, request *http.Request) {
 	runID := request.PathValue("runID")
 	s.mu.Lock()
-	cancel := s.running[runID]
+	state := s.running[runID]
 	s.mu.Unlock()
-	if cancel == nil {
+	if state == nil {
 		writeError(writer, http.StatusNotFound, "worker_run_not_found", "no such in-flight run")
 		return
 	}
-	cancel()
+	state.cancel()
 	writer.WriteHeader(http.StatusNoContent)
 }
 
-func (s *Server) track(runID string, cancel context.CancelFunc) {
+func (s *Server) respondPermission(writer http.ResponseWriter, request *http.Request) {
+	var input PermissionResponse
+	decoder := json.NewDecoder(io.LimitReader(request.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		writeError(writer, http.StatusBadRequest, "permission_decision_invalid", "invalid permission response")
+		return
+	}
+	runID, requestID := request.PathValue("runID"), request.PathValue("requestID")
 	s.mu.Lock()
-	s.running[runID] = cancel
-	s.mu.Unlock()
+	state := s.running[runID]
+	var pending *pendingPermission
+	if state != nil {
+		pending = state.permissions[requestID]
+	}
+	if pending == nil {
+		s.mu.Unlock()
+		writeError(writer, http.StatusNotFound, "permission_not_pending", "permission request is no longer pending")
+		return
+	}
+	decision, err := permissionDecision(input.Decision, pending.request)
+	if err != nil {
+		s.mu.Unlock()
+		writeError(writer, http.StatusBadRequest, err.Code, err.Message)
+		return
+	}
+	select {
+	case pending.response <- decision:
+		s.mu.Unlock()
+		writer.WriteHeader(http.StatusNoContent)
+	default:
+		s.mu.Unlock()
+		writeError(writer, http.StatusConflict, "permission_not_pending", "permission request was already answered")
+	}
+}
+
+func permissionDecision(decision string, permission agentrun.PermissionRequest) (agentrun.PermissionDecision, *RemoteError) {
+	switch decision {
+	case "allow_once":
+		return agentrun.PermissionDecision{Behavior: "allow", DecisionClassification: "user_temporary"}, nil
+	case "allow_always":
+		if permission.SuppressAlwaysAllow || len(permission.Suggestions) == 0 {
+			return agentrun.PermissionDecision{}, &RemoteError{Code: "permission_persistent_unavailable", Message: "this request cannot be permanently allowed"}
+		}
+		return agentrun.PermissionDecision{Behavior: "allow", UpdatedPermissions: permission.Suggestions, DecisionClassification: "user_permanent"}, nil
+	case "deny":
+		return agentrun.PermissionDecision{Behavior: "deny", Message: "Permission denied by user", DecisionClassification: "user_reject"}, nil
+	default:
+		return agentrun.PermissionDecision{}, &RemoteError{Code: "permission_decision_invalid", Message: "permission decision must be allow_once, allow_always or deny"}
+	}
+}
+
+func (s *Server) registerPermission(state *runState, permission agentrun.PermissionRequest) *pendingPermission {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if existing := state.permissions[permission.ID]; existing != nil {
+		return existing
+	}
+	pending := &pendingPermission{request: permission, response: make(chan agentrun.PermissionDecision, 1)}
+	state.permissions[permission.ID] = pending
+	return pending
+}
+
+func (s *Server) awaitPermission(ctx context.Context, state *runState, permission agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {
+	pending := s.registerPermission(state, permission)
+	defer func() {
+		s.mu.Lock()
+		if state.permissions[permission.ID] == pending {
+			delete(state.permissions, permission.ID)
+		}
+		s.mu.Unlock()
+	}()
+	select {
+	case decision := <-pending.response:
+		return decision, nil
+	case <-ctx.Done():
+		return agentrun.PermissionDecision{}, ctx.Err()
+	}
+}
+
+func (s *Server) track(runID string, cancel context.CancelFunc) (*runState, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running[runID] != nil {
+		return nil, false
+	}
+	state := &runState{cancel: cancel, permissions: make(map[string]*pendingPermission)}
+	s.running[runID] = state
+	return state, true
 }
 
 func (s *Server) untrack(runID string) {
 	s.mu.Lock()
-	delete(s.running, runID)
+	state := s.running[runID]
+	if state != nil {
+		delete(s.running, runID)
+	}
 	s.mu.Unlock()
 }
 

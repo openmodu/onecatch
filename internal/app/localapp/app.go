@@ -146,26 +146,27 @@ type RunDetail struct {
 }
 
 type App struct {
-	store          *localdata.Store
-	orchestrator   *workflowuc.Usecase
-	runtimes       *RuntimeRegistry
-	git            *gitinspect.Inspector
-	rootCtx        context.Context
-	rootCancel     context.CancelFunc
-	mu             sync.RWMutex
-	active         map[string]context.CancelFunc
-	lastErrors     map[string]string
-	wg             sync.WaitGroup
-	workers        *worker.Registry
-	workerClient   *worker.Client
-	settings       settingsrepo.SettingsRepo
-	cleanupMu      sync.Mutex
-	cleanupPlans   map[string]cleanupPlan
-	confirmations  map[string]runConfirmation
-	settingsReload func(domainsettings.Settings) error
-	queueMu        sync.Mutex
-	runStreams     *runstream.Hub
-	runStates      *runstate.Hub
+	store             *localdata.Store
+	orchestrator      *workflowuc.Usecase
+	runtimes          *RuntimeRegistry
+	git               *gitinspect.Inspector
+	rootCtx           context.Context
+	rootCancel        context.CancelFunc
+	mu                sync.RWMutex
+	active            map[string]context.CancelFunc
+	lastErrors        map[string]string
+	wg                sync.WaitGroup
+	workers           *worker.Registry
+	workerClient      *worker.Client
+	remotePermissions *remotePermissionRegistry
+	settings          settingsrepo.SettingsRepo
+	cleanupMu         sync.Mutex
+	cleanupPlans      map[string]cleanupPlan
+	confirmations     map[string]runConfirmation
+	settingsReload    func(domainsettings.Settings) error
+	queueMu           sync.Mutex
+	runStreams        *runstream.Hub
+	runStates         *runstate.Hub
 }
 
 func New(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitinspect.Inspector) *App {
@@ -178,7 +179,8 @@ func New(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *Run
 		cleanupPlans:  make(map[string]cleanupPlan),
 		confirmations: make(map[string]runConfirmation),
 	}
-	orchestrator.SetRemoteExecutor(remoteExecutor{registry: app.workers, client: app.workerClient})
+	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
+	orchestrator.SetRemoteExecutor(remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions})
 	return app
 }
 
@@ -755,7 +757,11 @@ func (a *App) ListRunEvents(ctx context.Context, runID string, afterSeq int64) (
 }
 
 func (a *App) RespondPermission(input PermissionDecisionInput) error {
-	return a.runtimes.ResolvePermission(strings.TrimSpace(input.RunID), strings.TrimSpace(input.RequestID), strings.TrimSpace(input.Decision))
+	runID, requestID, decision := strings.TrimSpace(input.RunID), strings.TrimSpace(input.RequestID), strings.TrimSpace(input.Decision)
+	if found, err := a.remotePermissions.resolve(runID, requestID, decision); found {
+		return err
+	}
+	return a.runtimes.ResolvePermission(runID, requestID, decision)
 }
 
 func (a *App) GetRunDetail(ctx context.Context, runID string) (RunDetail, error) {

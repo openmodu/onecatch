@@ -26,12 +26,26 @@ export class Health {
              */
             this["name"] = "";
         }
+        if (!("protocolVersion" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["protocolVersion"] = 0;
+        }
         if (!("runtimes" in $$source)) {
             /**
              * @member
              * @type {{ [_ in string]?: boolean }}
              */
             this["runtimes"] = {};
+        }
+        if (!("capabilities" in $$source)) {
+            /**
+             * @member
+             * @type {{ [_ in string]?: boolean }}
+             */
+            this["capabilities"] = {};
         }
 
         Object.assign(this, $$source);
@@ -43,10 +57,14 @@ export class Health {
      * @returns {Health}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType0;
+        const $$createField3_0 = $$createType0;
+        const $$createField4_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("runtimes" in $$parsedSource) {
-            $$parsedSource["runtimes"] = $$createField2_0($$parsedSource["runtimes"]);
+            $$parsedSource["runtimes"] = $$createField3_0($$parsedSource["runtimes"]);
+        }
+        if ("capabilities" in $$parsedSource) {
+            $$parsedSource["capabilities"] = $$createField4_0($$parsedSource["capabilities"]);
         }
         return new Health(/** @type {Partial<Health>} */($$parsedSource));
     }
@@ -78,6 +96,41 @@ export class Info {
              * @type {string}
              */
             this["baseUrl"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["caFile"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["clientCertFile"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["clientKeyFile"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["serverName"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["serverCertificateSha256"] = undefined;
         }
         if (!("enabled" in $$source)) {
             /**
@@ -155,6 +208,41 @@ export class Input {
              * @type {string | undefined}
              */
             this["token"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["caFile"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["clientCertFile"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["clientKeyFile"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["serverName"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["serverCertificateSha256"] = undefined;
         }
         if (!("enabled" in $$source)) {
             /**

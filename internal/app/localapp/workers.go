@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
@@ -30,11 +31,16 @@ func (a *App) CheckWorker(ctx context.Context, id string) (WorkerStatus, error) 
 	if err != nil {
 		return WorkerStatus{}, err
 	}
-	return WorkerStatus{Worker: worker.Info{ID: config.ID, Name: config.Name, BaseURL: config.BaseURL, Enabled: config.Enabled, HasToken: config.Token != "", CreatedAt: config.CreatedAt, UpdatedAt: config.UpdatedAt}, Health: health}, nil
+	return WorkerStatus{Worker: worker.Info{
+		ID: config.ID, Name: config.Name, BaseURL: config.BaseURL,
+		CAFile: config.CAFile, ClientCertFile: config.ClientCertFile, ClientKeyFile: config.ClientKeyFile,
+		ServerName: config.ServerName, ServerCertificateSHA256: config.ServerCertificateSHA256,
+		Enabled: config.Enabled, HasToken: config.Token != "", CreatedAt: config.CreatedAt, UpdatedAt: config.UpdatedAt,
+	}, Health: health}, nil
 }
 
-// WorkerGitStatus reads the git state of a workspace on a remote worker, so the
-// desktop Git panel can show what a remotely executed step changed.
+// WorkerGitStatus reads the operational git state of a mapped remote clone.
+// Writable run changes normally appear locally after patch synchronization.
 func (a *App) WorkerGitStatus(ctx context.Context, workerID, workspaceID string) (domainworkspaces.GitSnapshot, error) {
 	config, err := a.workers.Get(ctx, workerID)
 	if err != nil {
@@ -44,8 +50,9 @@ func (a *App) WorkerGitStatus(ctx context.Context, workerID, workspaceID string)
 }
 
 type remoteExecutor struct {
-	registry *worker.Registry
-	client   *worker.Client
+	registry    *worker.Registry
+	client      *worker.Client
+	permissions *remotePermissionRegistry
 }
 
 func (e remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID string, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
@@ -57,6 +64,14 @@ func (e remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID str
 	if err != nil {
 		return agentrun.Result{}, err
 	}
+	writable := request.Sandbox != agentrun.SandboxReadOnly
+	baseRevision := ""
+	if writable {
+		baseRevision, err = worker.WorkspaceBaseline(ctx, request.Workspace)
+		if err != nil {
+			return agentrun.Result{}, err
+		}
+	}
 
 	// The streaming POST is deliberately detached from ctx. A cancel must become
 	// a graceful interrupt — SIGINT plus grace on the remote agent, so it can
@@ -64,6 +79,9 @@ func (e remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID str
 	// that discards them. A backstop hard-cancels if the worker never closes.
 	streamCtx, cancelStream := context.WithCancel(context.Background())
 	defer cancelStream()
+	if e.permissions != nil {
+		defer e.permissions.clearRemoteRun(runID)
+	}
 	done := make(chan struct{})
 	defer close(done)
 	go func() {
@@ -85,7 +103,23 @@ func (e remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID str
 		}
 	}()
 
-	return e.client.Execute(streamCtx, config, worker.ExecuteRequest{
+	remoteSink := sink
+	if e.permissions != nil {
+		remoteSink = func(event agentrun.Event) {
+			if event.Permission != nil {
+				switch event.Kind {
+				case agentrun.KindPermissionRequest:
+					e.permissions.add(request.RunID, event.Permission.ID, remotePermissionTarget{config: config, remoteRunID: runID})
+				case agentrun.KindPermissionResolved:
+					e.permissions.remove(request.RunID, event.Permission.ID)
+				}
+			}
+			if sink != nil {
+				sink(event)
+			}
+		}
+	}
+	result, patch, executeErr := e.client.ExecuteWithPatch(streamCtx, config, worker.ExecuteRequest{
 		RunID:                 runID,
 		WorkspaceID:           workspaceID,
 		Runtime:               request.Runtime,
@@ -99,7 +133,32 @@ func (e remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID str
 		EnvironmentAllowlist:  append([]string{}, request.EnvironmentAllowlist...),
 		TimeoutSeconds:        remainingSeconds(ctx),
 		InterruptGraceSeconds: int(request.InterruptGrace / time.Second),
-	}, sink)
+		BaseRevision:          baseRevision,
+		SyncChanges:           writable,
+	}, remoteSink)
+	if patch == nil {
+		return result, executeErr
+	}
+	syncCtx, cancelSync := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancelSync()
+	if err := worker.ApplyWorkspacePatch(syncCtx, request.Workspace, *patch); err != nil {
+		return result, err
+	}
+	ackCtx, cancelAck := context.WithTimeout(context.Background(), 20*time.Second)
+	ackErr := e.client.AckPatch(ackCtx, config, runID, patch.Digest)
+	cancelAck()
+	if ackErr != nil {
+		// The first acknowledgement may have reached the worker even when its
+		// response was lost. The endpoint is idempotent, so one bounded retry
+		// safely resolves that ambiguous transport state.
+		retryCtx, cancelRetry := context.WithTimeout(context.Background(), 20*time.Second)
+		ackErr = e.client.AckPatch(retryCtx, config, runID, patch.Digest)
+		cancelRetry()
+	}
+	if ackErr != nil {
+		return result, fmt.Errorf("remote changes were applied locally but worker cleanup was not acknowledged: %w", ackErr)
+	}
+	return result, executeErr
 }
 
 func remainingSeconds(ctx context.Context) int {

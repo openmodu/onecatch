@@ -11,37 +11,74 @@ import (
 const MaxRunDuration = 24 * time.Hour
 
 type Config struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	BaseURL   string    `json:"baseUrl"`
-	Token     string    `json:"token"`
-	Enabled   bool      `json:"enabled"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID                      string    `json:"id"`
+	Name                    string    `json:"name"`
+	BaseURL                 string    `json:"baseUrl"`
+	Token                   string    `json:"token"`
+	CAFile                  string    `json:"caFile,omitempty"`
+	ClientCertFile          string    `json:"clientCertFile,omitempty"`
+	ClientKeyFile           string    `json:"clientKeyFile,omitempty"`
+	ServerName              string    `json:"serverName,omitempty"`
+	ServerCertificateSHA256 string    `json:"serverCertificateSha256,omitempty"`
+	Enabled                 bool      `json:"enabled"`
+	CreatedAt               time.Time `json:"createdAt"`
+	UpdatedAt               time.Time `json:"updatedAt"`
 }
 
 type Input struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	BaseURL string `json:"baseUrl"`
-	Token   string `json:"token,omitempty"`
-	Enabled bool   `json:"enabled"`
+	ID                      string `json:"id"`
+	Name                    string `json:"name"`
+	BaseURL                 string `json:"baseUrl"`
+	Token                   string `json:"token,omitempty"`
+	CAFile                  string `json:"caFile,omitempty"`
+	ClientCertFile          string `json:"clientCertFile,omitempty"`
+	ClientKeyFile           string `json:"clientKeyFile,omitempty"`
+	ServerName              string `json:"serverName,omitempty"`
+	ServerCertificateSHA256 string `json:"serverCertificateSha256,omitempty"`
+	Enabled                 bool   `json:"enabled"`
 }
 
 type Info struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	BaseURL   string    `json:"baseUrl"`
-	Enabled   bool      `json:"enabled"`
-	HasToken  bool      `json:"hasToken"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID                      string    `json:"id"`
+	Name                    string    `json:"name"`
+	BaseURL                 string    `json:"baseUrl"`
+	CAFile                  string    `json:"caFile,omitempty"`
+	ClientCertFile          string    `json:"clientCertFile,omitempty"`
+	ClientKeyFile           string    `json:"clientKeyFile,omitempty"`
+	ServerName              string    `json:"serverName,omitempty"`
+	ServerCertificateSHA256 string    `json:"serverCertificateSha256,omitempty"`
+	Enabled                 bool      `json:"enabled"`
+	HasToken                bool      `json:"hasToken"`
+	CreatedAt               time.Time `json:"createdAt"`
+	UpdatedAt               time.Time `json:"updatedAt"`
 }
 
 type Health struct {
-	WorkerID string          `json:"workerId"`
-	Name     string          `json:"name"`
-	Runtimes map[string]bool `json:"runtimes"`
+	WorkerID        string          `json:"workerId"`
+	Name            string          `json:"name"`
+	ProtocolVersion int             `json:"protocolVersion"`
+	Runtimes        map[string]bool `json:"runtimes"`
+	Capabilities    map[string]bool `json:"capabilities"`
+}
+
+type PermissionResponse struct {
+	Decision string `json:"decision"`
+}
+
+type PatchAckRequest struct {
+	Digest string `json:"digest"`
+}
+
+// WorkspacePatch is the complete Git worktree delta produced by a writable
+// remote run. Data carries a binary-capable git patch using Encoding;
+// BaseRevision and Digest keep application and cleanup fail-closed when either
+// worktree moved.
+type WorkspacePatch struct {
+	BaseRevision   string   `json:"baseRevision"`
+	Digest         string   `json:"digest"`
+	Encoding       string   `json:"encoding,omitempty"`
+	Data           string   `json:"data"`
+	UntrackedPaths []string `json:"untrackedPaths,omitempty"`
 }
 
 type ExecuteRequest struct {
@@ -61,6 +98,8 @@ type ExecuteRequest struct {
 	EnvironmentAllowlist  []string         `json:"environmentAllowlist"`
 	TimeoutSeconds        int              `json:"timeoutSeconds,omitempty"`
 	InterruptGraceSeconds int              `json:"interruptGraceSeconds,omitempty"`
+	BaseRevision          string           `json:"baseRevision,omitempty"`
+	SyncChanges           bool             `json:"syncChanges,omitempty"`
 }
 
 // Frame is one line of the NDJSON execute stream. Exactly one field is set: a
@@ -70,6 +109,7 @@ type ExecuteRequest struct {
 // what lets the coordinator's UI show a remote run live, the same as a local one.
 type Frame struct {
 	Event  *agentrun.Event  `json:"event,omitempty"`
+	Patch  *WorkspacePatch  `json:"patch,omitempty"`
 	Result *agentrun.Result `json:"result,omitempty"`
 	Error  *RemoteError     `json:"error,omitempty"`
 }

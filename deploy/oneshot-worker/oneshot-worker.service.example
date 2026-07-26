@@ -1,0 +1,25 @@
+[Unit]
+Description=Oneshot remote agent worker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=oneshot
+Group=oneshot
+EnvironmentFile=/etc/oneshot-worker.env
+ExecStart=/usr/local/bin/oneshot-worker \
+  --listen 0.0.0.0:9231 \
+  --id linux-builder \
+  --name "Linux builder" \
+  --workspace workspace-id=/srv/project \
+  --tls-cert /etc/oneshot-worker/server.pem \
+  --tls-key /etc/oneshot-worker/server-key.pem
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=35s
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

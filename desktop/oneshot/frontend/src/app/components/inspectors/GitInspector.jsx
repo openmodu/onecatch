@@ -13,8 +13,8 @@ function fileState(file, t) {
   return { label: t("inspector.fileModified"), tone: "modified" };
 }
 
-// Branch operations are available for the local workspace only. A remote
-// worker reports status from its own clone, so its branches remain read-only.
+// Branch operations are available for the local workspace only. The remote
+// source is an operational view of that clone, so its branches remain read-only.
 function GitInspector({ mode, workspaceID, runWorkerID = "", notify }) {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState(null);
@@ -23,8 +23,7 @@ function GitInspector({ mode, workspaceID, runWorkerID = "", notify }) {
   const [branches, setBranches] = useState([]);
   const [branchBusy, setBranchBusy] = useState(false);
   const [newBranch, setNewBranch] = useState("");
-  // Which machine's git state to show: "local" or a remote worker id. A remote
-  // step runs on its worker's own clone, so its changes only exist there.
+  // Which machine's git state to show: "local" or a remote worker id.
   const [source, setSource] = useState("local");
 
   useEffect(() => {

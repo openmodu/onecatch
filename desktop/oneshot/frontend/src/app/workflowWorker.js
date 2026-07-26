@@ -4,6 +4,6 @@ export function isRemoteWorker(workerId) {
 
 export function assignWorkflowWorker(step, workerId) {
   const next = { ...step, workerId: workerId || "local" };
-  if (isRemoteWorker(next.workerId)) next.sandbox = "read-only";
+  if (isRemoteWorker(next.workerId) && next.sandbox === "full") next.sandbox = "workspace-write";
   return next;
 }

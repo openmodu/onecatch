@@ -4,12 +4,16 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -19,7 +23,7 @@ import (
 
 // maxFrameBytes bounds a single NDJSON line. It matches the runtime event
 // persistence cap so a large tool output streamed as one frame is not rejected.
-const maxFrameBytes = 8 * 1024 * 1024
+const maxFrameBytes = 34 * 1024 * 1024
 
 type Client struct{ http *http.Client }
 
@@ -57,9 +61,17 @@ func (c *Client) Health(ctx context.Context, config Config) (Health, error) {
 // stream opens surface as an error from the HTTP status; failures during the run
 // surface as a terminal error frame. sink may be nil.
 func (c *Client) Execute(ctx context.Context, config Config, input ExecuteRequest, sink agentrun.Sink) (agentrun.Result, error) {
+	result, _, err := c.ExecuteWithPatch(ctx, config, input, sink)
+	return result, err
+}
+
+// ExecuteWithPatch is Execute plus the recoverable worktree delta emitted by a
+// writable run. The patch is returned even when the agent's terminal frame is
+// an error so the coordinator can preserve changes made before that failure.
+func (c *Client) ExecuteWithPatch(ctx context.Context, config Config, input ExecuteRequest, sink agentrun.Sink) (agentrun.Result, *WorkspacePatch, error) {
 	payload, err := json.Marshal(input)
 	if err != nil {
-		return agentrun.Result{}, err
+		return agentrun.Result{}, nil, err
 	}
 	streamCtx := ctx
 	cancel := func() {}
@@ -73,7 +85,7 @@ func (c *Client) Execute(ctx context.Context, config Config, input ExecuteReques
 	defer cancel()
 	response, err := c.openExecute(streamCtx, config, payload)
 	if err != nil {
-		return agentrun.Result{}, RemoteError{Code: "worker_unavailable", Message: err.Error()}
+		return agentrun.Result{}, nil, RemoteError{Code: "worker_unavailable", Message: err.Error()}
 	}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		remoteErr := decodeRemoteError(response)
@@ -82,7 +94,7 @@ func (c *Client) Execute(ctx context.Context, config Config, input ExecuteReques
 		// requests strictly. Retry the exact pre-extension shape only when the
 		// worker reports a decode failure; no execution has started at this point.
 		var remote RemoteError
-		if errors.As(remoteErr, &remote) && remote.Code == "worker_invalid_request" && remote.Message == "invalid execute request" {
+		if !input.SyncChanges && errors.As(remoteErr, &remote) && remote.Code == "worker_invalid_request" && remote.Message == "invalid execute request" {
 			legacyPayload, marshalErr := json.Marshal(legacyExecuteRequest{
 				RunID: input.RunID, WorkspaceID: input.WorkspaceID, Runtime: input.Runtime,
 				Model: input.Model, ReasoningEffort: input.ReasoningEffort, ServiceTier: input.ServiceTier,
@@ -90,24 +102,25 @@ func (c *Client) Execute(ctx context.Context, config Config, input ExecuteReques
 				InterruptGraceSeconds: input.InterruptGraceSeconds,
 			})
 			if marshalErr != nil {
-				return agentrun.Result{}, marshalErr
+				return agentrun.Result{}, nil, marshalErr
 			}
 			response, err = c.openExecute(streamCtx, config, legacyPayload)
 			if err != nil {
-				return agentrun.Result{}, RemoteError{Code: "worker_unavailable", Message: err.Error()}
+				return agentrun.Result{}, nil, RemoteError{Code: "worker_unavailable", Message: err.Error()}
 			}
 			if response.StatusCode < 200 || response.StatusCode >= 300 {
 				defer response.Body.Close()
-				return agentrun.Result{}, decodeRemoteError(response)
+				return agentrun.Result{}, nil, decodeRemoteError(response)
 			}
 		} else {
-			return agentrun.Result{}, remoteErr
+			return agentrun.Result{}, nil, remoteErr
 		}
 	}
 	defer response.Body.Close()
 
 	scanner := bufio.NewScanner(response.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), maxFrameBytes)
+	var patch *WorkspacePatch
 	for scanner.Scan() {
 		line := scanner.Bytes()
 		if len(bytes.TrimSpace(line)) == 0 {
@@ -118,10 +131,12 @@ func (c *Client) Execute(ctx context.Context, config Config, input ExecuteReques
 			continue
 		}
 		switch {
+		case frame.Patch != nil:
+			patch = frame.Patch
 		case frame.Error != nil:
-			return agentrun.Result{}, *frame.Error
+			return agentrun.Result{}, patch, *frame.Error
 		case frame.Result != nil:
-			return *frame.Result, nil
+			return *frame.Result, patch, nil
 		case frame.Event != nil:
 			if sink != nil {
 				sink(*frame.Event)
@@ -129,9 +144,9 @@ func (c *Client) Execute(ctx context.Context, config Config, input ExecuteReques
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return agentrun.Result{}, RemoteError{Code: "worker_stream_broken", Message: err.Error()}
+		return agentrun.Result{}, patch, RemoteError{Code: "worker_stream_broken", Message: err.Error()}
 	}
-	return agentrun.Result{}, RemoteError{Code: "worker_stream_incomplete", Message: "stream ended before a terminal frame"}
+	return agentrun.Result{}, patch, RemoteError{Code: "worker_stream_incomplete", Message: "stream ended before a terminal frame"}
 }
 
 func (c *Client) openExecute(ctx context.Context, config Config, payload []byte) (*http.Response, error) {
@@ -141,11 +156,14 @@ func (c *Client) openExecute(ctx context.Context, config Config, payload []byte)
 	}
 	request.Header.Set("Authorization", "Bearer "+config.Token)
 	request.Header.Set("Content-Type", "application/json")
-	return c.http.Do(request)
+	httpClient, err := c.httpClient(config)
+	if err != nil {
+		return nil, err
+	}
+	return httpClient.Do(request)
 }
 
-// GitStatus reads the git state of a mapped workspace on the worker, so the
-// coordinator can show what a remote step changed without syncing files.
+// GitStatus reads the operational git state of a mapped worker clone.
 func (c *Client) GitStatus(ctx context.Context, config Config, workspaceID string) (domainworkspaces.GitSnapshot, error) {
 	var snapshot domainworkspaces.GitSnapshot
 	if err := c.do(ctx, config, http.MethodGet, "/v1/workspaces/"+url.PathEscape(workspaceID)+"/git", nil, &snapshot); err != nil {
@@ -159,6 +177,18 @@ func (c *Client) GitStatus(ctx context.Context, config Config, workspaceID strin
 // caller can safely ignore.
 func (c *Client) Interrupt(ctx context.Context, config Config, runID string) error {
 	return c.do(ctx, config, http.MethodPost, "/v1/runs/"+runID+"/interrupt", nil, nil)
+}
+
+// RespondPermission forwards a desktop approval decision to a Claude process
+// blocked on the remote worker.
+func (c *Client) RespondPermission(ctx context.Context, config Config, runID, requestID, decision string) error {
+	path := "/v1/runs/" + url.PathEscape(runID) + "/permissions/" + url.PathEscape(requestID)
+	return c.do(ctx, config, http.MethodPost, path, PermissionResponse{Decision: decision}, nil)
+}
+
+func (c *Client) AckPatch(ctx context.Context, config Config, runID, digest string) error {
+	path := "/v1/runs/" + url.PathEscape(runID) + "/patch/ack"
+	return c.do(ctx, config, http.MethodPost, path, PatchAckRequest{Digest: digest}, nil)
 }
 
 func (c *Client) do(ctx context.Context, config Config, method, path string, input, output any) error {
@@ -183,7 +213,11 @@ func (c *Client) do(ctx context.Context, config Config, method, path string, inp
 	if input != nil {
 		request.Header.Set("Content-Type", "application/json")
 	}
-	response, err := c.http.Do(request)
+	httpClient, err := c.httpClient(config)
+	if err != nil {
+		return RemoteError{Code: "worker_tls_invalid", Message: err.Error()}
+	}
+	response, err := httpClient.Do(request)
 	if err != nil {
 		return RemoteError{Code: "worker_unavailable", Message: err.Error()}
 	}
@@ -196,6 +230,70 @@ func (c *Client) do(ctx context.Context, config Config, method, path string, inp
 		return nil
 	}
 	return json.NewDecoder(io.LimitReader(response.Body, 16<<20)).Decode(output)
+}
+
+func (c *Client) httpClient(config Config) (*http.Client, error) {
+	if config.CAFile == "" && config.ClientCertFile == "" && config.ServerName == "" && config.ServerCertificateSHA256 == "" {
+		return c.http, nil
+	}
+	parsed, err := url.Parse(config.BaseURL)
+	if err != nil || parsed.Scheme != "https" {
+		return nil, errors.New("worker TLS settings require an HTTPS base URL")
+	}
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: config.ServerName}
+	if config.CAFile != "" {
+		pem, err := os.ReadFile(config.CAFile)
+		if err != nil {
+			return nil, fmt.Errorf("read worker CA: %w", err)
+		}
+		roots, err := x509.SystemCertPool()
+		if err != nil || roots == nil {
+			roots = x509.NewCertPool()
+		}
+		if !roots.AppendCertsFromPEM(pem) {
+			return nil, errors.New("worker CA file contains no certificates")
+		}
+		tlsConfig.RootCAs = roots
+	}
+	if config.ClientCertFile != "" || config.ClientKeyFile != "" {
+		if config.ClientCertFile == "" || config.ClientKeyFile == "" {
+			return nil, errors.New("worker client certificate and key must be configured together")
+		}
+		certificate, err := tls.LoadX509KeyPair(config.ClientCertFile, config.ClientKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("load worker client certificate: %w", err)
+		}
+		tlsConfig.Certificates = []tls.Certificate{certificate}
+	}
+	if config.ServerCertificateSHA256 != "" {
+		expected := normalizeFingerprint(config.ServerCertificateSHA256)
+		if !validFingerprint(expected) {
+			return nil, errors.New("worker server certificate fingerprint is invalid")
+		}
+		// Exact certificate pinning performs the authentication in this mode.
+		// InsecureSkipVerify only disables Go's CA/hostname verifier; the
+		// callback below still rejects every certificate except the paired DER.
+		tlsConfig.InsecureSkipVerify = true //nolint:gosec
+		tlsConfig.VerifyConnection = func(state tls.ConnectionState) error {
+			if len(state.PeerCertificates) == 0 {
+				return errors.New("worker supplied no TLS certificate")
+			}
+			certificate := state.PeerCertificates[0]
+			now := time.Now()
+			if now.Before(certificate.NotBefore) || now.After(certificate.NotAfter) {
+				return errors.New("worker TLS certificate is outside its validity period")
+			}
+			actual := sha256.Sum256(certificate.Raw)
+			if fmt.Sprintf("%x", actual[:]) != expected {
+				return errors.New("worker TLS certificate does not match the paired fingerprint")
+			}
+			return nil
+		}
+	}
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = tlsConfig
+	transport.DisableKeepAlives = true
+	return &http.Client{Transport: transport}, nil
 }
 
 func endpoint(config Config, path string) string {
