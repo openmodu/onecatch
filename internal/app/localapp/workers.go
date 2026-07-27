@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
@@ -13,20 +14,39 @@ import (
 )
 
 type WorkerStatus struct {
-	Worker worker.Info   `json:"worker"`
-	Health worker.Health `json:"health"`
+	Worker              worker.Info   `json:"worker"`
+	Health              worker.Health `json:"health"`
+	CheckedAt           time.Time     `json:"checkedAt"`
+	LatencyMilliseconds int64         `json:"latencyMilliseconds"`
+}
+
+type WorkerWorkspaceSetup struct {
+	Mapping worker.WorkspaceMapping      `json:"mapping"`
+	Local   domainworkspaces.GitSnapshot `json:"local"`
+	Remote  domainworkspaces.GitSnapshot `json:"remote"`
 }
 
 func (a *App) ListWorkers(ctx context.Context) ([]worker.Info, error) { return a.workers.List(ctx) }
-func (a *App) SaveWorker(ctx context.Context, input worker.Input) (worker.Info, error) {
-	return a.workers.Save(ctx, input)
+func (a *App) UpdateWorker(ctx context.Context, input worker.UpdateInput) (worker.Info, error) {
+	return a.workers.Update(ctx, input)
 }
 func (a *App) DeleteWorker(ctx context.Context, id string) error { return a.workers.Delete(ctx, id) }
+func (a *App) PairWorker(ctx context.Context, baseURL, code string) (worker.Info, error) {
+	paired, err := a.workerClient.Pair(ctx, baseURL, code)
+	if err != nil {
+		return worker.Info{}, err
+	}
+	return a.workers.Save(ctx, worker.Input{
+		ID: paired.WorkerID, Name: paired.Name, BaseURL: baseURL, Token: paired.Token,
+		ServerCertificateSHA256: paired.ServerCertificateSHA256, Enabled: true,
+	})
+}
 func (a *App) CheckWorker(ctx context.Context, id string) (WorkerStatus, error) {
 	config, err := a.workers.Get(ctx, id)
 	if err != nil {
 		return WorkerStatus{}, coded("worker_not_found", "worker was not found")
 	}
+	startedAt := time.Now()
 	health, err := a.workerClient.Health(ctx, config)
 	if err != nil {
 		return WorkerStatus{}, err
@@ -36,7 +56,7 @@ func (a *App) CheckWorker(ctx context.Context, id string) (WorkerStatus, error) 
 		CAFile: config.CAFile, ClientCertFile: config.ClientCertFile, ClientKeyFile: config.ClientKeyFile,
 		ServerName: config.ServerName, ServerCertificateSHA256: config.ServerCertificateSHA256,
 		Enabled: config.Enabled, HasToken: config.Token != "", CreatedAt: config.CreatedAt, UpdatedAt: config.UpdatedAt,
-	}, Health: health}, nil
+	}, Health: health, CheckedAt: time.Now().UTC(), LatencyMilliseconds: time.Since(startedAt).Milliseconds()}, nil
 }
 
 // WorkerGitStatus reads the operational git state of a mapped remote clone.
@@ -49,29 +69,123 @@ func (a *App) WorkerGitStatus(ctx context.Context, workerID, workspaceID string)
 	return a.workerClient.GitStatus(ctx, config, workspaceID)
 }
 
-type remoteExecutor struct {
-	registry    *worker.Registry
-	client      *worker.Client
-	permissions *remotePermissionRegistry
+func (a *App) PrepareWorkerWorkspace(ctx context.Context, workerID, workspaceID string) (WorkerWorkspaceSetup, error) {
+	config, err := a.workers.Get(ctx, workerID)
+	if err != nil || !config.Enabled {
+		return WorkerWorkspaceSetup{}, coded("worker_not_found", "worker was not found or is disabled")
+	}
+	workspace, err := a.GetWorkspace(ctx, workspaceID)
+	if err != nil {
+		return WorkerWorkspaceSetup{}, err
+	}
+	revision, err := worker.WorkspaceBaseline(ctx, workspace.Path)
+	if err != nil {
+		return WorkerWorkspaceSetup{}, err
+	}
+	remoteURL, err := worker.WorkspaceRemoteURL(ctx, workspace.Path)
+	if err != nil {
+		return WorkerWorkspaceSetup{}, err
+	}
+	localSnapshot, err := a.git.Inspect(ctx, workspace.Path)
+	if err != nil {
+		return WorkerWorkspaceSetup{}, err
+	}
+	prepared, err := a.workerClient.PrepareWorkspace(ctx, config, workspaceID, worker.WorkspacePrepareRequest{
+		RemoteURL: remoteURL, Revision: revision,
+	})
+	if err != nil {
+		return WorkerWorkspaceSetup{}, err
+	}
+	return WorkerWorkspaceSetup{Mapping: prepared.Mapping, Local: localSnapshot, Remote: prepared.Git}, nil
 }
 
-func (e remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID string, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
+type remoteExecutor struct {
+	registry     *worker.Registry
+	client       *worker.Client
+	permissions  *remotePermissionRegistry
+	preparations *remotePreparationRegistry
+}
+
+type remotePreparationCall struct {
+	done chan struct{}
+	err  error
+}
+
+type remotePreparationRegistry struct {
+	mu       sync.Mutex
+	inFlight map[string]*remotePreparationCall
+	ready    map[string]time.Time
+}
+
+func newRemotePreparationRegistry() *remotePreparationRegistry {
+	return &remotePreparationRegistry{inFlight: make(map[string]*remotePreparationCall), ready: make(map[string]time.Time)}
+}
+
+func (r *remotePreparationRegistry) ensure(ctx context.Context, key string, prepare func() error) error {
+	r.mu.Lock()
+	if expiresAt := r.ready[key]; time.Now().Before(expiresAt) {
+		r.mu.Unlock()
+		return nil
+	}
+	if call := r.inFlight[key]; call != nil {
+		r.mu.Unlock()
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-call.done:
+			return call.err
+		}
+	}
+	call := &remotePreparationCall{done: make(chan struct{})}
+	r.inFlight[key] = call
+	r.mu.Unlock()
+
+	call.err = prepare()
+	r.mu.Lock()
+	delete(r.inFlight, key)
+	if call.err == nil {
+		r.ready[key] = time.Now().Add(5 * time.Second)
+	} else {
+		delete(r.ready, key)
+	}
+	close(call.done)
+	r.mu.Unlock()
+	return call.err
+}
+
+func (e *remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID string, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	config, err := e.registry.Get(ctx, workerID)
 	if err != nil || !config.Enabled {
 		return agentrun.Result{}, worker.RemoteError{Code: "worker_not_found", Message: "worker is missing or disabled"}
+	}
+	baseRevision, err := worker.WorkspaceBaseline(ctx, request.Workspace)
+	if err != nil {
+		return agentrun.Result{}, err
+	}
+	remoteURL, err := worker.WorkspaceRemoteURL(ctx, request.Workspace)
+	if err != nil {
+		return agentrun.Result{}, err
+	}
+	prepare := func() error {
+		_, prepareErr := e.client.PrepareWorkspace(ctx, config, workspaceID, worker.WorkspacePrepareRequest{
+			RemoteURL: remoteURL, Revision: baseRevision,
+		})
+		return prepareErr
+	}
+	preparationKey := workerID + "\x00" + workspaceID + "\x00" + baseRevision
+	if e.preparations != nil {
+		err = e.preparations.ensure(ctx, preparationKey, prepare)
+	} else {
+		err = prepare()
+	}
+	if err != nil {
+		return agentrun.Result{}, err
 	}
 	runID, err := newRunID()
 	if err != nil {
 		return agentrun.Result{}, err
 	}
 	writable := request.Sandbox != agentrun.SandboxReadOnly
-	baseRevision := ""
-	if writable {
-		baseRevision, err = worker.WorkspaceBaseline(ctx, request.Workspace)
-		if err != nil {
-			return agentrun.Result{}, err
-		}
-	}
 
 	// The streaming POST is deliberately detached from ctx. A cancel must become
 	// a graceful interrupt — SIGINT plus grace on the remote agent, so it can

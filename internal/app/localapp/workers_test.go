@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -46,7 +47,7 @@ func (remoteWritingEngine) Run(_ context.Context, request agentrun.Request, _ ag
 
 func TestRemoteExecutorDeliversWritableChangesLocally(t *testing.T) {
 	root := t.TempDir()
-	local, remote := filepath.Join(root, "local"), filepath.Join(root, "remote")
+	local := filepath.Join(root, "local")
 	if err := os.Mkdir(local, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -58,19 +59,20 @@ func TestRemoteExecutorDeliversWritableChangesLocally(t *testing.T) {
 	}
 	runWorkerGitTest(t, local, "add", "tracked.txt")
 	runWorkerGitTest(t, local, "commit", "-m", "initial")
-	clone := exec.Command("git", "clone", "--quiet", local, remote)
-	if output, err := clone.CombinedOutput(); err != nil {
-		t.Fatalf("clone: %v: %s", err, output)
-	}
+	runWorkerGitTest(t, local, "remote", "add", "origin", local)
 
-	service := worker.NewServer("remote", "Remote", "secret", map[string]string{"workspace": remote}, remoteWritingEngine{}, 1)
+	workerState := filepath.Join(root, "worker-state")
+	service := worker.NewServer("remote", "Remote", "secret", nil, remoteWritingEngine{}, 1)
+	if err := service.SetWorkspaceRegistry(context.Background(), worker.NewWorkspaceRegistry(filepath.Join(workerState, "workspaces.json"))); err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewServer(service.Handler())
 	defer server.Close()
 	registry := worker.NewRegistry(filepath.Join(root, "workers.json"))
 	if _, err := registry.Save(context.Background(), worker.Input{ID: "remote", Name: "Remote", BaseURL: server.URL, Token: "secret", Enabled: true}); err != nil {
 		t.Fatal(err)
 	}
-	executor := remoteExecutor{registry: registry, client: worker.NewClient()}
+	executor := &remoteExecutor{registry: registry, client: worker.NewClient(), preparations: newRemotePreparationRegistry()}
 	result, err := executor.RunRemote(context.Background(), "remote", "workspace", agentrun.Request{
 		RunID: "workflow-run", Runtime: agentrun.RuntimeCodex, Workspace: local,
 		Sandbox: agentrun.SandboxWorkspaceWrite, Prompt: "write",
@@ -81,6 +83,7 @@ func TestRemoteExecutorDeliversWritableChangesLocally(t *testing.T) {
 	if content, readErr := os.ReadFile(filepath.Join(local, "remote.txt")); readErr != nil || string(content) != "delivered\n" {
 		t.Fatalf("local delivered file = %q, %v", content, readErr)
 	}
+	remote := filepath.Join(workerState, "projects", "workspace")
 	if status := runWorkerGitTest(t, remote, "status", "--porcelain"); strings.TrimSpace(status) != "" {
 		t.Fatalf("remote workspace was not cleaned: %q", status)
 	}
@@ -89,7 +92,19 @@ func TestRemoteExecutorDeliversWritableChangesLocally(t *testing.T) {
 func TestRemoteExecutorRoutesPermissionDecisionBackToWorker(t *testing.T) {
 	engine := remoteApprovalEngine{decision: make(chan agentrun.PermissionDecision, 1)}
 	workspace := t.TempDir()
-	service := worker.NewServer("remote", "Remote", "secret", map[string]string{"workspace": workspace}, engine, 1)
+	runWorkerGitTest(t, workspace, "init")
+	runWorkerGitTest(t, workspace, "config", "user.email", "localapp-test@example.com")
+	runWorkerGitTest(t, workspace, "config", "user.name", "Localapp Test")
+	if err := os.WriteFile(filepath.Join(workspace, "tracked.txt"), []byte("initial\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runWorkerGitTest(t, workspace, "add", "tracked.txt")
+	runWorkerGitTest(t, workspace, "commit", "-m", "initial")
+	runWorkerGitTest(t, workspace, "remote", "add", "origin", workspace)
+	service := worker.NewServer("remote", "Remote", "secret", nil, engine, 1)
+	if err := service.SetWorkspaceRegistry(context.Background(), worker.NewWorkspaceRegistry(filepath.Join(t.TempDir(), "workspaces.json"))); err != nil {
+		t.Fatal(err)
+	}
 	server := httptest.NewServer(service.Handler())
 	defer server.Close()
 	registry := worker.NewRegistry(filepath.Join(t.TempDir(), "workers.json"))
@@ -98,7 +113,7 @@ func TestRemoteExecutorRoutesPermissionDecisionBackToWorker(t *testing.T) {
 	}
 	client := worker.NewClient()
 	permissions := newRemotePermissionRegistry(client)
-	executor := remoteExecutor{registry: registry, client: client, permissions: permissions}
+	executor := &remoteExecutor{registry: registry, client: client, permissions: permissions, preparations: newRemotePreparationRegistry()}
 	requested := make(chan struct{})
 	finished := make(chan error, 1)
 	go func() {
@@ -131,6 +146,37 @@ func TestRemoteExecutorRoutesPermissionDecisionBackToWorker(t *testing.T) {
 	}
 	if err := <-finished; err != nil {
 		t.Fatalf("remote execute: %v", err)
+	}
+}
+
+func TestRemotePreparationRegistryCoalescesConcurrentRequests(t *testing.T) {
+	registry := newRemotePreparationRegistry()
+	started := make(chan struct{})
+	release := make(chan struct{})
+	var calls atomic.Int32
+	prepare := func() error {
+		if calls.Add(1) == 1 {
+			close(started)
+		}
+		<-release
+		return nil
+	}
+	results := make(chan error, 2)
+	go func() { results <- registry.ensure(context.Background(), "worker\x00workspace\x00revision", prepare) }()
+	<-started
+	go func() { results <- registry.ensure(context.Background(), "worker\x00workspace\x00revision", prepare) }()
+	close(release)
+	if err := <-results; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-results; err != nil {
+		t.Fatal(err)
+	}
+	if err := registry.ensure(context.Background(), "worker\x00workspace\x00revision", prepare); err != nil {
+		t.Fatal(err)
+	}
+	if calls.Load() != 1 {
+		t.Fatalf("prepare calls = %d, want 1", calls.Load())
 	}
 }
 

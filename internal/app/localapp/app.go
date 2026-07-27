@@ -180,7 +180,7 @@ func New(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *Run
 		confirmations: make(map[string]runConfirmation),
 	}
 	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
-	orchestrator.SetRemoteExecutor(remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions})
+	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, preparations: newRemotePreparationRegistry()})
 	return app
 }
 
