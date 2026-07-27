@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/openmodu/oneshot/internal/agentrun"
+	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
 )
 
 const MaxRunDuration = 24 * time.Hour
@@ -38,6 +39,18 @@ type Input struct {
 	Enabled                 bool   `json:"enabled"`
 }
 
+type UpdateInput struct {
+	ID                      string `json:"id"`
+	Name                    string `json:"name"`
+	BaseURL                 string `json:"baseUrl"`
+	CAFile                  string `json:"caFile,omitempty"`
+	ClientCertFile          string `json:"clientCertFile,omitempty"`
+	ClientKeyFile           string `json:"clientKeyFile,omitempty"`
+	ServerName              string `json:"serverName,omitempty"`
+	ServerCertificateSHA256 string `json:"serverCertificateSha256,omitempty"`
+	Enabled                 bool   `json:"enabled"`
+}
+
 type Info struct {
 	ID                      string    `json:"id"`
 	Name                    string    `json:"name"`
@@ -61,12 +74,43 @@ type Health struct {
 	Capabilities    map[string]bool `json:"capabilities"`
 }
 
+type PairRequest struct {
+	Code string `json:"code"`
+}
+
+type PairResult struct {
+	WorkerID                string          `json:"workerId"`
+	Name                    string          `json:"name"`
+	Token                   string          `json:"token"`
+	ProtocolVersion         int             `json:"protocolVersion"`
+	Runtimes                map[string]bool `json:"runtimes"`
+	Capabilities            map[string]bool `json:"capabilities"`
+	ServerCertificateSHA256 string          `json:"serverCertificateSha256,omitempty"`
+}
+
 type PermissionResponse struct {
 	Decision string `json:"decision"`
 }
 
 type PatchAckRequest struct {
 	Digest string `json:"digest"`
+}
+
+type WorkspaceMapping struct {
+	ID        string    `json:"id"`
+	Path      string    `json:"path"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type WorkspacePrepareRequest struct {
+	RemoteURL string `json:"remoteUrl"`
+	Revision  string `json:"revision"`
+}
+
+type WorkspacePrepareResult struct {
+	Mapping WorkspaceMapping             `json:"mapping"`
+	Git     domainworkspaces.GitSnapshot `json:"git"`
 }
 
 // WorkspacePatch is the complete Git worktree delta produced by a writable

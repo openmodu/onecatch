@@ -113,12 +113,44 @@ func TestPinnedTLSAuthenticatesWorkerCertificate(t *testing.T) {
 	sum := sha256.Sum256(server.Certificate().Raw)
 	config := Config{BaseURL: server.URL, Token: "secret", ServerCertificateSHA256: fmt.Sprintf("%x", sum[:])}
 	health, err := NewClient().Health(context.Background(), config)
-	if err != nil || health.WorkerID != "remote-1" || health.ProtocolVersion != 2 || !health.Capabilities["workspaceSync"] {
+	if err != nil || health.WorkerID != "remote-1" || health.ProtocolVersion != 3 || !health.Capabilities["workspaceSync"] {
 		t.Fatalf("health = %+v, %v", health, err)
 	}
 	config.ServerCertificateSHA256 = strings.Repeat("0", 64)
 	if _, err := NewClient().Health(context.Background(), config); err == nil || !strings.Contains(err.Error(), "paired fingerprint") {
 		t.Fatalf("wrong certificate pin error = %v", err)
+	}
+}
+
+func TestPairingReturnsTokenAndPinsTLSCertificateOnce(t *testing.T) {
+	service := NewServer("remote-1", "Remote", "secret", nil, fakeEngine{}, 1)
+	service.EnablePairing("ABCD-2345", time.Now().Add(time.Minute), false)
+	server := httptest.NewTLSServer(service.Handler())
+	defer server.Close()
+
+	client := NewClient()
+	paired, err := client.Pair(context.Background(), server.URL, "ABCD-2345")
+	if err != nil || paired.WorkerID != "remote-1" || paired.Token != "secret" || len(paired.ServerCertificateSHA256) != 64 {
+		t.Fatalf("paired = %+v, %v", paired, err)
+	}
+	health, err := client.Health(context.Background(), Config{
+		BaseURL: server.URL, Token: paired.Token, ServerCertificateSHA256: paired.ServerCertificateSHA256,
+	})
+	if err != nil || health.WorkerID != "remote-1" || !health.Capabilities["pairing"] {
+		t.Fatalf("paired health = %+v, %v", health, err)
+	}
+	if _, err := client.Pair(context.Background(), server.URL, "ABCD-2345"); err == nil || !strings.Contains(err.Error(), "worker_pairing_invalid") {
+		t.Fatalf("reused pairing code error = %v", err)
+	}
+}
+
+func TestPairingRejectsPlainHTTPUnlessExplicitlyAllowed(t *testing.T) {
+	service := NewServer("remote-1", "Remote", "secret", nil, fakeEngine{}, 1)
+	service.EnablePairing("ABCD-2345", time.Now().Add(time.Minute), false)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+	if _, err := NewClient().Pair(context.Background(), server.URL, "ABCD-2345"); err == nil || !strings.Contains(err.Error(), "worker_pairing_requires_tls") {
+		t.Fatalf("plain HTTP pairing error = %v", err)
 	}
 }
 
@@ -180,38 +212,6 @@ func TestServerEnforcesRunTimeout(t *testing.T) {
 	}
 	if elapsed := time.Since(startedAt); elapsed > 3*time.Second {
 		t.Fatalf("timeout took %s", elapsed)
-	}
-}
-
-func TestClientFallsBackToPreviousExecuteShape(t *testing.T) {
-	attempts := 0
-	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		attempts++
-		var input legacyExecuteRequest
-		decoder := json.NewDecoder(request.Body)
-		decoder.DisallowUnknownFields()
-		if err := decoder.Decode(&input); err != nil {
-			writeError(writer, http.StatusBadRequest, "worker_invalid_request", "invalid execute request")
-			return
-		}
-		if input.RunID != "run-legacy" || input.WorkspaceID != "project" {
-			t.Errorf("legacy request = %+v", input)
-		}
-		writer.Header().Set("Content-Type", "application/x-ndjson")
-		_ = json.NewEncoder(writer).Encode(Frame{Result: &agentrun.Result{Succeeded: true, FinalMessage: "legacy done"}})
-	}))
-	defer server.Close()
-
-	result, err := NewClient().Execute(context.Background(), Config{BaseURL: server.URL, Token: "secret"}, ExecuteRequest{
-		RunID: "run-legacy", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex,
-		Sandbox: agentrun.SandboxReadOnly, Prompt: "review", TimeoutSeconds: 60,
-		EnvironmentAllowlist: []string{"TOKEN"},
-	}, nil)
-	if err != nil || !result.Succeeded || result.FinalMessage != "legacy done" {
-		t.Fatalf("fallback result = %+v, %v", result, err)
-	}
-	if attempts != 2 {
-		t.Fatalf("attempts = %d, want 2", attempts)
 	}
 }
 

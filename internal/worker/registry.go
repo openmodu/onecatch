@@ -116,6 +116,15 @@ func (r *Registry) Save(ctx context.Context, input Input) (Info, error) {
 	return publicInfo(config), nil
 }
 
+func (r *Registry) Update(ctx context.Context, input UpdateInput) (Info, error) {
+	return r.Save(ctx, Input{
+		ID: input.ID, Name: input.Name, BaseURL: input.BaseURL,
+		CAFile: input.CAFile, ClientCertFile: input.ClientCertFile, ClientKeyFile: input.ClientKeyFile,
+		ServerName: input.ServerName, ServerCertificateSHA256: input.ServerCertificateSHA256,
+		Enabled: input.Enabled,
+	})
+}
+
 func (r *Registry) Delete(ctx context.Context, id string) error {
 	if err := ctx.Err(); err != nil {
 		return err

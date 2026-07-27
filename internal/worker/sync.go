@@ -13,8 +13,8 @@ import (
 
 const maxPatchBytes = 24 * 1024 * 1024
 
-// WorkspaceBaseline verifies that the coordinator worktree can safely receive
-// a remote patch and returns the exact commit both machines must share.
+// WorkspaceBaseline verifies that the coordinator worktree can be mirrored to
+// a remote worker and returns the exact commit both machines must share.
 func WorkspaceBaseline(ctx context.Context, workspace string) (string, error) {
 	head, remoteErr := cleanGitHead(ctx, workspace)
 	if remoteErr != nil {
@@ -37,7 +37,7 @@ func validateWorkspaceBaseline(ctx context.Context, workspace, expected string) 
 func cleanGitHead(ctx context.Context, workspace string) (string, *RemoteError) {
 	head, err := gitOutput(ctx, workspace, "rev-parse", "--verify", "HEAD")
 	if err != nil {
-		return "", &RemoteError{Code: "worker_workspace_git_required", Message: "writable remote runs require a Git worktree with an initial commit"}
+		return "", &RemoteError{Code: "worker_workspace_git_required", Message: "remote runs require a Git worktree with an initial commit"}
 	}
 	index, err := gitOutput(ctx, workspace, "ls-files", "--stage")
 	if err != nil {
@@ -45,7 +45,7 @@ func cleanGitHead(ctx context.Context, workspace string) (string, *RemoteError) 
 	}
 	for _, line := range bytes.Split(index, []byte{'\n'}) {
 		if bytes.HasPrefix(line, []byte("160000 ")) {
-			return "", &RemoteError{Code: "worker_workspace_submodules_unsupported", Message: "writable remote runs do not support repositories with Git submodules"}
+			return "", &RemoteError{Code: "worker_workspace_submodules_unsupported", Message: "remote runs do not support repositories with Git submodules"}
 		}
 	}
 	status, err := gitOutput(ctx, workspace, "status", "--porcelain=v1", "-z", "--untracked-files=all")
@@ -53,7 +53,7 @@ func cleanGitHead(ctx context.Context, workspace string) (string, *RemoteError) 
 		return "", &RemoteError{Code: "worker_workspace_git_failed", Message: "could not inspect workspace Git state"}
 	}
 	if len(status) != 0 {
-		return "", &RemoteError{Code: "worker_workspace_dirty", Message: "writable remote runs require a clean workspace on both machines"}
+		return "", &RemoteError{Code: "worker_workspace_dirty", Message: "remote runs require a clean workspace on both machines"}
 	}
 	return strings.TrimSpace(string(head)), nil
 }

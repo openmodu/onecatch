@@ -27,23 +27,10 @@ const maxFrameBytes = 34 * 1024 * 1024
 
 type Client struct{ http *http.Client }
 
-type legacyExecuteRequest struct {
-	RunID                 string           `json:"runId"`
-	WorkspaceID           string           `json:"workspaceId"`
-	Runtime               agentrun.Runtime `json:"runtime"`
-	Model                 string           `json:"model,omitempty"`
-	ReasoningEffort       string           `json:"reasoningEffort,omitempty"`
-	ServiceTier           string           `json:"serviceTier,omitempty"`
-	Sandbox               agentrun.Sandbox `json:"sandbox"`
-	Prompt                string           `json:"prompt"`
-	ResumeSessionID       string           `json:"resumeSessionId,omitempty"`
-	InterruptGraceSeconds int              `json:"interruptGraceSeconds,omitempty"`
-}
-
 const (
 	controlRequestTimeout = 15 * time.Second
 	streamShutdownGrace   = 2 * time.Minute
-	legacyRunTimeout      = 35 * time.Minute
+	defaultRunTimeout     = 35 * time.Minute
 )
 
 func NewClient() *Client { return &Client{http: &http.Client{}} }
@@ -54,6 +41,64 @@ func (c *Client) Health(ctx context.Context, config Config) (Health, error) {
 		return Health{}, err
 	}
 	return health, nil
+}
+
+// Pair exchanges a short-lived code for the worker's persistent bearer token.
+// For HTTPS, the certificate seen during this one-time exchange is returned as
+// a pin so every later request can authenticate that exact worker.
+func (c *Client) Pair(ctx context.Context, baseURL, code string) (PairResult, error) {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+		return PairResult{}, RemoteError{Code: "worker_pairing_invalid", Message: "worker URL must use http or https"}
+	}
+	payload, err := json.Marshal(PairRequest{Code: strings.TrimSpace(code)})
+	if err != nil {
+		return PairResult{}, err
+	}
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(parsed.String(), "/")+"/v1/pair", bytes.NewReader(payload))
+	if err != nil {
+		return PairResult{}, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	httpClient := &http.Client{Timeout: controlRequestTimeout}
+	fingerprint := ""
+	if parsed.Scheme == "https" {
+		tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12, InsecureSkipVerify: true} //nolint:gosec
+		tlsConfig.VerifyConnection = func(state tls.ConnectionState) error {
+			if len(state.PeerCertificates) == 0 {
+				return errors.New("worker supplied no TLS certificate")
+			}
+			certificate := state.PeerCertificates[0]
+			now := time.Now()
+			if now.Before(certificate.NotBefore) || now.After(certificate.NotAfter) {
+				return errors.New("worker TLS certificate is outside its validity period")
+			}
+			sum := sha256.Sum256(certificate.Raw)
+			fingerprint = fmt.Sprintf("%x", sum[:])
+			return nil
+		}
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		transport.TLSClientConfig = tlsConfig
+		transport.DisableKeepAlives = true
+		httpClient.Transport = transport
+	}
+	response, err := httpClient.Do(request)
+	if err != nil {
+		return PairResult{}, RemoteError{Code: "worker_unavailable", Message: err.Error()}
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return PairResult{}, decodeRemoteError(response)
+	}
+	var result PairResult
+	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&result); err != nil {
+		return PairResult{}, RemoteError{Code: "worker_pairing_invalid", Message: "worker returned an invalid pairing response"}
+	}
+	if result.WorkerID == "" || result.Token == "" {
+		return PairResult{}, RemoteError{Code: "worker_pairing_invalid", Message: "worker pairing response is incomplete"}
+	}
+	result.ServerCertificateSHA256 = fingerprint
+	return result, nil
 }
 
 // Execute runs a task on the worker and forwards each streamed event to sink as
@@ -76,7 +121,7 @@ func (c *Client) ExecuteWithPatch(ctx context.Context, config Config, input Exec
 	streamCtx := ctx
 	cancel := func() {}
 	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
-		timeout := legacyRunTimeout
+		timeout := defaultRunTimeout
 		if input.TimeoutSeconds > 0 {
 			timeout = time.Duration(input.TimeoutSeconds) * time.Second
 		}
@@ -90,31 +135,7 @@ func (c *Client) ExecuteWithPatch(ctx context.Context, config Config, input Exec
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		remoteErr := decodeRemoteError(response)
 		_ = response.Body.Close()
-		// The previous protocol rejected newly added fields because it decoded
-		// requests strictly. Retry the exact pre-extension shape only when the
-		// worker reports a decode failure; no execution has started at this point.
-		var remote RemoteError
-		if !input.SyncChanges && errors.As(remoteErr, &remote) && remote.Code == "worker_invalid_request" && remote.Message == "invalid execute request" {
-			legacyPayload, marshalErr := json.Marshal(legacyExecuteRequest{
-				RunID: input.RunID, WorkspaceID: input.WorkspaceID, Runtime: input.Runtime,
-				Model: input.Model, ReasoningEffort: input.ReasoningEffort, ServiceTier: input.ServiceTier,
-				Sandbox: input.Sandbox, Prompt: input.Prompt, ResumeSessionID: input.ResumeSessionID,
-				InterruptGraceSeconds: input.InterruptGraceSeconds,
-			})
-			if marshalErr != nil {
-				return agentrun.Result{}, nil, marshalErr
-			}
-			response, err = c.openExecute(streamCtx, config, legacyPayload)
-			if err != nil {
-				return agentrun.Result{}, nil, RemoteError{Code: "worker_unavailable", Message: err.Error()}
-			}
-			if response.StatusCode < 200 || response.StatusCode >= 300 {
-				defer response.Body.Close()
-				return agentrun.Result{}, nil, decodeRemoteError(response)
-			}
-		} else {
-			return agentrun.Result{}, nil, remoteErr
-		}
+		return agentrun.Result{}, nil, remoteErr
 	}
 	defer response.Body.Close()
 
@@ -170,6 +191,23 @@ func (c *Client) GitStatus(ctx context.Context, config Config, workspaceID strin
 		return domainworkspaces.GitSnapshot{}, err
 	}
 	return snapshot, nil
+}
+
+func (c *Client) ListWorkspaces(ctx context.Context, config Config) ([]WorkspaceMapping, error) {
+	var mappings []WorkspaceMapping
+	if err := c.do(ctx, config, http.MethodGet, "/v1/workspaces", nil, &mappings); err != nil {
+		return nil, err
+	}
+	return mappings, nil
+}
+
+func (c *Client) PrepareWorkspace(ctx context.Context, config Config, workspaceID string, input WorkspacePrepareRequest) (WorkspacePrepareResult, error) {
+	var result WorkspacePrepareResult
+	path := "/v1/workspaces/" + url.PathEscape(workspaceID)
+	if err := c.do(ctx, config, http.MethodPut, path, input, &result); err != nil {
+		return WorkspacePrepareResult{}, err
+	}
+	return result, nil
 }
 
 // Interrupt asks the worker to gracefully stop an in-flight run. A run that has

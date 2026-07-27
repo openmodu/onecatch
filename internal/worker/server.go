@@ -36,14 +36,17 @@ const defaultMaxConcurrency = 4
 var runIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
 type Server struct {
-	id         string
-	name       string
-	token      string
-	workspaces map[string]string
-	locks      map[string]*sync.RWMutex
-	engine     Engine
-	git        GitInspector
-	slots      chan struct{}
+	id                string
+	name              string
+	token             string
+	workspaces        map[string]string
+	workspacesMu      sync.RWMutex
+	workspaceRegistry *WorkspaceRegistry
+	locks             map[string]*sync.RWMutex
+	engine            Engine
+	git               GitInspector
+	slots             chan struct{}
+	pairing           *pairingState
 
 	mu       sync.Mutex
 	running  map[string]*runState
@@ -72,21 +75,52 @@ type pendingPatch struct {
 // endpoint reports the capability as unavailable.
 func (s *Server) SetGitInspector(git GitInspector) { s.git = git }
 
+// EnablePairing exposes a short-lived, one-time bootstrap endpoint. Pairing is
+// normally used over HTTPS; allowInsecure is only appropriate for explicitly
+// trusted loopback or private-network HTTP.
+func (s *Server) EnablePairing(code string, expiresAt time.Time, allowInsecure bool) {
+	s.pairing = newPairingState(code, expiresAt, allowInsecure)
+}
+
+func (s *Server) SetWorkspaceRegistry(ctx context.Context, registry *WorkspaceRegistry) error {
+	items, err := registry.List(ctx)
+	if err != nil {
+		return err
+	}
+	s.workspacesMu.Lock()
+	defer s.workspacesMu.Unlock()
+	s.workspaceRegistry = registry
+	for _, item := range items {
+		s.workspaces[item.ID] = item.Path
+		if s.locks[item.ID] == nil {
+			s.locks[item.ID] = &sync.RWMutex{}
+		}
+	}
+	for id, path := range s.workspaces {
+		if _, err := registry.Save(ctx, id, path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // NewServer builds a worker HTTP server. maxConcurrency <= 0 uses
 // defaultMaxConcurrency.
 func NewServer(id, name, token string, workspaces map[string]string, engine Engine, maxConcurrency int) *Server {
 	if maxConcurrency <= 0 {
 		maxConcurrency = defaultMaxConcurrency
 	}
+	mapped := make(map[string]string, len(workspaces))
 	locks := make(map[string]*sync.RWMutex, len(workspaces))
-	for workspaceID := range workspaces {
+	for workspaceID, path := range workspaces {
+		mapped[workspaceID] = path
 		locks[workspaceID] = &sync.RWMutex{}
 	}
 	return &Server{
 		id:         id,
 		name:       name,
 		token:      token,
-		workspaces: workspaces,
+		workspaces: mapped,
 		locks:      locks,
 		engine:     engine,
 		slots:      make(chan struct{}, maxConcurrency),
@@ -98,13 +132,39 @@ func NewServer(id, name, token string, workspaces map[string]string, engine Engi
 
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
+	mux.HandleFunc("POST /v1/pair", s.pair)
 	mux.HandleFunc("GET /v1/health", s.authorize(s.health))
 	mux.HandleFunc("POST /v1/execute", s.authorize(s.execute))
 	mux.HandleFunc("POST /v1/runs/{runID}/interrupt", s.authorize(s.interrupt))
 	mux.HandleFunc("POST /v1/runs/{runID}/permissions/{requestID}", s.authorize(s.respondPermission))
 	mux.HandleFunc("POST /v1/runs/{runID}/patch/ack", s.authorize(s.ackPatch))
+	mux.HandleFunc("GET /v1/workspaces", s.authorize(s.listWorkspaces))
+	mux.HandleFunc("PUT /v1/workspaces/{workspaceID}", s.authorize(s.prepareWorkspace))
 	mux.HandleFunc("GET /v1/workspaces/{workspaceID}/git", s.authorize(s.workspaceGit))
 	return mux
+}
+
+func (s *Server) pair(writer http.ResponseWriter, request *http.Request) {
+	if s.pairing == nil {
+		writeError(writer, http.StatusNotFound, "worker_pairing_unavailable", "worker pairing is not enabled")
+		return
+	}
+	if request.TLS == nil && !s.pairing.allowInsecure {
+		writeError(writer, http.StatusUpgradeRequired, "worker_pairing_requires_tls", "worker pairing requires HTTPS")
+		return
+	}
+	var input PairRequest
+	decoder := json.NewDecoder(io.LimitReader(request.Body, 1<<10))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil || !s.pairing.consume(input.Code, time.Now()) {
+		writeError(writer, http.StatusUnauthorized, "worker_pairing_invalid", "pairing code is invalid or expired")
+		return
+	}
+	health := s.healthValue()
+	writeJSON(writer, http.StatusOK, PairResult{
+		WorkerID: health.WorkerID, Name: health.Name, Token: s.token,
+		ProtocolVersion: health.ProtocolVersion, Runtimes: health.Runtimes, Capabilities: health.Capabilities,
+	})
 }
 
 func (s *Server) workspaceGit(writer http.ResponseWriter, request *http.Request) {
@@ -112,17 +172,95 @@ func (s *Server) workspaceGit(writer http.ResponseWriter, request *http.Request)
 		writeError(writer, http.StatusNotImplemented, "worker_git_unsupported", "git inspection is not enabled on this worker")
 		return
 	}
-	workspace, ok := s.workspaces[request.PathValue("workspaceID")]
+	workspace, workspaceLock, ok := s.workspaceState(request.PathValue("workspaceID"))
 	if !ok {
 		writeError(writer, http.StatusConflict, "worker_workspace_unmapped", "workspace is not mapped on this worker")
 		return
 	}
+	workspaceLock.RLock()
+	defer workspaceLock.RUnlock()
 	snapshot, err := s.git.Inspect(request.Context(), workspace)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "worker_git_failed", "git inspection failed")
 		return
 	}
 	writeJSON(writer, http.StatusOK, snapshot)
+}
+
+func (s *Server) listWorkspaces(writer http.ResponseWriter, request *http.Request) {
+	s.workspacesMu.RLock()
+	items := make([]WorkspaceMapping, 0, len(s.workspaces))
+	for id, path := range s.workspaces {
+		items = append(items, WorkspaceMapping{ID: id, Path: path})
+	}
+	s.workspacesMu.RUnlock()
+	writeJSON(writer, http.StatusOK, items)
+}
+
+func (s *Server) prepareWorkspace(writer http.ResponseWriter, request *http.Request) {
+	if s.workspaceRegistry == nil {
+		writeError(writer, http.StatusNotImplemented, "worker_workspace_management_unsupported", "persistent workspace management is not enabled on this worker")
+		return
+	}
+	workspaceID := request.PathValue("workspaceID")
+	if !runIDPattern.MatchString(workspaceID) {
+		writeError(writer, http.StatusBadRequest, "worker_workspace_prepare_invalid", "workspace id is invalid")
+		return
+	}
+	workspaceLock := s.ensureWorkspaceLock(workspaceID)
+	workspaceLock.Lock()
+	defer workspaceLock.Unlock()
+	var input WorkspacePrepareRequest
+	decoder := json.NewDecoder(io.LimitReader(request.Body, 1<<20))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&input); err != nil {
+		writeError(writer, http.StatusBadRequest, "worker_workspace_prepare_invalid", "invalid workspace preparation request")
+		return
+	}
+	workspacePath, _, mapped := s.workspaceState(workspaceID)
+	if !mapped {
+		workspacePath = s.workspaceRegistry.DefaultPath(workspaceID)
+	}
+	if remoteErr := prepareGitWorkspace(request.Context(), workspacePath, input.RemoteURL, input.Revision); remoteErr != nil {
+		writeError(writer, http.StatusConflict, remoteErr.Code, remoteErr.Message)
+		return
+	}
+	mapping, err := s.workspaceRegistry.Save(request.Context(), workspaceID, workspacePath)
+	if err != nil {
+		writeError(writer, http.StatusInternalServerError, "worker_workspace_persist_failed", "could not persist the workspace mapping")
+		return
+	}
+	s.workspacesMu.Lock()
+	s.workspaces[workspaceID] = mapping.Path
+	if s.locks[workspaceID] == nil {
+		s.locks[workspaceID] = &sync.RWMutex{}
+	}
+	s.workspacesMu.Unlock()
+	var snapshot domainworkspaces.GitSnapshot
+	if s.git != nil {
+		snapshot, err = s.git.Inspect(request.Context(), mapping.Path)
+		if err != nil {
+			writeError(writer, http.StatusInternalServerError, "worker_git_failed", "git inspection failed after preparing the workspace")
+			return
+		}
+	}
+	writeJSON(writer, http.StatusOK, WorkspacePrepareResult{Mapping: mapping, Git: snapshot})
+}
+
+func (s *Server) workspaceState(id string) (string, *sync.RWMutex, bool) {
+	s.workspacesMu.RLock()
+	defer s.workspacesMu.RUnlock()
+	path, ok := s.workspaces[id]
+	return path, s.locks[id], ok
+}
+
+func (s *Server) ensureWorkspaceLock(id string) *sync.RWMutex {
+	s.workspacesMu.Lock()
+	defer s.workspacesMu.Unlock()
+	if s.locks[id] == nil {
+		s.locks[id] = &sync.RWMutex{}
+	}
+	return s.locks[id]
 }
 
 func (s *Server) authorize(next http.HandlerFunc) http.HandlerFunc {
@@ -137,11 +275,15 @@ func (s *Server) authorize(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
-	writeJSON(writer, http.StatusOK, Health{
-		WorkerID: s.id, Name: s.name, ProtocolVersion: 2,
+	writeJSON(writer, http.StatusOK, s.healthValue())
+}
+
+func (s *Server) healthValue() Health {
+	return Health{
+		WorkerID: s.id, Name: s.name, ProtocolVersion: 3,
 		Runtimes:     map[string]bool{"codex": s.engine.Available(agentrun.RuntimeCodex), "claude": s.engine.Available(agentrun.RuntimeClaude), "modu": s.engine.Available(agentrun.RuntimeModu)},
-		Capabilities: map[string]bool{"interactivePermissions": true, "workspaceSync": true},
-	})
+		Capabilities: map[string]bool{"interactivePermissions": true, "workspaceSync": true, "workspaceManagement": s.workspaceRegistry != nil, "pairing": s.pairing != nil},
+	}
 }
 
 // execute streams the run as NDJSON: one Frame per line. Pre-flight failures
@@ -161,7 +303,7 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 		writeError(writer, http.StatusBadRequest, "worker_invalid_request", "run id is missing or malformed")
 		return
 	}
-	workspace, ok := s.workspaces[input.WorkspaceID]
+	workspace, workspaceLock, ok := s.workspaceState(input.WorkspaceID)
 	if !ok {
 		writeError(writer, http.StatusConflict, "worker_workspace_unmapped", "workspace is not mapped on this worker")
 		return
@@ -206,10 +348,15 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 	}
 	defer s.untrack(input.RunID)
 
-	workspaceLock := s.locks[input.WorkspaceID]
 	if input.Sandbox == agentrun.SandboxReadOnly {
 		workspaceLock.RLock()
 		defer workspaceLock.RUnlock()
+		if input.BaseRevision != "" {
+			if err := validateWorkspaceBaseline(request.Context(), workspace, input.BaseRevision); err != nil {
+				writeError(writer, http.StatusConflict, err.Code, err.Message)
+				return
+			}
+		}
 	} else {
 		workspaceLock.Lock()
 		defer workspaceLock.Unlock()
@@ -316,7 +463,11 @@ func (s *Server) ackPatch(writer http.ResponseWriter, request *http.Request) {
 		writeError(writer, http.StatusNotFound, "worker_patch_not_found", "no matching patch is awaiting acknowledgement")
 		return
 	}
-	lock := s.locks[pending.workspaceID]
+	_, lock, ok := s.workspaceState(pending.workspaceID)
+	if !ok {
+		writeError(writer, http.StatusConflict, "worker_workspace_unmapped", "workspace is not mapped on this worker")
+		return
+	}
 	lock.Lock()
 	defer lock.Unlock()
 	current, err := buildWorkspacePatch(request.Context(), pending.workspace, pending.patch.BaseRevision)
