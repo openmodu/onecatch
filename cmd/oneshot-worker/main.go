@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
@@ -20,46 +22,28 @@ import (
 	"github.com/openmodu/oneshot/internal/agentrun"
 	"github.com/openmodu/oneshot/internal/gitinspect"
 	"github.com/openmodu/oneshot/internal/worker"
+	"github.com/openmodu/oneshot/internal/workerdaemon"
 )
 
-type workspaceFlags map[string]string
-
-func (f workspaceFlags) String() string { return fmt.Sprintf("%v", map[string]string(f)) }
-func (f workspaceFlags) Set(value string) error {
-	parts := strings.SplitN(value, "=", 2)
-	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return fmt.Errorf("workspace must be id=/absolute/path")
-	}
-	f[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-	return nil
-}
-
 func main() {
-	workspaces := workspaceFlags{}
 	listen := flag.String("listen", "127.0.0.1:9231", "listen address")
 	id := flag.String("id", "worker", "stable worker ID")
 	name := flag.String("name", "Oneshot Worker", "worker display name")
-	token := flag.String("token", "", "shared bearer token (prefer --token-env)")
-	tokenEnv := flag.String("token-env", "ONESHOT_WORKER_TOKEN", "environment variable containing the token")
 	codex := flag.String("codex-binary", "", "Codex binary override")
 	claude := flag.String("claude-binary", "", "Claude binary override")
 	modu := flag.String("modu-binary", "", "Modu Code binary override")
 	maxConcurrency := flag.Int("max-concurrency", 4, "maximum simultaneous runs (<=0 uses the default)")
+	dataDir := flag.String("data-dir", "~/.oneshot-worker", "persistent worker state directory")
+	pair := flag.Bool("pair", false, "print a one-time desktop pairing code valid for 10 minutes")
+	installService := flag.Bool("install-service", false, "install and start a per-user launchd or systemd service")
 	tlsCert := flag.String("tls-cert", "", "PEM server certificate for HTTPS")
 	tlsKey := flag.String("tls-key", "", "PEM server private key for HTTPS")
 	clientCA := flag.String("client-ca", "", "PEM CA used to require and verify mTLS client certificates")
 	allowInsecureHTTP := flag.Bool("allow-insecure-http", false, "allow plain HTTP on a non-loopback listen address")
-	flag.Var(workspaces, "workspace", "workspace mapping id=/absolute/path (repeatable)")
 	flag.Parse()
-	secret := strings.TrimSpace(*token)
-	if secret == "" {
-		secret = strings.TrimSpace(os.Getenv(*tokenEnv))
-	}
-	if secret == "" {
-		log.Fatal("worker token is required")
-	}
-	if len(workspaces) == 0 {
-		log.Fatal("at least one --workspace mapping is required")
+	stateRoot, err := expandWorkerPath(*dataDir)
+	if err != nil {
+		log.Fatalf("resolve worker data directory: %v", err)
 	}
 	if (*tlsCert == "") != (*tlsKey == "") {
 		log.Fatal("--tls-cert and --tls-key must be configured together")
@@ -70,20 +54,56 @@ func main() {
 	if *tlsCert == "" && !*allowInsecureHTTP && !loopbackListenAddress(*listen) {
 		log.Fatal("plain HTTP is restricted to loopback; configure TLS or explicitly pass --allow-insecure-http")
 	}
-	for workspaceID, path := range workspaces {
-		absolute, err := filepath.Abs(path)
+	if *installService {
+		if *pair {
+			if err := requestServicePairing(stateRoot); err != nil {
+				log.Fatalf("request service pairing: %v", err)
+			}
+		}
+		binary, err := os.Executable()
 		if err != nil {
-			log.Fatalf("resolve workspace %s: %v", workspaceID, err)
+			log.Fatalf("resolve worker binary: %v", err)
 		}
-		info, err := os.Stat(absolute)
-		if err != nil || !info.IsDir() {
-			log.Fatalf("workspace %s is not an existing directory", workspaceID)
+		binary, err = filepath.Abs(binary)
+		if err != nil {
+			log.Fatalf("resolve worker binary: %v", err)
 		}
-		workspaces[workspaceID] = absolute
+		result, err := workerdaemon.Install(context.Background(), workerdaemon.Config{
+			Binary: binary, Listen: *listen, ID: *id, Name: *name, DataDir: stateRoot,
+			TLSCert: *tlsCert, TLSKey: *tlsKey, ClientCA: *clientCA,
+			CodexBinary: *codex, ClaudeBinary: *claude, ModuBinary: *modu,
+			MaxConcurrency: *maxConcurrency, AllowInsecureHTTP: *allowInsecureHTTP,
+			PathEnvironment: os.Getenv("PATH"),
+		})
+		if err != nil {
+			log.Fatalf("install worker service: %v", err)
+		}
+		log.Printf("worker service installed: %s", result.ServiceFile)
+		log.Printf("follow the startup log for the pairing code: %s", result.LogHint)
+		return
+	}
+	secret, tokenCreated, err := loadOrCreateWorkerToken(stateRoot)
+	if err != nil {
+		log.Fatalf("load worker token: %v", err)
+	}
+	pairRequested, err := consumeServicePairingRequest(stateRoot)
+	if err != nil {
+		log.Fatalf("load service pairing request: %v", err)
 	}
 	engine := agentrun.NewEngine(agentrun.Config{CodexBinary: *codex, ClaudeBinary: *claude, ModuBinary: *modu})
-	service := worker.NewServer(*id, *name, secret, workspaces, engine, *maxConcurrency)
+	service := worker.NewServer(*id, *name, secret, nil, engine, *maxConcurrency)
+	if err := service.SetWorkspaceRegistry(context.Background(), worker.NewWorkspaceRegistry(filepath.Join(stateRoot, "workspaces.json"))); err != nil {
+		log.Fatalf("load worker workspace mappings: %v", err)
+	}
 	service.SetGitInspector(gitinspect.New(""))
+	if *pair || pairRequested || tokenCreated {
+		code, err := newPairingCode()
+		if err != nil {
+			log.Fatalf("create pairing code: %v", err)
+		}
+		service.EnablePairing(code, time.Now().Add(10*time.Minute), *tlsCert == "" && (*allowInsecureHTTP || loopbackListenAddress(*listen)))
+		log.Printf("desktop pairing code: %s (valid for 10 minutes, one use)", code)
+	}
 	runCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	server := &http.Server{
@@ -138,6 +158,99 @@ func main() {
 			log.Printf("worker shutdown: %v", err)
 		}
 	}
+}
+
+func requestServicePairing(stateRoot string) error {
+	if err := os.MkdirAll(stateRoot, 0o700); err != nil {
+		return err
+	}
+	path := filepath.Join(stateRoot, "pair-once")
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	if err != nil {
+		return err
+	}
+	return file.Close()
+}
+
+func consumeServicePairingRequest(stateRoot string) (bool, error) {
+	path := filepath.Join(stateRoot, "pair-once")
+	if err := os.Remove(path); os.IsNotExist(err) {
+		return false, nil
+	} else if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func loadOrCreateWorkerToken(stateRoot string) (string, bool, error) {
+	if err := os.MkdirAll(stateRoot, 0o700); err != nil {
+		return "", false, err
+	}
+	path := filepath.Join(stateRoot, "token")
+	value, err := os.ReadFile(path)
+	if err == nil {
+		token := strings.TrimSpace(string(value))
+		if token == "" {
+			return "", false, fmt.Errorf("%s is empty", path)
+		}
+		if err := os.Chmod(path, 0o600); err != nil {
+			return "", false, err
+		}
+		return token, false, nil
+	}
+	if !os.IsNotExist(err) {
+		return "", false, err
+	}
+	buffer := make([]byte, 32)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", false, err
+	}
+	token := hex.EncodeToString(buffer)
+	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if os.IsExist(err) {
+		return loadOrCreateWorkerToken(stateRoot)
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := file.WriteString(token + "\n"); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return "", false, err
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return "", false, err
+	}
+	return token, true, nil
+}
+
+func newPairingCode() (string, error) {
+	const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+	buffer := make([]byte, 8)
+	if _, err := rand.Read(buffer); err != nil {
+		return "", err
+	}
+	for index := range buffer {
+		buffer[index] = alphabet[int(buffer[index])%len(alphabet)]
+	}
+	return string(buffer[:4]) + "-" + string(buffer[4:]), nil
+}
+
+func expandWorkerPath(value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if value == "~" || strings.HasPrefix(value, "~/") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		if value == "~" {
+			value = home
+		} else {
+			value = filepath.Join(home, strings.TrimPrefix(value, "~/"))
+		}
+	}
+	return filepath.Abs(value)
 }
 
 func loopbackListenAddress(address string) bool {

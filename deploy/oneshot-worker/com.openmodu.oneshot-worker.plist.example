@@ -13,18 +13,13 @@
     <string>mac-mini</string>
     <string>--name</string>
     <string>Build Mac mini</string>
-    <string>--workspace</string>
-    <string>workspace-id=/Users/worker/Code/project</string>
+    <string>--data-dir</string>
+    <string>/Users/worker/.oneshot-worker</string>
     <string>--tls-cert</string>
     <string>/Users/worker/.config/oneshot-worker/server.pem</string>
     <string>--tls-key</string>
     <string>/Users/worker/.config/oneshot-worker/server-key.pem</string>
   </array>
-  <key>EnvironmentVariables</key>
-  <dict>
-    <key>ONESHOT_WORKER_TOKEN</key>
-    <string>replace-with-a-random-token</string>
-  </dict>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>

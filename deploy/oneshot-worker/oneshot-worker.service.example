@@ -7,14 +7,15 @@ Wants=network-online.target
 Type=simple
 User=oneshot
 Group=oneshot
-EnvironmentFile=/etc/oneshot-worker.env
 ExecStart=/usr/local/bin/oneshot-worker \
   --listen 0.0.0.0:9231 \
   --id linux-builder \
   --name "Linux builder" \
-  --workspace workspace-id=/srv/project \
+  --data-dir /var/lib/oneshot-worker \
   --tls-cert /etc/oneshot-worker/server.pem \
   --tls-key /etc/oneshot-worker/server-key.pem
+StateDirectory=oneshot-worker
+StateDirectoryMode=0700
 Restart=on-failure
 RestartSec=5s
 TimeoutStopSec=35s
