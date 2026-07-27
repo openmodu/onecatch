@@ -1310,6 +1310,20 @@ export class WorkerStatus {
              */
             this["health"] = (new worker$0.Health());
         }
+        if (!("checkedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["checkedAt"] = "0001-01-01T00:00:00.000Z";
+        }
+        if (!("latencyMilliseconds" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["latencyMilliseconds"] = 0;
+        }
 
         Object.assign(this, $$source);
     }
@@ -1330,6 +1344,60 @@ export class WorkerStatus {
             $$parsedSource["health"] = $$createField1_0($$parsedSource["health"]);
         }
         return new WorkerStatus(/** @type {Partial<WorkerStatus>} */($$parsedSource));
+    }
+}
+
+export class WorkerWorkspaceSetup {
+    /**
+     * Creates a new WorkerWorkspaceSetup instance.
+     * @param {Partial<WorkerWorkspaceSetup>} [$$source = {}] - The source object to create the WorkerWorkspaceSetup.
+     */
+    constructor($$source = {}) {
+        if (!("mapping" in $$source)) {
+            /**
+             * @member
+             * @type {worker$0.WorkspaceMapping}
+             */
+            this["mapping"] = (new worker$0.WorkspaceMapping());
+        }
+        if (!("local" in $$source)) {
+            /**
+             * @member
+             * @type {workspaces$0.GitSnapshot}
+             */
+            this["local"] = (new workspaces$0.GitSnapshot());
+        }
+        if (!("remote" in $$source)) {
+            /**
+             * @member
+             * @type {workspaces$0.GitSnapshot}
+             */
+            this["remote"] = (new workspaces$0.GitSnapshot());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkerWorkspaceSetup instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WorkerWorkspaceSetup}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType25;
+        const $$createField1_0 = $$createType26;
+        const $$createField2_0 = $$createType26;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("mapping" in $$parsedSource) {
+            $$parsedSource["mapping"] = $$createField0_0($$parsedSource["mapping"]);
+        }
+        if ("local" in $$parsedSource) {
+            $$parsedSource["local"] = $$createField1_0($$parsedSource["local"]);
+        }
+        if ("remote" in $$parsedSource) {
+            $$parsedSource["remote"] = $$createField2_0($$parsedSource["remote"]);
+        }
+        return new WorkerWorkspaceSetup(/** @type {Partial<WorkerWorkspaceSetup>} */($$parsedSource));
     }
 }
 
@@ -1427,7 +1495,7 @@ export class WorkspaceStatus {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType3;
-        const $$createField1_0 = $$createType25;
+        const $$createField1_0 = $$createType26;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -1465,4 +1533,5 @@ const $$createType21 = TaskSearchItem.createFrom;
 const $$createType22 = $Create.Array($$createType21);
 const $$createType23 = worker$0.Info.createFrom;
 const $$createType24 = worker$0.Health.createFrom;
-const $$createType25 = workspaces$0.GitSnapshot.createFrom;
+const $$createType25 = worker$0.WorkspaceMapping.createFrom;
+const $$createType26 = workspaces$0.GitSnapshot.createFrom;

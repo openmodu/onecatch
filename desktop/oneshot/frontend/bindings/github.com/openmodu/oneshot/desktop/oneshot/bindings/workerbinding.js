@@ -44,11 +44,33 @@ export function ListWorkers() {
 }
 
 /**
- * @param {worker$0.Input} input
+ * @param {string} baseURL
+ * @param {string} code
  * @returns {$CancellablePromise<worker$0.Info>}
  */
-export function SaveWorker(input) {
-    return $Call.ByID(595776057, input).then(/** @type {($result: any) => any} */(($result) => {
+export function PairWorker(baseURL, code) {
+    return $Call.ByID(3481626968, baseURL, code).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * @param {string} id
+ * @param {string} workspaceID
+ * @returns {$CancellablePromise<localapp$0.WorkerWorkspaceSetup>}
+ */
+export function PrepareWorkerWorkspace(id, workspaceID) {
+    return $Call.ByID(4061358492, id, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
+}
+
+/**
+ * @param {worker$0.UpdateInput} input
+ * @returns {$CancellablePromise<worker$0.Info>}
+ */
+export function UpdateWorker(input) {
+    return $Call.ByID(3719355773, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -60,7 +82,7 @@ export function SaveWorker(input) {
  */
 export function WorkerGitStatus(id, workspaceID) {
     return $Call.ByID(2243598250, id, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType4($result);
     }));
 }
 
@@ -68,4 +90,5 @@ export function WorkerGitStatus(id, workspaceID) {
 const $$createType0 = localapp$0.WorkerStatus.createFrom;
 const $$createType1 = worker$0.Info.createFrom;
 const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = workspaces$0.GitSnapshot.createFrom;
+const $$createType3 = localapp$0.WorkerWorkspaceSetup.createFrom;
+const $$createType4 = workspaces$0.GitSnapshot.createFrom;

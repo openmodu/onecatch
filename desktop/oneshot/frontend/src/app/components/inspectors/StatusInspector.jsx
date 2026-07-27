@@ -72,6 +72,6 @@ export default function StatusInspector({ detail, queuedTask, queuePosition, not
       {sessions.map((session) => <div className="inspector-session" key={session.stepID}><div className="inspector-session-head"><span><strong>{session.runtime}</strong> · {session.stepName}</span><small>{session.idLabel}</small></div><code>{session.command || session.sessionID}</code><div className="inspector-session-action"><span>{session.command ? t("inspector.resumeTerminal") : t("inspector.copySession")}</span><Action tone={copiedStepID === session.stepID ? "cyan" : "muted"} onClick={() => copySession(session)}>{copiedStepID === session.stepID ? t("inspector.copied") : t("inspector.copy")}</Action></div></div>)}
       {!sessions.length && <p>{t("inspector.noSessions")}</p>}
     </section>
-    {(run.pauseReason || detail.lastError) && <section className="inspector-alert">{run.pauseReason && <p>{t("inspector.paused", { reason: t(`pauseReason.${run.pauseReason}`, { defaultValue: run.pauseReason }) })}</p>}{detail.lastError && <p>{detail.lastError}</p>}</section>}
+    {(run.pauseReason || detail.lastError) && <section className="inspector-alert">{run.pauseReason && <p>{t("inspector.paused", { reason: t(`pauseReason.${run.pauseReason}`, { defaultValue: run.pauseReason }) })}</p>}{detail.lastError && <p>{errorMessage(detail.lastError)}</p>}</section>}
   </div>;
 }

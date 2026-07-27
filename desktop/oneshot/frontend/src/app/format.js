@@ -10,7 +10,11 @@ export function formatTime(value) {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
-export function errorMessage(error) { return String(error?.message || error || i18n.t("common.unknownError")).replace(/^Error:\s*/, ""); }
+export function errorMessage(error) {
+  const message = String(error?.message || error || i18n.t("common.unknownError")).replace(/^Error:\s*/, "");
+  const code = message.match(/^([a-z][a-z0-9_]+):/)?.[1];
+  return code && i18n.exists(`error.${code}`) ? i18n.t(`error.${code}`) : message;
+}
 
 export function formatDuration(value = 0) {
   const milliseconds = Math.max(0, Number(value) || 0);

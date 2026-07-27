@@ -29,6 +29,7 @@ export {
     TaskSearchItem,
     TaskSearchPage,
     WorkerStatus,
+    WorkerWorkspaceSetup,
     WorkflowEventView,
     WorkspaceStatus
 } from "./models.js";

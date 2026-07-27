@@ -175,10 +175,10 @@ export class Info {
     }
 }
 
-export class Input {
+export class UpdateInput {
     /**
-     * Creates a new Input instance.
-     * @param {Partial<Input>} [$$source = {}] - The source object to create the Input.
+     * Creates a new UpdateInput instance.
+     * @param {Partial<UpdateInput>} [$$source = {}] - The source object to create the UpdateInput.
      */
     constructor($$source = {}) {
         if (!("id" in $$source)) {
@@ -201,13 +201,6 @@ export class Input {
              * @type {string}
              */
             this["baseUrl"] = "";
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {string | undefined}
-             */
-            this["token"] = undefined;
         }
         if (/** @type {any} */(false)) {
             /**
@@ -256,13 +249,62 @@ export class Input {
     }
 
     /**
-     * Creates a new Input instance from a string or object.
+     * Creates a new UpdateInput instance from a string or object.
      * @param {any} [$$source = {}]
-     * @returns {Input}
+     * @returns {UpdateInput}
      */
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        return new Input(/** @type {Partial<Input>} */($$parsedSource));
+        return new UpdateInput(/** @type {Partial<UpdateInput>} */($$parsedSource));
+    }
+}
+
+export class WorkspaceMapping {
+    /**
+     * Creates a new WorkspaceMapping instance.
+     * @param {Partial<WorkspaceMapping>} [$$source = {}] - The source object to create the WorkspaceMapping.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["createdAt"] = "0001-01-01T00:00:00.000Z";
+        }
+        if (!("updatedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["updatedAt"] = "0001-01-01T00:00:00.000Z";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceMapping instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WorkspaceMapping}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkspaceMapping(/** @type {Partial<WorkspaceMapping>} */($$parsedSource));
     }
 }
 

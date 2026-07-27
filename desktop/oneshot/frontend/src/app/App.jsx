@@ -73,7 +73,7 @@ function App() {
   const [workers, setWorkers] = useState([]);
   const [workerHealth, setWorkerHealth] = useState({});
   const [workerModal, setWorkerModal] = useState(false);
-  const [workerForm, setWorkerForm] = useState({ id: "", name: "", baseUrl: "https://", token: "", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
+  const [workerForm, setWorkerForm] = useState({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
   const [settings, setSettings] = useState(demoSettings);
   const [appDialog, setAppDialog] = useState(null);
   const appDialogResolve = useRef(null);
@@ -481,21 +481,40 @@ function App() {
     }
   }, [mode, notify, requestConfirm, selectWorkspace, workspaceID, workspaces]);
 
-  const saveWorker = async () => {
+  const updateWorker = async () => {
     if (!workerForm.id.trim() || !workerForm.name.trim() || !workerForm.baseUrl.trim()) { notify("error", t("app.workerFieldsRequired")); return; }
     setBusy("worker");
     try {
-      if (mode === "demo") setWorkers((items) => [...items.filter((item) => item.id !== workerForm.id), { ...workerForm, hasToken: Boolean(workerForm.token) }]);
-      else { await WorkerBinding.SaveWorker(workerForm); setWorkers(await WorkerBinding.ListWorkers()); }
+      if (mode === "demo") setWorkers((items) => [...items.filter((item) => item.id !== workerForm.id), { ...workerForm, hasToken: true }]);
+      else { await WorkerBinding.UpdateWorker(workerForm); setWorkers(await WorkerBinding.ListWorkers()); }
       setWorkerModal(false); notify("success", t("app.workerSaved"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
+  const pairWorker = async (baseURL, code) => {
+    if (!baseURL.trim() || !code.trim()) { notify("error", t("app.workerPairingFieldsRequired")); return; }
+    setBusy("worker-pair");
+    try {
+      if (mode === "demo") {
+        setWorkers((items) => [...items, { id: "paired-worker", name: "Paired Worker", baseUrl: baseURL, hasToken: true, enabled: true }]);
+      } else {
+        await WorkerBinding.PairWorker(baseURL, code);
+        setWorkers(await WorkerBinding.ListWorkers());
+      }
+      setWorkerModal(false);
+      notify("success", t("app.workerPaired"));
+    } catch (error) {
+      notify("error", t("app.workerPairingFailed", { error: errorMessage(error) }));
+    } finally {
+      setBusy("");
+    }
+  };
+
   const checkWorker = async (worker) => {
-    setWorkerHealth((current) => ({ ...current, [worker.id]: { checking: true } }));
+    setWorkerHealth((current) => ({ ...current, [worker.id]: { ...current[worker.id], checking: true } }));
     try {
       const status = mode === "demo" ? { health: { workerId: worker.id, name: worker.name, runtimes: { codex: true, claude: true, modu: true } } } : await WorkerBinding.CheckWorker(worker.id);
-      setWorkerHealth((current) => ({ ...current, [worker.id]: { ok: true, ...status.health } }));
+      setWorkerHealth((current) => ({ ...current, [worker.id]: { ok: true, checking: false, ...status.health, checkedAt: status.checkedAt, latencyMilliseconds: status.latencyMilliseconds } }));
     } catch (error) { setWorkerHealth((current) => ({ ...current, [worker.id]: { ok: false, error: errorMessage(error) } })); }
   };
 
@@ -862,13 +881,13 @@ function App() {
           onRename={openRenameTask}
           onDelete={deleteSelectedTask}
           notify={notify}
-        /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, token: "", caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", token: "", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} />}
+        /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
     </div>
     {workspaceModal && <Modal title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>{t("workspace.path")}<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>{t("workspace.displayName")}<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder={t("workspace.defaultName")} /></label><label>{t("workspace.defaultSandbox")}<TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} /></label><div className="modal-actions"><Action tone="muted" onClick={() => setWorkspaceModal(false)}>{t("common.cancel")}</Action><Action tone="primary" onClick={addWorkspace} disabled={busy === "workspace"}>{t("workspace.add")}</Action></div></div></Modal>}
     {taskModal && <Modal title={t("task.createTitle")} subtitle={t("task.createSubtitle")} onClose={() => setTaskModal(false)}><div className="form-stack task-create-form"><label>{t("task.name")}<input autoFocus value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.namePlaceholder")} /></label><label>{t("task.goal")}<textarea value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.goalPlaceholder")} /></label><label>{t("task.workflow")}<TUISelect ariaLabel={t("task.workflow")} value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><label>{t("task.executionMode")}<TUISelect ariaLabel={t("task.executionMode")} value={taskForm.executionMode} onChange={(executionMode) => setTaskForm((form) => ({ ...form, executionMode }))} options={[{ value: "immediate", label: t("task.runNow") }, { value: "queued", label: t("task.joinQueue") }]} /></label><div className="attachment-picker"><span>{t("task.attachmentsLimit")}</span><Action size="compact" onClick={() => chooseAttachments("task")}>+ {t("task.chooseFiles")}</Action>{taskForm.attachmentPaths?.map((path) => <div className="attachment-chip" key={path}><span title={path}>{fileName(path)}</span><Action size="compact" tone="danger" onClick={() => setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }))}>{t("common.remove")}</Action></div>)}</div><div className="modal-actions"><Action tone="muted" onClick={() => setTaskModal(false)}>{t("common.cancel")}</Action><Action tone="primary" onClick={createTaskAndRun} disabled={busy === "run" || !selectedWorkspace}>{busy === "run" ? t("task.creating") : taskForm.executionMode === "queued" ? t("task.joinQueue") : t("task.createAndRun")}</Action></div></div></Modal>}
     {renameForm && <Modal title={t("task.renameTitle")} subtitle={t("task.renameSubtitle")} onClose={() => busy !== "rename" && setRenameForm(null)}><div className="form-stack"><label>{t("task.name")}<input autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={(event) => { if (event.key === "Enter" && !event.nativeEvent.isComposing && busy !== "rename") renameSelectedTask(); }} /></label><div className="modal-actions"><Action tone="muted" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>{t("common.cancel")}</Action><Action tone="primary" disabled={busy === "rename" || !renameForm.title.trim()} onClick={renameSelectedTask}>{busy === "rename" ? t("common.saving") : t("task.saveName")}</Action></div></div></Modal>}
-    {workerModal && <WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onSave={saveWorker} />}
+    {workerModal && <WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} />}
     <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
     {locked && <LockScreen signal={lockSignal} workspaceName={selectedWorkspace?.name || ""} onExit={exitLock} />}

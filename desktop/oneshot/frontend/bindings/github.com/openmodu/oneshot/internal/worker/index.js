@@ -5,5 +5,6 @@
 export {
     Health,
     Info,
-    Input
+    UpdateInput,
+    WorkspaceMapping
 } from "./models.js";

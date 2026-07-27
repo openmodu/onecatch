@@ -19,6 +19,13 @@ export function assessWorkerWorkspace(local, remote) {
 export function classifyWorkerPreflightError(error) {
   const message = String(error?.message || error || "");
   if (message.includes("worker_workspace_unmapped")) return { code: "workspaceUnmapped", message: "" };
+  if (message.includes("worker_workspace_management_unsupported")) return { code: "workspaceManagementUnsupported", message: "" };
+  if (message.includes("worker_workspace_remote_missing")) return { code: "workspaceRemoteMissing", message: "" };
+  if (message.includes("worker_workspace_remote_mismatch")) return { code: "workspaceRemoteMismatch", message: "" };
+  if (message.includes("worker_workspace_dirty")) return { code: "remoteDirty", message: "" };
+  if (message.includes("worker_workspace_clone_failed")) return { code: "workspaceCloneFailed", message: "" };
+  if (message.includes("worker_workspace_fetch_failed")) return { code: "workspaceFetchFailed", message: "" };
+  if (message.includes("worker_workspace_revision_missing")) return { code: "workspaceRevisionMissing", message: "" };
   if (message.includes("worker_unavailable")) return { code: "workerUnavailable", message: "" };
   return { code: "error", message };
 }
@@ -27,19 +34,13 @@ function shellQuote(value) {
   return `'${String(value).replaceAll("'", "'\"'\"'")}'`;
 }
 
-export function defaultRemoteWorkspacePath(workspace) {
-  const name = String(workspace?.path || workspace?.name || "project").split(/[\\/]/).filter(Boolean).pop() || "project";
-  return `/absolute/path/to/${name}`;
-}
-
-export function buildWorkerCommand({ workspace, workerID, remotePath }) {
-  if (!workspace?.id) return "";
-  const mapping = `${workspace.id}=${remotePath || defaultRemoteWorkspacePath(workspace)}`;
+export function buildWorkerCommand({ workerID }) {
   return [
-    "ONESHOT_WORKER_TOKEN='<shared-token>' oneshot-worker \\",
+    "oneshot-worker \\",
+    "  --install-service \\",
     "  --listen 0.0.0.0:9231 \\",
     `  --id ${shellQuote(workerID || "mac-mini")} \\`,
-    `  --workspace ${shellQuote(mapping)} \\`,
+    "  --pair \\",
     "  --tls-cert '<server.pem>' \\",
     "  --tls-key '<server-key.pem>'",
   ].join("\n");
