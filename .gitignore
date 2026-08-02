@@ -1,9 +1,11 @@
 /design/prototype/node_modules/
 /design/prototype/dist/
 /design/prototype/.npm-cache/
-/desktop/oneshot/frontend/node_modules/
-/desktop/oneshot/frontend/.node_modules/
-/desktop/oneshot/bin/
-/desktop/oneshot/.task/
+/frontend/node_modules
+/frontend/.node_modules/
+/internal/desktop/assets/frontend/dist/*
+!/internal/desktop/assets/frontend/dist/.gitkeep
+/bin/
+/.task/
 .DS_Store
 .modu_code/

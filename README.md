@@ -6,29 +6,44 @@ Oneshot 是一个 local-first 的桌面 Agent 调度编排工具。用户可以�
 
 本地数据默认以 JSON/JSONL 文件保存在 `~/.oneshot/`，runtime 事件流位于 `~/.oneshot/runs/`。测试和开发可以显式覆盖数据根目录。
 
-## 目录
+## 工程结构
 
 ```text
-cmd/                    远端 Worker 进程入口
-clients/oneshot/        Oneshot HTTP SDK
-desktop/oneshot/        Wails v3 桌面端
-internal/domain/        领域对象和值对象
-internal/data/          数据连接和生命周期管理
-internal/repo/          业务数据封装
-internal/usecase/       领域业务组合
-internal/service/       上层应用组合
-internal/transport/     HTTP 适配层
-pkg/                    通用基础封装
+cmd/
+├── app/                Wails 桌面应用入口
+└── worker/             远端执行服务入口
+frontend/               React/Vite 前端、测试和生成的 Wails bindings
+internal/desktop/       桌面启动、平台适配、Wails bindings 和嵌入资源
+internal/app/workerapp/ Worker 服务启动与进程组装
+clients/oneshot/        Oneshot Go HTTP SDK
+internal/               仓库内共享的领域、用例和基础设施代码
+pkg/                    可被外部项目引用的通用 Go 包
+build/desktop/          Wails 配置、图标和 macOS 打包脚本
+deploy/                 Worker 的 launchd、systemd 部署模板
 design/                 PRD、issue、设计文档和 prototype
+tools/                  Go 工具依赖声明
 ```
 
-## 开发
+仓库只维护一个根 `go.mod`。`cmd` 只保留进程入口，不承载可复用业务逻辑；
+仓库内共享代码放进 `internal`，确实需要向仓库外暴露的包才放进 `pkg` 或
+`clients`。React/Vite 源码统一放在 `frontend`，构建产物写入
+`internal/desktop/assets/frontend/dist`，再由 Go 嵌入桌面二进制。
 
-运行桌面端：
+## 常用命令
+
+以下命令都从仓库根目录执行：
 
 ```bash
-cd desktop/oneshot
-wails3 dev -config ./build/config.yml
+wails3 task dev:desktop       # 启动 Wails 和 Vite 开发环境
+wails3 task build:desktop     # 构建桌面开发版本
+wails3 task build:worker      # 输出 bin/oneshot-worker
+wails3 task test              # 运行 Go 和前端测试
+```
+
+也可以直接调用底层命令：
+
+```bash
+wails3 dev -config ./build/desktop/config.yml
 ```
 
 ## 远端 Worker
@@ -51,7 +66,7 @@ chmod 600 ~/.config/oneshot-worker/server-key.pem
 构建并启动 Worker。首次启动会在 `~/.oneshot-worker/` 生成持久 Token，并打印一个 10 分钟内有效、只能使用一次的配对码：
 
 ```bash
-go build -o oneshot-worker ./cmd/oneshot-worker
+go build -o oneshot-worker ./cmd/worker
 ./oneshot-worker \
   --listen 0.0.0.0:9231 \
   --id mac-mini \
@@ -111,6 +126,6 @@ macOS `launchd` 和 Linux `systemd` 模板位于 [`deploy/oneshot-worker`](deplo
 检查：
 
 ```bash
-go test ./...
-cd desktop/oneshot && wails3 build DEV=true
+wails3 task test
+wails3 task build:desktop
 ```

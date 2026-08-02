@@ -1,0 +1,146 @@
+version: '3'
+
+vars:
+  APP_NAME: oneshot
+  BIN_DIR: bin
+  VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+
+tasks:
+  default:
+    silent: true
+    cmds:
+      - wails3 task -list
+
+  go:mod:tidy:
+    internal: true
+    cmds:
+      - go mod tidy
+
+  frontend:install:
+    internal: true
+    dir: frontend
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules
+    cmds:
+      - npm install
+
+  desktop:bindings:
+    internal: true
+    deps:
+      - task: go:mod:tidy
+    sources:
+      - cmd/app/**/*.go
+      - internal/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - frontend/bindings/**/*
+    cmds:
+      - wails3 generate bindings -d frontend/bindings -f '{{.BUILD_FLAGS}}' -clean=true ./cmd/app
+
+  frontend:build:
+    internal: true
+    dir: frontend
+    cmds:
+      - task: desktop:bindings
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+      - task: frontend:install
+      - npm run {{if eq .DEV "true"}}build:dev{{else}}build{{end}} -q
+
+  desktop:icons:
+    desc: Regenerate the macOS application icon
+    dir: build/desktop
+    sources:
+      - appicon-source.png
+      - render_appicon.swift
+      - appicon.icon/icon.json
+    generates:
+      - ../../internal/desktop/assets/appicon.png
+      - appicon.icon/Assets/oneshot_icon_final.png
+      - darwin/Assets.car
+      - darwin/icons.icns
+    cmds:
+      - swift render_appicon.swift appicon-source.png ../../internal/desktop/assets/appicon.png
+      - cp ../../internal/desktop/assets/appicon.png appicon.icon/Assets/oneshot_icon_final.png
+      - wails3 generate icons -iconcomposerinput appicon.icon -macassetdir darwin
+      - wails3 generate icons -input ../../internal/desktop/assets/appicon.png -macfilename darwin/icons.icns
+
+  build:
+    cmds:
+      - task: frontend:build
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          DEV:
+            ref: .DEV
+      - go build {{.BUILD_FLAGS}} -o '{{.OUTPUT}}' ./cmd/app
+    vars:
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
+      OUTPUT: '{{.OUTPUT | default (printf "%s/%s" .BIN_DIR .APP_NAME)}}'
+    env:
+      GOOS: darwin
+      CGO_ENABLED: 1
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+
+  dev:desktop:
+    desc: Start the Wails desktop app and Vite dev server
+    cmds:
+      - wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
+
+  build:desktop:
+    desc: Build the desktop app with development settings
+    cmds:
+      - wails3 build DEV=true
+
+  package:desktop:
+    desc: Build and package the macOS desktop app
+    cmds:
+      - task: build
+        vars:
+          DEV: 'false'
+      - task: build:worker:package
+      - ./build/desktop/darwin/package.sh
+
+  build:worker:
+    desc: Build the remote worker service
+    cmds:
+      - mkdir -p '{{.BIN_DIR}}'
+      - go build -o '{{.BIN_DIR}}/oneshot-worker' ./cmd/worker
+
+  build:worker:package:
+    internal: true
+    cmds:
+      - mkdir -p '{{.BIN_DIR}}'
+      - go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o '{{.BIN_DIR}}/oneshot-worker' ./cmd/worker
+    env:
+      GOOS: darwin
+      CGO_ENABLED: 1
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+
+  dev:frontend:
+    internal: true
+    dir: frontend
+    cmds:
+      - npm run dev -- --port {{.VITE_PORT}} --strictPort
+
+  test:go:
+    desc: Run all Go tests
+    cmds:
+      - go test ./...
+
+  test:frontend:
+    desc: Run desktop frontend tests
+    dir: frontend
+    cmds:
+      - npm test
+
+  test:
+    desc: Run the repository test suite
+    cmds:
+      - task: test:go
+      - task: test:frontend
