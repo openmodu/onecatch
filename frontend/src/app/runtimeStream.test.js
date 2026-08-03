@@ -44,6 +44,23 @@ test("ignores another run and deduplicates atomic events", () => {
   assert.equal(next.runtimeEvents.length, 1);
 });
 
+test("keeps correlated atomic tool results instead of treating their id as a stream", () => {
+  const current = {
+    run: { id: "run-1" },
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 5, kind: "tool_use", streamId: "call-1", revision: 0, streaming: false, text: "git status" },
+    ],
+  };
+  const result = { runId: "run-1", stepRunId: "step-1", seq: 6, kind: "tool_result", streamId: "call-1", text: "clean" };
+  const next = applyRuntimeFrames(current, [result, result]);
+
+  assert.equal(next.runtimeEvents.length, 2);
+  assert.equal(next.runtimeEvents[0].kind, "tool_use");
+  assert.equal(next.runtimeEvents[1].kind, "tool_result");
+  assert.equal(next.runtimeEvents[1].streamId, "call-1");
+  assert.equal(next.runtimeEvents[1].streaming, false);
+});
+
 test("coalesces a large delta batch without growing event rows", () => {
   const frames = Array.from({ length: 1_000 }, (_, index) => ({
     runId: "run-1", stepRunId: "step-1", seq: 1, kind: "message", streamId: "m1",
