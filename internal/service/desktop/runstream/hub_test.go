@@ -59,3 +59,19 @@ func TestHubSnapshotPreservesCompletedStream(t *testing.T) {
 		t.Fatalf("snapshot = %#v, want completed frame", frames)
 	}
 }
+
+func TestHubBroadcastsCorrelatedAtomicToolsWithoutSnapshottingThem(t *testing.T) {
+	hub := NewHub()
+	var received []Frame
+	hub.Subscribe(func(frame Frame) { received = append(received, frame) })
+
+	hub.Publish(Frame{RunID: "run-1", StepRunID: "step-1", Seq: 5, Event: agentrun.Event{Kind: agentrun.KindToolUse, StreamID: "call-1", Text: "git status"}})
+	hub.Publish(Frame{RunID: "run-1", StepRunID: "step-1", Seq: 6, Event: agentrun.Event{Kind: agentrun.KindToolResult, StreamID: "call-1", Text: "clean"}})
+
+	if len(received) != 2 || received[0].Kind != agentrun.KindToolUse || received[1].Kind != agentrun.KindToolResult {
+		t.Fatalf("received = %#v", received)
+	}
+	if snapshot := hub.Snapshot("run-1"); len(snapshot) != 0 {
+		t.Fatalf("atomic tool frames leaked into stream snapshot: %#v", snapshot)
+	}
+}
