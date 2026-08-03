@@ -4,7 +4,7 @@ import wails from "@wailsio/runtime/plugins/vite";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-const outputDir = fileURLToPath(new URL("../internal/desktop/assets/frontend/dist", import.meta.url));
+const outputDir = fileURLToPath(new URL("../internal/app/desktop/assets/frontend/dist", import.meta.url));
 
 function keepDistDirectory() {
   return {

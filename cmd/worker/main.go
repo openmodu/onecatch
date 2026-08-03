@@ -1,7 +1,7 @@
 package main
 
-import "github.com/openmodu/oneshot/internal/app/workerapp"
+import "github.com/openmodu/oneshot/internal/app/worker"
 
 func main() {
-	workerapp.Run()
+	worker.Run()
 }

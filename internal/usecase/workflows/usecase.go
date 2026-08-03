@@ -14,11 +14,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/agentrun"
 	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	"github.com/openmodu/oneshot/internal/runstream"
+	"github.com/openmodu/oneshot/internal/usecase/agentrun"
 )
 
 const (
@@ -64,6 +63,19 @@ type GitInspector interface {
 	Inspect(context.Context, string) (domainworkspaces.GitSnapshot, error)
 }
 
+// RuntimeEventFrame is the transport-neutral event emitted while a workflow
+// step is running. Service and transport layers decide how to deliver it.
+type RuntimeEventFrame struct {
+	RunID     string `json:"runId"`
+	StepRunID string `json:"stepRunId"`
+	Seq       int64  `json:"seq,omitempty"`
+	agentrun.Event
+}
+
+type RuntimeEventPublisher interface {
+	Publish(RuntimeEventFrame)
+}
+
 type IDGenerator func(prefix string) string
 
 type RunResolution struct {
@@ -81,7 +93,7 @@ type Usecase struct {
 	now               func() time.Time
 	newID             IDGenerator
 	remote            RemoteExecutor
-	streamPublisher   runstream.Publisher
+	runtimePublisher  RuntimeEventPublisher
 	maxDAGConcurrency atomic.Int64
 }
 
@@ -112,8 +124,8 @@ func (s *Usecase) dispatchStep(ctx context.Context, definition domainworkflows.D
 	}
 	return s.engine.Run(stepCtx, request, sink)
 }
-func (s *Usecase) SetRunStreamPublisher(publisher runstream.Publisher) {
-	s.streamPublisher = publisher
+func (s *Usecase) SetRuntimeEventPublisher(publisher RuntimeEventPublisher) {
+	s.runtimePublisher = publisher
 }
 func (s *Usecase) SetMaxDAGConcurrency(value int) {
 	if value < 1 {

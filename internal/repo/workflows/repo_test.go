@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	localdata "github.com/openmodu/oneshot/internal/data/local"
 	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
+	localdata "github.com/openmodu/oneshot/internal/repo/store/local"
 	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
 )
 

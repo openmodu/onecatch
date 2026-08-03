@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	localdata "github.com/openmodu/oneshot/internal/data/local"
 	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
 	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
+	localdata "github.com/openmodu/oneshot/internal/repo/store/local"
 )
 
 func TestTasksRepoPersistsAcrossReopen(t *testing.T) {

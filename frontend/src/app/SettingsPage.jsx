@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/internal/desktop/bindings/index.js";
+import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
 import { Action, Field, NumberField, SettingPanel as SettingCard, SettingsModule, TUISelect, ToggleRow as Toggle } from "../ui/primitives.jsx";
 import { accentThemes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
 import { codexEffortValues, codexServiceTierValues, selectedCodexModel } from "./codexRuntimeOptions.js";

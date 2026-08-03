@@ -8,8 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/agentrun"
-	"github.com/openmodu/oneshot/internal/runstream"
+	"github.com/openmodu/oneshot/internal/usecase/agentrun"
 )
 
 const (
@@ -22,7 +21,7 @@ type runtimeEventCollector struct {
 	runID        string
 	stepRunID    string
 	persist      func(agentrun.Event) (int64, error)
-	publisher    runstream.Publisher
+	publisher    RuntimeEventPublisher
 	liveEvery    time.Duration
 	durableEvery time.Duration
 	streams      map[string]*runtimeStreamState
@@ -45,7 +44,7 @@ type runtimeStreamState struct {
 	ended       bool
 }
 
-func newRuntimeEventCollector(runID, stepRunID string, persist func(agentrun.Event) (int64, error), publisher runstream.Publisher) *runtimeEventCollector {
+func newRuntimeEventCollector(runID, stepRunID string, persist func(agentrun.Event) (int64, error), publisher RuntimeEventPublisher) *runtimeEventCollector {
 	return &runtimeEventCollector{
 		runID: runID, stepRunID: stepRunID, persist: persist, publisher: publisher,
 		liveEvery: defaultLiveFlush, durableEvery: defaultDurableFlush,
@@ -221,7 +220,7 @@ func (c *runtimeEventCollector) persistLocked(event agentrun.Event) int64 {
 
 func (c *runtimeEventCollector) publishLocked(seq int64, event agentrun.Event) {
 	if c.publisher != nil {
-		c.publisher.Publish(runstream.Frame{RunID: c.runID, StepRunID: c.stepRunID, Seq: seq, Event: event})
+		c.publisher.Publish(RuntimeEventFrame{RunID: c.runID, StepRunID: c.stepRunID, Seq: seq, Event: event})
 	}
 }
 
@@ -255,7 +254,7 @@ func (s *Usecase) newRuntimeCollector(runID, stepRunID string) *runtimeEventColl
 		}
 		return stored.Seq, nil
 	}
-	return newRuntimeEventCollector(runID, stepRunID, persist, s.streamPublisher)
+	return newRuntimeEventCollector(runID, stepRunID, persist, s.runtimePublisher)
 }
 
 func collectorError(err error) error {

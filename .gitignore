@@ -3,8 +3,8 @@
 /design/prototype/.npm-cache/
 /frontend/node_modules
 /frontend/.node_modules/
-/internal/desktop/assets/frontend/dist/*
-!/internal/desktop/assets/frontend/dist/.gitkeep
+/internal/app/desktop/assets/frontend/dist/*
+!/internal/app/desktop/assets/frontend/dist/.gitkeep
 /bin/
 /.task/
 .DS_Store

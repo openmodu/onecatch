@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clipboard } from "@wailsio/runtime";
-import { GitBinding, WorkerBinding } from "../../../bindings/github.com/openmodu/oneshot/internal/desktop/bindings/index.js";
+import { GitBinding, WorkerBinding } from "../../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
 import { Action, Field, Kicker, SettingsModule, StatusBadge } from "../../ui/primitives.jsx";
 import { errorMessage, shortID } from "../format.js";
 import { assessWorkerWorkspace, buildWorkerCommand, classifyWorkerPreflightError } from "../workerWorkspace.js";

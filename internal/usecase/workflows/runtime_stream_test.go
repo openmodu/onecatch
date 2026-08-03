@@ -4,13 +4,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/agentrun"
-	"github.com/openmodu/oneshot/internal/runstream"
+	"github.com/openmodu/oneshot/internal/usecase/agentrun"
 )
 
-type collectingPublisher struct{ frames []runstream.Frame }
+type collectingPublisher struct{ frames []RuntimeEventFrame }
 
-func (p *collectingPublisher) Publish(frame runstream.Frame) { p.frames = append(p.frames, frame) }
+func (p *collectingPublisher) Publish(frame RuntimeEventFrame) {
+	p.frames = append(p.frames, frame)
+}
 
 func TestRuntimeEventCollectorBatchesDeltaAndPersistsAuthoritativeEnd(t *testing.T) {
 	var stored []agentrun.Event

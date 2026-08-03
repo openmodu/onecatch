@@ -9,7 +9,7 @@ import {
   WorkflowBinding,
   WorkspaceBinding,
   WorkerBinding,
-} from "../../bindings/github.com/openmodu/oneshot/internal/desktop/bindings/index.js";
+} from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
 import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceSections } from "./listNavigation.js";
 import { Action, TUISelect } from "../ui/primitives.jsx";

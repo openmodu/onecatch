@@ -13,10 +13,14 @@ cmd/
 ├── app/                Wails 桌面应用入口
 └── worker/             远端执行服务入口
 frontend/               React/Vite 前端、测试和生成的 Wails bindings
-internal/desktop/       桌面启动、平台适配、Wails bindings 和嵌入资源
-internal/app/workerapp/ Worker 服务启动与进程组装
+internal/
+├── app/                Desktop、Worker 和 Server 的启动装配
+├── domain/             领域模型与业务规则
+├── repo/               SQL、文件、Git 等数据访问
+├── usecase/            按业务能力拆分的用例
+├── service/            Desktop、Worker 和 Server 的对外服务
+└── transport/          Wails 与 HTTP 适配
 clients/oneshot/        Oneshot Go HTTP SDK
-internal/               仓库内共享的领域、用例和基础设施代码
 pkg/                    可被外部项目引用的通用 Go 包
 build/desktop/          Wails 配置、图标和 macOS 打包脚本
 deploy/                 Worker 的 launchd、systemd 部署模板
@@ -27,7 +31,9 @@ tools/                  Go 工具依赖声明
 仓库只维护一个根 `go.mod`。`cmd` 只保留进程入口，不承载可复用业务逻辑；
 仓库内共享代码放进 `internal`，确实需要向仓库外暴露的包才放进 `pkg` 或
 `clients`。React/Vite 源码统一放在 `frontend`，构建产物写入
-`internal/desktop/assets/frontend/dist`，再由 Go 嵌入桌面二进制。
+`internal/app/desktop/assets/frontend/dist`，再由 Go 嵌入桌面二进制。
+`internal` 的分层边界和新代码归类判据见
+[`internal/README.md`](internal/README.md)。
 
 ## 常用命令
 

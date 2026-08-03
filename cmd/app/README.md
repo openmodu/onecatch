@@ -57,7 +57,9 @@ VERSION=0.1.0 OUTPUT_ZIP=bin/Oneshot-0.1.0-arm64.zip wails3 task package:desktop
 
 ```text
 cmd/app/                    可执行入口，仅保留 main.go
-internal/desktop/           启动组装、平台适配、嵌入资源和 Wails bindings
+internal/app/desktop/       Desktop 启动装配、平台适配和嵌入资源
+internal/service/desktop/   Desktop 对外服务与运行状态
+internal/transport/wails/   Wails bindings
 frontend/                   React/Vite 前端
 build/desktop/              Wails 构建与打包配置
 ```
