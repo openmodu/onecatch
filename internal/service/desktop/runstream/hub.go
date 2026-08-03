@@ -39,7 +39,7 @@ func (h *Hub) Publish(frame Frame) {
 		return
 	}
 	h.mu.Lock()
-	if frame.StreamID != "" {
+	if frame.StreamID != "" && frame.Phase != "" {
 		streams := h.runs[frame.RunID]
 		if streams == nil {
 			streams = make(map[streamKey]Frame)

@@ -6,6 +6,10 @@ function atomicKey(value) {
   return `${value.stepRunId || ""}\u0000${value.seq || 0}\u0000${value.kind || ""}`;
 }
 
+function isStreamEvent(value) {
+  return Boolean(value.streamId && (value.phase || value.streaming || Number(value.revision || 0) > 0));
+}
+
 function frameEvent(frame) {
   return {
     stepRunId: frame.stepRunId || "",
@@ -13,7 +17,7 @@ function frameEvent(frame) {
     kind: frame.kind || "",
     streamId: frame.streamId || "",
     revision: Number(frame.revision || 0),
-    streaming: frame.phase !== "end",
+    streaming: Boolean(frame.phase && frame.phase !== "end"),
     text: frame.phase === "start" ? "" : String(frame.text || ""),
     failed: Boolean(frame.failed),
     ...(frame.permission ? { permission: frame.permission } : {}),
@@ -30,18 +34,18 @@ export function applyRuntimeFrames(detail, incoming) {
   const streamIndexes = new Map();
   const atomics = new Set();
   events.forEach((event, index) => {
-    if (event.streamId) streamIndexes.set(streamKey(event), index);
+    if (isStreamEvent(event)) streamIndexes.set(streamKey(event), index);
     else atomics.add(atomicKey(event));
   });
 
   let changed = false;
   for (const frame of incoming) {
     if (!frame || (frame.runId && frame.runId !== detail.run?.id)) continue;
-    if (!frame.streamId) {
+    if (!isStreamEvent(frame)) {
       const key = atomicKey(frame);
       if (atomics.has(key)) continue;
       atomics.add(key);
-      events.push(frameEvent({ ...frame, phase: "end" }));
+      events.push(frameEvent(frame));
       changed = true;
       continue;
     }
