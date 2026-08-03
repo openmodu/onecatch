@@ -132,6 +132,17 @@ static void oneshotInstallTitlebarDoubleClick(NSWindow *window) {
 	recognizer.numberOfClicksRequired = 2;
 	recognizer.buttonMask = 0x1;
 	recognizer.delegate = handler;
+	// Without this, every single click in the window costs the user a second one.
+	// delaysPrimaryMouseButtonEvents defaults to YES, which holds left-button
+	// events back from the view hierarchy until the recognizer decides whether it
+	// matched. Requiring two clicks to match means a lone click is held for the
+	// double-click interval and then replayed, which the WKWebView underneath
+	// sees as a click that only moves focus — so the control fires on the *next*
+	// click instead. gestureRecognizerShouldBegin only limits where the gesture
+	// may begin (the titlebar strip); it does not stop the delay from applying to
+	// the whole content view. Setting NO lets the recognizer still observe the
+	// titlebar double-click without ever intercepting ordinary clicks.
+	recognizer.delaysPrimaryMouseButtonEvents = NO;
 	[window.contentView addGestureRecognizer:recognizer];
 	objc_setAssociatedObject(window, &oneshotTitlebarDoubleClickKey, handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	[recognizer release];
