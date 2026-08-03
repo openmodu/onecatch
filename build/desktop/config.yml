@@ -55,12 +55,12 @@ dev_mode:
   executes:
     - cmd: wails3 build DEV=true
       type: blocking
-    - cmd: wails3 task dev:frontend
+    - cmd: './build/desktop/dev-supervise.sh background "$PPID" wails3 task dev:frontend'
       type: background
-    # Wails runs the GUI in a separate foreground process group on macOS, so
-    # Ctrl+C reaches this shell instead of the watcher. Relay it to the watcher,
-    # which then shuts down both the app and the Vite background process.
-    - cmd: "trap 'kill -INT \"$PPID\"' INT TERM; ./bin/oneshot"
+    # The GUI becomes the terminal's foreground process group on macOS. The
+    # supervisor relays terminal signals to Wails and also stops the GUI if the
+    # watcher exits unexpectedly.
+    - cmd: './build/desktop/dev-supervise.sh primary "$PPID" ./bin/oneshot'
       type: primary
 
 # File Associations
