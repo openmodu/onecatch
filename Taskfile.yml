@@ -60,15 +60,15 @@ tasks:
       - render_appicon.swift
       - appicon.icon/icon.json
     generates:
-      - ../../internal/desktop/assets/appicon.png
+      - ../../internal/app/desktop/assets/appicon.png
       - appicon.icon/Assets/oneshot_icon_final.png
       - darwin/Assets.car
       - darwin/icons.icns
     cmds:
-      - swift render_appicon.swift appicon-source.png ../../internal/desktop/assets/appicon.png
-      - cp ../../internal/desktop/assets/appicon.png appicon.icon/Assets/oneshot_icon_final.png
+      - swift render_appicon.swift appicon-source.png ../../internal/app/desktop/assets/appicon.png
+      - cp ../../internal/app/desktop/assets/appicon.png appicon.icon/Assets/oneshot_icon_final.png
       - wails3 generate icons -iconcomposerinput appicon.icon -macassetdir darwin
-      - wails3 generate icons -input ../../internal/desktop/assets/appicon.png -macfilename darwin/icons.icns
+      - wails3 generate icons -input ../../internal/app/desktop/assets/appicon.png -macfilename darwin/icons.icns
 
   build:
     cmds:

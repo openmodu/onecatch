@@ -7,11 +7,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openmodu/oneshot/internal/api"
 	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
 	"github.com/openmodu/oneshot/internal/domain/orders"
 	"github.com/openmodu/oneshot/internal/domain/users"
-	"github.com/openmodu/oneshot/internal/service"
+	serverservice "github.com/openmodu/oneshot/internal/service/server"
+	routing "github.com/openmodu/oneshot/internal/transport/router"
 	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
 	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
 	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
@@ -19,22 +19,22 @@ import (
 )
 
 type Server struct {
-	services *service.Services
+	services *serverservice.Services
 	log      *slog.Logger
 }
 
-func NewServer(services *service.Services) http.Handler {
+func NewServer(services *serverservice.Services) http.Handler {
 	server := &Server{services: services, log: slog.Default()}
-	router := api.NewRouter()
+	router := routing.NewRouter()
 
-	router.Use(api.DefaultMiddlewares()...)
+	router.Use(routing.DefaultMiddlewares()...)
 
 	// Admin lives under a separate route tree with its own auth, never under
 	// /api and never reachable through the desktop client.
 	newAdminHandler(os.Getenv("ONESHOT_ADMIN_TOKEN"), server.log).register(router)
 
 	router.Get("/healthz", server.health)
-	router.Group("/api", func(router api.Router) {
+	router.Group("/api", func(router routing.Router) {
 		router.Get("/me", server.currentUser)
 		router.Post("/auth/wechat/start", server.startWechat)
 		router.Post("/auth/wechat/callback", server.loginWithWechat)
@@ -136,7 +136,7 @@ func (s *Server) listAgents(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getAgent(w http.ResponseWriter, r *http.Request) {
-	id := api.URLParam(r, "agentID")
+	id := routing.URLParam(r, "agentID")
 	agent, err := s.services.Agents.Get(r.Context(), id)
 	if err != nil {
 		writeError(w, err)
@@ -234,7 +234,7 @@ func (s *Server) getConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv, err := s.services.Conversations.Get(r.Context(), user.ID, api.URLParam(r, "conversationID"))
+	conv, err := s.services.Conversations.Get(r.Context(), user.ID, routing.URLParam(r, "conversationID"))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -257,7 +257,7 @@ func (s *Server) postConversationMessage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	conv, err := s.services.Conversations.PostMessage(r.Context(), user.ID, api.URLParam(r, "conversationID"), input.Text)
+	conv, err := s.services.Conversations.PostMessage(r.Context(), user.ID, routing.URLParam(r, "conversationID"), input.Text)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -272,7 +272,7 @@ func (s *Server) confirmConversation(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	conv, err := s.services.Conversations.Confirm(r.Context(), user.ID, api.URLParam(r, "conversationID"))
+	conv, err := s.services.Conversations.Confirm(r.Context(), user.ID, routing.URLParam(r, "conversationID"))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -341,7 +341,7 @@ func (s *Server) getOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := api.URLParam(r, "orderID")
+	id := routing.URLParam(r, "orderID")
 	order, err := s.services.Orders.Get(r.Context(), user.ID, id)
 	if err != nil {
 		writeError(w, err)
@@ -360,7 +360,7 @@ func (s *Server) getOrderRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := api.URLParam(r, "orderID")
+	id := routing.URLParam(r, "orderID")
 	if _, err := s.services.Orders.Get(r.Context(), user.ID, id); err != nil {
 		writeError(w, err)
 		return
@@ -386,7 +386,7 @@ func (s *Server) continueOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	order, err := s.services.Orders.Continue(r.Context(), user.ID, api.URLParam(r, "orderID"), input.Prompt)
+	order, err := s.services.Orders.Continue(r.Context(), user.ID, routing.URLParam(r, "orderID"), input.Prompt)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -401,7 +401,7 @@ func (s *Server) cancelOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := api.URLParam(r, "orderID")
+	id := routing.URLParam(r, "orderID")
 	order, err := s.services.Orders.Cancel(r.Context(), user.ID, id)
 	if err != nil {
 		writeError(w, err)
@@ -417,7 +417,7 @@ func (s *Server) listArtifacts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	orderID := api.URLParam(r, "orderID")
+	orderID := routing.URLParam(r, "orderID")
 	artifacts, err := s.services.Artifacts.ListForOrder(r.Context(), user.ID, orderID)
 	if err != nil {
 		writeError(w, err)
@@ -433,7 +433,7 @@ func (s *Server) downloadArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	artifactID := api.URLParam(r, "artifactID")
+	artifactID := routing.URLParam(r, "artifactID")
 	download, err := s.services.Artifacts.Download(r.Context(), user.ID, artifactID)
 	if err != nil {
 		writeError(w, err)
@@ -452,7 +452,7 @@ func (s *Server) shareArtifact(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	artifactID := api.URLParam(r, "artifactID")
+	artifactID := routing.URLParam(r, "artifactID")
 	share, err := s.services.Artifacts.Share(r.Context(), user.ID, artifactID)
 	if err != nil {
 		writeError(w, err)

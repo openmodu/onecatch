@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/openmodu/oneshot/internal/agentrun"
+	"github.com/openmodu/oneshot/internal/usecase/agentrun"
 )
 
 // runFileName is where each order's run log is persisted, inside the order's

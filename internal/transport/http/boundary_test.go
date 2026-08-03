@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openmodu/oneshot/internal/api"
+	routing "github.com/openmodu/oneshot/internal/transport/router"
 )
 
 // loginWechatForTest logs in a second, distinct user via the wechat callback
@@ -167,7 +167,7 @@ func TestAdminBoundaryIsolation(t *testing.T) {
 }
 
 func TestAdminAuthGate(t *testing.T) {
-	router := api.NewRouter()
+	router := routing.NewRouter()
 	newAdminHandler("admin-secret", slog.Default()).register(router)
 	handler := router.Handler()
 

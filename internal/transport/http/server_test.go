@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/agentrun"
 	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
 	"github.com/openmodu/oneshot/internal/domain/users"
 	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
@@ -21,7 +20,8 @@ import (
 	repoconversations "github.com/openmodu/oneshot/internal/repo/conversations"
 	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
 	repousers "github.com/openmodu/oneshot/internal/repo/users"
-	"github.com/openmodu/oneshot/internal/service"
+	serverservice "github.com/openmodu/oneshot/internal/service/server"
+	"github.com/openmodu/oneshot/internal/usecase/agentrun"
 	usecaseagents "github.com/openmodu/oneshot/internal/usecase/agents"
 	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
 	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
@@ -416,7 +416,7 @@ func newTestFixture() testFixture {
 	conversationsUsecase := usecaseconversations.NewUsecase(conversationRepo, agentsUsecase, ordersUsecase)
 
 	return testFixture{
-		handler: NewServer(service.NewServices(
+		handler: NewServer(serverservice.NewServices(
 			usecaseauth.NewUsecaseWithOptions(userRepo, usecaseauth.Options{AllowInsecureCallbacks: true}),
 			agentsUsecase,
 			artifactsUsecase,

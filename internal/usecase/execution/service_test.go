@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/agentrun"
 	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
 	"github.com/openmodu/oneshot/internal/domain/users"
 	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
 	repoartifacts "github.com/openmodu/oneshot/internal/repo/artifacts"
 	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
+	"github.com/openmodu/oneshot/internal/usecase/agentrun"
 	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
 )
 

@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/openmodu/oneshot/internal/api"
+	routing "github.com/openmodu/oneshot/internal/transport/router"
 	"github.com/openmodu/oneshot/pkg/httpx"
 )
 
@@ -46,8 +46,8 @@ func newAdminHandler(token string, audit *slog.Logger) *adminHandler {
 
 // register mounts the admin routes under their own subtree with admin-only
 // middleware. Kept separate from the user-facing /api group on purpose.
-func (h *adminHandler) register(router api.Router) {
-	router.Group("/admin/api", func(admin api.Router) {
+func (h *adminHandler) register(router routing.Router) {
+	router.Group("/admin/api", func(admin routing.Router) {
 		admin.Use(h.requireAdmin)
 		admin.Get("/whoami", h.whoami)
 	})
