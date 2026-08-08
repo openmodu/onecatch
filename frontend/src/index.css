@@ -339,16 +339,45 @@
     background: var(--accent);
   }
 
+  /* The state and time columns size to their content instead of reserving
+     fixed tracks. `time` is blank on most rows — consecutive same-second
+     events de-duplicate to an empty label — and `state` is a short word, so
+     the fixed 50px/64px tracks held ~90px of dead space per row while the
+     command beside them was being cut off. */
   .conversation-tool-summary {
     min-height: 40px;
+    grid-template-columns: var(--ui-event-marker-size) minmax(0, 1fr) auto auto;
   }
 
   /* Only the command itself is code; the state word is prose and the timestamp
-     is a number, so those move to the UI face. */
+     is a number, so those move to the UI face.
+
+     Commands are long and have no spaces to break on, so a single ellipsised
+     line hid most of them with no way to reveal the rest — the row neither
+     wrapped nor scrolled. Clamping to two lines and breaking anywhere keeps
+     rows compact while showing far more of the command. */
   .conversation-tool-summary strong {
     color: var(--muted-foreground);
     font-family: var(--font-ui-mono);
     font-size: 12px;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* Same reason as the tool row: this label is empty on most rows, so it only
+     reserves its width when there is a timestamp to show. */
+  .conversation-message-meta time {
+    min-width: 0;
+    text-align: right;
+  }
+
+  .conversation-message-meta time:not(:empty) {
+    min-width: var(--ui-event-time-width);
   }
 
   .conversation-tool time,

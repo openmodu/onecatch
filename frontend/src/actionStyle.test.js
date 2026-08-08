@@ -118,6 +118,30 @@ test("appearance controls stay labelled radiogroups", async () => {
   assert.match(settings, /ACCENT_SWATCH\[accent\]/);
 });
 
+test("tool rows spend their width on the command, not on empty columns", async () => {
+  const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
+  // `time` is empty on most rows (same-second events de-duplicate to a blank
+  // label) and `state` is one short word, so fixed tracks for them reserved
+  // ~90px per row while the command beside them was cut off.
+  assert.match(
+    css,
+    /\.conversation-tool-summary\s*\{[^}]*grid-template-columns:[^;]*minmax\(0,\s*1fr\)\s+auto\s+auto/s,
+    "the state and time columns must size to their content",
+  );
+  assert.doesNotMatch(
+    css,
+    /\.conversation-tool-summary\s*\{[^}]*grid-template-columns:[^;]*--ui-event-state-width/s,
+    "the state column must not go back to a fixed track",
+  );
+  // Commands have no spaces to break on, so a single ellipsised line hid most
+  // of them with no way to reveal the rest.
+  assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*white-space:\s*normal/s);
+  assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*line-clamp:\s*2/s);
+  assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+  // The message timestamp has the same empty-label problem.
+  assert.match(css, /\.conversation-message-meta time:not\(:empty\)\s*\{[^}]*min-width:\s*var\(--ui-event-time-width\)/s);
+});
+
 test("select options keep long labels and metadata from overlapping", async () => {
   const primitives = await readFile(path.join(sourceRoot, "ui", "primitives.jsx"), "utf8");
   // The option row is now a shadcn SelectItem, so this asserts the behaviour
