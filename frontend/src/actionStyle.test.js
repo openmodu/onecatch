@@ -50,11 +50,21 @@ test("workspace actions use a compact project menu and tasks stay visually light
   // Geometry now lives in Tailwind classes on the markup rather than in
   // mirage.css, so these assert the same intent against the class lists.
   assert.match(sidebar, /className="workspace-row-actions[^"]*"/);
-  assert.match(sidebar, /className="workspace-row-actions[^"]*\bhidden\b[^"]*"/, "project actions must stay hidden until the row is engaged");
-  assert.match(sidebar, /className="workspace-row-actions[^"]*group-hover:flex[^"]*"/);
-  assert.match(sidebar, /className="workspace-row-actions[^"]*group-focus-within:flex[^"]*"/, "keyboard users must be able to reach the project actions");
-  assert.match(sidebar, /className="workspace-context-menu[^"]*"[^>]*role="menu"/);
-  assert.match(sidebar, /className="workspace-menu-trigger"[^>]*aria-haspopup="menu"/);
+  assert.match(sidebar, /className="workspace-row-actions[^"]*\bopacity-0\b/, "project actions must stay out of sight until the row is engaged");
+  assert.match(sidebar, /className="workspace-row-actions[^"]*group-hover:opacity-100/);
+  assert.match(sidebar, /className="workspace-row-actions[^"]*group-focus-within:opacity-100/, "keyboard users must be able to reach the project actions");
+  // Not `hidden`: display:none drops the buttons out of the tab order (so
+  // group-focus-within can never fire) and un-focuses the trigger the instant
+  // the menu closes, leaving Radix nowhere to restore focus to.
+  assert.doesNotMatch(sidebar, /className="workspace-row-actions[^"]*\bhidden\b/, "project actions must not be hidden with display:none");
+  // The menu is a shadcn DropdownMenu now, so role="menu"/aria-haspopup are
+  // emitted by Radix at runtime and cannot be asserted in the source. What the
+  // source still has to prove is that the row keeps its actions revealed while
+  // the menu is up — Radix stamps data-state on the trigger.
+  assert.match(sidebar, /className="workspace-row-actions[^"]*has-\[\[data-state=open\]\]:opacity-100/, "the row must stay revealed while its menu is open");
+  assert.match(sidebar, /<DropdownMenuTrigger asChild>[\s\S]{0,240}?className="workspace-menu-trigger"/, "the ellipsis button must be the menu trigger");
+  assert.match(sidebar, /<DropdownMenuItem onSelect=\{\(\) => onTogglePinned\(workspace\)\}/);
+  assert.match(sidebar, /<DropdownMenuItem variant="destructive" onSelect=\{\(\) => onRemoveWorkspace\(workspace\)\}/, "remove must read as destructive");
   assert.match(sidebar, /className="workspace-new-task"[^>]*sidebar\.newTaskInProject/);
   assert.match(sidebar, /className="add-workspace"[^>]*>\{t\("sidebar\.addProject"\)\}/);
   assert.match(sidebar, /<Folder(?:Open)?\b/);
@@ -79,13 +89,24 @@ test("sidebar reserves its footer for navigation and exposes a resize separator"
 
 test("workflow and settings share one expandable footer menu", async () => {
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
-  assert.match(sidebar, /className="secondary-navigation-menu[^"]*"[^>]*role="menu"/);
-  assert.match(sidebar, /className={`secondary-navigation-trigger[^>]*aria-haspopup="menu"[^>]*aria-expanded=/);
-  assert.match(sidebar, /role="menuitem"[^>]*onClick=\{\(\) => goToSecondaryView\("workflows"\)\}/);
-  assert.match(sidebar, /role="menuitem"[^>]*onClick=\{\(\) => goToSecondaryView\("settings"\)\}/);
-  assert.match(sidebar, /className="primary-nav[^"]*\brelative\b/, "the popover anchors to the nav");
-  assert.match(sidebar, /secondary-navigation-menu[^"]*absolute[^"]*bottom-\[calc\(100%\+6px\)\]/, "the menu must open upward, clear of the trigger");
+  assert.match(sidebar, /<DropdownMenuTrigger asChild>[\s\S]{0,200}?className={`secondary-navigation-trigger/);
+  assert.match(sidebar, /<DropdownMenuItem[^>]*onSelect=\{\(\) => goToSecondaryView\("workflows"\)\}/);
+  assert.match(sidebar, /<DropdownMenuItem[^>]*onSelect=\{\(\) => goToSecondaryView\("settings"\)\}/);
+  // The footer sits at the bottom of the rail, so the menu has to open upward
+  // and span the rail rather than hugging the trigger's own width.
+  assert.match(sidebar, /<DropdownMenuContent side="top"[^>]*w-\[var\(--radix-dropdown-menu-trigger-width\)\]/s, "the menu must open upward at rail width");
   assert.doesNotMatch(sidebar, /<(?:List|GitBranch|Settings)\b/, "footer navigation must stay text-first");
+});
+
+test("sidebar menus delegate dismissal to Radix instead of hand-rolled effects", async () => {
+  const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
+  // Both menus used to carry their own outside-click, Escape and focus-restore
+  // listeners plus manual fixed positioning. DropdownMenu owns all of it now;
+  // this guards against that machinery creeping back in.
+  assert.doesNotMatch(sidebar, /secondaryNavigationOpen|projectMenuWorkspaceID|projectMenuPosition/, "menu open-state must live in Radix, not component state");
+  assert.doesNotMatch(sidebar, /firstSecondaryNavigationItem|secondaryNavigationTrigger|projectMenuTrigger/, "Radix restores focus; no manual focus refs");
+  assert.doesNotMatch(sidebar, /getBoundingClientRect\(\)[\s\S]{0,200}menuWidth/, "menu placement must come from Radix, not manual measurement");
+  assert.doesNotMatch(sidebar, /addEventListener\("pointerdown"/, "outside-click dismissal is Radix's job");
 });
 
 test("appearance controls stay labelled radiogroups", async () => {
