@@ -118,6 +118,61 @@ test("appearance controls stay labelled radiogroups", async () => {
   assert.match(settings, /ACCENT_SWATCH\[accent\]/);
 });
 
+test("no stylesheet has a dangling selector group", async () => {
+  // A line-based edit that removes the line carrying "{ ... }" leaves the
+  // selectors above it dangling, and they silently merge into the next rule.
+  // That is how `white-space: nowrap` once got applied to every transcript
+  // container, blowing the column past its width so content was clipped.
+  for (const file of ["mirage.css", "styles.css", "index.css"]) {
+    const raw = await readFile(path.join(sourceRoot, file), "utf8");
+    const css = raw.replace(/\/\*[\s\S]*?\*\//g, "");
+    const lines = css.split("\n");
+    // Track block nesting so a wrapped property value (which also ends in a
+    // comma) is not mistaken for a selector group.
+    const stack = [];
+    for (let i = 0; i < lines.length; i += 1) {
+      const line = lines[i].trim();
+      const inDeclarations = stack.length > 0 && stack[stack.length - 1] === "rule";
+      if (line.endsWith(",") && !inDeclarations && /[.#[a-zA-Z]/.test(line)) {
+        let j = i + 1;
+        while (j < lines.length && lines[j].trim().endsWith(",")) j += 1;
+        assert.ok(
+          (lines[j] || "").includes("{"),
+          `${file}:${i + 1} starts a selector group that never reaches a declaration block`,
+        );
+      }
+      for (const char of line) {
+        if (char === "{") stack.push(line.trim().startsWith("@") ? "at" : "rule");
+        else if (char === "}") stack.pop();
+      }
+    }
+  }
+});
+
+test("the transcript column cannot be widened past its container", async () => {
+  const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
+  // A bare `display: grid` gives an implicit `auto` track that sizes toward
+  // max-content, so one long unbreakable command widens the whole transcript
+  // and .conversation-scroll clips it with overflow-x: hidden.
+  for (const selector of ["conversation-list", "conversation-round-body"]) {
+    assert.match(
+      css,
+      new RegExp(`\\.${selector}\\s*\\{[^}]*grid-template-columns:\\s*minmax\\(0,\\s*1fr\\)`, "s"),
+      `.${selector} must pin its track to minmax(0, 1fr)`,
+    );
+  }
+  // Nothing may impose nowrap on a transcript container.
+  const mirage = await readFile(path.join(sourceRoot, "mirage.css"), "utf8");
+  for (const rule of mirage.matchAll(/([^{}]+)\{([^}]*)\}/g)) {
+    if (!/white-space:\s*nowrap/.test(rule[2])) continue;
+    assert.doesNotMatch(
+      rule[1],
+      /\.conversation-(?:list|section|round|round-body|agent|user)\b/,
+      "transcript containers must be allowed to wrap",
+    );
+  }
+});
+
 test("tool rows spend their width on the command, not on empty columns", async () => {
   const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
   // `time` is empty on most rows (same-second events de-duplicate to a blank

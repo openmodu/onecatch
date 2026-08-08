@@ -258,8 +258,12 @@
    Living in @layer app means it outranks the hand-written stylesheets it
    replaces without having to delete them row by row. */
 @layer app {
+  /* minmax(0, 1fr), not a bare grid: an implicit `auto` track sizes toward
+     max-content, so one long unbreakable command widens the whole transcript
+     past its column and .conversation-scroll silently clips it. */
   .conversation-list {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     padding: 12px 14px 16px;
   }
@@ -282,6 +286,7 @@
 
   .conversation-round-body {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
 
