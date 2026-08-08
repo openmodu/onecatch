@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Circle, FolderPlus, FolderSimple, GearSix, GitBranch, MagnifyingGlass, NotePencil } from "@phosphor-icons/react";
+import { Circle, Folder, FolderPlus, GitBranch, Search, Settings, SquarePen } from "lucide-react";
 import { commandPaletteShortcutIndex, commandPaletteWorkspaceResults, moveCommandPaletteIndex } from "../commandPaletteNavigation.js";
 
 function PaletteRow({ item, active, onActivate, onActive }) {
   const Icon = item.icon;
   return <button type="button" role="option" aria-selected={active} tabIndex={-1} className={`command-palette__item ${active ? "active" : ""}`} onPointerMove={onActive} onClick={onActivate}>
-    <span className="command-palette__icon" aria-hidden="true"><Icon size={15} weight={item.iconWeight || "regular"} /></span>
+    <span className="command-palette__icon" aria-hidden="true"><Icon size={15} strokeWidth={item.iconStrokeWidth || 2} /></span>
     <span className="command-palette__copy"><strong>{item.label}</strong>{item.description && <small>{item.description}</small>}</span>
     {item.meta && <span className="command-palette__meta" title={item.meta}>{item.meta}</span>}
     {item.shortcutLabel && <kbd>{item.shortcutLabel}</kbd>}
@@ -38,7 +38,6 @@ export default function CommandPalette({
     kind: "task",
     result,
     icon: result.task.status === "queued" ? Circle : GitBranch,
-    iconWeight: "regular",
     label: result.task.title,
     meta: result.workspace.name,
     shortcutLabel: `⌘${index + 1}`,
@@ -50,7 +49,7 @@ export default function CommandPalette({
       key: `workspace:${workspace.id}`,
       kind: "workspace",
       workspace,
-      icon: FolderSimple,
+      icon: Folder,
       label: workspace.name,
       meta: workspace.path,
       shortcutLabel,
@@ -58,9 +57,9 @@ export default function CommandPalette({
     })), [normalizedQuery, taskItems.length, workspaces]);
 
   const commandItems = [
-    { key: "command:new-task", kind: "command", command: "new-task", icon: NotePencil, label: t("task.newTask"), shortcutLabel: "⌘N", shortcutKey: "n" },
+    { key: "command:new-task", kind: "command", command: "new-task", icon: SquarePen, label: t("task.newTask"), shortcutLabel: "⌘N", shortcutKey: "n" },
     { key: "command:add-workspace", kind: "command", command: "add-workspace", icon: FolderPlus, label: t("sidebar.openFolder"), shortcutLabel: "⌘O", shortcutKey: "o" },
-    { key: "command:settings", kind: "command", command: "settings", icon: GearSix, label: t("sidebar.settings"), shortcutLabel: "⌘,", shortcutKey: "," },
+    { key: "command:settings", kind: "command", command: "settings", icon: Settings, label: t("sidebar.settings"), shortcutLabel: "⌘,", shortcutKey: "," },
   ];
   const items = [...taskItems, ...projectItems, ...commandItems];
   const resultCount = taskItems.length + projectItems.length;
@@ -128,7 +127,7 @@ export default function CommandPalette({
   return createPortal(<div className="command-palette-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="command-palette" id="global-command-palette" role="dialog" aria-modal="true" aria-busy={loading} aria-label={t("sidebar.commandPalette")} onKeyDown={handleKeyDown}>
       <label className="command-palette__search">
-        <span className="command-palette__search-icon" aria-hidden="true"><MagnifyingGlass size={16} weight="regular" /></span>
+        <span className="command-palette__search-icon" aria-hidden="true"><Search size={16} /></span>
         <input ref={inputRef} autoFocus value={query} aria-label={t("sidebar.searchTasksCommands")} placeholder={t("sidebar.searchTasksCommands")} onChange={(event) => onQueryChange(event.target.value)} />
         <kbd>Esc</kbd>
       </label>

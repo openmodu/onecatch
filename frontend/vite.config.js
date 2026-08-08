@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import wails from "@wailsio/runtime/plugins/vite";
 import { writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -26,5 +27,10 @@ export default defineConfig({
     outDir: outputDir,
     emptyOutDir: true,
   },
-  plugins: [react(), wails("./bindings"), keepDistDirectory()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
+  plugins: [react(), tailwindcss(), wails("./bindings"), keepDistDirectory()],
 });

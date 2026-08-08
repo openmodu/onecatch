@@ -1,6 +1,6 @@
 import { lazy, memo, Suspense } from "react";
 import { useTranslation } from "react-i18next";
-import { CaretDown, CaretRight, Circle } from "@phosphor-icons/react";
+import { ChevronDown, ChevronRight, Circle } from "lucide-react";
 import { formatTime } from "../format.js";
 import { Action } from "../../ui/primitives.jsx";
 
@@ -29,7 +29,7 @@ function ToolTimelineItem({ entry, running, stalled, time }) {
   const failed = Boolean(entry.failed);
   const state = failed ? t("timeline.failed") : running ? t("timeline.executing") : stalled ? t("timeline.incomplete") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.done");
   return <details className={`conversation-tool kind-${entry.kind} ${running ? "running" : ""} ${failed ? "failed" : ""} ${stalled ? "stalled" : ""}`}>
-    <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-caret"><CaretRight className="closed" weight="bold" /><CaretDown className="opened" weight="bold" /></span><strong title={entry.text}>{entry.title}</strong><span className="conversation-tool-state">{running && <span className="pulse" />}{state}</span><time>{time ?? formatTime(entry.at)}</time></span></summary>
+    <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-caret"><ChevronRight className="closed" strokeWidth={2.5} /><ChevronDown className="opened" strokeWidth={2.5} /></span><strong title={entry.text}>{entry.title}</strong><span className="conversation-tool-state">{running && <span className="pulse" />}{state}</span><time>{time ?? formatTime(entry.at)}</time></span></summary>
     <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? t("timeline.path") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.command")}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
   </details>;
 }
@@ -64,7 +64,7 @@ const ConversationRound = memo(function ConversationRound({ round, active, permi
   return <article className="conversation-round">
     <div className="conversation-round-body">{round.items.map((entry, index) => {
       if (entry.type === "message") {
-        return <div className={`conversation-agent ${entry.tone}`} key={entry.id || `message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" weight="fill" aria-label={t("timeline.agentMessage")} /><strong>{round.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">{t("timeline.round", { count: round.round })}</span><time>{timeLabel(entry.at || round.finishedAt || round.startedAt)}</time></span></div><MessageBody content={entry.text} streaming={entry.streaming} /></div>;
+        return <div className={`conversation-agent ${entry.tone}`} key={entry.id || `message-${index}`}><div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot agent" fill="currentColor" aria-label={t("timeline.agentMessage")} /><strong>{round.runtime}</strong></span><span className="conversation-message-meta"><span className="conversation-round-index">{t("timeline.round", { count: round.round })}</span><time>{timeLabel(entry.at || round.finishedAt || round.startedAt)}</time></span></div><MessageBody content={entry.text} streaming={entry.streaming} /></div>;
       }
       if (entry.type === "permission") {
         return <PermissionTimelineItem key={entry.id} entry={entry} busy={permissionBusy === entry.request?.id} onDecision={onPermissionDecision} time={timeLabel(entry.at)} />;
@@ -87,7 +87,7 @@ function ConversationTimeline({ items, active, permissionBusy = "", onPermission
   return <div className="conversation-section">
     <div className="conversation-list">
       {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
-        <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" weight="fill" aria-label={t("timeline.userMessage")} /></span><span className="conversation-message-meta"><time>{userTimeLabel(item.at)}</time></span></div>
+        <div className="conversation-speaker"><span className="conversation-identity"><Circle className="conversation-event-dot user" fill="currentColor" aria-label={t("timeline.userMessage")} /></span><span className="conversation-message-meta"><time>{userTimeLabel(item.at)}</time></span></div>
         <MessageBody content={item.text} />
       </div> : <ConversationRound key={item.id} round={item} active={Boolean(active) && item === lastRound} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />)}
       {!items.length && <p className="muted-copy">{t("timeline.empty")}</p>}

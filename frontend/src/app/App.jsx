@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { LockSimple } from "@phosphor-icons/react";
+import { Lock } from "lucide-react";
 import { Events } from "@wailsio/runtime";
 import {
   RuntimeBinding,
@@ -12,7 +12,7 @@ import {
 } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
 import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceSections } from "./listNavigation.js";
-import { Action, TUISelect } from "../ui/primitives.jsx";
+import { Action, StatusBadge, TUISelect } from "../ui/primitives.jsx";
 import { copy, errorMessage, fileName } from "./format.js";
 import { loopTemplate } from "./templates.js";
 import { demoRun, demoRuntimes, demoTasks, demoWorkers, demoWorkflows, demoWorkspaces } from "./demoData.js";
@@ -816,11 +816,20 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [mode]);
 
-  if (mode === "loading") return <div className="loading-screen"><div className="brand-mark">1</div><span>{t("task.opening")}</span></div>;
+  if (mode === "loading") return <div className="flex h-full flex-col items-center justify-center gap-4 bg-background text-sm text-muted-foreground">
+    <div className="grid size-11 place-items-center rounded-xl bg-primary text-xl font-bold text-primary-foreground">1</div>
+    <span>{t("task.opening")}</span>
+  </div>;
 
-  return <div className="app-frame">
-    <header className="mac-titlebar" aria-label={t("app.windowAria")}><span aria-hidden="true" /><strong>Oneshot</strong><span /></header>
-    <div className="app-shell">
+  return <div className="relative grid h-full grid-rows-[52px_minmax(0,1fr)] bg-background text-foreground">
+    {/* The 78px gutters keep the centred title clear of the macOS traffic
+        lights, and pointer-events:none lets a click anywhere here drag. */}
+    <header className="drag-region grid h-[52px] cursor-default grid-cols-[78px_1fr_78px] items-center px-4 [&>*]:pointer-events-none" aria-label={t("app.windowAria")}>
+      <span aria-hidden="true" />
+      <strong className="text-center text-[13px] font-semibold text-muted-foreground">Oneshot</strong>
+      <span />
+    </header>
+    <div className="app-shell grid min-h-0 grid-cols-[auto_minmax(0,1fr)]">
       <Sidebar
         workspaces={workspaces}
         workspaceID={workspaceID}
@@ -857,8 +866,20 @@ function App() {
         onGoView={goView}
       />
 
-      <main className="main-area">
-        <div className="command-strip"><span>&gt;</span><strong>{commandText}</strong><button type="button" className="command-lock" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}><LockSimple size={13} weight="bold" aria-hidden="true" />{lockSignal.active > 0 && <em className="command-lock-badge">{lockSignal.active}</em>}</button><span className={`connection ${mode}`}>{mode === "wails" ? t("common.local") : t("common.preview")}</span></div>
+      <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+        <div className="flex h-11 shrink-0 items-center gap-3 border-b px-5">
+          {/* The workspace path is machine text, so it keeps the mono face
+              while the rest of the chrome moves to the UI font. */}
+          <strong className="min-w-0 truncate font-mono text-[13px] font-medium text-muted-foreground" title={commandText}>{commandText}</strong>
+          <button type="button" className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
+            <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
+            {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
+          </button>
+          <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
+            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+            {mode === "wails" ? t("common.local") : t("common.preview")}
+          </StatusBadge>
+        </div>
         {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} /> : view === "tasks" ? <TaskWorkbench
           mode={mode}
           workspaceID={workspaceID}
