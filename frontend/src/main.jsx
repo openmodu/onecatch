@@ -3,9 +3,9 @@ import { createRoot } from "react-dom/client";
 import "./i18n.js";
 import App from "./app/App.jsx";
 import { applyAppearance, readAppearance } from "./app/appearance.js";
-import "./styles.css";
-import "./ui/tokens.css";
-import "./mirage.css";
+// index.css pulls in the hand-written stylesheets itself, inside @layer legacy,
+// so Tailwind utilities outrank them during the migration.
+import "./index.css";
 
 applyAppearance(readAppearance());
 

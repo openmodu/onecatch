@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
-import { Action, Field, NumberField, SettingPanel as SettingCard, SettingsModule, TUISelect, ToggleRow as Toggle } from "../ui/primitives.jsx";
+import { Action, Field, Kicker, NumberField, SettingPanel as SettingCard, SettingsModule, TUISelect, ToggleRow as Toggle } from "../ui/primitives.jsx";
+
+// Preview swatches for the accent picker. These mirror the light-theme
+// --primary values in index.css; the picker is the one place the colour has to
+// be shown before it is applied, so it cannot read them off the live token.
+const ACCENT_SWATCH = { forest: "#694d1f", ocean: "#1f6475", violet: "#684886", amber: "#87501d" };
 import { accentThemes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
 import { codexEffortValues, codexServiceTierValues, selectedCodexModel } from "./codexRuntimeOptions.js";
 
@@ -228,21 +233,28 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     ask({ title: t("settings.fullAccessTitle"), description: t("settings.fullAccessDescription"), detail: t("settings.fullAccessDetail"), confirmLabel: t("settings.enableRisk"), dangerous: true }, () => setSectionValue("security", { ...draft.security, allowFullSandbox: true }));
   };
 
-  return <div className="settings-page">
-    <aside className="settings-rail" aria-label={t("settings.sectionsAria")}>
-      <span className="kicker">{t("settings.preferences")}</span>
-      {sections.map((item) => <button key={item.id} className={section === item.id ? "active" : ""} aria-current={section === item.id ? "page" : undefined} onClick={() => switchSection(item.id)}>
-        <strong>{item.label}{section === item.id && dirty && <i className="dirty-dot" aria-label={t("settings.unsaved")} />}</strong>
-        <small>{item.description}</small>
+  return <div className="settings-page grid min-h-0 flex-1 grid-cols-[176px_minmax(0,1fr)] overflow-hidden">
+    <aside className="flex min-h-0 flex-col gap-0.5 overflow-y-auto border-r p-2.5" aria-label={t("settings.sectionsAria")}>
+      <Kicker className="mb-1.5 px-1.5">{t("settings.preferences")}</Kicker>
+      {sections.map((item) => <button key={item.id} className={`rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent ${section === item.id ? "bg-accent text-accent-foreground" : "text-muted-foreground"}`} aria-current={section === item.id ? "page" : undefined} onClick={() => switchSection(item.id)}>
+        <strong className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">{item.label}{section === item.id && dirty && <i className="size-1.5 rounded-full bg-primary" aria-label={t("settings.unsaved")} />}</strong>
+        <small className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{item.description}</small>
       </button>)}
     </aside>
-    <section className="settings-content">
-      <div className="settings-title">
-        <div><span className="kicker">{t("settings.localSettings")}</span><h2>{activeMeta.label}</h2><p>{activeMeta.description}</p></div>
-        <div className="settings-title-actions"><span className="settings-sync-state">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span><Action onClick={reset}>{t("settings.reset")}</Action></div>
+    <section className="settings-content min-h-0 min-w-0 overflow-y-auto px-7 pt-6 pb-10">
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <Kicker>{t("settings.localSettings")}</Kicker>
+          <h2 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h2>
+          <p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2.5">
+          <span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span>
+          <Action onClick={reset}>{t("settings.reset")}</Action>
+        </div>
       </div>
-      {conflict && <div className="settings-banner conflict" role="alert"><div><strong>{t("settings.conflictTitle")}</strong><span>{t("settings.conflictDescription")}</span></div><Action onClick={reload}>{t("settings.reload")}</Action></div>}
-      {validationErrors.length > 0 && <div className="settings-banner invalid" role="alert"><div><strong>{t("settings.validationCount", { count: validationErrors.length })}</strong><span>{t("settings.validationDescription")}</span></div></div>}
+      {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-warning/35 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><Action onClick={reload}>{t("settings.reload")}</Action></div>}
+      {validationErrors.length > 0 && <div className="mb-4 rounded-md border border-destructive/35 bg-destructive/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div></div>}
       {section === "runtime" && <>
         <InterfaceSettings i18n={i18n} />
         <SettingsModule className="settings-runtime-module" title={t("settings.agentRuntimes")} description={t("settings.agentRuntimesDescription")}>
@@ -253,9 +265,15 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
       {section === "storage" && <StorageSettings value={draft.storage} setValue={(next) => setSectionValue("storage", next)} errors={errorsByField} security={draft.security} diagnosticOptions={diagnosticOptions} setDiagnosticOptions={setDiagnosticOptions} usage={usage} usageLoading={usageLoading} refreshUsage={refreshUsage} preview={preview} previewCleanup={previewCleanup} executeCleanup={executeCleanup} reveal={() => mode === "wails" && SettingsBinding.RevealDataRoot()} diagnosticPath={diagnosticPath} setDiagnosticPath={setDiagnosticPath} exportDiagnostics={exportDiagnostics} />}
       {section === "experimental" && <ExperimentalSettings draft={draft.experimental} saved={value?.experimental || demoSettings.experimental} setValue={(next) => setSectionValue("experimental", next)} workersPanel={workersPanel} />}
-      {dirty && <div className="settings-savebar" role="region" aria-label={t("settings.unsavedSettings")}>
-        <div><strong>{t("settings.unsavedTitle")}</strong><span>{t("settings.unsavedDescription")}</span></div>
-        <div><Action disabled={saving} onClick={discard}>{t("settings.discard")}</Action><Action tone="primary" disabled={saving || validationErrors.length > 0} onClick={save}>{saving ? t("common.saving") : t("settings.save")}</Action></div>
+      {dirty && <div className="sticky bottom-0 mt-6 flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3 shadow-lg" role="region" aria-label={t("settings.unsavedSettings")}>
+        <div className="min-w-0">
+          <strong className="block text-sm font-semibold text-foreground">{t("settings.unsavedTitle")}</strong>
+          <span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.unsavedDescription")}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <Action disabled={saving} onClick={discard}>{t("settings.discard")}</Action>
+          <Action tone="primary" disabled={saving || validationErrors.length > 0} onClick={save}>{saving ? t("common.saving") : t("settings.save")}</Action>
+        </div>
       </div>}
     </section>
     <ConfirmDialog dialog={dialog} busy={confirming} onCancel={closeDialog} onConfirm={acceptDialog} />
@@ -267,20 +285,27 @@ function InterfaceSettings({ i18n }) {
   const [appearance, setAppearance] = useState(readAppearance);
   const updateAppearance = (change) => setAppearance((current) => saveAppearance({ ...current, ...change }));
   return <SettingsModule className="settings-interface-module" title={t("settings.interface")} description={t("settings.interfaceDescription")}>
-    <div className="settings-option-row">
-      <div><h4>{t("settings.language")}</h4><p>{t("settings.languageDescription")}</p></div>
-      <TUISelect className="settings-language-select" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={(language) => i18n.changeLanguage(language)} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} />
+    <div className="settings-option-row flex items-center justify-between gap-6 border-b px-4 py-3.5 last:border-b-0">
+      <div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.language")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.languageDescription")}</p></div>
+      <TUISelect className="w-44 shrink-0" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={(language) => i18n.changeLanguage(language)} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} />
     </div>
-    <div className="settings-option-row appearance-mode-row">
-      <div><h4>{t("settings.colorMode")}</h4><p>{t("settings.colorModeDescription")}</p></div>
-      <div className="appearance-mode-picker" role="radiogroup" aria-label={t("settings.colorMode")}>
-        {themeModes.map((mode) => <button type="button" role="radio" aria-checked={appearance.theme === mode} className={appearance.theme === mode ? "active" : ""} key={mode} onClick={() => updateAppearance({ theme: mode })}>{t(`settings.colorMode.${mode}`)}</button>)}
+    <div className="settings-option-row flex items-center justify-between gap-6 border-b px-4 py-3.5 last:border-b-0">
+      <div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.colorMode")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.colorModeDescription")}</p></div>
+      {/* A segmented control, not a row of buttons: one shared border, the
+          selected segment lifts onto the card surface. */}
+      <div className="appearance-mode-picker inline-flex shrink-0 rounded-md border bg-muted p-0.5" role="radiogroup" aria-label={t("settings.colorMode")}>
+        {themeModes.map((mode) => <button type="button" role="radio" aria-checked={appearance.theme === mode} className={`rounded-sm px-3 py-1.5 text-xs transition-colors ${appearance.theme === mode ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`} key={mode} onClick={() => updateAppearance({ theme: mode })}>{t(`settings.colorMode.${mode}`)}</button>)}
       </div>
     </div>
-    <div className="settings-option-row appearance-accent-row">
-      <div><h4>{t("settings.themeColor")}</h4><p>{t("settings.themeColorDescription")}</p></div>
-      <div className="appearance-accent-picker" role="radiogroup" aria-label={t("settings.themeColor")}>
-        {accentThemes.map((accent) => <button type="button" role="radio" aria-checked={appearance.accent === accent} className={`appearance-accent appearance-accent--${accent} ${appearance.accent === accent ? "active" : ""}`} key={accent} onClick={() => updateAppearance({ accent })}>{t(`settings.themeColor.${accent}`)}</button>)}
+    <div className="settings-option-row flex items-center justify-between gap-6 border-b px-4 py-3.5 last:border-b-0">
+      <div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.themeColor")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.themeColorDescription")}</p></div>
+      {/* Each swatch previews its own accent, so the choice is visible before
+          it is applied; ACCENT_SWATCH holds the same hexes as index.css. */}
+      <div className="appearance-accent-picker inline-flex shrink-0 gap-1.5" role="radiogroup" aria-label={t("settings.themeColor")}>
+        {accentThemes.map((accent) => <button type="button" role="radio" aria-checked={appearance.accent === accent} className={`appearance-accent flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${appearance.accent === accent ? "border-ring bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60"}`} key={accent} onClick={() => updateAppearance({ accent })}>
+          <i className="size-2.5 rounded-full" style={{ background: ACCENT_SWATCH[accent] }} aria-hidden="true" />
+          {t(`settings.themeColor.${accent}`)}
+        </button>)}
       </div>
     </div>
   </SettingsModule>;

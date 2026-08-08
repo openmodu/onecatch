@@ -1,13 +1,94 @@
+import { useId, useMemo } from "react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
+
+/* This module keeps the call signatures the rest of the app already uses
+   (tone="danger", size="compact", options=[{value,label,meta}], …) and renders
+   shadcn underneath, so the migration doesn't have to touch 16 call sites at
+   once. The shadcn files in components/ui stay pristine — every deviation is
+   expressed as a className here so `shadcn add --overwrite` stays safe. */
+
+const ACTION_VARIANT = {
+  primary: "default",
+  accent: "secondary",
+  muted: "outline",
+  danger: "outline",
+  cyan: "outline",
+};
+
+const ACTION_TONE = {
+  danger: "border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground",
+  cyan: "border-info/40 text-info hover:bg-info hover:text-info-foreground",
+};
+
+const ACTION_SIZE = { regular: "sm", compact: "xs" };
+
 export function Action({ children, tone = "accent", size = "regular", className = "", type = "button", ...props }) {
-  return <button type={type} className={`ui-action ui-action--${tone} ui-action--${size} ${className}`.trim()} {...props}>{children}</button>;
+  return (
+    <Button
+      type={type}
+      variant={ACTION_VARIANT[tone] || "secondary"}
+      size={ACTION_SIZE[size] || "sm"}
+      className={cn(ACTION_TONE[tone], className)}
+      {...props}
+    >
+      {children}
+    </Button>
+  );
 }
 
 export function Kicker({ children, className = "" }) {
-  return <span className={`ui-kicker ${className}`.trim()}>{children}</span>;
+  return (
+    <span className={cn("text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground", className)}>
+      {children}
+    </span>
+  );
 }
 
+/* Run states carry more meaning than shadcn's default/secondary/destructive
+   trio, so each maps onto one of the semantic colour tokens. Anything not
+   listed (ready, pending, skipped, an unknown backend state) falls through to
+   neutral rather than borrowing the identity colour. */
+const TONE_PRIMARY = "border-primary/35 bg-primary/10 text-primary";
+const TONE_SUCCESS = "border-success/35 bg-success/10 text-success";
+const TONE_WARNING = "border-warning/35 bg-warning/10 text-warning";
+const TONE_DANGER = "border-destructive/35 bg-destructive/10 text-destructive";
+const TONE_INFO = "border-info/35 bg-info/10 text-info";
+const TONE_NEUTRAL = "border-border bg-muted text-muted-foreground";
+
+const BADGE_TONE = {
+  accent: TONE_PRIMARY,
+  running: TONE_PRIMARY,
+  serial: TONE_PRIMARY,
+  good: TONE_SUCCESS,
+  completed: TONE_SUCCESS,
+  succeeded: TONE_SUCCESS,
+  warn: TONE_WARNING,
+  paused: TONE_WARNING,
+  danger: TONE_DANGER,
+  failed: TONE_DANGER,
+  cancelled: TONE_DANGER,
+  interrupted: TONE_DANGER,
+  cyan: TONE_INFO,
+  dag: TONE_INFO,
+  queued: TONE_INFO,
+};
+
 export function StatusBadge({ status = "accent", children, className = "" }) {
-  return <span className={`ui-badge ui-badge--${status} ${className}`.trim()}>{children}</span>;
+  return (
+    <Badge
+      variant="outline"
+      className={cn("gap-1.5 font-medium", BADGE_TONE[status] || TONE_NEUTRAL, className)}
+    >
+      {children}
+    </Badge>
+  );
 }
 
 export function ModeBadge({ mode = "serial", children }) {
@@ -16,141 +97,146 @@ export function ModeBadge({ mode = "serial", children }) {
 
 export function Panel({ title, description, aside, children, className = "", headingLevel = 3 }) {
   const Heading = `h${Math.min(6, Math.max(1, headingLevel))}`;
-  return <section className={`ui-panel ${className}`.trim()}>
-    {(title || aside) && <div className="ui-panel__head"><Heading className="ui-panel__title">{title}</Heading>{aside}</div>}
-    {description && <p className="ui-panel__description">{description}</p>}
-    {children}
-  </section>;
+  return (
+    <section className={cn("border-b p-4 last:border-b-0", className)}>
+      {(title || aside) && (
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <Heading className="m-0 text-sm font-semibold text-foreground">{title}</Heading>
+          {aside}
+        </div>
+      )}
+      {description && <p className="mt-0 mb-3 max-w-3xl text-xs leading-relaxed text-muted-foreground">{description}</p>}
+      {children}
+    </section>
+  );
 }
 
 export function SettingPanel(props) {
-  return <Panel {...props} className={`setting-card ${props.className || ""}`.trim()} />;
+  return <Panel {...props} />;
 }
 
+/* A settings section: heading and blurb sit outside the card, the controls
+   sit inside it, so consecutive modules read as separate groups. */
 export function SettingsModule({ title, description, aside, children, className = "", bodyClassName = "" }) {
-  return <section className={`settings-module ${className}`.trim()}>
-    <div className="settings-module-head"><div><h3>{title}</h3>{description && <p>{description}</p>}</div>{aside}</div>
-    <div className={`settings-module-body ${bodyClassName}`.trim()}>{children}</div>
-  </section>;
+  return (
+    <section className={cn("settings-module mb-7", className)}>
+      <div className="flex items-start justify-between gap-6 px-0.5 pb-3">
+        <div className="min-w-0">
+          <h3 className="m-0 text-base font-semibold leading-tight text-foreground">{title}</h3>
+          {description && <p className="mt-1.5 mb-0 max-w-2xl text-xs leading-relaxed text-muted-foreground">{description}</p>}
+        </div>
+        {aside}
+      </div>
+      <div className={cn("settings-module-body overflow-hidden rounded-lg border bg-card", bodyClassName)}>{children}</div>
+    </section>
+  );
 }
 
 export function Field({ label, hint, error, helpId, className = "", children }) {
-  return <label className={`ui-field ${className} ${error ? "ui-field--error" : ""}`.trim()}>
-    <span className="ui-field__label">{label}</span>
-    {children}
-    {(error || hint) && <small className="ui-field__hint" id={helpId}>{error || hint}</small>}
-  </label>;
+  return (
+    <label className={cn("flex flex-col gap-2", className)}>
+      <Label asChild>
+        <span className="text-muted-foreground">{label}</span>
+      </Label>
+      {children}
+      {(error || hint) && (
+        <small id={helpId} className={cn("text-xs leading-snug", error ? "text-destructive" : "text-muted-foreground")}>
+          {error || hint}
+        </small>
+      )}
+    </label>
+  );
 }
 
 export function NumberField({ field, label, hint, value, error, onChange }) {
   const helpId = `${field}-help`;
-  return <Field label={label} hint={hint} error={error} helpId={helpId}>
-    <input type="number" value={value} aria-invalid={Boolean(error)} aria-describedby={helpId} onChange={(event) => onChange(event.target.value)} />
-  </Field>;
+  return (
+    <Field label={label} hint={hint} error={error} helpId={helpId}>
+      <Input
+        type="number"
+        value={value}
+        aria-invalid={Boolean(error)}
+        aria-describedby={helpId}
+        onChange={(event) => onChange(event.target.value)}
+      />
+    </Field>
+  );
 }
 
+/* Radix throws on an empty-string item value, but several call sites use "" to
+   mean "inherit the global default". Swap in a sentinel across the Radix
+   boundary and translate it back on the way out. */
+const EMPTY_VALUE = "__oneshot_empty__";
+const toRadix = (value) => (value === "" || value == null ? EMPTY_VALUE : String(value));
+const fromRadix = (value) => (value === EMPTY_VALUE ? "" : value);
+
 export function TUISelect({ value, onChange, options = [], ariaLabel, disabled = false, className = "" }) {
-  const id = useId().replace(/:/g, "");
-  const triggerRef = useRef(null);
-  const menuRef = useRef(null);
-  const normalized = useMemo(() => options.map((option) => typeof option === "object" ? { ...option, value: String(option.value) } : { value: String(option), label: String(option) }), [options]);
-  const selectedIndex = normalized.findIndex((option) => option.value === String(value ?? ""));
-  const selected = normalized[selectedIndex] || normalized.find((option) => !option.disabled) || { value: "", label: "—" };
-  const [open, setOpen] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(Math.max(selectedIndex, 0));
-  const [menuStyle, setMenuStyle] = useState({});
+  const normalized = useMemo(
+    () =>
+      options.map((option) =>
+        typeof option === "object"
+          ? { ...option, value: toRadix(option.value) }
+          : { value: toRadix(option), label: String(option) },
+      ),
+    [options],
+  );
+  const current = toRadix(value);
+  const selected = normalized.find((option) => option.value === current);
 
-  const enabledIndex = (from, direction) => {
-    if (!normalized.length) return -1;
-    let index = from;
-    for (let count = 0; count < normalized.length; count += 1) {
-      index = (index + direction + normalized.length) % normalized.length;
-      if (!normalized[index].disabled) return index;
-    }
-    return -1;
-  };
-
-  const choose = (index) => {
-    const option = normalized[index];
-    if (!option || option.disabled) return;
-    onChange(option.value);
-    setOpen(false);
-    triggerRef.current?.focus();
-  };
-
-  const openMenu = (direction = 1) => {
-    const fallback = enabledIndex(direction > 0 ? -1 : 0, direction);
-    setActiveIndex(selectedIndex >= 0 && !normalized[selectedIndex]?.disabled ? selectedIndex : fallback);
-    setOpen(true);
-  };
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const updatePosition = () => {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const estimatedHeight = Math.min(248, normalized.length * 36 + 8);
-      const openAbove = window.innerHeight - rect.bottom < estimatedHeight && rect.top > estimatedHeight;
-      setMenuStyle({ left: rect.left, top: openAbove ? rect.top - estimatedHeight - 4 : rect.bottom + 4, width: rect.width });
-    };
-    const closeOutside = (event) => {
-      if (!triggerRef.current?.contains(event.target) && !menuRef.current?.contains(event.target)) setOpen(false);
-    };
-    updatePosition();
-    document.addEventListener("pointerdown", closeOutside, true);
-    window.addEventListener("resize", updatePosition);
-    window.addEventListener("scroll", updatePosition, true);
-    return () => {
-      document.removeEventListener("pointerdown", closeOutside, true);
-      window.removeEventListener("resize", updatePosition);
-      window.removeEventListener("scroll", updatePosition, true);
-    };
-  }, [normalized.length, open]);
-
-  const handleKeyDown = (event) => {
-    if (["ArrowDown", "ArrowUp", "Home", "End", "Enter", " ", "Escape"].includes(event.key)) event.preventDefault();
-    if (event.key === "Escape") { setOpen(false); return; }
-    if (event.key === "Enter" || event.key === " ") {
-      if (open) choose(activeIndex); else openMenu();
-      return;
-    }
-    if (event.key === "Home" || event.key === "End") {
-      if (!open) setOpen(true);
-      setActiveIndex(enabledIndex(event.key === "Home" ? -1 : 0, event.key === "Home" ? 1 : -1));
-      return;
-    }
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-      const direction = event.key === "ArrowDown" ? 1 : -1;
-      if (!open) openMenu(direction);
-      else setActiveIndex((current) => enabledIndex(current, direction));
-    }
-  };
-
-  return <div className={`ui-select ${open ? "ui-select--open" : ""} ${className}`.trim()}>
-    <button ref={triggerRef} type="button" className="ui-select__trigger" role="combobox" aria-label={ariaLabel} aria-controls={`${id}-listbox`} aria-expanded={open} aria-haspopup="listbox" aria-activedescendant={open && activeIndex >= 0 ? `${id}-option-${activeIndex}` : undefined} disabled={disabled} onClick={() => open ? setOpen(false) : openMenu()} onKeyDown={handleKeyDown}>
-      <span className="ui-select__value">{selected.label}</span><span className="ui-select__caret" aria-hidden="true">{open ? "▴" : "▾"}</span>
-    </button>
-    {open && createPortal(<div ref={menuRef} id={`${id}-listbox`} className="ui-select__menu" role="listbox" aria-label={ariaLabel} style={menuStyle}>
-      {normalized.map((option, index) => <div id={`${id}-option-${index}`} key={`${option.value}-${index}`} className={`ui-select__option ${index === activeIndex ? "active" : ""} ${option.value === String(value ?? "") ? "selected" : ""} ${option.disabled ? "disabled" : ""}`.trim()} role="option" aria-selected={option.value === String(value ?? "")} aria-disabled={Boolean(option.disabled)} onPointerMove={() => !option.disabled && setActiveIndex(index)} onPointerDown={(event) => event.preventDefault()} onClick={() => choose(index)}><span className="ui-select__mark" aria-hidden="true">{option.value === String(value ?? "") ? ">" : ""}</span><span className="ui-select__label" title={option.label}>{option.label}</span>{option.meta && <small title={option.meta}>{option.meta}</small>}</div>)}
-    </div>, document.body)}
-  </div>;
+  return (
+    <Select value={selected ? current : undefined} onValueChange={(next) => onChange(fromRadix(next))} disabled={disabled}>
+      <SelectTrigger aria-label={ariaLabel} className={cn("w-full", className)}>
+        <SelectValue placeholder="—" />
+      </SelectTrigger>
+      <SelectContent>
+        {normalized.map((option, index) => (
+          <SelectItem key={`${option.value}-${index}`} value={option.value} disabled={option.disabled}>
+            <span className="truncate" title={option.label}>{option.label}</span>
+            {option.meta && (
+              <span className="ml-auto max-w-[42%] truncate text-xs text-muted-foreground" title={option.meta}>
+                {option.meta}
+              </span>
+            )}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
 }
 
 export function ToggleRow({ checked, onChange, label, description, dangerous = false, disabled = false }) {
-  const { t } = useTranslation();
-  return <div className={`ui-toggle-row ${checked ? "ui-toggle-row--checked" : ""} ${dangerous ? "ui-toggle-row--danger" : ""} ${disabled ? "ui-toggle-row--disabled" : ""}`.trim()}>
-    <span><strong>{label}</strong><small>{description}</small></span>
-    <button type="button" role="switch" aria-checked={Boolean(checked)} disabled={disabled} className="ui-toggle-row__state" onClick={() => onChange(!checked)}>{checked ? t("common.enabled") : t("common.disabled")}</button>
-  </div>;
+  const id = useId();
+  return (
+    <div className={cn("flex items-center gap-4 border-t py-3", disabled && "opacity-50")}>
+      <span className="min-w-0 flex-1">
+        <Label
+          htmlFor={id}
+          className={cn("block text-sm font-semibold", dangerous ? "text-destructive" : "text-foreground")}
+        >
+          {label}
+        </Label>
+        {description && <small className="mt-1 block text-xs leading-relaxed text-muted-foreground">{description}</small>}
+      </span>
+      <Switch
+        id={id}
+        checked={Boolean(checked)}
+        disabled={disabled}
+        aria-label={typeof label === "string" ? label : undefined}
+        onCheckedChange={(next) => onChange(next)}
+        className={cn(dangerous && "data-[state=checked]:bg-destructive")}
+      />
+    </div>
+  );
 }
 
 export function Toolbar({ children, className = "" }) {
-  return <header className={`ui-toolbar ${className}`.trim()}>{children}</header>;
+  return (
+    <header className={cn("flex h-12 shrink-0 items-center gap-3 border-b px-5", className)}>
+      {children}
+    </header>
+  );
 }
 
 export function ToolbarSpacer() {
-  return <span className="ui-toolbar__spacer" aria-hidden="true" />;
+  return <span className="flex-1" aria-hidden="true" />;
 }
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { useTranslation } from "react-i18next";

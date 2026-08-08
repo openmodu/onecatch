@@ -20,6 +20,14 @@
     "checkJs": false,
     "strict": true,
     "skipLibCheck": true,
+    /**
+     * The "@/*" alias mirrors resolve.alias in vite.config.js. shadcn/ui reads it
+     * from here to decide where to write generated components.
+     */
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+    },
   },
   "include": ["src", "bindings"]
 }

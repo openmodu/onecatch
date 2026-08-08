@@ -1,0 +1,829 @@
+/* Layer order is fixed by this first declaration. Slotting `legacy` between
+   components and utilities is what makes the incremental migration tractable:
+   unlayered CSS outranks every Tailwind layer, so as long as the hand-written
+   stylesheets stayed unlayered, no utility class could override them. Inside
+   the layer they keep their own source order (mirage still beats styles). */
+@layer theme, base, components, legacy, app, utilities;
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@import "./styles.css" layer(legacy);
+@import "./ui/tokens.css" layer(legacy);
+@import "./mirage.css" layer(legacy);
+
+/* Theme resolution mirrors appearance.js: no [data-theme] means "follow the OS",
+   an explicit [data-theme] pins it. Keeping the OS branch in CSS (rather than a
+   JS-applied .dark class) is what avoids a light-theme flash before React mounts. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *) {
+    @slot;
+  }
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Run-state colours. The workbench needs more than success/destructive:
+     a run can be queued, running, paused, delivered or failed. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-ui-sans);
+  --font-mono: var(--font-ui-mono);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  /* No webfont is bundled — the system stack resolves to SF Pro on macOS, which
+     is what a Wails desktop shell should look like. Mono is reserved for paths,
+     agent logs, diffs and token counts. */
+  --font-ui-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-ui-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+
+/* ---- Light: the mirage cream canvas, with cards lifted above it ---------- */
+:root {
+  --background: #f5f5f0;
+  --foreground: #1a1a1a;
+  --card: #fcfcfa;
+  --card-foreground: #1a1a1a;
+  --popover: #fcfcfa;
+  --popover-foreground: #1a1a1a;
+  --primary: #694d1f;
+  --primary-foreground: #f7f4ec;
+  --secondary: #e9e7dd;
+  --secondary-foreground: #33302a;
+  --muted: #ebeae3;
+  --muted-foreground: #60605e;
+  --accent: #e4e1d5;
+  --accent-foreground: #1a1a1a;
+  --destructive: #ad2e24;
+  --destructive-foreground: #fdf6f4;
+  --border: #d5d2c6;
+  --input: #c6c4bb;
+  --ring: #694d1f;
+
+  --success: #33732e;
+  --success-foreground: #f3f8f2;
+  --warning: #a15e14;
+  --warning-foreground: #fdf7ee;
+  --info: #216e78;
+  --info-foreground: #f0f8f9;
+
+  --sidebar: #efeee7;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-primary: #694d1f;
+  --sidebar-primary-foreground: #f7f4ec;
+  --sidebar-accent: #e4e1d5;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #d5d2c6;
+  --sidebar-ring: #694d1f;
+}
+
+/* ---- Dark: charcoal canvas, amber stays the identity colour -------------
+   Declared twice on purpose: once for "follow the OS" and once for the pinned
+   [data-theme="dark"]. A media query cannot be merged into a plain selector
+   list, and tokens.css already uses this shape. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #1c1c1c;
+    --foreground: #efefef;
+    --card: #232323;
+    --card-foreground: #efefef;
+    --popover: #272727;
+    --popover-foreground: #efefef;
+    --primary: #edc278;
+    --primary-foreground: #1f1a10;
+    --secondary: #2e2e2e;
+    --secondary-foreground: #efefef;
+    --muted: #2a2a2a;
+    --muted-foreground: #ababab;
+    --accent: #333333;
+    --accent-foreground: #efefef;
+    --destructive: #ff6b61;
+    --destructive-foreground: #26100e;
+    --border: #3a3a3a;
+    --input: #454545;
+    --ring: #edc278;
+
+    --success: #91e082;
+    --success-foreground: #10210d;
+    --warning: #ffba54;
+    --warning-foreground: #241703;
+    --info: #73e0eb;
+    --info-foreground: #062224;
+
+    --sidebar: #202020;
+    --sidebar-foreground: #efefef;
+    --sidebar-primary: #edc278;
+    --sidebar-primary-foreground: #1f1a10;
+    --sidebar-accent: #2e2e2e;
+    --sidebar-accent-foreground: #efefef;
+    --sidebar-border: #333333;
+    --sidebar-ring: #edc278;
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #1c1c1c;
+  --foreground: #efefef;
+  --card: #232323;
+  --card-foreground: #efefef;
+  --popover: #272727;
+  --popover-foreground: #efefef;
+  --primary: #edc278;
+  --primary-foreground: #1f1a10;
+  --secondary: #2e2e2e;
+  --secondary-foreground: #efefef;
+  --muted: #2a2a2a;
+  --muted-foreground: #ababab;
+  --accent: #333333;
+  --accent-foreground: #efefef;
+  --destructive: #ff6b61;
+  --destructive-foreground: #26100e;
+  --border: #3a3a3a;
+  --input: #454545;
+  --ring: #edc278;
+
+  --success: #91e082;
+  --success-foreground: #10210d;
+  --warning: #ffba54;
+  --warning-foreground: #241703;
+  --info: #73e0eb;
+  --info-foreground: #062224;
+
+  --sidebar: #202020;
+  --sidebar-foreground: #efefef;
+  --sidebar-primary: #edc278;
+  --sidebar-primary-foreground: #1f1a10;
+  --sidebar-accent: #2e2e2e;
+  --sidebar-accent-foreground: #efefef;
+  --sidebar-border: #333333;
+  --sidebar-ring: #edc278;
+}
+
+/* ---- Accent themes -------------------------------------------------------
+   Only the identity colour moves; the cream/charcoal canvas stays put. The
+   default ("forest") is the amber-brown already declared above, so it needs no
+   override. Every light-theme accent is dark and every dark-theme accent is
+   light, which is why --primary-foreground never has to change. */
+:root[data-accent="ocean"] { --primary: #1f6475; --ring: #1f6475; --sidebar-primary: #1f6475; --sidebar-ring: #1f6475; }
+:root[data-accent="violet"] { --primary: #684886; --ring: #684886; --sidebar-primary: #684886; --sidebar-ring: #684886; }
+:root[data-accent="amber"] { --primary: #87501d; --ring: #87501d; --sidebar-primary: #87501d; --sidebar-ring: #87501d; }
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent="ocean"] { --primary: #79d7e7; --ring: #79d7e7; --sidebar-primary: #79d7e7; --sidebar-ring: #79d7e7; }
+  :root:not([data-theme="light"])[data-accent="violet"] { --primary: #d0a8f2; --ring: #d0a8f2; --sidebar-primary: #d0a8f2; --sidebar-ring: #d0a8f2; }
+  :root:not([data-theme="light"])[data-accent="amber"] { --primary: #f0bd73; --ring: #f0bd73; --sidebar-primary: #f0bd73; --sidebar-ring: #f0bd73; }
+}
+
+:root[data-theme="dark"][data-accent="ocean"] { --primary: #79d7e7; --ring: #79d7e7; --sidebar-primary: #79d7e7; --sidebar-ring: #79d7e7; }
+:root[data-theme="dark"][data-accent="violet"] { --primary: #d0a8f2; --ring: #d0a8f2; --sidebar-primary: #d0a8f2; --sidebar-ring: #d0a8f2; }
+:root[data-theme="dark"][data-accent="amber"] { --primary: #f0bd73; --ring: #f0bd73; --sidebar-primary: #f0bd73; --sidebar-ring: #f0bd73; }
+
+@layer base {
+  *,
+  ::after,
+  ::before {
+    border-color: var(--border);
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-ui-sans);
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* The run transcript is dense, deeply nested content rather than a control
+   surface, so it keeps class-based rules instead of per-element utilities.
+   Living in @layer app means it outranks the hand-written stylesheets it
+   replaces without having to delete them row by row. */
+@layer app {
+  .conversation-list {
+    display: grid;
+    gap: 8px;
+    padding: 12px 14px 16px;
+  }
+
+  .conversation-user,
+  .conversation-round,
+  .conversation-agent,
+  .conversation-tool {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+  }
+
+  /* A round is a container for its own cards; only the leaves carry a surface. */
+  .conversation-round {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  .conversation-round-body {
+    display: grid;
+    gap: 8px;
+  }
+
+  .conversation-user,
+  .conversation-agent {
+    padding: 14px 16px;
+  }
+
+  .conversation-user {
+    border-color: color-mix(in oklab, var(--primary) 22%, var(--border));
+    background: color-mix(in oklab, var(--primary) 4%, var(--card));
+  }
+
+  .conversation-agent:hover {
+    background: color-mix(in oklab, var(--foreground) 2%, var(--card));
+  }
+
+  .conversation-agent.error {
+    border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));
+    background: color-mix(in oklab, var(--destructive) 5%, var(--card));
+  }
+
+  .conversation-speaker {
+    margin-bottom: 8px;
+  }
+
+  .conversation-speaker strong,
+  .conversation-speaker time,
+  .conversation-round-index {
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-sans);
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .conversation-event-dot.agent { color: var(--info); }
+  .conversation-event-dot.user { color: var(--primary); filter: none; }
+
+  /* Prose reads in the UI font; only machine output stays monospaced. */
+  .conversation-user .markdown-content,
+  .conversation-agent .markdown-content {
+    color: var(--card-foreground);
+    font-family: var(--font-ui-sans);
+    font-size: 14px;
+    line-height: 1.65;
+  }
+
+  .conversation-tool > summary {
+    padding: 0 12px;
+    border-radius: calc(var(--radius) - 2px);
+  }
+
+  .conversation-tool > summary:hover {
+    background: var(--accent);
+  }
+
+  .conversation-tool-summary {
+    min-height: 40px;
+  }
+
+  .conversation-tool-summary strong,
+  .conversation-tool time,
+  .conversation-tool-state {
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-mono);
+    font-size: 12px;
+  }
+
+  .conversation-tool-state { color: var(--success); }
+  .conversation-tool.running {
+    border-color: color-mix(in oklab, var(--info) 35%, var(--border));
+    background: color-mix(in oklab, var(--info) 5%, var(--card));
+  }
+  .conversation-tool.running .conversation-tool-state { color: var(--info); }
+  .conversation-tool.failed {
+    border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));
+    background: color-mix(in oklab, var(--destructive) 5%, var(--card));
+  }
+  .conversation-tool.failed .conversation-tool-state { color: var(--destructive); }
+  .conversation-tool.stalled .conversation-tool-state { color: var(--muted-foreground); }
+
+  .conversation-tool[open] { background: var(--card); }
+  .conversation-tool[open] > summary {
+    border-bottom: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;
+  }
+
+  .conversation-tool-body { border-left-color: var(--info); }
+  .conversation-tool-body pre,
+  .conversation-permission pre {
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-mono);
+  }
+
+  .conversation-permission {
+    border: 1px solid color-mix(in oklab, var(--warning) 35%, var(--border));
+    border-radius: var(--radius);
+    background: color-mix(in oklab, var(--warning) 6%, var(--card));
+  }
+}
+
+/* Settings is a long stack of dense form rows. Like the transcript above, the
+   markup keeps its class names and the rules are re-authored here against the
+   shadcn tokens, rather than expanding into per-element utilities. */
+@layer app {
+  .settings-module-content { padding: 16px; }
+
+  .settings-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+
+  .settings-grid .full { grid-column: 1 / -1; }
+
+  .settings-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+
+  /* Runtime cards stack inside one module card, so only their shared
+     hairlines separate them — no nested borders or radii. */
+  .runtime-setting-card {
+    margin: 0;
+    padding: 16px;
+    border: 0;
+    border-top: 1px solid var(--border);
+    background: transparent;
+  }
+
+  .settings-runtime-module .runtime-setting-card:first-child,
+  .settings-runtime-module .runtime-path-help + .runtime-setting-card {
+    border-top: 0;
+  }
+
+  .setting-status {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 6px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+
+  .setting-status i {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .setting-status.ok { color: var(--success); }
+  .setting-status.bad { color: var(--destructive); }
+
+  .settings-boundary,
+  .settings-inline-empty,
+  .cleanup-preview,
+  .runtime-path-help {
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--muted);
+    padding: 12px 14px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .settings-boundary strong,
+  .cleanup-preview strong {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--foreground);
+    font-size: 13px;
+  }
+
+  .data-root-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .data-root-row code {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    padding: 6px 8px;
+    border-radius: calc(var(--radius) - 4px);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-mono);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .usage-total {
+    color: var(--foreground);
+    font-size: 20px;
+    font-weight: 600;
+  }
+
+  .usage-total small,
+  .storage-calculated-at {
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 400;
+  }
+
+  .usage-bars { display: grid; gap: 8px; margin-top: 12px; }
+  .usage-bars > div { display: grid; gap: 4px; font-size: 11px; color: var(--muted-foreground); }
+  .usage-bars i {
+    display: block;
+    height: 5px;
+    border-radius: 999px;
+    background: var(--primary);
+  }
+
+  /* The confirm dialog predates the shadcn Dialog; until it is ported it at
+     least matches the popover surface. */
+  .confirm-backdrop {
+    position: fixed;
+    z-index: 130;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    background: color-mix(in oklab, var(--foreground) 30%, transparent);
+  }
+
+  .confirm-dialog {
+    width: min(440px, 100%);
+    display: grid;
+    gap: 16px;
+    padding: 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: 0 16px 44px color-mix(in oklab, var(--foreground) 22%, transparent);
+  }
+
+  .confirm-copy h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
+  .confirm-copy p { margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.6; }
+
+  .confirm-detail {
+    padding: 10px 12px;
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+
+  .confirm-dialog.dangerous .confirm-detail {
+    background: color-mix(in oklab, var(--destructive) 8%, transparent);
+    color: var(--destructive);
+  }
+
+  .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+}
+
+/* Command palette. Self-contained BEM block, re-authored onto the shadcn
+   tokens: a floating popover card instead of the old square terminal panel. */
+@layer app {
+  .command-palette-backdrop {
+    position: fixed;
+    z-index: 120;
+    inset: 0;
+    display: grid;
+    place-items: start center;
+    padding: clamp(72px, 16vh, 150px) 20px 20px;
+    background: color-mix(in oklab, var(--foreground) 22%, transparent);
+    -webkit-app-region: no-drag;
+  }
+
+  .command-palette {
+    width: min(620px, calc(100vw - 40px));
+    max-height: min(560px, calc(100vh - 110px));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: 0 20px 50px color-mix(in oklab, var(--foreground) 25%, transparent);
+  }
+
+  .command-palette__search {
+    flex: 0 0 auto;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    min-height: 48px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted-foreground);
+  }
+
+  .command-palette__search input {
+    width: 100%;
+    min-width: 0;
+    height: 47px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+    font-size: 14px;
+    outline: none;
+  }
+
+  .command-palette__search:focus-within .command-palette__search-icon { color: var(--primary); }
+
+  .command-palette kbd {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-mono);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .command-palette__search > kbd {
+    min-width: 28px;
+    padding: 3px 5px;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 4px);
+    text-align: center;
+  }
+
+  .command-palette__body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 6px;
+  }
+
+  .command-palette__group + .command-palette__group {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+  }
+
+  .command-palette__group-title {
+    padding: 4px 8px 5px;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .command-palette__group [role="listbox"] { display: grid; gap: 2px; }
+
+  .command-palette__item {
+    width: 100%;
+    min-width: 0;
+    min-height: 36px;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) minmax(70px, max-content) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 7px 8px;
+    border: 0;
+    border-radius: calc(var(--radius) - 2px);
+    background: transparent;
+    color: var(--muted-foreground);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .command-palette__item:hover,
+  .command-palette__item.active {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .command-palette__icon { display: grid; place-items: center; color: var(--muted-foreground); }
+  .command-palette__item.active .command-palette__icon { color: var(--primary); }
+
+  .command-palette__copy { min-width: 0; }
+  .command-palette__copy strong,
+  .command-palette__copy small {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .command-palette__copy strong { color: inherit; font-size: 13px; font-weight: 500; }
+  .command-palette__copy small { margin-top: 2px; color: var(--muted-foreground); font-size: 11px; }
+
+  .command-palette__meta {
+    min-width: 0;
+    max-width: 160px;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .command-palette__empty {
+    margin: 4px 0 8px;
+    padding: 14px 8px;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    text-align: center;
+  }
+}
+
+/* Rendered agent output. The `em`-relative sizing lets one block sit inside
+   both the transcript and the wider inspector without re-tuning. */
+@layer app {
+  .markdown-content {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    color: var(--card-foreground);
+    font-family: var(--font-ui-sans);
+    font-size: 14px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+
+  .markdown-content > :first-child { margin-top: 0; }
+  .markdown-content > :last-child { margin-bottom: 0; }
+  .markdown-content p { margin: 0 0 0.72em; white-space: pre-wrap; }
+
+  .markdown-content h1,
+  .markdown-content h2,
+  .markdown-content h3,
+  .markdown-content h4 {
+    margin: 1em 0 0.45em;
+    color: inherit;
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .markdown-content h1 { font-size: 1.4em; }
+  .markdown-content h2 { font-size: 1.24em; }
+  .markdown-content h3 { font-size: 1.1em; }
+
+  .markdown-content ul,
+  .markdown-content ol { margin: 0.45em 0 0.75em; padding-left: 1.55em; }
+  .markdown-content ul { list-style: disc; }
+  .markdown-content ol { list-style: decimal; }
+  .markdown-content li + li { margin-top: 0.2em; }
+
+  .markdown-content blockquote {
+    margin: 0.7em 0;
+    padding: 0.15em 0.85em;
+    border-left: 3px solid var(--info);
+    color: var(--muted-foreground);
+  }
+
+  .markdown-content pre {
+    max-width: 100%;
+    margin: 0.75em 0;
+    padding: 11px 12px;
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--muted);
+  }
+
+  .markdown-content code {
+    padding: 0.08em 0.32em;
+    border-radius: calc(var(--radius) - 6px);
+    background: var(--muted);
+    color: var(--foreground);
+    font-family: var(--font-ui-mono);
+    font-size: 0.9em;
+  }
+
+  .markdown-content pre code {
+    padding: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    white-space: pre;
+  }
+
+  .markdown-content table {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0.75em 0;
+    border-collapse: collapse;
+    table-layout: fixed;
+    overflow: hidden;
+    border-radius: calc(var(--radius) - 2px);
+  }
+
+  .markdown-content th,
+  .markdown-content td {
+    padding: 7px 10px;
+    border: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .markdown-content th { background: var(--muted); font-weight: 600; }
+  .markdown-content a { color: var(--info); text-decoration: underline; text-underline-offset: 2px; }
+  .markdown-content hr { margin: 1em 0; border: 0; border-top: 1px solid var(--border); }
+  .markdown-content input[type="checkbox"] { margin-right: 0.4em; }
+
+  /* Toast: bottom-right, tinted by outcome on the leading edge only. */
+  .toast {
+    position: fixed;
+    z-index: 140;
+    right: 20px;
+    bottom: 20px;
+    max-width: 420px;
+    padding: 11px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    font-size: 13px;
+    box-shadow: 0 12px 32px color-mix(in oklab, var(--foreground) 22%, transparent);
+  }
+
+  .toast.success { border-left: 3px solid var(--success); }
+  .toast.error { border-left: 3px solid var(--destructive); }
+}
+
+/* Wails owns the window chrome: the titlebar drags, anything interactive inside
+   it must opt back out or the control becomes unclickable. */
+@utility drag-region {
+  --wails-draggable: drag;
+  -webkit-app-region: drag;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+@utility no-drag {
+  --wails-draggable: no-drag;
+  -webkit-app-region: no-drag;
+}
