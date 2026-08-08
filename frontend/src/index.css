@@ -315,6 +315,7 @@
     font-family: var(--font-ui-sans);
     font-size: 12px;
     font-weight: 500;
+    font-variant-numeric: tabular-nums;
   }
 
   .conversation-event-dot.agent { color: var(--info); }
@@ -342,12 +343,22 @@
     min-height: 40px;
   }
 
-  .conversation-tool-summary strong,
-  .conversation-tool time,
-  .conversation-tool-state {
+  /* Only the command itself is code; the state word is prose and the timestamp
+     is a number, so those move to the UI face. */
+  .conversation-tool-summary strong {
     color: var(--muted-foreground);
     font-family: var(--font-ui-mono);
     font-size: 12px;
+  }
+
+  .conversation-tool time,
+  .conversation-tool-state {
+    color: var(--muted-foreground);
+    /* Stated explicitly: the legacy rules use the `font:` shorthand, which
+       supplies a family this rule would otherwise inherit from them. */
+    font-family: var(--font-ui-sans);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
   }
 
   .conversation-tool-state { color: var(--success); }

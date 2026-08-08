@@ -765,7 +765,15 @@ function App() {
 
   const sidebarWorkspaces = useMemo(() => workspaceSections(workspaces, { selectedID: workspaceID, query: "", expanded: workspaceExpanded }), [workspaceExpanded, workspaceID, workspaces]);
   const goView = useCallback((next) => { setEditor(null); setEditorSourceID(""); setView(next); }, []);
-  const commandText = view === "settings" ? `${t("sidebar.settings")} @ ~/.oneshot` : selectedWorkspace ? `${selectedWorkspace.name} @ ${selectedWorkspace.path}` : t("app.selectWorkspace");
+  // Split rather than one "name @ path" string: the shell-prompt framing was
+  // the loudest terminal cue in the chrome. The label is prose, the path is a
+  // real filesystem path and keeps the mono face.
+  const location = view === "settings"
+    ? { label: t("sidebar.settings"), path: "~/.oneshot" }
+    : selectedWorkspace
+      ? { label: selectedWorkspace.name, path: selectedWorkspace.path }
+      : { label: t("app.selectWorkspace"), path: "" };
+  const commandText = location.path ? `${location.label} · ${location.path}` : location.label;
 
   const toggleWorkspaceSearch = useCallback(() => setWorkspaceSearchOpen((open) => !open), []);
   const clearSidebarSearch = useCallback(() => { setGlobalSearchQuery(""); setGlobalTaskItems([]); }, []);
@@ -870,7 +878,10 @@ function App() {
         <div className="flex h-11 shrink-0 items-center gap-3 border-b px-5">
           {/* The workspace path is machine text, so it keeps the mono face
               while the rest of the chrome moves to the UI font. */}
-          <strong className="min-w-0 truncate font-mono text-[13px] font-medium text-muted-foreground" title={commandText}>{commandText}</strong>
+          <span className="flex min-w-0 items-baseline gap-2" title={commandText}>
+            <strong className="shrink-0 text-[13px] font-semibold text-foreground">{location.label}</strong>
+            {location.path && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{location.path}</span>}
+          </span>
           <button type="button" className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}

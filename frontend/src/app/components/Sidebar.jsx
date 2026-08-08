@@ -1,6 +1,6 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Ellipsis, Folder, FolderOpen, Pin, Plus, Search, Trash2 } from "lucide-react";
+import { Ellipsis, Folder, FolderOpen, Menu, Pin, Plus, Search, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -249,12 +249,12 @@ function Sidebar({
             if (entry.kind === "queued") {
               const task = entry.item;
               const selected = selectedQueuedTaskID === task.id;
-              return <button type="button" className={`project-task-item grid w-full min-w-0 grid-cols-[10px_minmax(0,1fr)] items-center gap-1 rounded-md bg-transparent py-1.5 pr-2 pl-1 text-left transition-colors hover:bg-accent hover:text-foreground ${selected ? "selected bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openQueuedTask(task)}><span className="project-task-marker text-center font-bold text-primary" aria-hidden="true">{selected ? "*" : ""}</span><span className="project-task-title min-w-0 truncate text-[13px] font-medium">{task.title}</span></button>;
+              return <button type="button" className={`project-task-item flex w-full min-w-0 items-center gap-2 rounded-md bg-transparent py-1.5 pr-2 pl-2.5 text-left transition-colors hover:bg-accent hover:text-foreground ${selected ? "selected bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openQueuedTask(task)}><span className={`size-1.5 shrink-0 rounded-full ${selected ? "bg-primary" : "bg-transparent"}`} aria-hidden="true" /><span className="project-task-title min-w-0 truncate text-[13px] font-medium">{task.title}</span></button>;
             }
             const run = entry.item;
             const title = run.task?.title || run.id;
             const selected = selectedRunID === run.id;
-            return <button type="button" className={`project-task-item grid w-full min-w-0 grid-cols-[10px_minmax(0,1fr)] items-center gap-1 rounded-md bg-transparent py-1.5 pr-2 pl-1 text-left transition-colors hover:bg-accent hover:text-foreground ${selected ? "selected bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openRun(run)}><span className="project-task-marker text-center font-bold text-primary" aria-hidden="true">{selected ? "*" : ""}</span><span className="project-task-title min-w-0 truncate text-[13px] font-medium">{title}</span></button>;
+            return <button type="button" className={`project-task-item flex w-full min-w-0 items-center gap-2 rounded-md bg-transparent py-1.5 pr-2 pl-2.5 text-left transition-colors hover:bg-accent hover:text-foreground ${selected ? "selected bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openRun(run)}><span className={`size-1.5 shrink-0 rounded-full ${selected ? "bg-primary" : "bg-transparent"}`} aria-hidden="true" /><span className="project-task-title min-w-0 truncate text-[13px] font-medium">{title}</span></button>;
           })}
           {!taskEntries.length && !runLoading && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
           {runLoading && !taskEntries.length && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{t("task.loading")}</div>}
@@ -268,7 +268,7 @@ function Sidebar({
 
   const widthBounds = typeof window === "undefined" ? sidebarWidthBounds() : sidebarWidthBounds(window.innerWidth);
   return <aside className={`sidebar relative z-30 flex min-h-0 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground ${resizing ? "resizing" : ""}`} style={{ width: `${width}px` }}>
-    <div className="brand grid min-h-[62px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b pt-3.5 pr-3 pb-3 pl-4"><strong className="block text-[15px] font-bold tracking-[0.14em] text-primary">ONESHOT</strong><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger ${workspaceSearchOpen ? "active" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={16} aria-hidden="true" /></Action></div>
+    <div className="brand grid min-h-[62px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b pt-3.5 pr-3 pb-3 pl-4"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">Oneshot</strong><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger ${workspaceSearchOpen ? "active" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={16} aria-hidden="true" /></Action></div>
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
       <div className="project-sections min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pt-3 pb-3">
         <section className="project-section" aria-labelledby="pinned-project-heading">
@@ -288,8 +288,8 @@ function Sidebar({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button className={`secondary-navigation-trigger flex min-h-[52px] w-full items-center gap-2.5 bg-transparent px-4 text-sm font-medium transition-colors hover:bg-accent ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
-            <span className="secondary-navigation-marker font-bold text-primary" aria-hidden="true">&gt;</span>
-            <b>{t("sidebar.menu")}</b>
+            <Menu size={16} aria-hidden="true" />
+            <b className="font-medium">{t("sidebar.menu")}</b>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent side="top" align="start" sideOffset={6} className="secondary-navigation-menu w-[var(--radix-dropdown-menu-trigger-width)]">
