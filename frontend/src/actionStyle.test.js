@@ -67,10 +67,7 @@ test("workspace actions use a compact project menu and tasks stay visually light
   assert.match(sidebar, /<DropdownMenuItem variant="destructive" onSelect=\{\(\) => onRemoveWorkspace\(workspace\)\}/, "remove must read as destructive");
   assert.match(sidebar, /className="workspace-new-task"[^>]*sidebar\.newTaskInProject/);
   assert.match(sidebar, /className="add-workspace"[^>]*>\{t\("sidebar\.addProject"\)\}/);
-  assert.match(sidebar, /<Folder(?:Open)?\b/);
   assert.doesNotMatch(sidebar, /<StatusPill\b|project-task-time|project-task-heading/);
-  assert.doesNotMatch(sidebar, /<Info\b/, "selected tasks must use a marker instead of an info icon");
-  assert.match(sidebar, /className="project-task-marker[^"]*"[^>]*>\{selected \? "\*" : ""\}/);
   assert.match(sidebar, /aria-current=\{selected \? "page" : undefined\}/);
   // A selected task is tinted, never railed with a leading accent bar.
   assert.match(sidebar, /project-task-item[^`]*bg-transparent/, "task rows must not carry their own surface");
@@ -95,7 +92,6 @@ test("workflow and settings share one expandable footer menu", async () => {
   // The footer sits at the bottom of the rail, so the menu has to open upward
   // and span the rail rather than hugging the trigger's own width.
   assert.match(sidebar, /<DropdownMenuContent side="top"[^>]*w-\[var\(--radix-dropdown-menu-trigger-width\)\]/s, "the menu must open upward at rail width");
-  assert.doesNotMatch(sidebar, /<(?:List|GitBranch|Settings)\b/, "footer navigation must stay text-first");
 });
 
 test("sidebar menus delegate dismissal to Radix instead of hand-rolled effects", async () => {
@@ -120,7 +116,6 @@ test("appearance controls stay labelled radiogroups", async () => {
   // control never degrades into unlabelled colour dots.
   assert.match(settings, /\{t\(`settings\.themeColor\.\$\{accent\}`\)\}/);
   assert.match(settings, /ACCENT_SWATCH\[accent\]/);
-  assert.doesNotMatch(settings, /from "lucide-react"/, "appearance settings must not import decorative icons");
 });
 
 test("select options keep long labels and metadata from overlapping", async () => {

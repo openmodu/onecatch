@@ -163,8 +163,8 @@ function GitInspector({ mode, workspaceID, runWorkerID = "", notify }) {
       <Action size="compact" tone="muted" className="shrink-0" disabled={refreshing} aria-label={t("inspector.refreshGit")} onClick={load}>{refreshing ? t("common.refreshing") : t("common.refresh")}</Action>
     </div>
     <div className="flex items-center gap-3 rounded-md border bg-muted/50 px-2.5 py-2 text-[11px]" aria-label={t("inspector.gitSync")}>
-      <span className="font-mono text-muted-foreground">↑ {snapshot?.ahead || 0}</span>
-      <span className="font-mono text-muted-foreground">↓ {snapshot?.behind || 0}</span>
+      <span className="tabular-nums text-muted-foreground">↑ {snapshot?.ahead || 0}</span>
+      <span className="tabular-nums text-muted-foreground">↓ {snapshot?.behind || 0}</span>
       <strong className={`ml-auto font-medium ${files.length ? "text-warning" : "text-success"}`}>{files.length ? t("inspector.changesCount", { count: files.length }) : t("inspector.clean")}</strong>
     </div>
     {source === "local" && snapshot?.isRepo && <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
@@ -182,7 +182,7 @@ function GitInspector({ mode, workspaceID, runWorkerID = "", notify }) {
         const state = fileState(file, t);
         const tone = FILE_TONE[state.tone] || "text-muted-foreground";
         return <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-2 py-0.5" key={file.path}>
-          <b className={`font-mono text-[11px] font-bold ${tone}`}>{state.label}</b>
+          <b className={`text-[11px] font-semibold ${tone}`}>{state.label}</b>
           <span className="truncate font-mono text-[11px] text-muted-foreground" title={file.path}>{file.path}</span>
         </div>;
       })}
