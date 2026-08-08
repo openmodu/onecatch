@@ -1,6 +1,12 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Ellipsis, Folder, FolderOpen, Pin, Plus, Search, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Action } from "../../ui/primitives.jsx";
 import {
   SIDEBAR_DEFAULT_WIDTH,
@@ -61,17 +67,9 @@ function Sidebar({
   const [resizing, setResizing] = useState(false);
   const [expandedWorkspaceID, setExpandedWorkspaceID] = useState(workspaceID);
   const [taskListExpanded, setTaskListExpanded] = useState(false);
-  const [projectMenuWorkspaceID, setProjectMenuWorkspaceID] = useState("");
-  const [projectMenuPosition, setProjectMenuPosition] = useState({ left: 0, top: 0 });
   const [pendingSearchTask, setPendingSearchTask] = useState(null);
-  const [secondaryNavigationOpen, setSecondaryNavigationOpen] = useState(false);
   const drag = useRef(null);
   const searchTrigger = useRef(null);
-  const projectMenu = useRef(null);
-  const projectMenuTrigger = useRef(null);
-  const secondaryNavigation = useRef(null);
-  const secondaryNavigationTrigger = useRef(null);
-  const firstSecondaryNavigationItem = useRef(null);
 
   const taskEntries = useMemo(() => buildSidebarTaskEntries(tasks, runs, { query: taskSearch, status: taskStatus }), [runs, taskSearch, taskStatus, tasks]);
   const visibleTaskEntries = visibleSidebarTaskEntries(taskEntries, taskListExpanded);
@@ -116,24 +114,6 @@ function Sidebar({
   }, [onSelectQueued, onSelectRun, pendingSearchTask, workspaceID]);
 
   useEffect(() => {
-    if (!projectMenuWorkspaceID) return undefined;
-    const closeOutside = (event) => {
-      if (!projectMenu.current?.contains(event.target)) setProjectMenuWorkspaceID("");
-    };
-    const closeWithKeyboard = (event) => {
-      if (event.key !== "Escape") return;
-      setProjectMenuWorkspaceID("");
-      projectMenuTrigger.current?.focus();
-    };
-    window.addEventListener("pointerdown", closeOutside);
-    window.addEventListener("keydown", closeWithKeyboard);
-    return () => {
-      window.removeEventListener("pointerdown", closeOutside);
-      window.removeEventListener("keydown", closeWithKeyboard);
-    };
-  }, [projectMenuWorkspaceID]);
-
-  useEffect(() => {
     const openWithKeyboard = (event) => {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLocaleLowerCase() !== "k") return;
       event.preventDefault();
@@ -143,36 +123,13 @@ function Sidebar({
     return () => window.removeEventListener("keydown", openWithKeyboard);
   }, [closeSearch, openSearch, workspaceSearchOpen]);
 
-  useEffect(() => {
-    if (!secondaryNavigationOpen) return undefined;
-    firstSecondaryNavigationItem.current?.focus();
-    const closeOutside = (event) => {
-      if (!secondaryNavigation.current?.contains(event.target)) setSecondaryNavigationOpen(false);
-    };
-    const closeWithKeyboard = (event) => {
-      if (event.key !== "Escape") return;
-      setSecondaryNavigationOpen(false);
-      secondaryNavigationTrigger.current?.focus();
-    };
-    window.addEventListener("pointerdown", closeOutside);
-    window.addEventListener("keydown", closeWithKeyboard);
-    return () => {
-      window.removeEventListener("pointerdown", closeOutside);
-      window.removeEventListener("keydown", closeWithKeyboard);
-    };
-  }, [secondaryNavigationOpen]);
-
   const commitWidth = (next) => {
     const fitted = clampSidebarWidth(next, window.innerWidth);
     setWidth(fitted);
     writeSidebarWidth(window.localStorage, fitted);
   };
-  const goToSecondaryView = (nextView) => {
-    setSecondaryNavigationOpen(false);
-    onGoView(nextView);
-  };
+  const goToSecondaryView = (nextView) => onGoView(nextView);
   const toggleProject = (workspace) => {
-    setProjectMenuWorkspaceID("");
     const opening = expandedWorkspaceID !== workspace.id;
     setExpandedWorkspaceID(opening ? workspace.id : "");
     setTaskListExpanded(false);
@@ -210,24 +167,9 @@ function Sidebar({
     else onSelectQueued(item.task);
   };
   const createTaskForWorkspace = (workspace) => {
-    setProjectMenuWorkspaceID("");
     onGoView("tasks");
     if (workspace.id !== workspaceID) onSelectWorkspace(workspace.id);
     onNewTask();
-  };
-  const toggleProjectMenu = (event, workspace) => {
-    if (projectMenuWorkspaceID === workspace.id) {
-      setProjectMenuWorkspaceID("");
-      return;
-    }
-    const trigger = event.currentTarget.getBoundingClientRect();
-    const menuWidth = 176;
-    const menuHeight = 82;
-    setProjectMenuPosition({
-      left: Math.min(trigger.right + 4, window.innerWidth - menuWidth - 8),
-      top: Math.min(trigger.top, window.innerHeight - menuHeight - 8),
-    });
-    setProjectMenuWorkspaceID(workspace.id);
   };
   const startResize = (event) => {
     event.preventDefault();
@@ -273,21 +215,33 @@ function Sidebar({
   const renderWorkspace = (workspace) => {
     const active = workspace.id === workspaceID;
     const expanded = expandedWorkspaceID === workspace.id;
-    const menuOpen = projectMenuWorkspaceID === workspace.id;
     const taskPanelID = `workspace-tasks-${encodeURIComponent(workspace.id)}`;
-    const menuID = `workspace-menu-${encodeURIComponent(workspace.id)}`;
-    return <div className={`workspace-row group relative block min-w-0 ${active ? "active" : ""} ${expanded ? "expanded" : ""} ${menuOpen ? "menu-open" : ""}`} key={workspace.id}>
+    return <div className={`workspace-row group relative block min-w-0 ${active ? "active" : ""} ${expanded ? "expanded" : ""}`} key={workspace.id}>
       <button className={`workspace-item grid w-full min-w-0 grid-cols-[20px_minmax(0,1fr)] items-center gap-2 rounded-md py-2 pr-16 pl-2 text-left transition-colors hover:bg-accent ${active ? "bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={workspace.path} aria-expanded={expanded} aria-controls={taskPanelID} onClick={() => toggleProject(workspace)}>
         {expanded ? <FolderOpen size={18} aria-hidden="true" className="text-muted-foreground" /> : <Folder size={18} aria-hidden="true" className="text-muted-foreground" />}
         <span className="min-w-0"><strong className="block truncate text-sm font-medium">{workspace.name}</strong></span>
       </button>
-      <div className="workspace-row-actions absolute top-1.5 right-1.5 z-20 hidden h-6 items-center gap-1 group-hover:flex group-focus-within:flex" ref={menuOpen ? projectMenu : null}>
-        <Action ref={menuOpen ? projectMenuTrigger : null} size="compact" tone="muted" className="workspace-menu-trigger" aria-label={t("sidebar.projectMenu", { name: workspace.name })} aria-haspopup="menu" aria-expanded={menuOpen} aria-controls={menuID} title={t("sidebar.projectMenu", { name: workspace.name })} onClick={(event) => toggleProjectMenu(event, workspace)}><Ellipsis size={16} aria-hidden="true" /></Action>
+      {/* Hidden by opacity rather than `display: none`, for two reasons:
+          display:none drops the buttons out of the tab order, so they were
+          unreachable by keyboard and group-focus-within could never fire; and
+          it un-focuses the trigger the moment the menu closes, leaving Radix
+          nowhere to restore focus to. has-[[data-state=open]] keeps the row
+          revealed while the menu is up — Radix stamps that on the trigger. */}
+      <div className="workspace-row-actions absolute top-1.5 right-1.5 z-20 flex h-6 items-center gap-1 opacity-0 transition-opacity pointer-events-none group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Action size="compact" tone="muted" className="workspace-menu-trigger" aria-label={t("sidebar.projectMenu", { name: workspace.name })} title={t("sidebar.projectMenu", { name: workspace.name })}><Ellipsis size={16} aria-hidden="true" /></Action>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" side="right" className="w-44">
+            <DropdownMenuItem onSelect={() => onTogglePinned(workspace)}>
+              <Pin size={15} aria-hidden="true" />{t(workspace.pinned ? "common.unpin" : "common.pin")}
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={() => onRemoveWorkspace(workspace)}>
+              <Trash2 size={15} aria-hidden="true" />{t("common.remove")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Action size="compact" tone="primary" className="workspace-new-task" aria-label={t("sidebar.newTaskInProject", { name: workspace.name })} title={t("sidebar.newTaskInProject", { name: workspace.name })} onClick={() => createTaskForWorkspace(workspace)}><Plus size={14} strokeWidth={2.5} aria-hidden="true" /></Action>
-        {menuOpen && <div className="workspace-context-menu fixed z-40 grid w-44 gap-0.5 rounded-md border bg-popover p-1 text-popover-foreground shadow-md" id={menuID} role="menu" aria-label={t("sidebar.projectMenu", { name: workspace.name })} style={projectMenuPosition}>
-          <button type="button" role="menuitem" className="grid w-full grid-cols-[18px_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground" onClick={() => { onTogglePinned(workspace); setProjectMenuWorkspaceID(""); }}><Pin size={15} aria-hidden="true" /><span>{t(workspace.pinned ? "common.unpin" : "common.pin")}</span></button>
-          <button type="button" role="menuitem" className="danger grid w-full grid-cols-[18px_minmax(0,1fr)] items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive transition-colors hover:bg-destructive/10" onClick={() => { onRemoveWorkspace(workspace); setProjectMenuWorkspaceID(""); }}><Trash2 size={15} aria-hidden="true" /><span>{t("common.remove")}</span></button>
-        </div>}
       </div>
       {expanded && active && <div className="project-task-panel mt-px mr-1 mb-2 ml-[18px]" id={taskPanelID}>
         <div className="project-task-list grid gap-px">
@@ -329,13 +283,24 @@ function Sidebar({
       </div>
     </div>
     <nav className="primary-nav relative mt-auto border-t">
-      <div className="secondary-navigation static" ref={secondaryNavigation}>
-        {secondaryNavigationOpen && <div className="secondary-navigation-menu absolute right-2 bottom-[calc(100%+6px)] left-2 z-25 grid gap-1 rounded-md border bg-popover p-1.5 text-popover-foreground shadow-md" id="sidebar-secondary-navigation" role="menu" aria-label={t("sidebar.menu")}>
-          <button ref={firstSecondaryNavigationItem} role="menuitem" className={`w-full rounded-sm px-2.5 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground ${view === "workflows" || editor ? "active bg-accent text-accent-foreground" : "text-muted-foreground"}`} onClick={() => goToSecondaryView("workflows")}><b>{t("sidebar.workflows")}</b></button>
-          <button role="menuitem" className={`w-full rounded-sm px-2.5 py-2 text-left text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground ${view === "settings" && !editor ? "active bg-accent text-accent-foreground" : "text-muted-foreground"}`} onClick={() => goToSecondaryView("settings")}><b>{t("sidebar.settings")}</b></button>
-        </div>}
-        <button ref={secondaryNavigationTrigger} className={`secondary-navigation-trigger flex min-h-[52px] w-full items-center gap-2.5 bg-transparent px-4 text-sm font-medium transition-colors hover:bg-accent ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")} aria-haspopup="menu" aria-expanded={secondaryNavigationOpen} aria-controls="sidebar-secondary-navigation" onClick={() => setSecondaryNavigationOpen((open) => !open)}><span className="secondary-navigation-marker font-bold text-primary" aria-hidden="true">&gt;</span><b>{t("sidebar.menu")}</b></button>
-      </div>
+      {/* side="top" + sideOffset opens the menu upward and full-rail wide,
+          matching where the footer sits. */}
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <button className={`secondary-navigation-trigger flex min-h-[52px] w-full items-center gap-2.5 bg-transparent px-4 text-sm font-medium transition-colors hover:bg-accent ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
+            <span className="secondary-navigation-marker font-bold text-primary" aria-hidden="true">&gt;</span>
+            <b>{t("sidebar.menu")}</b>
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="top" align="start" sideOffset={6} className="secondary-navigation-menu w-[var(--radix-dropdown-menu-trigger-width)]">
+          <DropdownMenuItem className={view === "workflows" || editor ? "active bg-accent text-accent-foreground" : ""} onSelect={() => goToSecondaryView("workflows")}>
+            <b>{t("sidebar.workflows")}</b>
+          </DropdownMenuItem>
+          <DropdownMenuItem className={view === "settings" && !editor ? "active bg-accent text-accent-foreground" : ""} onSelect={() => goToSecondaryView("settings")}>
+            <b>{t("sidebar.settings")}</b>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </nav>
     {workspaceSearchOpen && <Suspense fallback={null}><CommandPalette open query={searchQuery} taskResults={searchTaskItems} loading={searchLoading} workspaces={workspaces} onQueryChange={onSearchQueryChange} onClose={closeSearch} onOpenTask={openTaskFromSearch} onOpenWorkspace={openWorkspaceFromSearch} onNewTask={() => { onGoView("tasks"); onNewTask(); }} onAddWorkspace={onAddWorkspace} onOpenSettings={() => onGoView("settings")} /></Suspense>}
     <div className="sidebar-resizer group absolute top-0 -right-[5px] z-20 h-full w-2.5 cursor-col-resize touch-none select-none" role="separator" aria-label={t("sidebar.resize")} aria-orientation="vertical" aria-valuemin={widthBounds.min} aria-valuemax={widthBounds.max} aria-valuenow={width} tabIndex={0} title={t("sidebar.resizeHint")} onDoubleClick={() => commitWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={resizeWithKeyboard} onPointerDown={startResize}><span aria-hidden="true" className={`absolute inset-y-0 left-1 w-px bg-transparent group-hover:w-0.5 group-hover:bg-ring group-focus-visible:w-0.5 group-focus-visible:bg-ring ${resizing ? "w-0.5 bg-ring" : ""}`} /></div>
