@@ -38,6 +38,18 @@ static char oneshotSidebarBridgeKey;
 static char oneshotWindowBorderOverlayKey;
 static NSString *const oneshotSidebarMessageName = @"oneshotSidebar";
 static const CGFloat oneshotSidebarCornerRadius = 16.0;
+// The rail is an inset floating panel, not a flush column: it clears the window
+// edge on the left, top and bottom, and leaves a gap before the content panel.
+static const CGFloat oneshotSidebarInset = 8.0;
+static const CGFloat oneshotSidebarGutter = 4.0;
+
+static NSRect oneshotSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
+	CGFloat width = MAX(0.0, MIN(railWidth, NSWidth(bounds)) - oneshotSidebarInset - oneshotSidebarGutter);
+	return NSMakeRect(NSMinX(bounds) + oneshotSidebarInset,
+	                  NSMinY(bounds) + oneshotSidebarInset,
+	                  width,
+	                  MAX(0.0, NSHeight(bounds) - oneshotSidebarInset * 2.0));
+}
 
 // Canvas colour mirrored from frontend tokens (--acp-canvas): light #F5F5F0,
 // dark #1C1C1C. Resolved against the window's effective appearance at apply
@@ -168,8 +180,7 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 
 	if (width != nil && self.effectView.superview != nil) {
 		NSRect bounds = self.effectView.superview.bounds;
-		CGFloat nextWidth = MAX(0.0, MIN(width.doubleValue, NSWidth(bounds)));
-		self.effectView.frame = NSMakeRect(NSMinX(bounds), NSMinY(bounds), nextWidth, NSHeight(bounds));
+		self.effectView.frame = oneshotSidebarPanelFrame(bounds, width.doubleValue);
 		self.canvasView.frame = bounds;
 		self.borderView.frame = self.effectView.frame;
 	}
@@ -206,7 +217,7 @@ static void oneshotInstallSidebarMaterial(NSWindow *window) {
 	canvasView.layer.backgroundColor = oneshotCanvasColor(window.effectiveAppearance).CGColor;
 	canvasView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
 	NSVisualEffectView *effectView = [[NSVisualEffectView alloc]
-		initWithFrame:NSMakeRect(NSMinX(container.bounds), NSMinY(container.bounds), 216.0, NSHeight(container.bounds))];
+		initWithFrame:oneshotSidebarPanelFrame(container.bounds, 216.0)];
 	effectView.material = NSVisualEffectMaterialSidebar;
 	effectView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
 	effectView.state = NSVisualEffectStateFollowsWindowActiveState;
