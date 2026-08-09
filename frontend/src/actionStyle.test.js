@@ -93,14 +93,67 @@ test("application chrome cannot be selected while transcript content remains cop
   assert.match(workbench, /className="conversation-scroll[^"]*\bselect-text\b/, "conversation content must remain explicitly selectable");
 });
 
-test("workflow and settings share one expandable footer menu", async () => {
+test("application grouping uses spacing and surfaces instead of horizontal rules", async () => {
+  const sources = await jsxSources();
+  for (const [filename, source] of sources) {
+    const relative = path.relative(sourceRoot, filename);
+    if (relative !== path.join("ui", "primitives.jsx") && !relative.startsWith(`app${path.sep}`)) continue;
+    assert.doesNotMatch(
+      source,
+      /\b(?:border-(?:t|b)(?:-[^\s"'`}]+)?|border-y(?:-[^\s"'`}]+)?|divide-y(?:-[^\s"'`}]+)?)\b/,
+      `${relative} still draws an open horizontal separator`,
+    );
+  }
+
+  for (const file of ["styles.css", "mirage.css", "index.css"]) {
+    const raw = await readFile(path.join(sourceRoot, file), "utf8");
+    // A horizontal rule authored inside markdown is document content, not app
+    // chrome, and remains a valid part of the renderer.
+    const css = raw.replace(/\.markdown-content hr\s*\{[^}]*\}/g, "");
+    assert.doesNotMatch(css, /border-(?:top|bottom)\s*:/, `${file} still contains a horizontal separator rule`);
+  }
+});
+
+test("workflow and settings share one contained footer menu", async () => {
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
   assert.match(sidebar, /<DropdownMenuTrigger asChild>[\s\S]{0,200}?className={`secondary-navigation-trigger/);
   assert.match(sidebar, /<DropdownMenuItem[^>]*onSelect=\{\(\) => goToSecondaryView\("workflows"\)\}/);
   assert.match(sidebar, /<DropdownMenuItem[^>]*onSelect=\{\(\) => goToSecondaryView\("settings"\)\}/);
-  // The footer sits at the bottom of the rail, so the menu has to open upward
-  // and span the rail rather than hugging the trigger's own width.
-  assert.match(sidebar, /<DropdownMenuContent side="top"[^>]*w-\[var\(--radix-dropdown-menu-trigger-width\)\]/s, "the menu must open upward at rail width");
+  // The footer sits at the bottom of the rail, so the menu opens upward while
+  // staying inset from both rounded rail edges instead of spilling over them.
+  assert.match(sidebar, /<DropdownMenuContent side="top"[^>]*alignOffset=\{8\}[^>]*collisionPadding=\{12\}[^>]*w-\[calc\(var\(--radix-dropdown-menu-trigger-width\)-16px\)\]/s, "the menu must stay inside the rounded rail");
+});
+
+test("settings and workflows are routed to singleton native windows", async () => {
+  const main = await readFile(path.join(sourceRoot, "main.jsx"), "utf8");
+  const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
+  assert.match(main, /windowKind === "settings" \? SettingsWindow : windowKind === "workflows" \? WorkflowsWindow : App/);
+  assert.match(app, /next === "settings" \? WindowBinding\.OpenSettings\(\) : WindowBinding\.OpenWorkflows\(\)/);
+});
+
+test("the settings window uses a flush native vibrancy rail sized to its redesigned navigation", async () => {
+  const settings = await readFile(path.join(sourceRoot, "app", "SettingsPage.jsx"), "utf8");
+  const auxiliary = await readFile(path.join(sourceRoot, "app", "AuxiliaryWindow.jsx"), "utf8");
+  assert.match(settings, /grid-cols-\[248px_minmax\(0,1fr\)\]/);
+  assert.match(settings, /<ScrollArea className="sidebar settings-sidebar[^\"]*border-r/);
+  assert.match(settings, /<aside className="[^"]*pt-\[70px\]"/);
+  assert.match(auxiliary, /nativeSidebar\.postMessage\(\{ width: document\.querySelector\("\.settings-sidebar"\)[^;]*flush: true/);
+  assert.match(auxiliary, /flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-foreground/);
+});
+
+test("settings renders directly through shadcn instead of the TUI compatibility layer", async () => {
+  const settings = await readFile(path.join(sourceRoot, "app", "SettingsPage.jsx"), "utf8");
+  const controls = await readFile(path.join(sourceRoot, "app", "components", "settings", "SettingsControls.jsx"), "utf8");
+  const workerPage = await readFile(path.join(sourceRoot, "app", "components", "WorkerPage.jsx"), "utf8");
+  const workerModal = await readFile(path.join(sourceRoot, "app", "components", "WorkerModal.jsx"), "utf8");
+  for (const [name, source] of [["settings", settings], ["worker page", workerPage], ["worker dialog", workerModal]]) {
+    assert.doesNotMatch(source, /ui\/primitives|\bTUISelect\b|<(?:button|input|select|textarea)\b/, `${name} still uses the TUI layer or raw form controls`);
+  }
+  for (const component of ["Button", "Card", "Input", "Label", "Select", "Switch"]) {
+    assert.match(controls, new RegExp(`components/ui/${component.toLowerCase()}`), `${component} must come from shadcn`);
+  }
+  assert.match(settings, /components\/ui\/dialog/);
+  assert.match(settings, /components\/ui\/scroll-area/);
 });
 
 test("sidebar menus delegate dismissal to Radix instead of hand-rolled effects", async () => {
@@ -120,11 +173,19 @@ test("appearance controls stay labelled radiogroups", async () => {
   assert.match(settings, /className="appearance-accent-picker[^"]*"[^>]*role="radiogroup"/);
   // Each option must be an aria-checked radio, not a plain button.
   assert.match(settings, /role="radio" aria-checked=\{appearance\.theme === mode\}/);
-  assert.match(settings, /role="radio" aria-checked=\{appearance\.accent === accent\}/);
+  assert.match(settings, /role="radio"[^>]*aria-checked=\{appearance\.accent === accent\}/);
   // The accent options carry their name; the swatch only supplements it, so the
   // control never degrades into unlabelled colour dots.
   assert.match(settings, /\{t\(`settings\.themeColor\.\$\{accent\}`\)\}/);
   assert.match(settings, /ACCENT_SWATCH\[accent\]/);
+});
+
+test("appearance changes propagate to every native window", async () => {
+  const main = await readFile(path.join(sourceRoot, "main.jsx"), "utf8");
+  const settings = await readFile(path.join(sourceRoot, "app", "SettingsPage.jsx"), "utf8");
+  assert.match(settings, /Events\.Emit\(APPEARANCE_CHANGED_EVENT, next\)/);
+  assert.match(main, /Events\.On\(APPEARANCE_CHANGED_EVENT, syncAppearance\)/);
+  assert.match(main, /window\.addEventListener\("storage"/);
 });
 
 test("no stylesheet has a dangling selector group", async () => {

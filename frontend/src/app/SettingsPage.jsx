@@ -1,13 +1,28 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Events } from "@wailsio/runtime";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
-import { Action, Field, Kicker, NumberField, SettingPanel as SettingCard, SettingsModule, TUISelect, ToggleRow as Toggle } from "../ui/primitives.jsx";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  SettingsButton,
+  SettingsField,
+  SettingsKicker,
+  SettingsNumberField,
+  RuntimeSettingsCard,
+  SettingsSection,
+  SettingsSelect,
+  SettingsSwitchRow,
+} from "./components/settings/SettingsControls.jsx";
 
 // Preview swatches for the accent picker. These mirror the light-theme
 // --primary values in index.css; the picker is the one place the colour has to
 // be shown before it is applied, so it cannot read them off the live token.
 const ACCENT_SWATCH = { forest: "#694d1f", ocean: "#1f6475", violet: "#684886", amber: "#87501d" };
-import { accentThemes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
+import { APPEARANCE_CHANGED_EVENT, accentThemes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
 import { codexEffortValues, codexServiceTierValues, selectedCodexModel } from "./codexRuntimeOptions.js";
 
 const sectionMeta = (t) => ["runtime", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
@@ -28,49 +43,26 @@ export const demoSettings = {
 
 export function ConfirmDialog({ dialog, busy = false, onCancel, onConfirm }) {
   const { t } = useTranslation();
-  const dialogRef = useRef(null);
-  const cancelRef = useRef(onCancel);
-
-  useEffect(() => { cancelRef.current = onCancel; }, [onCancel]);
-  useEffect(() => {
-    if (!dialog) return undefined;
-    const previousFocus = document.activeElement;
-    const handleKeyDown = (event) => {
-      if (event.key === "Escape" && !busy) {
-        event.preventDefault();
-        cancelRef.current?.();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const focusable = [...(dialogRef.current?.querySelectorAll("button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])") || [])];
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      previousFocus?.focus?.();
-    };
-  }, [busy, dialog]);
-
   if (!dialog) return null;
-  return <div className="modal-backdrop confirm-backdrop" onMouseDown={(event) => event.target === event.currentTarget && !busy && onCancel()}>
-    <section ref={dialogRef} className={`modal confirm-dialog ${dialog.dangerous ? "dangerous" : ""}`} role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-description">
-      <div className="confirm-copy">
-        <span className="kicker">{dialog.eyebrow || t(dialog.dangerous ? "modal.dangerous" : "modal.confirmChange")}</span>
-        <h2 id="confirm-title">{dialog.title}</h2>
-        <p id="confirm-description">{dialog.description}</p>
-        {dialog.detail && <div className="confirm-detail">{dialog.detail}</div>}
-      </div>
-      <div className="confirm-actions">
-        <Action disabled={busy} onClick={onCancel}>{dialog.cancelLabel || t("common.cancel")}</Action>
-        <Action autoFocus tone={dialog.dangerous ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>{busy ? t("common.processing") : dialog.confirmLabel || t("common.confirm")}</Action>
-      </div>
-    </section>
-  </div>;
+  return <Dialog open onOpenChange={(open) => !open && !busy && onCancel()}>
+    <DialogContent
+      showCloseButton={false}
+      className="sm:max-w-md"
+      onEscapeKeyDown={(event) => busy && event.preventDefault()}
+      onPointerDownOutside={(event) => busy && event.preventDefault()}
+    >
+      <DialogHeader>
+        <SettingsKicker>{dialog.eyebrow || t(dialog.dangerous ? "modal.dangerous" : "modal.confirmChange")}</SettingsKicker>
+        <DialogTitle>{dialog.title}</DialogTitle>
+        <DialogDescription>{dialog.description}</DialogDescription>
+      </DialogHeader>
+      {dialog.detail && <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{dialog.detail}</div>}
+      <DialogFooter>
+        <SettingsButton tone="muted" disabled={busy} onClick={onCancel}>{dialog.cancelLabel || t("common.cancel")}</SettingsButton>
+        <SettingsButton autoFocus tone={dialog.dangerous ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>{busy ? t("common.processing") : dialog.confirmLabel || t("common.confirm")}</SettingsButton>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>;
 }
 
 export default function SettingsPage({ mode, value, runtimes, onChange, notify, workersPanel }) {
@@ -233,49 +225,32 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     ask({ title: t("settings.fullAccessTitle"), description: t("settings.fullAccessDescription"), detail: t("settings.fullAccessDetail"), confirmLabel: t("settings.enableRisk"), dangerous: true }, () => setSectionValue("security", { ...draft.security, allowFullSandbox: true }));
   };
 
-  return <div className="settings-page grid min-h-0 flex-1 grid-cols-[176px_minmax(0,1fr)] overflow-hidden">
-    <aside className="flex min-h-0 flex-col gap-0.5 overflow-y-auto border-r p-2.5" aria-label={t("settings.sectionsAria")}>
-      <Kicker className="mb-1.5 px-1.5">{t("settings.preferences")}</Kicker>
-      {sections.map((item) => <button key={item.id} className={`rounded-md px-2.5 py-2 text-left transition-colors hover:bg-accent ${section === item.id ? "bg-accent text-accent-foreground" : "text-muted-foreground"}`} aria-current={section === item.id ? "page" : undefined} onClick={() => switchSection(item.id)}>
-        <strong className="flex items-center gap-1.5 text-[13px] font-medium text-foreground">{item.label}{section === item.id && dirty && <i className="size-1.5 rounded-full bg-primary" aria-label={t("settings.unsaved")} />}</strong>
-        <small className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{item.description}</small>
-      </button>)}
-    </aside>
-    <section className="settings-content min-h-0 min-w-0 overflow-y-auto px-7 pt-6 pb-10">
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <Kicker>{t("settings.localSettings")}</Kicker>
-          <h2 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h2>
-          <p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2.5">
-          <span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span>
-          <Action onClick={reset}>{t("settings.reset")}</Action>
-        </div>
-      </div>
-      {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-md border border-warning/35 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><Action onClick={reload}>{t("settings.reload")}</Action></div>}
-      {validationErrors.length > 0 && <div className="mb-4 rounded-md border border-destructive/35 bg-destructive/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div></div>}
-      {section === "runtime" && <>
-        <InterfaceSettings i18n={i18n} />
-        <SettingsModule className="settings-runtime-module" title={t("settings.agentRuntimes")} description={t("settings.agentRuntimesDescription")}>
-          <RuntimeSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} />
-        </SettingsModule>
-      </>}
-      {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
-      {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
-      {section === "storage" && <StorageSettings value={draft.storage} setValue={(next) => setSectionValue("storage", next)} errors={errorsByField} security={draft.security} diagnosticOptions={diagnosticOptions} setDiagnosticOptions={setDiagnosticOptions} usage={usage} usageLoading={usageLoading} refreshUsage={refreshUsage} preview={preview} previewCleanup={previewCleanup} executeCleanup={executeCleanup} reveal={() => mode === "wails" && SettingsBinding.RevealDataRoot()} diagnosticPath={diagnosticPath} setDiagnosticPath={setDiagnosticPath} exportDiagnostics={exportDiagnostics} />}
-      {section === "experimental" && <ExperimentalSettings draft={draft.experimental} saved={value?.experimental || demoSettings.experimental} setValue={(next) => setSectionValue("experimental", next)} workersPanel={workersPanel} />}
-      {dirty && <div className="sticky bottom-0 mt-6 flex items-center justify-between gap-4 rounded-lg border bg-card px-4 py-3 shadow-lg" role="region" aria-label={t("settings.unsavedSettings")}>
-        <div className="min-w-0">
-          <strong className="block text-sm font-semibold text-foreground">{t("settings.unsavedTitle")}</strong>
-          <span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.unsavedDescription")}</span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Action disabled={saving} onClick={discard}>{t("settings.discard")}</Action>
-          <Action tone="primary" disabled={saving || validationErrors.length > 0} onClick={save}>{saving ? t("common.saving") : t("settings.save")}</Action>
-        </div>
-      </div>}
-    </section>
+  return <div className="settings-page grid min-h-0 flex-1 grid-cols-[248px_minmax(0,1fr)] overflow-hidden bg-background text-foreground">
+    <ScrollArea className="sidebar settings-sidebar min-h-0 border-r border-sidebar-border/70">
+      <aside className="flex min-h-full flex-col gap-1 px-3 pb-4 pt-[70px]" aria-label={t("settings.sectionsAria")}>
+        <SettingsKicker className="mb-2 px-2">{t("settings.preferences")}</SettingsKicker>
+        {sections.map((item) => <Button key={item.id} variant="ghost" className={`h-auto w-full justify-start rounded-lg px-3 py-2.5 text-left ${section === item.id ? "bg-accent text-accent-foreground hover:bg-accent" : "text-muted-foreground hover:bg-background/45"}`} aria-current={section === item.id ? "page" : undefined} onClick={() => switchSection(item.id)}>
+          <span className="min-w-0"><strong className="flex items-center gap-2 text-[13px] font-medium text-foreground">{item.label}{section === item.id && dirty && <i className="size-1.5 rounded-full bg-primary" aria-label={t("settings.unsaved")} />}</strong><small className="mt-0.5 block whitespace-normal text-[11px] font-normal leading-snug text-muted-foreground">{item.description}</small></span>
+        </Button>)}
+      </aside>
+    </ScrollArea>
+
+    <ScrollArea className="settings-content min-h-0 min-w-0 bg-background">
+      <section className="px-7 pt-7 pb-10">
+        <header className="mb-6 flex items-start justify-between gap-4 [-webkit-app-region:drag]">
+          <div className="min-w-0"><SettingsKicker>{t("settings.localSettings")}</SettingsKicker><h1 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h1><p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p></div>
+          <div className="flex shrink-0 items-center gap-2.5 [-webkit-app-region:no-drag]"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span><SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton></div>
+        </header>
+        {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><SettingsButton tone="muted" onClick={reload}>{t("settings.reload")}</SettingsButton></div>}
+        {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
+        {section === "runtime" && <><InterfaceSettings i18n={i18n} /><SettingsSection title={t("settings.agentRuntimes")} description={t("settings.agentRuntimesDescription")}><RuntimeSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} /></SettingsSection></>}
+        {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
+        {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
+        {section === "storage" && <StorageSettings value={draft.storage} setValue={(next) => setSectionValue("storage", next)} errors={errorsByField} security={draft.security} diagnosticOptions={diagnosticOptions} setDiagnosticOptions={setDiagnosticOptions} usage={usage} usageLoading={usageLoading} refreshUsage={refreshUsage} preview={preview} previewCleanup={previewCleanup} executeCleanup={executeCleanup} reveal={() => mode === "wails" && SettingsBinding.RevealDataRoot()} diagnosticPath={diagnosticPath} setDiagnosticPath={setDiagnosticPath} exportDiagnostics={exportDiagnostics} />}
+        {section === "experimental" && <ExperimentalSettings draft={draft.experimental} saved={value?.experimental || demoSettings.experimental} setValue={(next) => setSectionValue("experimental", next)} workersPanel={workersPanel} />}
+        {dirty && <div className="sticky bottom-0 mt-6 flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3 shadow-lg" role="region" aria-label={t("settings.unsavedSettings")}><div className="min-w-0"><strong className="block text-sm font-semibold text-foreground">{t("settings.unsavedTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.unsavedDescription")}</span></div><div className="flex shrink-0 items-center gap-2"><SettingsButton tone="muted" disabled={saving} onClick={discard}>{t("settings.discard")}</SettingsButton><SettingsButton tone="primary" disabled={saving || validationErrors.length > 0} onClick={save}>{saving ? t("common.saving") : t("settings.save")}</SettingsButton></div></div>}
+      </section>
+    </ScrollArea>
     <ConfirmDialog dialog={dialog} busy={confirming} onCancel={closeDialog} onConfirm={acceptDialog} />
   </div>;
 }
@@ -283,32 +258,18 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
 function InterfaceSettings({ i18n }) {
   const { t } = useTranslation();
   const [appearance, setAppearance] = useState(readAppearance);
-  const updateAppearance = (change) => setAppearance((current) => saveAppearance({ ...current, ...change }));
-  return <SettingsModule className="settings-interface-module" title={t("settings.interface")} description={t("settings.interfaceDescription")}>
-    <div className="settings-option-row flex items-center justify-between gap-6 border-b px-4 py-3.5 last:border-b-0">
-      <div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.language")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.languageDescription")}</p></div>
-      <TUISelect className="w-44 shrink-0" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={(language) => i18n.changeLanguage(language)} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} />
+  const updateAppearance = (change) => {
+    const next = saveAppearance({ ...appearance, ...change });
+    setAppearance(next);
+    void Events.Emit(APPEARANCE_CHANGED_EVENT, next);
+  };
+  return <SettingsSection title={t("settings.interface")} description={t("settings.interfaceDescription")}>
+    <div className="grid gap-2">
+      <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.language")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.languageDescription")}</p></div><SettingsSelect className="w-44 shrink-0" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={(language) => i18n.changeLanguage(language)} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} /></div>
+      <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.colorMode")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.colorModeDescription")}</p></div><div className="appearance-mode-picker inline-flex shrink-0 rounded-md border bg-muted p-0.5" role="radiogroup" aria-label={t("settings.colorMode")}>{themeModes.map((mode) => <Button type="button" variant="ghost" size="xs" role="radio" aria-checked={appearance.theme === mode} className={`rounded-sm px-3 ${appearance.theme === mode ? "bg-background text-foreground shadow-xs hover:bg-background" : "text-muted-foreground"}`} key={mode} onClick={() => updateAppearance({ theme: mode })}>{t(`settings.colorMode.${mode}`)}</Button>)}</div></div>
+      <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.themeColor")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.themeColorDescription")}</p></div><div className="appearance-accent-picker inline-flex shrink-0 gap-1.5" role="radiogroup" aria-label={t("settings.themeColor")}>{accentThemes.map((accent) => <Button type="button" variant="outline" size="xs" role="radio" aria-checked={appearance.accent === accent} className={appearance.accent === accent ? "border-ring bg-accent text-foreground" : "text-muted-foreground"} key={accent} onClick={() => updateAppearance({ accent })}><i className="size-2.5 rounded-full" style={{ background: ACCENT_SWATCH[accent] }} aria-hidden="true" />{t(`settings.themeColor.${accent}`)}</Button>)}</div></div>
     </div>
-    <div className="settings-option-row flex items-center justify-between gap-6 border-b px-4 py-3.5 last:border-b-0">
-      <div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.colorMode")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.colorModeDescription")}</p></div>
-      {/* A segmented control, not a row of buttons: one shared border, the
-          selected segment lifts onto the card surface. */}
-      <div className="appearance-mode-picker inline-flex shrink-0 rounded-md border bg-muted p-0.5" role="radiogroup" aria-label={t("settings.colorMode")}>
-        {themeModes.map((mode) => <button type="button" role="radio" aria-checked={appearance.theme === mode} className={`rounded-sm px-3 py-1.5 text-xs transition-colors ${appearance.theme === mode ? "bg-background text-foreground shadow-xs" : "text-muted-foreground hover:text-foreground"}`} key={mode} onClick={() => updateAppearance({ theme: mode })}>{t(`settings.colorMode.${mode}`)}</button>)}
-      </div>
-    </div>
-    <div className="settings-option-row flex items-center justify-between gap-6 border-b px-4 py-3.5 last:border-b-0">
-      <div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.themeColor")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.themeColorDescription")}</p></div>
-      {/* Each swatch previews its own accent, so the choice is visible before
-          it is applied; ACCENT_SWATCH holds the same hexes as index.css. */}
-      <div className="appearance-accent-picker inline-flex shrink-0 gap-1.5" role="radiogroup" aria-label={t("settings.themeColor")}>
-        {accentThemes.map((accent) => <button type="button" role="radio" aria-checked={appearance.accent === accent} className={`appearance-accent flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${appearance.accent === accent ? "border-ring bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/60"}`} key={accent} onClick={() => updateAppearance({ accent })}>
-          <i className="size-2.5 rounded-full" style={{ background: ACCENT_SWATCH[accent] }} aria-hidden="true" />
-          {t(`settings.themeColor.${accent}`)}
-        </button>)}
-      </div>
-    </div>
-  </SettingsModule>;
+  </SettingsSection>;
 }
 
 function RuntimeSettings({ value, setValue, status, runtimes, check, errors, codexConfiguration, claudeConfiguration }) {
@@ -319,103 +280,75 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors, cod
     claude: { name: "Claude Code", command: "claude", description: t("settings.runtimeDescription"), env: "ANTHROPIC_API_KEY, HTTPS_PROXY" },
     modu: { name: "Modu Code", command: "modu_code", description: t("settings.moduDescription"), env: t("settings.optionalEnv") },
   };
-  return <>
-    <aside className="runtime-path-help" aria-labelledby="runtime-path-help-title">
-      <div className="runtime-path-help-copy">
-        <strong id="runtime-path-help-title">{t("settings.runtimePathHelpTitle")}</strong>
-        <p>{t("settings.runtimePathHelpDescription")}</p>
-      </div>
-      <div className="runtime-path-help-groups">
-        <div><span>{t("settings.runtimePathHelpCommands")}</span><code>command -v codex</code><code>command -v claude</code><code>command -v modu_code</code></div>
-        <div><span>{t("settings.runtimePathHelpExamples")}</span><code>/opt/homebrew/bin/codex</code><code>/usr/local/bin/codex</code><code>/Users/yourname/.local/bin/claude</code><code>/Users/yourname/go/bin/modu_code</code></div>
-      </div>
-    </aside>
+  return <div className="grid gap-3">
+    <aside className="rounded-lg bg-muted/45 p-4 text-xs leading-relaxed text-muted-foreground" aria-labelledby="runtime-path-help-title"><strong className="text-sm text-foreground" id="runtime-path-help-title">{t("settings.runtimePathHelpTitle")}</strong><p className="mt-1 mb-3">{t("settings.runtimePathHelpDescription")}</p><div className="grid grid-cols-2 gap-3"><code className="rounded-md bg-background/70 p-3 text-info">command -v codex<br />command -v claude<br />command -v modu_code</code><code className="break-all rounded-md bg-background/70 p-3 text-info">/opt/homebrew/bin/codex<br />/usr/local/bin/claude<br />~/go/bin/modu_code</code></div></aside>
     {runtimeIds.map((id) => {
-    const current = status[id] || runtimes.find((item) => item.id === id) || {};
-    const statusText = current.checking ? t("settings.checkingCommand") : current.available ? `${current.version || t("common.available")}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN")}` : ""}` : current.error || t("settings.notDetected");
-    const codexData = codexConfiguration.data;
-    const claudeData = claudeConfiguration.data;
-    const codexModel = id === "codex" ? selectedCodexModel(codexData, value.codex?.defaultModel) : null;
-    const effortValues = id === "codex" ? codexEffortValues(codexData, value.codex?.defaultModel, value.codex?.reasoningEffort) : [];
-    const claudeEffortValues = id === "claude" ? [...new Set([...(claudeData?.efforts?.length ? claudeData.efforts : ["low", "medium", "high", "xhigh", "max"]), value.claude?.reasoningEffort].filter(Boolean))] : [];
-    const serviceTierValues = id === "codex" ? codexServiceTierValues(codexData, value.codex?.defaultModel, value.codex?.serviceTier) : [];
-    const modelOptions = id === "codex" ? [
-      { value: "", label: t("settings.useCodexConfig"), meta: codexData?.model || t("settings.runtimeDefault") },
-      ...(codexData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.model })),
-    ] : id === "claude" ? [
-      { value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") },
-      ...(claudeData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.alias ? t("settings.claudeModelAlias") : model.model })),
-    ] : [];
-    if ((id === "codex" || id === "claude") && value[id]?.defaultModel && !modelOptions.some((option) => option.value === value[id].defaultModel)) modelOptions.push({ value: value[id].defaultModel, label: value[id].defaultModel, meta: t("settings.savedCustomValue") });
-    const detectedEffort = codexData?.reasoningEffort || codexModel?.defaultReasoningEffort || t("settings.runtimeDefault");
-    const detectedTier = codexData?.serviceTier || t("settings.speed.standard");
-    const tierDetails = new Map((codexModel?.serviceTiers || []).map((tier) => [tier.id, tier]));
-    const updateCodexModel = (defaultModel) => {
-      const nextModel = selectedCodexModel(codexData, defaultModel);
-      const supportedEfforts = nextModel?.reasoningEfforts || [];
-      const supportedTiers = ["standard", ...(nextModel?.serviceTiers || []).map((tier) => tier.id)];
-      setValue({ ...value, codex: {
-        ...value.codex,
-        defaultModel,
-        reasoningEffort: value.codex?.reasoningEffort && supportedEfforts.length && !supportedEfforts.includes(value.codex.reasoningEffort) ? "" : value.codex?.reasoningEffort || "",
-        serviceTier: value.codex?.serviceTier && supportedTiers.length > 1 && !supportedTiers.includes(value.codex.serviceTier) ? "" : value.codex?.serviceTier || "",
-      } });
-    };
-    const configurationLoading = id === "codex" ? codexConfiguration.loading : id === "claude" ? claudeConfiguration.loading : false;
-    const updateModel = id === "codex" ? updateCodexModel : (defaultModel) => update(id, "defaultModel", defaultModel);
-    const modelHint = id === "codex" && codexData
-      ? t("settings.codexDetectedValue", { value: codexData.model || t("settings.runtimeDefault") })
-      : id === "claude" && claudeData
-        ? t("settings.claudeModelsDetected", { count: claudeData.models?.length || 0 })
-        : t("settings.runtimeDecides");
-    return <SettingCard className="runtime-setting-card" headingLevel={4} key={id} title={meta[id].name} description={meta[id].description} aside={<span className={`setting-status ${current.available ? "ok" : current.error ? "bad" : ""}`}><i />{statusText}</span>}>
-      {id === "codex" && (codexConfiguration.loading || codexData || codexConfiguration.error) && <div className={`codex-config-state ${codexConfiguration.error ? "bad" : ""}`} role={codexConfiguration.error ? "alert" : "status"}>
-        {codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })}
-      </div>}
-      {id === "claude" && (claudeConfiguration.loading || claudeData || claudeConfiguration.error) && <div className={`codex-config-state ${claudeConfiguration.error ? "bad" : ""}`} role={claudeConfiguration.error ? "alert" : "status"}>
-        {claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })}
-      </div>}
-      <div className="settings-grid">
-        <Field label={t("settings.binaryPath")} hint={t("settings.useCommand", { command: meta[id].command })} error={errors[`${id}.binary`]}><input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={meta[id].command} /></Field>
-        <Field label={t("settings.defaultModel")} hint={modelHint} error={errors[`${id}.defaultModel`]}>{modelOptions.length > 1 ? <TUISelect ariaLabel={t("settings.defaultModel")} value={value[id]?.defaultModel || ""} onChange={updateModel} options={modelOptions} /> : <input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} />}</Field>
-        {id === "codex" && <Field label={t("settings.reasoningEffort")} hint={t("settings.codexDetectedValue", { value: detectedEffort })} error={errors[`${id}.reasoningEffort`]}><TUISelect ariaLabel={t("settings.reasoningEffort")} value={value.codex?.reasoningEffort || ""} onChange={(reasoningEffort) => update("codex", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedEffort }, ...(codexData && effortValues.length ? effortValues : ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]).map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></Field>}
-        {id === "claude" && <Field label={t("settings.reasoningEffort")} hint={t("settings.claudeEffortsDetected", { count: claudeEffortValues.length })} error={errors[`${id}.reasoningEffort`]}><TUISelect ariaLabel={t("settings.reasoningEffort")} value={value.claude?.reasoningEffort || ""} onChange={(reasoningEffort) => update("claude", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...claudeEffortValues.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></Field>}
-        {id === "codex" && <Field label={t("settings.speed")} hint={t("settings.codexDetectedValue", { value: detectedTier })} error={errors[`${id}.serviceTier`]}><TUISelect ariaLabel={t("settings.speed")} value={value.codex?.serviceTier || ""} onChange={(serviceTier) => update("codex", "serviceTier", serviceTier)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedTier }, ...(codexData ? serviceTierValues : ["standard", "fast", "priority", "flex"]).map((tier) => ({ value: tier, label: t(`settings.speed.${tier}`, { defaultValue: tierDetails.get(tier)?.name || tier }), meta: tierDetails.get(tier)?.description || tier }))]} /></Field>}
-        {id === "modu" && <Field label={t("common.provider")} hint={t("settings.providerHint")} error={errors[`${id}.provider`]}><TUISelect ariaLabel={t("common.provider")} value={value[id]?.provider || "auto"} onChange={(provider) => update(id, "provider", provider)} options={[{ value: "auto", label: t("settings.autoDetect") }, { value: "openai", label: "OpenAI / Compatible" }, { value: "anthropic", label: "Anthropic" }, { value: "gemini", label: "Gemini" }]} /></Field>}
-        <Field className="full" label={t("settings.envAllowlist")} hint={t("settings.envAllowlistHint")} error={errors[`${id}.environmentAllowlist`]}><input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder={meta[id].env} /></Field>
-      </div>
-      <div className="settings-actions"><Action tone="cyan" disabled={current.checking || configurationLoading} onClick={() => check(id)}>{current.checking || configurationLoading ? t("settings.checking") : id === "codex" ? t("settings.refreshCodexConfig") : id === "claude" ? t("settings.refreshClaudeModels") : t("settings.testConfig")}</Action></div>
-    </SettingCard>;
-  })}</>;
+      const current = status[id] || runtimes.find((item) => item.id === id) || {};
+      const statusText = current.checking ? t("settings.checkingCommand") : current.available ? `${current.version || t("common.available")}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN")}` : ""}` : current.error || t("settings.notDetected");
+      const codexData = codexConfiguration.data;
+      const claudeData = claudeConfiguration.data;
+      const codexModel = id === "codex" ? selectedCodexModel(codexData, value.codex?.defaultModel) : null;
+      const effortValues = id === "codex" ? codexEffortValues(codexData, value.codex?.defaultModel, value.codex?.reasoningEffort) : [];
+      const claudeEffortValues = id === "claude" ? [...new Set([...(claudeData?.efforts?.length ? claudeData.efforts : ["low", "medium", "high", "xhigh", "max"]), value.claude?.reasoningEffort].filter(Boolean))] : [];
+      const serviceTierValues = id === "codex" ? codexServiceTierValues(codexData, value.codex?.defaultModel, value.codex?.serviceTier) : [];
+      const modelOptions = id === "codex" ? [{ value: "", label: t("settings.useCodexConfig"), meta: codexData?.model || t("settings.runtimeDefault") }, ...(codexData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.model }))] : id === "claude" ? [{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...(claudeData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.alias ? t("settings.claudeModelAlias") : model.model }))] : [];
+      if ((id === "codex" || id === "claude") && value[id]?.defaultModel && !modelOptions.some((option) => option.value === value[id].defaultModel)) modelOptions.push({ value: value[id].defaultModel, label: value[id].defaultModel, meta: t("settings.savedCustomValue") });
+      const detectedEffort = codexData?.reasoningEffort || codexModel?.defaultReasoningEffort || t("settings.runtimeDefault");
+      const detectedTier = codexData?.serviceTier || t("settings.speed.standard");
+      const tierDetails = new Map((codexModel?.serviceTiers || []).map((tier) => [tier.id, tier]));
+      const updateModel = id === "codex" ? (defaultModel) => {
+        const nextModel = selectedCodexModel(codexData, defaultModel);
+        const supportedEfforts = nextModel?.reasoningEfforts || [];
+        const supportedTiers = ["standard", ...(nextModel?.serviceTiers || []).map((tier) => tier.id)];
+        setValue({ ...value, codex: { ...value.codex, defaultModel, reasoningEffort: value.codex?.reasoningEffort && supportedEfforts.length && !supportedEfforts.includes(value.codex.reasoningEffort) ? "" : value.codex?.reasoningEffort || "", serviceTier: value.codex?.serviceTier && supportedTiers.length > 1 && !supportedTiers.includes(value.codex.serviceTier) ? "" : value.codex?.serviceTier || "" } });
+      } : (defaultModel) => update(id, "defaultModel", defaultModel);
+      const configurationLoading = id === "codex" ? codexConfiguration.loading : id === "claude" ? claudeConfiguration.loading : false;
+      const modelHint = id === "codex" && codexData ? t("settings.codexDetectedValue", { value: codexData.model || t("settings.runtimeDefault") }) : id === "claude" && claudeData ? t("settings.claudeModelsDetected", { count: claudeData.models?.length || 0 }) : t("settings.runtimeDecides");
+      const configurationMessage = id === "codex" ? codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || (codexData && t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })) : id === "claude" ? claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || (claudeData && t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })) : "";
+      return <RuntimeSettingsCard key={id} title={meta[id].name} description={meta[id].description} aside={<Badge variant="outline" className={current.available ? "border-success/25 bg-success/8 text-success" : current.error ? "border-destructive/25 bg-destructive/8 text-destructive" : "text-muted-foreground"}><i className="size-1.5 rounded-full bg-current" />{statusText}</Badge>}>
+        {configurationMessage && <div className={`mb-4 rounded-lg px-3 py-2 text-xs leading-relaxed ${codexConfiguration.error || claudeConfiguration.error ? "bg-destructive/8 text-destructive" : "bg-primary/6 text-muted-foreground"}`} role={codexConfiguration.error || claudeConfiguration.error ? "alert" : "status"}>{configurationMessage}</div>}
+        <div className="grid grid-cols-2 gap-4">
+          <SettingsField label={t("settings.binaryPath")} hint={t("settings.useCommand", { command: meta[id].command })} error={errors[`${id}.binary`]}><Input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={meta[id].command} /></SettingsField>
+          <SettingsField label={t("settings.defaultModel")} hint={modelHint} error={errors[`${id}.defaultModel`]}>{modelOptions.length > 1 ? <SettingsSelect ariaLabel={t("settings.defaultModel")} value={value[id]?.defaultModel || ""} onChange={updateModel} options={modelOptions} /> : <Input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} />}</SettingsField>
+          {id === "codex" && <SettingsField label={t("settings.reasoningEffort")} hint={t("settings.codexDetectedValue", { value: detectedEffort })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.codex?.reasoningEffort || ""} onChange={(reasoningEffort) => update("codex", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedEffort }, ...(codexData && effortValues.length ? effortValues : ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]).map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
+          {id === "claude" && <SettingsField label={t("settings.reasoningEffort")} hint={t("settings.claudeEffortsDetected", { count: claudeEffortValues.length })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.claude?.reasoningEffort || ""} onChange={(reasoningEffort) => update("claude", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...claudeEffortValues.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
+          {id === "codex" && <SettingsField label={t("settings.speed")} hint={t("settings.codexDetectedValue", { value: detectedTier })} error={errors[`${id}.serviceTier`]}><SettingsSelect ariaLabel={t("settings.speed")} value={value.codex?.serviceTier || ""} onChange={(serviceTier) => update("codex", "serviceTier", serviceTier)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedTier }, ...(codexData ? serviceTierValues : ["standard", "fast", "priority", "flex"]).map((tier) => ({ value: tier, label: t(`settings.speed.${tier}`, { defaultValue: tierDetails.get(tier)?.name || tier }), meta: tierDetails.get(tier)?.description || tier }))]} /></SettingsField>}
+          {id === "modu" && <SettingsField label={t("common.provider")} hint={t("settings.providerHint")} error={errors[`${id}.provider`]}><SettingsSelect ariaLabel={t("common.provider")} value={value[id]?.provider || "auto"} onChange={(provider) => update(id, "provider", provider)} options={[{ value: "auto", label: t("settings.autoDetect") }, { value: "openai", label: "OpenAI / Compatible" }, { value: "anthropic", label: "Anthropic" }, { value: "gemini", label: "Gemini" }]} /></SettingsField>}
+          <SettingsField className="col-span-2" label={t("settings.envAllowlist")} hint={t("settings.envAllowlistHint")} error={errors[`${id}.environmentAllowlist`]}><Input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder={meta[id].env} /></SettingsField>
+        </div>
+        <div className="mt-4 flex justify-end"><SettingsButton tone="cyan" disabled={current.checking || configurationLoading} onClick={() => check(id)}>{current.checking || configurationLoading ? t("settings.checking") : id === "codex" ? t("settings.refreshCodexConfig") : id === "claude" ? t("settings.refreshClaudeModels") : t("settings.testConfig")}</SettingsButton></div>
+      </RuntimeSettingsCard>;
+    })}
+  </div>;
 }
 
 function ExecutionSettings({ value, setValue, errors }) {
   const { t } = useTranslation();
   const number = (key, next) => setValue({ ...value, [key]: Number(next) });
-  return <SettingsModule title={t("settings.executionPolicy")} description={t("settings.executionPolicyDescription")} bodyClassName="settings-module-content">
-    <div className="settings-grid execution-grid">
-      <NumberField field="maxTransitions" label={t("settings.maxTransitions")} hint="1–10000" value={value.maxTransitions} error={errors.maxTransitions} onChange={(next) => number("maxTransitions", next)} />
-      <NumberField field="maxConsecutiveFailures" label={t("settings.maxFailures")} hint="1–100" value={value.maxConsecutiveFailures} error={errors.maxConsecutiveFailures} onChange={(next) => number("maxConsecutiveFailures", next)} />
-      <NumberField field="stepTimeoutSeconds" label={t("settings.nodeTimeout")} hint={t("settings.secondsRange", { min: 30, max: 86400 })} value={value.stepTimeoutSeconds} error={errors.stepTimeoutSeconds} onChange={(next) => number("stepTimeoutSeconds", next)} />
-      <NumberField field="maxLocalDAGConcurrency" label={t("settings.dagConcurrency")} hint={t("settings.readonlyNodesRange")} value={value.maxLocalDAGConcurrency} error={errors.maxLocalDAGConcurrency} onChange={(next) => number("maxLocalDAGConcurrency", next)} />
-      <NumberField field="interruptGraceSeconds" label={t("settings.interruptGrace")} hint={t("settings.secondsRange", { min: 1, max: 60 })} value={value.interruptGraceSeconds} error={errors.interruptGraceSeconds} onChange={(next) => number("interruptGraceSeconds", next)} />
-      <Field label={t("workspace.defaultSandbox")} hint={t("settings.noGlobalFullAccess")}><TUISelect ariaLabel={t("workspace.defaultSandbox")} value={value.defaultSandbox} onChange={(defaultSandbox) => setValue({ ...value, defaultSandbox })} options={[{ value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }]} /></Field>
+  return <SettingsSection title={t("settings.executionPolicy")} description={t("settings.executionPolicyDescription")} contentClassName="p-4">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+      <SettingsNumberField field="maxTransitions" label={t("settings.maxTransitions")} hint="1–10000" value={value.maxTransitions} error={errors.maxTransitions} onChange={(next) => number("maxTransitions", next)} />
+      <SettingsNumberField field="maxConsecutiveFailures" label={t("settings.maxFailures")} hint="1–100" value={value.maxConsecutiveFailures} error={errors.maxConsecutiveFailures} onChange={(next) => number("maxConsecutiveFailures", next)} />
+      <SettingsNumberField field="stepTimeoutSeconds" label={t("settings.nodeTimeout")} hint={t("settings.secondsRange", { min: 30, max: 86400 })} value={value.stepTimeoutSeconds} error={errors.stepTimeoutSeconds} onChange={(next) => number("stepTimeoutSeconds", next)} />
+      <SettingsNumberField field="maxLocalDAGConcurrency" label={t("settings.dagConcurrency")} hint={t("settings.readonlyNodesRange")} value={value.maxLocalDAGConcurrency} error={errors.maxLocalDAGConcurrency} onChange={(next) => number("maxLocalDAGConcurrency", next)} />
+      <SettingsNumberField field="interruptGraceSeconds" label={t("settings.interruptGrace")} hint={t("settings.secondsRange", { min: 1, max: 60 })} value={value.interruptGraceSeconds} error={errors.interruptGraceSeconds} onChange={(next) => number("interruptGraceSeconds", next)} />
+      <SettingsField label={t("workspace.defaultSandbox")} hint={t("settings.noGlobalFullAccess")}><SettingsSelect ariaLabel={t("workspace.defaultSandbox")} value={value.defaultSandbox} onChange={(defaultSandbox) => setValue({ ...value, defaultSandbox })} options={[{ value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }]} /></SettingsField>
     </div>
-  </SettingsModule>;
+  </SettingsSection>;
 }
 
 function SecuritySettings({ value, setValue, confirmFullAccess }) {
   const { t } = useTranslation();
   const toggle = (key) => (checked) => setValue({ ...value, [key]: checked });
   return <>
-    <SettingsModule title={t("settings.executionAuth")} description={t("settings.executionAuthDescription")} bodyClassName="settings-module-content settings-toggle-list">
-      <Toggle checked={value.allowFullSandbox} onChange={confirmFullAccess} label={t("settings.allowFullAccess")} description={t("settings.fullAccessDanger")} dangerous />
-      <Toggle checked={value.confirmFullSandboxEveryRun} onChange={toggle("confirmFullSandboxEveryRun")} label={t("settings.confirmEveryRun")} description={value.allowFullSandbox ? t("settings.confirmEveryRunEnabled") : t("settings.confirmEveryRunDisabled")} disabled={!value.allowFullSandbox} />
-    </SettingsModule>
-    <SettingsModule title={t("settings.diagnosticPrivacy")} description={t("settings.diagnosticPrivacyDescription")} bodyClassName="settings-module-content settings-toggle-list">
-      <Toggle checked={value.diagnosticsIncludePrompt} onChange={toggle("diagnosticsIncludePrompt")} label={t("settings.allowPrompt")} description={t("settings.confirmOnExport")} />
-      <Toggle checked={value.diagnosticsIncludeRawEvents} onChange={toggle("diagnosticsIncludeRawEvents")} label={t("settings.allowRawEvents")} description={t("settings.rawEventsDescription")} />
-    </SettingsModule>
+    <SettingsSection title={t("settings.executionAuth")} description={t("settings.executionAuthDescription")} contentClassName="p-4">
+      <SettingsSwitchRow checked={value.allowFullSandbox} onChange={confirmFullAccess} label={t("settings.allowFullAccess")} description={t("settings.fullAccessDanger")} dangerous />
+      <SettingsSwitchRow checked={value.confirmFullSandboxEveryRun} onChange={toggle("confirmFullSandboxEveryRun")} label={t("settings.confirmEveryRun")} description={value.allowFullSandbox ? t("settings.confirmEveryRunEnabled") : t("settings.confirmEveryRunDisabled")} disabled={!value.allowFullSandbox} />
+    </SettingsSection>
+    <SettingsSection title={t("settings.diagnosticPrivacy")} description={t("settings.diagnosticPrivacyDescription")} contentClassName="p-4">
+      <SettingsSwitchRow checked={value.diagnosticsIncludePrompt} onChange={toggle("diagnosticsIncludePrompt")} label={t("settings.allowPrompt")} description={t("settings.confirmOnExport")} />
+      <SettingsSwitchRow checked={value.diagnosticsIncludeRawEvents} onChange={toggle("diagnosticsIncludeRawEvents")} label={t("settings.allowRawEvents")} description={t("settings.rawEventsDescription")} />
+    </SettingsSection>
   </>;
 }
 
@@ -423,43 +356,43 @@ function StorageSettings({ value, setValue, errors, security, diagnosticOptions,
   const { t, i18n } = useTranslation();
   const number = (key, next) => setValue({ ...value, [key]: Number(next) });
   return <>
-    <SettingsModule title={t("settings.localData")} description={t("settings.localDataDescription")} aside={<Action tone="cyan" onClick={refreshUsage} disabled={usageLoading}>{usageLoading ? t("settings.calculating") : t("settings.recalculate")}</Action>} bodyClassName="settings-module-content">
-      <div className="data-root-row"><div><span>{t("settings.dataRoot")}</span><code>~/.oneshot/</code></div><Action onClick={reveal}>{t("settings.revealFinder")}</Action></div>
-      {usage ? <><div className="usage-total">{bytes(usage.totalBytes)} <small>{t("settings.totalUsage")}</small></div><div className="usage-bars">{(usage.categories || []).map((item) => <div key={item.name}><span>{item.name}</span><b>{bytes(item.bytes)}</b><i style={{ width: `${Math.max(3, item.bytes / Math.max(usage.totalBytes, 1) * 100)}%` }} /></div>)}</div><p className="storage-calculated-at">{t("settings.lastCalculated", { time: usage.calculatedAt ? new Date(usage.calculatedAt).toLocaleString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN") : t("settings.justNow") })}</p></> : <div className="settings-inline-empty">{usageLoading ? t("settings.calculatingUsage") : t("settings.noUsage")}</div>}
-    </SettingsModule>
-    <SettingsModule title={t("settings.historyCleanup")} description={t("settings.historyCleanupDescription")} bodyClassName="settings-module-content">
-      <Field label={t("settings.retention")} hint={t("settings.keepForeverDefault")}><TUISelect ariaLabel={t("settings.retention")} value={value.completedRunRetentionDays} onChange={(retentionDays) => { number("completedRunRetentionDays", retentionDays); setPreview(null); }} options={[{ value: 0, label: t("settings.keepForever") }, { value: 30, label: t("common.daysCount", { count: 30 }) }, { value: 90, label: t("common.daysCount", { count: 90 }) }, { value: 180, label: t("common.daysCount", { count: 180 }) }]} /></Field>
-      <div className="settings-actions"><Action tone="muted" disabled={!value.completedRunRetentionDays} onClick={previewCleanup}>{t("settings.previewCleanup")}</Action></div>
-      {preview?.token && <div className="cleanup-preview" role="status"><div><span className="kicker">{t("settings.cleanupPreview")}</span><strong>{t("settings.historicalRuns", { count: preview.count })}</strong><p>{t("settings.estimatedRelease", { size: bytes(preview.estimatedBytes) })}</p></div><Action tone="danger" disabled={!preview.count} onClick={executeCleanup}>{t("settings.irreversibleCleanup")}</Action></div>}
-    </SettingsModule>
-    <SettingsModule title={t("settings.logRotation")} description={t("settings.logRotationDescription")} bodyClassName="settings-module-content">
-      <div className="settings-grid">
-        <Field label={t("settings.logLevel")} hint={t("settings.recommendedInfo")}><TUISelect ariaLabel={t("settings.logLevel")} value={value.logLevel} onChange={(logLevel) => setValue({ ...value, logLevel })} options={["error", "warn", "info", "debug"]} /></Field>
-        <NumberField field="logMaxSizeMB" label={t("settings.logFileSize")} hint="1–1024 MB" value={value.logMaxSizeMB} error={errors.logMaxSizeMB} onChange={(next) => number("logMaxSizeMB", next)} />
-        <NumberField field="logMaxBackups" label={t("settings.backupCount")} hint="1–50" value={value.logMaxBackups} error={errors.logMaxBackups} onChange={(next) => number("logMaxBackups", next)} />
-        <NumberField field="logMaxAgeDays" label={t("settings.logRetention")} hint={t("settings.daysRange", { min: 1, max: 365 })} value={value.logMaxAgeDays} error={errors.logMaxAgeDays} onChange={(next) => number("logMaxAgeDays", next)} />
+    <SettingsSection title={t("settings.localData")} description={t("settings.localDataDescription")} aside={<SettingsButton tone="cyan" onClick={refreshUsage} disabled={usageLoading}>{usageLoading ? t("settings.calculating") : t("settings.recalculate")}</SettingsButton>} contentClassName="p-4">
+      <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><span className="mb-1 block text-xs text-muted-foreground">{t("settings.dataRoot")}</span><code className="block truncate rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">~/.oneshot/</code></div><SettingsButton tone="muted" onClick={reveal}>{t("settings.revealFinder")}</SettingsButton></div>
+      {usage ? <><div className="mt-5 text-xl font-semibold text-foreground">{bytes(usage.totalBytes)} <small className="text-xs font-normal text-muted-foreground">{t("settings.totalUsage")}</small></div><div className="mt-3 grid gap-2">{(usage.categories || []).map((item) => <div className="grid gap-1 text-xs text-muted-foreground" key={item.name}><span>{item.name}</span><b>{bytes(item.bytes)}</b><i className="block h-1.5 rounded-full bg-primary" style={{ width: `${Math.max(3, item.bytes / Math.max(usage.totalBytes, 1) * 100)}%` }} /></div>)}</div><p className="mt-3 mb-0 text-xs text-muted-foreground">{t("settings.lastCalculated", { time: usage.calculatedAt ? new Date(usage.calculatedAt).toLocaleString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN") : t("settings.justNow") })}</p></> : <div className="mt-4 rounded-lg bg-muted p-3 text-xs text-muted-foreground">{usageLoading ? t("settings.calculatingUsage") : t("settings.noUsage")}</div>}
+    </SettingsSection>
+    <SettingsSection title={t("settings.historyCleanup")} description={t("settings.historyCleanupDescription")} contentClassName="p-4">
+      <SettingsField label={t("settings.retention")} hint={t("settings.keepForeverDefault")}><SettingsSelect ariaLabel={t("settings.retention")} value={value.completedRunRetentionDays} onChange={(retentionDays) => { number("completedRunRetentionDays", retentionDays); setPreview(null); }} options={[{ value: 0, label: t("settings.keepForever") }, { value: 30, label: t("common.daysCount", { count: 30 }) }, { value: 90, label: t("common.daysCount", { count: 90 }) }, { value: 180, label: t("common.daysCount", { count: 180 }) }]} /></SettingsField>
+      <div className="mt-4 flex flex-wrap items-center gap-2"><SettingsButton tone="muted" disabled={!value.completedRunRetentionDays} onClick={previewCleanup}>{t("settings.previewCleanup")}</SettingsButton></div>
+      {preview?.token && <div className="mt-4 flex items-center justify-between gap-4 rounded-lg bg-muted p-4" role="status"><div><SettingsKicker>{t("settings.cleanupPreview")}</SettingsKicker><strong className="mt-1 block text-sm text-foreground">{t("settings.historicalRuns", { count: preview.count })}</strong><p className="mt-1 mb-0 text-xs text-muted-foreground">{t("settings.estimatedRelease", { size: bytes(preview.estimatedBytes) })}</p></div><SettingsButton tone="danger" disabled={!preview.count} onClick={executeCleanup}>{t("settings.irreversibleCleanup")}</SettingsButton></div>}
+    </SettingsSection>
+    <SettingsSection title={t("settings.logRotation")} description={t("settings.logRotationDescription")} contentClassName="p-4">
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+        <SettingsField label={t("settings.logLevel")} hint={t("settings.recommendedInfo")}><SettingsSelect ariaLabel={t("settings.logLevel")} value={value.logLevel} onChange={(logLevel) => setValue({ ...value, logLevel })} options={["error", "warn", "info", "debug"]} /></SettingsField>
+        <SettingsNumberField field="logMaxSizeMB" label={t("settings.logFileSize")} hint="1–1024 MB" value={value.logMaxSizeMB} error={errors.logMaxSizeMB} onChange={(next) => number("logMaxSizeMB", next)} />
+        <SettingsNumberField field="logMaxBackups" label={t("settings.backupCount")} hint="1–50" value={value.logMaxBackups} error={errors.logMaxBackups} onChange={(next) => number("logMaxBackups", next)} />
+        <SettingsNumberField field="logMaxAgeDays" label={t("settings.logRetention")} hint={t("settings.daysRange", { min: 1, max: 365 })} value={value.logMaxAgeDays} error={errors.logMaxAgeDays} onChange={(next) => number("logMaxAgeDays", next)} />
       </div>
-      {value.logLevel === "debug" && <div className="settings-note warning"><strong>{t("settings.debugWarning")}</strong><span>{t("settings.debugAdvice")}</span></div>}
-    </SettingsModule>
-    <SettingsModule title={t("settings.exportDiagnostics")} description={t("settings.exportDiagnosticsDescription")} bodyClassName="settings-module-content settings-toggle-list">
-      <Field label={t("settings.zipPath")} hint={t("settings.zipPathHint")}><input value={diagnosticPath} onChange={(event) => setDiagnosticPath(event.target.value)} placeholder="/Users/me/Desktop/oneshot-diagnostics.zip" /></Field>
-      <Toggle checked={diagnosticOptions.includePrompt} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includePrompt: checked })} label={t("settings.includePrompt")} description={security.diagnosticsIncludePrompt ? t("settings.confirmOnExport") : t("settings.authorizeSecurity")} disabled={!security.diagnosticsIncludePrompt} />
-      <Toggle checked={diagnosticOptions.includeRawEvents} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includeRawEvents: checked })} label={t("settings.includeRawEvents")} description={security.diagnosticsIncludeRawEvents ? t("settings.confirmOnExport") : t("settings.authorizeSecurity")} disabled={!security.diagnosticsIncludeRawEvents} />
-      <div className="settings-actions"><Action onClick={exportDiagnostics}>{t("settings.exportZip")}</Action></div>
-    </SettingsModule>
+      {value.logLevel === "debug" && <div className="mt-4 rounded-lg bg-warning/10 p-3 text-xs text-warning"><strong className="block">{t("settings.debugWarning")}</strong><span>{t("settings.debugAdvice")}</span></div>}
+    </SettingsSection>
+    <SettingsSection title={t("settings.exportDiagnostics")} description={t("settings.exportDiagnosticsDescription")} contentClassName="p-4">
+      <SettingsField label={t("settings.zipPath")} hint={t("settings.zipPathHint")}><Input value={diagnosticPath} onChange={(event) => setDiagnosticPath(event.target.value)} placeholder="/Users/me/Desktop/oneshot-diagnostics.zip" /></SettingsField>
+      <SettingsSwitchRow checked={diagnosticOptions.includePrompt} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includePrompt: checked })} label={t("settings.includePrompt")} description={security.diagnosticsIncludePrompt ? t("settings.confirmOnExport") : t("settings.authorizeSecurity")} disabled={!security.diagnosticsIncludePrompt} />
+      <SettingsSwitchRow checked={diagnosticOptions.includeRawEvents} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includeRawEvents: checked })} label={t("settings.includeRawEvents")} description={security.diagnosticsIncludeRawEvents ? t("settings.confirmOnExport") : t("settings.authorizeSecurity")} disabled={!security.diagnosticsIncludeRawEvents} />
+      <div className="mt-4 flex flex-wrap items-center gap-2"><SettingsButton tone="primary" onClick={exportDiagnostics}>{t("settings.exportZip")}</SettingsButton></div>
+    </SettingsSection>
   </>;
 }
 
 function ExperimentalSettings({ draft, saved, setValue, workersPanel }) {
   const { t } = useTranslation();
   return <>
-    <div className="settings-boundary" role="note"><span className="kicker">{t("settings.experimentalBoundary")}</span><strong>{t("settings.remoteTrustedOnly")}</strong><p>{t("settings.remoteBoundaryDescription")}</p></div>
-    <SettingsModule title={t("settings.remoteScheduling")} description={t("settings.remoteSchedulingDescription")} bodyClassName="settings-module-content settings-toggle-list">
-      <Toggle checked={draft.remoteWorkersEnabled} onChange={(checked) => setValue({ ...draft, remoteWorkersEnabled: checked })} label={t("settings.enableRemoteWorker")} description={t("settings.enableRemoteDescription")} />
-    </SettingsModule>
+    <div className="mb-7 rounded-lg border bg-card p-4 text-xs leading-relaxed text-muted-foreground" role="note"><SettingsKicker>{t("settings.experimentalBoundary")}</SettingsKicker><strong className="mt-1 block text-sm text-foreground">{t("settings.remoteTrustedOnly")}</strong><p className="mt-1 mb-0">{t("settings.remoteBoundaryDescription")}</p></div>
+    <SettingsSection title={t("settings.remoteScheduling")} description={t("settings.remoteSchedulingDescription")} contentClassName="p-4">
+      <SettingsSwitchRow checked={draft.remoteWorkersEnabled} onChange={(checked) => setValue({ ...draft, remoteWorkersEnabled: checked })} label={t("settings.enableRemoteWorker")} description={t("settings.enableRemoteDescription")} />
+    </SettingsSection>
     {draft.remoteWorkersEnabled && saved.remoteWorkersEnabled && workersPanel}
-    {draft.remoteWorkersEnabled && !saved.remoteWorkersEnabled && <div className="settings-pending panel"><strong>{t("settings.enableAfterSave")}</strong><span>{t("settings.enableAfterSaveDescription")}</span></div>}
-    {!draft.remoteWorkersEnabled && saved.remoteWorkersEnabled && <div className="settings-pending panel"><strong>{t("settings.disableAfterSave")}</strong><span>{t("settings.disableAfterSaveDescription")}</span></div>}
+    {draft.remoteWorkersEnabled && !saved.remoteWorkersEnabled && <div className="rounded-lg border bg-card p-4"><strong className="block text-sm text-foreground">{t("settings.enableAfterSave")}</strong><span className="mt-1 block text-xs text-muted-foreground">{t("settings.enableAfterSaveDescription")}</span></div>}
+    {!draft.remoteWorkersEnabled && saved.remoteWorkersEnabled && <div className="rounded-lg border bg-card p-4"><strong className="block text-sm text-foreground">{t("settings.disableAfterSave")}</strong><span className="mt-1 block text-xs text-muted-foreground">{t("settings.disableAfterSaveDescription")}</span></div>}
   </>;
 }
 

@@ -1,0 +1,316 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { Events } from "@wailsio/runtime";
+import {
+  RuntimeBinding,
+  SettingsBinding,
+  WorkflowBinding,
+  WorkspaceBinding,
+  WorkerBinding,
+} from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
+import WorkflowLibrary from "./components/workflow/WorkflowLibrary.jsx";
+import WorkflowEditor from "./components/workflow/WorkflowEditor.jsx";
+import WorkerPage from "./components/WorkerPage.jsx";
+import WorkerModal from "./components/WorkerModal.jsx";
+import { copy, errorMessage } from "./format.js";
+import { loopTemplate } from "./templates.js";
+import { nextWorkflowDefinitionID } from "./workflowIds.js";
+import { demoRuntimes, demoWorkers, demoWorkflows, demoWorkspaces } from "./demoData.js";
+
+export const settingsChangedEvent = "oneshot:settings-changed";
+export const workflowsChangedEvent = "oneshot:workflows-changed";
+
+const emptyWorkerForm = () => ({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
+const editWorkerForm = (worker) => ({ id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled });
+
+function LoadingWindow() {
+  const { t } = useTranslation();
+  return <div className="flex h-full items-center justify-center bg-background text-sm text-muted-foreground">{t("task.opening")}</div>;
+}
+
+function useNotice() {
+  const [notice, setNotice] = useState(null);
+  const notify = useCallback((type, text) => {
+    setNotice({ type, text });
+    window.setTimeout(() => setNotice(null), 4200);
+  }, []);
+  return { notice, notify };
+}
+
+function useConfirmDialog() {
+  const [dialog, setDialog] = useState(null);
+  const resolveRef = useRef(null);
+  const requestConfirm = useCallback((options) => new Promise((resolve) => {
+    resolveRef.current?.(false);
+    resolveRef.current = resolve;
+    setDialog(options);
+  }), []);
+  const resolveConfirm = useCallback((accepted) => {
+    const resolve = resolveRef.current;
+    resolveRef.current = null;
+    setDialog(null);
+    resolve?.(accepted);
+  }, []);
+  return { dialog, requestConfirm, resolveConfirm };
+}
+
+export function SettingsWindow() {
+  const { t } = useTranslation();
+  const [mode, setMode] = useState("loading");
+  const [runtimes, setRuntimes] = useState([]);
+  const [workspaces, setWorkspaces] = useState([]);
+  const [workers, setWorkers] = useState([]);
+  const [workerHealth, setWorkerHealth] = useState({});
+  const [settings, setSettings] = useState(demoSettings);
+  const [workerModal, setWorkerModal] = useState(false);
+  const [workerForm, setWorkerForm] = useState(emptyWorkerForm);
+  const [busy, setBusy] = useState("");
+  const { notice, notify } = useNotice();
+  const { dialog, requestConfirm, resolveConfirm } = useConfirmDialog();
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([RuntimeBinding.ListRuntimes(), WorkspaceBinding.ListWorkspaces(), WorkerBinding.ListWorkers(), SettingsBinding.GetSettings()])
+      .then(([runtimeItems, workspaceItems, workerItems, settingsValue]) => {
+        if (!active) return;
+        setRuntimes(runtimeItems || []);
+        setWorkspaces(workspaceItems || []);
+        setWorkers(workerItems || []);
+        setSettings(settingsValue || demoSettings);
+        setMode("wails");
+      })
+      .catch(() => {
+        if (!active) return;
+        setRuntimes(demoRuntimes);
+        setWorkspaces(demoWorkspaces);
+        setWorkers(demoWorkers);
+        setSettings(demoSettings);
+        setMode("demo");
+      });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
+    if (!nativeSidebar || mode === "loading") return;
+    document.documentElement.dataset.nativeSidebarMaterial = "true";
+    nativeSidebar.postMessage({ width: document.querySelector(".settings-sidebar")?.getBoundingClientRect().width || 248, flush: true });
+  }, [mode]);
+
+  const updateSettings = useCallback((value) => {
+    setSettings(value);
+    void Events.Emit(settingsChangedEvent, { revision: value?.revision || 0 });
+  }, []);
+
+  const openWorker = useCallback((worker) => {
+    setWorkerForm(worker ? editWorkerForm(worker) : emptyWorkerForm());
+    setWorkerModal(true);
+  }, []);
+
+  const updateWorker = async () => {
+    if (!workerForm.id.trim() || !workerForm.name.trim() || !workerForm.baseUrl.trim()) {
+      notify("error", t("app.workerFieldsRequired"));
+      return;
+    }
+    setBusy("worker");
+    try {
+      if (mode === "demo") setWorkers((items) => [...items.filter((item) => item.id !== workerForm.id), { ...workerForm, hasToken: true }]);
+      else {
+        await WorkerBinding.UpdateWorker(workerForm);
+        setWorkers(await WorkerBinding.ListWorkers());
+      }
+      setWorkerModal(false);
+      notify("success", t("app.workerSaved"));
+    } catch (error) {
+      notify("error", errorMessage(error));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const pairWorker = async (baseURL, code) => {
+    if (!baseURL.trim() || !code.trim()) {
+      notify("error", t("app.workerPairingFieldsRequired"));
+      return;
+    }
+    setBusy("worker-pair");
+    try {
+      if (mode === "demo") setWorkers((items) => [...items, { id: "paired-worker", name: "Paired Worker", baseUrl: baseURL, hasToken: true, enabled: true }]);
+      else {
+        await WorkerBinding.PairWorker(baseURL, code);
+        setWorkers(await WorkerBinding.ListWorkers());
+      }
+      setWorkerModal(false);
+      notify("success", t("app.workerPaired"));
+    } catch (error) {
+      notify("error", t("app.workerPairingFailed", { error: errorMessage(error) }));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const checkWorker = useCallback(async (worker) => {
+    setWorkerHealth((current) => ({ ...current, [worker.id]: { ...current[worker.id], checking: true } }));
+    try {
+      const status = mode === "demo" ? { health: { workerId: worker.id, name: worker.name, runtimes: { codex: true, claude: true, modu: true } } } : await WorkerBinding.CheckWorker(worker.id);
+      setWorkerHealth((current) => ({ ...current, [worker.id]: { ok: true, checking: false, ...status.health, checkedAt: status.checkedAt, latencyMilliseconds: status.latencyMilliseconds } }));
+    } catch (error) {
+      setWorkerHealth((current) => ({ ...current, [worker.id]: { ok: false, checking: false, error: errorMessage(error) } }));
+    }
+  }, [mode]);
+
+  const deleteWorker = useCallback(async (id) => {
+    const worker = workers.find((item) => item.id === id);
+    if (!await requestConfirm({ title: t("app.deleteWorkerTitle", { name: worker?.name || id }), description: t("app.deleteWorkerDescription"), confirmLabel: t("app.deleteWorker"), dangerous: true })) return;
+    try {
+      if (mode === "demo") setWorkers((items) => items.filter((item) => item.id !== id));
+      else {
+        await WorkerBinding.DeleteWorker(id);
+        setWorkers(await WorkerBinding.ListWorkers());
+      }
+    } catch (error) {
+      notify("error", errorMessage(error));
+    }
+  }, [mode, notify, requestConfirm, t, workers]);
+
+  if (mode === "loading") return <LoadingWindow />;
+  return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-foreground">
+    <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={updateSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={workspaces[0]} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={openWorker} />} />
+    {workerModal && <WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} />}
+    <ConfirmDialog dialog={dialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
+    {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
+  </div>;
+}
+
+export function WorkflowsWindow() {
+  const { t } = useTranslation();
+  const [mode, setMode] = useState("loading");
+  const [runtimes, setRuntimes] = useState([]);
+  const [workflows, setWorkflows] = useState([]);
+  const [workers, setWorkers] = useState([]);
+  const [settings, setSettings] = useState(demoSettings);
+  const [editor, setEditor] = useState(null);
+  const [editorSourceID, setEditorSourceID] = useState("");
+  const [validation, setValidation] = useState([]);
+  const [busy, setBusy] = useState("");
+  const { notice, notify } = useNotice();
+  const { dialog, requestConfirm, resolveConfirm } = useConfirmDialog();
+
+  const load = useCallback(async () => {
+    try {
+      const [runtimeItems, workflowItems, workerItems, settingsValue] = await Promise.all([RuntimeBinding.ListRuntimes(), WorkflowBinding.ListDefinitions(), WorkerBinding.ListWorkers(), SettingsBinding.GetSettings()]);
+      setRuntimes(runtimeItems || []);
+      setWorkflows(workflowItems || []);
+      setWorkers(workerItems || []);
+      setSettings(settingsValue || demoSettings);
+      setMode("wails");
+    } catch {
+      setRuntimes(demoRuntimes);
+      setWorkflows(demoWorkflows);
+      setWorkers(demoWorkers);
+      setSettings(demoSettings);
+      setMode("demo");
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => Events.On(settingsChangedEvent, async () => {
+    if (mode !== "wails") return;
+    try {
+      const [value, items] = await Promise.all([SettingsBinding.GetSettings(), WorkerBinding.ListWorkers()]);
+      setSettings(value || demoSettings);
+      setWorkers(items || []);
+    } catch {
+      // A later edit or window reopen will retry; the current editor remains usable.
+    }
+  }), [mode]);
+
+  const announceChange = () => { void Events.Emit(workflowsChangedEvent, {}); };
+  const openEditor = (definition, isNew = false) => {
+    const next = copy(definition || loopTemplate);
+    if (isNew) next.id = nextWorkflowDefinitionID(next.id, workflows);
+    if (isNew || !workflows.some((item) => item.id === next.id)) next.policy = { maxTransitions: settings.execution.maxTransitions, maxConsecutiveFailures: settings.execution.maxConsecutiveFailures, stepTimeoutSeconds: settings.execution.stepTimeoutSeconds };
+    setEditorSourceID(isNew ? "" : next.id);
+    setEditor(next);
+    setValidation([]);
+  };
+  const updateStep = (index, field, value) => setEditor((current) => ({ ...current, steps: current.steps.map((step, itemIndex) => itemIndex === index ? { ...step, [field]: value } : step) }));
+  const updateTransition = (stepIndex, oldSignal, signal, target) => setEditor((current) => ({ ...current, steps: current.steps.map((step, index) => {
+    if (index !== stepIndex) return step;
+    const transitions = { ...step.transitions };
+    delete transitions[oldSignal];
+    transitions[signal] = target;
+    return { ...step, transitions };
+  }) }));
+  const removeTransition = (stepIndex, signal) => setEditor((current) => ({ ...current, steps: current.steps.map((step, index) => {
+    if (index !== stepIndex) return step;
+    const transitions = { ...step.transitions };
+    delete transitions[signal];
+    return { ...step, transitions };
+  }) }));
+
+  const validateEditor = async () => {
+    if (!editor) return [];
+    const duplicateID = workflows.some((item) => item.id === editor.id && item.id !== editorSourceID);
+    let issues;
+    if (mode === "demo") {
+      issues = [];
+      if (!/^[a-z][a-z0-9_-]*$/.test(editor.id)) issues.push({ path: "id", message: t("workflow.lowercaseID") });
+      if (!editor.steps?.length) issues.push({ path: "steps", message: t("workflow.stepRequired") });
+    } else issues = await WorkflowBinding.ValidateDefinition(editor) || [];
+    if (duplicateID) issues = [...issues, { path: "id", code: "duplicate", message: t("workflow.idExists") }];
+    setValidation(issues);
+    return issues;
+  };
+
+  const saveWorkflow = async () => {
+    const issues = await validateEditor();
+    if (issues.length) {
+      notify("error", t("workflow.configIssues", { count: issues.length }));
+      return;
+    }
+    if (editor.steps.some((step) => step.sandbox === "full") && !await requestConfirm({ title: t("app.fullWorkflowTitle"), description: t("app.fullWorkflowDescription"), detail: t("app.workflowDetail", { name: editor.name || editor.id }), confirmLabel: t("app.confirmSave"), dangerous: true })) return;
+    setBusy("workflow");
+    try {
+      if (mode !== "demo") {
+        if (editorSourceID) await WorkflowBinding.UpdateDefinition(editorSourceID, editor);
+        else await WorkflowBinding.CreateDefinition(editor);
+        setWorkflows(await WorkflowBinding.ListDefinitions());
+      } else setWorkflows((items) => [...items.filter((item) => item.id !== editor.id && item.id !== editorSourceID), editor]);
+      setEditor(null);
+      setEditorSourceID("");
+      announceChange();
+      notify("success", t("app.workflowSaved"));
+    } catch (error) {
+      notify("error", errorMessage(error));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const deleteWorkflow = async (workflow) => {
+    if (!await requestConfirm({ title: t("app.deleteWorkflowTitle", { name: workflow.name }), description: t("app.deleteWorkflowDescription"), detail: t("app.workflowDetail", { name: workflow.name || workflow.id }), confirmLabel: t("app.deleteWorkflow"), dangerous: true })) return;
+    setBusy("delete-workflow");
+    try {
+      if (mode === "demo") setWorkflows((items) => items.filter((item) => item.id !== workflow.id));
+      else {
+        await WorkflowBinding.DeleteDefinition(workflow.id);
+        setWorkflows(await WorkflowBinding.ListDefinitions());
+      }
+      announceChange();
+      notify("success", t("app.workflowDeleted"));
+    } catch (error) {
+      notify("error", errorMessage(error));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  if (mode === "loading") return <LoadingWindow />;
+  return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
+    {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} /> : <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} />}
+    <ConfirmDialog dialog={dialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
+    {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
+  </div>;
+}

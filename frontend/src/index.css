@@ -205,11 +205,7 @@
   --sidebar-ring: #edc278;
 }
 
-/* ---- Accent themes -------------------------------------------------------
-   Only the identity colour moves; the cream/charcoal canvas stays put. The
-   default ("forest") is the amber-brown already declared above, so it needs no
-   override. Every light-theme accent is dark and every dark-theme accent is
-   light, which is why --primary-foreground never has to change. */
+/* ---- Accent themes ------------------------------------------------------- */
 :root[data-accent="ocean"] { --primary: #1f6475; --ring: #1f6475; --sidebar-primary: #1f6475; --sidebar-ring: #1f6475; }
 :root[data-accent="violet"] { --primary: #684886; --ring: #684886; --sidebar-primary: #684886; --sidebar-ring: #684886; }
 :root[data-accent="amber"] { --primary: #87501d; --ring: #87501d; --sidebar-primary: #87501d; --sidebar-ring: #87501d; }
@@ -425,8 +421,8 @@
 
   .conversation-tool[open] { background: var(--card); }
   .conversation-tool[open] > summary {
-    border-bottom: 1px solid var(--border);
-    border-radius: calc(var(--radius) - 2px) calc(var(--radius) - 2px) 0 0;
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--muted);
   }
 
   .conversation-tool-body { border-left-color: var(--info); }
@@ -444,167 +440,6 @@
     border-radius: var(--radius);
     background: color-mix(in oklab, var(--warning) 6%, var(--card));
   }
-}
-
-/* Settings is a long stack of dense form rows. Like the transcript above, the
-   markup keeps its class names and the rules are re-authored here against the
-   shadcn tokens, rather than expanding into per-element utilities. */
-@layer app {
-  .settings-module-content { padding: 16px; }
-
-  .settings-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 16px;
-  }
-
-  .settings-grid .full { grid-column: 1 / -1; }
-
-  .settings-actions {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-
-  /* Runtime cards stack inside one module card, so only their shared
-     hairlines separate them — no nested borders or radii. */
-  .runtime-setting-card {
-    margin: 0;
-    padding: 16px;
-    border: 0;
-    border-top: 1px solid var(--border);
-    background: transparent;
-  }
-
-  .settings-runtime-module .runtime-setting-card:first-child,
-  .settings-runtime-module .runtime-path-help + .runtime-setting-card {
-    border-top: 0;
-  }
-
-  .setting-status {
-    display: inline-flex;
-    flex: 0 0 auto;
-    align-items: center;
-    gap: 6px;
-    color: var(--muted-foreground);
-    font-size: 12px;
-  }
-
-  .setting-status i {
-    width: 6px;
-    height: 6px;
-    border-radius: 999px;
-    background: currentColor;
-  }
-
-  .setting-status.ok { color: var(--success); }
-  .setting-status.bad { color: var(--destructive); }
-
-  .settings-boundary,
-  .settings-inline-empty,
-  .cleanup-preview,
-  .runtime-path-help {
-    border: 1px solid var(--border);
-    border-radius: calc(var(--radius) - 2px);
-    background: var(--muted);
-    padding: 12px 14px;
-    color: var(--muted-foreground);
-    font-size: 12px;
-    line-height: 1.6;
-  }
-
-  .settings-boundary strong,
-  .cleanup-preview strong {
-    display: block;
-    margin-bottom: 4px;
-    color: var(--foreground);
-    font-size: 13px;
-  }
-
-  .data-root-row {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .data-root-row code {
-    min-width: 0;
-    flex: 1;
-    overflow: hidden;
-    padding: 6px 8px;
-    border-radius: calc(var(--radius) - 4px);
-    background: var(--muted);
-    color: var(--muted-foreground);
-    font-family: var(--font-ui-mono);
-    font-size: 11px;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .usage-total {
-    color: var(--foreground);
-    font-size: 20px;
-    font-weight: 600;
-  }
-
-  .usage-total small,
-  .storage-calculated-at {
-    color: var(--muted-foreground);
-    font-size: 11px;
-    font-weight: 400;
-  }
-
-  .usage-bars { display: grid; gap: 8px; margin-top: 12px; }
-  .usage-bars > div { display: grid; gap: 4px; font-size: 11px; color: var(--muted-foreground); }
-  .usage-bars i {
-    display: block;
-    height: 5px;
-    border-radius: 999px;
-    background: var(--primary);
-  }
-
-  /* The confirm dialog predates the shadcn Dialog; until it is ported it at
-     least matches the popover surface. */
-  .confirm-backdrop {
-    position: fixed;
-    z-index: 130;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    padding: 24px;
-    background: color-mix(in oklab, var(--foreground) 30%, transparent);
-  }
-
-  .confirm-dialog {
-    width: min(440px, 100%);
-    display: grid;
-    gap: 16px;
-    padding: 24px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--popover);
-    color: var(--popover-foreground);
-    box-shadow: 0 16px 44px color-mix(in oklab, var(--foreground) 22%, transparent);
-  }
-
-  .confirm-copy h2 { margin: 0 0 6px; font-size: 16px; font-weight: 600; }
-  .confirm-copy p { margin: 0; color: var(--muted-foreground); font-size: 13px; line-height: 1.6; }
-
-  .confirm-detail {
-    padding: 10px 12px;
-    border-radius: calc(var(--radius) - 2px);
-    background: var(--muted);
-    color: var(--muted-foreground);
-    font-size: 12px;
-  }
-
-  .confirm-dialog.dangerous .confirm-detail {
-    background: color-mix(in oklab, var(--destructive) 8%, transparent);
-    color: var(--destructive);
-  }
-
-  .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 }
 
 /* Command palette. Self-contained BEM block, re-authored onto the shadcn
@@ -640,16 +475,18 @@
     grid-template-columns: 18px minmax(0, 1fr) auto;
     align-items: center;
     gap: 10px;
-    min-height: 48px;
+    min-height: 44px;
+    margin: 8px 8px 0;
     padding: 0 14px;
-    border-bottom: 1px solid var(--border);
+    border-radius: calc(var(--radius) - 2px);
+    background: var(--muted);
     color: var(--muted-foreground);
   }
 
   .command-palette__search input {
     width: 100%;
     min-width: 0;
-    height: 47px;
+    height: 43px;
     padding: 0;
     border: 0;
     background: transparent;
@@ -686,9 +523,8 @@
   }
 
   .command-palette__group + .command-palette__group {
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px solid var(--border);
+    margin-top: 8px;
+    padding-top: 0;
   }
 
   .command-palette__group-title {

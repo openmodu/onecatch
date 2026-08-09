@@ -11,11 +11,11 @@ export default function QueuedTaskView({ task, position }) {
     <Kicker>{t("queue.kicker")}</Kicker>
     <h3 className="mt-2 mb-1.5 text-lg font-semibold text-foreground">{t("queue.waiting")}</h3>
     <p className="m-0 text-sm leading-relaxed text-muted-foreground">{t("queue.description")}</p>
-    <dl className="mt-6 grid gap-0 text-left">
+    <dl className="mt-6 grid gap-1.5 text-left">
       {[[t("queue.goal"), task.prompt],
         [t("queue.enqueuedAt"), formatTime(task.queue?.enqueuedAt || task.createdAt)],
         [t("queue.attachments"), t("common.itemsCount", { count: task.attachments?.length || 0 })]].map(([term, value]) => (
-        <div className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-3 border-b py-2.5 last:border-b-0" key={term}>
+        <div className="grid grid-cols-[minmax(0,7rem)_minmax(0,1fr)] gap-3 rounded-md bg-muted/45 px-3 py-2.5" key={term}>
           <dt className="text-xs text-muted-foreground">{term}</dt>
           <dd className="m-0 text-xs leading-relaxed text-foreground">{value}</dd>
         </div>

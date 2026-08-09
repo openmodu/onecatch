@@ -98,7 +98,7 @@ export function ModeBadge({ mode = "serial", children }) {
 export function Panel({ title, description, aside, children, className = "", headingLevel = 3 }) {
   const Heading = `h${Math.min(6, Math.max(1, headingLevel))}`;
   return (
-    <section className={cn("border-b p-4 last:border-b-0", className)}>
+    <section className={cn("rounded-md bg-muted/35 p-4", className)}>
       {(title || aside) && (
         <div className="mb-1 flex items-center justify-between gap-3">
           <Heading className="m-0 text-sm font-semibold text-foreground">{title}</Heading>
@@ -207,7 +207,7 @@ export function TUISelect({ value, onChange, options = [], ariaLabel, disabled =
 export function ToggleRow({ checked, onChange, label, description, dangerous = false, disabled = false }) {
   const id = useId();
   return (
-    <div className={cn("flex items-center gap-4 border-t py-3", disabled && "opacity-50")}>
+    <div className={cn("mt-2 flex items-center gap-4 rounded-md bg-muted/45 px-3 py-3 first:mt-0", disabled && "opacity-50")}>
       <span className="min-w-0 flex-1">
         <Label
           htmlFor={id}
@@ -231,7 +231,7 @@ export function ToggleRow({ checked, onChange, label, description, dangerous = f
 
 export function Toolbar({ children, className = "" }) {
   return (
-    <header className={cn("flex h-12 shrink-0 items-center gap-3 border-b px-5", className)}>
+    <header className={cn("flex h-12 shrink-0 items-center gap-3 px-5", className)}>
       {children}
     </header>
   );

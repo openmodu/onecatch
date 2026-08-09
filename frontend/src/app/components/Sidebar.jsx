@@ -305,7 +305,7 @@ function Sidebar({
             <b className="font-medium">{t("sidebar.menu")}</b>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" sideOffset={6} className="secondary-navigation-menu w-[var(--radix-dropdown-menu-trigger-width)]">
+        <DropdownMenuContent side="top" align="start" alignOffset={8} sideOffset={6} collisionPadding={12} className="secondary-navigation-menu w-[calc(var(--radix-dropdown-menu-trigger-width)-16px)]">
           <DropdownMenuItem className={view === "workflows" || editor ? "active bg-accent text-accent-foreground" : ""} onSelect={() => goToSecondaryView("workflows")}>
             <b>{t("sidebar.workflows")}</b>
           </DropdownMenuItem>

@@ -52,7 +52,8 @@ static NSRect oneshotSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
 }
 
 // Canvas colour mirrored from frontend tokens (--acp-canvas): light #F5F5F0,
-// dark #1C1C1C. Resolved against the window's effective appearance at apply
+// dark #1C1C1C.
+// Resolved against the window's effective appearance at apply
 // time — WebKit copies NSColor values into plain RGBA on assignment, so a
 // dynamic NSColor would freeze at whatever appearance was active on first set.
 // AppKit strokes a dark hairline around a stock light window and a light one
@@ -164,11 +165,16 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 
 	id body = message.body;
 	NSNumber *width = nil;
+	NSNumber *flush = nil;
 	NSString *theme = nil;
 	if ([body isKindOfClass:[NSDictionary class]]) {
 		id candidateWidth = [(NSDictionary *)body objectForKey:@"width"];
 		if ([candidateWidth isKindOfClass:[NSNumber class]]) {
 			width = candidateWidth;
+		}
+		id candidateFlush = [(NSDictionary *)body objectForKey:@"flush"];
+		if ([candidateFlush isKindOfClass:[NSNumber class]]) {
+			flush = candidateFlush;
 		}
 		id candidateTheme = [(NSDictionary *)body objectForKey:@"theme"];
 		if ([candidateTheme isKindOfClass:[NSString class]]) {
@@ -180,9 +186,15 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 
 	if (width != nil && self.effectView.superview != nil) {
 		NSRect bounds = self.effectView.superview.bounds;
-		self.effectView.frame = oneshotSidebarPanelFrame(bounds, width.doubleValue);
+		BOOL useFlushRail = flush.boolValue;
+		self.effectView.frame = useFlushRail
+			? NSMakeRect(NSMinX(bounds), NSMinY(bounds), MIN(width.doubleValue, NSWidth(bounds)), NSHeight(bounds))
+			: oneshotSidebarPanelFrame(bounds, width.doubleValue);
+		self.effectView.layer.cornerRadius = useFlushRail ? 0.0 : oneshotSidebarCornerRadius;
 		self.canvasView.frame = bounds;
 		self.borderView.frame = self.effectView.frame;
+		self.borderView.layer.cornerRadius = useFlushRail ? 0.0 : oneshotSidebarCornerRadius;
+		self.borderView.layer.borderWidth = useFlushRail ? 0.0 : oneshotDeviceHairlineWidth(self.window);
 	}
 
 	// A pinned web theme must also pin AppKit; otherwise a dark sidebar
@@ -262,8 +274,9 @@ static void oneshotInstallSidebarMaterial(NSWindow *window) {
 		@"document.documentElement.dataset.nativeSidebarMaterial='true';"
 		 "window.webkit.messageHandlers.oneshotSidebar.postMessage({"
 		 "width:document.querySelector('.sidebar')?.getBoundingClientRect().width||216,"
-		 "theme:document.documentElement.dataset.theme||'system'"
-		 "});";
+		 "flush:Boolean(document.querySelector('.settings-sidebar')),"
+			 "theme:document.documentElement.dataset.theme||'system'"
+			 "});";
 	[webView evaluateJavaScript:script completionHandler:nil];
 
 	// Behind-window materials need a non-opaque window even though the main
@@ -413,6 +426,16 @@ static void oneshotSetWindowCornerRadius(void *handle, double radius) {
 	oneshotUpdateWindowBorder(window, radius);
 	[window invalidateShadow];
 }
+
+static void oneshotSetWindowZoomButtonHidden(void *handle, bool hidden) {
+	NSWindow *window = (__bridge NSWindow *)handle;
+	if (window == nil) {
+		return;
+	}
+	NSButton *zoomButton = [window standardWindowButton:NSWindowZoomButton];
+	zoomButton.enabled = !hidden;
+	zoomButton.hidden = hidden;
+}
 */
 import "C"
 
@@ -423,4 +446,11 @@ func setNativeWindowCornerRadius(window unsafe.Pointer, radius float64) {
 		return
 	}
 	C.oneshotSetWindowCornerRadius(window, C.double(radius))
+}
+
+func setNativeWindowZoomButtonHidden(window unsafe.Pointer, hidden bool) {
+	if window == nil {
+		return
+	}
+	C.oneshotSetWindowZoomButtonHidden(window, C.bool(hidden))
 }

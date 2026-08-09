@@ -9,6 +9,7 @@ import {
   WorkflowBinding,
   WorkspaceBinding,
   WorkerBinding,
+  WindowBinding,
 } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
 import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceSections } from "./listNavigation.js";
@@ -28,6 +29,7 @@ import { nextWorkflowDefinitionID } from "./workflowIds.js";
 import LockScreen from "./components/LockScreen.jsx";
 import { buildLockSignal, completionEdge, LOCK_PHASE } from "./lockSignal.js";
 import { notifyStandby } from "./standbyNotify.js";
+import { settingsChangedEvent, workflowsChangedEvent } from "./AuxiliaryWindow.jsx";
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
 const runStateEvent = "oneshot:run-state";
@@ -187,6 +189,32 @@ function App() {
   }, []);
 
   useEffect(() => { boot(); }, [boot]);
+
+  // Settings and workflow definitions are edited in their own WebViews. Wails
+  // custom events are application-wide, so the main task window can refresh
+  // just the shared data that changed without running duplicate polling loops.
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    const offSettings = Events.On(settingsChangedEvent, async () => {
+      try {
+        const [value, workerItems] = await Promise.all([SettingsBinding.GetSettings(), WorkerBinding.ListWorkers()]);
+        setSettings(value || demoSettings);
+        setWorkers(workerItems || []);
+      } catch (error) {
+        notify("error", errorMessage(error));
+      }
+    });
+    const offWorkflows = Events.On(workflowsChangedEvent, async () => {
+      try {
+        const items = await WorkflowBinding.ListDefinitions();
+        setWorkflows(items || []);
+        setTaskForm((form) => items.some((item) => item.id === form.workflowId) ? form : { ...form, workflowId: items[0]?.id || "" });
+      } catch (error) {
+        notify("error", errorMessage(error));
+      }
+    });
+    return () => { offSettings(); offWorkflows(); };
+  }, [mode, notify]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setRunKeyword(runSearchDraft.trim()), 220);
@@ -764,7 +792,20 @@ function App() {
   };
 
   const sidebarWorkspaces = useMemo(() => workspaceSections(workspaces, { selectedID: workspaceID, query: "", expanded: workspaceExpanded }), [workspaceExpanded, workspaceID, workspaces]);
-  const goView = useCallback((next) => { setEditor(null); setEditorSourceID(""); setView(next); }, []);
+  const goView = useCallback((next) => {
+    if (next === "settings" || next === "workflows") {
+      if (mode === "wails") {
+        const open = next === "settings" ? WindowBinding.OpenSettings() : WindowBinding.OpenWorkflows();
+        void open.catch((error) => notify("error", errorMessage(error)));
+        return;
+      }
+    }
+    // Browser preview has no native window host, so keeping the legacy inline
+    // view there makes design work possible without changing desktop behavior.
+    setEditor(null);
+    setEditorSourceID("");
+    setView(next);
+  }, [mode, notify]);
   // Split rather than one "name @ path" string: the shell-prompt framing was
   // the loudest terminal cue in the chrome. The label is prose, the path is a
   // real filesystem path and keeps the mono face.
@@ -872,7 +913,7 @@ function App() {
       />
 
       <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
-        <div className="drag-region flex h-11 shrink-0 cursor-default items-center gap-3 border-b px-5">
+        <div className="drag-region flex h-11 shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
           {/* The workspace path is machine text, so it keeps the mono face
               while the rest of the chrome moves to the UI font. */}
           <span className="flex min-w-0 items-baseline gap-2" title={commandText}>

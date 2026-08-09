@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	desktopassets "github.com/openmodu/oneshot/internal/app/desktop/assets"
@@ -20,7 +21,6 @@ import (
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/pkg/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"go.uber.org/zap"
 )
@@ -90,6 +90,19 @@ func Run() {
 	}
 	var wailsApp *application.App
 	workspaceBinding := wailstransport.NewWorkspaceBinding(service, func() *application.App { return wailsApp })
+	var auxiliaryWindows *auxiliaryWindowController
+	windowBinding := wailstransport.NewWindowBinding(
+		func() {
+			if auxiliaryWindows != nil {
+				auxiliaryWindows.OpenSettings()
+			}
+		},
+		func() {
+			if auxiliaryWindows != nil {
+				auxiliaryWindows.OpenWorkflows()
+			}
+		},
+	)
 
 	// The macOS notification service hard-fails its Startup without a bundle
 	// identifier, which would abort app launch. It only has one when running
@@ -103,6 +116,7 @@ func Run() {
 		application.NewService(wailstransport.NewWorkflowBinding(service)),
 		application.NewService(wailstransport.NewTaskRunBinding(service)),
 		application.NewService(wailstransport.NewWorkerBinding(service)),
+		application.NewService(windowBinding),
 	}
 	var notifier *notifications.NotificationService
 	if runningAsBundle() {
@@ -123,6 +137,7 @@ func Run() {
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
 	})
+	auxiliaryWindows = newAuxiliaryWindowController(wailsApp)
 	unsubscribeRunStream := streamHub.Subscribe(func(frame runstream.Frame) {
 		wailsApp.Event.Emit(runstream.EventName, frame)
 	})
@@ -131,12 +146,29 @@ func Run() {
 		wailsApp.Event.Emit(runstate.EventName, view)
 	})
 	menu := wailsApp.NewMenu()
-	menu.AddRole(application.AppMenu)
+	if runtime.GOOS == "darwin" {
+		appMenu := menu.AddSubmenu(Name)
+		appMenu.AddRole(application.About)
+		appMenu.Add("设置…").SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
+			auxiliaryWindows.OpenSettings()
+		})
+		appMenu.AddSeparator()
+		appMenu.AddRole(application.ServicesMenu)
+		appMenu.AddSeparator()
+		appMenu.AddRole(application.Hide)
+		appMenu.AddRole(application.HideOthers)
+		appMenu.AddRole(application.UnHide)
+		appMenu.AddSeparator()
+		appMenu.AddRole(application.Quit)
+	} else {
+		menu.AddRole(application.AppMenu)
+	}
 	menu.AddRole(application.EditMenu)
 	menu.AddRole(application.WindowMenu)
 	wailsApp.Menu.Set(menu)
 
 	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:             "main",
 		Title:            Name,
 		Width:            1280,
 		Height:           800,
@@ -149,16 +181,7 @@ func Run() {
 			Backdrop: application.MacBackdropTransparent,
 		},
 	})
-	applyWindowCorner := func(radius float64) {
-		application.InvokeSync(func() {
-			setNativeWindowCornerRadius(mainWindow.NativeWindow(), radius)
-		})
-	}
-	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { applyWindowCorner(26) })
-	mainWindow.OnWindowEvent(events.Common.WindowMaximise, func(*application.WindowEvent) { applyWindowCorner(0) })
-	mainWindow.OnWindowEvent(events.Common.WindowUnMaximise, func(*application.WindowEvent) { applyWindowCorner(26) })
-	mainWindow.OnWindowEvent(events.Common.WindowFullscreen, func(*application.WindowEvent) { applyWindowCorner(0) })
-	mainWindow.OnWindowEvent(events.Common.WindowUnFullscreen, func(*application.WindowEvent) { applyWindowCorner(26) })
+	applyNativeWindowChrome(mainWindow)
 
 	if err := wailsApp.Run(); err != nil {
 		log.Fatal("wails app failed", zap.Error(err))

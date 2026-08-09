@@ -9,7 +9,7 @@ import StatusPill from "../StatusPill.jsx";
 import { statusKey } from "../../constants.js";
 
 function InspectorRow({ label, value }) {
-  return <div className="flex items-center justify-between gap-2.5 border-b py-2.5 last:border-b-0">
+  return <div className="mt-1.5 flex items-center justify-between gap-2.5 rounded-md bg-muted/45 px-2.5 py-2.5">
     <span className="text-xs text-muted-foreground">{label}</span>
     <strong className="text-xs font-medium text-foreground">{value || "—"}</strong>
   </div>;
@@ -52,7 +52,7 @@ export default function StatusInspector({ detail, queuedTask, queuePosition, not
     }
   };
 
-  if (queuedTask) return <div className="status-inspector p-3.5"><Kicker>{t("inspector.queueStatus")}</Kicker><div className="mt-2 flex items-center gap-2.5 border-b pb-3"><StatusPill status="queued" /><strong>{t("inspector.queuePosition", { position: queuePosition })}</strong></div><InspectorRow label={t("inspector.executionMode")} value={t("task.workspaceFIFO")} /><InspectorRow label={t("inspector.authorized")} value={queuedTask.queue?.authorized ? t("common.yes") : t("common.no")} /><InspectorRow label={t("inspector.enqueuedAt")} value={formatTime(queuedTask.queue?.enqueuedAt)} /><InspectorRow label={t("inspector.attachments")} value={t("common.itemsCount", { count: queuedTask.attachments?.length || 0 })} /></div>;
+  if (queuedTask) return <div className="status-inspector p-3.5"><Kicker>{t("inspector.queueStatus")}</Kicker><div className="mt-2 mb-2 flex items-center gap-2.5 rounded-lg bg-muted/60 px-3 py-2.5"><StatusPill status="queued" /><strong>{t("inspector.queuePosition", { position: queuePosition })}</strong></div><InspectorRow label={t("inspector.executionMode")} value={t("task.workspaceFIFO")} /><InspectorRow label={t("inspector.authorized")} value={queuedTask.queue?.authorized ? t("common.yes") : t("common.no")} /><InspectorRow label={t("inspector.enqueuedAt")} value={formatTime(queuedTask.queue?.enqueuedAt)} /><InspectorRow label={t("inspector.attachments")} value={t("common.itemsCount", { count: queuedTask.attachments?.length || 0 })} /></div>;
   if (!detail) return <p className="m-0 px-4 py-5 text-xs leading-relaxed text-muted-foreground">{t("inspector.selectTask")}</p>;
   const { run, workflow, stepRuns = [] } = detail;
   const tokenUsage = summarizeTokenUsage(stepRuns);
@@ -60,19 +60,19 @@ export default function StatusInspector({ detail, queuedTask, queuePosition, not
   const sessions = runtimeSessionEntries(detail, t);
   const currentStep = workflow.steps?.find((step) => step.id === run.currentStepId);
   return <div className="status-inspector p-3.5">
-    <div className="flex items-center gap-2.5 border-b pb-3">
+    <div className="flex items-center gap-2.5 rounded-lg bg-muted/60 px-3 py-2.5">
       <StatusPill status={run.status} active={detail.active} />
       <strong className="min-w-0 truncate text-sm font-semibold text-foreground">{currentStep?.name || run.currentStepId || "—"}</strong>
       <small className="ml-auto shrink-0 text-[11px] font-medium text-info">{currentStep?.runtime || "agent"}</small>
     </div>
-    {/* 2×2 metric grid: interior hairlines only, so the block reads as one unit. */}
-    <div className="grid grid-cols-2 border-b [&>div:nth-child(-n+2)]:border-b [&>div:nth-child(odd)]:border-r">
+    {/* Spacing and a shared tint group the four metrics without table rules. */}
+    <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-lg bg-muted/35 p-1.5">
       <TokenMetric label={t("inspector.inputTokens")} total={tokenUsage.inputTokens} details={[{ label: t("inspector.cacheRead"), value: tokenUsage.cachedInputTokens }, { label: t("inspector.cacheWrite"), value: tokenUsage.cacheCreationInputTokens }]} />
       <TokenMetric label={t("inspector.outputTokens")} total={tokenUsage.outputTokens} details={[{ label: t("inspector.reasoning"), value: tokenUsage.reasoningOutputTokens }]} />
       <div className="px-1.5 py-3"><span className="block text-[11px] text-muted-foreground">{t("inspector.duration")}</span><strong className="mt-1 block text-[17px] font-semibold tabular-nums text-foreground">{formatDuration(duration)}</strong></div>
       <div className="px-1.5 py-3"><span className="block text-[11px] text-muted-foreground">{t("inspector.rounds")}</span><strong className="mt-1 block text-[17px] font-semibold tabular-nums text-foreground">{stepRuns.length}</strong></div>
     </div>
-    <section className="border-b py-3.5">
+    <section className="mt-3 rounded-lg bg-muted/30 px-3 py-3">
       <Kicker className="mb-2 block">{t("inspector.workflow")}</Kicker>
       {(workflow.steps || []).map((step, index) => {
         const stepRun = [...stepRuns].reverse().find((item) => item.stepId === step.id);
@@ -88,9 +88,9 @@ export default function StatusInspector({ detail, queuedTask, queuePosition, not
         </div>;
       })}
     </section>
-    <section className="border-b py-3.5">
+    <section className="mt-3 rounded-lg bg-muted/30 px-3 py-3">
       <Kicker className="mb-2 block">{t("inspector.resumeSessions")}</Kicker>
-      {sessions.map((session) => <div className="grid gap-2 border-b py-2.5 last:border-b-0" key={session.stepID}>
+      {sessions.map((session) => <div className="mt-2 grid gap-2 rounded-md bg-background/70 p-2.5" key={session.stepID}>
         <div className="flex items-center justify-between gap-2">
           <span className="min-w-0 truncate text-[11px] text-muted-foreground"><strong className="font-medium text-foreground capitalize">{session.runtime}</strong> · {session.stepName}</span>
           <small className="shrink-0 text-[11px] uppercase text-muted-foreground">{session.idLabel}</small>
