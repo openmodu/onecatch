@@ -1,6 +1,6 @@
 import { lazy, memo, Suspense } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, ChevronRight, Circle } from "lucide-react";
+import { BrainCircuit, Check, ChevronDown, ChevronRight, Circle, Clock3, FilePenLine, LoaderCircle, Terminal, TriangleAlert, Wrench } from "lucide-react";
 import { formatTime } from "../format.js";
 import { Action } from "../../ui/primitives.jsx";
 
@@ -10,17 +10,11 @@ function MessageBody({ content, streaming = false }) {
   return <Suspense fallback={<div className="markdown-content markdown-loading">{content}</div>}><MarkdownContent content={content} streaming={streaming} /></Suspense>;
 }
 
-// Consecutive events often share the same second; repeating the identical
-// timestamp on every row is noise. Each caller keeps its own de-duper so the
-// label only shows on the first of a same-second run.
+// Every timeline entry owns its timestamp. Tool calls often finish within the
+// same second, but hiding repeated values makes an individual row look like it
+// has no recorded time.
 function createTimeLabeler() {
-  let last = "";
-  return (at) => {
-    const label = formatTime(at);
-    if (!label || label === last) return "";
-    last = label;
-    return label;
-  };
+  return (at) => formatTime(at);
 }
 
 function ToolTimelineItem({ entry, running, stalled, time }) {
@@ -28,8 +22,10 @@ function ToolTimelineItem({ entry, running, stalled, time }) {
   const labels = { tool_use: t("timeline.toolUse"), tool_result: t("timeline.result"), file_change: t("timeline.fileChange"), reasoning: t("timeline.process") };
   const failed = Boolean(entry.failed);
   const state = failed ? t("timeline.failed") : running ? t("timeline.executing") : stalled ? t("timeline.incomplete") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.done");
+  const ToolIcon = entry.kind === "file_change" ? FilePenLine : entry.kind === "reasoning" ? BrainCircuit : entry.kind === "tool_use" ? Terminal : Wrench;
+  const StateIcon = failed ? TriangleAlert : running ? LoaderCircle : stalled ? Clock3 : Check;
   return <details className={`conversation-tool kind-${entry.kind} ${running ? "running" : ""} ${failed ? "failed" : ""} ${stalled ? "stalled" : ""}`}>
-    <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-caret"><ChevronRight className="closed" strokeWidth={2.5} /><ChevronDown className="opened" strokeWidth={2.5} /></span><strong title={entry.text}>{entry.title}</strong><span className="conversation-tool-state">{running && <span className="pulse" />}{state}</span><time>{time ?? formatTime(entry.at)}</time></span></summary>
+    <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-icon"><ToolIcon aria-hidden="true" /></span><span className="conversation-tool-heading"><span>{entry.toolName || labels[entry.kind] || entry.kind}</span><strong title={entry.title}>{entry.title}</strong></span><span className="conversation-tool-state"><StateIcon className={running ? "conversation-tool-state-icon spinning" : "conversation-tool-state-icon"} aria-hidden="true" /><span>{state}</span></span><time>{time ?? formatTime(entry.at)}</time><span className="conversation-tool-caret"><ChevronRight className="closed" strokeWidth={2.25} /><ChevronDown className="opened" strokeWidth={2.25} /></span></span></summary>
     <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? t("timeline.path") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.command")}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
   </details>;
 }

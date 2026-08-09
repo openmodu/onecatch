@@ -264,11 +264,12 @@ test("tool rows spend their width on the command, not on empty columns", async (
     /\.conversation-tool-summary\s*\{[^}]*grid-template-columns:[^;]*--ui-event-state-width/s,
     "the state column must not go back to a fixed track",
   );
-  // Commands have no spaces to break on, so a single ellipsised line hid most
-  // of them with no way to reveal the rest.
-  assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*white-space:\s*normal/s);
-  assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*line-clamp:\s*2/s);
-  assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*overflow-wrap:\s*anywhere/s);
+  // The tool row now reads as a compact disclosure: an uppercase tool-name
+  // label above a single-line summary. The command itself is a nowrap,
+  // ellipsised line that is only fully revealed once the disclosure opens.
+  assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*white-space:\s*nowrap/s);
+  assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*text-overflow:\s*ellipsis/s);
+  assert.match(css, /\.conversation-tool-heading > span\s*\{[^}]*text-transform:\s*uppercase/s);
   // The message timestamp has the same empty-label problem.
   assert.match(css, /\.conversation-message-meta time:not\(:empty\)\s*\{[^}]*min-width:\s*var\(--ui-event-time-width\)/s);
 });

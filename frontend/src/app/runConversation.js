@@ -123,6 +123,40 @@ export function readableToolTitle(value, translate = defaultTranslate) {
   return command || firstLine;
 }
 
+function commandToolName(value) {
+  const first = String(value || "").trim().split(/\s+/, 1)[0] || "";
+  return first.split(/[\\/]/).pop() || first;
+}
+
+// Codex tool calls can arrive as `bash {"command":"…","description":"…"}`.
+// Keep that transport envelope out of the UI: the summary uses the human
+// description while the expanded body shows the decoded command itself.
+export function readableToolInvocation(value, translate = defaultTranslate) {
+  const source = String(value || "").trim();
+  const envelope = source.match(/^([^\s{}]+)\s+(\{[\s\S]*\})$/);
+  if (envelope) {
+    try {
+      const payload = JSON.parse(envelope[2]);
+      if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+        const preferred = ["command", "cmd", "path", "file_path", "query", "url", "prompt"]
+          .map((key) => payload[key])
+          .find((candidate) => typeof candidate === "string" && candidate.trim());
+        const text = preferred?.trim() || JSON.stringify(payload, null, 2);
+        const description = typeof payload.description === "string" ? payload.description.trim() : "";
+        return {
+          toolName: commandToolName(envelope[1]),
+          title: description || readableToolTitle(text, translate),
+          text,
+        };
+      }
+    } catch {
+      // Providers may stream an incomplete JSON envelope. Until it closes,
+      // preserve the original text instead of presenting a misleading parse.
+    }
+  }
+  return { toolName: commandToolName(source), title: readableToolTitle(source, translate), text: source };
+}
+
 function roundItems(events, fallbackText, fallbackError, translate) {
   const items = [];
   const seenMessages = new Set();
@@ -172,7 +206,8 @@ function roundItems(events, fallbackText, fallbackError, translate) {
       lastTool = null;
       continue;
     }
-    const tool = { type: "tool", id: event.streamId || `${event.kind}-${event.seq}`, kind: event.kind, title: readableToolTitle(event.text, translate), text: event.text, streaming: Boolean(event.streaming), at: event.at, details: [], failed: Boolean(event.failed), settled: event.kind !== "tool_use" };
+    const invocation = event.kind === "tool_use" ? readableToolInvocation(event.text, translate) : { toolName: "", title: readableToolTitle(event.text, translate), text: event.text };
+    const tool = { type: "tool", id: event.streamId || `${event.kind}-${event.seq}`, kind: event.kind, toolName: invocation.toolName, title: invocation.title, text: invocation.text, streaming: Boolean(event.streaming), at: event.at, details: [], failed: Boolean(event.failed), settled: event.kind !== "tool_use" };
     items.push(tool);
     if (event.kind === "tool_use") {
       lastTool = tool;
