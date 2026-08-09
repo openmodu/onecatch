@@ -6,7 +6,7 @@ import { assignWorkflowWorker, isRemoteWorker } from "../../workflowWorker.js";
 import Modal from "../Modal.jsx";
 import WorkflowIdentityFields from "./WorkflowIdentityFields.jsx";
 
-export default function DAGWorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, runtimes, workers, defaultSandbox, allowFullSandbox, onClose }) {
+export default function DAGWorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, runtimes, workers, defaultSandbox, allowFullSandbox, onClose, embedded = false }) {
   const { t } = useTranslation();
   const [selectedID, setSelectedID] = useState(editor.steps[0]?.id || "");
   const [connectFrom, setConnectFrom] = useState("");
@@ -54,21 +54,26 @@ export default function DAGWorkflowEditor({ editor, setEditor, validation, valid
   const moveNode = (event, stepID) => {
     if (!drag.current || drag.current.id !== stepID) return;
     const rect = canvas.current.getBoundingClientRect();
-    const x = Math.max(10, Math.min(700, event.clientX - rect.left - drag.current.offsetX));
-    const y = Math.max(10, Math.min(460, event.clientY - rect.top - drag.current.offsetY));
+    const width = Math.max(canvas.current.clientWidth, canvas.current.scrollWidth);
+    const height = Math.max(canvas.current.clientHeight, canvas.current.scrollHeight);
+    const x = Math.max(10, Math.min(width - 224, event.clientX - rect.left + canvas.current.scrollLeft - drag.current.offsetX));
+    const y = Math.max(10, Math.min(height - 106, event.clientY - rect.top + canvas.current.scrollTop - drag.current.offsetY));
     setEditor((current) => ({ ...current, layout: { nodes: { ...(current.layout?.nodes || {}), [stepID]: { x, y } } } }));
   };
   const updateSignal = (oldSignal, signal, target) => setStep("transitions", Object.fromEntries(Object.entries(selected.transitions || {}).filter(([key]) => key !== oldSignal).concat([[signal, target]])));
 
-  return <Modal wide title={t("workflow.dagCanvas")} subtitle={t("workflow.dagCanvasSubtitle")} onClose={onClose}>
-    <div className="dag-editor-shell">
-      <div className="dag-toolbar">
+  const actionButtons = <><Action onClick={autoLayout}>{t("workflow.autoLayout")}</Action><Action tone="primary" onClick={addNode}>{t("workflow.node")}</Action><Action tone="primary" disabled={busy === "workflow"} onClick={saveWorkflow}>{busy === "workflow" ? t("common.saving") : t("workflow.saveDag")}</Action></>;
+  const shell = <div className={`dag-editor-shell ${embedded ? "dag-editor-shell--embedded" : ""}`}>
+      {embedded ? <header className="dag-editor-header">
+        <div className="dag-actions">{actionButtons}</div>
+        <div className="serial-editor-basics dag-editor-basics"><WorkflowIdentityFields editor={editor} setEditor={setEditor} validation={validation} /></div>
+      </header> : <div className="dag-toolbar">
         <WorkflowIdentityFields editor={editor} setEditor={setEditor} validation={validation} />
-        <div className="dag-actions"><span className="mode-chip dag">DAG · {t("workflow.allJoin")}</span><Action onClick={autoLayout}>{t("workflow.autoLayout")}</Action><Action tone="primary" onClick={addNode}>{t("workflow.node")}</Action><Action tone="primary" disabled={busy === "workflow"} onClick={saveWorkflow}>{busy === "workflow" ? t("common.saving") : t("workflow.saveDag")}</Action></div>
-      </div>
+        <div className="dag-actions"><span className="mode-chip dag">DAG · {t("workflow.allJoin")}</span>{actionButtons}</div>
+      </div>}
       <div className="dag-workspace">
         <div className="dag-canvas" ref={canvas} onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
-          <svg className="dag-edges" viewBox="0 0 900 560" preserveAspectRatio="none">{editor.steps.flatMap((step) => (step.dependsOn || []).map((source) => {
+          <svg className="dag-edges" aria-hidden="true">{editor.steps.flatMap((step) => (step.dependsOn || []).map((source) => {
             const from = positions[source] || { x: 30, y: 30 };
             const to = positions[step.id] || { x: 400, y: 200 };
             const x1 = from.x + 190, y1 = from.y + 48, x2 = to.x, y2 = to.y + 48;
@@ -88,13 +93,14 @@ export default function DAGWorkflowEditor({ editor, setEditor, validation, valid
           <div className="dag-inspector-title"><div><span className="kicker">{t("workflow.nodeInspector")}</span><h3>{selected.name}</h3></div><Action className="dag-delete-node" tone="danger" disabled={editor.steps.length <= 1} onClick={deleteNode}>{t("workflow.deleteNode")}</Action></div>
           <label>{t("common.nodeID")}<input value={selected.id} onChange={(event) => { const next = event.target.value; renameStep(next); setSelectedID(next); }} /></label>
           <label>{t("worker.name")}<input value={selected.name} onChange={(event) => setStep("name", event.target.value)} /></label>
-          <div className="two-fields"><label>{t("common.runtime")}<TUISelect ariaLabel={t("common.runtime")} value={selected.runtime} onChange={(runtime) => setStep("runtime", runtime)} options={runtimes.map((runtime) => ({ value: runtime.id, label: runtime.name }))} /></label><label>{t("common.worker")}<TUISelect ariaLabel={t("common.worker")} value={selected.workerId || "local"} onChange={setWorker} options={workerOptions.map((worker) => ({ value: worker.id, label: worker.name }))} /></label></div>
+          <label>{t("common.runtime")}<TUISelect ariaLabel={t("common.runtime")} value={selected.runtime} onChange={(runtime) => setStep("runtime", runtime)} options={runtimes.map((runtime) => ({ value: runtime.id, label: runtime.name }))} /></label>
+          <label>{t("common.worker")}<TUISelect ariaLabel={t("common.worker")} value={selected.workerId || "local"} onChange={setWorker} options={workerOptions.map((worker) => ({ value: worker.id, label: worker.name }))} /></label>
           <label>{t("common.sandbox")}<TUISelect ariaLabel={t("common.sandbox")} value={selected.sandbox || "read-only"} onChange={(sandbox) => setStep("sandbox", sandbox)} options={[{ value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, { value: "full", label: t("workspace.fullDanger"), disabled: isRemoteWorker(selected.workerId) }]} /></label>
           <label>{t("workflow.rolePrompt")}<textarea value={selected.rolePrompt} onChange={(event) => setStep("rolePrompt", event.target.value)} /></label><label>{t("workflow.nodeInstruction")}<textarea value={selected.instruction} onChange={(event) => setStep("instruction", event.target.value)} /></label>
-          <div className="transition-editor"><span>{t("workflow.terminalSignals")}</span>{Object.entries(selected.transitions || {}).map(([signal, target]) => <div className="transition-row" key={signal}><input value={signal} onChange={(event) => updateSignal(signal, event.target.value, target)} /><span>→</span><TUISelect ariaLabel={`${signal} target`} value={target} onChange={(nextTarget) => updateSignal(signal, signal, nextTarget)} options={[{ value: "$done", label: "$done" }, { value: "$pause", label: "$pause" }, { value: "$fail", label: "$fail" }]} /></div>)}</div>
+          <div className="transition-editor"><span>{t("workflow.terminalSignals")}</span>{Object.entries(selected.transitions || {}).map(([signal, target], index) => <section className="dag-transition-item" key={signal}><strong>{t("workflow.transitionNumber", { number: index + 1 })}</strong><label>{t("workflow.signal")}<input value={signal} onChange={(event) => updateSignal(signal, event.target.value, target)} /></label><label>{t("workflow.target")}<TUISelect ariaLabel={`${signal} target`} value={target} onChange={(nextTarget) => updateSignal(signal, signal, nextTarget)} options={[{ value: "$done", label: "$done" }, { value: "$pause", label: "$pause" }, { value: "$fail", label: "$fail" }]} /></label></section>)}</div>
         </> : null}</aside>
       </div>
       <div className={`dag-validation ${validation.length ? "has-errors" : ""}`}><Action size="compact" onClick={validateEditor}>{t("workflow.validateDag")}</Action>{validation.length ? validation.map((issue) => <span key={`${issue.path}-${issue.code}`}><code>{issue.path}</code>{issue.message}</span>) : <span>{t("workflow.dagValidationHint")}</span>}</div>
-    </div>
-  </Modal>;
+    </div>;
+  return embedded ? <section className="workflow-editor-surface dag-editor-page">{shell}</section> : <Modal wide title={t("workflow.dagCanvas")} subtitle={t("workflow.dagCanvasSubtitle")} onClose={onClose}>{shell}</Modal>;
 }

@@ -166,6 +166,7 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 	id body = message.body;
 	NSNumber *width = nil;
 	NSNumber *flush = nil;
+	NSNumber *hidden = nil;
 	NSString *theme = nil;
 	if ([body isKindOfClass:[NSDictionary class]]) {
 		id candidateWidth = [(NSDictionary *)body objectForKey:@"width"];
@@ -175,6 +176,10 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 		id candidateFlush = [(NSDictionary *)body objectForKey:@"flush"];
 		if ([candidateFlush isKindOfClass:[NSNumber class]]) {
 			flush = candidateFlush;
+		}
+		id candidateHidden = [(NSDictionary *)body objectForKey:@"hidden"];
+		if ([candidateHidden isKindOfClass:[NSNumber class]]) {
+			hidden = candidateHidden;
 		}
 		id candidateTheme = [(NSDictionary *)body objectForKey:@"theme"];
 		if ([candidateTheme isKindOfClass:[NSString class]]) {
@@ -195,6 +200,10 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 		self.borderView.frame = self.effectView.frame;
 		self.borderView.layer.cornerRadius = useFlushRail ? 0.0 : oneshotSidebarCornerRadius;
 		self.borderView.layer.borderWidth = useFlushRail ? 0.0 : oneshotDeviceHairlineWidth(self.window);
+	}
+	if (hidden != nil) {
+		self.effectView.hidden = hidden.boolValue;
+		self.borderView.hidden = hidden.boolValue;
 	}
 
 	// A pinned web theme must also pin AppKit; otherwise a dark sidebar
@@ -435,6 +444,15 @@ static void oneshotSetWindowZoomButtonHidden(void *handle, bool hidden) {
 	zoomButton.enabled = !hidden;
 	zoomButton.hidden = hidden;
 }
+
+static void oneshotSetWindowAppearance(void *targetHandle, void *sourceHandle) {
+	NSWindow *target = (__bridge NSWindow *)targetHandle;
+	NSWindow *source = (__bridge NSWindow *)sourceHandle;
+	if (target == nil || source == nil) {
+		return;
+	}
+	target.appearance = source.appearance;
+}
 */
 import "C"
 
@@ -452,4 +470,11 @@ func setNativeWindowZoomButtonHidden(window unsafe.Pointer, hidden bool) {
 		return
 	}
 	C.oneshotSetWindowZoomButtonHidden(window, C.bool(hidden))
+}
+
+func setNativeWindowAppearance(window, source unsafe.Pointer) {
+	if window == nil || source == nil {
+		return
+	}
+	C.oneshotSetWindowAppearance(window, source)
 }

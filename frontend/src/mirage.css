@@ -174,6 +174,14 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .legacy-wide-editor .dag-toolbar .mode-chip { display: none; }
 .legacy-wide-editor .dag-actions { flex: 0 0 auto; gap: 10px; }
 .legacy-wide-editor .dag-actions .ui-action { flex: 0 0 auto; }
+.dag-editor-page { background: var(--acp-canvas); }
+.dag-editor-shell--embedded { background: var(--acp-canvas); }
+.dag-editor-header { flex: 0 0 auto; display: flex; flex-direction: column; gap: 12px; padding: 12px 20px 14px; }
+.dag-editor-header > .dag-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.dag-editor-basics { width: 100%; }
+.dag-editor-shell--embedded .dag-workspace { min-height: 0; }
+.dag-editor-shell--embedded .dag-canvas { min-height: 0; }
+.dag-editor-shell--embedded .dag-validation { margin-top: 8px; }
 .dag-delete-node { flex: 0 0 auto; }
 .dag-workspace { grid-template-columns: minmax(0, 1fr) var(--ui-editor-inspector-width); }
 .dag-canvas { background-color: var(--acp-canvas); background-image: radial-gradient(color-mix(in oklab, var(--acp-line) 72%, transparent) .7px, transparent .7px); }
@@ -185,6 +193,9 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .dag-edge path { stroke: var(--acp-text-muted); stroke-width: 1.5; }
 .dag-inspector { padding: 16px 18px; border-left-color: var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 42%, transparent); }
 .dag-inspector input, .dag-inspector select, .dag-inspector textarea { border-radius: calc(var(--radius) - 2px); }
+.dag-transition-item { display: flex; flex-direction: column; gap: 7px; margin-top: 10px; padding: 10px; border-radius: calc(var(--radius) - 3px); background: color-mix(in oklab, var(--acp-panel) 55%, transparent); }
+.dag-transition-item > strong { color: var(--acp-text); font-size: var(--ui-font-caption); }
+.dag-transition-item > label { display: flex; flex-direction: column; gap: 4px; color: var(--acp-text-soft); font-size: var(--ui-font-caption); }
 .dag-validation { margin: 6px 10px 10px; background: color-mix(in oklab, var(--acp-panel) 54%, transparent); color: var(--acp-text-muted); }
 .canvas-hint { border-radius: calc(var(--radius) - 2px); background: var(--acp-panel); color: var(--acp-text-soft); }
 

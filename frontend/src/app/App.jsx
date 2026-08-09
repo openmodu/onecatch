@@ -841,6 +841,15 @@ function App() {
   const enterLock = useCallback(() => setLocked(true), []);
   const exitLock = useCallback(() => setLocked(false), []);
 
+  useEffect(() => {
+    const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
+    if (!nativeSidebar) return undefined;
+    nativeSidebar.postMessage({ hidden: locked });
+    return () => {
+      if (locked) nativeSidebar.postMessage({ hidden: false });
+    };
+  }, [locked]);
+
   // Fire a system notification on the meaningful edges even if the window is
   // behind another app: work finished, or a run now needs you. Watching the
   // signal (not the lock) means the ping arrives whether or not you locked.

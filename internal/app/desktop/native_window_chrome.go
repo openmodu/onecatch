@@ -5,6 +5,18 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
+// inheritNativeWindowAppearance runs before an auxiliary window is shown, so
+// its AppKit background and WebView backing layers start in the same light or
+// dark appearance as the already-visible main window.
+func inheritNativeWindowAppearance(window, source *application.WebviewWindow) {
+	if window == nil || source == nil || window.NativeWindow() == nil || source.NativeWindow() == nil {
+		return
+	}
+	application.InvokeSync(func() {
+		setNativeWindowAppearance(window.NativeWindow(), source.NativeWindow())
+	})
+}
+
 // applyNativeWindowChrome keeps every full-size-content Oneshot window on the
 // same native path: continuous corners, the outer hairline and the inset
 // sidebar material are installed together and disabled at edge-to-edge sizes.

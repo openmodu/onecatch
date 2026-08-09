@@ -10,7 +10,7 @@ import WorkflowIdentityFields from "./WorkflowIdentityFields.jsx";
 export default function WorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, updateStep, updateTransition, removeTransition, runtimes, workers, defaultSandbox, allowFullSandbox, onClose, showBack = false }) {
   const { t } = useTranslation();
   const [previewOpen, setPreviewOpen] = useState(false);
-  if (editor.mode === "dag") return <DAGWorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} runtimes={runtimes} workers={workers} defaultSandbox={defaultSandbox} allowFullSandbox={allowFullSandbox} onClose={onClose} />;
+  if (editor.mode === "dag") return <DAGWorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} runtimes={runtimes} workers={workers} defaultSandbox={defaultSandbox} allowFullSandbox={allowFullSandbox} onClose={onClose} embedded={!showBack} />;
   const workerOptions = [{ value: "local", label: t("common.local") }, ...workers.filter((worker) => worker.enabled).map((worker) => ({ value: worker.id, label: worker.name }))];
   const updateWorker = (stepIndex, workerId) => setEditor((current) => ({ ...current, steps: current.steps.map((step, index) => index === stepIndex ? assignWorkflowWorker(step, workerId) : step) }));
   const addStep = () => setEditor((current) => {
