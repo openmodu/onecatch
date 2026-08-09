@@ -258,6 +258,21 @@
    Living in @layer app means it outranks the hand-written stylesheets it
    replaces without having to delete them row by row. */
 @layer app {
+  /* styles.css gives :root an opaque legacy canvas. Both it and body must be
+     cleared above that layer or WebKit covers the native material wholesale. */
+  :root[data-native-sidebar-material],
+  :root[data-native-sidebar-material] body {
+    background: transparent;
+  }
+
+  .sidebar {
+    background-color: var(--sidebar);
+  }
+
+  :root[data-native-sidebar-material] .sidebar {
+    background-color: transparent;
+  }
+
   /* minmax(0, 1fr), not a bare grid: an implicit `auto` track sizes toward
      max-content, so one long unbreakable command widens the whole transcript
      past its column and .conversation-scroll silently clips it. */

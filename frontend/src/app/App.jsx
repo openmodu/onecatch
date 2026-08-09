@@ -829,14 +829,11 @@ function App() {
     <span>{t("task.opening")}</span>
   </div>;
 
-  return <div className="relative grid h-full grid-rows-[52px_minmax(0,1fr)] bg-background text-foreground">
-    {/* The 78px gutters keep the centred title clear of the macOS traffic
-        lights, and pointer-events:none lets a click anywhere here drag. */}
-    <header className="drag-region grid h-[52px] cursor-default grid-cols-[78px_1fr_78px] items-center px-4 [&>*]:pointer-events-none" aria-label={t("app.windowAria")}>
-      <span aria-hidden="true" />
-      <strong className="text-center text-[13px] font-semibold text-muted-foreground">Oneshot</strong>
-      <span />
-    </header>
+  {/* No title band: the sidebar runs the full height of the window and the
+      traffic lights sit on it, the way Finder and Music do. The window is
+      MacTitleBarHiddenInsetUnified, so the lights are inset — the rail
+      reserves that strip itself (see .traffic-light-gutter). */}
+  return <div className="relative grid h-full grid-rows-[minmax(0,1fr)] bg-transparent text-foreground">
     <div className="app-shell grid min-h-0 grid-cols-[auto_minmax(0,1fr)]">
       <Sidebar
         workspaces={workspaces}
