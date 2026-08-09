@@ -152,6 +152,9 @@ func (r *tasksImpl) ListTasks(ctx context.Context, workspaceID string) ([]domain
 		}
 	}
 	sort.Slice(out, func(i, j int) bool {
+		if out[i].Pinned != out[j].Pinned {
+			return out[i].Pinned
+		}
 		if out[i].UpdatedAt.Equal(out[j].UpdatedAt) {
 			return out[i].ID < out[j].ID
 		}

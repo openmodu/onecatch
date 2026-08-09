@@ -17,7 +17,7 @@ import {
   WindowBinding,
 } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
-import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceSections } from "./listNavigation.js";
+import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceResults } from "./listNavigation.js";
 import { Action, StatusBadge, TUISelect } from "../ui/primitives.jsx";
 import { copy, errorMessage, fileName } from "./format.js";
 import { loopTemplate } from "./templates.js";
@@ -62,6 +62,7 @@ function App() {
   const [workflows, setWorkflows] = useState([]);
   const [runItems, setRunItems] = useState([]);
   const [tasks, setTasks] = useState([]);
+  const [pinnedTasks, setPinnedTasks] = useState([]);
   const [runTotal, setRunTotal] = useState(0);
   const [runNextCursor, setRunNextCursor] = useState("");
   const [runLoading, setRunLoading] = useState(false);
@@ -328,7 +329,17 @@ function App() {
   const loadTasks = useCallback(async () => {
     if (!workspaceID || mode === "loading") return;
     try {
-      setTasks(mode === "demo" ? demoTasks : (await TaskRunBinding.ListTasks(workspaceID)) || []);
+      if (mode === "demo") {
+        setTasks(demoTasks);
+        setPinnedTasks(demoTasks.filter((task) => task.pinned));
+        return;
+      }
+      const [workspaceTasks, allTasks] = await Promise.all([
+        TaskRunBinding.ListTasks(workspaceID),
+        TaskRunBinding.ListTasks(""),
+      ]);
+      setTasks(workspaceTasks || []);
+      setPinnedTasks((allTasks || []).filter((task) => task.pinned));
     } catch (error) {
       notify("error", errorMessage(error));
     }
@@ -513,19 +524,25 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
-  const toggleWorkspacePinned = useCallback(async (workspace) => {
-    const pinned = !workspace.pinned;
-    setWorkspaces((items) => sortWorkspaces(items.map((item) => item.id === workspace.id ? { ...item, pinned } : item)));
+  const toggleTaskPinned = useCallback(async (task) => {
+    const pinned = !task.pinned;
+    const applyPinned = (item) => item.id === task.id ? { ...item, pinned } : item;
+    setTasks((items) => items.map(applyPinned));
+    setRunItems((items) => items.map((run) => run.task?.id === task.id ? { ...run, task: { ...run.task, pinned } } : run));
+    setPinnedTasks((items) => pinned ? [{ ...task, pinned: true }, ...items.filter((item) => item.id !== task.id)] : items.filter((item) => item.id !== task.id));
     try {
       if (mode !== "demo") {
-        await WorkspaceBinding.SetWorkspacePinned(workspace.id, pinned);
-        setWorkspaces(sortWorkspaces(await WorkspaceBinding.ListWorkspaces()));
+        await TaskRunBinding.SetTaskPinned(task.id, pinned);
+        await loadTasks();
+        await loadRunList();
       }
     } catch (error) {
-      setWorkspaces((items) => sortWorkspaces(items.map((item) => item.id === workspace.id ? { ...item, pinned: workspace.pinned } : item)));
+      setTasks((items) => items.map((item) => item.id === task.id ? { ...item, pinned: task.pinned } : item));
+      setRunItems((items) => items.map((run) => run.task?.id === task.id ? { ...run, task: { ...run.task, pinned: task.pinned } } : run));
+      setPinnedTasks((items) => task.pinned ? [{ ...task }, ...items.filter((item) => item.id !== task.id)] : items.filter((item) => item.id !== task.id));
       notify("error", errorMessage(error));
     }
-  }, [mode, notify]);
+  }, [loadRunList, loadTasks, mode, notify]);
 
   const removeWorkspace = useCallback(async (workspace) => {
     if (!await requestConfirm({ title: t("app.removeWorkspaceTitle", { name: workspace.name }), description: t("app.removeWorkspaceDescription"), detail: workspace.path, confirmLabel: t("sidebar.removeFromList"), dangerous: true })) return;
@@ -729,12 +746,32 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
-  const deleteSelectedTask = useCallback(async () => {
-    const task = runDetailRef.current?.task || tasksRef.current.find((item) => item.id === selectedQueuedTaskIDRef.current);
+  const deleteTask = useCallback(async (task) => {
     if (!task || !await requestConfirm({ title: t("app.deleteTaskTitle", { name: task.title }), description: t("app.deleteTaskDescription"), confirmLabel: t("app.deleteTask"), dangerous: true })) return;
-    try { if (mode !== "demo") await TaskRunBinding.DeleteTask(task.id); setSelectedRunID(""); setSelectedQueuedTaskID(""); setRunDetail(null); await loadTasks(); await loadRunList(); }
+    const selected = runDetailRef.current?.task?.id === task.id || selectedQueuedTaskIDRef.current === task.id;
+    try {
+      if (mode === "demo") {
+        setTasks((items) => items.filter((item) => item.id !== task.id));
+        setRunItems((items) => items.filter((run) => run.task?.id !== task.id));
+        setPinnedTasks((items) => items.filter((item) => item.id !== task.id));
+      } else {
+        await TaskRunBinding.DeleteTask(task.id);
+        await loadTasks();
+        await loadRunList();
+      }
+      if (selected) {
+        setSelectedRunID("");
+        setSelectedQueuedTaskID("");
+        setRunDetail(null);
+      }
+    }
     catch (error) { notify("error", errorMessage(error)); }
   }, [loadRunList, loadTasks, mode, notify, requestConfirm, t]);
+
+  const deleteSelectedTask = useCallback(() => {
+    const task = runDetailRef.current?.task || tasksRef.current.find((item) => item.id === selectedQueuedTaskIDRef.current);
+    return deleteTask(task);
+  }, [deleteTask]);
 
   const composerSubmitKey = (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && busy !== "run" && selectedWorkspace) createTaskAndRun();
@@ -834,7 +871,7 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
-  const sidebarWorkspaces = useMemo(() => workspaceSections(workspaces, { selectedID: workspaceID, query: "", expanded: workspaceExpanded }), [workspaceExpanded, workspaceID, workspaces]);
+  const sidebarWorkspaces = useMemo(() => workspaceResults(workspaces, { selectedID: workspaceID, query: "", expanded: workspaceExpanded }), [workspaceExpanded, workspaceID, workspaces]);
   const goView = useCallback((next) => {
     if (next === "settings" || next === "workflows") {
       if (mode === "wails") {
@@ -931,14 +968,14 @@ function App() {
       <Sidebar
         workspaces={workspaces}
         workspaceID={workspaceID}
-        pinnedWorkspaces={sidebarWorkspaces.pinned}
-        projectWorkspaces={sidebarWorkspaces.projects}
+        projectWorkspaces={sidebarWorkspaces}
         searchQuery={globalSearchQuery}
         searchTaskItems={globalTaskItems}
         searchLoading={globalTaskSearchLoading}
         workspaceExpanded={workspaceExpanded}
         workspaceSearchOpen={workspaceSearchOpen}
         tasks={tasks}
+        pinnedTasks={pinnedTasks}
         runs={runItems}
         selectedRunID={selectedRunID}
         selectedQueuedTaskID={selectedQueuedTaskID}
@@ -953,7 +990,8 @@ function App() {
         onClearSearch={clearSidebarSearch}
         onSearchQueryChange={setGlobalSearchQuery}
         onSelectWorkspace={selectWorkspace}
-        onTogglePinned={toggleWorkspacePinned}
+        onToggleTaskPinned={toggleTaskPinned}
+        onDeleteTask={deleteTask}
         onRemoveWorkspace={removeWorkspace}
         onToggleExpanded={toggleWorkspaceExpanded}
         onAddWorkspace={chooseWorkspace}

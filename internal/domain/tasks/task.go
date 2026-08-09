@@ -63,6 +63,7 @@ type Task struct {
 	Prompt        string        `json:"prompt"`
 	WorkflowID    string        `json:"workflowId"`
 	Status        Status        `json:"status"`
+	Pinned        bool          `json:"pinned,omitempty"`
 	ExecutionMode ExecutionMode `json:"executionMode,omitempty"`
 	Queue         *QueueInfo    `json:"queue,omitempty"`
 	Attachments   []Attachment  `json:"attachments,omitempty"`

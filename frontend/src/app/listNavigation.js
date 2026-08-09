@@ -7,7 +7,6 @@ function timestamp(value) {
 
 export function sortWorkspaces(items = []) {
   return [...items].sort((a, b) => {
-    if (Boolean(a.pinned) !== Boolean(b.pinned)) return a.pinned ? -1 : 1;
     const recent = timestamp(b.lastOpenedAt) - timestamp(a.lastOpenedAt);
     return recent || String(a.name || "").localeCompare(String(b.name || ""));
   });

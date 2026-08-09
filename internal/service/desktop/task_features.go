@@ -39,6 +39,18 @@ func (a *Service) RenameTask(ctx context.Context, taskID, title string) (domaint
 	return task, nil
 }
 
+func (a *Service) SetTaskPinned(ctx context.Context, taskID string, pinned bool) (domaintasks.Task, error) {
+	task, err := a.store.Repos.Tasks.GetTask(ctx, strings.TrimSpace(taskID))
+	if err != nil {
+		return task, coded("task_not_found", "task was not found")
+	}
+	task.Pinned = pinned
+	if err := a.store.Repos.Tasks.SaveTask(ctx, task); err != nil {
+		return task, err
+	}
+	return task, nil
+}
+
 func (a *Service) DeleteTask(ctx context.Context, taskID string) error {
 	task, err := a.store.Repos.Tasks.GetTask(ctx, strings.TrimSpace(taskID))
 	if err != nil {

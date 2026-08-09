@@ -27,6 +27,9 @@ func (b *TaskRunBinding) SearchTasks(input desktopservice.SearchTasksInput) (des
 func (b *TaskRunBinding) RenameTask(taskID, title string) (domaintasks.Task, error) {
 	return b.service.RenameTask(context.Background(), taskID, title)
 }
+func (b *TaskRunBinding) SetTaskPinned(taskID string, pinned bool) (domaintasks.Task, error) {
+	return b.service.SetTaskPinned(context.Background(), taskID, pinned)
+}
 func (b *TaskRunBinding) DeleteTask(taskID string) error {
 	return b.service.DeleteTask(context.Background(), taskID)
 }

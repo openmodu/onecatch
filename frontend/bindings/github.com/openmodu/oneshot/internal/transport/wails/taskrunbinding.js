@@ -225,6 +225,17 @@ export function SearchTasks(input) {
 
 /**
  * @param {string} taskID
+ * @param {boolean} pinned
+ * @returns {$CancellablePromise<tasks$0.Task>}
+ */
+export function SetTaskPinned(taskID, pinned) {
+    return $Call.ByID(3365865999, taskID, pinned).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * @param {string} taskID
  * @param {string} confirmationToken
  * @returns {$CancellablePromise<workflows$0.Run>}
  */
