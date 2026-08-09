@@ -98,6 +98,15 @@ function Sidebar({
   }, []);
 
   useEffect(() => {
+    // On macOS the WebView is transparent over a native NSVisualEffectView.
+    // Browser previews simply have no such handler and keep the CSS fallback.
+    const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
+    if (!nativeSidebar) return;
+    document.documentElement.dataset.nativeSidebarMaterial = "true";
+    nativeSidebar.postMessage({ width });
+  }, [width]);
+
+  useEffect(() => {
     setExpandedWorkspaceID(workspaceID);
     setTaskListExpanded(false);
   }, [workspaceID]);
@@ -217,7 +226,7 @@ function Sidebar({
     const expanded = expandedWorkspaceID === workspace.id;
     const taskPanelID = `workspace-tasks-${encodeURIComponent(workspace.id)}`;
     return <div className={`workspace-row group relative block min-w-0 ${active ? "active" : ""} ${expanded ? "expanded" : ""}`} key={workspace.id}>
-      <button className={`workspace-item grid w-full min-w-0 grid-cols-[20px_minmax(0,1fr)] items-center gap-2 rounded-md py-2 pr-16 pl-2 text-left transition-colors hover:bg-accent ${active ? "bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={workspace.path} aria-expanded={expanded} aria-controls={taskPanelID} onClick={() => toggleProject(workspace)}>
+      <button className={`workspace-item grid w-full min-w-0 grid-cols-[20px_minmax(0,1fr)] items-center gap-2 rounded-lg py-2 pr-16 pl-2 text-left transition-colors hover:bg-accent ${active ? "bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={workspace.path} aria-expanded={expanded} aria-controls={taskPanelID} onClick={() => toggleProject(workspace)}>
         {expanded ? <FolderOpen size={18} aria-hidden="true" className="text-muted-foreground" /> : <Folder size={18} aria-hidden="true" className="text-muted-foreground" />}
         <span className="min-w-0"><strong className="block truncate text-sm font-medium">{workspace.name}</strong></span>
       </button>
@@ -243,18 +252,18 @@ function Sidebar({
         </DropdownMenu>
         <Action size="compact" tone="primary" className="workspace-new-task" aria-label={t("sidebar.newTaskInProject", { name: workspace.name })} title={t("sidebar.newTaskInProject", { name: workspace.name })} onClick={() => createTaskForWorkspace(workspace)}><Plus size={14} strokeWidth={2.5} aria-hidden="true" /></Action>
       </div>
-      {expanded && active && <div className="project-task-panel mt-px mr-1 mb-2 ml-[18px]" id={taskPanelID}>
+      {expanded && active && <div className="project-task-panel mt-px mb-2 ml-[18px]" id={taskPanelID}>
         <div className="project-task-list grid gap-px">
           {visibleTaskEntries.map((entry) => {
             if (entry.kind === "queued") {
               const task = entry.item;
               const selected = selectedQueuedTaskID === task.id;
-              return <button type="button" className={`project-task-item flex w-full min-w-0 items-center gap-2 rounded-md bg-transparent py-1.5 pr-2 pl-2.5 text-left transition-colors hover:bg-accent hover:text-foreground ${selected ? "selected bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openQueuedTask(task)}><span className={`size-1.5 shrink-0 rounded-full ${selected ? "bg-primary" : "bg-transparent"}`} aria-hidden="true" /><span className="project-task-title min-w-0 truncate text-[13px] font-medium">{task.title}</span></button>;
+              return <button type="button" className={`project-task-item flex w-full min-w-0 items-center gap-2 rounded-lg bg-transparent py-1.5 pr-2 pl-2.5 text-left transition-colors hover:bg-accent hover:text-foreground ${selected ? "selected bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openQueuedTask(task)}><span className={`size-1.5 shrink-0 rounded-full ${selected ? "bg-primary" : "bg-transparent"}`} aria-hidden="true" /><span className="project-task-title min-w-0 truncate text-[13px] font-medium">{task.title}</span></button>;
             }
             const run = entry.item;
             const title = run.task?.title || run.id;
             const selected = selectedRunID === run.id;
-            return <button type="button" className={`project-task-item flex w-full min-w-0 items-center gap-2 rounded-md bg-transparent py-1.5 pr-2 pl-2.5 text-left transition-colors hover:bg-accent hover:text-foreground ${selected ? "selected bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openRun(run)}><span className={`size-1.5 shrink-0 rounded-full ${selected ? "bg-primary" : "bg-transparent"}`} aria-hidden="true" /><span className="project-task-title min-w-0 truncate text-[13px] font-medium">{title}</span></button>;
+            return <button type="button" className={`project-task-item flex w-full min-w-0 items-center gap-2 rounded-lg bg-transparent py-1.5 pr-2 pl-2.5 text-left transition-colors hover:bg-accent hover:text-foreground ${selected ? "selected bg-accent/70 text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} key={entry.key} onClick={() => openRun(run)}><span className={`size-1.5 shrink-0 rounded-full ${selected ? "bg-primary" : "bg-transparent"}`} aria-hidden="true" /><span className="project-task-title min-w-0 truncate text-[13px] font-medium">{title}</span></button>;
           })}
           {!taskEntries.length && !runLoading && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
           {runLoading && !taskEntries.length && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{t("task.loading")}</div>}
@@ -267,27 +276,31 @@ function Sidebar({
   };
 
   const widthBounds = typeof window === "undefined" ? sidebarWidthBounds() : sidebarWidthBounds(window.innerWidth);
-  return <aside className={`sidebar relative z-30 flex min-h-0 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground ${resizing ? "resizing" : ""}`} style={{ width: `${width}px` }}>
-    <div className="brand grid min-h-[62px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 border-b pt-3.5 pr-3 pb-3 pl-4"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">Oneshot</strong><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger ${workspaceSearchOpen ? "active" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={16} aria-hidden="true" /></Action></div>
+  return <aside className={`sidebar relative z-30 flex min-h-0 shrink-0 flex-col text-sidebar-foreground ${resizing ? "resizing" : ""}`} style={{ width: `${width}px` }} aria-label={t("app.windowAria")}>
+    {/* Traffic-light gutter. The window hides its titlebar and insets the
+        lights, so the rail has to reserve this strip itself — and it doubles
+        as the window's drag handle, which is why it is empty. */}
+    <div className="drag-region h-[52px] shrink-0 cursor-default" aria-hidden="true" />
+    <div className="brand grid min-h-[46px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-3 pb-2.5 pl-5"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">Oneshot</strong><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger ${workspaceSearchOpen ? "active" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={16} aria-hidden="true" /></Action></div>
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
-      <div className="project-sections min-h-0 flex-1 overflow-y-auto overscroll-contain px-2 pt-3 pb-3">
+      <div className="project-sections min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-3 pb-3">
         <section className="project-section" aria-labelledby="pinned-project-heading">
-          <div className="project-section-heading grid min-h-7 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-1 pb-1.5 text-xs font-semibold text-muted-foreground" id="pinned-project-heading"><span>{t("sidebar.pinnedProjects")}</span><small>{pinnedWorkspaces.length}</small></div>
+          <div className="project-section-heading grid min-h-7 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-2 pb-1.5 text-xs font-semibold text-muted-foreground" id="pinned-project-heading"><span>{t("sidebar.pinnedProjects")}</span><small>{pinnedWorkspaces.length}</small></div>
           <div className="workspace-list flex min-h-0 flex-none flex-col gap-0.5">{pinnedWorkspaces.map(renderWorkspace)}{!pinnedWorkspaces.length && <div className="sidebar-empty px-2 py-2 text-xs text-muted-foreground">{t("sidebar.noPinnedProjects")}</div>}</div>
         </section>
-        <section className="project-section mt-3 border-t pt-3" aria-labelledby="project-heading">
-          <div className="project-section-heading grid min-h-7 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-1 pb-1.5 text-xs font-semibold text-muted-foreground" id="project-heading"><span>{t("sidebar.projects")}</span><small>{regularProjectCount}</small><Action size="compact" tone="primary" className="add-workspace" onClick={onAddWorkspace}>{t("sidebar.addProject")}</Action></div>
+        <section className="project-section mt-5" aria-labelledby="project-heading">
+          <div className="project-section-heading grid min-h-7 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-2 pb-1.5 text-xs font-semibold text-muted-foreground" id="project-heading"><span>{t("sidebar.projects")}</span><small>{regularProjectCount}</small><Action size="compact" tone="primary" className="add-workspace" onClick={onAddWorkspace}>{t("sidebar.addProject")}</Action></div>
           <div className={`workspace-list flex min-h-0 flex-none flex-col gap-0.5 ${workspaceExpanded ? "expanded" : ""}`}>{projectWorkspaces.map(renderWorkspace)}{!workspaces.length && <div className="sidebar-empty px-2 py-3 text-xs text-muted-foreground">{t("sidebar.noWorkspaces")}</div>}{!projectWorkspaces.length && pinnedWorkspaces.length > 0 && <div className="sidebar-empty px-2 py-2 text-xs text-muted-foreground">{t("sidebar.allProjectsPinned")}</div>}</div>
           {regularProjectCount > 8 && <Action size="compact" tone="muted" className="workspace-expand" onClick={onToggleExpanded}>{workspaceExpanded ? t("sidebar.collapse") : t("sidebar.allProjects", { count: regularProjectCount })}</Action>}
         </section>
       </div>
     </div>
-    <nav className="primary-nav relative mt-auto border-t">
+    <nav className="primary-nav relative mt-auto pb-1">
       {/* side="top" + sideOffset opens the menu upward and full-rail wide,
           matching where the footer sits. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className={`secondary-navigation-trigger flex min-h-[52px] w-full items-center gap-2.5 bg-transparent px-4 text-sm font-medium transition-colors hover:bg-accent ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
+          <button className={`secondary-navigation-trigger grid min-h-[52px] w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-2 bg-transparent pr-3 pl-5 text-left text-sm font-medium transition-colors hover:bg-accent ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
             <Menu size={16} aria-hidden="true" />
             <b className="font-medium">{t("sidebar.menu")}</b>
           </button>

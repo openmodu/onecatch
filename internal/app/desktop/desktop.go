@@ -146,6 +146,7 @@ func Run() {
 		URL:              "/",
 		Mac: application.MacWindow{
 			TitleBar: application.MacTitleBarHiddenInsetUnified,
+			Backdrop: application.MacBackdropTransparent,
 		},
 	})
 	applyWindowCorner := func(radius float64) {

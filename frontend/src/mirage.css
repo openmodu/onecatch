@@ -14,7 +14,6 @@ button:active:not(:disabled) { filter: brightness(.82); }
 .workspace-expand:hover { color: var(--acp-accent); background: color-mix(in oklab, var(--acp-accent-soft) 8%, transparent); }
 .add-workspace { width: auto; min-height: 24px; margin: 0; padding: 4px 7px; justify-content: center; }
 .add-workspace:hover { background: var(--acp-accent); color: var(--acp-canvas); }
-.project-task-panel { margin: 1px 4px 7px 18px; padding: 0; border: 0; }
 .project-task-list { display: grid; gap: 1px; }
 .project-task-item { min-width: 0; width: 100%; display: grid; grid-template-columns: 10px minmax(0, 1fr); align-items: center; gap: 4px; padding: 7px 8px 7px 4px; border: 0; background: transparent; color: var(--acp-text-muted); text-align: left; cursor: pointer; }
 .project-task-item:hover { background: color-mix(in oklab, var(--acp-text) 7%, transparent); color: var(--acp-text); }

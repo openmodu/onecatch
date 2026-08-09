@@ -31,6 +31,7 @@ export function applyAppearance(appearance, root = typeof document === "undefine
   else root.dataset.theme = theme;
   root.dataset.accent = accent;
   root.style.colorScheme = theme === "system" ? "light dark" : theme;
+  globalThis.webkit?.messageHandlers?.oneshotSidebar?.postMessage({ theme });
 }
 
 export function saveAppearance(appearance, storage = typeof localStorage === "undefined" ? null : localStorage) {
