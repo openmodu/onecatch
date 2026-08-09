@@ -179,7 +179,7 @@ function App() {
     runListLoadVersion.current += 1;
     runLoadVersion.current += 1;
     setWorkspaceID(nextWorkspaceID);
-    setWorkspaces((items) => sortWorkspaces(items.map((item) => item.id === nextWorkspaceID ? { ...item, lastOpenedAt: new Date().toISOString() } : item)));
+    setWorkspaces((items) => items.map((item) => item.id === nextWorkspaceID ? { ...item, lastOpenedAt: new Date().toISOString() } : item));
     setRunItems([]);
     setTasks([]);
     setRunTotal(0);
@@ -190,7 +190,7 @@ function App() {
     setResumePendingRunID("");
     setGlobalSearchQuery("");
     setWorkspaceSearchOpen(false);
-    if (mode === "wails") WorkspaceBinding.OpenWorkspace(nextWorkspaceID).then(() => WorkspaceBinding.ListWorkspaces()).then((items) => setWorkspaces(items || [])).catch((error) => notify("error", errorMessage(error)));
+    if (mode === "wails") WorkspaceBinding.OpenWorkspace(nextWorkspaceID).then((opened) => setWorkspaces((items) => items.map((item) => item.id === opened.id ? opened : item))).catch((error) => notify("error", errorMessage(error)));
   }, [mode, notify, workspaceID]);
 
   const boot = useCallback(async () => {
@@ -871,7 +871,7 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
-  const sidebarWorkspaces = useMemo(() => workspaceResults(workspaces, { selectedID: workspaceID, query: "", expanded: workspaceExpanded }), [workspaceExpanded, workspaceID, workspaces]);
+  const sidebarWorkspaces = useMemo(() => workspaceResults(workspaces, { query: "", expanded: workspaceExpanded }), [workspaceExpanded, workspaces]);
   const goView = useCallback((next) => {
     if (next === "settings" || next === "workflows") {
       if (mode === "wails") {

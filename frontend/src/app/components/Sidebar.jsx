@@ -389,10 +389,11 @@ function Sidebar({
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
       <div className="project-sections min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-2 pb-3">
         {pinnedTasks.length > 0 && <section className="project-section mb-3 min-w-0 max-w-full" aria-labelledby="pinned-task-heading">
-          <div className="flex h-7 items-center px-2 text-[11px] font-semibold text-muted-foreground" id="pinned-task-heading">{t("sidebar.pinnedTasks")}</div>
+          <div className="flex h-7 items-center px-2 text-[11px] font-bold text-foreground" id="pinned-task-heading">{t("sidebar.pinnedTasks")}</div>
           <div className="flex flex-col">{pinnedTasks.map(renderPinnedTask)}</div>
         </section>}
-        <section className="project-section min-w-0 max-w-full" aria-label={t("sidebar.projects")}>
+        <section className="project-section min-w-0 max-w-full" aria-labelledby="project-heading">
+          <div className="flex h-7 items-center px-2 text-[11px] font-bold text-foreground" id="project-heading">{t("sidebar.projects")}</div>
           <div className={`workspace-list flex min-h-0 min-w-0 max-w-full flex-none flex-col ${workspaceExpanded ? "expanded" : ""}`}>{projectWorkspaces.map(renderWorkspace)}{!workspaces.length && <div className="sidebar-empty px-2 py-3 text-xs text-muted-foreground">{t("sidebar.noWorkspaces")}</div>}</div>
           {regularProjectCount > 8 && <Action size="compact" tone="muted" className="workspace-expand h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={onToggleExpanded}>{workspaceExpanded ? t("sidebar.collapse") : t("sidebar.allProjects", { count: regularProjectCount })}</Action>}
         </section>

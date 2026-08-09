@@ -12,17 +12,14 @@ export function sortWorkspaces(items = []) {
   });
 }
 
-export function workspaceResults(items = [], { selectedID = "", query = "", expanded = false, limit = COMPACT_WORKSPACE_LIMIT } = {}) {
-  const sorted = sortWorkspaces(items);
+export function workspaceResults(items = [], { query = "", expanded = false, limit = COMPACT_WORKSPACE_LIMIT } = {}) {
+  // Keep the order established when the sidebar was loaded. Opening a
+  // workspace updates lastOpenedAt, but navigation must not make its row jump.
+  const sorted = [...items];
   const needle = query.trim().toLocaleLowerCase();
   if (needle) return sorted.filter((item) => `${item.name || ""}\n${item.path || ""}`.toLocaleLowerCase().includes(needle));
   if (expanded || sorted.length <= limit) return sorted;
-  const compact = sorted.slice(0, limit);
-  if (selectedID && !compact.some((item) => item.id === selectedID)) {
-    const selected = sorted.find((item) => item.id === selectedID);
-    if (selected) compact[compact.length - 1] = selected;
-  }
-  return compact;
+  return sorted.slice(0, limit);
 }
 
 export function workspaceSections(items = [], { selectedID = "", query = "", expanded = false, limit = COMPACT_WORKSPACE_LIMIT } = {}) {
