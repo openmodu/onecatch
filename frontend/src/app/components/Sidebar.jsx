@@ -276,14 +276,14 @@ function Sidebar({
   };
 
   const widthBounds = typeof window === "undefined" ? sidebarWidthBounds() : sidebarWidthBounds(window.innerWidth);
-  return <aside className={`sidebar relative z-30 flex min-h-0 shrink-0 flex-col text-sidebar-foreground ${resizing ? "resizing" : ""}`} style={{ width: `${width}px` }} aria-label={t("app.windowAria")}>
+  return <aside className={`sidebar relative z-30 flex min-h-0 shrink-0 flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)] ${resizing ? "resizing" : ""}`} style={{ width: `${width}px` }} aria-label={t("app.windowAria")}>
     {/* Traffic-light gutter. The window hides its titlebar and insets the
         lights, so the rail has to reserve this strip itself — and it doubles
         as the window's drag handle, which is why it is empty. */}
     <div className="drag-region h-[52px] shrink-0 cursor-default" aria-hidden="true" />
-    <div className="brand grid min-h-[46px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-3 pb-2.5 pl-5"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">Oneshot</strong><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger ${workspaceSearchOpen ? "active" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={16} aria-hidden="true" /></Action></div>
+    <div className="brand grid min-h-[46px] grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pb-2.5 pl-7"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">Oneshot</strong><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger ${workspaceSearchOpen ? "active" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={16} aria-hidden="true" /></Action></div>
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
-      <div className="project-sections min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pt-3 pb-3">
+      <div className="project-sections min-h-0 flex-1 overflow-y-auto overscroll-contain pr-4 pl-5 pt-3 pb-3">
         <section className="project-section" aria-labelledby="pinned-project-heading">
           <div className="project-section-heading grid min-h-7 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-2 pb-1.5 text-xs font-semibold text-muted-foreground" id="pinned-project-heading"><span>{t("sidebar.pinnedProjects")}</span><small>{pinnedWorkspaces.length}</small></div>
           <div className="workspace-list flex min-h-0 flex-none flex-col gap-0.5">{pinnedWorkspaces.map(renderWorkspace)}{!pinnedWorkspaces.length && <div className="sidebar-empty px-2 py-2 text-xs text-muted-foreground">{t("sidebar.noPinnedProjects")}</div>}</div>
@@ -300,7 +300,7 @@ function Sidebar({
           matching where the footer sits. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className={`secondary-navigation-trigger grid min-h-[52px] w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-2 bg-transparent pr-3 pl-5 text-left text-sm font-medium transition-colors hover:bg-accent ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
+          <button className={`secondary-navigation-trigger grid min-h-[52px] w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-2 bg-transparent pr-4 pl-7 text-left text-sm font-medium transition-colors hover:bg-accent ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
             <Menu size={16} aria-hidden="true" />
             <b className="font-medium">{t("sidebar.menu")}</b>
           </button>

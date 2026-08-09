@@ -872,14 +872,14 @@ function App() {
       />
 
       <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
-        <div className="flex h-11 shrink-0 items-center gap-3 border-b px-5">
+        <div className="drag-region flex h-11 shrink-0 cursor-default items-center gap-3 border-b px-5">
           {/* The workspace path is machine text, so it keeps the mono face
               while the rest of the chrome moves to the UI font. */}
           <span className="flex min-w-0 items-baseline gap-2" title={commandText}>
             <strong className="shrink-0 text-[13px] font-semibold text-foreground">{location.label}</strong>
             {location.path && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{location.path}</span>}
           </span>
-          <button type="button" className="relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
+          <button type="button" className="no-drag relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
           </button>
