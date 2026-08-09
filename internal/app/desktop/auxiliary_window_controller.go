@@ -37,13 +37,14 @@ func (c *auxiliaryWindowController) OpenSettings() {
 
 func (c *auxiliaryWindowController) OpenWorkflows() {
 	c.open(auxiliaryWindowOptions{
-		name:      workflowsWindowName,
-		title:     "工作流",
-		url:       "/?window=workflows",
-		width:     1080,
-		height:    760,
-		minWidth:  860,
-		minHeight: 600,
+		name:         workflowsWindowName,
+		title:        "工作流",
+		url:          "/?window=workflows",
+		width:        1040,
+		height:       760,
+		minWidth:     860,
+		minHeight:    600,
+		customChrome: true,
 	})
 }
 

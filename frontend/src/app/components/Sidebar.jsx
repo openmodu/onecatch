@@ -300,7 +300,7 @@ function Sidebar({
           matching where the footer sits. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className={`secondary-navigation-trigger grid min-h-[52px] w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-2 bg-transparent pr-4 pl-7 text-left text-sm font-medium transition-colors hover:bg-accent ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
+          <button className={`secondary-navigation-trigger grid min-h-[52px] w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-2 border-0 bg-transparent pr-4 pl-7 text-left text-sm font-medium shadow-none transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-0 ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
             <Menu size={16} aria-hidden="true" />
             <b className="font-medium">{t("sidebar.menu")}</b>
           </button>

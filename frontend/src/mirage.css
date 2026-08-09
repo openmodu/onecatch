@@ -113,6 +113,16 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .runtime-callout { margin: 14px 20px; padding: 12px; border-left: 2px solid var(--acp-warn); background: color-mix(in oklab, var(--acp-warn) 8%, transparent); color: var(--acp-text-muted); font-size: var(--ui-font-caption); }
 
 .workflow-editor-surface { position: relative; min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--acp-canvas); }
+.serial-editor-header { flex: 0 0 auto; display: flex; flex-direction: column; gap: 12px; padding: 12px 20px 0; }
+.serial-editor-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.serial-editor-actions--compact { justify-content: flex-end; }
+.serial-editor-actions > div { display: flex; align-items: center; gap: 8px; }
+.serial-editor-basics { padding: 14px 16px; border-radius: var(--radius); background: color-mix(in oklab, var(--acp-panel) 54%, transparent); }
+.serial-editor-basics .workflow-identity { display: flex; flex-direction: column; align-items: stretch; gap: 10px; }
+.serial-editor-basics .workflow-identity label { display: grid; grid-template-columns: 132px minmax(0, 1fr); align-items: center; gap: 16px; white-space: normal; }
+.serial-editor-basics .workflow-identity input { width: 100%; height: 34px; }
+.workflow-preview-dialog > [data-slot="dialog-close"] { border: 0; background: transparent; box-shadow: none; }
+.workflow-preview-dialog > [data-slot="dialog-close"]:hover { background: color-mix(in oklab, var(--acp-text) 6%, transparent); }
 .editor-toolbar { min-height: var(--ui-editor-toolbar-height); height: var(--ui-editor-toolbar-height); display: flex; align-items: center; gap: var(--ui-space-6); margin: 8px 12px 0; padding: 0 var(--ui-row-padding-x); border-radius: var(--radius); background: color-mix(in oklab, var(--acp-panel) 54%, transparent); }
 .editor-toolbar > span { flex: 1; }
 .editor-toolbar > strong, .editor-toolbar h2 { font-size: var(--ui-font-emphasis); }
@@ -130,19 +140,22 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .editor-side { padding: 16px 18px; border-left: 1px solid var(--acp-line); background: color-mix(in oklab, var(--acp-panel) 26%, transparent); }
 .step-editor-list { display: flex; flex-direction: column; gap: 16px; }
 .step-editor { display: block; padding: 14px 16px; margin: 0; border: var(--ui-rule); border-radius: var(--radius); background: color-mix(in oklab, var(--acp-panel) 68%, transparent); }
-.step-editor-head { display: grid; grid-template-columns: 28px 120px 82px 146px minmax(100px, 1fr) auto; align-items: center; gap: 12px; margin-bottom: 12px; }
+.step-editor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
 .step-editor-head > b { color: var(--acp-accent); }
-.step-editor-head input, .step-editor-head select { height: 32px; padding: 0 10px; }
-.step-editor-head input { width: 120px; padding: 0 8px; border: 1px solid transparent; border-radius: calc(var(--radius) - 3px); background: color-mix(in oklab, var(--acp-ink) 48%, transparent); font-size: var(--ui-font-emphasis); font-weight: 700; }
-.step-editor-head button { justify-self: end; }
-.step-editor-grid { margin: 0; grid-template-columns: 1fr 1fr; gap: 10px; }
-.step-editor-grid label { color: var(--acp-text-soft); font-size: var(--ui-font-caption); text-transform: uppercase; }
-.step-editor-grid textarea { height: 44px; padding: 8px 10px; font-size: var(--ui-font-meta); }
+.step-editor-fields { display: flex; flex-direction: column; gap: 10px; }
+.step-field { min-width: 0; display: grid; grid-template-columns: 132px minmax(0, 1fr); align-items: center; gap: 16px; color: var(--acp-text-soft); font-size: var(--ui-font-caption); }
+.step-field > span { font-weight: 600; }
+.step-field input, .step-field textarea { width: 100%; }
+.step-field input { height: 34px; padding: 0 10px; }
+.step-field textarea { min-height: 64px; padding: 9px 10px; font-size: var(--ui-font-meta); resize: vertical; }
+.step-field--multiline { align-items: start; }
+.step-field--multiline > span { padding-top: 9px; }
 .transition-editor { margin-top: 12px; padding: 10px; border-radius: calc(var(--radius) - 2px); background: color-mix(in oklab, var(--acp-ink) 42%, transparent); }
 .transition-editor > span { color: var(--acp-text-soft); font-size: var(--ui-font-caption); text-transform: uppercase; }
-.transition-row { grid-template-columns: 200px 20px 160px minmax(74px, 1fr); gap: 12px; margin-top: 8px; }
-.transition-row input, .transition-row select { height: 30px; padding: 0 9px; color: var(--acp-cyan); font-size: var(--ui-font-meta); }
-.transition-row .ui-action { justify-self: end; }
+.transition-item { display: flex; flex-direction: column; gap: 8px; margin: 10px 0; padding: 10px 12px; border-radius: calc(var(--radius) - 3px); background: color-mix(in oklab, var(--acp-panel) 48%, transparent); }
+.transition-item-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.transition-item-head strong { color: var(--acp-text); font-size: var(--ui-font-caption); }
+.transition-item input { color: var(--acp-cyan); font-family: var(--ui-font-mono); }
 .add-step { margin-top: 16px; }
 .flow-ascii { margin: 12px 0 18px; color: var(--acp-text-muted); font: var(--ui-font-meta)/1.75 var(--ui-font-mono); white-space: pre-wrap; }
 .policy-box { padding: 12px; border-radius: var(--radius); background: color-mix(in oklab, var(--acp-ink) 48%, transparent); }
@@ -202,6 +215,8 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 }
 
 @media (max-width: 920px) {
+  .serial-editor-actions { align-items: flex-start; }
+  .serial-editor-actions > div { flex-wrap: wrap; justify-content: flex-end; }
   .workflow-card { grid-template-columns: minmax(0, 1fr); }
   .workflow-card__main { padding-bottom: 7px; }
   .workflow-card__actions { justify-content: flex-end; padding: 0 12px 8px; }
@@ -209,6 +224,11 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
   .legacy-wide-editor .dag-toolbar { top: 48px; left: 20px; right: 20px; }
   .legacy-wide-editor .dag-actions { gap: 5px; }
   .legacy-wide-editor .dag-actions .ui-action { padding: 5px 6px; font-size: var(--ui-font-11); }
+}
+
+@media (max-width: 720px) {
+  .serial-editor-basics .workflow-identity label, .step-field { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .step-field--multiline > span { padding-top: 0; }
 }
 
 /* ---- Standby lock screen ---------------------------------------------------

@@ -188,12 +188,15 @@ export function WorkflowsWindow() {
   const [mode, setMode] = useState("loading");
   const [runtimes, setRuntimes] = useState([]);
   const [workflows, setWorkflows] = useState([]);
+  const [selectedWorkflowID, setSelectedWorkflowID] = useState("");
   const [workers, setWorkers] = useState([]);
   const [settings, setSettings] = useState(demoSettings);
   const [editor, setEditor] = useState(null);
   const [editorSourceID, setEditorSourceID] = useState("");
   const [validation, setValidation] = useState([]);
   const [busy, setBusy] = useState("");
+  const navigationRef = useRef({ back: [], forward: [] });
+  const [, setNavigationVersion] = useState(0);
   const { notice, notify } = useNotice();
   const { dialog, requestConfirm, resolveConfirm } = useConfirmDialog();
 
@@ -201,13 +204,16 @@ export function WorkflowsWindow() {
     try {
       const [runtimeItems, workflowItems, workerItems, settingsValue] = await Promise.all([RuntimeBinding.ListRuntimes(), WorkflowBinding.ListDefinitions(), WorkerBinding.ListWorkers(), SettingsBinding.GetSettings()]);
       setRuntimes(runtimeItems || []);
-      setWorkflows(workflowItems || []);
+      const nextWorkflows = workflowItems || [];
+      setWorkflows(nextWorkflows);
+      setSelectedWorkflowID((current) => nextWorkflows.some((item) => item.id === current) ? current : nextWorkflows[0]?.id || "");
       setWorkers(workerItems || []);
       setSettings(settingsValue || demoSettings);
       setMode("wails");
     } catch {
       setRuntimes(demoRuntimes);
       setWorkflows(demoWorkflows);
+      setSelectedWorkflowID((current) => demoWorkflows.some((item) => item.id === current) ? current : demoWorkflows[0]?.id || "");
       setWorkers(demoWorkers);
       setSettings(demoSettings);
       setMode("demo");
@@ -215,6 +221,12 @@ export function WorkflowsWindow() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
+    if (!nativeSidebar || mode === "loading") return;
+    document.documentElement.dataset.nativeSidebarMaterial = "true";
+    nativeSidebar.postMessage({ width: document.querySelector(".workflow-sidebar")?.getBoundingClientRect().width || 240 });
+  }, [mode]);
   useEffect(() => Events.On(settingsChangedEvent, async () => {
     if (mode !== "wails") return;
     try {
@@ -227,13 +239,51 @@ export function WorkflowsWindow() {
   }), [mode]);
 
   const announceChange = () => { void Events.Emit(workflowsChangedEvent, {}); };
+  const currentPage = () => ({
+    selectedWorkflowID,
+    editor: editor ? copy(editor) : null,
+    editorSourceID,
+    validation: copy(validation),
+  });
+  const pageKey = (page) => page.editor
+    ? `editor:${page.editorSourceID || "new"}:${page.editor.id}`
+    : `detail:${page.selectedWorkflowID}`;
+  const applyPage = (page) => {
+    setSelectedWorkflowID(page.selectedWorkflowID || "");
+    setEditor(page.editor ? copy(page.editor) : null);
+    setEditorSourceID(page.editorSourceID || "");
+    setValidation(copy(page.validation || []));
+  };
+  const visitPage = (page) => {
+    const current = currentPage();
+    if (pageKey(current) !== pageKey(page)) {
+      navigationRef.current.back = [...navigationRef.current.back.slice(-49), current];
+      navigationRef.current.forward = [];
+      setNavigationVersion((version) => version + 1);
+    }
+    applyPage(page);
+  };
+  const goBack = () => {
+    const history = navigationRef.current;
+    const page = history.back.pop();
+    if (!page) return;
+    history.forward.push(currentPage());
+    applyPage(page);
+    setNavigationVersion((version) => version + 1);
+  };
+  const goForward = () => {
+    const history = navigationRef.current;
+    const page = history.forward.pop();
+    if (!page) return;
+    history.back.push(currentPage());
+    applyPage(page);
+    setNavigationVersion((version) => version + 1);
+  };
   const openEditor = (definition, isNew = false) => {
     const next = copy(definition || loopTemplate);
     if (isNew) next.id = nextWorkflowDefinitionID(next.id, workflows);
     if (isNew || !workflows.some((item) => item.id === next.id)) next.policy = { maxTransitions: settings.execution.maxTransitions, maxConsecutiveFailures: settings.execution.maxConsecutiveFailures, stepTimeoutSeconds: settings.execution.stepTimeoutSeconds };
-    setEditorSourceID(isNew ? "" : next.id);
-    setEditor(next);
-    setValidation([]);
+    visitPage({ selectedWorkflowID: isNew ? selectedWorkflowID : next.id, editor: next, editorSourceID: isNew ? "" : next.id, validation: [] });
   };
   const updateStep = (index, field, value) => setEditor((current) => ({ ...current, steps: current.steps.map((step, itemIndex) => itemIndex === index ? { ...step, [field]: value } : step) }));
   const updateTransition = (stepIndex, oldSignal, signal, target) => setEditor((current) => ({ ...current, steps: current.steps.map((step, index) => {
@@ -273,13 +323,13 @@ export function WorkflowsWindow() {
     if (editor.steps.some((step) => step.sandbox === "full") && !await requestConfirm({ title: t("app.fullWorkflowTitle"), description: t("app.fullWorkflowDescription"), detail: t("app.workflowDetail", { name: editor.name || editor.id }), confirmLabel: t("app.confirmSave"), dangerous: true })) return;
     setBusy("workflow");
     try {
+      const savedID = editor.id;
       if (mode !== "demo") {
         if (editorSourceID) await WorkflowBinding.UpdateDefinition(editorSourceID, editor);
         else await WorkflowBinding.CreateDefinition(editor);
         setWorkflows(await WorkflowBinding.ListDefinitions());
       } else setWorkflows((items) => [...items.filter((item) => item.id !== editor.id && item.id !== editorSourceID), editor]);
-      setEditor(null);
-      setEditorSourceID("");
+      visitPage({ selectedWorkflowID: savedID, editor: null, editorSourceID: "", validation: [] });
       announceChange();
       notify("success", t("app.workflowSaved"));
     } catch (error) {
@@ -298,6 +348,14 @@ export function WorkflowsWindow() {
         await WorkflowBinding.DeleteDefinition(workflow.id);
         setWorkflows(await WorkflowBinding.ListDefinitions());
       }
+      if (selectedWorkflowID === workflow.id) setSelectedWorkflowID("");
+      if (editorSourceID === workflow.id) {
+        setEditor(null);
+        setEditorSourceID("");
+      }
+      navigationRef.current.back = navigationRef.current.back.filter((page) => page.selectedWorkflowID !== workflow.id && page.editorSourceID !== workflow.id);
+      navigationRef.current.forward = navigationRef.current.forward.filter((page) => page.selectedWorkflowID !== workflow.id && page.editorSourceID !== workflow.id);
+      setNavigationVersion((version) => version + 1);
       announceChange();
       notify("success", t("app.workflowDeleted"));
     } catch (error) {
@@ -307,9 +365,19 @@ export function WorkflowsWindow() {
     }
   };
 
+  useEffect(() => {
+    setSelectedWorkflowID((current) => workflows.some((item) => item.id === current) ? current : workflows[0]?.id || "");
+  }, [workflows]);
+
+  const selectedWorkflow = workflows.find((workflow) => workflow.id === selectedWorkflowID) || workflows[0] || null;
+  const selectWorkflow = (workflow) => {
+    visitPage({ selectedWorkflowID: workflow.id, editor: null, editorSourceID: "", validation: [] });
+  };
+
   if (mode === "loading") return <LoadingWindow />;
-  return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-background text-foreground">
-    {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} /> : <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} />}
+  const editorContent = editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => visitPage({ selectedWorkflowID: editorSourceID || selectedWorkflowID, editor: null, editorSourceID: "", validation: [] })} /> : null;
+  return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-foreground">
+    <WorkflowLibrary workflows={workflows} selectedWorkflow={selectedWorkflow} runtimes={runtimes} editorContent={editorContent} openEditor={openEditor} deleteWorkflow={deleteWorkflow} onSelect={selectWorkflow} busy={busy} canGoBack={navigationRef.current.back.length > 0} canGoForward={navigationRef.current.forward.length > 0} onGoBack={goBack} onGoForward={goForward} />
     <ConfirmDialog dialog={dialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
   </div>;
