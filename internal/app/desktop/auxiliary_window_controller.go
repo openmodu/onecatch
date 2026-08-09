@@ -100,7 +100,9 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions) {
 		Mac:              macOptions,
 	})
 	if mainWindow, ok := c.app.Window.GetByName("main"); ok {
-		inheritNativeWindowAppearance(window, mainWindow)
+		if source, ok := mainWindow.(*application.WebviewWindow); ok {
+			inheritNativeWindowAppearance(window, source)
+		}
 	}
 	if options.customChrome {
 		applyNativeWindowChrome(window)

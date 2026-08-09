@@ -1,10 +1,9 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft } from "lucide-react";
+import { Activity, GitBranch, ListTree, Maximize2, Minimize2, PanelRightClose, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Action, Kicker } from "../../ui/primitives.jsx";
+import { Action, Kicker, StatusBadge } from "../../ui/primitives.jsx";
 import { shortID } from "../format.js";
 import { buildRunConversation } from "../runConversation.js";
-import { INSPECTOR_COMPACT_QUERY, readInspectorPreference, resolveInspectorCollapsed, writeInspectorPreference } from "../inspectorLayout.js";
 import StatusPill from "./StatusPill.jsx";
 import QueuedTaskView from "./QueuedTaskView.jsx";
 import ConversationTimeline from "./ConversationTimeline.jsx";
@@ -12,6 +11,10 @@ import Composer from "./Composer.jsx";
 import StatusInspector from "./inspectors/StatusInspector.jsx";
 import GitInspector from "./inspectors/GitInspector.jsx";
 import EventInspector from "./inspectors/EventInspector.jsx";
+
+const MIN_INSPECTOR_WIDTH = 320;
+const DEFAULT_INSPECTOR_WIDTH = 380;
+const INSPECTOR_SNAP_DISTANCE = 24;
 
 function workflowNameFor(workflows, workflowID) { return workflows.find((workflow) => workflow.id === workflowID)?.name || workflowID; }
 
@@ -24,18 +27,6 @@ function activeWorkerID(runDetail) {
   const stepID = stepRuns[stepRuns.length - 1]?.stepId || runDetail?.run?.currentStepId;
   const step = steps.find((item) => item.id === stepID);
   return step?.sandbox === "read-only" && step.workerId && step.workerId !== "local" ? step.workerId : "";
-}
-
-function initialInspectorPreference() {
-  try {
-    return typeof window === "undefined" ? null : readInspectorPreference(window.localStorage);
-  } catch {
-    return null;
-  }
-}
-
-function initialCompactViewport() {
-  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(INSPECTOR_COMPACT_QUERY).matches;
 }
 
 // Cheap fingerprint of everything buildRunConversation reads, so a poll tick
@@ -59,13 +50,17 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, permissionBusy, attachments, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, onRename, onDelete, notify }) {
+function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, onRename, onDelete, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
-  const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
-  const [compactViewport, setCompactViewport] = useState(initialCompactViewport);
+  const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
+  const [inspectorResizing, setInspectorResizing] = useState(false);
+  const [inspectorMaximized, setInspectorMaximized] = useState(false);
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
+  const inspectorResizeRef = useRef(null);
+  const inspectorRestoreWidthRef = useRef(DEFAULT_INSPECTOR_WIDTH);
+  const workbenchRef = useRef(null);
 
   const selectedQueuedTask = useMemo(() => tasks.find((task) => task.id === selectedQueuedTaskID), [tasks, selectedQueuedTaskID]);
   const selectedTask = runDetail?.task || selectedQueuedTask;
@@ -86,19 +81,6 @@ function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, sel
     const element = scrollRef.current;
     if (element && pinnedRef.current) element.scrollTop = element.scrollHeight;
   }, [attachments.length, conversationSize, pendingInstructions.length, runDetail?.run?.status]);
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    const media = window.matchMedia(INSPECTOR_COMPACT_QUERY);
-    const update = (event) => setCompactViewport(event.matches);
-    setCompactViewport(media.matches);
-    if (typeof media.addEventListener === "function") {
-      media.addEventListener("change", update);
-      return () => media.removeEventListener("change", update);
-    }
-    media.addListener?.(update);
-    return () => media.removeListener?.(update);
-  }, []);
-
   const handleConversationScroll = () => {
     const element = scrollRef.current;
     if (element) pinnedRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 90;
@@ -106,18 +88,68 @@ function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, sel
   const workflowName = selectedTask ? workflowNameFor(workflows, selectedTask.workflowId) : "";
   const runStatus = runDetail?.run?.status;
   const runWorkerID = useMemo(() => activeWorkerID(runDetail), [runDetail]);
-  const inspectorCollapsed = resolveInspectorCollapsed(inspectorPreference, compactViewport);
-  const toggleInspector = () => {
-    const next = !inspectorCollapsed;
-    setInspectorPreference(next);
-    try {
-      writeInspectorPreference(window.localStorage, next);
-    } catch {
-      // Storage is best effort; the current session should still respond.
-    }
+  const inspectorTabs = [
+    { value: "status", label: t("inspector.status"), icon: Activity },
+    { value: "git", label: t("inspector.git"), icon: GitBranch },
+    { value: "events", label: t("inspector.events"), icon: ListTree },
+  ];
+  const activeInspector = inspectorTabs.find((tab) => tab.value === inspectorTab) || inspectorTabs[0];
+  const clampInspectorWidth = (width) => {
+    const workbenchWidth = workbenchRef.current?.getBoundingClientRect().width || window.innerWidth;
+    const maximum = Math.max(MIN_INSPECTOR_WIDTH, workbenchWidth - INSPECTOR_SNAP_DISTANCE);
+    return Math.max(MIN_INSPECTOR_WIDTH, Math.min(width, maximum));
   };
-
-  return <div className={`task-workbench grid min-h-0 min-w-0 flex-1 overflow-hidden transition-[grid-template-columns] duration-150 ease-out motion-reduce:transition-none ${inspectorCollapsed ? "inspector-collapsed grid-cols-[minmax(360px,1fr)_32px]" : "grid-cols-[minmax(360px,1fr)_310px]"}`}>
+  const beginInspectorResize = (event) => {
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setInspectorResizing(true);
+    inspectorRestoreWidthRef.current = inspectorWidth;
+    inspectorResizeRef.current = { pointerID: event.pointerId, startX: event.clientX, startWidth: inspectorWidth };
+  };
+  const moveInspectorResize = (event) => {
+    const resize = inspectorResizeRef.current;
+    if (!resize || resize.pointerID !== event.pointerId) return;
+    const bounds = workbenchRef.current?.getBoundingClientRect();
+    if (bounds && event.clientX <= bounds.left + INSPECTOR_SNAP_DISTANCE) {
+      setInspectorMaximized(true);
+      return;
+    }
+    setInspectorMaximized(false);
+    setInspectorWidth(clampInspectorWidth(resize.startWidth + resize.startX - event.clientX));
+  };
+  const endInspectorResize = (event) => {
+    if (inspectorResizeRef.current?.pointerID !== event.pointerId) return;
+    inspectorResizeRef.current = null;
+    setInspectorResizing(false);
+    event.currentTarget.releasePointerCapture?.(event.pointerId);
+  };
+  const resizeInspectorWithKeyboard = (event) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    setInspectorWidth((width) => clampInspectorWidth(width + (event.key === "ArrowLeft" ? 20 : -20)));
+  };
+  const closeInspector = () => {
+    if (inspectorMaximized) setInspectorWidth(clampInspectorWidth(inspectorRestoreWidthRef.current));
+    setInspectorMaximized(false);
+    onToggleInspector();
+  };
+  const toggleInspectorMaximized = () => {
+    if (inspectorMaximized) {
+      setInspectorWidth(clampInspectorWidth(inspectorRestoreWidthRef.current));
+      setInspectorMaximized(false);
+      return;
+    }
+    inspectorRestoreWidthRef.current = inspectorWidth;
+    setInspectorMaximized(true);
+  };
+  return <div ref={workbenchRef} className={`task-workbench grid min-h-0 min-w-0 flex-1 overflow-visible ${inspectorCollapsed ? "inspector-collapsed" : "inspector-open"} ${inspectorResizing ? "inspector-resizing" : ""} ${inspectorMaximized ? "inspector-maximized" : ""}`} style={{ "--workbench-inspector-width": `${inspectorWidth}px` }}>
+    {!inspectorCollapsed && !inspectorMaximized && <div className="workbench-inspector-dock no-drag">
+      <StatusBadge status={mode === "wails" ? "good" : "warn"} className="shrink-0">
+        <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+        {mode === "wails" ? t("common.local") : t("common.preview")}
+      </StatusBadge>
+      <button type="button" className="workbench-inspector-dock-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><PanelRightClose size={16} strokeWidth={2} aria-hidden="true" /></button>
+    </div>}
     <section className="conversation-workspace flex min-h-0 min-w-0 flex-col bg-background">
       {selectedTask ? <>
         <header className="conversation-workspace-head mx-2 mt-2 flex min-h-[58px] shrink-0 items-center justify-between gap-3 rounded-lg bg-muted/45 px-3.5 py-2"><div className="min-w-0"><div className="conversation-title-row flex min-w-0 items-center gap-2.5"><h2 className="m-0 min-w-0 truncate text-[15px] font-semibold text-foreground">{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p className="mt-1 truncate text-xs text-muted-foreground">{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : ` · ${t("task.workspaceFIFO")}`}</p></div><div className="conversation-head-actions flex shrink-0 items-center gap-1.5"><Action size="compact" tone="muted" onClick={onRename}>{t("task.rename")}</Action><Action size="compact" tone="danger" onClick={onDelete}>{t("task.delete")}</Action></div></header>
@@ -140,10 +172,11 @@ function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, sel
       </> : <div className="workbench-welcome m-auto max-w-xl select-none p-10 text-center text-muted-foreground"><Kicker>{t("task.welcomeKicker")}</Kicker><h2 className="my-3 text-lg font-semibold text-foreground">{t("task.welcomeTitle")}</h2><p className="mb-6 text-sm leading-relaxed">{t("task.welcomeDescription")}</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>{t("task.newTask")}</Action></div>}
     </section>
 
-    <aside className={`workbench-inspector grid min-h-0 min-w-0 border-l bg-muted/40 ${inspectorCollapsed ? "collapsed grid-rows-[minmax(0,1fr)]" : "grid-rows-[42px_minmax(0,1fr)]"}`} aria-label={t("inspector.aria")}>
-      {inspectorCollapsed ? <div className="workbench-inspector-rail min-h-0"><button type="button" className="grid h-full w-full grid-rows-[32px_minmax(0,1fr)] justify-items-center bg-muted/60 pt-1.5 pb-2.5 text-muted-foreground transition-colors hover:bg-accent hover:text-primary" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><ChevronLeft size={16} aria-hidden="true" /><strong className="self-start text-[11px] font-bold tracking-[0.12em] [writing-mode:vertical-rl]">{t("inspector.rail")}</strong></button></div> : <div className="workbench-tabs m-2 mb-0 grid grid-cols-[repeat(3,minmax(0,1fr))_auto] items-center gap-1 rounded-lg bg-muted/70 p-1">{[["status", t("inspector.status")], ["git", t("inspector.git")], ["events", t("inspector.events")]].map(([value, label]) => <button type="button" className={`rounded-sm px-2 py-1.5 text-xs transition-colors hover:text-foreground ${inspectorTab === value ? "active bg-background text-foreground shadow-xs" : "text-muted-foreground"}`} aria-pressed={inspectorTab === value} key={value} onClick={() => setInspectorTab(value)}>{label}</button>)}<Action size="compact" tone="muted" className="workbench-inspector-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={toggleInspector}>{t("inspector.collapse")}</Action></div>}
-      <div className="workbench-inspector-body min-h-0 overflow-y-auto" id="workbench-inspector-content" hidden={inspectorCollapsed}>{!inspectorCollapsed && (inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={runWorkerID} notify={notify} /> : <EventInspector detail={runDetail} />)}</div>
-    </aside>
+    {!inspectorCollapsed && <aside className="workbench-inspector open min-h-0 min-w-0" aria-label={t("inspector.aria")}>
+      <span className="workbench-inspector-resize" role="separator" aria-label={t("inspector.resize", { defaultValue: "调整状态栏宽度" })} aria-orientation="vertical" tabIndex="0" onPointerDown={beginInspectorResize} onPointerMove={moveInspectorResize} onPointerUp={endInspectorResize} onPointerCancel={endInspectorResize} onKeyDown={resizeInspectorWithKeyboard} />
+      <div className="workbench-inspector-toolbar"><div className="workbench-inspector-tabs" role="tablist" aria-label={t("inspector.aria")}>{inspectorTabs.map(({ value, label, icon: Icon }) => <button type="button" role="tab" className={inspectorTab === value ? "active" : ""} aria-selected={inspectorTab === value} aria-controls="workbench-inspector-content" title={label} key={value} onClick={() => setInspectorTab(value)}><Icon size={15} strokeWidth={2} aria-hidden="true" /><span className="sr-only">{label}</span></button>)}</div><strong className="workbench-inspector-title">{activeInspector.label}</strong><div className="workbench-inspector-window-actions"><button type="button" className="workbench-inspector-maximize" aria-label={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} aria-pressed={inspectorMaximized} title={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} onClick={toggleInspectorMaximized}>{inspectorMaximized ? <Minimize2 size={15} strokeWidth={2} aria-hidden="true" /> : <Maximize2 size={15} strokeWidth={2} aria-hidden="true" />}</button><button type="button" className="workbench-inspector-close" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><X size={16} strokeWidth={2} aria-hidden="true" /></button></div></div>
+      <div className="workbench-inspector-body min-h-0 overflow-y-auto" id="workbench-inspector-content">{inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={runWorkerID} notify={notify} /> : <EventInspector detail={runDetail} />}</div>
+    </aside>}
   </div>;
 }
 

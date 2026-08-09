@@ -171,7 +171,7 @@ function GitInspector({ mode, workspaceID, runWorkerID = "", notify }) {
       <Kicker>{t("inspector.branches")}</Kicker>
       <TUISelect ariaLabel={t("inspector.branchSelect")} value={snapshot?.branch || ""} onChange={switchBranch} options={branchOptions} disabled={branchBusy || !branchOptions.length} />
       <form className="flex gap-1.5" onSubmit={createBranch}>
-        <input className="h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2.5 text-xs shadow-xs outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-50" value={newBranch} onChange={(event) => setNewBranch(event.target.value)} disabled={branchBusy} aria-label={t("inspector.branchName")} placeholder={t("inspector.branchCreatePlaceholder")} />
+        <input className="h-8 min-w-0 flex-1 rounded-md border border-input bg-transparent px-2.5 text-xs outline-none focus-visible:border-ring disabled:opacity-50" value={newBranch} onChange={(event) => setNewBranch(event.target.value)} disabled={branchBusy} aria-label={t("inspector.branchName")} placeholder={t("inspector.branchCreatePlaceholder")} />
         <Action type="submit" size="compact" disabled={branchBusy || !newBranch.trim()}>{branchBusy ? t("common.loading") : t("inspector.branchCreate")}</Action>
       </form>
     </section>}

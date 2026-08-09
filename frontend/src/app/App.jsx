@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lock } from "lucide-react";
+import { Lock, PanelRightOpen, Paperclip, X } from "lucide-react";
 import { Events } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   RuntimeBinding,
   SettingsBinding,
@@ -34,9 +35,22 @@ import LockScreen from "./components/LockScreen.jsx";
 import { buildLockSignal, completionEdge, LOCK_PHASE } from "./lockSignal.js";
 import { notifyStandby } from "./standbyNotify.js";
 import { settingsChangedEvent, workflowsChangedEvent } from "./AuxiliaryWindow.jsx";
+import { INSPECTOR_COMPACT_QUERY, readInspectorPreference, resolveInspectorCollapsed, writeInspectorPreference } from "./inspectorLayout.js";
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
 const runStateEvent = "oneshot:run-state";
+
+function initialInspectorPreference() {
+  try {
+    return typeof window === "undefined" ? null : readInspectorPreference(window.localStorage);
+  } catch {
+    return null;
+  }
+}
+
+function initialCompactViewport() {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(INSPECTOR_COMPACT_QUERY).matches;
+}
 
 function App() {
   const { t } = useTranslation();
@@ -82,6 +96,8 @@ function App() {
   const [workerForm, setWorkerForm] = useState({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
   const [settings, setSettings] = useState(demoSettings);
   const [appDialog, setAppDialog] = useState(null);
+  const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
+  const [compactViewport, setCompactViewport] = useState(initialCompactViewport);
   const appDialogResolve = useRef(null);
   const runListLoadVersion = useRef(0);
   const runLoadVersion = useRef(0);
@@ -111,6 +127,29 @@ function App() {
   runNextCursorRef.current = runNextCursor;
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID);
+  const inspectorCollapsed = resolveInspectorCollapsed(inspectorPreference, compactViewport);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
+    const media = window.matchMedia(INSPECTOR_COMPACT_QUERY);
+    const update = (event) => setCompactViewport(event.matches);
+    setCompactViewport(media.matches);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", update);
+      return () => media.removeEventListener("change", update);
+    }
+    media.addListener?.(update);
+    return () => media.removeListener?.(update);
+  }, []);
+
+  const toggleInspector = useCallback(() => {
+    setInspectorPreference((current) => {
+      const collapsed = resolveInspectorCollapsed(current, compactViewport);
+      const next = !collapsed;
+      writeInspectorPreference(window.localStorage, next);
+      return next;
+    });
+  }, [compactViewport]);
 
   const notify = useCallback((type, text) => {
     setNotice({ type, text });
@@ -937,10 +976,11 @@ function App() {
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
           </button>
-          <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
+          {(view !== "tasks" || inspectorCollapsed) && <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {mode === "wails" ? t("common.local") : t("common.preview")}
-          </StatusBadge>
+          </StatusBadge>}
+          {view === "tasks" && inspectorCollapsed && <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /></button>}
         </div>
         {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} showBack /> : view === "tasks" ? <TaskWorkbench
           mode={mode}
@@ -953,6 +993,8 @@ function App() {
           busy={busy}
           permissionBusy={permissionBusy}
           attachments={composerAttachments}
+          inspectorCollapsed={inspectorCollapsed}
+          onToggleInspector={toggleInspector}
           onNewTask={openTaskModal}
           onChooseAttachments={chooseComposerAttachments}
           onRemoveAttachment={removeComposerAttachment}
@@ -968,7 +1010,37 @@ function App() {
       </main>
     </div>
     {workspaceModal && <Modal title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>{t("workspace.path")}<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>{t("workspace.displayName")}<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder={t("workspace.defaultName")} /></label><label>{t("workspace.defaultSandbox")}<TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} /></label><div className="modal-actions"><Action tone="muted" onClick={() => setWorkspaceModal(false)}>{t("common.cancel")}</Action><Action tone="primary" onClick={addWorkspace} disabled={busy === "workspace"}>{t("workspace.add")}</Action></div></div></Modal>}
-    {taskModal && <Modal title={t("task.createTitle")} subtitle={t("task.createSubtitle")} onClose={() => setTaskModal(false)}><div className="form-stack task-create-form"><label>{t("task.name")}<input autoFocus value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.namePlaceholder")} /></label><label>{t("task.goal")}<textarea value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.goalPlaceholder")} /></label><label>{t("task.workflow")}<TUISelect ariaLabel={t("task.workflow")} value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} /></label><label>{t("task.executionMode")}<TUISelect ariaLabel={t("task.executionMode")} value={taskForm.executionMode} onChange={(executionMode) => setTaskForm((form) => ({ ...form, executionMode }))} options={[{ value: "immediate", label: t("task.runNow") }, { value: "queued", label: t("task.joinQueue") }]} /></label><div className="attachment-picker"><span>{t("task.attachmentsLimit")}</span><Action size="compact" onClick={() => chooseAttachments("task")}>+ {t("task.chooseFiles")}</Action>{taskForm.attachmentPaths?.map((path) => <div className="attachment-chip" key={path}><span title={path}>{fileName(path)}</span><Action size="compact" tone="danger" onClick={() => setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }))}>{t("common.remove")}</Action></div>)}</div><div className="modal-actions"><Action tone="muted" onClick={() => setTaskModal(false)}>{t("common.cancel")}</Action><Action tone="primary" onClick={createTaskAndRun} disabled={busy === "run" || !selectedWorkspace}>{busy === "run" ? t("task.creating") : taskForm.executionMode === "queued" ? t("task.joinQueue") : t("task.createAndRun")}</Action></div></div></Modal>}
+    {taskModal && <Modal className="task-create-dialog gap-0 overflow-hidden p-0 sm:max-w-[520px]" title={t("task.createTitle")} subtitle={t("task.createSubtitle")} onClose={() => setTaskModal(false)}>
+      <form className="task-create-form grid gap-4 px-5 pt-4 pb-5" onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "run") void createTaskAndRun(); }}>
+        <div className="grid gap-1.5">
+          <Label htmlFor="task-create-title">{t("task.name")}</Label>
+          <Input id="task-create-title" autoFocus value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.namePlaceholder")} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="task-create-goal">{t("task.goal")}</Label>
+          <Textarea id="task-create-goal" className="min-h-24 resize-y" value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.goalPlaceholder")} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>{t("task.workflow")}</Label>
+          <TUISelect ariaLabel={t("task.workflow")} value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label>{t("task.executionMode")}</Label>
+          <TUISelect ariaLabel={t("task.executionMode")} value={taskForm.executionMode} onChange={(executionMode) => setTaskForm((form) => ({ ...form, executionMode }))} options={[{ value: "immediate", label: t("task.runNow") }, { value: "queued", label: t("task.joinQueue") }]} />
+        </div>
+        <div className="grid gap-2">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-muted-foreground">{t("task.attachmentsLimit")}</span>
+            <Button type="button" variant="ghost" size="sm" onClick={() => chooseAttachments("task")}><Paperclip aria-hidden="true" />{t("task.chooseFiles")}</Button>
+          </div>
+          {taskForm.attachmentPaths?.length > 0 && <div className="flex flex-wrap gap-1.5">{taskForm.attachmentPaths.map((path) => <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground" key={path}><span className="truncate" title={path}>{fileName(path)}</span><button type="button" className="grid size-4 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={`${t("common.remove")} ${fileName(path)}`} title={t("common.remove")} onClick={() => setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }))}><X size={12} aria-hidden="true" /></button></span>)}</div>}
+        </div>
+        <DialogFooter className="mt-1">
+          <Button type="button" variant="ghost" onClick={() => setTaskModal(false)}>{t("common.cancel")}</Button>
+          <Button type="submit" disabled={busy === "run" || !selectedWorkspace || !taskForm.title.trim() || !taskForm.prompt.trim() || !taskForm.workflowId}>{busy === "run" ? t("task.creating") : taskForm.executionMode === "queued" ? t("task.joinQueue") : t("task.createAndRun")}</Button>
+        </DialogFooter>
+      </form>
+    </Modal>}
     {renameForm && <Modal className="gap-5 p-5 sm:max-w-md" title={t("task.renameTitle")} subtitle={t("task.renameSubtitle")} onClose={() => busy !== "rename" && setRenameForm(null)}><form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "rename") void renameSelectedTask(); }}><div className="grid gap-2"><Label htmlFor="rename-task-title">{t("task.name")}</Label><Input id="rename-task-title" autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} /></div><DialogFooter className="pt-1"><Button type="button" variant="outline" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>{t("common.cancel")}</Button><Button type="submit" disabled={busy === "rename" || !renameForm.title.trim()}>{busy === "rename" ? t("common.saving") : t("task.saveName")}</Button></DialogFooter></form></Modal>}
     {workerModal && <WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} />}
     <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />

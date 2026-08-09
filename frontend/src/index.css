@@ -254,6 +254,216 @@
    Living in @layer app means it outranks the hand-written stylesheets it
    replaces without having to delete them row by row. */
 @layer app {
+  input,
+  textarea,
+  select,
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"],
+  .workbench-composer-input {
+    box-shadow: none !important;
+  }
+
+  input:focus,
+  input:focus-visible,
+  textarea:focus,
+  textarea:focus-visible,
+  select:focus,
+  select:focus-visible,
+  [data-slot="input"]:focus-visible,
+  [data-slot="textarea"]:focus-visible,
+  [data-slot="select-trigger"]:focus-visible,
+  .workbench-composer-input:focus-within {
+    outline: none !important;
+    box-shadow: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+  }
+
+  .task-workbench {
+    position: relative;
+    transition: grid-template-columns 200ms cubic-bezier(.2, .8, .2, 1);
+  }
+
+  .task-workbench.inspector-open {
+    grid-template-columns: minmax(0, 1fr) var(--workbench-inspector-width, 380px);
+  }
+
+  .task-workbench.inspector-collapsed {
+    grid-template-columns: minmax(0, 1fr) 0;
+  }
+
+  .task-workbench.inspector-maximized {
+    grid-template-columns: 0 minmax(0, 1fr);
+  }
+
+  .task-workbench.inspector-maximized .conversation-workspace {
+    visibility: hidden;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  .task-workbench.inspector-maximized .workbench-inspector.open {
+    margin-left: 8px;
+  }
+
+  .task-workbench.inspector-resizing {
+    transition: none;
+  }
+
+  .workbench-inspector.open {
+    position: relative;
+    z-index: 20;
+    top: -36px;
+    display: grid;
+    grid-template-rows: 44px minmax(0, 1fr);
+    height: calc(100% + 28px);
+    margin: 0 8px 0 0;
+    overflow: hidden;
+    border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
+    border-radius: 16px;
+    background: color-mix(in oklab, var(--popover) 97%, var(--muted));
+    box-shadow: 10px 12px 26px -18px color-mix(in oklab, var(--foreground) 18%, transparent);
+    animation: workbench-inspector-enter 200ms cubic-bezier(.2, .8, .2, 1);
+  }
+
+  .workbench-inspector-dock {
+    position: absolute;
+    z-index: 21;
+    top: -36px;
+    right: calc(var(--workbench-inspector-width, 380px) + 16px);
+    display: flex;
+    height: 36px;
+    align-items: center;
+    gap: 4px;
+    padding-left: 4px;
+    border-radius: 8px;
+    background: var(--background);
+  }
+
+  .workbench-inspector-dock-toggle,
+  .workbench-inspector-maximize,
+  .workbench-inspector-close {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+
+  .workbench-inspector-dock-toggle:hover,
+  .workbench-inspector-maximize:hover,
+  .workbench-inspector-close:hover {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+
+  @keyframes workbench-inspector-enter {
+    from { opacity: 0; transform: translateX(28px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .workbench-inspector-resize {
+    position: absolute;
+    z-index: 2;
+    top: 12px;
+    bottom: 12px;
+    left: -5px;
+    width: 10px;
+    border-radius: 999px;
+    background: transparent;
+    cursor: col-resize;
+    touch-action: none;
+  }
+
+  .workbench-inspector-resize:hover,
+  .workbench-inspector-resize:focus-visible {
+    background: transparent;
+    outline: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .task-workbench { transition: none; }
+    .workbench-inspector.open { animation: none; }
+  }
+
+  .workbench-inspector-toolbar {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 7px 6px 8px;
+    user-select: none;
+  }
+
+  .workbench-inspector-tabs {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+    padding: 3px;
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--muted) 72%, transparent);
+  }
+
+  .workbench-inspector-tabs button {
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+
+  .workbench-inspector-tabs button {
+    width: 27px;
+    height: 27px;
+    border-radius: 6px;
+  }
+
+  .workbench-inspector-tabs button:hover,
+  .workbench-inspector-tabs button.active {
+    background: var(--background);
+    color: var(--foreground);
+    box-shadow: 0 1px 3px color-mix(in oklab, var(--foreground) 10%, transparent);
+  }
+
+  .workbench-inspector-tabs button:focus-visible,
+  .workbench-inspector-dock-toggle:focus-visible,
+  .workbench-inspector-maximize:focus-visible,
+  .workbench-inspector-close:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--ring) 72%, transparent);
+    outline-offset: 1px;
+  }
+
+  .workbench-inspector-title {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .workbench-inspector-window-actions {
+    margin-left: auto;
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .workbench-inspector-body {
+    min-width: 0;
+    background: color-mix(in oklab, var(--popover) 98%, var(--muted));
+    overscroll-behavior: contain;
+  }
+
   /* styles.css gives :root an opaque legacy canvas. Both it and body must be
      cleared above that layer or WebKit covers the native material wholesale. */
   :root[data-native-sidebar-material],
@@ -535,6 +745,19 @@
     color: var(--popover-foreground);
     box-shadow: 0 20px 50px color-mix(in oklab, var(--foreground) 25%, transparent);
   }
+
+  .menu-accent-swatch {
+    width: 9px;
+    height: 9px;
+    flex: 0 0 auto;
+    border-radius: 999px;
+    background: var(--primary);
+  }
+
+  .menu-accent-swatch.accent-forest { background: #71521f; }
+  .menu-accent-swatch.accent-ocean { background: #1f6475; }
+  .menu-accent-swatch.accent-violet { background: #684886; }
+  .menu-accent-swatch.accent-amber { background: #87501d; }
 
   .command-palette__search {
     flex: 0 0 auto;

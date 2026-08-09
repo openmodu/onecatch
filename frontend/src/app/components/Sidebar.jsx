@@ -1,13 +1,23 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Ellipsis, Folder, FolderOpen, Menu, Pin, Plus, Search, Trash2 } from "lucide-react";
+import { Events } from "@wailsio/runtime";
+import { Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, Pin, Plus, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuShortcut,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Action } from "../../ui/primitives.jsx";
+import { APPEARANCE_CHANGED_EVENT, accentThemes, readAppearance, saveAppearance } from "../appearance.js";
+import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../../i18n.js";
 import {
   SIDEBAR_DEFAULT_WIDTH,
   SIDEBAR_KEYBOARD_STEP,
@@ -62,9 +72,10 @@ function Sidebar({
   onSelectQueued,
   onGoView,
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [width, setWidth] = useState(initialSidebarWidth);
   const [resizing, setResizing] = useState(false);
+  const [appearance, setAppearance] = useState(readAppearance);
   const [expandedWorkspaceID, setExpandedWorkspaceID] = useState(workspaceID);
   const [taskListExpanded, setTaskListExpanded] = useState(false);
   const [pendingSearchTask, setPendingSearchTask] = useState(null);
@@ -96,6 +107,8 @@ function Sidebar({
       drag.current?.cleanup?.();
     };
   }, []);
+
+  useEffect(() => Events.On(APPEARANCE_CHANGED_EVENT, (event) => setAppearance(event?.data || readAppearance())), []);
 
   useEffect(() => {
     // On macOS the WebView is transparent over a native NSVisualEffectView.
@@ -137,6 +150,17 @@ function Sidebar({
     setWidth(fitted);
     writeSidebarWidth(window.localStorage, fitted);
   };
+  const updateLanguage = (language) => {
+    const next = normalizeLanguage(language);
+    void i18n.changeLanguage(next);
+    void Events.Emit(LANGUAGE_CHANGED_EVENT, next);
+  };
+  const updateAppearance = (change) => {
+    const next = saveAppearance({ ...appearance, ...change });
+    setAppearance(next);
+    void Events.Emit(APPEARANCE_CHANGED_EVENT, next);
+  };
+  const displayedTheme = appearance.theme === "dark" ? "dark" : appearance.theme === "light" ? "light" : globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
   const goToSecondaryView = (nextView) => onGoView(nextView);
   const toggleProject = (workspace) => {
     const opening = expandedWorkspaceID !== workspace.id;
@@ -305,12 +329,51 @@ function Sidebar({
             <b className="font-medium">{t("sidebar.menu")}</b>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" alignOffset={8} sideOffset={6} collisionPadding={12} className="secondary-navigation-menu w-[calc(var(--radix-dropdown-menu-trigger-width)-16px)]">
-          <DropdownMenuItem className={view === "workflows" || editor ? "active bg-accent text-accent-foreground" : ""} onSelect={() => goToSecondaryView("workflows")}>
-            <b>{t("sidebar.workflows")}</b>
+        <DropdownMenuContent side="top" align="start" alignOffset={8} sideOffset={6} collisionPadding={12} className="secondary-navigation-menu w-[calc(var(--radix-dropdown-menu-trigger-width)-20px)] p-1.5">
+          <DropdownMenuItem className={`min-h-8 rounded-md ${view === "settings" && !editor ? "active bg-accent text-accent-foreground" : ""}`} onSelect={() => goToSecondaryView("settings")}>
+            <Settings2 aria-hidden="true" />
+            <span>{t("sidebar.settings")}</span>
+            <DropdownMenuShortcut>⌘,</DropdownMenuShortcut>
           </DropdownMenuItem>
-          <DropdownMenuItem className={view === "settings" && !editor ? "active bg-accent text-accent-foreground" : ""} onSelect={() => goToSecondaryView("settings")}>
-            <b>{t("sidebar.settings")}</b>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="min-h-8 rounded-md">
+              <Languages aria-hidden="true" />
+              <span>{t("settings.language")}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent sideOffset={7} className="min-w-44 p-1.5">
+              <DropdownMenuRadioGroup value={normalizeLanguage(i18n.resolvedLanguage)} onValueChange={updateLanguage}>
+                <DropdownMenuRadioItem className="min-h-8 rounded-md" value="zh-CN">{t("language.chinese")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem className="min-h-8 rounded-md" value="en">{t("language.english")}</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="min-h-8 rounded-md">
+              <Palette aria-hidden="true" />
+              <span>{t("settings.themeColor")}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent sideOffset={7} className="min-w-44 p-1.5">
+              <DropdownMenuRadioGroup value={appearance.accent} onValueChange={(accent) => updateAppearance({ accent })}>
+                {accentThemes.map((accent) => <DropdownMenuRadioItem className="min-h-8 rounded-md" value={accent} key={accent}><i className={`menu-accent-swatch accent-${accent}`} aria-hidden="true" />{t(`settings.themeColor.${accent}`)}</DropdownMenuRadioItem>)}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="min-h-8 rounded-md">
+              <SunMoon aria-hidden="true" />
+              <span>{t("settings.colorMode")}</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent sideOffset={7} className="min-w-36 p-1.5">
+              <DropdownMenuRadioGroup value={displayedTheme} onValueChange={(theme) => updateAppearance({ theme })}>
+                <DropdownMenuRadioItem className="min-h-8 rounded-md" value="light">{t("settings.colorMode.light")}</DropdownMenuRadioItem>
+                <DropdownMenuRadioItem className="min-h-8 rounded-md" value="dark">{t("settings.colorMode.dark")}</DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className={`min-h-8 rounded-md ${view === "workflows" || editor ? "active bg-accent text-accent-foreground" : ""}`} onSelect={() => goToSecondaryView("workflows")}>
+            <Workflow aria-hidden="true" />
+            <span>{t("sidebar.workflows")}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
