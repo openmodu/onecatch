@@ -131,14 +131,20 @@ test("settings and workflows are routed to singleton native windows", async () =
   assert.match(app, /next === "settings" \? WindowBinding\.OpenSettings\(\) : WindowBinding\.OpenWorkflows\(\)/);
 });
 
-test("the settings window uses a flush native vibrancy rail sized to its redesigned navigation", async () => {
+test("the settings window uses the main window's inset sidebar and draggable chrome", async () => {
   const settings = await readFile(path.join(sourceRoot, "app", "SettingsPage.jsx"), "utf8");
   const auxiliary = await readFile(path.join(sourceRoot, "app", "AuxiliaryWindow.jsx"), "utf8");
-  assert.match(settings, /grid-cols-\[248px_minmax\(0,1fr\)\]/);
-  assert.match(settings, /<ScrollArea className="sidebar settings-sidebar[^\"]*border-r/);
-  assert.match(settings, /<aside className="[^"]*pt-\[70px\]"/);
-  assert.match(auxiliary, /nativeSidebar\.postMessage\(\{ width: document\.querySelector\("\.settings-sidebar"\)[^;]*flush: true/);
+  const nativeWindow = await readFile(path.join(sourceRoot, "..", "..", "internal", "app", "desktop", "auxiliary_window_controller.go"), "utf8");
+  assert.match(settings, /grid-cols-\[216px_minmax\(0,1fr\)\]/);
+  assert.match(settings, /settings-page[^\"]*bg-transparent/);
+  assert.match(settings, /<ScrollArea className="sidebar settings-sidebar[^\"]*\[clip-path:inset\(8px_4px_8px_8px_round_16px\)\]/);
+  assert.match(settings, /<div className="drag-region h-\[52px\] shrink-0 cursor-default" aria-hidden="true" \/>/);
+  assert.match(settings, /<header className="drag-region [^"]*"/);
+  assert.match(settings, /<div className="no-drag flex shrink-0 items-center gap-2\.5">/);
+  assert.match(auxiliary, /nativeSidebar\.postMessage\(\{ width: document\.querySelector\("\.settings-sidebar"\)[^;]*\|\| 216 \}\);/);
+  assert.doesNotMatch(auxiliary, /flush: true/);
   assert.match(auxiliary, /flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-foreground/);
+  assert.match(nativeWindow, /macOptions\.InvisibleTitleBarHeight = 28/);
 });
 
 test("settings renders directly through shadcn instead of the TUI compatibility layer", async () => {

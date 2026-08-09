@@ -95,7 +95,7 @@ export function SettingsWindow() {
     const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
     if (!nativeSidebar || mode === "loading") return;
     document.documentElement.dataset.nativeSidebarMaterial = "true";
-    nativeSidebar.postMessage({ width: document.querySelector(".settings-sidebar")?.getBoundingClientRect().width || 248, flush: true });
+    nativeSidebar.postMessage({ width: document.querySelector(".settings-sidebar")?.getBoundingClientRect().width || 216 });
   }, [mode]);
 
   const updateSettings = useCallback((value) => {

@@ -80,6 +80,11 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions) {
 	if options.customChrome {
 		macOptions.TitleBar = application.MacTitleBarHiddenInsetUnified
 		macOptions.Backdrop = application.MacBackdropTransparent
+		// Keep a small, genuinely native drag strip above the web content.
+		// CSS drag regions cover the larger visual handles, while this strip
+		// guarantees that the hidden-titlebar utility window remains movable
+		// even when WebKit consumes the initial pointer event.
+		macOptions.InvisibleTitleBarHeight = 28
 	}
 
 	window := c.app.Window.NewWithOptions(application.WebviewWindowOptions{

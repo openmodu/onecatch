@@ -274,7 +274,6 @@ static void oneshotInstallSidebarMaterial(NSWindow *window) {
 		@"document.documentElement.dataset.nativeSidebarMaterial='true';"
 		 "window.webkit.messageHandlers.oneshotSidebar.postMessage({"
 		 "width:document.querySelector('.sidebar')?.getBoundingClientRect().width||216,"
-		 "flush:Boolean(document.querySelector('.settings-sidebar')),"
 			 "theme:document.documentElement.dataset.theme||'system'"
 			 "});";
 	[webView evaluateJavaScript:script completionHandler:nil];

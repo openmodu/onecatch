@@ -225,9 +225,10 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     ask({ title: t("settings.fullAccessTitle"), description: t("settings.fullAccessDescription"), detail: t("settings.fullAccessDetail"), confirmLabel: t("settings.enableRisk"), dangerous: true }, () => setSectionValue("security", { ...draft.security, allowFullSandbox: true }));
   };
 
-  return <div className="settings-page grid min-h-0 flex-1 grid-cols-[248px_minmax(0,1fr)] overflow-hidden bg-background text-foreground">
-    <ScrollArea className="sidebar settings-sidebar min-h-0 border-r border-sidebar-border/70">
-      <aside className="flex min-h-full flex-col gap-1 px-3 pb-4 pt-[70px]" aria-label={t("settings.sectionsAria")}>
+  return <div className="settings-page grid min-h-0 flex-1 grid-cols-[216px_minmax(0,1fr)] overflow-hidden bg-transparent text-foreground">
+    <ScrollArea className="sidebar settings-sidebar relative z-30 min-h-0 select-none text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]">
+      <aside className="flex min-h-full flex-col gap-1 px-3 pb-4" aria-label={t("settings.sectionsAria")}>
+        <div className="drag-region h-[52px] shrink-0 cursor-default" aria-hidden="true" />
         <SettingsKicker className="mb-2 px-2">{t("settings.preferences")}</SettingsKicker>
         {sections.map((item) => <Button key={item.id} variant="ghost" className={`h-auto w-full justify-start rounded-lg px-3 py-2.5 text-left ${section === item.id ? "bg-accent text-accent-foreground hover:bg-accent" : "text-muted-foreground hover:bg-background/45"}`} aria-current={section === item.id ? "page" : undefined} onClick={() => switchSection(item.id)}>
           <span className="min-w-0"><strong className="flex items-center gap-2 text-[13px] font-medium text-foreground">{item.label}{section === item.id && dirty && <i className="size-1.5 rounded-full bg-primary" aria-label={t("settings.unsaved")} />}</strong><small className="mt-0.5 block whitespace-normal text-[11px] font-normal leading-snug text-muted-foreground">{item.description}</small></span>
@@ -237,9 +238,9 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
 
     <ScrollArea className="settings-content min-h-0 min-w-0 bg-background">
       <section className="px-7 pt-7 pb-10">
-        <header className="mb-6 flex items-start justify-between gap-4 [-webkit-app-region:drag]">
+        <header className="drag-region mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0"><SettingsKicker>{t("settings.localSettings")}</SettingsKicker><h1 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h1><p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p></div>
-          <div className="flex shrink-0 items-center gap-2.5 [-webkit-app-region:no-drag]"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span><SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton></div>
+          <div className="no-drag flex shrink-0 items-center gap-2.5"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span><SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton></div>
         </header>
         {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><SettingsButton tone="muted" onClick={reload}>{t("settings.reload")}</SettingsButton></div>}
         {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
