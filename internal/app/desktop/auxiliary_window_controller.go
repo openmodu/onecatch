@@ -25,7 +25,7 @@ func (c *auxiliaryWindowController) OpenSettings() {
 		name:           settingsWindowName,
 		title:          "设置",
 		url:            "/?window=settings",
-		width:          1040,
+		width:          960,
 		height:         800,
 		minWidth:       860,
 		minHeight:      600,
