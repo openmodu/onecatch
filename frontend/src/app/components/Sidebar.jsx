@@ -276,7 +276,7 @@ function Sidebar({
   };
 
   const widthBounds = typeof window === "undefined" ? sidebarWidthBounds() : sidebarWidthBounds(window.innerWidth);
-  return <aside className={`sidebar relative z-30 flex min-h-0 shrink-0 flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)] ${resizing ? "resizing" : ""}`} style={{ width: `${width}px` }} aria-label={t("app.windowAria")}>
+  return <aside className={`sidebar relative z-30 flex min-h-0 shrink-0 select-none flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)] ${resizing ? "resizing" : ""}`} style={{ width: `${width}px` }} aria-label={t("app.windowAria")}>
     {/* Traffic-light gutter. The window hides its titlebar and insets the
         lights, so the rail has to reserve this strip itself — and it doubles
         as the window's drag handle, which is why it is empty. */}

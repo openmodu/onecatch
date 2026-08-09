@@ -121,8 +121,8 @@ function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, sel
     <section className="conversation-workspace flex min-h-0 min-w-0 flex-col bg-background">
       {selectedTask ? <>
         <header className="conversation-workspace-head flex min-h-[62px] shrink-0 items-center justify-between gap-3 border-b px-4 py-2"><div className="min-w-0"><div className="conversation-title-row flex min-w-0 items-center gap-2.5"><h2 className="m-0 min-w-0 truncate text-[15px] font-semibold text-foreground">{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p className="mt-1 truncate text-xs text-muted-foreground">{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : ` · ${t("task.workspaceFIFO")}`}</p></div><div className="conversation-head-actions flex shrink-0 items-center gap-1.5"><Action size="compact" tone="muted" onClick={onRename}>{t("task.rename")}</Action><Action size="compact" tone="danger" onClick={onDelete}>{t("task.delete")}</Action></div></header>
-        <div className="conversation-scroll min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>
-          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />{!conversation.length && <div className="workbench-empty p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
+        <div className="conversation-scroll min-h-0 min-w-0 flex-1 select-text overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>
+          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
         {runDetail && <Composer
           runStatus={runStatus}
@@ -137,7 +137,7 @@ function TaskWorkbench({ mode, workspaceID, tasks, runDetail, selectedRunID, sel
           onCancel={onCancel}
           onSubmit={onSubmit}
         />}
-      </> : <div className="workbench-welcome m-auto max-w-xl p-10 text-center text-muted-foreground"><Kicker>{t("task.welcomeKicker")}</Kicker><h2 className="my-3 text-lg font-semibold text-foreground">{t("task.welcomeTitle")}</h2><p className="mb-6 text-sm leading-relaxed">{t("task.welcomeDescription")}</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>{t("task.newTask")}</Action></div>}
+      </> : <div className="workbench-welcome m-auto max-w-xl select-none p-10 text-center text-muted-foreground"><Kicker>{t("task.welcomeKicker")}</Kicker><h2 className="my-3 text-lg font-semibold text-foreground">{t("task.welcomeTitle")}</h2><p className="mb-6 text-sm leading-relaxed">{t("task.welcomeDescription")}</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>{t("task.newTask")}</Action></div>}
     </section>
 
     <aside className={`workbench-inspector grid min-h-0 min-w-0 border-l bg-muted/40 ${inspectorCollapsed ? "collapsed grid-rows-[minmax(0,1fr)]" : "grid-rows-[42px_minmax(0,1fr)]"}`} aria-label={t("inspector.aria")}>

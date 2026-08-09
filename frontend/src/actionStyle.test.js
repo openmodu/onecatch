@@ -84,6 +84,15 @@ test("sidebar reserves its footer for navigation and exposes a resize separator"
   assert.doesNotMatch(app, /className="app-shell[^"]*grid-cols-\[\d+px/, "the shell must not pin the rail to a fixed width");
 });
 
+test("application chrome cannot be selected while transcript content remains copyable", async () => {
+  const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
+  const workbench = await readFile(path.join(sourceRoot, "app", "components", "TaskWorkbench.jsx"), "utf8");
+  assert.match(sidebar, /className=\{`sidebar[^`]*\bselect-none\b/, "navigation labels must not behave like document text");
+  assert.match(workbench, /className="workbench-welcome[^"]*\bselect-none\b/, "the welcome empty state is application chrome");
+  assert.match(workbench, /className="workbench-empty[^"]*\bselect-none\b/, "empty transcript guidance is application chrome");
+  assert.match(workbench, /className="conversation-scroll[^"]*\bselect-text\b/, "conversation content must remain explicitly selectable");
+});
+
 test("workflow and settings share one expandable footer menu", async () => {
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
   assert.match(sidebar, /<DropdownMenuTrigger asChild>[\s\S]{0,200}?className={`secondary-navigation-trigger/);
