@@ -25,11 +25,11 @@ func (c *auxiliaryWindowController) OpenSettings() {
 		name:           settingsWindowName,
 		title:          "设置",
 		url:            "/?window=settings",
-		width:          1280,
+		width:          1040,
 		height:         800,
-		minWidth:       1080,
-		minHeight:      720,
-		disableResize:  true,
+		minWidth:       860,
+		minHeight:      600,
+		disableResize:  false,
 		hideZoomButton: true,
 		customChrome:   true,
 	})
@@ -80,10 +80,8 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions) {
 	if options.customChrome {
 		macOptions.TitleBar = application.MacTitleBarHiddenInsetUnified
 		macOptions.Backdrop = application.MacBackdropTransparent
-		// Keep a small, genuinely native drag strip above the web content.
-		// CSS drag regions cover the larger visual handles, while this strip
-		// guarantees that the hidden-titlebar utility window remains movable
-		// even when WebKit consumes the initial pointer event.
+		// Keep a small native titlebar strip above the web content. It provides
+		// the drag surface behind the centred title without covering controls.
 		macOptions.InvisibleTitleBarHeight = 28
 	}
 

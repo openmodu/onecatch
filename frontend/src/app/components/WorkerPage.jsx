@@ -22,7 +22,7 @@ function SnapshotSummary({ label, snapshot, t }) {
   return <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 rounded-lg bg-background/75 p-3">
     <span className="col-span-full text-[10px] font-medium tracking-wide text-muted-foreground uppercase">{label}</span>
     <strong className="truncate text-sm text-foreground">{snapshot?.branch || "—"}</strong>
-    <code className="text-xs text-info">{snapshot?.head ? shortID(snapshot.head) : "—"}</code>
+    <code className="select-text text-xs text-info">{snapshot?.head ? shortID(snapshot.head) : "—"}</code>
     <small className="col-span-full text-xs text-muted-foreground">{snapshot?.status?.trim() || snapshot?.files?.length ? t("worker.preflightChanges", { count: snapshot?.files?.length || 1 }) : t("worker.preflightClean")}</small>
   </div>;
 }
@@ -130,12 +130,12 @@ export default function WorkerPage({ mode, workspace, workers, health, checkWork
           <CardAction><Badge variant="outline" className={worker.enabled ? "border-success/35 bg-success/10 text-success" : "border-border bg-muted text-muted-foreground"}>{worker.enabled ? t("common.enabled") : t("common.disabled")}</Badge></CardAction>
         </CardHeader>
         <CardContent className="px-4">
-          <code className="block truncate rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">{worker.baseUrl}</code>
+          <code className="block select-text truncate rounded-md bg-muted px-2.5 py-2 text-xs text-muted-foreground">{worker.baseUrl}</code>
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">{health[worker.id]?.checking && !health[worker.id]?.ok ? t("worker.checking") : health[worker.id]?.ok ? <><span className="text-success">protocol v{health[worker.id].protocolVersion || 1}</span><span className="text-success">{health[worker.id].latencyMilliseconds ?? 0} ms</span>{Object.entries(health[worker.id].runtimes || {}).map(([runtime, ok]) => <span key={runtime} className={ok ? "text-success" : "text-destructive"}>{runtime}</span>)}</> : health[worker.id]?.error || t("worker.notChecked")}</div>
           {workspace && <section className={`mt-4 rounded-lg bg-muted/65 p-3 ${preflight[worker.id]?.ready ? "text-success" : preflight[worker.id] ? "text-warning" : "text-muted-foreground"}`}>
             <div className="flex items-center justify-between gap-4"><span className="min-w-0"><SettingsKicker>{t("worker.preflight")}</SettingsKicker><strong className="ml-2 text-sm text-foreground">{workspace.name}</strong></span><div className="flex shrink-0 gap-2"><SettingsButton compact tone="primary" disabled={preflight[worker.id]?.preparing} onClick={() => prepareWorkspace(worker)}>{preflight[worker.id]?.preparing ? t("worker.workspacePreparing") : t("worker.workspacePrepare")}</SettingsButton><SettingsButton compact tone="muted" disabled={preflight[worker.id]?.checking || preflight[worker.id]?.preparing} onClick={() => runPreflight(worker)}>{preflight[worker.id]?.checking ? t("worker.preflightChecking") : t("worker.preflightRun")}</SettingsButton></div></div>
             {preflight[worker.id]?.local && <div className="mt-3 grid grid-cols-2 gap-2"><SnapshotSummary label={t("worker.preflightLocal")} snapshot={preflight[worker.id].local} t={t} /><SnapshotSummary label={t("worker.preflightRemote")} snapshot={preflight[worker.id].remote} t={t} /></div>}
-            {preflight[worker.id]?.mapping?.path && <div className="mt-3 flex gap-2 text-xs text-muted-foreground"><span>{t("worker.remoteMappedPath")}</span><code className="min-w-0 truncate text-info">{preflight[worker.id].mapping.path}</code></div>}
+            {preflight[worker.id]?.mapping?.path && <div className="mt-3 flex gap-2 text-xs text-muted-foreground"><span>{t("worker.remoteMappedPath")}</span><code className="min-w-0 select-text truncate text-info">{preflight[worker.id].mapping.path}</code></div>}
             {preflight[worker.id] && !preflight[worker.id].checking && !preflight[worker.id].preparing && <p className="mt-3 mb-0 text-xs">{preflight[worker.id].error || preflightCopy[preflight[worker.id].code]}</p>}
             {!preflight[worker.id] && <p className="mt-3 mb-0 text-xs">{t("worker.preflightDescription")}</p>}
           </section>}
@@ -145,7 +145,7 @@ export default function WorkerPage({ mode, workspace, workers, health, checkWork
     </SettingsSection>
     <SettingsSection title={t("worker.command")} description={t("worker.commandDescription")} contentClassName="p-4">
       <SettingsField label={t("worker.commandWorkerID")}><Input value={workerID} onChange={(event) => setWorkerID(event.target.value)} placeholder="mac-mini" /></SettingsField>
-      <pre className="mt-4 overflow-x-auto rounded-lg bg-muted p-4 text-xs text-foreground"><code>{command}</code></pre>
+      <pre className="mt-4 select-text overflow-x-auto rounded-lg bg-muted p-4 text-xs text-foreground"><code>{command}</code></pre>
       <div className="mt-4 flex items-center justify-between gap-4"><p className="m-0 text-xs text-muted-foreground">{t("worker.networkWarning")}</p><SettingsButton tone={copied ? "cyan" : "primary"} onClick={copyCommand}>{copied ? t("worker.commandCopiedShort") : t("worker.commandCopy")}</SettingsButton></div>
     </SettingsSection>
   </div>;

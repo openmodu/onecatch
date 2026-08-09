@@ -2,6 +2,7 @@ import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
 export const LANGUAGE_STORAGE_KEY = "oneshot.language";
+export const LANGUAGE_CHANGED_EVENT = "oneshot:language-changed";
 export const supportedLanguages = ["zh-CN", "en"];
 
 const zh = {

@@ -24,6 +24,7 @@ import {
 const ACCENT_SWATCH = { forest: "#694d1f", ocean: "#1f6475", violet: "#684886", amber: "#87501d" };
 import { APPEARANCE_CHANGED_EVENT, accentThemes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
 import { codexEffortValues, codexServiceTierValues, selectedCodexModel } from "./codexRuntimeOptions.js";
+import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
 
 const sectionMeta = (t) => ["runtime", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -225,7 +226,10 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     ask({ title: t("settings.fullAccessTitle"), description: t("settings.fullAccessDescription"), detail: t("settings.fullAccessDetail"), confirmLabel: t("settings.enableRisk"), dangerous: true }, () => setSectionValue("security", { ...draft.security, allowFullSandbox: true }));
   };
 
-  return <div className="settings-page grid min-h-0 flex-1 grid-cols-[216px_minmax(0,1fr)] overflow-hidden bg-transparent text-foreground">
+  return <div className="settings-page relative grid min-h-0 flex-1 select-none grid-cols-[216px_minmax(0,1fr)] overflow-hidden bg-transparent text-foreground">
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex h-[52px] select-none items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85" aria-hidden="true">
+      {t("sidebar.settings")}
+    </div>
     <ScrollArea className="sidebar settings-sidebar relative z-30 min-h-0 select-none text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]">
       <aside className="flex min-h-full flex-col gap-1 px-3 pb-4" aria-label={t("settings.sectionsAria")}>
         <div className="drag-region h-[52px] shrink-0 cursor-default" aria-hidden="true" />
@@ -237,7 +241,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     </ScrollArea>
 
     <ScrollArea className="settings-content min-h-0 min-w-0 bg-background">
-      <section className="px-7 pt-7 pb-10">
+      <section className="px-7 pt-[64px] pb-10">
         <header className="drag-region mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0"><SettingsKicker>{t("settings.localSettings")}</SettingsKicker><h1 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h1><p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p></div>
           <div className="no-drag flex shrink-0 items-center gap-2.5"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span><SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton></div>
@@ -259,6 +263,11 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
 function InterfaceSettings({ i18n }) {
   const { t } = useTranslation();
   const [appearance, setAppearance] = useState(readAppearance);
+  const updateLanguage = (language) => {
+    const next = normalizeLanguage(language);
+    void i18n.changeLanguage(next);
+    void Events.Emit(LANGUAGE_CHANGED_EVENT, next);
+  };
   const updateAppearance = (change) => {
     const next = saveAppearance({ ...appearance, ...change });
     setAppearance(next);
@@ -266,7 +275,7 @@ function InterfaceSettings({ i18n }) {
   };
   return <SettingsSection title={t("settings.interface")} description={t("settings.interfaceDescription")}>
     <div className="grid gap-2">
-      <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.language")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.languageDescription")}</p></div><SettingsSelect className="w-44 shrink-0" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={(language) => i18n.changeLanguage(language)} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} /></div>
+      <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.language")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.languageDescription")}</p></div><SettingsSelect className="w-44 shrink-0" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={updateLanguage} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} /></div>
       <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.colorMode")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.colorModeDescription")}</p></div><div className="appearance-mode-picker inline-flex shrink-0 rounded-md border bg-muted p-0.5" role="radiogroup" aria-label={t("settings.colorMode")}>{themeModes.map((mode) => <Button type="button" variant="ghost" size="xs" role="radio" aria-checked={appearance.theme === mode} className={`rounded-sm px-3 ${appearance.theme === mode ? "bg-background text-foreground shadow-xs hover:bg-background" : "text-muted-foreground"}`} key={mode} onClick={() => updateAppearance({ theme: mode })}>{t(`settings.colorMode.${mode}`)}</Button>)}</div></div>
       <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.themeColor")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.themeColorDescription")}</p></div><div className="appearance-accent-picker inline-flex shrink-0 gap-1.5" role="radiogroup" aria-label={t("settings.themeColor")}>{accentThemes.map((accent) => <Button type="button" variant="outline" size="xs" role="radio" aria-checked={appearance.accent === accent} className={appearance.accent === accent ? "border-ring bg-accent text-foreground" : "text-muted-foreground"} key={accent} onClick={() => updateAppearance({ accent })}><i className="size-2.5 rounded-full" style={{ background: ACCENT_SWATCH[accent] }} aria-hidden="true" />{t(`settings.themeColor.${accent}`)}</Button>)}</div></div>
     </div>
@@ -282,7 +291,7 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors, cod
     modu: { name: "Modu Code", command: "modu_code", description: t("settings.moduDescription"), env: t("settings.optionalEnv") },
   };
   return <div className="grid gap-3">
-    <aside className="rounded-lg bg-muted/45 p-4 text-xs leading-relaxed text-muted-foreground" aria-labelledby="runtime-path-help-title"><strong className="text-sm text-foreground" id="runtime-path-help-title">{t("settings.runtimePathHelpTitle")}</strong><p className="mt-1 mb-3">{t("settings.runtimePathHelpDescription")}</p><div className="grid grid-cols-2 gap-3"><code className="rounded-md bg-background/70 p-3 text-info">command -v codex<br />command -v claude<br />command -v modu_code</code><code className="break-all rounded-md bg-background/70 p-3 text-info">/opt/homebrew/bin/codex<br />/usr/local/bin/claude<br />~/go/bin/modu_code</code></div></aside>
+    <aside className="rounded-lg bg-muted/45 p-4 text-xs leading-relaxed text-muted-foreground" aria-labelledby="runtime-path-help-title"><strong className="text-sm text-foreground" id="runtime-path-help-title">{t("settings.runtimePathHelpTitle")}</strong><p className="mt-1 mb-3">{t("settings.runtimePathHelpDescription")}</p><div className="grid grid-cols-2 gap-3"><code className="select-text rounded-md bg-background/70 p-3 text-info">command -v codex<br />command -v claude<br />command -v modu_code</code><code className="select-text break-all rounded-md bg-background/70 p-3 text-info">/opt/homebrew/bin/codex<br />/usr/local/bin/claude<br />~/go/bin/modu_code</code></div></aside>
     {runtimeIds.map((id) => {
       const current = status[id] || runtimes.find((item) => item.id === id) || {};
       const statusText = current.checking ? t("settings.checkingCommand") : current.available ? `${current.version || t("common.available")}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN")}` : ""}` : current.error || t("settings.notDetected");
@@ -307,7 +316,7 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors, cod
       const modelHint = id === "codex" && codexData ? t("settings.codexDetectedValue", { value: codexData.model || t("settings.runtimeDefault") }) : id === "claude" && claudeData ? t("settings.claudeModelsDetected", { count: claudeData.models?.length || 0 }) : t("settings.runtimeDecides");
       const configurationMessage = id === "codex" ? codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || (codexData && t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })) : id === "claude" ? claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || (claudeData && t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })) : "";
       return <RuntimeSettingsCard key={id} title={meta[id].name} description={meta[id].description} aside={<Badge variant="outline" className={current.available ? "border-success/25 bg-success/8 text-success" : current.error ? "border-destructive/25 bg-destructive/8 text-destructive" : "text-muted-foreground"}><i className="size-1.5 rounded-full bg-current" />{statusText}</Badge>}>
-        {configurationMessage && <div className={`mb-4 rounded-lg px-3 py-2 text-xs leading-relaxed ${codexConfiguration.error || claudeConfiguration.error ? "bg-destructive/8 text-destructive" : "bg-primary/6 text-muted-foreground"}`} role={codexConfiguration.error || claudeConfiguration.error ? "alert" : "status"}>{configurationMessage}</div>}
+        {configurationMessage && <div className={`mb-4 rounded-lg px-3 py-2 text-xs leading-relaxed ${codexConfiguration.error || claudeConfiguration.error ? "select-text bg-destructive/8 text-destructive" : "bg-primary/6 text-muted-foreground"}`} role={codexConfiguration.error || claudeConfiguration.error ? "alert" : "status"}>{configurationMessage}</div>}
         <div className="grid grid-cols-2 gap-4">
           <SettingsField label={t("settings.binaryPath")} hint={t("settings.useCommand", { command: meta[id].command })} error={errors[`${id}.binary`]}><Input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={meta[id].command} /></SettingsField>
           <SettingsField label={t("settings.defaultModel")} hint={modelHint} error={errors[`${id}.defaultModel`]}>{modelOptions.length > 1 ? <SettingsSelect ariaLabel={t("settings.defaultModel")} value={value[id]?.defaultModel || ""} onChange={updateModel} options={modelOptions} /> : <Input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} />}</SettingsField>
@@ -327,7 +336,7 @@ function ExecutionSettings({ value, setValue, errors }) {
   const { t } = useTranslation();
   const number = (key, next) => setValue({ ...value, [key]: Number(next) });
   return <SettingsSection title={t("settings.executionPolicy")} description={t("settings.executionPolicyDescription")} contentClassName="p-4">
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <SettingsNumberField field="maxTransitions" label={t("settings.maxTransitions")} hint="1–10000" value={value.maxTransitions} error={errors.maxTransitions} onChange={(next) => number("maxTransitions", next)} />
       <SettingsNumberField field="maxConsecutiveFailures" label={t("settings.maxFailures")} hint="1–100" value={value.maxConsecutiveFailures} error={errors.maxConsecutiveFailures} onChange={(next) => number("maxConsecutiveFailures", next)} />
       <SettingsNumberField field="stepTimeoutSeconds" label={t("settings.nodeTimeout")} hint={t("settings.secondsRange", { min: 30, max: 86400 })} value={value.stepTimeoutSeconds} error={errors.stepTimeoutSeconds} onChange={(next) => number("stepTimeoutSeconds", next)} />
@@ -358,7 +367,7 @@ function StorageSettings({ value, setValue, errors, security, diagnosticOptions,
   const number = (key, next) => setValue({ ...value, [key]: Number(next) });
   return <>
     <SettingsSection title={t("settings.localData")} description={t("settings.localDataDescription")} aside={<SettingsButton tone="cyan" onClick={refreshUsage} disabled={usageLoading}>{usageLoading ? t("settings.calculating") : t("settings.recalculate")}</SettingsButton>} contentClassName="p-4">
-      <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><span className="mb-1 block text-xs text-muted-foreground">{t("settings.dataRoot")}</span><code className="block truncate rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">~/.oneshot/</code></div><SettingsButton tone="muted" onClick={reveal}>{t("settings.revealFinder")}</SettingsButton></div>
+      <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><span className="mb-1 block text-xs text-muted-foreground">{t("settings.dataRoot")}</span><code className="block select-text truncate rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">~/.oneshot/</code></div><SettingsButton tone="muted" onClick={reveal}>{t("settings.revealFinder")}</SettingsButton></div>
       {usage ? <><div className="mt-5 text-xl font-semibold text-foreground">{bytes(usage.totalBytes)} <small className="text-xs font-normal text-muted-foreground">{t("settings.totalUsage")}</small></div><div className="mt-3 grid gap-2">{(usage.categories || []).map((item) => <div className="grid gap-1 text-xs text-muted-foreground" key={item.name}><span>{item.name}</span><b>{bytes(item.bytes)}</b><i className="block h-1.5 rounded-full bg-primary" style={{ width: `${Math.max(3, item.bytes / Math.max(usage.totalBytes, 1) * 100)}%` }} /></div>)}</div><p className="mt-3 mb-0 text-xs text-muted-foreground">{t("settings.lastCalculated", { time: usage.calculatedAt ? new Date(usage.calculatedAt).toLocaleString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN") : t("settings.justNow") })}</p></> : <div className="mt-4 rounded-lg bg-muted p-3 text-xs text-muted-foreground">{usageLoading ? t("settings.calculatingUsage") : t("settings.noUsage")}</div>}
     </SettingsSection>
     <SettingsSection title={t("settings.historyCleanup")} description={t("settings.historyCleanupDescription")} contentClassName="p-4">

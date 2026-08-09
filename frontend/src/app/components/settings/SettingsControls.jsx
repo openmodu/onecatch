@@ -73,7 +73,7 @@ export function SettingsField({ label, hint, error, helpId, className = "", chil
       <Label asChild><span className="text-xs font-medium text-foreground/85">{label}</span></Label>
       {children}
       {(error || hint) && (
-        <small id={helpId} className={cn("text-xs leading-snug", error ? "text-destructive" : "text-muted-foreground")}>{error || hint}</small>
+        <small id={helpId} className={cn("text-xs leading-snug", error ? "select-text text-destructive" : "text-muted-foreground")}>{error || hint}</small>
       )}
     </label>
   );
