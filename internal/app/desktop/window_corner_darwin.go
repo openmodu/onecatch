@@ -51,6 +51,16 @@ static NSRect oneshotSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
 	                  MAX(0.0, NSHeight(bounds) - oneshotSidebarInset * 2.0));
 }
 
+static NSRect oneshotCompactSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
+	CGFloat width = MAX(0.0, MIN(railWidth, NSWidth(bounds)) - oneshotSidebarInset - oneshotSidebarGutter);
+	CGFloat outerHeight = MIN(560.0, NSHeight(bounds));
+	CGFloat height = MAX(0.0, outerHeight - oneshotSidebarInset * 2.0);
+	return NSMakeRect(NSMinX(bounds) + oneshotSidebarInset,
+	                  NSMaxY(bounds) - oneshotSidebarInset - height,
+	                  width,
+	                  height);
+}
+
 // Canvas colour mirrored from frontend tokens (--acp-canvas): light #F5F5F0,
 // dark #1C1C1C.
 // Resolved against the window's effective appearance at apply
@@ -167,6 +177,7 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 	NSNumber *width = nil;
 	NSNumber *flush = nil;
 	NSNumber *hidden = nil;
+	NSNumber *compact = nil;
 	NSString *theme = nil;
 	if ([body isKindOfClass:[NSDictionary class]]) {
 		id candidateWidth = [(NSDictionary *)body objectForKey:@"width"];
@@ -181,6 +192,10 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 		if ([candidateHidden isKindOfClass:[NSNumber class]]) {
 			hidden = candidateHidden;
 		}
+		id candidateCompact = [(NSDictionary *)body objectForKey:@"compact"];
+		if ([candidateCompact isKindOfClass:[NSNumber class]]) {
+			compact = candidateCompact;
+		}
 		id candidateTheme = [(NSDictionary *)body objectForKey:@"theme"];
 		if ([candidateTheme isKindOfClass:[NSString class]]) {
 			theme = candidateTheme;
@@ -192,12 +207,19 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 	if (width != nil && self.effectView.superview != nil) {
 		NSRect bounds = self.effectView.superview.bounds;
 		BOOL useFlushRail = flush.boolValue;
+		BOOL useCompactRail = !useFlushRail && compact.boolValue;
 		self.effectView.frame = useFlushRail
 			? NSMakeRect(NSMinX(bounds), NSMinY(bounds), MIN(width.doubleValue, NSWidth(bounds)), NSHeight(bounds))
-			: oneshotSidebarPanelFrame(bounds, width.doubleValue);
+			: useCompactRail
+				? oneshotCompactSidebarPanelFrame(bounds, width.doubleValue)
+				: oneshotSidebarPanelFrame(bounds, width.doubleValue);
+		self.effectView.autoresizingMask = useCompactRail
+			? NSViewMinYMargin | NSViewMaxXMargin
+			: NSViewHeightSizable | NSViewMaxXMargin;
 		self.effectView.layer.cornerRadius = useFlushRail ? 0.0 : oneshotSidebarCornerRadius;
 		self.canvasView.frame = bounds;
 		self.borderView.frame = self.effectView.frame;
+		self.borderView.autoresizingMask = self.effectView.autoresizingMask;
 		self.borderView.layer.cornerRadius = useFlushRail ? 0.0 : oneshotSidebarCornerRadius;
 		self.borderView.layer.borderWidth = useFlushRail ? 0.0 : oneshotDeviceHairlineWidth(self.window);
 	}
@@ -281,8 +303,9 @@ static void oneshotInstallSidebarMaterial(NSWindow *window) {
 	// React width/theme update that may have run before this handler was added.
 	NSString *script =
 		@"document.documentElement.dataset.nativeSidebarMaterial='true';"
+		 "var sidebar=document.querySelector('.sidebar');"
 		 "window.webkit.messageHandlers.oneshotSidebar.postMessage({"
-		 "width:document.querySelector('.sidebar')?.getBoundingClientRect().width||216,"
+		 "width:sidebar?.dataset.visible==='false'?0:(sidebar?.getBoundingClientRect().width||216),"
 			 "theme:document.documentElement.dataset.theme||'system'"
 			 "});";
 	[webView evaluateJavaScript:script completionHandler:nil];
@@ -445,6 +468,21 @@ static void oneshotSetWindowZoomButtonHidden(void *handle, bool hidden) {
 	zoomButton.hidden = hidden;
 }
 
+static void oneshotSetWindowMiniwindowIcon(void *handle, void *icon, int length) {
+	NSWindow *window = (__bridge NSWindow *)handle;
+	if (window == nil || icon == nil || length <= 0) {
+		return;
+	}
+	NSData *data = [NSData dataWithBytes:icon length:(NSUInteger)length];
+	NSImage *image = [[NSImage alloc] initWithData:data];
+	if (image != nil) {
+		[NSApp setApplicationIconImage:image];
+		window.miniwindowImage = image;
+		window.miniwindowTitle = window.title;
+	}
+	[image release];
+}
+
 static void oneshotSetWindowAppearance(void *targetHandle, void *sourceHandle) {
 	NSWindow *target = (__bridge NSWindow *)targetHandle;
 	NSWindow *source = (__bridge NSWindow *)sourceHandle;
@@ -470,6 +508,13 @@ func setNativeWindowZoomButtonHidden(window unsafe.Pointer, hidden bool) {
 		return
 	}
 	C.oneshotSetWindowZoomButtonHidden(window, C.bool(hidden))
+}
+
+func setNativeWindowMiniwindowIcon(window unsafe.Pointer, icon []byte) {
+	if window == nil || len(icon) == 0 {
+		return
+	}
+	C.oneshotSetWindowMiniwindowIcon(window, unsafe.Pointer(&icon[0]), C.int(len(icon)))
 }
 
 func setNativeWindowAppearance(window, source unsafe.Pointer) {

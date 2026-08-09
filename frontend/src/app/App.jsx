@@ -965,7 +965,7 @@ function App() {
       />
 
       <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
-        <div className="drag-region flex h-11 shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
+        <div className="app-titlebar drag-region flex h-[52px] shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
           {/* The workspace path is machine text, so it keeps the mono face
               while the rest of the chrome moves to the UI font. */}
           <span className="flex min-w-0 items-baseline gap-2" title={commandText}>

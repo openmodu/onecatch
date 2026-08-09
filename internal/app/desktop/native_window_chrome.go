@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	desktopassets "github.com/openmodu/oneshot/internal/app/desktop/assets"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -27,6 +28,7 @@ func applyNativeWindowChrome(window *application.WebviewWindow) {
 	applyCorner := func(radius float64) {
 		application.InvokeSync(func() {
 			setNativeWindowCornerRadius(window.NativeWindow(), radius)
+			setNativeWindowMiniwindowIcon(window.NativeWindow(), desktopassets.AppIcon)
 		})
 	}
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { applyCorner(26) })

@@ -1,7 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
-import { Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, Pin, Plus, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
+import { Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -29,10 +29,17 @@ import {
 import { SIDEBAR_TASK_PREVIEW_LIMIT, buildSidebarTaskEntries, visibleSidebarTaskEntries } from "../sidebarNavigation.js";
 
 const CommandPalette = lazy(() => import("./CommandPalette.jsx"));
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "oneshot.sidebar.collapsed";
+const SIDEBAR_PEEK_WIDTH = 216;
 
 function initialSidebarWidth() {
   if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
   return readSidebarWidth(window.localStorage, window.innerWidth) ?? clampSidebarWidth(SIDEBAR_DEFAULT_WIDTH, window.innerWidth);
+}
+
+function initialSidebarCollapsed() {
+  if (typeof window === "undefined") return false;
+  try { return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true"; } catch { return false; }
 }
 
 // Its workspace and task data only change when the active project changes or a
@@ -76,22 +83,41 @@ function Sidebar({
   const [width, setWidth] = useState(initialSidebarWidth);
   const [resizing, setResizing] = useState(false);
   const [appearance, setAppearance] = useState(readAppearance);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed);
+  const [sidebarPeeked, setSidebarPeeked] = useState(false);
   const [expandedWorkspaceID, setExpandedWorkspaceID] = useState(workspaceID);
   const [taskListExpanded, setTaskListExpanded] = useState(false);
   const [pendingSearchTask, setPendingSearchTask] = useState(null);
   const drag = useRef(null);
+  const sidebarToggleRef = useRef(null);
   const searchTrigger = useRef(null);
+  const sidebarPeekTimer = useRef(null);
+  const sidebarPeekBlocked = useRef(false);
+  const sidebarMenuOpen = useRef(false);
+  const sidebarVisible = !sidebarCollapsed || sidebarPeeked;
+  const sidebarDisplayWidth = sidebarCollapsed ? Math.min(width, SIDEBAR_PEEK_WIDTH) : width;
 
   const taskEntries = useMemo(() => buildSidebarTaskEntries(tasks, runs, { query: taskSearch, status: taskStatus }), [runs, taskSearch, taskStatus, tasks]);
   const visibleTaskEntries = visibleSidebarTaskEntries(taskEntries, taskListExpanded);
   const queuedEntryCount = taskEntries.filter((entry) => entry.kind === "queued").length;
   const taskTotal = Math.max(taskEntries.length, queuedEntryCount + (taskStatus === "queued" ? 0 : runTotal));
   const regularProjectCount = workspaces.filter((workspace) => !workspace.pinned).length;
-  const closeSearch = useCallback(() => {
+  const closeSearch = useCallback(({ restoreFocus = true } = {}) => {
     onClearSearch();
     if (workspaceSearchOpen) onToggleSearch();
-    requestAnimationFrame(() => searchTrigger.current?.focus());
-  }, [onClearSearch, onToggleSearch, workspaceSearchOpen]);
+    if (sidebarCollapsed) {
+      sidebarPeekBlocked.current = restoreFocus;
+      setSidebarPeeked(false);
+    }
+    requestAnimationFrame(() => {
+      if (!restoreFocus) {
+        document.activeElement?.blur?.();
+        return;
+      }
+      if (sidebarCollapsed) sidebarToggleRef.current?.focus({ preventScroll: true });
+      else searchTrigger.current?.focus({ preventScroll: true });
+    });
+  }, [onClearSearch, onToggleSearch, sidebarCollapsed, workspaceSearchOpen]);
   const openSearch = useCallback(() => {
     if (workspaceSearchOpen) return;
     onClearSearch();
@@ -105,6 +131,7 @@ function Sidebar({
     return () => {
       window.removeEventListener("resize", fitViewport);
       drag.current?.cleanup?.();
+      window.clearTimeout(sidebarPeekTimer.current);
     };
   }, []);
 
@@ -116,8 +143,11 @@ function Sidebar({
     const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
     if (!nativeSidebar) return;
     document.documentElement.dataset.nativeSidebarMaterial = "true";
-    nativeSidebar.postMessage({ width });
-  }, [width]);
+    nativeSidebar.postMessage({
+      width: sidebarVisible ? sidebarDisplayWidth : 0,
+      compact: sidebarCollapsed && sidebarVisible,
+    });
+  }, [sidebarCollapsed, sidebarDisplayWidth, sidebarVisible]);
 
   useEffect(() => {
     setExpandedWorkspaceID(workspaceID);
@@ -161,6 +191,33 @@ function Sidebar({
     void Events.Emit(APPEARANCE_CHANGED_EVENT, next);
   };
   const displayedTheme = appearance.theme === "dark" ? "dark" : appearance.theme === "light" ? "light" : globalThis.matchMedia?.("(prefers-color-scheme: dark)")?.matches ? "dark" : "light";
+  const cancelSidebarHide = () => window.clearTimeout(sidebarPeekTimer.current);
+  const revealSidebar = () => {
+    cancelSidebarHide();
+    if (sidebarCollapsed && !sidebarPeekBlocked.current) setSidebarPeeked(true);
+  };
+  const scheduleSidebarHide = () => {
+    cancelSidebarHide();
+    sidebarPeekTimer.current = window.setTimeout(() => {
+      if (!sidebarMenuOpen.current) setSidebarPeeked(false);
+    }, 120);
+  };
+  const toggleSidebar = () => {
+    cancelSidebarHide();
+    setSidebarPeeked(false);
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      // A pointer click leaves the button hovered and focused. Do not turn
+      // that same click into an immediate peek; require a real leave/re-enter.
+      sidebarPeekBlocked.current = next;
+      try { window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(next)); } catch { /* best effort */ }
+      return next;
+    });
+  };
+  const releaseSidebarPeekBlock = () => {
+    sidebarPeekBlocked.current = false;
+    scheduleSidebarHide();
+  };
   const goToSecondaryView = (nextView) => onGoView(nextView);
   const toggleProject = (workspace) => {
     const opening = expandedWorkspaceID !== workspace.id;
@@ -300,7 +357,9 @@ function Sidebar({
   };
 
   const widthBounds = typeof window === "undefined" ? sidebarWidthBounds() : sidebarWidthBounds(window.innerWidth);
-  return <aside className={`sidebar relative z-30 flex min-h-0 shrink-0 select-none flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)] ${resizing ? "resizing" : ""}`} style={{ width: `${width}px` }} aria-label={t("app.windowAria")}>
+  return <div className={`sidebar-shell relative z-30 h-full min-h-0 shrink-0 ${sidebarCollapsed ? "is-collapsed" : ""}`} style={{ width: sidebarCollapsed ? 0 : `${width}px` }}>
+    <button ref={sidebarToggleRef} type="button" className={`sidebar-visibility-toggle no-drag fixed top-3 left-[92px] z-50 grid place-items-center text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none ${sidebarCollapsed ? "text-foreground" : ""}`} aria-label={sidebarCollapsed ? t("sidebar.expandPanel") : t("sidebar.collapsePanel")} aria-expanded={!sidebarCollapsed} aria-controls="app-sidebar-content" title={sidebarCollapsed ? t("sidebar.expandPanel") : t("sidebar.collapsePanel")} onClick={toggleSidebar} onPointerEnter={revealSidebar} onPointerLeave={releaseSidebarPeekBlock} onFocus={revealSidebar} onBlur={releaseSidebarPeekBlock}>{sidebarCollapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}</button>
+    <aside id="app-sidebar-content" data-visible={sidebarVisible ? "true" : "false"} className={`sidebar z-30 flex min-h-0 shrink-0 select-none flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)] ${resizing ? "resizing" : ""} ${sidebarCollapsed ? "absolute top-0 left-0 h-[min(560px,calc(100vh-16px))] transition-[opacity,transform] duration-150" : "relative h-full"} ${sidebarVisible ? "translate-x-0 opacity-100" : "pointer-events-none invisible -translate-x-2 opacity-0"}`} style={{ width: `${sidebarDisplayWidth}px` }} aria-label={t("app.windowAria")} aria-hidden={!sidebarVisible} onPointerEnter={revealSidebar} onPointerLeave={scheduleSidebarHide}>
     {/* Traffic-light gutter. The window hides its titlebar and insets the
         lights, so the rail has to reserve this strip itself — and it doubles
         as the window's drag handle, which is why it is empty. */}
@@ -322,7 +381,7 @@ function Sidebar({
     <nav className="primary-nav relative mt-auto pb-1">
       {/* side="top" + sideOffset opens the menu upward and full-rail wide,
           matching where the footer sits. */}
-      <DropdownMenu>
+      <DropdownMenu onOpenChange={(open) => { sidebarMenuOpen.current = open; if (open) revealSidebar(); else scheduleSidebarHide(); }}>
         <DropdownMenuTrigger asChild>
           <button className={`secondary-navigation-trigger grid min-h-[52px] w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-2 border-0 bg-transparent pr-4 pl-7 text-left text-sm font-medium shadow-none transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-0 ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
             <Menu size={16} aria-hidden="true" />
@@ -379,8 +438,9 @@ function Sidebar({
       </DropdownMenu>
     </nav>
     {workspaceSearchOpen && <Suspense fallback={null}><CommandPalette open query={searchQuery} taskResults={searchTaskItems} loading={searchLoading} workspaces={workspaces} onQueryChange={onSearchQueryChange} onClose={closeSearch} onOpenTask={openTaskFromSearch} onOpenWorkspace={openWorkspaceFromSearch} onNewTask={() => { onGoView("tasks"); onNewTask(); }} onAddWorkspace={onAddWorkspace} onOpenSettings={() => onGoView("settings")} /></Suspense>}
-    <div className="sidebar-resizer group absolute top-0 -right-[5px] z-20 h-full w-2.5 cursor-col-resize touch-none select-none" role="separator" aria-label={t("sidebar.resize")} aria-orientation="vertical" aria-valuemin={widthBounds.min} aria-valuemax={widthBounds.max} aria-valuenow={width} tabIndex={0} title={t("sidebar.resizeHint")} onDoubleClick={() => commitWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={resizeWithKeyboard} onPointerDown={startResize}><span aria-hidden="true" className={`absolute inset-y-0 left-1 w-px bg-transparent group-hover:w-0.5 group-hover:bg-ring group-focus-visible:w-0.5 group-focus-visible:bg-ring ${resizing ? "w-0.5 bg-ring" : ""}`} /></div>
-  </aside>;
+    {!sidebarCollapsed && <div className="sidebar-resizer group absolute top-0 -right-[5px] z-20 h-full w-2.5 cursor-col-resize touch-none select-none" role="separator" aria-label={t("sidebar.resize")} aria-orientation="vertical" aria-valuemin={widthBounds.min} aria-valuemax={widthBounds.max} aria-valuenow={width} tabIndex={0} title={t("sidebar.resizeHint")} onDoubleClick={() => commitWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={resizeWithKeyboard} onPointerDown={startResize}><span aria-hidden="true" className={`absolute inset-y-0 left-1 w-px bg-transparent group-hover:w-0.5 group-hover:bg-ring group-focus-visible:w-0.5 group-focus-visible:bg-ring ${resizing ? "w-0.5 bg-ring" : ""}`} /></div>}
+    </aside>
+  </div>;
 }
 
 export default memo(Sidebar);

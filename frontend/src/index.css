@@ -284,6 +284,26 @@
     transition: grid-template-columns 200ms cubic-bezier(.2, .8, .2, 1);
   }
 
+  .sidebar-shell.is-collapsed + main > .app-titlebar {
+    padding-left: 136px !important;
+  }
+
+  .sidebar-visibility-toggle {
+    width: 28px !important;
+    height: 28px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 7px !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+
+  .sidebar-visibility-toggle:hover,
+  .sidebar-visibility-toggle:focus-visible {
+    background: var(--accent) !important;
+  }
+
   .task-workbench.inspector-open {
     grid-template-columns: minmax(0, 1fr) var(--workbench-inspector-width, 380px);
   }
@@ -306,6 +326,10 @@
     margin-left: 8px;
   }
 
+  .sidebar-shell.is-collapsed + main .task-workbench.inspector-maximized .workbench-inspector-toolbar {
+    padding-left: 136px;
+  }
+
   .task-workbench.inspector-resizing {
     transition: none;
   }
@@ -313,10 +337,10 @@
   .workbench-inspector.open {
     position: relative;
     z-index: 20;
-    top: -36px;
+    top: -44px;
     display: grid;
-    grid-template-rows: 44px minmax(0, 1fr);
-    height: calc(100% + 28px);
+    grid-template-rows: 36px minmax(0, 1fr);
+    height: calc(100% + 36px);
     margin: 0 8px 0 0;
     overflow: hidden;
     border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
@@ -329,7 +353,7 @@
   .workbench-inspector-dock {
     position: absolute;
     z-index: 21;
-    top: -36px;
+    top: -44px;
     right: calc(var(--workbench-inspector-width, 380px) + 16px);
     display: flex;
     height: 36px;
@@ -396,7 +420,7 @@
     min-width: 0;
     align-items: center;
     gap: 10px;
-    padding: 6px 7px 6px 8px;
+    padding: 1px 7px 1px 8px;
     user-select: none;
   }
 
@@ -475,8 +499,11 @@
     background-color: var(--sidebar);
   }
 
+  /* Both the pinned rail and its compact preview use the same tint. The native
+     vibrancy remains underneath, while the tint prevents page text from
+     showing through when the rail temporarily floats over the workspace. */
   :root[data-native-sidebar-material] .sidebar {
-    background-color: transparent;
+    background-color: color-mix(in oklab, var(--sidebar) 94%, transparent);
   }
 
   /* minmax(0, 1fr), not a bare grid: an implicit `auto` track sizes toward

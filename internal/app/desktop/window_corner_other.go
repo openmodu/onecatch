@@ -8,4 +8,6 @@ func setNativeWindowCornerRadius(_ unsafe.Pointer, _ float64) {}
 
 func setNativeWindowZoomButtonHidden(_ unsafe.Pointer, _ bool) {}
 
+func setNativeWindowMiniwindowIcon(_ unsafe.Pointer, _ []byte) {}
+
 func setNativeWindowAppearance(_ unsafe.Pointer, _ unsafe.Pointer) {}

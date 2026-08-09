@@ -90,7 +90,7 @@ export default function CommandPalette({
     else if (item.command === "new-task") onNewTask();
     else if (item.command === "add-workspace") onAddWorkspace();
     else if (item.command === "settings") onOpenSettings();
-    onClose();
+    onClose({ restoreFocus: false });
   };
   const handleKeyDown = (event) => {
     if (event.nativeEvent?.isComposing) return;
