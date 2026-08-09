@@ -28,7 +28,7 @@ func applyNativeWindowChrome(window *application.WebviewWindow) {
 	applyCorner := func(radius float64) {
 		application.InvokeSync(func() {
 			setNativeWindowCornerRadius(window.NativeWindow(), radius)
-			setNativeWindowMiniwindowIcon(window.NativeWindow(), desktopassets.AppIcon)
+			setNativeApplicationIcon(desktopassets.AppIcon)
 		})
 	}
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { applyCorner(26) })

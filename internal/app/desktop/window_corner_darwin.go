@@ -468,17 +468,14 @@ static void oneshotSetWindowZoomButtonHidden(void *handle, bool hidden) {
 	zoomButton.hidden = hidden;
 }
 
-static void oneshotSetWindowMiniwindowIcon(void *handle, void *icon, int length) {
-	NSWindow *window = (__bridge NSWindow *)handle;
-	if (window == nil || icon == nil || length <= 0) {
+static void oneshotSetApplicationIcon(void *icon, int length) {
+	if (icon == nil || length <= 0) {
 		return;
 	}
 	NSData *data = [NSData dataWithBytes:icon length:(NSUInteger)length];
 	NSImage *image = [[NSImage alloc] initWithData:data];
 	if (image != nil) {
 		[NSApp setApplicationIconImage:image];
-		window.miniwindowImage = image;
-		window.miniwindowTitle = window.title;
 	}
 	[image release];
 }
@@ -510,11 +507,11 @@ func setNativeWindowZoomButtonHidden(window unsafe.Pointer, hidden bool) {
 	C.oneshotSetWindowZoomButtonHidden(window, C.bool(hidden))
 }
 
-func setNativeWindowMiniwindowIcon(window unsafe.Pointer, icon []byte) {
-	if window == nil || len(icon) == 0 {
+func setNativeApplicationIcon(icon []byte) {
+	if len(icon) == 0 {
 		return
 	}
-	C.oneshotSetWindowMiniwindowIcon(window, unsafe.Pointer(&icon[0]), C.int(len(icon)))
+	C.oneshotSetApplicationIcon(unsafe.Pointer(&icon[0]), C.int(len(icon)))
 }
 
 func setNativeWindowAppearance(window, source unsafe.Pointer) {

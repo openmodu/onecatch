@@ -345,7 +345,7 @@
     overflow: hidden;
     border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
     border-radius: 16px;
-    background: color-mix(in oklab, var(--popover) 97%, var(--muted));
+    background: color-mix(in oklab, var(--sidebar) 94%, transparent);
     box-shadow: 10px 12px 26px -18px color-mix(in oklab, var(--foreground) 18%, transparent);
     animation: workbench-inspector-enter 200ms cubic-bezier(.2, .8, .2, 1);
   }
@@ -484,7 +484,7 @@
 
   .workbench-inspector-body {
     min-width: 0;
-    background: color-mix(in oklab, var(--popover) 98%, var(--muted));
+    background: transparent;
     overscroll-behavior: contain;
   }
 
