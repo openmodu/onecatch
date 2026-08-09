@@ -60,7 +60,7 @@ dev_mode:
     # The GUI becomes the terminal's foreground process group on macOS. The
     # supervisor relays terminal signals to Wails and also stops the GUI if the
     # watcher exits unexpectedly.
-    - cmd: './build/desktop/dev-supervise.sh primary "$PPID" ./bin/oneshot'
+    - cmd: './build/desktop/dev-supervise.sh primary "$PPID" ./build/desktop/darwin/run-dev-bundle.sh'
       type: primary
 
 # File Associations
