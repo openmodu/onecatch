@@ -1,0 +1,60 @@
+version: '3'
+
+tasks:
+  dependencies:
+    internal: true
+    run: once
+    deps:
+      - task: go:download
+      - task: js:install
+    cmds:
+      - node build/scripts/verify-wails-runtime.mjs
+
+  go:download:
+    internal: true
+    run: once
+    sources:
+      - go.mod
+      - go.sum
+    cmds:
+      - go mod download
+
+  js:install:
+    internal: true
+    run: once
+    dir: frontend
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules/.package-lock.json
+    cmds:
+      - npm ci
+
+  generate:bindings:
+    internal: true
+    run: once
+    deps:
+      - task: go:download
+    sources:
+      - cmd/**/*.go
+      - internal/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - frontend/bindings/**/*
+    cmds:
+      - go tool wails3 generate bindings -d frontend/bindings -f '{{.BUILD_FLAGS}}' -clean=true ./cmd/app ./internal/app/mobile
+
+  build:frontend:
+    internal: true
+    run: once
+    deps:
+      - task: generate:bindings
+      - task: dependencies
+    dir: frontend
+    cmds:
+      - cmd: npm run {{if eq .PRODUCTION "true"}}build{{else}}build:dev{{end}} -q
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ../build/desktop/windows/run-node.ps1 node_modules/vite/bin/vite.js build {{if eq .PRODUCTION "true"}}--mode production{{else}}--minify=false --mode development{{end}}
+        platforms: [windows]

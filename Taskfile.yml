@@ -2,9 +2,15 @@ version: '3'
 
 vars:
   APP_NAME: oneshot
+  MOBILE_APP_NAME: oneshot-mobile
   BIN_DIR: bin
   EXE_EXT: '{{if eq OS "windows"}}.exe{{end}}'
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
+
+includes:
+  common: ./build/Taskfile.common.yml
+  ios: ./build/ios/Taskfile.yml
+  android: ./build/android/Taskfile.yml
 
 tasks:
   default:
@@ -12,49 +18,10 @@ tasks:
     cmds:
       - go tool wails3 task -list
 
-  go:mod:tidy:
-    internal: true
+  deps:
+    desc: Install the shared Go and JavaScript dependencies
     cmds:
-      - go mod tidy
-
-  frontend:install:
-    internal: true
-    dir: frontend
-    sources:
-      - package.json
-      - package-lock.json
-    generates:
-      - node_modules/.package-lock.json
-    cmds:
-      - npm ci
-
-  desktop:bindings:
-    internal: true
-    deps:
-      - task: go:mod:tidy
-    sources:
-      - cmd/app/**/*.go
-      - internal/**/*.go
-      - go.mod
-      - go.sum
-    generates:
-      - frontend/bindings/**/*
-    cmds:
-      - go tool wails3 generate bindings -d frontend/bindings -f '{{.BUILD_FLAGS}}' -clean=true ./cmd/app
-
-  frontend:build:
-    internal: true
-    dir: frontend
-    cmds:
-      - task: desktop:bindings
-        vars:
-          BUILD_FLAGS:
-            ref: .BUILD_FLAGS
-      - task: frontend:install
-      - cmd: npm run {{if eq .DEV "true"}}build:dev{{else}}build{{end}} -q
-        platforms: [darwin, linux]
-      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ../build/desktop/windows/run-node.ps1 node_modules/vite/bin/vite.js build {{if eq .DEV "true"}}--minify=false --mode development{{else}}--mode production{{end}}
-        platforms: [windows]
+      - task: common:dependencies
 
   desktop:icons:
     desc: Regenerate the macOS application icon
@@ -76,12 +43,11 @@ tasks:
 
   build:
     cmds:
-      - task: frontend:build
+      - task: common:build:frontend
         vars:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
-          DEV:
-            ref: .DEV
+          PRODUCTION: '{{if eq .DEV "true"}}false{{else}}true{{end}}'
       - go build {{.BUILD_FLAGS}} -o '{{.OUTPUT}}' ./cmd/app
     vars:
       BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
@@ -111,6 +77,36 @@ tasks:
         platforms: [darwin]
       - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ./build/desktop/windows/package.ps1
         platforms: [windows]
+
+  build:ios:
+    desc: Build the remote-worker mobile client for the iOS simulator
+    cmds:
+      - task: ios:build
+
+  run:ios:
+    desc: Build and launch the remote-worker mobile client in iOS Simulator
+    cmds:
+      - task: ios:run
+
+  package:ios:
+    desc: Package the remote-worker mobile client as an iOS app bundle
+    cmds:
+      - task: ios:package
+
+  build:android:
+    desc: Build the remote-worker mobile client for Android
+    cmds:
+      - task: android:build
+
+  run:android:
+    desc: Build and launch the remote-worker mobile client in Android Emulator
+    cmds:
+      - task: android:run
+
+  package:android:
+    desc: Package the remote-worker mobile client as an Android APK
+    cmds:
+      - task: android:package
 
   build:worker:
     desc: Build the remote worker service
@@ -152,7 +148,7 @@ tasks:
       - go test ./...
 
   test:frontend:
-    desc: Run desktop frontend tests
+    desc: Run shared desktop and mobile frontend tests
     dir: frontend
     cmds:
       - npm test

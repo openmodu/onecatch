@@ -8,8 +8,11 @@ export {
     CodexConfiguration,
     CodexModelInfo,
     CodexServiceTier,
+    Event,
     EventKind,
     PermissionRequest,
+    Result,
+    Runtime,
     StreamPhase,
     Usage
 } from "./models.js";
