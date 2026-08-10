@@ -92,7 +92,7 @@ tasks:
   dev:desktop:
     desc: Start the Wails desktop app and Vite dev server
     cmds:
-      - wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
+      - ./build/desktop/dev-session.sh wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
 
   build:desktop:
     desc: Build the desktop app with development settings
