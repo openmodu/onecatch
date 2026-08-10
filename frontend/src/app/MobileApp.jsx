@@ -1,25 +1,36 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Events } from "@wailsio/runtime";
 import {
+  Activity,
+  ArrowDownUp,
+  ArrowLeft,
   Bot,
   Check,
   ChevronDown,
+  ChevronRight,
   CircleAlert,
+  Clock3,
+  Cloud,
   Cpu,
+  Folder,
   FolderGit2,
   Link2,
   LoaderCircle,
+  Menu,
+  MessageCircle,
   MoreHorizontal,
-  Play,
+  PanelLeftClose,
+  PenLine,
   Plus,
-  Radio,
   RefreshCw,
+  Search,
+  Send,
   Server,
   Settings2,
   Square,
   Trash2,
   Wifi,
-  WifiOff,
+  Wrench,
   X,
 } from "lucide-react";
 
@@ -27,7 +38,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
-import { errorMessage, formatTime, shortID } from "./format.js";
+import MarkdownContent from "./components/MarkdownContent.jsx";
+import { errorMessage, formatTime } from "./format.js";
+import { applyMobileRunFrame, foldMobileEvents, groupMobileConversations, mergeMobileRun } from "./mobileRuns.js";
 import "../mobile.css";
 
 const RUN_EVENT = "mobile:run";
@@ -42,117 +55,133 @@ function workerLabel(worker) {
 }
 
 function workspaceLabel(workspace) {
+  if (workspace?.name) return workspace.name;
   const pieces = String(workspace?.path || "").split(/[\\/]/).filter(Boolean);
   return pieces.at(-1) || workspace?.id || "Workspace";
 }
 
 function runStatusLabel(status) {
-  return { running: "运行中", succeeded: "已完成", failed: "失败" }[status] || status || "等待";
+  return { running: "进行中", succeeded: "已完成", failed: "失败" }[status] || "等待";
 }
 
 function eventLabel(kind) {
   return {
-    started: "已连接",
-    reasoning: "思考",
-    message: "回复",
+    reasoning: "思考过程",
     tool_use: "调用工具",
     tool_result: "工具结果",
     file_change: "文件变化",
     usage: "用量",
-    result: "结果",
     error: "错误",
-    permission_request: "等待审批",
-    permission_resolved: "审批完成",
+    started: "已连接 Worker",
   }[kind] || kind;
+}
+
+function relativeTime(value) {
+  const date = new Date(value);
+  const distance = Date.now() - date.getTime();
+  if (!Number.isFinite(distance)) return "";
+  if (distance < 60_000) return "刚刚";
+  if (distance < 3_600_000) return `${Math.floor(distance / 60_000)} 分钟前`;
+  if (distance < 86_400_000) return `${Math.floor(distance / 3_600_000)} 小时前`;
+  if (distance < 604_800_000) return `${Math.floor(distance / 86_400_000)} 天前`;
+  return date.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
 }
 
 function Notice({ value, onClose }) {
   if (!value) return null;
   return <div className={`mobile-notice ${value.type || "info"}`} role="status">
     <span>{value.message}</span>
-    <button type="button" aria-label="关闭" onClick={onClose}><X size={15} /></button>
+    <button type="button" aria-label="关闭" onClick={onClose}><X size={16} /></button>
   </div>;
 }
 
-function PairSheet({ open, busy, onClose, onPair }) {
-  const [baseURL, setBaseURL] = useState("https://");
+function StatusDot({ online, running = false }) {
+  return <span className={`mobile-status-dot ${online ? "online" : ""} ${running ? "running" : ""}`} aria-hidden="true" />;
+}
+
+function PairSheet({ open, busy, initialURL = "https://", onClose, onPair }) {
+  const [baseURL, setBaseURL] = useState(initialURL || "https://");
   const [code, setCode] = useState("");
+  useEffect(() => { if (open) setBaseURL(initialURL || "https://"); }, [initialURL, open]);
   if (!open) return null;
   return <div className="mobile-sheet-backdrop" role="presentation" onPointerDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
     <section className="mobile-sheet" role="dialog" aria-modal="true" aria-labelledby="pair-title">
       <div className="mobile-sheet-handle" />
-      <header>
-        <div><span className="mobile-kicker">安全配对</span><h2 id="pair-title">连接远端 Worker</h2></div>
-        <button type="button" className="mobile-icon-button" aria-label="关闭" disabled={busy} onClick={onClose}><X size={18} /></button>
-      </header>
-      <p className="mobile-sheet-copy">在远端机器执行 <code>oneshot-worker --pair</code>，然后输入地址和日志中的一次性配对码。</p>
+      <header><div><small>安全配对</small><h2 id="pair-title">连接远端 Worker</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" disabled={busy} onClick={onClose}><X /></button></header>
+      <p className="mobile-sheet-copy">在远端执行 <code>oneshot-worker --pair</code>。配对码 10 分钟内有效且只能使用一次，失效后重新执行命令即可。</p>
       <form onSubmit={(event) => { event.preventDefault(); void onPair({ baseURL, code }).then((ok) => { if (ok) { setCode(""); onClose(); } }); }}>
         <label><span>Worker 地址</span><Input value={baseURL} inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="https://192.168.1.20:9231" onChange={(event) => setBaseURL(event.target.value)} /></label>
-        <label><span>一次性配对码</span><Input value={code} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="8 位配对码" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
-        <Button className="mobile-cta" type="submit" disabled={busy || !baseURL.trim() || !code.trim()}>{busy ? <><LoaderCircle className="animate-spin" />正在连接</> : <><Link2 />连接 Worker</>}</Button>
+        <label><span>一次性配对码</span><Input value={code} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="例如 ABCD-EFGH" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
+        <Button className="mobile-primary-button" type="submit" disabled={busy || !baseURL.trim() || !code.trim()}>{busy ? <><LoaderCircle className="animate-spin" />正在连接</> : <><Link2 />连接 Worker</>}</Button>
       </form>
-      <p className="mobile-security-note">首次 HTTPS 配对会固定服务器证书指纹，之后连接会拒绝证书变化。</p>
+      <p className="mobile-security-note">首次 HTTPS 配对会固定服务器证书指纹，之后会拒绝证书变化。</p>
     </section>
   </div>;
 }
 
-function EmptyWorkers({ onAdd }) {
-  return <section className="mobile-empty-card">
-    <div className="mobile-empty-icon"><Server size={26} /></div>
-    <span className="mobile-kicker">Remote workbench</span>
-    <h2>先连接一台 Worker</h2>
-    <p>移动端不运行本地 CLI。Codex、Claude Code 和 Git 全部留在你的远端开发机上。</p>
-    <Button className="mobile-cta" onClick={onAdd}><Plus />添加 Worker</Button>
+function EmptyConnection({ onPair }) {
+  return <section className="mobile-empty-state">
+    <span className="mobile-empty-symbol"><Cloud /></span>
+    <h2>连接你的开发机</h2>
+    <p>iPhone 只作为工作台。代码、Git 和 Agent 都在远端 Worker 上运行。</p>
+    <Button className="mobile-primary-button" onClick={onPair}><Link2 />连接 Worker</Button>
   </section>;
 }
 
-function WorkerPicker({ workers, selectedID, health, onSelect, onRefresh }) {
-  const selected = workers.find((item) => item.id === selectedID);
-  return <section className="mobile-worker-strip">
-    <div className="mobile-select-wrap">
-      <span className={`mobile-online-dot ${health ? "online" : "offline"}`} />
-      <select aria-label="远端 Worker" value={selectedID} onChange={(event) => onSelect(event.target.value)}>
-        {workers.map((worker) => <option key={worker.id} value={worker.id}>{workerLabel(worker)}</option>)}
-      </select>
-      <ChevronDown size={15} aria-hidden="true" />
-    </div>
-    <div className="mobile-worker-meta">
-      {health ? <><Wifi size={13} />{health.latencyMilliseconds}ms · 协议 v{health.health?.protocolVersion}</> : <><WifiOff size={13} />未连接</>}
-    </div>
-    <button type="button" className="mobile-icon-button" aria-label={`刷新 ${selected ? workerLabel(selected) : "Worker"}`} onClick={onRefresh}><RefreshCw size={16} /></button>
-  </section>;
+function Header({ title, subtitle, onMenu, onBack, onMore, onNew }) {
+  return <header className="mobile-topbar">
+    <button type="button" className="mobile-round-button" aria-label={onBack ? "返回" : "打开侧栏"} onClick={onBack || onMenu}>{onBack ? <ArrowLeft /> : <Menu />}</button>
+    <div className="mobile-topbar-title"><strong>{title}</strong>{subtitle && <span>{subtitle}</span>}</div>
+    <button type="button" className="mobile-round-button" aria-label={onNew ? "新建会话" : "更多"} onClick={onNew || onMore}>{onNew ? <PenLine /> : <MoreHorizontal />}</button>
+  </header>;
 }
 
-function WorkspacePicker({ workspaces, selectedID, snapshot, onSelect }) {
-  if (!workspaces.length) return <section className="mobile-warning-card">
-    <CircleAlert size={18} /><div><strong>没有已准备的 Workspace</strong><p>先在桌面端或 Worker 主机上准备项目，移动端只使用现有映射。</p></div>
-  </section>;
-  const selected = workspaces.find((item) => item.id === selectedID);
-  return <section className="mobile-workspace-card">
-    <span className="mobile-kicker">Workspace</span>
-    <div className="mobile-field-select">
-      <FolderGit2 size={18} />
-      <select aria-label="远端 Workspace" value={selectedID} onChange={(event) => onSelect(event.target.value)}>
-        {workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspaceLabel(workspace)}</option>)}
-      </select>
-      <ChevronDown size={16} />
-    </div>
-    <div className="mobile-workspace-meta">
-      <span title={selected?.path}>{selected?.path || "—"}</span>
-      {snapshot?.head && <b>{snapshot.branch || "detached"} · {shortID(snapshot.head)}</b>}
-    </div>
-  </section>;
+function BottomDock({ query, setQuery, onWorker, onNew, workerOnline }) {
+  return <footer className="mobile-bottom-dock">
+    <label className="mobile-search-pill"><Search /><input value={query} placeholder="搜索聊天记录" aria-label="搜索聊天记录" onChange={(event) => setQuery(event.target.value)} /></label>
+    <button type="button" className="mobile-dark-button" aria-label="Worker 管理" onClick={onWorker}><Activity /><StatusDot online={workerOnline} /></button>
+    <button type="button" className="mobile-dark-button" aria-label="新建会话" onClick={onNew}><PenLine /></button>
+  </footer>;
 }
 
-function RuntimePicker({ health, value, onChange }) {
-  const available = health?.health?.runtimes || {};
-  return <div className="mobile-runtime-picker" role="radiogroup" aria-label="Agent 运行时">
-    {RUNTIMES.map((runtime) => {
-      const enabled = Boolean(available[runtime.id]);
-      return <button type="button" role="radio" aria-checked={value === runtime.id} disabled={!enabled} className={value === runtime.id ? "selected" : ""} key={runtime.id} onClick={() => onChange(runtime.id)}>
-        <Bot size={15} /><span>{runtime.label}</span>{value === runtime.id && <Check size={13} />}
-      </button>;
-    })}
+function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew }) {
+  const normalized = query.trim().toLowerCase();
+  const visible = workspaces.filter((workspace) => {
+    if (!normalized) return true;
+    const sessions = conversations.filter((item) => item.workspaceId === workspace.id);
+    return workspaceLabel(workspace).toLowerCase().includes(normalized) || sessions.some((item) => item.title.toLowerCase().includes(normalized));
+  });
+  return <div className="mobile-page mobile-project-page">
+    <h1>项目</h1>
+    <div className="mobile-project-list">
+      {visible.map((workspace) => {
+        const sessions = conversations.filter((item) => item.workspaceId === workspace.id);
+        const running = sessions.some((item) => item.status === "running");
+        return <div className="mobile-project-row" key={workspace.id}>
+          <button type="button" className="mobile-project-link" onClick={() => onOpenWorkspace(workspace.id)}>
+            <Folder /><strong>{workspaceLabel(workspace)}</strong><ChevronRight />{running && <StatusDot online running />}
+          </button>
+          <button type="button" className="mobile-compose-project" aria-label={`在 ${workspaceLabel(workspace)} 新建会话`} onClick={() => onNew(workspace.id)}><PenLine /></button>
+        </div>;
+      })}
+    </div>
+    {!visible.length && <div className="mobile-list-empty"><Search /><p>没有匹配的项目或会话</p></div>}
+  </div>;
+}
+
+function SessionList({ workspace, conversations, query, onOpen, onNew }) {
+  const normalized = query.trim().toLowerCase();
+  const visible = conversations.filter((item) => item.workspaceId === workspace?.id && (!normalized || item.title.toLowerCase().includes(normalized)));
+  return <div className="mobile-page mobile-session-page">
+    <div className="mobile-workspace-heading"><FolderGit2 /><div><h1>{workspaceLabel(workspace)}</h1><span>{workspace?.path}</span></div></div>
+    <div className="mobile-session-list">
+      {visible.map((conversation) => <button type="button" className="mobile-session-row" key={conversation.id} onClick={() => onOpen(conversation.id)}>
+        <span className="mobile-session-icon"><MessageCircle /></span>
+        <span className="mobile-session-copy"><strong>{conversation.title}</strong><small>{conversation.runtime} · {conversation.runs.length} 轮 · {relativeTime(conversation.startedAt)}</small></span>
+        <span className={`mobile-session-status ${conversation.status}`}>{runStatusLabel(conversation.status)}</span><ChevronRight />
+      </button>)}
+    </div>
+    {!visible.length && <section className="mobile-list-empty"><MessageCircle /><h2>还没有会话</h2><p>从一个明确的问题开始，后续可以在同一 session 里继续追问。</p><Button className="mobile-primary-button" onClick={onNew}><Plus />新建会话</Button></section>}
   </div>;
 }
 
@@ -160,108 +189,163 @@ function PermissionCard({ runID, event, busy, onRespond }) {
   const permission = event.permission;
   if (!permission) return null;
   return <article className="mobile-permission-card">
-    <header><CircleAlert size={17} /><div><strong>{permission.displayName || permission.title || permission.toolName || "工具权限"}</strong><small>{permission.description || "Claude 正在等待你的决定"}</small></div></header>
+    <header><CircleAlert /><div><strong>{permission.displayName || permission.title || permission.toolName || "工具权限"}</strong><small>{permission.description || "Agent 正在等待你的决定"}</small></div></header>
     {permission.input && <pre>{JSON.stringify(permission.input, null, 2)}</pre>}
-    <div>
-      <Button variant="outline" size="sm" disabled={busy} onClick={() => onRespond(runID, permission.id, "deny")}>拒绝</Button>
-      {!permission.suppressAlwaysAllow && permission.suggestions?.length > 0 && <Button variant="outline" size="sm" disabled={busy} onClick={() => onRespond(runID, permission.id, "allow_always")}>始终允许</Button>}
-      <Button size="sm" disabled={busy} onClick={() => onRespond(runID, permission.id, "allow_once")}>允许一次</Button>
-    </div>
+    <footer><Button variant="outline" size="sm" disabled={busy} onClick={() => onRespond(runID, permission.id, "deny")}>拒绝</Button><Button size="sm" disabled={busy} onClick={() => onRespond(runID, permission.id, "allow_once")}>允许一次</Button></footer>
   </article>;
 }
 
-function EventTimeline({ run, permissionBusy, onRespond }) {
-  const events = run?.events || [];
-  if (!run) return null;
-  return <section className="mobile-run-card">
-    <header>
-      <div><span className={`mobile-run-pulse ${run.status}`} /><strong>{runStatusLabel(run.status)}</strong></div>
-      <small>{formatTime(run.startedAt)}</small>
-    </header>
-    <div className="mobile-event-list">
-      {events.length === 0 && run.status === "running" && <div className="mobile-event-placeholder"><LoaderCircle className="animate-spin" size={16} />等待 Worker 返回事件…</div>}
-      {events.map((event, index) => event.kind === "permission_request" ? <PermissionCard key={`${event.at}-${index}`} runID={run.id} event={event} busy={permissionBusy === event.permission?.id} onRespond={onRespond} /> : <article className={`mobile-event ${event.kind || "message"}`} key={`${event.at}-${index}`}>
-        <div><span>{eventLabel(event.kind)}</span><time>{formatTime(event.at)}</time></div>
-        {event.text && <pre>{event.text}</pre>}
-      </article>)}
-    </div>
-    {run.error && <div className="mobile-run-error"><CircleAlert size={16} />{run.error}</div>}
-    {run.result?.finalMessage && <div className="mobile-run-result"><span className="mobile-kicker">最终回复</span><p>{run.result.finalMessage}</p></div>}
-  </section>;
+function AgentEvent({ run, event, index, permissionBusy, onRespond }) {
+  if (event.kind === "permission_request") return <PermissionCard runID={run.id} event={event} busy={permissionBusy === event.permission?.id} onRespond={onRespond} />;
+  if (event.kind === "message") return event.text ? <div className="mobile-assistant-message"><span className="mobile-agent-mark"><Bot /></span><MarkdownContent content={event.text} streaming={Boolean(event.streaming || (run.status === "running" && index === run.events.length - 1))} /></div> : null;
+  if (!event.text && !event.kind) return null;
+  return <details className={`mobile-event-detail ${event.kind === "error" ? "error" : ""}`}>
+    <summary><span>{event.kind?.startsWith("tool") ? <Wrench /> : <Clock3 />}{eventLabel(event.kind)}</span><ChevronDown /></summary>
+    {event.text && <pre>{event.text}</pre>}
+  </details>;
 }
 
-function RunScreen({ workers, selectedWorkerID, health, workspaces, workspaceID, snapshot, currentRun, busy, permissionBusy, onSelectWorker, onRefreshWorker, onSelectWorkspace, onStart, onInterrupt, onRespondPermission, onAddWorker }) {
-  const [runtime, setRuntime] = useState("codex");
-  const [prompt, setPrompt] = useState("");
-  const [advanced, setAdvanced] = useState(false);
-  const [model, setModel] = useState("");
-  const [reasoningEffort, setReasoningEffort] = useState("");
-  const available = health?.health?.runtimes || {};
-  useEffect(() => {
-    if (available[runtime]) return;
-    const next = RUNTIMES.find((item) => available[item.id]);
-    if (next) setRuntime(next.id);
-  }, [available, runtime]);
-  const canRun = selectedWorkerID && workspaceID && available[runtime] && prompt.trim() && currentRun?.status !== "running" && !busy;
-
-  if (!workers.length) return <EmptyWorkers onAdd={onAddWorker} />;
-  return <div className="mobile-screen-body">
-    <WorkerPicker workers={workers} selectedID={selectedWorkerID} health={health} onSelect={onSelectWorker} onRefresh={onRefreshWorker} />
-    <WorkspacePicker workspaces={workspaces} selectedID={workspaceID} snapshot={snapshot} onSelect={onSelectWorkspace} />
-    <section className="mobile-composer-card">
-      <div className="mobile-section-heading"><div><span className="mobile-kicker">New analysis</span><h2>交给远端 Agent</h2></div><span className="mobile-readonly-badge">只读</span></div>
-      <RuntimePicker health={health} value={runtime} onChange={setRuntime} />
-      <Textarea value={prompt} rows={6} placeholder="让 Agent 分析代码、定位问题，或者给出实现方案…" onChange={(event) => setPrompt(event.target.value)} />
-      <button type="button" className="mobile-advanced-toggle" aria-expanded={advanced} onClick={() => setAdvanced((value) => !value)}><Settings2 size={14} />高级选项<ChevronDown className={advanced ? "open" : ""} size={14} /></button>
-      {advanced && <div className="mobile-advanced-grid">
-        <label><span>模型（可选）</span><Input value={model} autoCapitalize="none" placeholder="跟随 Worker 默认" onChange={(event) => setModel(event.target.value)} /></label>
-        <label><span>推理强度（可选）</span><Input value={reasoningEffort} autoCapitalize="none" placeholder="medium / high" onChange={(event) => setReasoningEffort(event.target.value)} /></label>
-      </div>}
-      <div className="mobile-composer-actions">
-        {currentRun?.status === "running" ? <Button variant="outline" className="mobile-stop-button" disabled={busy} onClick={() => onInterrupt(currentRun.id)}><Square size={14} />停止运行</Button> : <Button className="mobile-cta" disabled={!canRun} onClick={async () => {
-          const started = await onStart({ workerId: selectedWorkerID, workspaceId: workspaceID, runtime, prompt, model, reasoningEffort });
-          if (started) setPrompt("");
-        }}>{busy ? <LoaderCircle className="animate-spin" /> : <Play />}开始分析</Button>}
+function ConversationView({ conversation, workspace, snapshot, prompt, setPrompt, busy, permissionBusy, runtime, onOpenContext, onStart, onInterrupt, onRespond }) {
+  const runs = conversation?.runs || [];
+  const running = runs.find((item) => item.status === "running");
+  const latest = runs.at(-1);
+  const canSend = prompt.trim() && !running && !busy && snapshot?.isRepo && !snapshot?.status && !(snapshot?.files || []).length;
+  return <div className="mobile-conversation-shell">
+    <main className={`mobile-transcript ${runs.length ? "has-messages" : "empty"}`}>
+      {!runs.length && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)}</p></section>}
+      {runs.map((run) => {
+        const visibleEvents = foldMobileEvents(run.events || []);
+        return <section className="mobile-turn" key={run.id}>
+        <div className="mobile-user-message"><MarkdownContent content={run.prompt} /></div>
+        <div className="mobile-turn-meta"><span>{String(run.runtime || "agent")}</span><time>{formatTime(run.startedAt)}</time></div>
+        {visibleEvents.map((event, index) => <AgentEvent key={`${event.at || index}-${index}`} run={{ ...run, events: visibleEvents }} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />)}
+        {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
+        {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
+        {run.result?.finalMessage && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <div className="mobile-assistant-message final"><span className="mobile-agent-mark"><Bot /></span><MarkdownContent content={run.result.finalMessage} /></div>}
+      </section>;
+      })}
+    </main>
+    <footer className="mobile-composer-wrap">
+      {snapshot && (!snapshot.isRepo || snapshot.status || (snapshot.files || []).length) && <div className="mobile-workspace-alert"><CircleAlert />远端工作区需要保持干净才能开始只读任务</div>}
+      <div className="mobile-composer">
+        <Textarea value={prompt} rows={1} placeholder={runs.length ? "继续追问…" : "给 Agent 发送任务"} onChange={(event) => setPrompt(event.target.value)} />
+        <div className="mobile-composer-footer"><button type="button" className="mobile-context-button" onClick={onOpenContext}><Plus /><span>{workspaceLabel(workspace)}</span><b>{runtime}</b></button>
+          {running ? <button type="button" className="mobile-send-button stop" aria-label="停止" disabled={busy} onClick={() => onInterrupt(running.id)}><Square /></button> : <button type="button" className="mobile-send-button" aria-label="发送" disabled={!canSend} onClick={() => onStart({ resumeSessionId: latest?.result?.sessionId || "" })}>{busy ? <LoaderCircle className="animate-spin" /> : <Send />}</button>}
+        </div>
       </div>
-      <p className="mobile-readonly-note">移动端暂不接收 Git 补丁，因此只开放不会修改远端工作区的分析任务。</p>
-    </section>
-    <EventTimeline run={currentRun} permissionBusy={permissionBusy} onRespond={onRespondPermission} />
+      <p>Agent 在远端以只读模式运行</p>
+    </footer>
   </div>;
 }
 
-function WorkersScreen({ workers, healthByID, busy, onAdd, onRefresh, onDelete }) {
-  return <div className="mobile-screen-body">
-    <section className="mobile-page-intro"><span className="mobile-kicker">Connections</span><h2>远端 Worker</h2><p>配对信息只保存在当前设备的应用沙箱内。</p></section>
-    {!workers.length ? <EmptyWorkers onAdd={onAdd} /> : <div className="mobile-worker-list">
-      {workers.map((worker) => {
+function Sidebar({ open, workspaces, conversations, selectedConversationID, health, onClose, onHome, onWorkspace, onConversation, onNew, onWorkers }) {
+  if (!open) return null;
+  return <div className="mobile-drawer-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <aside className="mobile-drawer" aria-label="工作区与会话">
+      <header><div><span className="mobile-brand-mark">1</span><strong>Oneshot</strong></div><button type="button" className="mobile-icon-button" aria-label="关闭侧栏" onClick={onClose}><PanelLeftClose /></button></header>
+      <button type="button" className="mobile-new-session" onClick={() => { onNew(); onClose(); }}><PenLine />新建会话</button>
+      <button type="button" className="mobile-drawer-home" onClick={() => { onHome(); onClose(); }}><Folder />全部项目<ChevronRight /></button>
+      <div className="mobile-drawer-scroll">
+        {workspaces.map((workspace) => {
+          const sessions = conversations.filter((item) => item.workspaceId === workspace.id);
+          return <section className="mobile-drawer-group" key={workspace.id}>
+            <button type="button" className="mobile-drawer-workspace" onClick={() => { onWorkspace(workspace.id); onClose(); }}><FolderGit2 /><strong>{workspaceLabel(workspace)}</strong><span>{sessions.length}</span></button>
+            {sessions.slice(0, 8).map((conversation) => <button type="button" className={conversation.id === selectedConversationID ? "selected" : ""} key={conversation.id} onClick={() => { onConversation(conversation.id); onClose(); }}><span className="mobile-drawer-session-title">{conversation.title}</span>{conversation.status === "running" && <StatusDot online running />}</button>)}
+          </section>;
+        })}
+      </div>
+      <button type="button" className="mobile-drawer-worker" onClick={() => { onWorkers(); onClose(); }}><span className="mobile-worker-glyph"><Server /></span><span><strong>{health?.worker?.name || "远端 Worker"}</strong><small>{health ? `在线 · ${health.latencyMilliseconds}ms` : "未连接"}</small></span><StatusDot online={Boolean(health)} /><ChevronRight /></button>
+    </aside>
+  </div>;
+}
+
+function MoreMenu({ open, sortMode, onSort, onWorkers, onPair, onSettings, onClose }) {
+  if (!open) return null;
+  return <div className="mobile-popover-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section className="mobile-more-menu">
+      <small>整理</small>
+      <button type="button" onClick={() => { onSort("project"); onClose(); }}>{sortMode === "project" ? <Check /> : <span />}<Folder />按项目</button>
+      <button type="button" onClick={() => { onSort("recent"); onClose(); }}>{sortMode === "recent" ? <Check /> : <span />}<ArrowDownUp />按时间倒序排列</button>
+      <hr />
+      <small>管理</small>
+      <button type="button" onClick={() => { onWorkers(); onClose(); }}><span /><Cloud />Worker 管理</button>
+      <button type="button" onClick={() => { onPair(); onClose(); }}><span /><Link2 />添加连接</button>
+      <button type="button" onClick={() => { onSettings(); onClose(); }}><span /><Settings2 />运行设置</button>
+    </section>
+  </div>;
+}
+
+function ContextSheet({ open, workers, selectedWorkerID, workspaces, workspaceID, health, runtime, runtimeLocked, model, reasoningEffort, onClose, onSelectWorker, onSelectWorkspace, onRuntime, onModel, onReasoning }) {
+  if (!open) return null;
+  const available = health?.health?.runtimes || {};
+  return <div className="mobile-sheet-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section className="mobile-sheet mobile-context-sheet">
+      <div className="mobile-sheet-handle" />
+      <header><div><small>会话上下文</small><h2>远端运行设置</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" onClick={onClose}><X /></button></header>
+      <label><span>Worker</span><select value={selectedWorkerID} onChange={(event) => onSelectWorker(event.target.value)}>{workers.map((worker) => <option key={worker.id} value={worker.id}>{workerLabel(worker)}</option>)}</select></label>
+      <label><span>工作区</span><select value={workspaceID} onChange={(event) => onSelectWorkspace(event.target.value)}>{workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspaceLabel(workspace)}</option>)}</select></label>
+      <div className="mobile-runtime-picker">{RUNTIMES.map((item) => <button type="button" className={runtime === item.id ? "selected" : ""} disabled={!available[item.id] || (runtimeLocked && runtime !== item.id)} key={item.id} onClick={() => onRuntime(item.id)}><Bot />{item.label}{runtime === item.id && <Check />}</button>)}</div>
+      {runtimeLocked && <p className="mobile-context-note">已有 session 会保持原运行时；切换工作区或新建会话后可以重新选择。</p>}
+      <label><span>模型（可选）</span><Input value={model} placeholder="跟随 Worker 默认" autoCapitalize="none" onChange={(event) => onModel(event.target.value)} /></label>
+      <label><span>推理强度（可选）</span><Input value={reasoningEffort} placeholder="medium / high" autoCapitalize="none" onChange={(event) => onReasoning(event.target.value)} /></label>
+      <Button className="mobile-primary-button" onClick={onClose}>完成</Button>
+    </section>
+  </div>;
+}
+
+function WorkersSheet({ open, workers, healthByID, busy, onClose, onPair, onRefresh, onDelete }) {
+  if (!open) return null;
+  return <div className="mobile-sheet-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section className="mobile-sheet mobile-workers-sheet">
+      <div className="mobile-sheet-handle" />
+      <header><div><small>Connections</small><h2>远端 Worker</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" onClick={onClose}><X /></button></header>
+      <div className="mobile-worker-list">{workers.map((worker) => {
         const health = healthByID[worker.id];
         return <article className="mobile-worker-card" key={worker.id}>
-          <header><div className="mobile-worker-avatar"><Server size={20} /></div><div><strong>{workerLabel(worker)}</strong><span>{worker.baseUrl}</span></div><span className={`mobile-status-chip ${health ? "online" : "offline"}`}>{health ? "在线" : "离线"}</span></header>
-          <div className="mobile-worker-stats">
-            <span><Radio size={14} />{health ? `${health.latencyMilliseconds}ms` : "—"}</span>
-            <span><Cpu size={14} />{health ? RUNTIMES.filter((item) => health.health?.runtimes?.[item.id]).map((item) => item.label).join(" · ") || "无可用运行时" : "等待检查"}</span>
-          </div>
-          <footer><Button variant="outline" size="sm" disabled={busy} onClick={() => onRefresh(worker.id)}><RefreshCw />检查</Button><Button variant="ghost" size="icon-sm" aria-label={`删除 ${workerLabel(worker)}`} disabled={busy} onClick={() => onDelete(worker)}><Trash2 /></Button></footer>
+          <div className="mobile-worker-card-main"><span className="mobile-worker-glyph"><Server /></span><span><strong>{workerLabel(worker)}</strong><small>{worker.baseUrl}</small></span><span className={`mobile-worker-state ${health ? "online" : ""}`}>{health ? "在线" : "离线"}</span></div>
+          <div className="mobile-worker-card-meta"><span><Wifi />{health ? `${health.latencyMilliseconds}ms` : "未连接"}</span><span><Cpu />{health ? RUNTIMES.filter((item) => health.health?.runtimes?.[item.id]).map((item) => item.label).join(" · ") : "—"}</span></div>
+          <footer><Button variant="outline" size="sm" disabled={busy} onClick={() => onRefresh(worker.id)}><RefreshCw />检查</Button><Button variant="outline" size="sm" disabled={busy} onClick={() => onPair(worker)}><Link2 />重新配对</Button><Button variant="ghost" size="icon-sm" aria-label={`删除 ${workerLabel(worker)}`} disabled={busy} onClick={() => onDelete(worker)}><Trash2 /></Button></footer>
         </article>;
-      })}
-    </div>}
-    <Button variant="outline" className="mobile-add-worker" onClick={onAdd}><Plus />添加 Worker</Button>
+      })}</div>
+      <Button className="mobile-primary-button" onClick={() => onPair(null)}><Plus />添加 Worker</Button>
+    </section>
   </div>;
 }
 
 export default function MobileWorkbench() {
-  const [tab, setTab] = useState("run");
+  const [view, setView] = useState("projects");
   const [workers, setWorkers] = useState([]);
   const [selectedWorkerID, setSelectedWorkerID] = useState("");
   const [healthByID, setHealthByID] = useState({});
   const [workspaces, setWorkspaces] = useState([]);
   const [workspaceID, setWorkspaceID] = useState("");
   const [snapshot, setSnapshot] = useState(null);
-  const [currentRun, setCurrentRun] = useState(null);
-  const [pairOpen, setPairOpen] = useState(false);
+  const [runs, setRuns] = useState([]);
+  const [selectedConversationID, setSelectedConversationID] = useState("");
+  const [prompt, setPrompt] = useState("");
+  const [runtime, setRuntime] = useState("codex");
+  const [model, setModel] = useState("");
+  const [reasoningEffort, setReasoningEffort] = useState("");
+  const [query, setQuery] = useState("");
+  const [sortMode, setSortMode] = useState("project");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [pairTarget, setPairTarget] = useState(undefined);
+  const [contextOpen, setContextOpen] = useState(false);
+  const [workersOpen, setWorkersOpen] = useState(false);
   const [busy, setBusy] = useState("");
   const [permissionBusy, setPermissionBusy] = useState("");
   const [notice, setNotice] = useState(null);
+
+  const conversations = useMemo(() => groupMobileConversations(runs), [runs]);
+  const orderedWorkspaces = useMemo(() => {
+    if (sortMode === "project") return [...workspaces].sort((left, right) => workspaceLabel(left).localeCompare(workspaceLabel(right), "zh-CN"));
+    const latest = (id) => conversations.find((item) => item.workspaceId === id)?.startedAt || "";
+    return [...workspaces].sort((left, right) => String(latest(right.id)).localeCompare(String(latest(left.id))));
+  }, [conversations, sortMode, workspaces]);
+  const selectedConversation = conversations.find((item) => item.id === selectedConversationID) || null;
+  const selectedWorkspace = workspaces.find((item) => item.id === workspaceID) || null;
+  const selectedHealth = healthByID[selectedWorkerID] || null;
 
   const notify = useCallback((type, message) => {
     setNotice({ type, message });
@@ -303,9 +387,8 @@ export default function MobileWorkbench() {
   useEffect(() => {
     void (async () => {
       try {
-        const [items, runs] = await Promise.all([loadWorkers(), MobileBinding.ListRuns()]);
-        const latest = [...(runs || [])].sort((a, b) => String(b.startedAt).localeCompare(String(a.startedAt)))[0];
-        if (latest) setCurrentRun(latest);
+        const [items, runItems] = await Promise.all([loadWorkers(), MobileBinding.ListRuns()]);
+        setRuns(runItems || []);
         if (items[0]) await refreshWorker(items[0].id, true);
       } catch (error) { notify("error", errorMessage(error)); }
     })();
@@ -314,43 +397,56 @@ export default function MobileWorkbench() {
   useEffect(() => { if (selectedWorkerID) void loadWorkspaces(selectedWorkerID); }, [loadWorkspaces, selectedWorkerID]);
   useEffect(() => {
     if (!selectedWorkerID || !workspaceID) { setSnapshot(null); return; }
+    setSnapshot(null);
     void MobileBinding.WorkspaceGitStatus(selectedWorkerID, workspaceID).then(setSnapshot).catch((error) => { setSnapshot(null); notify("error", errorMessage(error)); });
   }, [notify, selectedWorkerID, workspaceID]);
-
+  useEffect(() => {
+    const available = selectedHealth?.health?.runtimes || {};
+    if (available[runtime]) return;
+    const next = RUNTIMES.find((item) => available[item.id]);
+    if (next) setRuntime(next.id);
+  }, [runtime, selectedHealth]);
   useEffect(() => {
     const off = Events.On(RUN_EVENT, (event) => {
       const frame = event.data;
       if (!frame?.runId) return;
-      setCurrentRun((current) => {
-        if (!current || current.id !== frame.runId) return current;
-        const next = { ...current };
-        if (frame.event) next.events = [...(current.events || []), frame.event];
-        if (frame.status) next.status = frame.status;
-        if (frame.result) next.result = frame.result;
-        if (frame.error) next.error = frame.error;
-        return next;
-      });
-      if (frame.status && frame.status !== "running") {
-        void MobileBinding.GetRun(frame.runId).then(setCurrentRun).catch(() => {});
-      }
+      setRuns((items) => items.map((run) => applyMobileRunFrame(run, frame)));
+      if (frame.status && frame.status !== "running") void MobileBinding.GetRun(frame.runId).then((run) => setRuns((items) => mergeMobileRun(items, run))).catch(() => {});
     });
     return () => off();
   }, []);
+
+  const selectWorkspace = (id, nextView = "sessions") => { setWorkspaceID(id); setSelectedConversationID(""); setView(nextView); setQuery(""); };
+  const openConversation = (id) => {
+    const conversation = conversations.find((item) => item.id === id);
+    if (conversation) { setWorkspaceID(conversation.workspaceId); setRuntime(conversation.runtime || "codex"); }
+    setSelectedConversationID(id); setView("conversation"); setQuery("");
+  };
+  const newConversation = (id = workspaceID) => {
+    const nextID = id || workspaces[0]?.id || "";
+    if (!nextID) { setPairTarget(null); return; }
+    setWorkspaceID(nextID); setSelectedConversationID(""); setPrompt(""); setView("conversation"); setQuery("");
+  };
 
   const pairWorker = async ({ baseURL, code }) => {
     setBusy("pair");
     try {
       const worker = await MobileBinding.PairWorker(baseURL.trim(), code.trim());
-      await loadWorkers(); setSelectedWorkerID(worker.id); await refreshWorker(worker.id, true);
-      notify("success", `已连接 ${workerLabel(worker)}`); setTab("run"); return true;
+      await loadWorkers(); setSelectedWorkerID(worker.id); await refreshWorker(worker.id, true); setPairTarget(undefined);
+      notify("success", `已连接 ${workerLabel(worker)}`); return true;
     } catch (error) { notify("error", errorMessage(error)); return false; }
     finally { setBusy(""); }
   };
 
-  const startRun = async (input) => {
+  const startRun = async ({ resumeSessionId = "" } = {}) => {
     setBusy("run");
-    try { const run = await MobileBinding.StartRun(input); setCurrentRun(run); return true; }
-    catch (error) { notify("error", errorMessage(error)); return false; }
+    try {
+      const run = await MobileBinding.StartRun({
+        workerId: selectedWorkerID, workspaceId: workspaceID, conversationId: selectedConversationID,
+        runtime, prompt: prompt.trim(), model: model.trim(), reasoningEffort: reasoningEffort.trim(), resumeSessionId,
+      });
+      setRuns((items) => mergeMobileRun(items, run)); setSelectedConversationID(run.conversationId || run.id); setPrompt(""); return true;
+    } catch (error) { notify("error", errorMessage(error)); return false; }
     finally { setBusy(""); }
   };
 
@@ -376,15 +472,19 @@ export default function MobileWorkbench() {
     finally { setBusy(""); }
   };
 
-  const selectedHealth = healthByID[selectedWorkerID] || null;
-  const title = tab === "run" ? "工作台" : "Worker";
+  const title = view === "projects" ? "远程" : view === "sessions" ? workspaceLabel(selectedWorkspace) : selectedConversation?.title || "新会话";
+  const subtitle = view === "projects" ? <><StatusDot online={Boolean(selectedHealth)} />{selectedHealth?.worker?.name || workerLabel(workers.find((item) => item.id === selectedWorkerID))}</> : view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : `${conversations.filter((item) => item.workspaceId === workspaceID).length} 个会话`;
+  const goBack = view === "conversation" ? () => setView("sessions") : view === "sessions" ? () => setView("projects") : null;
+
   return <div className="mobile-app-shell">
-    <header className="mobile-topbar"><div><span className="mobile-brand-mark">1</span><strong>Oneshot</strong></div><span>{title}</span><button type="button" className="mobile-icon-button" aria-label="更多"><MoreHorizontal size={19} /></button></header>
-    <main>
-      {tab === "run" ? <RunScreen workers={workers} selectedWorkerID={selectedWorkerID} health={selectedHealth} workspaces={workspaces} workspaceID={workspaceID} snapshot={snapshot} currentRun={currentRun} busy={busy} permissionBusy={permissionBusy} onSelectWorker={(id) => { setSelectedWorkerID(id); void refreshWorker(id, true); }} onRefreshWorker={() => refreshWorker()} onSelectWorkspace={setWorkspaceID} onStart={startRun} onInterrupt={interruptRun} onRespondPermission={respondPermission} onAddWorker={() => setPairOpen(true)} /> : <WorkersScreen workers={workers} healthByID={healthByID} busy={busy} onAdd={() => setPairOpen(true)} onRefresh={refreshWorker} onDelete={deleteWorker} />}
-    </main>
-    <nav className="mobile-bottom-nav" aria-label="主导航"><button type="button" className={tab === "run" ? "active" : ""} onClick={() => setTab("run")}><Play size={19} /><span>运行</span></button><button type="button" className={tab === "workers" ? "active" : ""} onClick={() => setTab("workers")}><Server size={19} /><span>Worker</span></button></nav>
+    <Header title={title} subtitle={subtitle} onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={view === "conversation" ? () => newConversation() : null} />
+    {!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
+    {workers.length > 0 && view !== "conversation" && <BottomDock query={query} setQuery={setQuery} workerOnline={Boolean(selectedHealth)} onWorker={() => setWorkersOpen(true)} onNew={() => newConversation()} />}
+    <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
+    <MoreMenu open={menuOpen} sortMode={sortMode} onSort={setSortMode} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
+    <ContextSheet open={contextOpen} workers={workers} selectedWorkerID={selectedWorkerID} workspaces={workspaces} workspaceID={workspaceID} health={selectedHealth} runtime={runtime} runtimeLocked={Boolean(selectedConversationID)} model={model} reasoningEffort={reasoningEffort} onClose={() => setContextOpen(false)} onSelectWorker={(id) => { setSelectedWorkerID(id); setSelectedConversationID(""); setView("conversation"); void refreshWorker(id, true); }} onSelectWorkspace={(id) => selectWorkspace(id, "conversation")} onRuntime={setRuntime} onModel={setModel} onReasoning={setReasoningEffort} />
+    <WorkersSheet open={workersOpen} workers={workers} healthByID={healthByID} busy={Boolean(busy)} onClose={() => setWorkersOpen(false)} onPair={(worker) => { setWorkersOpen(false); setPairTarget(worker || null); }} onRefresh={refreshWorker} onDelete={deleteWorker} />
+    <PairSheet open={pairTarget !== undefined} busy={busy === "pair"} initialURL={pairTarget?.baseUrl || "https://"} onClose={() => setPairTarget(undefined)} onPair={pairWorker} />
     <Notice value={notice} onClose={() => setNotice(null)} />
-    <PairSheet open={pairOpen} busy={busy === "pair"} onClose={() => setPairOpen(false)} onPair={pairWorker} />
   </div>;
 }
