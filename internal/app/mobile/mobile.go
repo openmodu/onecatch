@@ -49,6 +49,7 @@ func Run() {
 		},
 		IOS: application.IOSOptions{
 			DisableLinkPreview: true,
+			DisableBounce:      true,
 			BackgroundColour:   application.NewRGB(245, 245, 240),
 		},
 	})

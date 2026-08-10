@@ -28,9 +28,10 @@ const maxFrameBytes = 34 * 1024 * 1024
 type Client struct{ http *http.Client }
 
 const (
-	controlRequestTimeout = 15 * time.Second
-	streamShutdownGrace   = 2 * time.Minute
-	defaultRunTimeout     = 35 * time.Minute
+	controlRequestTimeout   = 15 * time.Second
+	workspaceRequestTimeout = 10 * time.Minute
+	streamShutdownGrace     = 2 * time.Minute
+	defaultRunTimeout       = 35 * time.Minute
 )
 
 func NewClient() *Client { return &Client{http: &http.Client{}} }
@@ -202,12 +203,25 @@ func (c *Client) ListWorkspaces(ctx context.Context, config Config) ([]Workspace
 }
 
 func (c *Client) PrepareWorkspace(ctx context.Context, config Config, workspaceID string, input WorkspacePrepareRequest) (WorkspacePrepareResult, error) {
+	if _, hasDeadline := ctx.Deadline(); !hasDeadline {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, workspaceRequestTimeout)
+		defer cancel()
+	}
 	var result WorkspacePrepareResult
 	path := "/v1/workspaces/" + url.PathEscape(workspaceID)
 	if err := c.do(ctx, config, http.MethodPut, path, input, &result); err != nil {
 		return WorkspacePrepareResult{}, err
 	}
 	return result, nil
+}
+
+func (c *Client) RemoveWorkspace(ctx context.Context, config Config, workspaceID string, deleteFiles bool) error {
+	path := "/v1/workspaces/" + url.PathEscape(workspaceID)
+	if deleteFiles {
+		path += "?deleteFiles=true"
+	}
+	return c.do(ctx, config, http.MethodDelete, path, nil, nil)
 }
 
 // Interrupt asks the worker to gracefully stop an in-flight run. A run that has

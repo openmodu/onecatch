@@ -92,6 +92,28 @@ export function PairWorker(baseURL, code) {
 }
 
 /**
+ * @param {string} workerID
+ * @param {string} workspaceID
+ * @param {worker$0.WorkspacePrepareRequest} input
+ * @returns {$CancellablePromise<worker$0.WorkspacePrepareResult>}
+ */
+export function PrepareWorkspace(workerID, workspaceID, input) {
+    return $Call.ByID(2414549450, workerID, workspaceID, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType7($result);
+    }));
+}
+
+/**
+ * @param {string} workerID
+ * @param {string} workspaceID
+ * @param {boolean} deleteFiles
+ * @returns {$CancellablePromise<void>}
+ */
+export function RemoveWorkspace(workerID, workspaceID, deleteFiles) {
+    return $Call.ByID(2641031735, workerID, workspaceID, deleteFiles);
+}
+
+/**
  * @param {mobile$0.PermissionDecisionInput} input
  * @returns {$CancellablePromise<void>}
  */
@@ -116,7 +138,7 @@ export function StartRun(input) {
  */
 export function WorkspaceGitStatus(workerID, workspaceID) {
     return $Call.ByID(547359395, workerID, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType8($result);
     }));
 }
 
@@ -128,4 +150,5 @@ const $$createType3 = worker$0.Info.createFrom;
 const $$createType4 = $Create.Array($$createType3);
 const $$createType5 = worker$0.WorkspaceMapping.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = workspaces$0.GitSnapshot.createFrom;
+const $$createType7 = worker$0.WorkspacePrepareResult.createFrom;
+const $$createType8 = workspaces$0.GitSnapshot.createFrom;

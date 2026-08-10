@@ -34,6 +34,14 @@ func (b *MobileBinding) ListWorkspaces(workerID string) ([]worker.WorkspaceMappi
 	return b.service.ListWorkspaces(context.Background(), workerID)
 }
 
+func (b *MobileBinding) PrepareWorkspace(workerID, workspaceID string, input worker.WorkspacePrepareRequest) (worker.WorkspacePrepareResult, error) {
+	return b.service.PrepareWorkspace(context.Background(), workerID, workspaceID, input)
+}
+
+func (b *MobileBinding) RemoveWorkspace(workerID, workspaceID string, deleteFiles bool) error {
+	return b.service.RemoveWorkspace(context.Background(), workerID, workspaceID, deleteFiles)
+}
+
 func (b *MobileBinding) WorkspaceGitStatus(workerID, workspaceID string) (domainworkspaces.GitSnapshot, error) {
 	return b.service.WorkspaceGitStatus(context.Background(), workerID, workspaceID)
 }

@@ -6,6 +6,10 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as workspaces$0 from "../../domain/workspaces/models.js";
+
 export class Health {
     /**
      * Creates a new Health instance.
@@ -272,12 +276,40 @@ export class WorkspaceMapping {
              */
             this["id"] = "";
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["name"] = undefined;
+        }
         if (!("path" in $$source)) {
             /**
              * @member
              * @type {string}
              */
             this["path"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["remoteUrl"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["revision"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["managed"] = undefined;
         }
         if (!("createdAt" in $$source)) {
             /**
@@ -308,5 +340,99 @@ export class WorkspaceMapping {
     }
 }
 
+export class WorkspacePrepareRequest {
+    /**
+     * Creates a new WorkspacePrepareRequest instance.
+     * @param {Partial<WorkspacePrepareRequest>} [$$source = {}] - The source object to create the WorkspacePrepareRequest.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["name"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["path"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["remoteUrl"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["revision"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspacePrepareRequest instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WorkspacePrepareRequest}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkspacePrepareRequest(/** @type {Partial<WorkspacePrepareRequest>} */($$parsedSource));
+    }
+}
+
+export class WorkspacePrepareResult {
+    /**
+     * Creates a new WorkspacePrepareResult instance.
+     * @param {Partial<WorkspacePrepareResult>} [$$source = {}] - The source object to create the WorkspacePrepareResult.
+     */
+    constructor($$source = {}) {
+        if (!("mapping" in $$source)) {
+            /**
+             * @member
+             * @type {WorkspaceMapping}
+             */
+            this["mapping"] = (new WorkspaceMapping());
+        }
+        if (!("git" in $$source)) {
+            /**
+             * @member
+             * @type {workspaces$0.GitSnapshot}
+             */
+            this["git"] = (new workspaces$0.GitSnapshot());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspacePrepareResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WorkspacePrepareResult}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType1;
+        const $$createField1_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("mapping" in $$parsedSource) {
+            $$parsedSource["mapping"] = $$createField0_0($$parsedSource["mapping"]);
+        }
+        if ("git" in $$parsedSource) {
+            $$parsedSource["git"] = $$createField1_0($$parsedSource["git"]);
+        }
+        return new WorkspacePrepareResult(/** @type {Partial<WorkspacePrepareResult>} */($$parsedSource));
+    }
+}
+
 // Private type creation functions
 const $$createType0 = $Create.Map($Create.Any, $Create.Any);
+const $$createType1 = WorkspaceMapping.createFrom;
+const $$createType2 = workspaces$0.GitSnapshot.createFrom;

@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -57,6 +59,7 @@ type Server struct {
 
 type runState struct {
 	cancel      context.CancelFunc
+	workspaceID string
 	permissions map[string]*pendingPermission
 }
 
@@ -140,6 +143,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/runs/{runID}/patch/ack", s.authorize(s.ackPatch))
 	mux.HandleFunc("GET /v1/workspaces", s.authorize(s.listWorkspaces))
 	mux.HandleFunc("PUT /v1/workspaces/{workspaceID}", s.authorize(s.prepareWorkspace))
+	mux.HandleFunc("DELETE /v1/workspaces/{workspaceID}", s.authorize(s.removeWorkspace))
 	mux.HandleFunc("GET /v1/workspaces/{workspaceID}/git", s.authorize(s.workspaceGit))
 	return mux
 }
@@ -188,12 +192,51 @@ func (s *Server) workspaceGit(writer http.ResponseWriter, request *http.Request)
 }
 
 func (s *Server) listWorkspaces(writer http.ResponseWriter, request *http.Request) {
+	stored := map[string]WorkspaceMapping{}
+	if s.workspaceRegistry != nil {
+		items, err := s.workspaceRegistry.List(request.Context())
+		if err != nil {
+			writeError(writer, http.StatusInternalServerError, "worker_workspace_list_failed", "could not read workspace mappings")
+			return
+		}
+		for _, item := range items {
+			stored[item.ID] = item
+		}
+	}
 	s.workspacesMu.RLock()
 	items := make([]WorkspaceMapping, 0, len(s.workspaces))
 	for id, path := range s.workspaces {
-		items = append(items, WorkspaceMapping{ID: id, Path: path})
+		mapping := stored[id]
+		mapping.ID = id
+		mapping.Path = path
+		if strings.TrimSpace(mapping.Name) == "" {
+			mapping.Name = id
+		}
+		if s.workspaceRegistry != nil {
+			mapping.Managed = s.workspaceRegistry.IsManagedPath(id, path)
+		}
+		items = append(items, mapping)
 	}
 	s.workspacesMu.RUnlock()
+	for index := range items {
+		if items[index].RemoteURL != "" && items[index].Revision != "" {
+			continue
+		}
+		_, workspaceLock, ok := s.workspaceState(items[index].ID)
+		if !ok {
+			continue
+		}
+		workspaceLock.RLock()
+		remoteURL, revision := workspaceIdentity(request.Context(), items[index].Path)
+		workspaceLock.RUnlock()
+		if items[index].RemoteURL == "" {
+			items[index].RemoteURL = remoteURL
+		}
+		if items[index].Revision == "" {
+			items[index].Revision = revision
+		}
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].Name < items[j].Name })
 	writeJSON(writer, http.StatusOK, items)
 }
 
@@ -207,9 +250,17 @@ func (s *Server) prepareWorkspace(writer http.ResponseWriter, request *http.Requ
 		writeError(writer, http.StatusBadRequest, "worker_workspace_prepare_invalid", "workspace id is invalid")
 		return
 	}
+	if s.workspaceInUse(workspaceID) {
+		writeError(writer, http.StatusConflict, "worker_workspace_busy", "the workspace has an active run or an unacknowledged patch")
+		return
+	}
 	workspaceLock := s.ensureWorkspaceLock(workspaceID)
 	workspaceLock.Lock()
 	defer workspaceLock.Unlock()
+	if s.workspaceInUse(workspaceID) {
+		writeError(writer, http.StatusConflict, "worker_workspace_busy", "the workspace has an active run or an unacknowledged patch")
+		return
+	}
 	var input WorkspacePrepareRequest
 	decoder := json.NewDecoder(io.LimitReader(request.Body, 1<<20))
 	decoder.DisallowUnknownFields()
@@ -217,15 +268,51 @@ func (s *Server) prepareWorkspace(writer http.ResponseWriter, request *http.Requ
 		writeError(writer, http.StatusBadRequest, "worker_workspace_prepare_invalid", "invalid workspace preparation request")
 		return
 	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.Path = strings.TrimSpace(input.Path)
+	input.RemoteURL = strings.TrimSpace(input.RemoteURL)
+	input.Revision = strings.TrimSpace(input.Revision)
 	workspacePath, _, mapped := s.workspaceState(workspaceID)
-	if !mapped {
+	if input.Path != "" {
+		if !filepath.IsAbs(input.Path) {
+			writeError(writer, http.StatusBadRequest, "worker_workspace_prepare_invalid", "workspace path must be absolute")
+			return
+		}
+		workspacePath = filepath.Clean(input.Path)
+	} else if !mapped {
 		workspacePath = s.workspaceRegistry.DefaultPath(workspaceID)
 	}
-	if remoteErr := prepareGitWorkspace(request.Context(), workspacePath, input.RemoteURL, input.Revision); remoteErr != nil {
-		writeError(writer, http.StatusConflict, remoteErr.Code, remoteErr.Message)
+	if !s.workspacePathAvailable(workspaceID, workspacePath) {
+		writeError(writer, http.StatusConflict, "worker_workspace_path_mapped", "the workspace path is already mapped with another id")
 		return
 	}
-	mapping, err := s.workspaceRegistry.Save(request.Context(), workspaceID, workspacePath)
+	remoteURL := input.RemoteURL
+	revision := input.Revision
+	if remoteURL != "" {
+		if revision == "" {
+			revision = "HEAD"
+		}
+		if remoteErr := prepareGitWorkspace(request.Context(), workspacePath, remoteURL, revision); remoteErr != nil {
+			writeError(writer, http.StatusConflict, remoteErr.Code, remoteErr.Message)
+			return
+		}
+		resolvedRemote, resolvedRevision, remoteErr := prepareExistingWorkspace(request.Context(), workspacePath, "")
+		if remoteErr != nil {
+			writeError(writer, http.StatusConflict, remoteErr.Code, remoteErr.Message)
+			return
+		}
+		remoteURL, revision = resolvedRemote, resolvedRevision
+	} else {
+		resolvedRemote, resolvedRevision, remoteErr := prepareExistingWorkspace(request.Context(), workspacePath, revision)
+		if remoteErr != nil {
+			writeError(writer, http.StatusConflict, remoteErr.Code, remoteErr.Message)
+			return
+		}
+		remoteURL, revision = resolvedRemote, resolvedRevision
+	}
+	mapping, err := s.workspaceRegistry.SaveMapping(request.Context(), WorkspaceMapping{
+		ID: workspaceID, Name: input.Name, Path: workspacePath, RemoteURL: remoteURL, Revision: revision,
+	})
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "worker_workspace_persist_failed", "could not persist the workspace mapping")
 		return
@@ -247,6 +334,53 @@ func (s *Server) prepareWorkspace(writer http.ResponseWriter, request *http.Requ
 	writeJSON(writer, http.StatusOK, WorkspacePrepareResult{Mapping: mapping, Git: snapshot})
 }
 
+func (s *Server) removeWorkspace(writer http.ResponseWriter, request *http.Request) {
+	if s.workspaceRegistry == nil {
+		writeError(writer, http.StatusNotImplemented, "worker_workspace_management_unsupported", "persistent workspace management is not enabled on this worker")
+		return
+	}
+	workspaceID := request.PathValue("workspaceID")
+	if !runIDPattern.MatchString(workspaceID) {
+		writeError(writer, http.StatusBadRequest, "worker_workspace_remove_invalid", "workspace id is invalid")
+		return
+	}
+	workspacePath, workspaceLock, ok := s.workspaceState(workspaceID)
+	if !ok {
+		writeError(writer, http.StatusNotFound, "worker_workspace_unmapped", "workspace is not mapped on this worker")
+		return
+	}
+	workspaceLock.Lock()
+	defer workspaceLock.Unlock()
+	if s.workspaceInUse(workspaceID) {
+		writeError(writer, http.StatusConflict, "worker_workspace_busy", "the workspace has an active run or an unacknowledged patch")
+		return
+	}
+	deleteFiles := request.URL.Query().Get("deleteFiles") == "true"
+	if deleteFiles {
+		if !s.workspaceRegistry.IsManagedPath(workspaceID, workspacePath) {
+			writeError(writer, http.StatusBadRequest, "worker_workspace_delete_forbidden", "only Worker-managed clones can be deleted")
+			return
+		}
+		if _, _, remoteErr := prepareExistingWorkspace(request.Context(), workspacePath, ""); remoteErr != nil {
+			writeError(writer, http.StatusConflict, remoteErr.Code, remoteErr.Message)
+			return
+		}
+		if err := os.RemoveAll(workspacePath); err != nil {
+			writeError(writer, http.StatusInternalServerError, "worker_workspace_delete_failed", "could not delete the managed workspace clone")
+			return
+		}
+	}
+	if err := s.workspaceRegistry.Delete(request.Context(), workspaceID); err != nil {
+		writeError(writer, http.StatusInternalServerError, "worker_workspace_persist_failed", "could not remove the workspace mapping")
+		return
+	}
+	s.workspacesMu.Lock()
+	delete(s.workspaces, workspaceID)
+	delete(s.locks, workspaceID)
+	s.workspacesMu.Unlock()
+	writeJSON(writer, http.StatusOK, map[string]any{"id": workspaceID, "deletedFiles": deleteFiles})
+}
+
 func (s *Server) workspaceState(id string) (string, *sync.RWMutex, bool) {
 	s.workspacesMu.RLock()
 	defer s.workspacesMu.RUnlock()
@@ -261,6 +395,50 @@ func (s *Server) ensureWorkspaceLock(id string) *sync.RWMutex {
 		s.locks[id] = &sync.RWMutex{}
 	}
 	return s.locks[id]
+}
+
+func (s *Server) workspaceInUse(id string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, state := range s.running {
+		if state.workspaceID == id {
+			return true
+		}
+	}
+	for _, patch := range s.patches {
+		if patch.workspaceID == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Server) workspaceMatches(id, path string) bool {
+	s.workspacesMu.RLock()
+	defer s.workspacesMu.RUnlock()
+	return s.workspaces[id] == path
+}
+
+func (s *Server) workspacePathAvailable(id, path string) bool {
+	s.workspacesMu.RLock()
+	defer s.workspacesMu.RUnlock()
+	wanted := filepath.Clean(path)
+	for currentID, currentPath := range s.workspaces {
+		if currentID != id && pathsOverlap(filepath.Clean(currentPath), wanted) {
+			return false
+		}
+	}
+	return true
+}
+
+func pathsOverlap(left, right string) bool {
+	for _, pair := range [][2]string{{left, right}, {right, left}} {
+		relative, err := filepath.Rel(pair[0], pair[1])
+		if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Server) authorize(next http.HandlerFunc) http.HandlerFunc {
@@ -341,7 +519,7 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 	// Register a cancellable context so an interrupt call can stop this run.
 	runCtx, cancel := context.WithTimeout(request.Context(), runTimeout)
 	defer cancel()
-	state, tracked := s.track(input.RunID, cancel)
+	state, tracked := s.track(input.RunID, input.WorkspaceID, cancel)
 	if !tracked {
 		writeError(writer, http.StatusConflict, "worker_run_exists", "run id is already in flight")
 		return
@@ -351,6 +529,10 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 	if input.Sandbox == agentrun.SandboxReadOnly {
 		workspaceLock.RLock()
 		defer workspaceLock.RUnlock()
+		if !s.workspaceMatches(input.WorkspaceID, workspace) {
+			writeError(writer, http.StatusConflict, "worker_workspace_unmapped", "workspace is no longer mapped on this worker")
+			return
+		}
 		if input.BaseRevision != "" {
 			if err := validateWorkspaceBaseline(request.Context(), workspace, input.BaseRevision); err != nil {
 				writeError(writer, http.StatusConflict, err.Code, err.Message)
@@ -360,6 +542,10 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 	} else {
 		workspaceLock.Lock()
 		defer workspaceLock.Unlock()
+		if !s.workspaceMatches(input.WorkspaceID, workspace) {
+			writeError(writer, http.StatusConflict, "worker_workspace_unmapped", "workspace is no longer mapped on this worker")
+			return
+		}
 		if !input.SyncChanges || input.BaseRevision == "" {
 			writeError(writer, http.StatusConflict, "worker_write_sync_required", "writable remote runs require workspace synchronization")
 			return
@@ -610,13 +796,13 @@ func (s *Server) awaitPermission(ctx context.Context, state *runState, permissio
 	}
 }
 
-func (s *Server) track(runID string, cancel context.CancelFunc) (*runState, bool) {
+func (s *Server) track(runID, workspaceID string, cancel context.CancelFunc) (*runState, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.running[runID] != nil {
 		return nil, false
 	}
-	state := &runState{cancel: cancel, permissions: make(map[string]*pendingPermission)}
+	state := &runState{cancel: cancel, workspaceID: workspaceID, permissions: make(map[string]*pendingPermission)}
 	s.running[runID] = state
 	return state, true
 }

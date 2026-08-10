@@ -14,12 +14,15 @@ import {
   Cpu,
   Folder,
   FolderGit2,
+	GitBranch,
+	HardDrive,
   Link2,
   LoaderCircle,
   Menu,
   MessageCircle,
   MoreHorizontal,
   PanelLeftClose,
+	Pencil,
   PenLine,
   Plus,
   RefreshCw,
@@ -58,6 +61,13 @@ function workspaceLabel(workspace) {
   if (workspace?.name) return workspace.name;
   const pieces = String(workspace?.path || "").split(/[\\/]/).filter(Boolean);
   return pieces.at(-1) || workspace?.id || "Workspace";
+}
+
+function workspaceGitLabel(snapshot) {
+  if (!snapshot) return "尚未检查";
+  if (!snapshot.isRepo) return "不是 Git 仓库";
+  if (snapshot.status || (snapshot.files || []).length) return `${(snapshot.files || []).length || 1} 项未提交变更`;
+  return snapshot.branch || snapshot.head?.slice(0, 8) || "Git 工作区";
 }
 
 function runStatusLabel(status) {
@@ -112,7 +122,7 @@ function PairSheet({ open, busy, initialURL = "https://", onClose, onPair }) {
       <form onSubmit={(event) => { event.preventDefault(); void onPair({ baseURL, code }).then((ok) => { if (ok) { setCode(""); onClose(); } }); }}>
         <label><span>Worker 地址</span><Input value={baseURL} inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="https://192.168.1.20:9231" onChange={(event) => setBaseURL(event.target.value)} /></label>
         <label><span>一次性配对码</span><Input value={code} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="例如 ABCD-EFGH" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
-        <Button className="mobile-primary-button" type="submit" disabled={busy || !baseURL.trim() || !code.trim()}>{busy ? <><LoaderCircle className="animate-spin" />正在连接</> : <><Link2 />连接 Worker</>}</Button>
+		<Button className="mobile-main-action" type="submit" disabled={busy || !baseURL.trim() || !code.trim()}>{busy ? <><LoaderCircle className="animate-spin" />正在连接</> : <><Link2 />连接 Worker</>}</Button>
       </form>
       <p className="mobile-security-note">首次 HTTPS 配对会固定服务器证书指纹，之后会拒绝证书变化。</p>
     </section>
@@ -124,7 +134,7 @@ function EmptyConnection({ onPair }) {
     <span className="mobile-empty-symbol"><Cloud /></span>
     <h2>连接你的开发机</h2>
     <p>iPhone 只作为工作台。代码、Git 和 Agent 都在远端 Worker 上运行。</p>
-    <Button className="mobile-primary-button" onClick={onPair}><Link2 />连接 Worker</Button>
+	<Button className="mobile-main-action" onClick={onPair}><Link2 />连接 Worker</Button>
   </section>;
 }
 
@@ -144,7 +154,7 @@ function BottomDock({ query, setQuery, onWorker, onNew, workerOnline }) {
   </footer>;
 }
 
-function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew }) {
+function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew, onManage }) {
   const normalized = query.trim().toLowerCase();
   const visible = workspaces.filter((workspace) => {
     if (!normalized) return true;
@@ -165,7 +175,7 @@ function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew 
         </div>;
       })}
     </div>
-    {!visible.length && <div className="mobile-list-empty"><Search /><p>没有匹配的项目或会话</p></div>}
+	{!visible.length && (workspaces.length ? <div className="mobile-list-empty"><Search /><p>没有匹配的项目或会话</p></div> : <section className="mobile-list-empty"><FolderGit2 /><h2>还没有 Workspace</h2><p>从 Git 仓库克隆，或绑定 Worker 上已有的干净工作区。</p><Button className="mobile-main-action" onClick={onManage}><Plus />创建 Workspace</Button></section>)}
   </div>;
 }
 
@@ -181,7 +191,70 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
         <span className={`mobile-session-status ${conversation.status}`}>{runStatusLabel(conversation.status)}</span><ChevronRight />
       </button>)}
     </div>
-    {!visible.length && <section className="mobile-list-empty"><MessageCircle /><h2>还没有会话</h2><p>从一个明确的问题开始，后续可以在同一 session 里继续追问。</p><Button className="mobile-primary-button" onClick={onNew}><Plus />新建会话</Button></section>}
+	{!visible.length && <section className="mobile-list-empty"><MessageCircle /><h2>还没有会话</h2><p>从一个明确的问题开始，后续可以在同一 session 里继续追问。</p><Button className="mobile-main-action" onClick={onNew}><Plus />新建会话</Button></section>}
+  </div>;
+}
+
+function WorkspaceManagerPage({ workspaces, statusByID, managementSupported, busy, onOpen, onCreate, onEdit, onRefresh }) {
+  if (!managementSupported) return <section className="mobile-page mobile-workspace-manager"><div className="mobile-list-empty"><CircleAlert /><h2>当前 Worker 不支持管理</h2><p>请更新并重启远端 Worker；已有 Workspace 仍然可以正常打开。</p></div></section>;
+  return <section className="mobile-page mobile-workspace-manager">
+    <header className="mobile-section-heading"><div><h1>Workspace</h1><p>管理当前 Worker 上的代码工作区</p></div><Button size="sm" onClick={onCreate}><Plus />新建</Button></header>
+    <div className="mobile-workspace-manage-list">
+      {workspaces.map((workspace) => {
+        const state = statusByID[workspace.id];
+        const snapshot = state?.snapshot;
+        const dirty = Boolean(snapshot && (snapshot.status || (snapshot.files || []).length));
+        return <article className="mobile-workspace-manage-card" key={workspace.id}>
+          <header><span className="mobile-workspace-manage-icon"><FolderGit2 /></span><div><strong>{workspaceLabel(workspace)}</strong><small>{workspace.id}</small></div><span className={`mobile-git-state ${dirty ? "dirty" : snapshot?.isRepo ? "clean" : ""}`}>{state?.loading ? "检查中" : state?.error ? "不可用" : workspaceGitLabel(snapshot)}</span></header>
+          <div className="mobile-workspace-manage-meta"><span><HardDrive />{workspace.path}</span>{workspace.remoteUrl && <span><GitBranch />{workspace.remoteUrl}</span>}</div>
+          <footer><Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={() => onOpen(workspace.id)}>打开</Button><Button variant="outline" size="icon-sm" aria-label={`刷新 ${workspaceLabel(workspace)}`} disabled={Boolean(busy) || state?.loading} onClick={() => onRefresh(workspace)}><RefreshCw className={state?.loading ? "animate-spin" : ""} /></Button><Button variant="ghost" size="icon-sm" aria-label={`编辑 ${workspaceLabel(workspace)}`} disabled={Boolean(busy)} onClick={() => onEdit(workspace)}><Pencil /></Button></footer>
+        </article>;
+      })}
+    </div>
+	{!workspaces.length && <div className="mobile-list-empty"><FolderGit2 /><h2>创建第一个 Workspace</h2><p>Worker 可以克隆 Git 仓库，也可以安全绑定已有的干净目录。</p><Button className="mobile-main-action" onClick={onCreate}><Plus />创建 Workspace</Button></div>}
+  </section>;
+}
+
+function WorkspaceEditorSheet({ workspace, busy, onClose, onSave, onDelete }) {
+  const [name, setName] = useState("");
+  const [id, setID] = useState("");
+  const [source, setSource] = useState("clone");
+  const [remoteURL, setRemoteURL] = useState("");
+  const [revision, setRevision] = useState("HEAD");
+  const [path, setPath] = useState("");
+  const [deleteFiles, setDeleteFiles] = useState(false);
+  useEffect(() => {
+    if (workspace === undefined) return;
+	const nextSource = workspace && !workspace.managed ? "existing" : "clone";
+    setName(workspace?.name || workspace?.id || "");
+    setID(workspace?.id || "");
+	setSource(nextSource);
+    setRemoteURL(workspace?.remoteUrl || "");
+	setRevision(nextSource === "clone" ? workspace?.revision || "HEAD" : "");
+    setPath(workspace?.path || "");
+    setDeleteFiles(false);
+  }, [workspace]);
+  if (workspace === undefined) return null;
+  const editing = Boolean(workspace);
+  const canSave = name.trim() && id.trim() && (source === "clone" ? remoteURL.trim() : path.trim());
+  return <div className="mobile-sheet-backdrop" onPointerDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
+    <section className="mobile-sheet mobile-workspace-editor" role="dialog" aria-modal="true" aria-labelledby="workspace-editor-title">
+      <div className="mobile-sheet-handle" />
+      <header><div><small>Remote Workspace</small><h2 id="workspace-editor-title">{editing ? "编辑 Workspace" : "新建 Workspace"}</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" disabled={Boolean(busy)} onClick={onClose}><X /></button></header>
+      <form onSubmit={(event) => { event.preventDefault(); void onSave({ id: id.trim(), name: name.trim(), path: source === "existing" ? path.trim() : editing && !workspace.managed ? workspace.path : "", remoteUrl: source === "clone" ? remoteURL.trim() : "", revision: revision.trim() }); }}>
+        <label><span>显示名称</span><Input value={name} placeholder="例如 Oneshot" onChange={(event) => setName(event.target.value)} /></label>
+        <label><span>Workspace ID</span><Input value={id} disabled={editing} autoCapitalize="none" autoCorrect="off" placeholder="oneshot" pattern="[A-Za-z0-9_-]{1,128}" onChange={(event) => setID(event.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} /></label>
+		<div className="mobile-workspace-source" role="radiogroup" aria-label="Workspace 来源"><button type="button" className={source === "clone" ? "selected" : ""} role="radio" aria-checked={source === "clone"} disabled={editing} onClick={() => { setSource("clone"); setRevision((value) => value || "HEAD"); }}><Cloud />克隆 Git 仓库</button><button type="button" className={source === "existing" ? "selected" : ""} role="radio" aria-checked={source === "existing"} disabled={editing} onClick={() => { setSource("existing"); setRevision(""); }}><HardDrive />绑定已有目录</button></div>
+        {source === "clone" ? <label><span>Git 地址</span><Input value={remoteURL} inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="git@github.com:org/repo.git" onChange={(event) => setRemoteURL(event.target.value)} /></label> : <label><span>Worker 绝对路径</span><Input value={path} autoCapitalize="none" autoCorrect="off" placeholder="/Users/me/Code/project" onChange={(event) => setPath(event.target.value)} /></label>}
+		<label><span>分支、标签或 Commit</span><Input value={revision} autoCapitalize="none" autoCorrect="off" placeholder={source === "clone" ? "HEAD" : "留空保持当前提交"} onChange={(event) => setRevision(event.target.value)} /></label>
+        <p className="mobile-context-note">创建和切换前会检查 Git 状态；存在未提交变更时 Worker 会拒绝操作。</p>
+		<Button className="mobile-main-action" type="submit" disabled={Boolean(busy) || !canSave}>{busy === "workspace-save" ? <><LoaderCircle className="animate-spin" />正在保存</> : "保存 Workspace"}</Button>
+      </form>
+      {editing && <div className="mobile-workspace-danger-zone">
+        {workspace.managed && <button type="button" className={`mobile-delete-toggle ${deleteFiles ? "selected" : ""}`} role="checkbox" aria-checked={deleteFiles} onClick={() => setDeleteFiles((value) => !value)}><span>{deleteFiles && <Check />}</span><div><strong>同时删除远端克隆</strong><small>仅允许删除由 Worker 创建且没有未提交变更的副本</small></div></button>}
+        <Button variant="destructive" disabled={Boolean(busy)} onClick={() => onDelete(workspace, deleteFiles)}>{busy === "workspace-delete" ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{deleteFiles ? "删除 Workspace 和文件" : "移除 Workspace"}</Button>
+      </div>}
+    </section>
   </div>;
 }
 
@@ -259,7 +332,7 @@ function Sidebar({ open, workspaces, conversations, selectedConversationID, heal
   </div>;
 }
 
-function MoreMenu({ open, sortMode, onSort, onWorkers, onPair, onSettings, onClose }) {
+function MoreMenu({ open, sortMode, health, onSort, onWorkspaces, onWorkers, onPair, onSettings, onClose }) {
   if (!open) return null;
   return <div className="mobile-popover-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="mobile-more-menu">
@@ -268,9 +341,12 @@ function MoreMenu({ open, sortMode, onSort, onWorkers, onPair, onSettings, onClo
       <button type="button" onClick={() => { onSort("recent"); onClose(); }}>{sortMode === "recent" ? <Check /> : <span />}<ArrowDownUp />按时间倒序排列</button>
       <hr />
       <small>管理</small>
+	  <button type="button" onClick={() => { onWorkspaces(); onClose(); }}><span /><FolderGit2 />Workspace 管理</button>
       <button type="button" onClick={() => { onWorkers(); onClose(); }}><span /><Cloud />Worker 管理</button>
       <button type="button" onClick={() => { onPair(); onClose(); }}><span /><Link2 />添加连接</button>
       <button type="button" onClick={() => { onSettings(); onClose(); }}><span /><Settings2 />运行设置</button>
+      <hr />
+      <div className="mobile-menu-status"><small>当前连接</small><strong><StatusDot online={Boolean(health)} />{health?.worker?.name || "远端 Worker"}</strong><span>{health ? `${health.latencyMilliseconds}ms · ${RUNTIMES.filter((item) => health.health?.runtimes?.[item.id]).map((item) => item.label).join(" · ") || "无可用运行时"}` : "离线"}</span></div>
     </section>
   </div>;
 }
@@ -288,7 +364,7 @@ function ContextSheet({ open, workers, selectedWorkerID, workspaces, workspaceID
       {runtimeLocked && <p className="mobile-context-note">已有 session 会保持原运行时；切换工作区或新建会话后可以重新选择。</p>}
       <label><span>模型（可选）</span><Input value={model} placeholder="跟随 Worker 默认" autoCapitalize="none" onChange={(event) => onModel(event.target.value)} /></label>
       <label><span>推理强度（可选）</span><Input value={reasoningEffort} placeholder="medium / high" autoCapitalize="none" onChange={(event) => onReasoning(event.target.value)} /></label>
-      <Button className="mobile-primary-button" onClick={onClose}>完成</Button>
+	  <Button className="mobile-main-action" onClick={onClose}>完成</Button>
     </section>
   </div>;
 }
@@ -307,7 +383,7 @@ function WorkersSheet({ open, workers, healthByID, busy, onClose, onPair, onRefr
           <footer><Button variant="outline" size="sm" disabled={busy} onClick={() => onRefresh(worker.id)}><RefreshCw />检查</Button><Button variant="outline" size="sm" disabled={busy} onClick={() => onPair(worker)}><Link2 />重新配对</Button><Button variant="ghost" size="icon-sm" aria-label={`删除 ${workerLabel(worker)}`} disabled={busy} onClick={() => onDelete(worker)}><Trash2 /></Button></footer>
         </article>;
       })}</div>
-      <Button className="mobile-primary-button" onClick={() => onPair(null)}><Plus />添加 Worker</Button>
+	  <Button className="mobile-main-action" onClick={() => onPair(null)}><Plus />添加 Worker</Button>
     </section>
   </div>;
 }
@@ -319,6 +395,8 @@ export default function MobileWorkbench() {
   const [healthByID, setHealthByID] = useState({});
   const [workspaces, setWorkspaces] = useState([]);
   const [workspaceID, setWorkspaceID] = useState("");
+	const [workspaceStatusByID, setWorkspaceStatusByID] = useState({});
+	const [workspaceEditor, setWorkspaceEditor] = useState(undefined);
   const [snapshot, setSnapshot] = useState(null);
   const [runs, setRuns] = useState([]);
   const [selectedConversationID, setSelectedConversationID] = useState("");
@@ -346,6 +424,7 @@ export default function MobileWorkbench() {
   const selectedConversation = conversations.find((item) => item.id === selectedConversationID) || null;
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID) || null;
   const selectedHealth = healthByID[selectedWorkerID] || null;
+	const workspaceManagementSupported = selectedHealth ? Boolean(selectedHealth.health?.capabilities?.workspaceManagement) : true;
 
   const notify = useCallback((type, message) => {
     setNotice({ type, message });
@@ -384,6 +463,22 @@ export default function MobileWorkbench() {
     }
   }, [notify]);
 
+	const refreshWorkspace = useCallback(async (workspace) => {
+	  const id = typeof workspace === "string" ? workspace : workspace?.id;
+	  if (!selectedWorkerID || !id) return null;
+	  setWorkspaceStatusByID((current) => ({ ...current, [id]: { ...current[id], loading: true, error: "" } }));
+	  try {
+	    const value = await MobileBinding.WorkspaceGitStatus(selectedWorkerID, id);
+	    setWorkspaceStatusByID((current) => ({ ...current, [id]: { loading: false, snapshot: value, error: "" } }));
+	    if (id === workspaceID) setSnapshot(value);
+	    return value;
+	  } catch (error) {
+	    const message = errorMessage(error);
+	    setWorkspaceStatusByID((current) => ({ ...current, [id]: { loading: false, snapshot: null, error: message } }));
+	    return null;
+	  }
+	}, [selectedWorkerID, workspaceID]);
+
   useEffect(() => {
     void (async () => {
       try {
@@ -395,6 +490,10 @@ export default function MobileWorkbench() {
   }, [loadWorkers, notify, refreshWorker]);
 
   useEffect(() => { if (selectedWorkerID) void loadWorkspaces(selectedWorkerID); }, [loadWorkspaces, selectedWorkerID]);
+	useEffect(() => {
+	  if (view !== "workspaces") return;
+	  for (const workspace of workspaces) void refreshWorkspace(workspace);
+	}, [refreshWorkspace, view, workspaces]);
   useEffect(() => {
     if (!selectedWorkerID || !workspaceID) { setSnapshot(null); return; }
     setSnapshot(null);
@@ -424,7 +523,7 @@ export default function MobileWorkbench() {
   };
   const newConversation = (id = workspaceID) => {
     const nextID = id || workspaces[0]?.id || "";
-    if (!nextID) { setPairTarget(null); return; }
+	if (!nextID) { setView("workspaces"); setWorkspaceEditor(null); return; }
     setWorkspaceID(nextID); setSelectedConversationID(""); setPrompt(""); setView("conversation"); setQuery("");
   };
 
@@ -472,19 +571,52 @@ export default function MobileWorkbench() {
     finally { setBusy(""); }
   };
 
-  const title = view === "projects" ? "远程" : view === "sessions" ? workspaceLabel(selectedWorkspace) : selectedConversation?.title || "新会话";
-  const subtitle = view === "projects" ? <><StatusDot online={Boolean(selectedHealth)} />{selectedHealth?.worker?.name || workerLabel(workers.find((item) => item.id === selectedWorkerID))}</> : view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : `${conversations.filter((item) => item.workspaceId === workspaceID).length} 个会话`;
-  const goBack = view === "conversation" ? () => setView("sessions") : view === "sessions" ? () => setView("projects") : null;
+	const saveWorkspace = async (input) => {
+	  setBusy("workspace-save");
+	  try {
+	    const result = await MobileBinding.PrepareWorkspace(selectedWorkerID, input.id, {
+	      name: input.name, path: input.path, remoteUrl: input.remoteUrl, revision: input.revision,
+	    });
+	    const items = await loadWorkspaces(selectedWorkerID);
+	    setWorkspaceID((current) => current || result.mapping?.id || items[0]?.id || "");
+	    if (result.mapping?.id) setWorkspaceStatusByID((current) => ({ ...current, [result.mapping.id]: { loading: false, snapshot: result.git, error: "" } }));
+	    setWorkspaceEditor(undefined);
+	    notify("success", `${workspaceLabel(result.mapping)} 已保存`);
+	    return true;
+	  } catch (error) { notify("error", errorMessage(error)); return false; }
+	  finally { setBusy(""); }
+	};
+
+	const deleteWorkspace = async (workspace, deleteFiles) => {
+	  const action = deleteFiles ? "删除远端克隆及其文件" : "移除 Workspace 映射";
+	  if (!window.confirm(`${action}“${workspaceLabel(workspace)}”？${deleteFiles ? " 此操作不可恢复。" : " 代码文件会保留在 Worker。"}`)) return;
+	  setBusy("workspace-delete");
+	  try {
+	    await MobileBinding.RemoveWorkspace(selectedWorkerID, workspace.id, deleteFiles);
+	    setWorkspaceStatusByID((current) => { const next = { ...current }; delete next[workspace.id]; return next; });
+	    await loadWorkspaces(selectedWorkerID);
+	    setWorkspaceEditor(undefined);
+	    notify("success", deleteFiles ? "Workspace 和远端克隆已删除" : "Workspace 映射已移除");
+	  } catch (error) { notify("error", errorMessage(error)); }
+	  finally { setBusy(""); }
+	};
+
+	const openWorkspaceManager = () => { setView("workspaces"); setQuery(""); void loadWorkspaces(selectedWorkerID); };
+
+	const title = view === "projects" ? "远程" : view === "workspaces" ? "Workspace" : view === "sessions" ? workspaceLabel(selectedWorkspace) : selectedConversation?.title || "新会话";
+	const subtitle = view === "projects" || view === "workspaces" ? <><StatusDot online={Boolean(selectedHealth)} />{selectedHealth?.worker?.name || workerLabel(workers.find((item) => item.id === selectedWorkerID))}</> : view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : `${conversations.filter((item) => item.workspaceId === workspaceID).length} 个会话`;
+	const goBack = view === "conversation" ? () => setView("sessions") : view === "sessions" || view === "workspaces" ? () => setView("projects") : null;
 
   return <div className="mobile-app-shell">
     <Header title={title} subtitle={subtitle} onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={view === "conversation" ? () => newConversation() : null} />
-    {!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
-    {workers.length > 0 && view !== "conversation" && <BottomDock query={query} setQuery={setQuery} workerOnline={Boolean(selectedHealth)} onWorker={() => setWorkersOpen(true)} onNew={() => newConversation()} />}
+	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
+	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomDock query={query} setQuery={setQuery} workerOnline={Boolean(selectedHealth)} onWorker={() => setWorkersOpen(true)} onNew={() => newConversation()} />}
     <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
-    <MoreMenu open={menuOpen} sortMode={sortMode} onSort={setSortMode} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
+	<MoreMenu open={menuOpen} sortMode={sortMode} health={selectedHealth} onSort={setSortMode} onWorkspaces={openWorkspaceManager} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
     <ContextSheet open={contextOpen} workers={workers} selectedWorkerID={selectedWorkerID} workspaces={workspaces} workspaceID={workspaceID} health={selectedHealth} runtime={runtime} runtimeLocked={Boolean(selectedConversationID)} model={model} reasoningEffort={reasoningEffort} onClose={() => setContextOpen(false)} onSelectWorker={(id) => { setSelectedWorkerID(id); setSelectedConversationID(""); setView("conversation"); void refreshWorker(id, true); }} onSelectWorkspace={(id) => selectWorkspace(id, "conversation")} onRuntime={setRuntime} onModel={setModel} onReasoning={setReasoningEffort} />
     <WorkersSheet open={workersOpen} workers={workers} healthByID={healthByID} busy={Boolean(busy)} onClose={() => setWorkersOpen(false)} onPair={(worker) => { setWorkersOpen(false); setPairTarget(worker || null); }} onRefresh={refreshWorker} onDelete={deleteWorker} />
-    <PairSheet open={pairTarget !== undefined} busy={busy === "pair"} initialURL={pairTarget?.baseUrl || "https://"} onClose={() => setPairTarget(undefined)} onPair={pairWorker} />
+	<PairSheet open={pairTarget !== undefined} busy={busy === "pair"} initialURL={pairTarget?.baseUrl || "https://"} onClose={() => setPairTarget(undefined)} onPair={pairWorker} />
+	<WorkspaceEditorSheet workspace={workspaceEditor} busy={busy} onClose={() => setWorkspaceEditor(undefined)} onSave={saveWorkspace} onDelete={deleteWorkspace} />
     <Notice value={notice} onClose={() => setNotice(null)} />
   </div>;
 }
