@@ -97,3 +97,107 @@ func TestPrepareWorkspaceFailedCloneLeavesNoPartialTarget(t *testing.T) {
 		t.Fatalf("temporary clone entries remained: %+v", entries)
 	}
 }
+
+func TestBindExistingWorkspaceAndRemoveMapping(t *testing.T) {
+	root := t.TempDir()
+	existing := filepath.Join(root, "existing")
+	if err := os.Mkdir(existing, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, existing, "init")
+	runGit(t, existing, "config", "user.email", "worker-test@example.com")
+	runGit(t, existing, "config", "user.name", "Worker Test")
+	if err := os.WriteFile(filepath.Join(existing, "README.md"), []byte("bound\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, existing, "add", "README.md")
+	runGit(t, existing, "commit", "-m", "initial")
+	head := strings.TrimSpace(runGit(t, existing, "rev-parse", "HEAD"))
+
+	service := NewServer("remote-1", "Remote", "secret", nil, fakeEngine{}, 1)
+	if err := service.SetWorkspaceRegistry(context.Background(), NewWorkspaceRegistry(filepath.Join(root, "state", "workspaces.json"))); err != nil {
+		t.Fatal(err)
+	}
+	service.SetGitInspector(gitrepo.New(""))
+	httpServer := httptest.NewServer(service.Handler())
+	defer httpServer.Close()
+	client := NewClient()
+	config := Config{ID: "remote-1", BaseURL: httpServer.URL, Token: "secret", Enabled: true}
+
+	prepared, err := client.PrepareWorkspace(context.Background(), config, "existing-project", WorkspacePrepareRequest{
+		Name: "Existing Project", Path: existing,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if prepared.Mapping.Name != "Existing Project" || prepared.Mapping.Managed || prepared.Mapping.Revision != head {
+		t.Fatalf("prepared mapping = %+v", prepared.Mapping)
+	}
+	items, err := client.ListWorkspaces(context.Background(), config)
+	if err != nil || len(items) != 1 || items[0].Path != existing || items[0].Name != "Existing Project" {
+		t.Fatalf("workspace list = %+v, %v", items, err)
+	}
+	if err := client.RemoveWorkspace(context.Background(), config, "existing-project", true); err == nil || !strings.Contains(err.Error(), "worker_workspace_delete_forbidden") {
+		t.Fatalf("delete existing files error = %v", err)
+	}
+	if err := client.RemoveWorkspace(context.Background(), config, "existing-project", false); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(existing); err != nil {
+		t.Fatalf("unmanaged workspace was removed: %v", err)
+	}
+	items, err = client.ListWorkspaces(context.Background(), config)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("workspace list after remove = %+v, %v", items, err)
+	}
+}
+
+func TestRemoveManagedWorkspaceCanDeleteCleanClone(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	if err := os.Mkdir(source, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, source, "init")
+	runGit(t, source, "config", "user.email", "worker-test@example.com")
+	runGit(t, source, "config", "user.name", "Worker Test")
+	if err := os.WriteFile(filepath.Join(source, "README.md"), []byte("managed\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, source, "add", "README.md")
+	runGit(t, source, "commit", "-m", "initial")
+
+	registry := NewWorkspaceRegistry(filepath.Join(root, "state", "workspaces.json"))
+	service := NewServer("remote-1", "Remote", "secret", nil, fakeEngine{}, 1)
+	if err := service.SetWorkspaceRegistry(context.Background(), registry); err != nil {
+		t.Fatal(err)
+	}
+	httpServer := httptest.NewServer(service.Handler())
+	defer httpServer.Close()
+	client := NewClient()
+	config := Config{ID: "remote-1", BaseURL: httpServer.URL, Token: "secret", Enabled: true}
+
+	prepared, err := client.PrepareWorkspace(context.Background(), config, "managed-project", WorkspacePrepareRequest{RemoteURL: source, Revision: "HEAD"})
+	if err != nil || !prepared.Mapping.Managed {
+		t.Fatalf("prepared mapping = %+v, %v", prepared.Mapping, err)
+	}
+	if err := client.RemoveWorkspace(context.Background(), config, "managed-project", true); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(registry.DefaultPath("managed-project")); !os.IsNotExist(err) {
+		t.Fatalf("managed clone still exists: %v", err)
+	}
+}
+
+func TestWorkspacePathsCannotOverlap(t *testing.T) {
+	root := t.TempDir()
+	if !pathsOverlap(filepath.Join(root, "project"), filepath.Join(root, "project")) {
+		t.Fatal("equal workspace paths should overlap")
+	}
+	if !pathsOverlap(filepath.Join(root, "project"), filepath.Join(root, "project", "nested")) {
+		t.Fatal("nested workspace paths should overlap")
+	}
+	if pathsOverlap(filepath.Join(root, "project-a"), filepath.Join(root, "project-b")) {
+		t.Fatal("sibling workspace paths should not overlap")
+	}
+}

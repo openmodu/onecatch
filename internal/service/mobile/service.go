@@ -1,6 +1,6 @@
 // Package mobile provides the remote-worker-only application service used by
-// the iOS and Android clients. It deliberately exposes no local process, Git,
-// or workspace mutation capability.
+// the iOS and Android clients. It exposes remote Worker resources without
+// granting the mobile process access to local runtimes or worktrees.
 package mobile
 
 import (
@@ -193,6 +193,30 @@ func (s *Service) ListWorkspaces(ctx context.Context, workerID string) ([]worker
 		return nil, err
 	}
 	return s.client.ListWorkspaces(ctx, config)
+}
+
+func (s *Service) PrepareWorkspace(ctx context.Context, workerID, workspaceID string, input worker.WorkspacePrepareRequest) (worker.WorkspacePrepareResult, error) {
+	config, err := s.enabledWorker(ctx, workerID)
+	if err != nil {
+		return worker.WorkspacePrepareResult{}, err
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return worker.WorkspacePrepareResult{}, worker.RemoteError{Code: "mobile_workspace_invalid", Message: "workspace id is required"}
+	}
+	return s.client.PrepareWorkspace(ctx, config, workspaceID, input)
+}
+
+func (s *Service) RemoveWorkspace(ctx context.Context, workerID, workspaceID string, deleteFiles bool) error {
+	config, err := s.enabledWorker(ctx, workerID)
+	if err != nil {
+		return err
+	}
+	workspaceID = strings.TrimSpace(workspaceID)
+	if workspaceID == "" {
+		return worker.RemoteError{Code: "mobile_workspace_invalid", Message: "workspace id is required"}
+	}
+	return s.client.RemoveWorkspace(ctx, config, workspaceID, deleteFiles)
 }
 
 func (s *Service) WorkspaceGitStatus(ctx context.Context, workerID, workspaceID string) (domainworkspaces.GitSnapshot, error) {

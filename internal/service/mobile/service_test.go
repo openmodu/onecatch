@@ -134,6 +134,46 @@ func TestStartRunRejectsDirtyRemoteWorkspace(t *testing.T) {
 	}
 }
 
+func TestManageRemoteWorkspaceLifecycle(t *testing.T) {
+	source := initMobileTestRepo(t)
+	workerRoot := t.TempDir()
+	server := worker.NewServer("workspace-worker", "Workspace Worker", "secret", nil, &mobileTestEngine{}, 1)
+	if err := server.SetWorkspaceRegistry(context.Background(), worker.NewWorkspaceRegistry(filepath.Join(workerRoot, "workspaces.json"))); err != nil {
+		t.Fatal(err)
+	}
+	server.SetGitInspector(gitrepo.New(""))
+	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+
+	service, err := NewService(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	paired, err := service.PairWorker(context.Background(), httpServer.URL, "PAIR1234")
+	if err != nil {
+		t.Fatal(err)
+	}
+	prepared, err := service.PrepareWorkspace(context.Background(), paired.ID, "mobile-project", worker.WorkspacePrepareRequest{
+		Name: "Mobile Project", RemoteURL: source, Revision: "HEAD",
+	})
+	if err != nil || prepared.Mapping.Name != "Mobile Project" || !prepared.Mapping.Managed {
+		t.Fatalf("prepared = %+v, %v", prepared, err)
+	}
+	items, err := service.ListWorkspaces(context.Background(), paired.ID)
+	if err != nil || len(items) != 1 || items[0].ID != "mobile-project" {
+		t.Fatalf("workspaces = %+v, %v", items, err)
+	}
+	if err := service.RemoveWorkspace(context.Background(), paired.ID, "mobile-project", true); err != nil {
+		t.Fatal(err)
+	}
+	items, err = service.ListWorkspaces(context.Background(), paired.ID)
+	if err != nil || len(items) != 0 {
+		t.Fatalf("workspaces after remove = %+v, %v", items, err)
+	}
+}
+
 func TestRunHistoryPersistsAcrossServiceRestart(t *testing.T) {
 	workspace := initMobileTestRepo(t)
 	server := worker.NewServer("history-worker", "History Worker", "secret", map[string]string{"oneshot": workspace}, &mobileTestEngine{}, 1)
