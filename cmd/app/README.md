@@ -1,7 +1,8 @@
-# Oneshot Desktop
+# Oneshot App
 
-Wails v3 本地 Agent 调度桌面端。应用进程直接组装本地 store、Workflow
-orchestrator 与 Codex / Claude Code / Modu Code runtime，不依赖后台服务、登录或远端 API。
+`cmd/app` 是桌面、iOS 和 Android 的统一 Wails 入口。桌面构建组装本地
+store、Workflow orchestrator 与 Agent CLI；移动构建组装远端 Worker
+工作台，通过 Worker API 操作远端 Workspace 和 runtime。
 
 ## 流式输出
 
@@ -16,21 +17,28 @@ orchestrator 与 Codex / Claude Code / Modu Code runtime，不依赖后台服务
 安装至少一个受支持的本地 Agent CLI 后，在仓库根目录启动：
 
 ```bash
-wails3 task dev:desktop
+go tool wails3 task dev:desktop
 ```
 
 Workspace、Task、Workflow、Run 和事件默认持久化在 `~/.oneshot/`。
 
+iOS 和 Android 不启动本地 CLI，也不直接操作设备文件系统中的 Git 仓库：
+
+```bash
+go tool wails3 task run:ios
+go tool wails3 task run:android
+```
+
 ## 构建
 
 ```bash
-wails3 task build:desktop
+go tool wails3 task build:desktop
 ```
 
 生产构建并生成 macOS `.app` ZIP：
 
 ```bash
-wails3 task package:desktop
+go tool wails3 task package:desktop
 ```
 
 安装包输出到 `bin/Oneshot-<version>-<commit>-<arch>.zip`。应用内同时包含
@@ -41,13 +49,13 @@ Finder 中右键选择“打开”。
 使用 Developer ID 证书签名：
 
 ```bash
-SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" wails3 task package:desktop
+SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" go tool wails3 task package:desktop
 ```
 
 可通过环境变量覆盖版本号和输出路径：
 
 ```bash
-VERSION=0.1.0 OUTPUT_ZIP=bin/Oneshot-0.1.0-arm64.zip wails3 task package:desktop
+VERSION=0.1.0 OUTPUT_ZIP=bin/Oneshot-0.1.0-arm64.zip go tool wails3 task package:desktop
 ```
 
 脚本只负责构建、组装、签名和压缩。公开分发前还需使用 Apple notary service
@@ -57,9 +65,12 @@ VERSION=0.1.0 OUTPUT_ZIP=bin/Oneshot-0.1.0-arm64.zip wails3 task package:desktop
 
 ```text
 cmd/app/                    可执行入口，仅保留 main.go
+internal/app/               按 ios/android build tag 选择应用装配
 internal/app/desktop/       Desktop 启动装配、平台适配和嵌入资源
+internal/app/mobile/        移动工作台装配与远端 Worker 服务
 internal/service/desktop/   Desktop 对外服务与运行状态
+internal/service/mobile/    移动端远程执行服务
 internal/transport/wails/   Wails bindings
 frontend/                   React/Vite 前端
-build/desktop/              Wails 构建与打包配置
+build/                      桌面、iOS、Android 构建与打包配置
 ```

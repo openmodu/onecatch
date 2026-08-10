@@ -7,5 +7,11 @@
 !/internal/app/desktop/assets/frontend/dist/.gitkeep
 /bin/
 /.task/
+/build/ios/xcode/
+/build/android/overlay.json
+/build/android/gen/
+/build/android/.gradle/
+/build/android/app/build/
+/build/android/app/src/main/jniLibs/
 .DS_Store
 .modu_code/

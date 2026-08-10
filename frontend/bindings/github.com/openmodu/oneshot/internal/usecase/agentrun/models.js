@@ -279,6 +279,121 @@ export class CodexServiceTier {
 }
 
 /**
+ * Event is a single normalized step emitted while an agent runs. Raw preserves
+ * the original JSON line so nothing is lost, while Kind/Text give callers a
+ * runtime-agnostic view suitable for display and persistence.
+ */
+export class Event {
+    /**
+     * Creates a new Event instance.
+     * @param {Partial<Event>} [$$source = {}] - The source object to create the Event.
+     */
+    constructor($$source = {}) {
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {EventKind}
+             */
+            this["kind"] = EventKind.$zero;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * StreamID is stable for all chunks belonging to one logical message,
+             * reasoning block, or tool output. Empty identifies an atomic event.
+             * @member
+             * @type {string | undefined}
+             */
+            this["streamId"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Phase controls whether Text starts, appends to, replaces, or completes a
+             * logical stream. Revision is assigned by the orchestration collector after
+             * it batches provider token deltas.
+             * @member
+             * @type {StreamPhase | undefined}
+             */
+            this["phase"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["revision"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Text is the human-meaningful payload: message prose, command, file path,
+             * or error description, depending on Kind.
+             * @member
+             * @type {string | undefined}
+             */
+            this["text"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Raw is the original JSONL line from the runtime, retained for debugging
+             * and forward compatibility with fields we do not yet model.
+             * @member
+             * @type {string | undefined}
+             */
+            this["raw"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Failed reports that this individual event is an error: a tool that
+             * returned an error, not a run that ended badly. A step can fail while most
+             * of its tool calls succeeded, so callers must not infer one from the other.
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["failed"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Permission is populated for permission_request and permission_resolved
+             * events. PermissionDecision is "allow" or "deny" on the resolved event.
+             * @member
+             * @type {PermissionRequest | null | undefined}
+             */
+            this["permission"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["permissionDecision"] = undefined;
+        }
+        if (!("at" in $$source)) {
+            /**
+             * At is when the engine observed the event.
+             * @member
+             * @type {string}
+             */
+            this["at"] = "0001-01-01T00:00:00.000Z";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Event instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Event}
+     */
+    static createFrom($$source = {}) {
+        const $$createField7_0 = $$createType8;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("permission" in $$parsedSource) {
+            $$parsedSource["permission"] = $$createField7_0($$parsedSource["permission"]);
+        }
+        return new Event(/** @type {Partial<Event>} */($$parsedSource));
+    }
+}
+
+/**
  * EventKind is the normalized category of a streamed run event. It is the
  * common denominator across every supported runtime.
  * @readonly
@@ -446,8 +561,8 @@ export class PermissionRequest {
      * @returns {PermissionRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType7;
-        const $$createField4_0 = $$createType9;
+        const $$createField3_0 = $$createType9;
+        const $$createField4_0 = $$createType11;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("input" in $$parsedSource) {
             $$parsedSource["input"] = $$createField3_0($$parsedSource["input"]);
@@ -465,6 +580,94 @@ export class PermissionRequest {
  * lets newer CLI versions add rule variants without requiring an app release.
  * @typedef {{ [_ in string]?: any }} PermissionUpdate
  */
+
+/**
+ * Result is the terminal outcome of a completed run.
+ */
+export class Result {
+    /**
+     * Creates a new Result instance.
+     * @param {Partial<Result>} [$$source = {}] - The source object to create the Result.
+     */
+    constructor($$source = {}) {
+        if (!("finalMessage" in $$source)) {
+            /**
+             * FinalMessage is the agent's last assistant message — the natural-language
+             * summary of what it did.
+             * @member
+             * @type {string}
+             */
+            this["finalMessage"] = "";
+        }
+        if (!("usage" in $$source)) {
+            /**
+             * Usage is best-effort token accounting; zero when the runtime omits it.
+             * @member
+             * @type {Usage}
+             */
+            this["usage"] = (new Usage());
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * SessionID is the runtime's own session/thread id, for resuming.
+             * @member
+             * @type {string | undefined}
+             */
+            this["sessionId"] = undefined;
+        }
+        if (!("succeeded" in $$source)) {
+            /**
+             * Succeeded is true when the runtime reported a clean terminal state.
+             * @member
+             * @type {boolean}
+             */
+            this["succeeded"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Result instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Result}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType12;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("usage" in $$parsedSource) {
+            $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
+        }
+        return new Result(/** @type {Partial<Result>} */($$parsedSource));
+    }
+}
+
+/**
+ * Runtime identifies a local agent CLI the engine knows how to drive.
+ * @readonly
+ * @enum {string}
+ */
+export const Runtime = {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero: "",
+
+    /**
+     * RuntimeCodex drives the OpenAI Codex CLI via app-server.
+     */
+    RuntimeCodex: "codex",
+
+    /**
+     * RuntimeClaude drives Anthropic's Claude Code via `claude -p`.
+     */
+    RuntimeClaude: "claude",
+
+    /**
+     * RuntimeModu drives Modu Code via its non-interactive print mode.
+     */
+    RuntimeModu: "modu",
+};
 
 /**
  * StreamPhase describes how an event contributes to one logical, growing UI
@@ -554,11 +757,14 @@ const $$createType3 = CodexModelInfo.createFrom;
 const $$createType4 = $Create.Array($$createType3);
 const $$createType5 = CodexServiceTier.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = $Create.Map($Create.Any, $Create.Any);
-var $$createType8 = /** @type {(...args: any[]) => any} */(function $$initCreateType8(...args) {
-    if ($$createType8 === $$initCreateType8) {
-        $$createType8 = $$createType7;
+const $$createType7 = PermissionRequest.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);
+const $$createType9 = $Create.Map($Create.Any, $Create.Any);
+var $$createType10 = /** @type {(...args: any[]) => any} */(function $$initCreateType10(...args) {
+    if ($$createType10 === $$initCreateType10) {
+        $$createType10 = $$createType9;
     }
-    return $$createType8(...args);
+    return $$createType10(...args);
 });
-const $$createType9 = $Create.Array($$createType8);
+const $$createType11 = $Create.Array($$createType10);
+const $$createType12 = Usage.createFrom;

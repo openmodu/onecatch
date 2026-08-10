@@ -7,7 +7,7 @@ Workflow 节点，在目标机器调用 Codex、Claude Code 或 Modu Code，并�
 从仓库根目录构建：
 
 ```bash
-wails3 task build:worker
+go tool wails3 task build:worker
 ./bin/oneshot-worker --help
 ```
 
