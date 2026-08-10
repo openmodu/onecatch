@@ -101,37 +101,34 @@ tasks:
       - go tool wails3 build DEV=true
 
   package:desktop:
-    desc: Build and package the macOS desktop app
+    desc: Build and package the desktop app for the current platform
     cmds:
       - task: build
         vars:
           DEV: 'false'
       - task: build:worker:package
-      - ./build/desktop/darwin/package.sh
-    env:
-      GOOS: darwin
-      CGO_ENABLED: 1
-      MACOSX_DEPLOYMENT_TARGET: '12.0'
-      CGO_CFLAGS: '-mmacosx-version-min=12.0'
-      CGO_LDFLAGS: '-mmacosx-version-min=12.0'
+      - cmd: ./build/desktop/darwin/package.sh
+        platforms: [darwin]
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ./build/desktop/windows/package.ps1
+        platforms: [windows]
 
   build:worker:
     desc: Build the remote worker service
     cmds:
-      - mkdir -p '{{.BIN_DIR}}'
-      - go build -o '{{.BIN_DIR}}/oneshot-worker' ./cmd/worker
+      - cmd: mkdir -p '{{.BIN_DIR}}'
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BIN_DIR}}' | Out-Null"
+        platforms: [windows]
+      - go build -o '{{.BIN_DIR}}/oneshot-worker{{.EXE_EXT}}' ./cmd/worker
 
   build:worker:package:
     internal: true
     cmds:
-      - mkdir -p '{{.BIN_DIR}}'
-      - go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o '{{.BIN_DIR}}/oneshot-worker' ./cmd/worker
-    env:
-      GOOS: darwin
-      CGO_ENABLED: 1
-      MACOSX_DEPLOYMENT_TARGET: '12.0'
-      CGO_CFLAGS: '-mmacosx-version-min=12.0'
-      CGO_LDFLAGS: '-mmacosx-version-min=12.0'
+      - cmd: mkdir -p '{{.BIN_DIR}}'
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BIN_DIR}}' | Out-Null"
+        platforms: [windows]
+      - go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o '{{.BIN_DIR}}/oneshot-worker{{.EXE_EXT}}' ./cmd/worker
 
   dev:frontend:
     internal: true
