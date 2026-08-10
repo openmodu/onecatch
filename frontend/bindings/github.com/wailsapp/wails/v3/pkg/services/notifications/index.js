@@ -9,6 +9,9 @@ export {
 
 export {
     NotificationAction,
+    NotificationAttachment,
     NotificationCategory,
-    NotificationOptions
+    NotificationOptions,
+    NotificationSchedule,
+    NotificationSound
 } from "./models.js";

@@ -53,6 +53,56 @@ export class NotificationAction {
 }
 
 /**
+ * NotificationAttachment is a media file shown with the notification.
+ * Path is an absolute filesystem path (or "file://" URL on macOS).
+ */
+export class NotificationAttachment {
+    /**
+     * Creates a new NotificationAttachment instance.
+     * @param {Partial<NotificationAttachment>} [$$source = {}] - The source object to create the NotificationAttachment.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["id"] = undefined;
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Type is an optional placement/UTI hint.
+             *   On macOS: a UTI like "public.png" / "public.audio" (often inferred).
+             *   On Windows: "hero" | "appLogoOverride" | "inline" (default "inline").
+             *   On Linux: ignored (always image-path hint).
+             * @member
+             * @type {string | undefined}
+             */
+            this["type"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NotificationAttachment instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {NotificationAttachment}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NotificationAttachment(/** @type {Partial<NotificationAttachment>} */($$parsedSource));
+    }
+}
+
+/**
  * NotificationCategory groups actions for notifications.
  */
 export class NotificationCategory {
@@ -116,7 +166,11 @@ export class NotificationCategory {
 }
 
 /**
- * NotificationOptions contains configuration for a notification
+ * NotificationOptions contains configuration for a notification.
+ *
+ * New optional fields (Sound, Attachments, ThreadID, InterruptionLevel,
+ * Schedule) gracefully degrade when a platform cannot honour them; see the
+ * package-level godoc for the per-platform support matrix.
  */
 export class NotificationOptions {
     /**
@@ -167,6 +221,63 @@ export class NotificationOptions {
              */
             this["data"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * Sound controls the sound played on delivery.
+             *   nil                                -> platform default sound
+             *   &NotificationSound{Silent: true}   -> no sound
+             *   &NotificationSound{Name: "Ping"}   -> named/bundled sound
+             * On macOS, Name is resolved by [UNNotificationSound soundNamed:] and
+             * requires the audio file to live under the bundle's Library/Sounds.
+             * On Windows, Name is used as-is if it begins with "ms-winsoundevent:" or
+             * "ms-appx:"; otherwise it is wrapped in "ms-winsoundevent:" for built-in
+             * event names. On Linux it is forwarded as the freedesktop "sound-name"
+             * hint (theme-dependent).
+             * @member
+             * @type {NotificationSound | null | undefined}
+             */
+            this["sound"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Attachments are media files shown alongside the notification. macOS
+             * supports multiple attachments of any media type; Windows and Linux
+             * honour the first image-typed attachment (Linux limits to one per spec).
+             * @member
+             * @type {NotificationAttachment[] | undefined}
+             */
+            this["attachments"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * ThreadID groups related notifications together in Notification Center
+             * (macOS) / Action Center (Windows) / the notification daemon (Linux).
+             * @member
+             * @type {string | undefined}
+             */
+            this["threadId"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * InterruptionLevel controls notification priority. One of "passive",
+             * "active" (default), "timeSensitive", "critical". Critical requires
+             * macOS 12+ and the Critical Alert entitlement. Linux maps to the
+             * freedesktop urgency hint; Windows maps to <toast scenario="...">.
+             * @member
+             * @type {string | undefined}
+             */
+            this["interruptionLevel"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Schedule defers delivery. macOS uses a native trigger and persists
+             * across app restarts. Windows and Linux fall back to an in-process
+             * time.AfterFunc timer that does NOT survive an app exit.
+             * @member
+             * @type {NotificationSchedule | null | undefined}
+             */
+            this["schedule"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -178,11 +289,100 @@ export class NotificationOptions {
      */
     static createFrom($$source = {}) {
         const $$createField5_0 = $$createType2;
+        const $$createField6_0 = $$createType4;
+        const $$createField7_0 = $$createType6;
+        const $$createField10_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("data" in $$parsedSource) {
             $$parsedSource["data"] = $$createField5_0($$parsedSource["data"]);
         }
+        if ("sound" in $$parsedSource) {
+            $$parsedSource["sound"] = $$createField6_0($$parsedSource["sound"]);
+        }
+        if ("attachments" in $$parsedSource) {
+            $$parsedSource["attachments"] = $$createField7_0($$parsedSource["attachments"]);
+        }
+        if ("schedule" in $$parsedSource) {
+            $$parsedSource["schedule"] = $$createField10_0($$parsedSource["schedule"]);
+        }
         return new NotificationOptions(/** @type {Partial<NotificationOptions>} */($$parsedSource));
+    }
+}
+
+/**
+ * NotificationSchedule defers delivery. Exactly one of DelaySeconds or At
+ * must be set. At is interpreted as Unix seconds (UTC).
+ */
+export class NotificationSchedule {
+    /**
+     * Creates a new NotificationSchedule instance.
+     * @param {Partial<NotificationSchedule>} [$$source = {}] - The source object to create the NotificationSchedule.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["delaySeconds"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["at"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NotificationSchedule instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {NotificationSchedule}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NotificationSchedule(/** @type {Partial<NotificationSchedule>} */($$parsedSource));
+    }
+}
+
+/**
+ * NotificationSound configures audio playback for a notification.
+ */
+export class NotificationSound {
+    /**
+     * Creates a new NotificationSound instance.
+     * @param {Partial<NotificationSound>} [$$source = {}] - The source object to create the NotificationSound.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["silent"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["name"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NotificationSound instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {NotificationSound}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NotificationSound(/** @type {Partial<NotificationSound>} */($$parsedSource));
     }
 }
 
@@ -190,3 +390,9 @@ export class NotificationOptions {
 const $$createType0 = NotificationAction.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = $Create.Map($Create.Any, $Create.Any);
+const $$createType3 = NotificationSound.createFrom;
+const $$createType4 = $Create.Nullable($$createType3);
+const $$createType5 = NotificationAttachment.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = NotificationSchedule.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);

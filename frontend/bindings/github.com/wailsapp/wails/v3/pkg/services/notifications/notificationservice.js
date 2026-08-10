@@ -99,3 +99,15 @@ export function SendNotification(options) {
 export function SendNotificationWithActions(options) {
     return $Call.ByID(1886542847, options);
 }
+
+/**
+ * UpdateNotification updates an in-flight notification by ID. On macOS this
+ * is auto-deduplicated by UNUserNotificationCenter; on Linux it uses the
+ * D-Bus replaces_id parameter. On Windows it currently redelivers as a new
+ * notification (true replace requires upstream wintoast support for tag/group).
+ * @param {$models.NotificationOptions} options
+ * @returns {$CancellablePromise<void>}
+ */
+export function UpdateNotification(options) {
+    return $Call.ByID(461019183, options);
+}

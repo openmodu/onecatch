@@ -9,7 +9,7 @@ tasks:
   default:
     silent: true
     cmds:
-      - wails3 task -list
+      - go tool wails3 task -list
 
   go:mod:tidy:
     internal: true
@@ -25,7 +25,7 @@ tasks:
     generates:
       - node_modules
     cmds:
-      - npm install
+      - npm ci
 
   desktop:bindings:
     internal: true
@@ -39,7 +39,7 @@ tasks:
     generates:
       - frontend/bindings/**/*
     cmds:
-      - wails3 generate bindings -d frontend/bindings -f '{{.BUILD_FLAGS}}' -clean=true ./cmd/app
+      - go tool wails3 generate bindings -d frontend/bindings -f '{{.BUILD_FLAGS}}' -clean=true ./cmd/app
 
   frontend:build:
     internal: true
@@ -67,8 +67,8 @@ tasks:
     cmds:
       - swift render_appicon.swift appicon-source.png ../../internal/app/desktop/assets/appicon.png
       - cp ../../internal/app/desktop/assets/appicon.png appicon.icon/Assets/oneshot_icon_final.png
-      - wails3 generate icons -iconcomposerinput appicon.icon -macassetdir darwin
-      - wails3 generate icons -input ../../internal/app/desktop/assets/appicon.png -macfilename darwin/icons.icns
+      - go tool wails3 generate icons -iconcomposerinput appicon.icon -macassetdir darwin
+      - go tool wails3 generate icons -input ../../internal/app/desktop/assets/appicon.png -macfilename darwin/icons.icns
 
   build:
     cmds:
@@ -92,12 +92,12 @@ tasks:
   dev:desktop:
     desc: Start the Wails desktop app and Vite dev server
     cmds:
-      - ./build/desktop/dev-session.sh wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
+      - ./build/desktop/dev-session.sh go tool wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
 
   build:desktop:
     desc: Build the desktop app with development settings
     cmds:
-      - wails3 build DEV=true
+      - go tool wails3 build DEV=true
 
   package:desktop:
     desc: Build and package the macOS desktop app
