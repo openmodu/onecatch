@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lock, PanelRightOpen, Paperclip, X } from "lucide-react";
-import { Events } from "@wailsio/runtime";
+import { Lock, Minus, PanelRightOpen, Paperclip, Square, X } from "lucide-react";
+import { Events, Window } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,17 @@ import { INSPECTOR_COMPACT_QUERY, readInspectorPreference, resolveInspectorColla
 const runtimeFrameEvent = "oneshot:runtime-frame";
 const runStateEvent = "oneshot:run-state";
 
+function WindowsTitleBar() {
+  return <div className="windows-titlebar drag-region hidden h-9 items-center border-b bg-background pl-3 text-xs text-foreground" onDoubleClick={() => void Window.ToggleMaximise()}>
+    <span className="windows-titlebar-brand flex items-center gap-2 font-medium"><img className="size-4 rounded-[4px]" src="/appicon.png" alt="" aria-hidden="true" />Oneshot</span>
+    <div className="no-drag ml-auto flex h-full" onDoubleClick={(event) => event.stopPropagation()}>
+      <button type="button" className="windows-caption-button" aria-label="最小化" onClick={() => void Window.Minimise()}><Minus size={14} aria-hidden="true" /></button>
+      <button type="button" className="windows-caption-button" aria-label="最大化或还原" onClick={() => void Window.ToggleMaximise()}><Square size={11} aria-hidden="true" /></button>
+      <button type="button" className="windows-caption-button close" aria-label="关闭" onClick={() => void Window.Close()}><X size={15} aria-hidden="true" /></button>
+    </div>
+  </div>;
+}
+
 function initialInspectorPreference() {
   try {
     return typeof window === "undefined" ? null : readInspectorPreference(window.localStorage);
@@ -56,6 +67,7 @@ function App() {
   const { t } = useTranslation();
   const [mode, setMode] = useState("loading");
   const [view, setView] = useState("tasks");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [runtimes, setRuntimes] = useState([]);
   const [workspaces, setWorkspaces] = useState([]);
   const [workspaceID, setWorkspaceID] = useState("");
@@ -954,6 +966,19 @@ function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [mode]);
 
+  // Keep the webview shortcut in sync with the native application menu.
+  // Windows conventionally opens Settings with Ctrl+,.
+  useEffect(() => {
+    if (mode === "loading") return undefined;
+    const openSettings = (event) => {
+      if (!(event.metaKey || event.ctrlKey) || event.altKey || event.key !== ",") return;
+      event.preventDefault();
+      void WindowBinding.OpenSettings();
+    };
+    window.addEventListener("keydown", openSettings);
+    return () => window.removeEventListener("keydown", openSettings);
+  }, [mode]);
+
   if (mode === "loading") return <div className="flex h-full flex-col items-center justify-center gap-4 bg-background text-sm text-muted-foreground">
     <div className="grid size-11 place-items-center rounded-xl bg-primary text-xl font-bold text-primary-foreground">1</div>
     <span>{t("task.opening")}</span>
@@ -963,8 +988,9 @@ function App() {
       traffic lights sit on it, the way Finder and Music do. The window is
       MacTitleBarHiddenInsetUnified, so the lights are inset — the rail
       reserves that strip itself (see .traffic-light-gutter). */}
-  return <div className="relative grid h-full grid-rows-[minmax(0,1fr)] bg-transparent text-foreground">
-    <div className="app-shell grid min-h-0 grid-cols-[auto_minmax(0,1fr)]">
+  return <div className="app-window-root relative grid h-full grid-rows-[minmax(0,1fr)] bg-transparent text-foreground">
+    <WindowsTitleBar />
+    <div className={`app-shell grid min-h-0 grid-cols-[auto_minmax(0,1fr)] ${sidebarCollapsed ? "sidebar-is-collapsed" : ""}`}>
       <Sidebar
         workspaces={workspaces}
         workspaceID={workspaceID}
@@ -1000,6 +1026,7 @@ function App() {
         onSelectRun={selectRun}
         onSelectQueued={selectQueued}
         onGoView={goView}
+        onCollapsedChange={setSidebarCollapsed}
       />
 
       <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">

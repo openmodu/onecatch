@@ -5,11 +5,13 @@ import i18n, { LANGUAGE_CHANGED_EVENT, LANGUAGE_STORAGE_KEY, normalizeLanguage }
 import App from "./app/App.jsx";
 import { SettingsWindow, WorkflowsWindow } from "./app/AuxiliaryWindow.jsx";
 import { APPEARANCE_CHANGED_EVENT, ACCENT_STORAGE_KEY, THEME_STORAGE_KEY, applyAppearance, readAppearance } from "./app/appearance.js";
+import { desktopPlatform } from "./app/platform.js";
 // index.css pulls in the hand-written stylesheets itself, inside @layer legacy,
 // so Tailwind utilities outrank them during the migration.
 import "./index.css";
 
 applyAppearance(readAppearance());
+document.documentElement.dataset.platform = desktopPlatform();
 
 // Every native window owns a separate document. Keep their root theme
 // attributes in lockstep when Settings changes the shared preference.

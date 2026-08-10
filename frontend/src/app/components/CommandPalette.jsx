@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { Circle, Folder, FolderPlus, GitBranch, Search, Settings, SquarePen } from "lucide-react";
 import { commandPaletteShortcutIndex, commandPaletteWorkspaceResults, moveCommandPaletteIndex } from "../commandPaletteNavigation.js";
+import { primaryShortcutLabel } from "../platform.js";
 
 function PaletteRow({ item, active, onActivate, onActive }) {
   const Icon = item.icon;
@@ -57,9 +58,9 @@ export default function CommandPalette({
     })), [normalizedQuery, taskItems.length, workspaces]);
 
   const commandItems = [
-    { key: "command:new-task", kind: "command", command: "new-task", icon: SquarePen, label: t("task.newTask"), shortcutLabel: "⌘N", shortcutKey: "n" },
-    { key: "command:add-workspace", kind: "command", command: "add-workspace", icon: FolderPlus, label: t("sidebar.openFolder"), shortcutLabel: "⌘O", shortcutKey: "o" },
-    { key: "command:settings", kind: "command", command: "settings", icon: Settings, label: t("sidebar.settings"), shortcutLabel: "⌘,", shortcutKey: "," },
+    { key: "command:new-task", kind: "command", command: "new-task", icon: SquarePen, label: t("task.newTask"), shortcutLabel: primaryShortcutLabel("N"), shortcutKey: "n" },
+    { key: "command:add-workspace", kind: "command", command: "add-workspace", icon: FolderPlus, label: t("sidebar.openFolder"), shortcutLabel: primaryShortcutLabel("O"), shortcutKey: "o" },
+    { key: "command:settings", kind: "command", command: "settings", icon: Settings, label: t("sidebar.settings"), shortcutLabel: primaryShortcutLabel(","), shortcutKey: "," },
   ];
   const items = [...taskItems, ...projectItems, ...commandItems];
   const resultCount = taskItems.length + projectItems.length;

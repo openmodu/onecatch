@@ -3,6 +3,7 @@ version: '3'
 vars:
   APP_NAME: oneshot
   BIN_DIR: bin
+  EXE_EXT: '{{if eq OS "windows"}}.exe{{end}}'
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
 
 tasks:
@@ -23,7 +24,7 @@ tasks:
       - package.json
       - package-lock.json
     generates:
-      - node_modules
+      - node_modules/.package-lock.json
     cmds:
       - npm ci
 
@@ -50,7 +51,10 @@ tasks:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
       - task: frontend:install
-      - npm run {{if eq .DEV "true"}}build:dev{{else}}build{{end}} -q
+      - cmd: npm run {{if eq .DEV "true"}}build:dev{{else}}build{{end}} -q
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ../build/desktop/windows/run-node.ps1 node_modules/vite/bin/vite.js build {{if eq .DEV "true"}}--minify=false --mode development{{else}}--mode production{{end}}
+        platforms: [windows]
 
   desktop:icons:
     desc: Regenerate the macOS application icon
@@ -81,18 +85,15 @@ tasks:
       - go build {{.BUILD_FLAGS}} -o '{{.OUTPUT}}' ./cmd/app
     vars:
       BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
-      OUTPUT: '{{.OUTPUT | default (printf "%s/%s" .BIN_DIR .APP_NAME)}}'
-    env:
-      GOOS: darwin
-      CGO_ENABLED: 1
-      MACOSX_DEPLOYMENT_TARGET: '12.0'
-      CGO_CFLAGS: '-mmacosx-version-min=12.0'
-      CGO_LDFLAGS: '-mmacosx-version-min=12.0'
+      OUTPUT: '{{.OUTPUT | default (printf "%s/%s%s" .BIN_DIR .APP_NAME .EXE_EXT)}}'
 
   dev:desktop:
     desc: Start the Wails desktop app and Vite dev server
     cmds:
-      - ./build/desktop/dev-session.sh go tool wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
+      - cmd: ./build/desktop/dev-session.sh go tool wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
+        platforms: [darwin]
+      - cmd: go tool wails3 dev -config ./build/desktop/config.windows.yml -port {{.VITE_PORT}}
+        platforms: [windows]
 
   build:desktop:
     desc: Build the desktop app with development settings
@@ -107,6 +108,12 @@ tasks:
           DEV: 'false'
       - task: build:worker:package
       - ./build/desktop/darwin/package.sh
+    env:
+      GOOS: darwin
+      CGO_ENABLED: 1
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
+      CGO_CFLAGS: '-mmacosx-version-min=12.0'
+      CGO_LDFLAGS: '-mmacosx-version-min=12.0'
 
   build:worker:
     desc: Build the remote worker service
@@ -130,7 +137,10 @@ tasks:
     internal: true
     dir: frontend
     cmds:
-      - npm run dev -- --port {{.VITE_PORT}} --strictPort
+      - cmd: npm run dev -- --port {{.VITE_PORT}} --strictPort
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ../build/desktop/windows/run-node.ps1 node_modules/vite/bin/vite.js --port {{.VITE_PORT}} --strictPort
+        platforms: [windows]
 
   test:go:
     desc: Run all Go tests

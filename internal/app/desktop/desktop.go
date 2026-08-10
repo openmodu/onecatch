@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -132,6 +133,17 @@ func Run() {
 		Services:    services,
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(desktopassets.Frontend),
+			Middleware: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+					if request.URL.Path == "/appicon.png" {
+						response.Header().Set("Content-Type", "image/png")
+						response.Header().Set("Cache-Control", "public, max-age=86400")
+						_, _ = response.Write(desktopassets.AppIcon)
+						return
+					}
+					next.ServeHTTP(response, request)
+				})
+			},
 		},
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
@@ -160,16 +172,32 @@ func Run() {
 		appMenu.AddRole(application.UnHide)
 		appMenu.AddSeparator()
 		appMenu.AddRole(application.Quit)
+	} else if runtime.GOOS == "windows" {
+		// Keep Windows' native caption and menu bar, matching Codex Desktop.
+		// Settings is a first-class File-menu command and uses the Windows
+		// convention even when the webview does not currently have focus.
+		fileMenu := menu.AddSubmenu("文件")
+		fileMenu.Add("设置…").SetAccelerator("Ctrl+,").OnClick(func(*application.Context) {
+			auxiliaryWindows.OpenSettings()
+		})
+		fileMenu.AddSeparator()
+		fileMenu.AddRole(application.Quit)
 	} else {
 		menu.AddRole(application.AppMenu)
 	}
 	menu.AddRole(application.EditMenu)
-	menu.AddRole(application.WindowMenu)
+	if runtime.GOOS == "windows" {
+		menu.AddRole(application.ViewMenu)
+		menu.AddRole(application.HelpMenu)
+	} else {
+		menu.AddRole(application.WindowMenu)
+	}
 	wailsApp.Menu.Set(menu)
 
 	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
 		Title:            Name,
+		Frameless:        runtime.GOOS == "windows",
 		Width:            1280,
 		Height:           800,
 		MinWidth:         1080,

@@ -1,0 +1,32 @@
+version: '3'
+
+# Windows development configuration. The default config wraps the development
+# processes in POSIX shell helpers and launches a macOS application bundle.
+dev_mode:
+  root_path: .
+  log_level: warn
+  debounce: 1000
+  ignore:
+    dir:
+      - .git
+      - node_modules
+      - frontend
+      - bin
+      - dist
+    file:
+      - .DS_Store
+      - .gitignore
+      - .gitkeep
+      - "*_test.go"
+    watched_extension:
+      - "*.go"
+      - "*.js"
+      - "*.ts"
+    git_ignore: true
+  executes:
+    - cmd: go tool wails3 build DEV=true
+      type: blocking
+    - cmd: go tool wails3 task dev:frontend
+      type: background
+    - cmd: bin\oneshot.exe
+      type: primary

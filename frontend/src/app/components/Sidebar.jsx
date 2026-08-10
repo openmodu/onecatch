@@ -27,6 +27,7 @@ import {
   writeSidebarWidth,
 } from "../sidebarLayout.js";
 import { SIDEBAR_TASK_PREVIEW_LIMIT, buildSidebarTaskEntries, visibleSidebarTaskEntries } from "../sidebarNavigation.js";
+import { primaryShortcutLabel } from "../platform.js";
 
 const CommandPalette = lazy(() => import("./CommandPalette.jsx"));
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "oneshot.sidebar.collapsed";
@@ -79,6 +80,7 @@ function Sidebar({
   onSelectRun,
   onSelectQueued,
   onGoView,
+  onCollapsedChange,
 }) {
   const { t, i18n } = useTranslation();
   const [width, setWidth] = useState(initialSidebarWidth);
@@ -158,6 +160,10 @@ function Sidebar({
   }, [workspaceID]);
 
   useEffect(() => setTaskListExpanded(false), [taskSearch, taskStatus]);
+
+  useEffect(() => {
+    onCollapsedChange?.(sidebarCollapsed);
+  }, [onCollapsedChange, sidebarCollapsed]);
 
   useEffect(() => {
     if (!pendingSearchTask || pendingSearchTask.workspace.id !== workspaceID) return;
@@ -413,7 +419,7 @@ function Sidebar({
           <DropdownMenuItem className={`min-h-8 rounded-md ${view === "settings" && !editor ? "active bg-accent text-accent-foreground" : ""}`} onSelect={() => goToSecondaryView("settings")}>
             <Settings2 aria-hidden="true" />
             <span>{t("sidebar.settings")}</span>
-            <DropdownMenuShortcut>⌘,</DropdownMenuShortcut>
+            <DropdownMenuShortcut>{primaryShortcutLabel(",")}</DropdownMenuShortcut>
           </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="min-h-8 rounded-md">
