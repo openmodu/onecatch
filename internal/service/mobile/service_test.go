@@ -134,6 +134,100 @@ func TestStartRunRejectsDirtyRemoteWorkspace(t *testing.T) {
 	}
 }
 
+func TestRunHistoryPersistsAcrossServiceRestart(t *testing.T) {
+	workspace := initMobileTestRepo(t)
+	server := worker.NewServer("history-worker", "History Worker", "secret", map[string]string{"oneshot": workspace}, &mobileTestEngine{}, 1)
+	server.SetGitInspector(gitrepo.New(""))
+	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+
+	root := t.TempDir()
+	service, err := NewService(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.PairWorker(context.Background(), httpServer.URL, "PAIR1234"); err != nil {
+		t.Fatal(err)
+	}
+	run, err := service.StartRun(context.Background(), StartRunInput{
+		WorkerID: "history-worker", WorkspaceID: "oneshot", Runtime: "codex", Prompt: "remember this run",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for run.Status == "running" && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		run, err = service.GetRun(run.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if run.Status != "succeeded" {
+		t.Fatalf("run status = %q", run.Status)
+	}
+	service.Close()
+
+	reopened, err := NewService(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	runs := reopened.ListRuns()
+	if len(runs) != 1 || runs[0].ID != run.ID || runs[0].Prompt != "remember this run" {
+		t.Fatalf("runs = %+v", runs)
+	}
+	if len(runs[0].Events) != 1 || runs[0].Result == nil || runs[0].Result.FinalMessage != "done" {
+		t.Fatalf("persisted run = %+v", runs[0])
+	}
+	if runs[0].ConversationID != runs[0].ID {
+		t.Fatalf("new conversation id = %q, want %q", runs[0].ConversationID, runs[0].ID)
+	}
+}
+
+func TestFollowUpKeepsConversationID(t *testing.T) {
+	workspace := initMobileTestRepo(t)
+	server := worker.NewServer("conversation-worker", "Conversation Worker", "secret", map[string]string{"oneshot": workspace}, &mobileTestEngine{}, 1)
+	server.SetGitInspector(gitrepo.New(""))
+	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+
+	service, err := NewService(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	if _, err := service.PairWorker(context.Background(), httpServer.URL, "PAIR1234"); err != nil {
+		t.Fatal(err)
+	}
+	first, err := service.StartRun(context.Background(), StartRunInput{
+		WorkerID: "conversation-worker", WorkspaceID: "oneshot", Runtime: "codex", Prompt: "first turn",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for first.Status == "running" && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+		first, err = service.GetRun(first.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	second, err := service.StartRun(context.Background(), StartRunInput{
+		WorkerID: "conversation-worker", WorkspaceID: "oneshot", ConversationID: first.ConversationID,
+		Runtime: "codex", Prompt: "follow up", ResumeSessionID: "session-mobile",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.ConversationID != first.ConversationID {
+		t.Fatalf("follow-up conversation id = %q, want %q", second.ConversationID, first.ConversationID)
+	}
+}
+
 func initMobileTestRepo(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()

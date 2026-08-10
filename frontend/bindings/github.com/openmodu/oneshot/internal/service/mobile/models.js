@@ -68,6 +68,13 @@ export class RunView {
              */
             this["id"] = "";
         }
+        if (!("conversationId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["conversationId"] = "";
+        }
         if (!("workerId" in $$source)) {
             /**
              * @member
@@ -148,14 +155,14 @@ export class RunView {
      * @returns {RunView}
      */
     static createFrom($$source = {}) {
-        const $$createField6_0 = $$createType1;
-        const $$createField7_0 = $$createType3;
+        const $$createField7_0 = $$createType1;
+        const $$createField8_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("events" in $$parsedSource) {
-            $$parsedSource["events"] = $$createField6_0($$parsedSource["events"]);
+            $$parsedSource["events"] = $$createField7_0($$parsedSource["events"]);
         }
         if ("result" in $$parsedSource) {
-            $$parsedSource["result"] = $$createField7_0($$parsedSource["result"]);
+            $$parsedSource["result"] = $$createField8_0($$parsedSource["result"]);
         }
         return new RunView(/** @type {Partial<RunView>} */($$parsedSource));
     }
@@ -180,6 +187,13 @@ export class StartRunInput {
              * @type {string}
              */
             this["workspaceId"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["conversationId"] = undefined;
         }
         if (!("runtime" in $$source)) {
             /**

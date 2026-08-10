@@ -9,7 +9,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -17,9 +19,12 @@ import (
 	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
 	"github.com/openmodu/oneshot/internal/service/worker"
 	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	"github.com/openmodu/oneshot/pkg/localfile"
 )
 
 const RunEventName = "mobile:run"
+
+const maxStoredRuns = 100
 
 type WorkerStatus struct {
 	Worker              worker.Info   `json:"worker"`
@@ -31,6 +36,7 @@ type WorkerStatus struct {
 type StartRunInput struct {
 	WorkerID        string `json:"workerId"`
 	WorkspaceID     string `json:"workspaceId"`
+	ConversationID  string `json:"conversationId,omitempty"`
 	Runtime         string `json:"runtime"`
 	Prompt          string `json:"prompt"`
 	Model           string `json:"model,omitempty"`
@@ -48,17 +54,18 @@ type PermissionDecisionInput struct {
 }
 
 type RunView struct {
-	ID          string           `json:"id"`
-	WorkerID    string           `json:"workerId"`
-	WorkspaceID string           `json:"workspaceId"`
-	Runtime     agentrun.Runtime `json:"runtime"`
-	Prompt      string           `json:"prompt"`
-	Status      string           `json:"status"`
-	Events      []agentrun.Event `json:"events"`
-	Result      *agentrun.Result `json:"result,omitempty"`
-	Error       string           `json:"error,omitempty"`
-	StartedAt   time.Time        `json:"startedAt"`
-	FinishedAt  *time.Time       `json:"finishedAt,omitempty"`
+	ID             string           `json:"id"`
+	ConversationID string           `json:"conversationId"`
+	WorkerID       string           `json:"workerId"`
+	WorkspaceID    string           `json:"workspaceId"`
+	Runtime        agentrun.Runtime `json:"runtime"`
+	Prompt         string           `json:"prompt"`
+	Status         string           `json:"status"`
+	Events         []agentrun.Event `json:"events"`
+	Result         *agentrun.Result `json:"result,omitempty"`
+	Error          string           `json:"error,omitempty"`
+	StartedAt      time.Time        `json:"startedAt"`
+	FinishedAt     *time.Time       `json:"finishedAt,omitempty"`
 }
 
 type RunFrame struct {
@@ -79,6 +86,7 @@ type runState struct {
 type Service struct {
 	registry *worker.Registry
 	client   *worker.Client
+	runsPath string
 
 	mu      sync.RWMutex
 	runs    map[string]*runState
@@ -90,11 +98,50 @@ func NewService(root string) (*Service, error) {
 	if root == "" {
 		return nil, errors.New("mobile data root is required")
 	}
-	return &Service{
+	if err := os.MkdirAll(root, 0o700); err != nil {
+		return nil, err
+	}
+	service := &Service{
 		registry: worker.NewRegistry(filepath.Join(root, "workers.json")),
 		client:   worker.NewClient(),
+		runsPath: filepath.Join(root, "runs.json"),
 		runs:     make(map[string]*runState),
-	}, nil
+	}
+	if err := service.loadRuns(); err != nil {
+		return nil, err
+	}
+	return service, nil
+}
+
+func (s *Service) loadRuns() error {
+	var views []RunView
+	if err := localfile.ReadJSON(s.runsPath, &views); errors.Is(err, os.ErrNotExist) {
+		return nil
+	} else if err != nil {
+		return err
+	}
+	changed := false
+	for _, view := range views {
+		if strings.TrimSpace(view.ID) == "" {
+			continue
+		}
+		if view.Status == "running" {
+			finishedAt := time.Now().UTC()
+			view.Status = "failed"
+			view.FinishedAt = &finishedAt
+			view.Error = "the app closed before this run returned a terminal result"
+			changed = true
+		}
+		if strings.TrimSpace(view.ConversationID) == "" {
+			view.ConversationID = view.ID
+			changed = true
+		}
+		s.runs[view.ID] = &runState{view: view}
+	}
+	if changed {
+		return s.persistRunsLocked()
+	}
+	return nil
 }
 
 func (s *Service) SetEmitter(emitter func(RunFrame)) {
@@ -200,18 +247,28 @@ func (s *Service) StartRun(ctx context.Context, input StartRunInput) (RunView, e
 	if err != nil {
 		return RunView{}, err
 	}
+	conversationID := strings.TrimSpace(input.ConversationID)
+	if conversationID == "" {
+		conversationID = runID
+	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	state := &runState{
 		config: config,
 		cancel: cancel,
 		view: RunView{
-			ID: runID, WorkerID: input.WorkerID, WorkspaceID: input.WorkspaceID,
+			ID: runID, ConversationID: conversationID, WorkerID: input.WorkerID, WorkspaceID: input.WorkspaceID,
 			Runtime: runtimeName, Prompt: input.Prompt, Status: "running",
 			Events: []agentrun.Event{}, StartedAt: time.Now().UTC(),
 		},
 	}
 	s.mu.Lock()
 	s.runs[runID] = state
+	if err := s.persistRunsLocked(); err != nil {
+		delete(s.runs, runID)
+		s.mu.Unlock()
+		cancel()
+		return RunView{}, err
+	}
 	s.mu.Unlock()
 	s.emit(RunFrame{RunID: runID, Status: "running", At: state.view.StartedAt})
 	view := copyRunView(state.view)
@@ -254,6 +311,7 @@ func (s *Service) execute(ctx context.Context, state *runState, input StartRunIn
 	state.view.Result = &result
 	state.view.Error = errorMessage
 	state.cancel = nil
+	_ = s.persistRunsLocked()
 	s.mu.Unlock()
 	s.emit(RunFrame{RunID: state.view.ID, Status: status, Result: &result, Error: errorMessage, At: finishedAt})
 }
@@ -272,12 +330,27 @@ func (s *Service) GetRun(id string) (RunView, error) {
 
 func (s *Service) ListRuns() []RunView {
 	s.mu.RLock()
+	items := s.runViewsLocked()
+	s.mu.RUnlock()
+	return items
+}
+
+func (s *Service) runViewsLocked() []RunView {
 	items := make([]RunView, 0, len(s.runs))
 	for _, state := range s.runs {
 		items = append(items, copyRunView(state.view))
 	}
-	s.mu.RUnlock()
+	sort.Slice(items, func(i, j int) bool {
+		return items[i].StartedAt.After(items[j].StartedAt)
+	})
+	if len(items) > maxStoredRuns {
+		items = items[:maxStoredRuns]
+	}
 	return items
+}
+
+func (s *Service) persistRunsLocked() error {
+	return localfile.WriteJSONAtomic(s.runsPath, s.runViewsLocked())
 }
 
 func (s *Service) InterruptRun(ctx context.Context, id string) error {
