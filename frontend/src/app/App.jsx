@@ -1047,7 +1047,26 @@ function App() {
         /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>
     </div>
-    {workspaceModal && <Modal title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => setWorkspaceModal(false)}><div className="form-stack"><label>{t("workspace.path")}<input autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /></label><label>{t("workspace.displayName")}<input value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder={t("workspace.defaultName")} /></label><label>{t("workspace.defaultSandbox")}<TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} /></label><div className="modal-actions"><Action tone="muted" onClick={() => setWorkspaceModal(false)}>{t("common.cancel")}</Action><Action tone="primary" onClick={addWorkspace} disabled={busy === "workspace"}>{t("workspace.add")}</Action></div></div></Modal>}
+    {workspaceModal && <Modal className="workspace-create-dialog gap-0 overflow-hidden p-0 sm:max-w-[480px]" title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => busy !== "workspace" && setWorkspaceModal(false)}>
+      <form className="grid gap-4 px-5 pt-4 pb-5" aria-busy={busy === "workspace"} onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "workspace") void addWorkspace(); }}>
+        <div className="grid gap-1.5">
+          <Label htmlFor="workspace-create-path">{t("workspace.path")}</Label>
+          <Input id="workspace-create-path" className="font-mono text-[13px]" autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" />
+        </div>
+        <div className="grid gap-1.5">
+          <Label htmlFor="workspace-create-name">{t("workspace.displayName")}</Label>
+          <Input id="workspace-create-name" value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder={t("workspace.defaultName")} />
+        </div>
+        <div className="grid gap-1.5">
+          <Label id="workspace-create-sandbox-label">{t("workspace.defaultSandbox")}</Label>
+          <TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} />
+        </div>
+        <DialogFooter className="mt-1">
+          <Button type="button" variant="ghost" disabled={busy === "workspace"} onClick={() => setWorkspaceModal(false)}>{t("common.cancel")}</Button>
+          <Button type="submit" disabled={busy === "workspace" || !workspaceForm.path.trim()}>{busy === "workspace" ? t("common.processing") : t("workspace.add")}</Button>
+        </DialogFooter>
+      </form>
+    </Modal>}
     {taskModal && <Modal className="task-create-dialog gap-0 overflow-hidden p-0 sm:max-w-[520px]" title={t("task.createTitle")} subtitle={t("task.createSubtitle")} onClose={() => setTaskModal(false)}>
       <form className="task-create-form grid gap-4 px-5 pt-4 pb-5" onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "run") void createTaskAndRun(); }}>
         <div className="grid gap-1.5">
