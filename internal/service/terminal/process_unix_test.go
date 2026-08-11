@@ -6,10 +6,39 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
+
+func TestTerminalEnvironmentAvoidsMacOSTerminalProbeReplies(t *testing.T) {
+	environment := terminalEnvironment([]string{"PATH=/usr/bin", "TERM=old", "COLORTERM=old"})
+	expectedTerm := "TERM=xterm-256color"
+	if runtime.GOOS == "darwin" {
+		expectedTerm = "TERM=screen-256color"
+	}
+	if !containsEnvironmentValue(environment, expectedTerm) {
+		t.Fatalf("environment = %q, expected %q", environment, expectedTerm)
+	}
+	if !containsEnvironmentValue(environment, "COLORTERM=truecolor") {
+		t.Fatalf("environment = %q, expected truecolor", environment)
+	}
+	for _, stale := range []string{"TERM=old", "COLORTERM=old"} {
+		if containsEnvironmentValue(environment, stale) {
+			t.Fatalf("environment retained stale value %q: %q", stale, environment)
+		}
+	}
+}
+
+func containsEnvironmentValue(environment []string, target string) bool {
+	for _, value := range environment {
+		if value == target {
+			return true
+		}
+	}
+	return false
+}
 
 func TestUnixProcessRunsInteractiveShellInWorkspace(t *testing.T) {
 	t.Setenv("SHELL", "/bin/sh")

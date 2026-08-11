@@ -29,7 +29,11 @@ stop_session() {
 
 trap stop_session HUP INT TERM
 
-/usr/bin/script -q /dev/null "$@" &
+# termenv probes real terminals with OSC colour and cursor-position queries.
+# Across this nested pseudo-terminal those replies can race with `script`
+# shutdown and leak into the parent shell as "11;rgb:..." text. Its screen/tmux
+# path deliberately skips the probes while retaining colour-capable output.
+/usr/bin/script -q /dev/null /usr/bin/env TERM=screen-256color "$@" &
 session_pid="$!"
 
 wait "$session_pid"

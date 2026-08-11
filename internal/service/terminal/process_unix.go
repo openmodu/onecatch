@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -59,7 +60,14 @@ func terminalEnvironment(environment []string) []string {
 		}
 		filtered = append(filtered, value)
 	}
-	return append(filtered, "TERM=xterm-256color", "COLORTERM=truecolor")
+	terminalType := "xterm-256color"
+	if runtime.GOOS == "darwin" {
+		// termenv skips OSC colour probes for screen/tmux terminals. That avoids
+		// terminal replies being echoed into the shell when a nested CLI exits
+		// quickly inside WKWebView's PTY bridge, while preserving 256 colours.
+		terminalType = "screen-256color"
+	}
+	return append(filtered, "TERM="+terminalType, "COLORTERM=truecolor")
 }
 
 func (p *unixProcess) Read(data []byte) (int, error) {
