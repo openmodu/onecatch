@@ -35,8 +35,10 @@ type RuntimeInfo struct {
 // pointer while users update local CLI paths from the desktop application.
 type RuntimeRegistry struct {
 	mu                 sync.RWMutex
+	probeMu            sync.Mutex
 	config             RuntimeConfig
 	settings           map[string]domainsettings.RuntimeSettings
+	statusCache        map[string]runtimeStatusCacheEntry
 	interruptGrace     time.Duration
 	engine             *agentrun.Engine
 	permissionMu       sync.Mutex
@@ -50,9 +52,16 @@ type pendingPermission struct {
 	response  chan agentrun.PermissionDecision
 }
 
+const runtimeStatusCacheTTL = 5 * time.Minute
+
+type runtimeStatusCacheEntry struct {
+	configured string
+	info       RuntimeInfo
+}
+
 func NewRuntimeRegistry(root string) (*RuntimeRegistry, error) {
 	_ = root
-	registry := &RuntimeRegistry{pendingPermissions: make(map[string]*pendingPermission)}
+	registry := &RuntimeRegistry{pendingPermissions: make(map[string]*pendingPermission), statusCache: make(map[string]runtimeStatusCacheEntry)}
 	registry.replace(RuntimeConfig{})
 	return registry, nil
 }
@@ -163,15 +172,49 @@ func (r *RuntimeRegistry) ResolvePermission(runID, requestID, decision string) e
 }
 
 func (r *RuntimeRegistry) List() []RuntimeInfo {
+	r.probeMu.Lock()
+	defer r.probeMu.Unlock()
+	if r.statusCache == nil {
+		r.statusCache = make(map[string]runtimeStatusCacheEntry)
+	}
 	r.mu.RLock()
 	config := r.config
 	engine := r.engine
 	r.mu.RUnlock()
-	return []RuntimeInfo{
-		runtimeInfo(engine, agentrun.RuntimeCodex, "Codex", config.CodexBinary),
-		runtimeInfo(engine, agentrun.RuntimeClaude, "Claude Code", config.ClaudeBinary),
-		runtimeInfo(engine, agentrun.RuntimeModu, "Modu Code", config.ModuBinary),
+	type runtimeSpec struct {
+		runtime    agentrun.Runtime
+		name       string
+		configured string
 	}
+	specs := []runtimeSpec{
+		{agentrun.RuntimeCodex, "Codex", config.CodexBinary},
+		{agentrun.RuntimeClaude, "Claude Code", config.ClaudeBinary},
+		{agentrun.RuntimeModu, "Modu Code", config.ModuBinary},
+	}
+	items := make([]RuntimeInfo, len(specs))
+	type probeResult struct {
+		index int
+		info  RuntimeInfo
+	}
+	results := make(chan probeResult, len(specs))
+	pending := 0
+	for index, spec := range specs {
+		cached, ok := r.statusCache[string(spec.runtime)]
+		if ok && cached.configured == spec.configured && time.Since(cached.info.CheckedAt) < runtimeStatusCacheTTL {
+			items[index] = cached.info
+			continue
+		}
+		pending++
+		go func(index int, spec runtimeSpec) {
+			results <- probeResult{index: index, info: runtimeInfo(engine, spec.runtime, spec.name, spec.configured)}
+		}(index, spec)
+	}
+	for range pending {
+		result := <-results
+		items[result.index] = result.info
+		r.statusCache[string(specs[result.index].runtime)] = runtimeStatusCacheEntry{configured: specs[result.index].configured, info: result.info}
+	}
+	return items
 }
 
 func (r *RuntimeRegistry) Check(runtime string) (RuntimeInfo, error) {
@@ -207,6 +250,7 @@ func (r *RuntimeRegistry) Update(input RuntimeConfigInput) (RuntimeInfo, error) 
 	r.config = config
 	r.engine = newRuntimeEngine(config)
 	r.mu.Unlock()
+	r.invalidateStatusCache()
 	return r.Check(input.Runtime)
 }
 
@@ -221,6 +265,13 @@ func (r *RuntimeRegistry) ApplySettings(runtimes map[string]domainsettings.Runti
 	config := RuntimeConfig{CodexBinary: runtimes["codex"].Binary, ClaudeBinary: runtimes["claude"].Binary, ModuBinary: runtimes["modu"].Binary}
 	r.replace(config)
 	r.mu.Unlock()
+	r.invalidateStatusCache()
+}
+
+func (r *RuntimeRegistry) invalidateStatusCache() {
+	r.probeMu.Lock()
+	r.statusCache = make(map[string]runtimeStatusCacheEntry)
+	r.probeMu.Unlock()
 }
 
 func (r *RuntimeRegistry) CheckDraft(runtime string, input domainsettings.RuntimeSettings) (RuntimeInfo, error) {

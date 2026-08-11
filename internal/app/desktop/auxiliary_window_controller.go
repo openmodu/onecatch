@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 )
 
 const (
@@ -12,12 +13,13 @@ const (
 )
 
 type auxiliaryWindowController struct {
-	app *application.App
-	mu  sync.Mutex
+	app     *application.App
+	mu      sync.Mutex
+	loading map[string]bool
 }
 
 func newAuxiliaryWindowController(app *application.App) *auxiliaryWindowController {
-	return &auxiliaryWindowController{app: app}
+	return &auxiliaryWindowController{app: app, loading: make(map[string]bool)}
 }
 
 func (c *auxiliaryWindowController) OpenSettings() {
@@ -67,7 +69,11 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions) {
 	// shortcut cannot race two windows with the same role into existence.
 	c.mu.Lock()
 	if existing, ok := c.app.Window.GetByName(options.name); ok {
+		loading := c.loading[options.name]
 		c.mu.Unlock()
+		if loading {
+			return
+		}
 		existing.Show()
 		existing.Restore()
 		existing.Focus()
@@ -96,9 +102,11 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions) {
 		DisableResize:    options.disableResize,
 		InitialPosition:  application.WindowCentered,
 		BackgroundColour: application.NewRGB(245, 245, 240),
+		Hidden:           true,
 		URL:              options.url,
 		Mac:              macOptions,
 	})
+	c.loading[options.name] = true
 	if mainWindow, ok := c.app.Window.GetByName("main"); ok {
 		if source, ok := mainWindow.(*application.WebviewWindow); ok {
 			inheritNativeWindowAppearance(window, source)
@@ -110,8 +118,12 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions) {
 	if options.hideZoomButton {
 		hideNativeWindowZoomButton(window)
 	}
+	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		c.mu.Lock()
+		delete(c.loading, options.name)
+		c.mu.Unlock()
+		window.Show()
+		window.Focus()
+	})
 	c.mu.Unlock()
-
-	window.Show()
-	window.Focus()
 }

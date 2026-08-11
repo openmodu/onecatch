@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
 import {
@@ -9,20 +9,52 @@ import {
   WorkerBinding,
 } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
-import WorkflowLibrary from "./components/workflow/WorkflowLibrary.jsx";
-import WorkflowEditor from "./components/workflow/WorkflowEditor.jsx";
-import WorkerPage from "./components/WorkerPage.jsx";
-import WorkerModal from "./components/WorkerModal.jsx";
 import { copy, errorMessage } from "./format.js";
 import { loopTemplate } from "./templates.js";
 import { nextWorkflowDefinitionID } from "./workflowIds.js";
 import { demoRuntimes, demoWorkers, demoWorkflows, demoWorkspaces } from "./demoData.js";
+
+const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary.jsx"));
+const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
+const WorkerPage = lazy(() => import("./components/WorkerPage.jsx"));
+const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
 
 export const settingsChangedEvent = "oneshot:settings-changed";
 export const workflowsChangedEvent = "oneshot:workflows-changed";
 
 const emptyWorkerForm = () => ({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
 const editWorkerForm = (worker) => ({ id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled });
+const loadingRuntimes = [
+  { id: "codex", name: "Codex", checking: true },
+  { id: "claude", name: "Claude Code", checking: true },
+  { id: "modu", name: "Modu Code", checking: true },
+];
+
+let settingsBootstrapPromise;
+let settingsSupportPromise;
+
+function loadSettingsBootstrap() {
+  settingsBootstrapPromise ||= SettingsBinding.GetSettings();
+  return settingsBootstrapPromise;
+}
+
+function loadSettingsSupport() {
+  settingsSupportPromise ||= Promise.allSettled([
+    RuntimeBinding.ListRuntimes(),
+    WorkspaceBinding.ListWorkspaces(),
+    WorkerBinding.ListWorkers(),
+  ]);
+  return settingsSupportPromise;
+}
+
+function scheduleIdle(callback) {
+  if (typeof window.requestIdleCallback === "function") {
+    const id = window.requestIdleCallback(callback, { timeout: 600 });
+    return () => window.cancelIdleCallback(id);
+  }
+  const id = window.setTimeout(callback, 0);
+  return () => window.clearTimeout(id);
+}
 
 function LoadingWindow() {
   const { t } = useTranslation();
@@ -58,7 +90,7 @@ function useConfirmDialog() {
 export function SettingsWindow() {
   const { t } = useTranslation();
   const [mode, setMode] = useState("loading");
-  const [runtimes, setRuntimes] = useState([]);
+  const [runtimes, setRuntimes] = useState(loadingRuntimes);
   const [workspaces, setWorkspaces] = useState([]);
   const [workers, setWorkers] = useState([]);
   const [workerHealth, setWorkerHealth] = useState({});
@@ -71,12 +103,9 @@ export function SettingsWindow() {
 
   useEffect(() => {
     let active = true;
-    Promise.all([RuntimeBinding.ListRuntimes(), WorkspaceBinding.ListWorkspaces(), WorkerBinding.ListWorkers(), SettingsBinding.GetSettings()])
-      .then(([runtimeItems, workspaceItems, workerItems, settingsValue]) => {
+    loadSettingsBootstrap()
+      .then((settingsValue) => {
         if (!active) return;
-        setRuntimes(runtimeItems || []);
-        setWorkspaces(workspaceItems || []);
-        setWorkers(workerItems || []);
         setSettings(settingsValue || demoSettings);
         setMode("wails");
       })
@@ -90,6 +119,20 @@ export function SettingsWindow() {
       });
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    let active = true;
+    const cancelIdle = scheduleIdle(() => {
+      loadSettingsSupport().then(([runtimeResult, workspaceResult, workerResult]) => {
+        if (!active) return;
+        setRuntimes(runtimeResult.status === "fulfilled" ? runtimeResult.value || [] : demoRuntimes);
+        if (workspaceResult.status === "fulfilled") setWorkspaces(workspaceResult.value || []);
+        if (workerResult.status === "fulfilled") setWorkers(workerResult.value || []);
+      });
+    });
+    return () => { active = false; cancelIdle(); };
+  }, [mode]);
 
   useEffect(() => {
     const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
@@ -176,8 +219,8 @@ export function SettingsWindow() {
 
   if (mode === "loading") return <LoadingWindow />;
   return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-foreground">
-    <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={updateSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={workspaces[0]} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={openWorker} />} />
-    {workerModal && <WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} />}
+    <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={updateSettings} notify={notify} workersPanel={<Suspense fallback={<div className="p-4 text-sm text-muted-foreground">{t("task.opening")}</div>}><WorkerPage mode={mode} workspace={workspaces[0]} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={openWorker} /></Suspense>} />
+    {workerModal && <Suspense fallback={null}><WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} /></Suspense>}
     <ConfirmDialog dialog={dialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
   </div>;
@@ -375,9 +418,9 @@ export function WorkflowsWindow() {
   };
 
   if (mode === "loading") return <LoadingWindow />;
-  const editorContent = editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => visitPage({ selectedWorkflowID: editorSourceID || selectedWorkflowID, editor: null, editorSourceID: "", validation: [] })} /> : null;
+  const editorContent = editor ? <Suspense fallback={<LoadingWindow />}><WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => visitPage({ selectedWorkflowID: editorSourceID || selectedWorkflowID, editor: null, editorSourceID: "", validation: [] })} /></Suspense> : null;
   return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-foreground">
-    <WorkflowLibrary workflows={workflows} selectedWorkflow={selectedWorkflow} runtimes={runtimes} editorContent={editorContent} openEditor={openEditor} deleteWorkflow={deleteWorkflow} onSelect={selectWorkflow} busy={busy} canGoBack={navigationRef.current.back.length > 0} canGoForward={navigationRef.current.forward.length > 0} onGoBack={goBack} onGoForward={goForward} />
+    <Suspense fallback={<LoadingWindow />}><WorkflowLibrary workflows={workflows} selectedWorkflow={selectedWorkflow} runtimes={runtimes} editorContent={editorContent} openEditor={openEditor} deleteWorkflow={deleteWorkflow} onSelect={selectWorkflow} busy={busy} canGoBack={navigationRef.current.back.length > 0} canGoForward={navigationRef.current.forward.length > 0} onGoBack={goBack} onGoForward={goForward} /></Suspense>
     <ConfirmDialog dialog={dialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
   </div>;

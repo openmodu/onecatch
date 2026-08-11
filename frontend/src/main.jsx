@@ -1,9 +1,7 @@
-import React from "react";
+import React, { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { Events } from "@wailsio/runtime";
 import i18n, { LANGUAGE_CHANGED_EVENT, LANGUAGE_STORAGE_KEY, normalizeLanguage } from "./i18n.js";
-import App from "./app/App.jsx";
-import { SettingsWindow, WorkflowsWindow } from "./app/AuxiliaryWindow.jsx";
 import { APPEARANCE_CHANGED_EVENT, ACCENT_STORAGE_KEY, THEME_STORAGE_KEY, applyAppearance, readAppearance } from "./app/appearance.js";
 import { desktopPlatform } from "./app/platform.js";
 // index.css pulls in the hand-written stylesheets itself, inside @layer legacy,
@@ -28,10 +26,24 @@ Events.On(APPEARANCE_CHANGED_EVENT, syncAppearance);
 Events.On(LANGUAGE_CHANGED_EVENT, syncLanguage);
 
 const windowKind = new URLSearchParams(window.location.search).get("window");
-const WindowRoot = windowKind === "settings" ? SettingsWindow : windowKind === "workflows" ? WorkflowsWindow : App;
+const WindowRoot = lazy(async () => {
+  if (windowKind === "settings") {
+    const module = await import("./app/AuxiliaryWindow.jsx");
+    return { default: module.SettingsWindow };
+  }
+  if (windowKind === "workflows") {
+    const module = await import("./app/AuxiliaryWindow.jsx");
+    return { default: module.WorkflowsWindow };
+  }
+  return import("./app/App.jsx");
+});
+
+function WindowLoading() {
+  return <div className="flex h-full items-center justify-center bg-background text-sm text-muted-foreground">{i18n.t("task.opening")}</div>;
+}
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <WindowRoot />
+    <Suspense fallback={<WindowLoading />}><WindowRoot /></Suspense>
   </React.StrictMode>,
 );

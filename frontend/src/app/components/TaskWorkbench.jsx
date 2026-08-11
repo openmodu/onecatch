@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, GitBranch, ListTree, Maximize2, Minimize2, PanelRightClose, SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Action, Kicker, StatusBadge } from "../../ui/primitives.jsx";
@@ -11,7 +11,8 @@ import Composer from "./Composer.jsx";
 import StatusInspector from "./inspectors/StatusInspector.jsx";
 import GitInspector from "./inspectors/GitInspector.jsx";
 import EventInspector from "./inspectors/EventInspector.jsx";
-import TerminalDock from "./TerminalDock.jsx";
+
+const TerminalDock = lazy(() => import("./TerminalDock.jsx"));
 
 const MIN_INSPECTOR_WIDTH = 320;
 const DEFAULT_INSPECTOR_WIDTH = 380;
@@ -57,13 +58,37 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
   const [inspectorMaximized, setInspectorMaximized] = useState(false);
+  const [terminalMounted, setTerminalMounted] = useState(false);
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
   const inspectorResizeRef = useRef(null);
   const inspectorRestoreWidthRef = useRef(DEFAULT_INSPECTOR_WIDTH);
   const workbenchRef = useRef(null);
   const terminalDockRef = useRef(null);
+  const pendingTerminalActionsRef = useRef([]);
   const terminalToggleVersionRef = useRef(terminalToggleVersion);
+
+  const runTerminalAction = useCallback((action) => {
+    const dock = terminalDockRef.current;
+    if (dock) {
+      if (action.type === "open") void dock.open(action.command);
+      else dock.toggle();
+      return;
+    }
+    pendingTerminalActionsRef.current.push(action);
+    setTerminalMounted(true);
+  }, []);
+  const setTerminalDock = useCallback((dock) => {
+    terminalDockRef.current = dock;
+    if (!dock || !pendingTerminalActionsRef.current.length) return;
+    const actions = pendingTerminalActionsRef.current.splice(0);
+    actions.forEach((action) => {
+      if (action.type === "open") void dock.open(action.command);
+      else dock.toggle();
+    });
+  }, []);
+  const toggleTerminal = useCallback(() => runTerminalAction({ type: "toggle" }), [runTerminalAction]);
+  const openTerminal = useCallback((command) => runTerminalAction({ type: "open", command }), [runTerminalAction]);
 
   const selectedQueuedTask = useMemo(() => tasks.find((task) => task.id === selectedQueuedTaskID), [tasks, selectedQueuedTaskID]);
   const selectedTask = runDetail?.task || selectedQueuedTask;
@@ -78,8 +103,19 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   useEffect(() => {
     if (terminalToggleVersion === terminalToggleVersionRef.current) return;
     terminalToggleVersionRef.current = terminalToggleVersion;
-    terminalDockRef.current?.toggle();
-  }, [terminalToggleVersion]);
+    toggleTerminal();
+  }, [terminalToggleVersion, toggleTerminal]);
+
+  useEffect(() => {
+    if (terminalMounted) return undefined;
+    const shortcut = (event) => {
+      if (!(event.ctrlKey || event.metaKey) || event.code !== "Backquote") return;
+      event.preventDefault();
+      toggleTerminal();
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [terminalMounted, toggleTerminal]);
 
   useEffect(() => {
     pinnedRef.current = true;
@@ -157,7 +193,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
         <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
         {mode === "wails" ? t("common.local") : t("common.preview")}
       </StatusBadge>
-      <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => terminalDockRef.current?.toggle()}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>
+      <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>
       <button type="button" className="workbench-inspector-dock-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><PanelRightClose size={16} strokeWidth={2} aria-hidden="true" /></button>
     </div>}
     <section className="conversation-workspace flex min-h-0 min-w-0 flex-col bg-background">
@@ -180,13 +216,13 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           onSubmit={onSubmit}
         />}
       </> : <div className="workbench-welcome m-auto max-w-xl select-none p-10 text-center text-muted-foreground"><Kicker>{t("task.welcomeKicker")}</Kicker><h2 className="my-3 text-lg font-semibold text-foreground">{t("task.welcomeTitle")}</h2><p className="mb-6 text-sm leading-relaxed">{t("task.welcomeDescription")}</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>{t("task.newTask")}</Action></div>}
-      <TerminalDock ref={terminalDockRef} mode={mode} workspace={workspace} preferences={terminalPreferences} notify={notify} onVisibilityChange={onTerminalVisibilityChange} />
+      {terminalMounted && <Suspense fallback={null}><TerminalDock ref={setTerminalDock} mode={mode} workspace={workspace} preferences={terminalPreferences} notify={notify} onVisibilityChange={onTerminalVisibilityChange} /></Suspense>}
     </section>
 
     {!inspectorCollapsed && <aside className="workbench-inspector open min-h-0 min-w-0" aria-label={t("inspector.aria")}>
       <span className="workbench-inspector-resize" role="separator" aria-label={t("inspector.resize", { defaultValue: "调整状态栏宽度" })} aria-orientation="vertical" tabIndex="0" onPointerDown={beginInspectorResize} onPointerMove={moveInspectorResize} onPointerUp={endInspectorResize} onPointerCancel={endInspectorResize} onKeyDown={resizeInspectorWithKeyboard} />
-      <div className="workbench-inspector-toolbar"><div className="workbench-inspector-tabs" role="tablist" aria-label={t("inspector.aria")}>{inspectorTabs.map(({ value, label, icon: Icon }) => <button type="button" role="tab" className={inspectorTab === value ? "active" : ""} aria-selected={inspectorTab === value} aria-controls="workbench-inspector-content" title={label} key={value} onClick={() => setInspectorTab(value)}><Icon size={15} strokeWidth={2} aria-hidden="true" /><span className="sr-only">{label}</span></button>)}</div><strong className="workbench-inspector-title">{activeInspector.label}</strong><div className="workbench-inspector-window-actions">{inspectorMaximized && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={() => terminalDockRef.current?.toggle()}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}<button type="button" className="workbench-inspector-maximize" aria-label={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} aria-pressed={inspectorMaximized} title={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} onClick={toggleInspectorMaximized}>{inspectorMaximized ? <Minimize2 size={15} strokeWidth={2} aria-hidden="true" /> : <Maximize2 size={15} strokeWidth={2} aria-hidden="true" />}</button><button type="button" className="workbench-inspector-close" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><X size={16} strokeWidth={2} aria-hidden="true" /></button></div></div>
-      <div className="workbench-inspector-body min-h-0 overflow-y-auto" id="workbench-inspector-content">{inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} onOpenTerminal={(command) => terminalDockRef.current?.open(command)} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={runWorkerID} notify={notify} /> : <EventInspector detail={runDetail} />}</div>
+      <div className="workbench-inspector-toolbar"><div className="workbench-inspector-tabs" role="tablist" aria-label={t("inspector.aria")}>{inspectorTabs.map(({ value, label, icon: Icon }) => <button type="button" role="tab" className={inspectorTab === value ? "active" : ""} aria-selected={inspectorTab === value} aria-controls="workbench-inspector-content" title={label} key={value} onClick={() => setInspectorTab(value)}><Icon size={15} strokeWidth={2} aria-hidden="true" /><span className="sr-only">{label}</span></button>)}</div><strong className="workbench-inspector-title">{activeInspector.label}</strong><div className="workbench-inspector-window-actions">{inspectorMaximized && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}<button type="button" className="workbench-inspector-maximize" aria-label={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} aria-pressed={inspectorMaximized} title={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} onClick={toggleInspectorMaximized}>{inspectorMaximized ? <Minimize2 size={15} strokeWidth={2} aria-hidden="true" /> : <Maximize2 size={15} strokeWidth={2} aria-hidden="true" />}</button><button type="button" className="workbench-inspector-close" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><X size={16} strokeWidth={2} aria-hidden="true" /></button></div></div>
+      <div className="workbench-inspector-body min-h-0 overflow-y-auto" id="workbench-inspector-content">{inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} onOpenTerminal={openTerminal} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={runWorkerID} notify={notify} /> : <EventInspector detail={runDetail} />}</div>
     </aside>}
   </div>;
 }

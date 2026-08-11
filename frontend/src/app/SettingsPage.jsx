@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
@@ -76,7 +76,6 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
   const [runtimeStatus, setRuntimeStatus] = useState({});
   const [codexConfiguration, setCodexConfiguration] = useState({ loading: false, data: null, error: "" });
   const [claudeConfiguration, setClaudeConfiguration] = useState({ loading: false, data: null, error: "" });
-  const runtimeConfigurationAutoChecked = useRef(false);
   const [usage, setUsage] = useState(null);
   const [usageLoading, setUsageLoading] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -181,12 +180,6 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       }
     }
   };
-  useEffect(() => {
-    if (section !== "runtime" || runtimeConfigurationAutoChecked.current) return;
-    runtimeConfigurationAutoChecked.current = true;
-    checkRuntime("codex");
-    checkRuntime("claude");
-  }, [section]);
   const refreshUsage = async () => {
     setUsageLoading(true);
     try {

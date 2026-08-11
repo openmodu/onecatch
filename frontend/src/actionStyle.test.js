@@ -127,8 +127,23 @@ test("workflow and settings share one contained footer menu", async () => {
 test("settings and workflows are routed to singleton native windows", async () => {
   const main = await readFile(path.join(sourceRoot, "main.jsx"), "utf8");
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
-  assert.match(main, /windowKind === "settings" \? SettingsWindow : windowKind === "workflows" \? WorkflowsWindow : App/);
+  assert.match(main, /if \(windowKind === "settings"\)[\s\S]*import\("\.\/app\/AuxiliaryWindow\.jsx"\)[\s\S]*module\.SettingsWindow/);
+  assert.match(main, /if \(windowKind === "workflows"\)[\s\S]*module\.WorkflowsWindow/);
+  assert.match(main, /return import\("\.\/app\/App\.jsx"\)/);
+  assert.doesNotMatch(main, /^import App from/m, "auxiliary windows must not eagerly load the main application");
   assert.match(app, /next === "settings" \? WindowBinding\.OpenSettings\(\) : WindowBinding\.OpenWorkflows\(\)/);
+});
+
+test("settings and terminal defer non-critical startup work", async () => {
+  const auxiliary = await readFile(path.join(sourceRoot, "app", "AuxiliaryWindow.jsx"), "utf8");
+  const settings = await readFile(path.join(sourceRoot, "app", "SettingsPage.jsx"), "utf8");
+  const workbench = await readFile(path.join(sourceRoot, "app", "components", "TaskWorkbench.jsx"), "utf8");
+  assert.match(auxiliary, /loadSettingsBootstrap\(\)[\s\S]*setMode\("wails"\)/);
+  assert.match(auxiliary, /scheduleIdle\(\(\) => \{[\s\S]*loadSettingsSupport\(\)/);
+  assert.match(auxiliary, /Promise\.allSettled\(\[[\s\S]*ListRuntimes\(\)/);
+  assert.doesNotMatch(settings, /runtimeConfigurationAutoChecked|checkRuntime\("codex"\);\s*checkRuntime\("claude"\);/);
+  assert.match(workbench, /lazy\(\(\) => import\("\.\/TerminalDock\.jsx"\)\)/);
+  assert.match(workbench, /terminalMounted && <Suspense/);
 });
 
 test("the settings window uses the main window's inset sidebar and draggable chrome", async () => {
