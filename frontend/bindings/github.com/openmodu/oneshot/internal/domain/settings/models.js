@@ -240,6 +240,13 @@ export class Settings {
              */
             this["runtimes"] = {};
         }
+        if (!("terminal" in $$source)) {
+            /**
+             * @member
+             * @type {TerminalSettings}
+             */
+            this["terminal"] = (new TerminalSettings());
+        }
         if (!("execution" in $$source)) {
             /**
              * @member
@@ -290,21 +297,25 @@ export class Settings {
         const $$createField4_0 = $$createType4;
         const $$createField5_0 = $$createType5;
         const $$createField6_0 = $$createType6;
+        const $$createField7_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("runtimes" in $$parsedSource) {
             $$parsedSource["runtimes"] = $$createField2_0($$parsedSource["runtimes"]);
         }
+        if ("terminal" in $$parsedSource) {
+            $$parsedSource["terminal"] = $$createField3_0($$parsedSource["terminal"]);
+        }
         if ("execution" in $$parsedSource) {
-            $$parsedSource["execution"] = $$createField3_0($$parsedSource["execution"]);
+            $$parsedSource["execution"] = $$createField4_0($$parsedSource["execution"]);
         }
         if ("security" in $$parsedSource) {
-            $$parsedSource["security"] = $$createField4_0($$parsedSource["security"]);
+            $$parsedSource["security"] = $$createField5_0($$parsedSource["security"]);
         }
         if ("storage" in $$parsedSource) {
-            $$parsedSource["storage"] = $$createField5_0($$parsedSource["storage"]);
+            $$parsedSource["storage"] = $$createField6_0($$parsedSource["storage"]);
         }
         if ("experimental" in $$parsedSource) {
-            $$parsedSource["experimental"] = $$createField6_0($$parsedSource["experimental"]);
+            $$parsedSource["experimental"] = $$createField7_0($$parsedSource["experimental"]);
         }
         return new Settings(/** @type {Partial<Settings>} */($$parsedSource));
     }
@@ -366,11 +377,58 @@ export class StorageSettings {
     }
 }
 
+export class TerminalSettings {
+    /**
+     * Creates a new TerminalSettings instance.
+     * @param {Partial<TerminalSettings>} [$$source = {}] - The source object to create the TerminalSettings.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["shell"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["arguments"] = undefined;
+        }
+        if (!("theme" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["theme"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TerminalSettings instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {TerminalSettings}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("arguments" in $$parsedSource) {
+            $$parsedSource["arguments"] = $$createField1_0($$parsedSource["arguments"]);
+        }
+        return new TerminalSettings(/** @type {Partial<TerminalSettings>} */($$parsedSource));
+    }
+}
+
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = RuntimeSettings.createFrom;
 const $$createType2 = $Create.Map($Create.Any, $$createType1);
-const $$createType3 = ExecutionSettings.createFrom;
-const $$createType4 = SecuritySettings.createFrom;
-const $$createType5 = StorageSettings.createFrom;
-const $$createType6 = ExperimentalSettings.createFrom;
+const $$createType3 = TerminalSettings.createFrom;
+const $$createType4 = ExecutionSettings.createFrom;
+const $$createType5 = SecuritySettings.createFrom;
+const $$createType6 = StorageSettings.createFrom;
+const $$createType7 = ExperimentalSettings.createFrom;

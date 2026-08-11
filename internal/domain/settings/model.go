@@ -14,6 +14,7 @@ const CurrentSchemaVersion = 1
 
 const (
 	SectionRuntime      = "runtime"
+	SectionTerminal     = "terminal"
 	SectionExecution    = "execution"
 	SectionSecurity     = "security"
 	SectionStorage      = "storage"
@@ -24,6 +25,7 @@ type Settings struct {
 	SchemaVersion int                        `json:"schemaVersion"`
 	Revision      int64                      `json:"revision"`
 	Runtimes      map[string]RuntimeSettings `json:"runtimes"`
+	Terminal      TerminalSettings           `json:"terminal"`
 	Execution     ExecutionSettings          `json:"execution"`
 	Security      SecuritySettings           `json:"security"`
 	Storage       StorageSettings            `json:"storage"`
@@ -38,6 +40,12 @@ type RuntimeSettings struct {
 	ServiceTier          string   `json:"serviceTier,omitempty"`
 	Provider             string   `json:"provider,omitempty"`
 	EnvironmentAllowlist []string `json:"environmentAllowlist,omitempty"`
+}
+
+type TerminalSettings struct {
+	Shell     string   `json:"shell,omitempty"`
+	Arguments []string `json:"arguments,omitempty"`
+	Theme     string   `json:"theme"`
 }
 
 type ExecutionSettings struct {
@@ -77,6 +85,7 @@ func Defaults() Settings {
 			"claude": {},
 			"modu":   {},
 		},
+		Terminal: TerminalSettings{Theme: "system"},
 		Execution: ExecutionSettings{
 			MaxTransitions: 20, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 1800,
 			MaxLocalDAGConcurrency: 4, InterruptGraceSeconds: 10, DefaultSandbox: "workspace-write",
@@ -113,6 +122,18 @@ func Normalize(input Settings) (Settings, error) {
 	if input.Execution.MaxTransitions == 0 {
 		input.Execution.MaxTransitions = defaults.Execution.MaxTransitions
 	}
+	input.Terminal.Shell = strings.TrimSpace(input.Terminal.Shell)
+	input.Terminal.Theme = strings.ToLower(strings.TrimSpace(input.Terminal.Theme))
+	if input.Terminal.Theme == "" {
+		input.Terminal.Theme = defaults.Terminal.Theme
+	}
+	arguments := make([]string, 0, len(input.Terminal.Arguments))
+	for _, argument := range input.Terminal.Arguments {
+		if argument = strings.TrimSpace(argument); argument != "" {
+			arguments = append(arguments, argument)
+		}
+	}
+	input.Terminal.Arguments = arguments
 	if input.Execution.MaxConsecutiveFailures == 0 {
 		input.Execution.MaxConsecutiveFailures = defaults.Execution.MaxConsecutiveFailures
 	}
@@ -201,6 +222,17 @@ func Validate(input Settings) error {
 			}
 		}
 	}
+	if strings.ContainsAny(input.Terminal.Shell, "\r\n\x00") {
+		return errors.New("terminal shell contains control characters")
+	}
+	for _, argument := range input.Terminal.Arguments {
+		if strings.ContainsAny(argument, "\r\n\x00") {
+			return errors.New("terminal argument contains control characters")
+		}
+	}
+	if !contains([]string{"system", "paper", "midnight", "contrast"}, input.Terminal.Theme) {
+		return errors.New("terminal theme is invalid")
+	}
 	e := input.Execution
 	if e.MaxTransitions < 1 || e.MaxTransitions > 10000 {
 		return errors.New("maxTransitions must be between 1 and 10000")
@@ -243,6 +275,8 @@ func DefaultSection(section string) (any, error) {
 	switch section {
 	case SectionRuntime:
 		return d.Runtimes, nil
+	case SectionTerminal:
+		return d.Terminal, nil
 	case SectionExecution:
 		return d.Execution, nil
 	case SectionSecurity:

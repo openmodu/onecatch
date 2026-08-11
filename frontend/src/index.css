@@ -343,7 +343,7 @@
     height: calc(100% + 36px);
     margin: 0 8px 0 0;
     overflow: hidden;
-    border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
+    border: 1px solid color-mix(in oklab, var(--border) 48%, transparent);
     border-radius: 16px;
     background: color-mix(in oklab, var(--sidebar) 94%, transparent);
     box-shadow: 10px 12px 26px -18px color-mix(in oklab, var(--foreground) 18%, transparent);
@@ -365,6 +365,7 @@
   }
 
   .workbench-inspector-dock-toggle,
+  .workbench-terminal-toggle,
   .workbench-inspector-maximize,
   .workbench-inspector-close {
     display: grid;
@@ -380,8 +381,14 @@
   }
 
   .workbench-inspector-dock-toggle:hover,
+  .workbench-terminal-toggle:hover,
   .workbench-inspector-maximize:hover,
   .workbench-inspector-close:hover {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+
+  .workbench-terminal-toggle.active {
     background: var(--accent);
     color: var(--foreground);
   }
@@ -458,6 +465,7 @@
 
   .workbench-inspector-tabs button:focus-visible,
   .workbench-inspector-dock-toggle:focus-visible,
+  .workbench-terminal-toggle:focus-visible,
   .workbench-inspector-maximize:focus-visible,
   .workbench-inspector-close:focus-visible {
     outline: 2px solid color-mix(in oklab, var(--ring) 72%, transparent);
@@ -1127,4 +1135,395 @@
 
 :root[data-platform="windows"] .workflow-sidebar > .drag-region {
   height: 40px;
+}
+
+@layer app {
+  .terminal-dock {
+    position: relative;
+    z-index: 24;
+    display: grid;
+    min-height: 36px;
+    grid-template-rows: 36px minmax(0, 1fr);
+    margin: 0 8px 8px 4px;
+    overflow: visible;
+    border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
+    border-radius: 14px;
+    background: color-mix(in oklab, var(--background) 97%, var(--sidebar));
+    box-shadow: none;
+    container-type: inline-size;
+  }
+
+  .terminal-dock.is-hidden {
+    display: none;
+  }
+
+  .conversation-workspace {
+    position: relative;
+  }
+
+  .terminal-dock.is-maximized {
+    position: absolute;
+    z-index: 40;
+    inset: 8px 8px 8px 4px;
+    height: auto;
+    margin: 0;
+  }
+
+  .terminal-dock.is-maximized .terminal-resize {
+    display: none;
+  }
+
+  .terminal-resize {
+    position: absolute;
+    z-index: 3;
+    top: -5px;
+    right: 0;
+    left: 0;
+    height: 10px;
+    cursor: row-resize;
+    touch-action: none;
+  }
+
+  .terminal-resize::after {
+    position: absolute;
+    top: 4px;
+    left: 50%;
+    width: 32px;
+    height: 2px;
+    border-radius: 999px;
+    background: transparent;
+    content: "";
+    transform: translateX(-50%);
+  }
+
+  .terminal-dock.is-open .terminal-resize:hover::after,
+  .terminal-dock.is-open .terminal-resize:focus-visible::after {
+    background: color-mix(in oklab, var(--primary) 72%, transparent);
+  }
+
+  .terminal-toolbar {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    padding: 0 8px 0 10px;
+    border-radius: 13px 13px 0 0;
+    background: color-mix(in oklab, var(--muted) 34%, var(--background));
+  }
+
+  .terminal-title,
+  .terminal-tool,
+  .terminal-empty {
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+  }
+
+  .terminal-title {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 7px;
+    padding: 5px 6px;
+    border-radius: 6px;
+  }
+
+  .terminal-title:hover,
+  .terminal-tool:hover:not(:disabled) {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+
+  .terminal-title strong {
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .terminal-title small,
+  .terminal-state {
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .terminal-tabs {
+    display: flex;
+    min-width: 0;
+    max-width: min(46%, 520px);
+    align-self: stretch;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .terminal-tabs::-webkit-scrollbar { display: none; }
+
+  .terminal-tab-shell {
+    display: inline-flex;
+    min-width: 82px;
+    max-width: 150px;
+    align-items: center;
+    border-right: 1px solid color-mix(in oklab, var(--border) 62%, transparent);
+    background: transparent;
+  }
+
+  .terminal-tab {
+    display: inline-flex;
+    min-width: 0;
+    flex: 1;
+    align-items: center;
+    gap: 6px;
+    align-self: stretch;
+    padding: 0 3px 0 8px;
+    border: 0;
+    background: transparent;
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-mono);
+    font-size: 10px;
+    cursor: pointer;
+  }
+
+  .terminal-tab > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .terminal-tab-close { display: grid; width: 22px; align-self: stretch; flex: 0 0 auto; place-items: center; border: 0; background: transparent; color: var(--muted-foreground); opacity: 0; cursor: pointer; }
+  .terminal-tab-shell:hover .terminal-tab-close,
+  .terminal-tab-shell.active .terminal-tab-close { opacity: .75; }
+  .terminal-tab-shell.active { background: var(--background); box-shadow: inset 0 2px var(--primary); }
+  .terminal-tab-shell.active .terminal-tab { color: var(--foreground); }
+  .terminal-tab-close:hover { color: var(--foreground); }
+  .terminal-tab > i { width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: var(--warning); animation: terminal-pulse 1s ease-in-out infinite alternate; }
+  .terminal-tab > em { color: var(--destructive); font-size: 9px; font-style: normal; }
+  @keyframes terminal-pulse { to { opacity: .35; } }
+
+  .terminal-status-dot {
+    width: 6px;
+    height: 6px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--muted-foreground);
+  }
+
+  .terminal-status-dot.running {
+    background: var(--success);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--success) 14%, transparent);
+  }
+
+  .terminal-workspace {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-mono);
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .terminal-state {
+    margin-left: auto;
+    color: var(--muted-foreground);
+  }
+
+  .terminal-toolbar kbd {
+    padding: 1px 5px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-sans);
+    font-size: 10px;
+    line-height: 16px;
+  }
+
+  .terminal-tool {
+    display: grid;
+    width: 26px;
+    height: 26px;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: 6px;
+  }
+
+  .terminal-tool:disabled {
+    opacity: .35;
+    cursor: default;
+  }
+
+  .terminal-title:focus-visible,
+  .terminal-tool:focus-visible,
+  .terminal-empty:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--ring) 72%, transparent);
+    outline-offset: 1px;
+  }
+
+  .terminal-viewport {
+    position: relative;
+    min-height: 0;
+    overflow: hidden;
+    border-radius: 0 0 13px 13px;
+    background: var(--background);
+  }
+
+  .terminal-dock:not(.is-open) .terminal-viewport {
+    display: none;
+  }
+
+  .terminal-pane-layout {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .terminal-split-canvas {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+  }
+
+  .terminal-pane-slot {
+    position: absolute;
+    min-width: 0;
+    min-height: 0;
+    padding: 1px;
+    overflow: hidden;
+    background: color-mix(in oklab, var(--border) 56%, transparent);
+  }
+
+  .terminal-split-handle {
+    position: absolute;
+    z-index: 3;
+    background: transparent;
+    touch-action: none;
+  }
+
+  .terminal-split-handle.vertical { width: 7px; cursor: col-resize; transform: translateX(-50%); }
+  .terminal-split-handle.horizontal { height: 7px; cursor: row-resize; transform: translateY(-50%); }
+
+  .terminal-split-handle::after {
+    position: absolute;
+    border-radius: 999px;
+    background: transparent;
+    content: "";
+  }
+
+  .terminal-split-handle.vertical::after { inset: 8px 2px; }
+  .terminal-split-handle.horizontal::after { inset: 2px 8px; }
+  .terminal-split-handle:hover::after,
+  .terminal-split-handle:focus-visible::after { background: color-mix(in oklab, var(--primary) 68%, transparent); }
+  .terminal-split-handle:focus-visible { outline: none; }
+
+  .terminal-host {
+    position: relative;
+    display: none;
+    min-width: 0;
+    min-height: 0;
+    padding: 8px 10px 6px;
+    overflow: hidden;
+    background: var(--terminal-pane-background, var(--background));
+    pointer-events: none;
+    height: 100%;
+  }
+
+  .terminal-host.active {
+    display: block;
+    pointer-events: auto;
+  }
+
+  .terminal-mount {
+    width: 100%;
+    /* Keep a small safety gutter below XTerm's fitted rows. Fractional WebKit
+       device pixels can otherwise make the final baseline appear clipped. */
+    height: calc(100% - 3px);
+  }
+
+  .terminal-pane-close {
+    position: absolute;
+    z-index: 4;
+    top: 5px;
+    right: 7px;
+    display: grid;
+    width: 22px;
+    height: 22px;
+    place-items: center;
+    border: 0;
+    border-radius: 5px;
+    background: color-mix(in oklab, var(--background) 88%, transparent);
+    color: var(--muted-foreground);
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  .terminal-host:hover .terminal-pane-close,
+  .terminal-host:focus-within .terminal-pane-close,
+  .terminal-pane-close:focus-visible { opacity: 1; }
+  .terminal-pane-close:hover { background: var(--accent); color: var(--foreground); }
+  .terminal-pane-close:focus-visible { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+  .terminal-mount .xterm {
+    width: 100%;
+    height: 100%;
+  }
+
+  .terminal-host .xterm-viewport {
+    overflow-x: hidden !important;
+    background-color: var(--terminal-pane-background, var(--background)) !important;
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 45%, transparent) transparent;
+    scrollbar-width: thin;
+  }
+
+  .terminal-empty {
+    position: absolute;
+    z-index: 2;
+    top: 50%;
+    left: 50%;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    background: var(--muted);
+    font-size: 11px;
+    transform: translate(-50%, -50%);
+  }
+
+  .terminal-search {
+    position: absolute;
+    z-index: 4;
+    top: 8px;
+    right: 12px;
+    display: flex;
+    height: 30px;
+    align-items: center;
+    gap: 4px;
+    padding: 0 5px 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    background: color-mix(in oklab, var(--card) 96%, transparent);
+    color: var(--muted-foreground);
+    box-shadow: 0 8px 24px color-mix(in oklab, var(--foreground) 12%, transparent);
+  }
+
+  .terminal-search input { width: 180px; border: 0; outline: 0; background: transparent; color: var(--foreground); font-size: 11px; }
+  .terminal-search span { min-width: 48px; color: var(--muted-foreground); font-size: 9px; text-align: right; }
+  .terminal-search span.not-found { color: var(--destructive); }
+  .terminal-search button { display: grid; width: 22px; height: 22px; place-items: center; border: 0; border-radius: 4px; background: transparent; color: var(--muted-foreground); cursor: pointer; }
+  .terminal-search button:hover { background: var(--accent); color: var(--foreground); }
+
+  @container (max-width: 560px) {
+    .terminal-workspace,
+    .terminal-state,
+    .terminal-toolbar kbd {
+      display: none;
+    }
+
+    .terminal-tabs { max-width: none; flex: 1; }
+
+    .terminal-tool:first-of-type {
+      margin-left: auto;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .terminal-dock { scroll-behavior: auto; }
+  }
 }

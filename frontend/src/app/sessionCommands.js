@@ -1,5 +1,8 @@
 export function runtimeResumeCommand(runtime, sessionID) {
-  if (!sessionID) return "";
+  // This command can be written directly into the embedded shell. Runtime IDs
+  // are normally UUID-like; reject shell metacharacters instead of attempting
+  // incompatible quoting rules for POSIX shells and PowerShell.
+  if (!sessionID || !/^[A-Za-z0-9._:/-]+$/.test(sessionID)) return "";
   if (runtime === "codex") return `codex resume ${sessionID}`;
   if (runtime === "claude") return `claude --resume ${sessionID}`;
   if (runtime === "modu") return `modu_code --resume ${sessionID}`;

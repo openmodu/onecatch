@@ -3,6 +3,8 @@ module github.com/openmodu/oneshot
 go 1.26.1
 
 require (
+	github.com/UserExistsError/conpty v0.1.4
+	github.com/creack/pty v1.1.24
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/wire v0.7.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.6

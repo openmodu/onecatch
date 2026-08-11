@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lock, Minus, PanelRightOpen, Paperclip, Square, X } from "lucide-react";
+import { Lock, Minus, PanelRightOpen, Paperclip, Square, SquareTerminal, X } from "lucide-react";
 import { Events, Window } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -68,6 +68,8 @@ function App() {
   const [mode, setMode] = useState("loading");
   const [view, setView] = useState("tasks");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [terminalVisible, setTerminalVisible] = useState(false);
+  const [terminalToggleVersion, setTerminalToggleVersion] = useState(0);
   const [runtimes, setRuntimes] = useState([]);
   const [workspaces, setWorkspaces] = useState([]);
   const [workspaceID, setWorkspaceID] = useState("");
@@ -1045,10 +1047,16 @@ function App() {
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {mode === "wails" ? t("common.local") : t("common.preview")}
           </StatusBadge>}
+          {view === "tasks" && !editor && inspectorCollapsed && <button type="button" className={`no-drag grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${terminalVisible ? "bg-accent text-foreground" : "text-muted-foreground"}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => setTerminalToggleVersion((value) => value + 1)}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
           {view === "tasks" && inspectorCollapsed && <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /></button>}
         </div>
         {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} showBack /> : view === "tasks" ? <TaskWorkbench
           mode={mode}
+          workspace={selectedWorkspace}
+          terminalPreferences={settings.terminal}
+          terminalVisible={terminalVisible}
+          terminalToggleVersion={terminalToggleVersion}
+          onTerminalVisibilityChange={setTerminalVisible}
           workspaceID={workspaceID}
           tasks={tasks}
           runDetail={runDetail}

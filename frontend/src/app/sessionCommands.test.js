@@ -7,6 +7,7 @@ test("builds recovery commands for supported runtimes", () => {
   assert.equal(runtimeResumeCommand("claude", "session-456"), "claude --resume session-456");
   assert.equal(runtimeResumeCommand("modu", "session-789"), "modu_code --resume session-789");
   assert.equal(runtimeResumeCommand("custom", "session-789"), "");
+  assert.equal(runtimeResumeCommand("codex", "thread; rm -rf project"), "");
 });
 
 test("prefers the current run session and emits one entry per step", () => {

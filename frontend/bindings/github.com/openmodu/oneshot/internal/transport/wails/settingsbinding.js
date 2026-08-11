@@ -167,6 +167,17 @@ export function UpdateStorageSettings(input, expectedRevision) {
     }));
 }
 
+/**
+ * @param {settings$0.TerminalSettings} input
+ * @param {number} expectedRevision
+ * @returns {$CancellablePromise<settings$0.Settings>}
+ */
+export function UpdateTerminalSettings(input, expectedRevision) {
+    return $Call.ByID(3346395065, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType3($result);
+    }));
+}
+
 // Private type creation functions
 const $$createType0 = desktop$0.RuntimeInfo.createFrom;
 const $$createType1 = desktop$0.CleanupResult.createFrom;

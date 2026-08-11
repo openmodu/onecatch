@@ -7,6 +7,7 @@ import * as NotifyBinding from "./notifybinding.js";
 import * as RuntimeBinding from "./runtimebinding.js";
 import * as SettingsBinding from "./settingsbinding.js";
 import * as TaskRunBinding from "./taskrunbinding.js";
+import * as TerminalBinding from "./terminalbinding.js";
 import * as WindowBinding from "./windowbinding.js";
 import * as WorkerBinding from "./workerbinding.js";
 import * as WorkflowBinding from "./workflowbinding.js";
@@ -17,6 +18,7 @@ export {
     RuntimeBinding,
     SettingsBinding,
     TaskRunBinding,
+    TerminalBinding,
     WindowBinding,
     WorkerBinding,
     WorkflowBinding,

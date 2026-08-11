@@ -62,6 +62,9 @@ func (a *Service) UpdateRuntimeSettings(ctx context.Context, value map[string]do
 	}
 	return a.updateSettings(ctx, expected, func(current *domainsettings.Settings) { current.Runtimes = value })
 }
+func (a *Service) UpdateTerminalSettings(ctx context.Context, value domainsettings.TerminalSettings, expected int64) (domainsettings.Settings, error) {
+	return a.updateSettings(ctx, expected, func(current *domainsettings.Settings) { current.Terminal = value })
+}
 func (a *Service) UpdateExecutionSettings(ctx context.Context, value domainsettings.ExecutionSettings, expected int64) (domainsettings.Settings, error) {
 	return a.updateSettings(ctx, expected, func(current *domainsettings.Settings) { current.Execution = value })
 }
@@ -84,6 +87,8 @@ func (a *Service) ResetSettingsSection(ctx context.Context, section string, expe
 		switch section {
 		case domainsettings.SectionRuntime:
 			current.Runtimes = d.Runtimes
+		case domainsettings.SectionTerminal:
+			current.Terminal = d.Terminal
 		case domainsettings.SectionExecution:
 			current.Execution = d.Execution
 		case domainsettings.SectionSecurity:

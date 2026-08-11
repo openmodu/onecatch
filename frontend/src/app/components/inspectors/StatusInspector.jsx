@@ -33,7 +33,7 @@ async function copyText(value) {
   }
 }
 
-export default function StatusInspector({ detail, queuedTask, queuePosition, notify }) {
+export default function StatusInspector({ detail, queuedTask, queuePosition, notify, onOpenTerminal }) {
   const { t } = useTranslation();
   const [copiedStepID, setCopiedStepID] = useState("");
   useEffect(() => {
@@ -98,7 +98,7 @@ export default function StatusInspector({ detail, queuedTask, queuePosition, not
         <code className="select-text rounded-md border-l-2 border-l-info bg-muted px-2 py-1.5 font-mono text-[11px] leading-relaxed break-all text-muted-foreground">{session.command || session.sessionID}</code>
         <div className="flex items-center justify-between gap-2">
           <span className="min-w-0 text-[11px] text-muted-foreground">{session.command ? t("inspector.resumeTerminal") : t("inspector.copySession")}</span>
-          <Action size="compact" tone={copiedStepID === session.stepID ? "cyan" : "muted"} onClick={() => copySession(session)}>{copiedStepID === session.stepID ? t("inspector.copied") : t("inspector.copy")}</Action>
+          <span className="flex shrink-0 items-center gap-1"><Action size="compact" tone={copiedStepID === session.stepID ? "cyan" : "muted"} onClick={() => copySession(session)}>{copiedStepID === session.stepID ? t("inspector.copied") : t("inspector.copy")}</Action>{session.command && onOpenTerminal && <Action size="compact" tone="muted" onClick={() => onOpenTerminal(session.command)}>{t("terminal.open")}</Action>}</span>
         </div>
       </div>)}
       {!sessions.length && <p className="m-0 text-xs text-muted-foreground">{t("inspector.noSessions")}</p>}

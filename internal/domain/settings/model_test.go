@@ -16,6 +16,28 @@ func TestDefaultsAreSafeAndValid(t *testing.T) {
 	if got.Experimental.RemoteWorkersEnabled {
 		t.Fatal("remote workers must default to disabled")
 	}
+	if got.Terminal.Theme != "system" || got.Terminal.Shell != "" {
+		t.Fatalf("terminal defaults = %+v", got.Terminal)
+	}
+}
+
+func TestNormalizeAndValidateTerminalSettings(t *testing.T) {
+	input := Defaults()
+	input.Terminal = TerminalSettings{Shell: " zsh ", Arguments: []string{" -l ", "", " --flag=value with spaces "}, Theme: " MIDNIGHT "}
+	got, err := Normalize(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Terminal.Shell != "zsh" || got.Terminal.Theme != "midnight" || len(got.Terminal.Arguments) != 2 || got.Terminal.Arguments[1] != "--flag=value with spaces" {
+		t.Fatalf("terminal settings = %+v", got.Terminal)
+	}
+	if err := Validate(got); err != nil {
+		t.Fatal(err)
+	}
+	got.Terminal.Theme = "neon"
+	if err := Validate(got); err == nil {
+		t.Fatal("invalid terminal theme was accepted")
+	}
 }
 
 func TestNormalizeEnvironmentAllowlist(t *testing.T) {

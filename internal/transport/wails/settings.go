@@ -19,6 +19,9 @@ func (b *SettingsBinding) GetSettings() (domainsettings.Settings, error) {
 func (b *SettingsBinding) UpdateRuntimeSettings(input map[string]domainsettings.RuntimeSettings, expectedRevision int64) (domainsettings.Settings, error) {
 	return b.service.UpdateRuntimeSettings(context.Background(), input, expectedRevision)
 }
+func (b *SettingsBinding) UpdateTerminalSettings(input domainsettings.TerminalSettings, expectedRevision int64) (domainsettings.Settings, error) {
+	return b.service.UpdateTerminalSettings(context.Background(), input, expectedRevision)
+}
 func (b *SettingsBinding) UpdateExecutionSettings(input domainsettings.ExecutionSettings, expectedRevision int64) (domainsettings.Settings, error) {
 	return b.service.UpdateExecutionSettings(context.Background(), input, expectedRevision)
 }

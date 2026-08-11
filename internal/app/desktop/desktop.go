@@ -18,6 +18,7 @@ import (
 	desktopservice "github.com/openmodu/oneshot/internal/service/desktop"
 	"github.com/openmodu/oneshot/internal/service/desktop/runstate"
 	"github.com/openmodu/oneshot/internal/service/desktop/runstream"
+	terminalservice "github.com/openmodu/oneshot/internal/service/terminal"
 	"github.com/openmodu/oneshot/internal/transport/wails"
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/pkg/logger"
@@ -104,6 +105,8 @@ func Run() {
 			}
 		},
 	)
+	terminalService := terminalservice.NewService()
+	defer terminalService.Close()
 
 	// The macOS notification service hard-fails its Startup without a bundle
 	// identifier, which would abort app launch. It only has one when running
@@ -116,6 +119,7 @@ func Run() {
 		application.NewService(workspaceBinding),
 		application.NewService(wailstransport.NewWorkflowBinding(service)),
 		application.NewService(wailstransport.NewTaskRunBinding(service)),
+		application.NewService(wailstransport.NewTerminalBinding(terminalService)),
 		application.NewService(wailstransport.NewWorkerBinding(service)),
 		application.NewService(windowBinding),
 	}
@@ -148,6 +152,9 @@ func Run() {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: true,
 		},
+	})
+	terminalService.SetEmitter(func(name string, payload any) {
+		wailsApp.Event.Emit(name, payload)
 	})
 	auxiliaryWindows = newAuxiliaryWindowController(wailsApp)
 	unsubscribeRunStream := streamHub.Subscribe(func(frame runstream.Frame) {

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   SettingsButton,
@@ -26,7 +27,7 @@ import { APPEARANCE_CHANGED_EVENT, accentThemes, readAppearance, saveAppearance,
 import { codexEffortValues, codexServiceTierValues, selectedCodexModel } from "./codexRuntimeOptions.js";
 import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
 
-const sectionMeta = (t) => ["runtime", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
+const sectionMeta = (t) => ["runtime", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const message = (error, t) => String(error?.message || error || t("common.unknownError")).replace(/^Error:\s*/, "");
 const bytes = (value = 0) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : value < 1073741824 ? `${(value / 1048576).toFixed(1)} MB` : `${(value / 1073741824).toFixed(1)} GB`;
@@ -36,6 +37,7 @@ const runtimeIds = ["codex", "claude", "modu"];
 export const demoSettings = {
   schemaVersion: 1, revision: 1,
   runtimes: { codex: { binary: "", defaultModel: "", reasoningEffort: "", serviceTier: "", environmentAllowlist: [] }, claude: { binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] }, modu: { binary: "", defaultModel: "", provider: "auto", environmentAllowlist: [] } },
+  terminal: { shell: "", arguments: [], theme: "system" },
   execution: { maxTransitions: 20, maxConsecutiveFailures: 3, stepTimeoutSeconds: 1800, maxLocalDAGConcurrency: 4, interruptGraceSeconds: 10, defaultSandbox: "workspace-write" },
   security: { allowFullSandbox: false, confirmFullSandboxEveryRun: true, diagnosticsIncludePrompt: false, diagnosticsIncludeRawEvents: false },
   storage: { completedRunRetentionDays: 0, logLevel: "info", logMaxSizeMB: 20, logMaxBackups: 5, logMaxAgeDays: 14 },
@@ -114,6 +116,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       let saved;
       if (mode === "demo") saved = { ...value, [key]: clone(draft[key]), revision: (value?.revision || 1) + 1 };
       else if (section === "runtime") saved = await SettingsBinding.UpdateRuntimeSettings(draft.runtimes, value.revision);
+      else if (section === "terminal") saved = await SettingsBinding.UpdateTerminalSettings(draft.terminal, value.revision);
       else if (section === "execution") saved = await SettingsBinding.UpdateExecutionSettings(draft.execution, value.revision);
       else if (section === "security") saved = await SettingsBinding.UpdateSecuritySettings(draft.security, value.revision);
       else if (section === "storage") saved = await SettingsBinding.UpdateStorageSettings(draft.storage, value.revision);
@@ -249,6 +252,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
         {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><SettingsButton tone="muted" onClick={reload}>{t("settings.reload")}</SettingsButton></div>}
         {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
         {section === "runtime" && <><InterfaceSettings i18n={i18n} /><SettingsSection title={t("settings.agentRuntimes")} description={t("settings.agentRuntimesDescription")}><RuntimeSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} /></SettingsSection></>}
+        {section === "terminal" && <TerminalSettings value={draft.terminal || demoSettings.terminal} setValue={(next) => setSectionValue("terminal", next)} errors={errorsByField} />}
         {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
         {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
         {section === "storage" && <StorageSettings value={draft.storage} setValue={(next) => setSectionValue("storage", next)} errors={errorsByField} security={draft.security} diagnosticOptions={diagnosticOptions} setDiagnosticOptions={setDiagnosticOptions} usage={usage} usageLoading={usageLoading} refreshUsage={refreshUsage} preview={preview} previewCleanup={previewCleanup} executeCleanup={executeCleanup} reveal={() => mode === "wails" && SettingsBinding.RevealDataRoot()} diagnosticPath={diagnosticPath} setDiagnosticPath={setDiagnosticPath} exportDiagnostics={exportDiagnostics} />}
@@ -279,6 +283,24 @@ function InterfaceSettings({ i18n }) {
       <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.colorMode")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.colorModeDescription")}</p></div><div className="appearance-mode-picker inline-flex shrink-0 rounded-md border bg-muted p-0.5" role="radiogroup" aria-label={t("settings.colorMode")}>{themeModes.map((mode) => <Button type="button" variant="ghost" size="xs" role="radio" aria-checked={appearance.theme === mode} className={`rounded-sm px-3 ${appearance.theme === mode ? "bg-background text-foreground shadow-xs hover:bg-background" : "text-muted-foreground"}`} key={mode} onClick={() => updateAppearance({ theme: mode })}>{t(`settings.colorMode.${mode}`)}</Button>)}</div></div>
       <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.themeColor")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.themeColorDescription")}</p></div><div className="appearance-accent-picker inline-flex shrink-0 gap-1.5" role="radiogroup" aria-label={t("settings.themeColor")}>{accentThemes.map((accent) => <Button type="button" variant="outline" size="xs" role="radio" aria-checked={appearance.accent === accent} className={appearance.accent === accent ? "border-ring bg-accent text-foreground" : "text-muted-foreground"} key={accent} onClick={() => updateAppearance({ accent })}><i className="size-2.5 rounded-full" style={{ background: ACCENT_SWATCH[accent] }} aria-hidden="true" />{t(`settings.themeColor.${accent}`)}</Button>)}</div></div>
     </div>
+  </SettingsSection>;
+}
+
+function TerminalSettings({ value, setValue, errors }) {
+  const { t } = useTranslation();
+  return <SettingsSection title={t("settings.terminalConfiguration")} description={t("settings.terminalConfigurationDescription")} contentClassName="p-4">
+    <div className="grid gap-4">
+      <SettingsField label={t("settings.terminalShell")} hint={t("settings.terminalShellHint")} error={errors.shell}>
+        <Input className="font-mono text-[13px]" value={value.shell || ""} onChange={(event) => setValue({ ...value, shell: event.target.value })} placeholder={t("settings.terminalShellPlaceholder")} />
+      </SettingsField>
+      <SettingsField label={t("settings.terminalArguments")} hint={t("settings.terminalArgumentsHint")} error={errors.arguments}>
+        <Textarea className="min-h-24 resize-y font-mono text-[13px]" value={(value.arguments || []).join("\n")} onChange={(event) => setValue({ ...value, arguments: event.target.value.split("\n") })} placeholder={t("settings.terminalArgumentsPlaceholder")} />
+      </SettingsField>
+      <SettingsField label={t("settings.terminalTheme")} hint={t("settings.terminalThemeHint")}>
+        <SettingsSelect ariaLabel={t("settings.terminalTheme")} value={value.theme || "system"} onChange={(theme) => setValue({ ...value, theme })} options={["system", "paper", "midnight", "contrast"].map((theme) => ({ value: theme, label: t(`settings.terminalTheme.${theme}`) }))} />
+      </SettingsField>
+    </div>
+    <p className="mt-4 mb-0 rounded-lg bg-muted/45 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">{t("settings.terminalRestartNote")}</p>
   </SettingsSection>;
 }
 
@@ -422,6 +444,10 @@ function validateSection(section, draft, t) {
       if (invalid) add(`${id}.environmentAllowlist`, t("settings.validation.invalidEnv", { key: invalid }));
       if (id === "modu" && !["", "auto", "openai", "anthropic", "gemini"].includes(runtime.provider || "")) add(`${id}.provider`, t("settings.validation.invalidProvider"));
     }
+  }
+  if (section === "terminal") {
+    if (/[\r\n\0]/.test(draft.terminal?.shell || "")) add("shell", t("settings.validation.pathCharacters"));
+    if ((draft.terminal?.arguments || []).some((argument) => /[\r\0]/.test(argument))) add("arguments", t("settings.validation.argumentCharacters"));
   }
   if (section === "execution") {
     const rules = [["maxTransitions", t("settings.maxTransitions"), 1, 10000], ["maxConsecutiveFailures", t("settings.maxFailures"), 1, 100], ["stepTimeoutSeconds", t("settings.nodeTimeout"), 30, 86400], ["maxLocalDAGConcurrency", t("settings.dagConcurrency"), 1, 16], ["interruptGraceSeconds", t("settings.interruptGrace"), 1, 60]];
