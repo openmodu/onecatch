@@ -10,7 +10,8 @@ export {
     CodexServiceTier,
     EventKind,
     PermissionRequest,
-    StreamPhase
+    StreamPhase,
+    Usage
 } from "./models.js";
 
 import * as $models from "./models.js";

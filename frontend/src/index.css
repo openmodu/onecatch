@@ -11,6 +11,7 @@
 @import "./styles.css" layer(legacy);
 @import "./ui/tokens.css" layer(legacy);
 @import "./mirage.css" layer(legacy);
+@import "./app/components/whiteboard/WhiteboardPage.css" layer(app);
 
 /* Theme resolution mirrors appearance.js: no [data-theme] means "follow the OS",
    an explicit [data-theme] pins it. Keeping the OS branch in CSS (rather than a

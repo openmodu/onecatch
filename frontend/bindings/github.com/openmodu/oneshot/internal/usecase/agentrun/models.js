@@ -485,6 +485,67 @@ export const StreamPhase = {
     StreamEnd: "end",
 };
 
+/**
+ * Usage captures cumulative token accounting for one workflow step. InputTokens
+ * includes cache reads and cache creation when a provider reports them
+ * separately; the detailed fields are subsets used to explain that total.
+ */
+export class Usage {
+    /**
+     * Creates a new Usage instance.
+     * @param {Partial<Usage>} [$$source = {}] - The source object to create the Usage.
+     */
+    constructor($$source = {}) {
+        if (!("inputTokens" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["inputTokens"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["cachedInputTokens"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["cacheCreationInputTokens"] = undefined;
+        }
+        if (!("outputTokens" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["outputTokens"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["reasoningOutputTokens"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Usage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Usage}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Usage(/** @type {Partial<Usage>} */($$parsedSource));
+    }
+}
+
 // Private type creation functions
 const $$createType0 = ClaudeModelInfo.createFrom;
 const $$createType1 = $Create.Array($$createType0);

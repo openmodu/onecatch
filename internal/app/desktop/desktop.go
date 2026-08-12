@@ -118,6 +118,7 @@ func Run() {
 		application.NewService(wailstransport.NewSettingsBinding(service)),
 		application.NewService(workspaceBinding),
 		application.NewService(wailstransport.NewWorkflowBinding(service)),
+		application.NewService(wailstransport.NewWhiteboardBinding(service, func() *application.App { return wailsApp })),
 		application.NewService(wailstransport.NewTaskRunBinding(service)),
 		application.NewService(wailstransport.NewTerminalBinding(terminalService)),
 		application.NewService(wailstransport.NewWorkerBinding(service)),

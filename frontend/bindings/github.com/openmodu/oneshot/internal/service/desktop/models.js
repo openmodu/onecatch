@@ -1290,6 +1290,244 @@ export class TaskSearchPage {
     }
 }
 
+export class WhiteboardChange {
+    /**
+     * Creates a new WhiteboardChange instance.
+     * @param {Partial<WhiteboardChange>} [$$source = {}] - The source object to create the WhiteboardChange.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("action" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["action"] = "";
+        }
+        if (!("objectType" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["objectType"] = "";
+        }
+        if (!("category" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["category"] = "";
+        }
+        if (!("title" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["title"] = "";
+        }
+        if (!("content" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["content"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["targetId"] = undefined;
+        }
+        if (!("x" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["x"] = 0;
+        }
+        if (!("y" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["y"] = 0;
+        }
+        if (!("width" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["width"] = 0;
+        }
+        if (!("height" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["height"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["requiresConfirmation"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WhiteboardChange instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WhiteboardChange}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WhiteboardChange(/** @type {Partial<WhiteboardChange>} */($$parsedSource));
+    }
+}
+
+export class WhiteboardProposal {
+    /**
+     * Creates a new WhiteboardProposal instance.
+     * @param {Partial<WhiteboardProposal>} [$$source = {}] - The source object to create the WhiteboardProposal.
+     */
+    constructor($$source = {}) {
+        if (!("runtime" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["runtime"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["sessionId"] = undefined;
+        }
+        if (!("summary" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["summary"] = "";
+        }
+        if (!("changes" in $$source)) {
+            /**
+             * @member
+             * @type {WhiteboardChange[]}
+             */
+            this["changes"] = [];
+        }
+        if (!("usage" in $$source)) {
+            /**
+             * @member
+             * @type {agentrun$0.Usage}
+             */
+            this["usage"] = (new agentrun$0.Usage());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WhiteboardProposal instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WhiteboardProposal}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType24;
+        const $$createField4_0 = $$createType25;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("changes" in $$parsedSource) {
+            $$parsedSource["changes"] = $$createField3_0($$parsedSource["changes"]);
+        }
+        if ("usage" in $$parsedSource) {
+            $$parsedSource["usage"] = $$createField4_0($$parsedSource["usage"]);
+        }
+        return new WhiteboardProposal(/** @type {Partial<WhiteboardProposal>} */($$parsedSource));
+    }
+}
+
+/**
+ * WhiteboardProposalInput is the complete, read-only context for one Agent
+ * turn on the collaborative canvas. The Agent can inspect the workspace and
+ * canvas, but it can only return proposals; accepting a proposal remains a
+ * separate human action in the UI.
+ */
+export class WhiteboardProposalInput {
+    /**
+     * Creates a new WhiteboardProposalInput instance.
+     * @param {Partial<WhiteboardProposalInput>} [$$source = {}] - The source object to create the WhiteboardProposalInput.
+     */
+    constructor($$source = {}) {
+        if (!("workspaceId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["workspaceId"] = "";
+        }
+        if (!("runtime" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["runtime"] = "";
+        }
+        if (!("instruction" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["instruction"] = "";
+        }
+        if (!("canvasJson" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["canvasJson"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["requestId"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["sessionId"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WhiteboardProposalInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WhiteboardProposalInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WhiteboardProposalInput(/** @type {Partial<WhiteboardProposalInput>} */($$parsedSource));
+    }
+}
+
 export class WorkerStatus {
     /**
      * Creates a new WorkerStatus instance.
@@ -1334,8 +1572,8 @@ export class WorkerStatus {
      * @returns {WorkerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType23;
-        const $$createField1_0 = $$createType24;
+        const $$createField0_0 = $$createType26;
+        const $$createField1_0 = $$createType27;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worker" in $$parsedSource) {
             $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
@@ -1384,9 +1622,9 @@ export class WorkerWorkspaceSetup {
      * @returns {WorkerWorkspaceSetup}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType25;
-        const $$createField1_0 = $$createType26;
-        const $$createField2_0 = $$createType26;
+        const $$createField0_0 = $$createType28;
+        const $$createField1_0 = $$createType29;
+        const $$createField2_0 = $$createType29;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("mapping" in $$parsedSource) {
             $$parsedSource["mapping"] = $$createField0_0($$parsedSource["mapping"]);
@@ -1495,7 +1733,7 @@ export class WorkspaceStatus {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType3;
-        const $$createField1_0 = $$createType26;
+        const $$createField1_0 = $$createType29;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -1531,7 +1769,10 @@ const $$createType19 = $Create.Array($$createType18);
 const $$createType20 = $Create.Nullable($$createType1);
 const $$createType21 = TaskSearchItem.createFrom;
 const $$createType22 = $Create.Array($$createType21);
-const $$createType23 = worker$0.Info.createFrom;
-const $$createType24 = worker$0.Health.createFrom;
-const $$createType25 = worker$0.WorkspaceMapping.createFrom;
-const $$createType26 = workspaces$0.GitSnapshot.createFrom;
+const $$createType23 = WhiteboardChange.createFrom;
+const $$createType24 = $Create.Array($$createType23);
+const $$createType25 = agentrun$0.Usage.createFrom;
+const $$createType26 = worker$0.Info.createFrom;
+const $$createType27 = worker$0.Health.createFrom;
+const $$createType28 = worker$0.WorkspaceMapping.createFrom;
+const $$createType29 = workspaces$0.GitSnapshot.createFrom;

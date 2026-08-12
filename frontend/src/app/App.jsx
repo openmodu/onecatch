@@ -29,6 +29,7 @@ import WorkflowEditor from "./components/workflow/WorkflowEditor.jsx";
 import WorkerPage from "./components/WorkerPage.jsx";
 import WorkerModal from "./components/WorkerModal.jsx";
 import Modal from "./components/Modal.jsx";
+import WhiteboardPage from "./components/whiteboard/WhiteboardPage.jsx";
 import { applyRunState, applyRuntimeFrames } from "./runtimeStream.js";
 import { nextWorkflowDefinitionID } from "./workflowIds.js";
 import LockScreen from "./components/LockScreen.jsx";
@@ -909,6 +910,7 @@ function App() {
       ? { label: selectedWorkspace.name, path: selectedWorkspace.path }
       : { label: t("app.selectWorkspace"), path: "" };
   const commandText = location.path ? `${location.label} · ${location.path}` : location.label;
+  const whiteboardOpen = view === "whiteboard" && !editor;
 
   const toggleWorkspaceSearch = useCallback(() => setWorkspaceSearchOpen((open) => !open), []);
   const clearSidebarSearch = useCallback(() => { setGlobalSearchQuery(""); setGlobalTaskItems([]); }, []);
@@ -1031,7 +1033,7 @@ function App() {
         onCollapsedChange={setSidebarCollapsed}
       />
 
-      <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+      {whiteboardOpen ? <WhiteboardPage key={workspaceID || "demo"} workspace={selectedWorkspace} mode={mode} runtimes={runtimes} onClose={() => goView("tasks")} /> : <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
         <div className="app-titlebar drag-region flex h-[52px] shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
           {/* The workspace path is machine text, so it keeps the mono face
               while the rest of the chrome moves to the UI font. */}
@@ -1080,7 +1082,7 @@ function App() {
           onDelete={deleteSelectedTask}
           notify={notify}
         /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} />}
-      </main>
+      </main>}
     </div>
     {workspaceModal && <Modal className="workspace-create-dialog gap-0 overflow-hidden p-0 sm:max-w-[480px]" title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => busy !== "workspace" && setWorkspaceModal(false)}>
       <form className="grid gap-4 px-5 pt-4 pb-5" aria-busy={busy === "workspace"} onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "workspace") void addWorkspace(); }}>

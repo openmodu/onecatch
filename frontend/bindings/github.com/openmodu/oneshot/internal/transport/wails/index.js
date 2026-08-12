@@ -8,6 +8,7 @@ import * as RuntimeBinding from "./runtimebinding.js";
 import * as SettingsBinding from "./settingsbinding.js";
 import * as TaskRunBinding from "./taskrunbinding.js";
 import * as TerminalBinding from "./terminalbinding.js";
+import * as WhiteboardBinding from "./whiteboardbinding.js";
 import * as WindowBinding from "./windowbinding.js";
 import * as WorkerBinding from "./workerbinding.js";
 import * as WorkflowBinding from "./workflowbinding.js";
@@ -19,6 +20,7 @@ export {
     SettingsBinding,
     TaskRunBinding,
     TerminalBinding,
+    WhiteboardBinding,
     WindowBinding,
     WorkerBinding,
     WorkflowBinding,

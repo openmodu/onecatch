@@ -1,7 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
-import { Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
+import { Boxes, Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -473,6 +473,10 @@ function Sidebar({
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           <DropdownMenuSeparator />
+          <DropdownMenuItem className={`min-h-8 rounded-md ${view === "whiteboard" ? "active bg-accent text-accent-foreground" : ""}`} onSelect={() => goToSecondaryView("whiteboard")}>
+            <Boxes aria-hidden="true" />
+            <span>{t("sidebar.whiteboard")}</span>
+          </DropdownMenuItem>
           <DropdownMenuItem className={`min-h-8 rounded-md ${view === "workflows" || editor ? "active bg-accent text-accent-foreground" : ""}`} onSelect={() => goToSecondaryView("workflows")}>
             <Workflow aria-hidden="true" />
             <span>{t("sidebar.workflows")}</span>

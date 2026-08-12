@@ -167,6 +167,8 @@ type Service struct {
 	queueMu           sync.Mutex
 	runStreams        *runstream.Hub
 	runStates         *runstate.Hub
+	whiteboardMu      sync.Mutex
+	whiteboardRuns    map[string]context.CancelFunc
 }
 
 func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitrepo.Inspector) *Service {
@@ -175,9 +177,10 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 		store: store, orchestrator: orchestrator, runtimes: runtimes, git: git,
 		rootCtx: ctx, rootCancel: cancel, active: make(map[string]context.CancelFunc), lastErrors: make(map[string]string),
 		workers: worker.NewRegistry(filepath.Join(store.Data.Paths.Root, "workers.json")), workerClient: worker.NewClient(),
-		settings:      settingsrepo.NewSettingsRepo(store.Data.Paths.Root),
-		cleanupPlans:  make(map[string]cleanupPlan),
-		confirmations: make(map[string]runConfirmation),
+		settings:       settingsrepo.NewSettingsRepo(store.Data.Paths.Root),
+		cleanupPlans:   make(map[string]cleanupPlan),
+		confirmations:  make(map[string]runConfirmation),
+		whiteboardRuns: make(map[string]context.CancelFunc),
 	}
 	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
 	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, preparations: newRemotePreparationRegistry()})
