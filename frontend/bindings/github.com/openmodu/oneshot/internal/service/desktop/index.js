@@ -34,5 +34,8 @@ export {
     WorkerStatus,
     WorkerWorkspaceSetup,
     WorkflowEventView,
-    WorkspaceStatus
+    WorkspaceFileDocument,
+    WorkspaceFileEntry,
+    WorkspaceStatus,
+    WriteWorkspaceFileInput
 } from "./models.js";

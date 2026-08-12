@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Activity, GitBranch, ListTree, Maximize2, Minimize2, PanelRightClose, SquareTerminal, X } from "lucide-react";
+import { Activity, FileCode2, GitBranch, ListTree, Maximize2, Minimize2, PanelRightClose, SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Action, Kicker, StatusBadge } from "../../ui/primitives.jsx";
 import { shortID } from "../format.js";
@@ -11,6 +11,7 @@ import Composer from "./Composer.jsx";
 import StatusInspector from "./inspectors/StatusInspector.jsx";
 import GitInspector from "./inspectors/GitInspector.jsx";
 import EventInspector from "./inspectors/EventInspector.jsx";
+import FileInspector from "./inspectors/FileInspector.jsx";
 
 const TerminalDock = lazy(() => import("./TerminalDock.jsx"));
 
@@ -58,6 +59,8 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
   const [inspectorMaximized, setInspectorMaximized] = useState(false);
+  const [fileInspectorMounted, setFileInspectorMounted] = useState(false);
+  const [fileInspectorDirty, setFileInspectorDirty] = useState(false);
   const [terminalMounted, setTerminalMounted] = useState(false);
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
@@ -135,18 +138,22 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const runWorkerID = useMemo(() => activeWorkerID(runDetail), [runDetail]);
   const inspectorTabs = [
     { value: "status", label: t("inspector.status"), icon: Activity },
+    { value: "files", label: t("inspector.files"), icon: FileCode2 },
     { value: "git", label: t("inspector.git"), icon: GitBranch },
     { value: "events", label: t("inspector.events"), icon: ListTree },
   ];
   const activeInspector = inspectorTabs.find((tab) => tab.value === inspectorTab) || inspectorTabs[0];
-  const clampInspectorWidth = (width) => {
+  const inspectorMaximumWidth = () => {
     const workbenchWidth = workbenchRef.current?.getBoundingClientRect().width || window.innerWidth;
-    const maximum = Math.max(MIN_INSPECTOR_WIDTH, workbenchWidth - INSPECTOR_SNAP_DISTANCE);
-    return Math.max(MIN_INSPECTOR_WIDTH, Math.min(width, maximum));
+    return Math.max(MIN_INSPECTOR_WIDTH, workbenchWidth - INSPECTOR_SNAP_DISTANCE);
+  };
+  const clampInspectorWidth = (width) => {
+    return Math.max(MIN_INSPECTOR_WIDTH, Math.min(width, inspectorMaximumWidth()));
   };
   const beginInspectorResize = (event) => {
+    if (event.button !== 0) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     setInspectorResizing(true);
     inspectorRestoreWidthRef.current = inspectorWidth;
     inspectorResizeRef.current = { pointerID: event.pointerId, startX: event.clientX, startWidth: inspectorWidth };
@@ -166,14 +173,20 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
     if (inspectorResizeRef.current?.pointerID !== event.pointerId) return;
     inspectorResizeRef.current = null;
     setInspectorResizing(false);
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
   };
   const resizeInspectorWithKeyboard = (event) => {
     if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
     event.preventDefault();
     setInspectorWidth((width) => clampInspectorWidth(width + (event.key === "ArrowLeft" ? 20 : -20)));
   };
+  const resetInspectorWidth = () => {
+    const width = clampInspectorWidth(DEFAULT_INSPECTOR_WIDTH);
+    inspectorRestoreWidthRef.current = width;
+    setInspectorWidth(width);
+  };
   const closeInspector = () => {
+    if (fileInspectorDirty && !globalThis.confirm(t("files.discardAllConfirm"))) return;
     if (inspectorMaximized) setInspectorWidth(clampInspectorWidth(inspectorRestoreWidthRef.current));
     setInspectorMaximized(false);
     onToggleInspector();
@@ -219,10 +232,30 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       {terminalMounted && <Suspense fallback={null}><TerminalDock ref={setTerminalDock} mode={mode} workspace={workspace} preferences={terminalPreferences} notify={notify} onVisibilityChange={onTerminalVisibilityChange} /></Suspense>}
     </section>
 
+    {!inspectorCollapsed && (!inspectorMaximized || inspectorResizing) && <span
+      className="workbench-inspector-resize"
+      role="separator"
+      aria-label={t("inspector.resize")}
+      aria-orientation="vertical"
+      aria-valuemin={MIN_INSPECTOR_WIDTH}
+      aria-valuemax={Math.round(inspectorMaximumWidth())}
+      aria-valuenow={Math.round(inspectorWidth)}
+      tabIndex="0"
+      title={t("inspector.resizeHint")}
+      onDoubleClick={resetInspectorWidth}
+      onPointerDown={beginInspectorResize}
+      onPointerMove={moveInspectorResize}
+      onPointerUp={endInspectorResize}
+      onPointerCancel={endInspectorResize}
+      onKeyDown={resizeInspectorWithKeyboard}
+    />}
+
     {!inspectorCollapsed && <aside className="workbench-inspector open min-h-0 min-w-0" aria-label={t("inspector.aria")}>
-      <span className="workbench-inspector-resize" role="separator" aria-label={t("inspector.resize", { defaultValue: "调整状态栏宽度" })} aria-orientation="vertical" tabIndex="0" onPointerDown={beginInspectorResize} onPointerMove={moveInspectorResize} onPointerUp={endInspectorResize} onPointerCancel={endInspectorResize} onKeyDown={resizeInspectorWithKeyboard} />
-      <div className="workbench-inspector-toolbar"><div className="workbench-inspector-tabs" role="tablist" aria-label={t("inspector.aria")}>{inspectorTabs.map(({ value, label, icon: Icon }) => <button type="button" role="tab" className={inspectorTab === value ? "active" : ""} aria-selected={inspectorTab === value} aria-controls="workbench-inspector-content" title={label} key={value} onClick={() => setInspectorTab(value)}><Icon size={15} strokeWidth={2} aria-hidden="true" /><span className="sr-only">{label}</span></button>)}</div><strong className="workbench-inspector-title">{activeInspector.label}</strong><div className="workbench-inspector-window-actions">{inspectorMaximized && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}<button type="button" className="workbench-inspector-maximize" aria-label={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} aria-pressed={inspectorMaximized} title={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} onClick={toggleInspectorMaximized}>{inspectorMaximized ? <Minimize2 size={15} strokeWidth={2} aria-hidden="true" /> : <Maximize2 size={15} strokeWidth={2} aria-hidden="true" />}</button><button type="button" className="workbench-inspector-close" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><X size={16} strokeWidth={2} aria-hidden="true" /></button></div></div>
-      <div className="workbench-inspector-body min-h-0 overflow-y-auto" id="workbench-inspector-content">{inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} onOpenTerminal={openTerminal} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={runWorkerID} notify={notify} /> : <EventInspector detail={runDetail} />}</div>
+      <div className="workbench-inspector-toolbar"><div className="workbench-inspector-tabs" role="tablist" aria-label={t("inspector.aria")}>{inspectorTabs.map(({ value, label, icon: Icon }) => <button type="button" role="tab" className={inspectorTab === value ? "active" : ""} aria-selected={inspectorTab === value} aria-controls="workbench-inspector-content" title={label} key={value} onClick={() => { setInspectorTab(value); if (value === "files") setFileInspectorMounted(true); }}><Icon size={15} strokeWidth={2} aria-hidden="true" /><span className="sr-only">{label}</span></button>)}</div><strong className="workbench-inspector-title">{activeInspector.label}</strong><div className="workbench-inspector-window-actions">{inspectorMaximized && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}<button type="button" className="workbench-inspector-maximize" aria-label={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} aria-pressed={inspectorMaximized} title={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} onClick={toggleInspectorMaximized}>{inspectorMaximized ? <Minimize2 size={15} strokeWidth={2} aria-hidden="true" /> : <Maximize2 size={15} strokeWidth={2} aria-hidden="true" />}</button><button type="button" className="workbench-inspector-close" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><X size={16} strokeWidth={2} aria-hidden="true" /></button></div></div>
+      <div className={`workbench-inspector-body min-h-0 ${inspectorTab === "files" ? "overflow-hidden" : "overflow-y-auto"}`} id="workbench-inspector-content">
+        {fileInspectorMounted && <div className={inspectorTab === "files" ? "h-full" : "hidden"}><FileInspector mode={mode} workspaceID={workspaceID} active={inspectorTab === "files"} notify={notify} onDirtyChange={setFileInspectorDirty} /></div>}
+        {inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} onOpenTerminal={openTerminal} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={runWorkerID} notify={notify} /> : inspectorTab === "events" ? <EventInspector detail={runDetail} /> : null}
+      </div>
     </aside>}
   </div>;
 }

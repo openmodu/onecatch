@@ -62,3 +62,12 @@ func (b *WorkspaceBinding) GetWorkspace(id string) (domainworkspaces.Workspace, 
 func (b *WorkspaceBinding) GetWorkspaceStatus(id string) (desktopservice.WorkspaceStatus, error) {
 	return b.service.GetWorkspaceStatus(context.Background(), id)
 }
+func (b *WorkspaceBinding) ListWorkspaceFiles(workspaceID, directory string) ([]desktopservice.WorkspaceFileEntry, error) {
+	return b.service.ListWorkspaceFiles(context.Background(), workspaceID, directory)
+}
+func (b *WorkspaceBinding) ReadWorkspaceFile(workspaceID, path string) (desktopservice.WorkspaceFileDocument, error) {
+	return b.service.ReadWorkspaceFile(context.Background(), workspaceID, path)
+}
+func (b *WorkspaceBinding) WriteWorkspaceFile(input desktopservice.WriteWorkspaceFileInput) (desktopservice.WorkspaceFileDocument, error) {
+	return b.service.WriteWorkspaceFile(context.Background(), input)
+}

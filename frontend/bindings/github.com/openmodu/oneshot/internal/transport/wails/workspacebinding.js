@@ -60,11 +60,22 @@ export function GetWorkspaceStatus(id) {
 }
 
 /**
+ * @param {string} workspaceID
+ * @param {string} directory
+ * @returns {$CancellablePromise<desktop$0.WorkspaceFileEntry[]>}
+ */
+export function ListWorkspaceFiles(workspaceID, directory) {
+    return $Call.ByID(134163371, workspaceID, directory).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
+}
+
+/**
  * @returns {$CancellablePromise<workspaces$0.Workspace[]>}
  */
 export function ListWorkspaces() {
     return $Call.ByID(117281613).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType5($result);
     }));
 }
 
@@ -75,6 +86,17 @@ export function ListWorkspaces() {
 export function OpenWorkspace(id) {
     return $Call.ByID(2917761272, id).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
+    }));
+}
+
+/**
+ * @param {string} workspaceID
+ * @param {string} path
+ * @returns {$CancellablePromise<desktop$0.WorkspaceFileDocument>}
+ */
+export function ReadWorkspaceFile(workspaceID, path) {
+    return $Call.ByID(961402126, workspaceID, path).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType6($result);
     }));
 }
 
@@ -97,8 +119,21 @@ export function SetWorkspacePinned(id, pinned) {
     }));
 }
 
+/**
+ * @param {desktop$0.WriteWorkspaceFileInput} input
+ * @returns {$CancellablePromise<desktop$0.WorkspaceFileDocument>}
+ */
+export function WriteWorkspaceFile(input) {
+    return $Call.ByID(937208877, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType6($result);
+    }));
+}
+
 // Private type creation functions
 const $$createType0 = workspaces$0.Workspace.createFrom;
 const $$createType1 = $Create.Array($Create.Any);
 const $$createType2 = desktop$0.WorkspaceStatus.createFrom;
-const $$createType3 = $Create.Array($$createType0);
+const $$createType3 = desktop$0.WorkspaceFileEntry.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = $Create.Array($$createType0);
+const $$createType6 = desktop$0.WorkspaceFileDocument.createFrom;

@@ -401,21 +401,123 @@
 
   .workbench-inspector-resize {
     position: absolute;
-    z-index: 2;
-    top: 12px;
-    bottom: 12px;
-    left: -5px;
-    width: 10px;
-    border-radius: 999px;
+    z-index: 30;
+    top: -32px;
+    right: calc(var(--workbench-inspector-width, 380px) - 9px);
+    bottom: 20px;
+    width: 18px;
     background: transparent;
     cursor: col-resize;
     touch-action: none;
+    user-select: none;
+  }
+
+  .workbench-inspector-resize::after {
+    position: absolute;
+    top: 12px;
+    bottom: 12px;
+    left: 50%;
+    width: 1px;
+    border-radius: 999px;
+    background: transparent;
+    content: "";
+    transform: translateX(-50%);
+    transition: width 120ms ease, background-color 120ms ease;
   }
 
   .workbench-inspector-resize:hover,
   .workbench-inspector-resize:focus-visible {
     background: transparent;
     outline: none;
+  }
+
+  .workbench-inspector-resize:hover::after,
+  .workbench-inspector-resize:focus-visible::after,
+  .task-workbench.inspector-resizing .workbench-inspector-resize::after {
+    width: 2px;
+    background: color-mix(in oklab, var(--ring) 58%, transparent);
+  }
+
+  .file-editor-highlight,
+  .file-editor-textarea {
+    font-family: var(--font-ui-mono);
+    font-size: 12px;
+    font-variant-ligatures: none;
+    line-height: 20px;
+    tab-size: 4;
+  }
+
+  .file-editor-highlight code {
+    display: block;
+    width: max-content;
+    min-width: 100%;
+    min-height: 100%;
+    padding: 12px;
+    color: var(--foreground);
+    font: inherit;
+    white-space: pre;
+    will-change: transform;
+  }
+
+  .file-editor-textarea {
+    color: transparent !important;
+    caret-color: var(--foreground);
+    -webkit-text-fill-color: transparent;
+  }
+
+  .file-editor-textarea::selection {
+    background: color-mix(in oklab, var(--primary) 25%, transparent);
+  }
+
+  .file-editor-highlight .token.comment,
+  .file-editor-highlight .token.prolog,
+  .file-editor-highlight .token.doctype,
+  .file-editor-highlight .token.cdata {
+    color: color-mix(in oklab, var(--muted-foreground) 78%, transparent);
+  }
+
+  .file-editor-highlight .token.punctuation,
+  .file-editor-highlight .token.operator {
+    color: color-mix(in oklab, var(--foreground) 72%, var(--muted-foreground));
+  }
+
+  .file-editor-highlight .token.property,
+  .file-editor-highlight .token.tag,
+  .file-editor-highlight .token.constant,
+  .file-editor-highlight .token.symbol,
+  .file-editor-highlight .token.deleted {
+    color: var(--destructive);
+  }
+
+  .file-editor-highlight .token.boolean,
+  .file-editor-highlight .token.number {
+    color: var(--warning);
+  }
+
+  .file-editor-highlight .token.selector,
+  .file-editor-highlight .token.attr-name,
+  .file-editor-highlight .token.string,
+  .file-editor-highlight .token.char,
+  .file-editor-highlight .token.builtin,
+  .file-editor-highlight .token.inserted {
+    color: var(--success);
+  }
+
+  .file-editor-highlight .token.atrule,
+  .file-editor-highlight .token.attr-value,
+  .file-editor-highlight .token.keyword {
+    color: var(--primary);
+  }
+
+  .file-editor-highlight .token.function,
+  .file-editor-highlight .token.class-name {
+    color: var(--info);
+  }
+
+  .file-editor-highlight .token.regex,
+  .file-editor-highlight .token.important,
+  .file-editor-highlight .token.variable {
+    color: var(--warning);
   }
 
   @media (prefers-reduced-motion: reduce) {

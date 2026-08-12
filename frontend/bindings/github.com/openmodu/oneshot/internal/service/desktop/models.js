@@ -1702,6 +1702,118 @@ export class WorkflowEventView {
     }
 }
 
+export class WorkspaceFileDocument {
+    /**
+     * Creates a new WorkspaceFileDocument instance.
+     * @param {Partial<WorkspaceFileDocument>} [$$source = {}] - The source object to create the WorkspaceFileDocument.
+     */
+    constructor($$source = {}) {
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("content" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["content"] = "";
+        }
+        if (!("hash" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["hash"] = "";
+        }
+        if (!("size" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["size"] = 0;
+        }
+        if (!("modifiedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["modifiedAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceFileDocument instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WorkspaceFileDocument}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkspaceFileDocument(/** @type {Partial<WorkspaceFileDocument>} */($$parsedSource));
+    }
+}
+
+export class WorkspaceFileEntry {
+    /**
+     * Creates a new WorkspaceFileEntry instance.
+     * @param {Partial<WorkspaceFileEntry>} [$$source = {}] - The source object to create the WorkspaceFileEntry.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("directory" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["directory"] = false;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["size"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["modifiedAt"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WorkspaceFileEntry instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WorkspaceFileEntry}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WorkspaceFileEntry(/** @type {Partial<WorkspaceFileEntry>} */($$parsedSource));
+    }
+}
+
 export class WorkspaceStatus {
     /**
      * Creates a new WorkspaceStatus instance.
@@ -1742,6 +1854,55 @@ export class WorkspaceStatus {
             $$parsedSource["git"] = $$createField1_0($$parsedSource["git"]);
         }
         return new WorkspaceStatus(/** @type {Partial<WorkspaceStatus>} */($$parsedSource));
+    }
+}
+
+export class WriteWorkspaceFileInput {
+    /**
+     * Creates a new WriteWorkspaceFileInput instance.
+     * @param {Partial<WriteWorkspaceFileInput>} [$$source = {}] - The source object to create the WriteWorkspaceFileInput.
+     */
+    constructor($$source = {}) {
+        if (!("workspaceId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["workspaceId"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("content" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["content"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["expectedHash"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new WriteWorkspaceFileInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {WriteWorkspaceFileInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new WriteWorkspaceFileInput(/** @type {Partial<WriteWorkspaceFileInput>} */($$parsedSource));
     }
 }
 
