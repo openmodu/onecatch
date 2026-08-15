@@ -2,9 +2,7 @@ import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState
 import { Activity, FileCode2, GitBranch, ListTree, Maximize2, Minimize2, PanelRightClose, SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Action, Kicker, StatusBadge } from "../../ui/primitives.jsx";
-import { shortID } from "../format.js";
 import { buildRunConversation } from "../runConversation.js";
-import StatusPill from "./StatusPill.jsx";
 import QueuedTaskView from "./QueuedTaskView.jsx";
 import ConversationTimeline from "./ConversationTimeline.jsx";
 import Composer from "./Composer.jsx";
@@ -18,8 +16,6 @@ const TerminalDock = lazy(() => import("./TerminalDock.jsx"));
 const MIN_INSPECTOR_WIDTH = 320;
 const DEFAULT_INSPECTOR_WIDTH = 380;
 const INSPECTOR_SNAP_DISTANCE = 24;
-
-function workflowNameFor(workflows, workflowID) { return workflows.find((workflow) => workflow.id === workflowID)?.name || workflowID; }
 
 // Read-only remote steps may inspect worker-local state, so follow that clone.
 // Writable remote steps synchronize their patch back and clean the worker;
@@ -53,7 +49,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, workflows, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, onRename, onDelete, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
@@ -133,7 +129,6 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
     const element = scrollRef.current;
     if (element) pinnedRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 90;
   };
-  const workflowName = selectedTask ? workflowNameFor(workflows, selectedTask.workflowId) : "";
   const runStatus = runDetail?.run?.status;
   const runWorkerID = useMemo(() => activeWorkerID(runDetail), [runDetail]);
   const inspectorTabs = [
@@ -211,7 +206,6 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
     </div>}
     <section className="conversation-workspace flex min-h-0 min-w-0 flex-col bg-background">
       {selectedTask ? <>
-        <header className="conversation-workspace-head mx-2 mt-2 flex min-h-[58px] shrink-0 items-center justify-between gap-3 rounded-lg bg-muted/45 px-3.5 py-2"><div className="min-w-0"><div className="conversation-title-row flex min-w-0 items-center gap-2.5"><h2 className="m-0 min-w-0 truncate text-[15px] font-semibold text-foreground">{selectedTask.title}</h2><StatusPill status={runStatus || selectedTask.status} active={runDetail?.active} /></div><p className="mt-1 truncate text-xs text-muted-foreground">{workflowName}{runDetail?.run?.id ? ` · ${shortID(runDetail.run.id)}` : ` · ${t("task.workspaceFIFO")}`}</p></div><div className="conversation-head-actions flex shrink-0 items-center gap-1.5"><Action size="compact" tone="muted" onClick={onRename}>{t("task.rename")}</Action><Action size="compact" tone="danger" onClick={onDelete}>{t("task.delete")}</Action></div></header>
         <div className="conversation-scroll min-h-0 min-w-0 flex-1 select-text overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>
           {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
         </div>

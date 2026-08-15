@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lock, Minus, PanelRightOpen, Paperclip, Square, SquareTerminal, X } from "lucide-react";
+import { Lock, Minus, PanelRightOpen, Paperclip, Pencil, Square, SquareTerminal, Trash2, X } from "lucide-react";
 import { Events, Window } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -24,6 +24,7 @@ import { loopTemplate } from "./templates.js";
 import { demoRun, demoRuntimes, demoTasks, demoWorkers, demoWorkflows, demoWorkspaces } from "./demoData.js";
 import Sidebar from "./components/Sidebar.jsx";
 import TaskWorkbench from "./components/TaskWorkbench.jsx";
+import StatusPill from "./components/StatusPill.jsx";
 import WorkflowLibrary from "./components/workflow/WorkflowLibrary.jsx";
 import WorkflowEditor from "./components/workflow/WorkflowEditor.jsx";
 import WorkerPage from "./components/WorkerPage.jsx";
@@ -910,6 +911,9 @@ function App() {
       ? { label: selectedWorkspace.name, path: selectedWorkspace.path }
       : { label: t("app.selectWorkspace"), path: "" };
   const commandText = location.path ? `${location.label} · ${location.path}` : location.label;
+  const selectedTask = runDetail?.task || tasks.find((task) => task.id === selectedQueuedTaskID);
+  const selectedTaskStatus = runDetail?.run?.status || selectedTask?.status;
+  const taskTitleVisible = view === "tasks" && !editor && selectedTask;
   const whiteboardOpen = view === "whiteboard" && !editor;
 
   const toggleWorkspaceSearch = useCallback(() => setWorkspaceSearchOpen((open) => !open), []);
@@ -1035,17 +1039,24 @@ function App() {
 
       {whiteboardOpen ? <WhiteboardPage key={workspaceID || "demo"} workspace={selectedWorkspace} mode={mode} runtimes={runtimes} onClose={() => goView("tasks")} /> : <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
         <div className="app-titlebar drag-region flex h-[52px] shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
-          {/* The workspace path is machine text, so it keeps the mono face
-              while the rest of the chrome moves to the UI font. */}
-          <span className="flex min-w-0 items-baseline gap-2" title={commandText}>
+          {taskTitleVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={`${location.label} / ${selectedTask.title}`}>
+            <span className="max-w-40 shrink truncate text-xs text-muted-foreground">{location.label}</span>
+            <span className="shrink-0 text-muted-foreground/60" aria-hidden="true">/</span>
+            <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{selectedTask.title}</strong>
+            <StatusPill status={selectedTaskStatus} active={runDetail?.active} />
+          </span> : <span className="flex min-w-0 items-baseline gap-2" title={commandText}>
             <strong className="shrink-0 text-[13px] font-semibold text-foreground">{location.label}</strong>
             {location.path && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{location.path}</span>}
-          </span>
+          </span>}
           <button type="button" className="no-drag relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
           </button>
-          {(view !== "tasks" || inspectorCollapsed) && <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
+          {taskTitleVisible && <span className="app-titlebar-task-actions no-drag ml-auto flex shrink-0 items-center gap-0.5">
+            <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("task.rename")} title={t("task.rename")} onClick={openRenameTask}><Pencil size={14} strokeWidth={2} aria-hidden="true" /></button>
+            <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" aria-label={t("task.delete")} title={t("task.delete")} onClick={deleteSelectedTask}><Trash2 size={14} strokeWidth={2} aria-hidden="true" /></button>
+          </span>}
+          {(view !== "tasks" || inspectorCollapsed) && <StatusBadge status={mode === "wails" ? "good" : "warn"} className={`${taskTitleVisible ? "" : "ml-auto"} shrink-0`}>
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {mode === "wails" ? t("common.local") : t("common.preview")}
           </StatusBadge>}
@@ -1064,7 +1075,6 @@ function App() {
           runDetail={runDetail}
           selectedRunID={selectedRunID}
           selectedQueuedTaskID={selectedQueuedTaskID}
-          workflows={workflows}
           busy={busy}
           permissionBusy={permissionBusy}
           attachments={composerAttachments}
@@ -1078,8 +1088,6 @@ function App() {
           onCancel={cancelRun}
           onRemoveInstruction={removeQueuedInstruction}
           onPermissionDecision={respondPermission}
-          onRename={openRenameTask}
-          onDelete={deleteSelectedTask}
           notify={notify}
         /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} />}
       </main>}

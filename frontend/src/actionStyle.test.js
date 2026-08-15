@@ -264,29 +264,59 @@ test("the transcript column cannot be widened past its container", async () => {
   }
 });
 
+test("the transcript and composer share one content edge", async () => {
+  const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
+  assert.match(css, /\.conversation-workspace\s*\{[^}]*--conversation-content-width:\s*920px[^}]*--conversation-inline-gutter:/s);
+  assert.match(css, /\.conversation-section\s*\{[^}]*padding-inline:\s*var\(--conversation-inline-gutter\)/s);
+  assert.match(css, /\.conversation-list\s*\{[^}]*max-width:\s*var\(--conversation-content-width\)[^}]*padding:\s*30px\s+0\s+44px/s);
+  assert.match(css, /\.workbench-composer\s*\{[^}]*padding:\s*8px\s+var\(--conversation-inline-gutter\)\s+14px/s);
+  assert.match(css, /\.workbench-composer-inner\s*\{[^}]*max-width:\s*var\(--conversation-content-width\)/s);
+});
+
+test("the task title is unified into the app titlebar", async () => {
+  const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
+  const workbench = await readFile(path.join(sourceRoot, "app", "components", "TaskWorkbench.jsx"), "utf8");
+  assert.match(app, /className="app-titlebar-task[^\"]*"/);
+  assert.match(app, /<StatusPill status=\{selectedTaskStatus\}/);
+  assert.doesNotMatch(workbench, /conversation-workspace-head|workflowNameFor|shortID\(runDetail\.run\.id\)/, "task metadata must not repeat in a second header");
+});
+
+test("the transcript follows Codex's user, process, and answer rhythm", async () => {
+  const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
+  const timeline = await readFile(path.join(sourceRoot, "app", "components", "ConversationTimeline.jsx"), "utf8");
+  assert.match(css, /\.conversation-user\s*\{[^}]*justify-self:\s*end/s, "user messages must sit on the right");
+  assert.match(css, /\.conversation-user\s+\.conversation-bubble\s*\{[^}]*border-radius:/s, "user messages need their own chat bubble treatment");
+  assert.doesNotMatch(timeline, /\b(?:Bot|UserRound)\b|conversation-message-avatar/, "Codex-style turns do not need chat avatars");
+  assert.match(timeline, /<details className="conversation-process" open=\{active \|\| undefined\}>/, "tool work must collapse behind one processed row");
+  assert.match(timeline, /className=\{`conversation-agent-message \$\{entry\.tone\}`\}/, "assistant prose must render separately from process chrome");
+  assert.match(timeline, /<FileChangeGroup entries=\{fileChanges\}/, "file edits need a dedicated review card");
+  assert.match(timeline, /<MessageActions at=\{item\.at\} content=\{item\.text\} align="end"/, "user messages expose hover actions");
+  assert.match(timeline, /<MessageActions at=\{entry\.at \|\| round\.finishedAt \|\| round\.startedAt\} content=\{entry\.text\}/, "assistant messages expose hover actions");
+  assert.match(timeline, /<Copy aria-hidden="true"/, "message actions must include a copy control");
+  assert.match(css, /\.conversation-user:hover \.conversation-message-actions[^}]*opacity:\s*1/s, "hovering a user turn must reveal its metadata actions");
+});
+
 test("tool rows spend their width on the command, not on empty columns", async () => {
   const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
-  // `time` is empty on most rows (same-second events de-duplicate to a blank
-  // label) and `state` is one short word, so fixed tracks for them reserved
-  // ~90px per row while the command beside them was cut off.
+  // The command owns the flexible track; only the transient state and caret
+  // reserve space beside it. The timestamp remains screen-reader metadata.
   assert.match(
     css,
-    /\.conversation-tool-summary\s*\{[^}]*grid-template-columns:[^;]*minmax\(0,\s*1fr\)\s+auto\s+auto/s,
-    "the state and time columns must size to their content",
+    /\.conversation-tool-summary\s*\{[^}]*grid-template-columns:\s*20px\s+minmax\(0,\s*1fr\)\s+auto\s+15px/s,
+    "tool activity rows must prioritize the readable summary",
   );
   assert.doesNotMatch(
     css,
     /\.conversation-tool-summary\s*\{[^}]*grid-template-columns:[^;]*--ui-event-state-width/s,
     "the state column must not go back to a fixed track",
   );
-  // The tool row now reads as a compact disclosure: an uppercase tool-name
-  // label above a single-line summary. The command itself is a nowrap,
-  // ellipsised line that is only fully revealed once the disclosure opens.
+  // The tool row reads as a lightweight activity feed: icon, single-line
+  // summary, transient state, and disclosure caret.
   assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*text-overflow:\s*ellipsis/s);
-  assert.match(css, /\.conversation-tool-heading > span\s*\{[^}]*text-transform:\s*uppercase/s);
-  // The message timestamp has the same empty-label problem.
-  assert.match(css, /\.conversation-message-meta time:not\(:empty\)\s*\{[^}]*min-width:\s*var\(--ui-event-time-width\)/s);
+  assert.match(css, /\.conversation-tool\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/s, "tool events must not look like stacked cards");
+  assert.match(css, /\.conversation-tool-icon\s*\{[^}]*background:\s*transparent/s, "tool icons stay unboxed like Codex activity rows");
+  assert.match(css, /\.conversation-message-actions\s*\{[^}]*opacity:\s*0/s, "message metadata stays quiet until hover or focus");
 });
 
 test("select options keep long labels and metadata from overlapping", async () => {

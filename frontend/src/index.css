@@ -617,27 +617,38 @@
     background-color: color-mix(in oklab, var(--sidebar) 94%, transparent);
   }
 
+  .conversation-workspace {
+    --conversation-content-width: 920px;
+    --conversation-inline-gutter: clamp(12px, 2.5vw, 24px);
+  }
+
+  .conversation-section {
+    padding-inline: var(--conversation-inline-gutter);
+  }
+
   /* minmax(0, 1fr), not a bare grid: an implicit `auto` track sizes toward
      max-content, so one long unbreakable command widens the whole transcript
      past its column and .conversation-scroll silently clips it. */
   .conversation-list {
+    width: 100%;
+    max-width: var(--conversation-content-width);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-    padding: 12px 14px 16px;
+    gap: 34px;
+    margin: 0 auto;
+    padding: 30px 0 44px;
   }
 
-  .conversation-user,
-  .conversation-round,
-  .conversation-agent,
   .conversation-tool {
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    background: var(--card);
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
   }
 
-  /* A round is a container for its own cards; only the leaves carry a surface. */
   .conversation-round {
+    width: 100%;
+    min-width: 0;
+    justify-self: start;
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -646,40 +657,162 @@
   .conversation-round-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 8px;
-  }
-
-  .conversation-user,
-  .conversation-agent {
-    padding: 14px 16px;
+    gap: 24px;
   }
 
   .conversation-user {
-    border-color: color-mix(in oklab, var(--primary) 22%, var(--border));
-    background: color-mix(in oklab, var(--primary) 4%, var(--card));
+    position: relative;
+    min-width: 0;
+    display: grid;
+    justify-items: end;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    width: fit-content;
+    max-width: min(72%, 680px);
+    justify-self: end;
   }
 
-  .conversation-agent:hover {
-    background: color-mix(in oklab, var(--foreground) 2%, var(--card));
+  .conversation-agent {
+    width: 100%;
+    max-width: 100%;
+    justify-self: start;
   }
 
-  .conversation-agent.error {
-    border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));
-    background: color-mix(in oklab, var(--destructive) 5%, var(--card));
+  .conversation-bubble {
+    min-width: 0;
+    max-width: 100%;
+    padding: 11px 16px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 18px;
+    background: var(--muted);
+    box-shadow: none;
   }
 
-  .conversation-speaker {
-    margin-bottom: 8px;
+  .conversation-user .conversation-bubble {
+    border-radius: 18px;
   }
 
-  .conversation-speaker strong,
-  .conversation-speaker time,
-  .conversation-round-index {
+  .conversation-agent-message {
+    position: relative;
+    min-width: 0;
+    padding: 0 2px;
+  }
+
+  .conversation-message-actions {
+    z-index: 2;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    gap: 3px;
     color: var(--muted-foreground);
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-2px);
+    transition: opacity 120ms ease, transform 120ms ease;
+  }
+
+  .conversation-user .conversation-message-actions,
+  .conversation-agent-message .conversation-message-actions {
+    position: absolute;
+    top: calc(100% + 3px);
+  }
+
+  .conversation-user .conversation-message-actions { right: 4px; }
+  .conversation-agent-message .conversation-message-actions { left: 2px; }
+
+  .conversation-user:hover .conversation-message-actions,
+  .conversation-user:focus-within .conversation-message-actions,
+  .conversation-agent-message:hover .conversation-message-actions,
+  .conversation-agent-message:focus-within .conversation-message-actions {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+  }
+
+  .conversation-message-actions time {
+    padding: 0 3px;
     font-family: var(--font-ui-sans);
     font-size: 12px;
-    font-weight: 500;
     font-variant-numeric: tabular-nums;
+    line-height: 24px;
+    white-space: nowrap;
+  }
+
+  .conversation-message-copy {
+    color: var(--muted-foreground);
+  }
+
+  .conversation-message-copy:hover,
+  .conversation-message-copy:focus-visible {
+    color: var(--foreground);
+  }
+
+  .conversation-process {
+    min-width: 0;
+  }
+
+  .conversation-process > summary {
+    position: relative;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 2px 12px;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    font-family: var(--font-ui-sans);
+    font-size: 13px;
+    font-variant-numeric: tabular-nums;
+    list-style: none;
+  }
+
+  .conversation-process > summary::-webkit-details-marker,
+  .conversation-file-changes > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .conversation-process > summary::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 1px;
+    background: color-mix(in oklab, var(--border) 78%, transparent);
+  }
+
+  .conversation-process > summary svg {
+    width: 14px;
+    height: 14px;
+    color: color-mix(in oklab, var(--muted-foreground) 72%, transparent);
+  }
+
+  .conversation-process > summary .opened,
+  .conversation-process[open] > summary .closed { display: none; }
+  .conversation-process[open] > summary .opened { display: block; }
+
+  .conversation-process > summary:focus-visible,
+  .conversation-tool > summary:focus-visible {
+    outline: 0;
+    background: color-mix(in oklab, var(--muted) 58%, transparent);
+    color: var(--foreground);
+    box-shadow: none;
+  }
+
+  .conversation-process-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+    padding: 10px 0 2px;
+  }
+
+  .conversation-agent-message.error {
+    padding: 10px 12px;
+    border: 1px solid color-mix(in oklab, var(--destructive) 35%, var(--border));
+    border-radius: calc(var(--radius) - 2px);
+    background: color-mix(in oklab, var(--destructive) 5%, var(--card));
   }
 
   .conversation-event-dot.agent { color: var(--info); }
@@ -695,123 +828,101 @@
   }
 
   .conversation-tool > summary {
-    padding: 0 14px;
-    border-radius: calc(var(--radius) - 2px);
+    padding: 0 3px;
+    border-radius: 7px;
   }
 
   .conversation-tool > summary:hover {
-    background: var(--accent);
+    background: color-mix(in oklab, var(--muted) 58%, transparent);
   }
 
-  /* Tool calls scan as compact native-style disclosure rows: identity and
-     summary on the left, transient state and time on the right. */
+  /* Tool calls read as a quiet activity feed. They only gain a surface on
+     hover/open; the icon and concise verb carry the hierarchy at rest. */
   .conversation-tool-summary {
-    min-height: 48px;
-    grid-template-columns: 28px minmax(0, 1fr) auto auto 16px;
+    min-height: 34px;
+    grid-template-columns: 20px minmax(0, 1fr) auto 15px;
     gap: 8px;
   }
 
   .conversation-tool-icon {
     display: grid;
-    width: 28px;
-    height: 28px;
+    width: 20px;
+    height: 20px;
     place-items: center;
     border: 0;
-    border-radius: 7px;
-    background: color-mix(in oklab, var(--info) 10%, var(--card));
-    color: var(--info);
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted-foreground);
   }
 
-  .conversation-tool-icon svg { width: 14px; height: 14px; }
-  .conversation-tool.kind-file_change .conversation-tool-icon { background: color-mix(in oklab, var(--primary) 9%, var(--card)); color: var(--primary); }
-  .conversation-tool.kind-reasoning .conversation-tool-icon { background: color-mix(in oklab, var(--warning) 9%, var(--card)); color: var(--warning); }
+  .conversation-tool-icon svg { width: 16px; height: 16px; stroke-width: 1.85; }
+  .conversation-tool.kind-reasoning .conversation-tool-icon { color: var(--muted-foreground); }
 
   .conversation-tool-heading {
     min-width: 0;
-    display: grid;
-    align-content: center;
-    gap: 2px;
-  }
-
-  .conversation-tool-heading > span {
-    color: var(--muted-foreground);
-    font-family: var(--font-ui-sans);
-    font-size: 10px;
-    font-weight: 650;
-    letter-spacing: .06em;
-    line-height: 1.2;
-    text-transform: uppercase;
+    display: block;
   }
 
   /* The summary is human-readable prose. Machine text only appears after the
      disclosure is opened. */
   .conversation-tool-summary strong {
-    color: var(--foreground);
+    display: block;
+    color: var(--muted-foreground);
     font-family: var(--font-ui-sans);
-    font-size: 12.5px;
-    font-weight: 550;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 34px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  /* Same reason as the tool row: this label is empty on most rows, so it only
-     reserves its width when there is a timestamp to show. */
-  .conversation-message-meta time {
-    min-width: 0;
-    text-align: right;
-  }
-
-  .conversation-message-meta time:not(:empty) {
-    min-width: var(--ui-event-time-width);
-  }
-
-  .conversation-tool time {
-    color: var(--muted-foreground);
-    font-family: var(--font-ui-sans);
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
+  .conversation-tool > summary:hover .conversation-tool-summary strong,
+  .conversation-tool[open] .conversation-tool-summary strong {
+    color: var(--foreground);
   }
 
   .conversation-tool-state {
-    padding: 3px 8px;
-    border: 1px solid color-mix(in oklab, var(--success) 24%, var(--border));
-    border-radius: 999px;
-    background: color-mix(in oklab, var(--success) 8%, transparent);
+    width: 18px;
+    height: 20px;
+    display: grid;
+    place-items: center;
+    justify-self: end;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
     color: var(--success);
-    font-family: var(--font-ui-sans);
-    font-size: 12px;
-    font-variant-numeric: tabular-nums;
+    transition: opacity 120ms ease;
   }
 
+  .conversation-tool:not(.running):not(.failed):not(.stalled) .conversation-tool-state { opacity: 0; }
   .conversation-tool-state-icon { width: 13px; height: 13px; }
   .conversation-tool-state-icon.spinning { animation: conversation-tool-spin .8s linear infinite; }
   @keyframes conversation-tool-spin { to { transform: rotate(360deg); } }
 
   .conversation-tool.running {
-    border-color: color-mix(in oklab, var(--info) 35%, var(--border));
-    background: color-mix(in oklab, var(--info) 5%, var(--card));
+    background: color-mix(in oklab, var(--info) 6%, transparent);
   }
-  .conversation-tool.running .conversation-tool-state { border-color: color-mix(in oklab, var(--info) 28%, var(--border)); background: color-mix(in oklab, var(--info) 9%, transparent); color: var(--info); }
+  .conversation-tool.running .conversation-tool-state { color: var(--info); }
   .conversation-tool.failed {
-    border-color: color-mix(in oklab, var(--destructive) 35%, var(--border));
-    background: color-mix(in oklab, var(--destructive) 5%, var(--card));
+    background: color-mix(in oklab, var(--destructive) 6%, transparent);
   }
-  .conversation-tool.failed .conversation-tool-state { border-color: color-mix(in oklab, var(--destructive) 28%, var(--border)); background: color-mix(in oklab, var(--destructive) 9%, transparent); color: var(--destructive); }
-  .conversation-tool.stalled .conversation-tool-state { border-color: var(--border); background: var(--muted); color: var(--muted-foreground); }
+  .conversation-tool.failed .conversation-tool-state { color: var(--destructive); }
+  .conversation-tool.stalled .conversation-tool-state { color: var(--muted-foreground); }
 
-  .conversation-tool-caret { color: var(--muted-foreground); }
-  .conversation-tool-caret svg { width: 16px; height: 16px; }
+  .conversation-tool-caret { color: var(--muted-foreground); opacity: .7; }
+  .conversation-tool-caret svg { width: 15px; height: 15px; }
 
-  .conversation-tool[open] { background: var(--card); }
+  .conversation-tool[open] { background: color-mix(in oklab, var(--muted) 40%, transparent); }
   .conversation-tool[open] > summary {
-    border-radius: calc(var(--radius) - 2px);
+    border-radius: 7px;
     background: transparent;
   }
 
   .conversation-tool-body {
-    gap: 14px;
-    padding: 2px 14px 14px;
+    gap: 10px;
+    padding: 2px 8px 10px 31px;
     border-left: 0;
   }
   .conversation-tool-body > div {
@@ -839,15 +950,174 @@
     color: var(--muted-foreground);
     font-family: var(--font-ui-mono);
   }
-  .conversation-tool-body pre { max-height: 220px; padding: 0; overflow: auto; border: 0; border-radius: 0; background: transparent; }
+  .conversation-tool-body pre { max-height: 220px; padding: 9px 10px; overflow: auto; border: 0; border-radius: 8px; background: var(--muted); }
+
+  .conversation-file-changes {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--card);
+  }
+
+  .conversation-file-changes > summary {
+    padding: 14px 16px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .conversation-file-changes > summary:hover {
+    background: color-mix(in oklab, var(--muted) 72%, transparent);
+  }
+
+  .conversation-file-changes-summary {
+    display: grid;
+    grid-template-columns: 38px minmax(0, 1fr) 16px;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .conversation-file-changes-icon {
+    width: 38px;
+    height: 38px;
+    display: grid;
+    place-items: center;
+    border-radius: 10px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+  }
+
+  .conversation-file-changes-icon svg { width: 18px; height: 18px; }
+  .conversation-file-changes-summary > span:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
+  .conversation-file-changes-summary strong { overflow: hidden; color: var(--foreground); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+  .conversation-file-changes-summary small { color: var(--success); font-size: 12px; }
+  .conversation-file-changes-caret { color: var(--muted-foreground); }
+  .conversation-file-changes-caret svg { width: 16px; height: 16px; }
+  .conversation-file-changes-caret .opened,
+  .conversation-file-changes[open] .conversation-file-changes-caret .closed { display: none; }
+  .conversation-file-changes[open] .conversation-file-changes-caret .opened { display: block; }
+
+  .conversation-file-changes-list {
+    display: grid;
+    gap: 2px;
+    padding: 2px 12px 12px;
+  }
+
+  .conversation-file-changes-list > div {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 7px 6px;
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-mono);
+    font-size: 12px;
+  }
+
+  .conversation-file-changes-list svg { width: 15px; height: 15px; color: var(--success); }
+  .conversation-file-changes-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .workbench-composer {
+    z-index: 4;
+    padding: 8px var(--conversation-inline-gutter) 14px;
+    background: var(--background);
+  }
+
+  .workbench-composer-inner {
+    width: 100%;
+    max-width: var(--conversation-content-width);
+    margin: 0 auto;
+  }
+
+  .workbench-composer-shell {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px 9px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--card);
+    box-shadow: 0 8px 28px color-mix(in oklab, var(--foreground) 8%, transparent), 0 1px 2px color-mix(in oklab, var(--foreground) 5%, transparent);
+  }
+
+  .workbench-composer-shell:focus-within {
+    border-color: color-mix(in oklab, var(--ring) 38%, var(--border));
+  }
+
+  .workbench-composer-shell.disabled { opacity: .62; }
+
+  .workbench-composer-input {
+    min-height: 70px;
+    display: flex;
+    padding: 3px 6px 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .workbench-composer-input textarea {
+    width: 100%;
+    min-height: 66px;
+    resize: none;
+    border: 0;
+    background: transparent;
+    color: var(--foreground);
+    font-family: var(--font-ui-sans);
+    font-size: 14px;
+    line-height: 1.55;
+    outline: 0;
+  }
+
+  .workbench-composer-input textarea::placeholder { color: var(--muted-foreground); }
+
+  .workbench-composer-actions {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 1px;
+  }
+
+  .composer-submit-hint {
+    color: var(--muted-foreground);
+    font-size: 11px;
+  }
+
+  .workbench-composer-submit {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-left: auto;
+  }
+
+  .workbench-composer-actions button { border-radius: 999px; }
 
   @media (prefers-reduced-motion: reduce) {
     .conversation-tool-state-icon.spinning { animation: none; }
+    .conversation-message-actions { transition: none; }
+  }
+
+  @media (hover: none) {
+    .conversation-message-actions {
+      opacity: 1;
+      pointer-events: auto;
+      transform: none;
+    }
   }
 
   @media (max-width: 760px) {
-    .conversation-tool-summary { grid-template-columns: 28px minmax(0, 1fr) auto 16px; }
-    .conversation-tool time { display: none; }
+    .conversation-list {
+      gap: 28px;
+      padding: 22px 0 34px;
+    }
+    .conversation-user { max-width: 88%; }
+    .conversation-agent { width: 100%; }
+    .conversation-bubble { padding: 11px 13px; }
+    .conversation-tool-summary { grid-template-columns: 20px minmax(0, 1fr) auto 15px; }
+    .workbench-composer { padding: 7px 10px 10px; }
+    .workbench-composer-shell { border-radius: 16px; }
+    .composer-submit-hint { display: none; }
+    .workbench-composer-submit { gap: 5px; }
   }
 
   .conversation-permission {
