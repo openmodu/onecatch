@@ -281,6 +281,17 @@ test("the task title is unified into the app titlebar", async () => {
   assert.doesNotMatch(workbench, /conversation-workspace-head|workflowNameFor|shortID\(runDetail\.run\.id\)/, "task metadata must not repeat in a second header");
 });
 
+test("task editing joins the existing sidebar row hover actions", async () => {
+  const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
+  const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
+  assert.doesNotMatch(app, /app-titlebar-task-actions|deleteSelectedTask/, "the titlebar must not carry task edit or delete actions");
+  assert.match(app, /onRenameTask=\{openRenameTask\}/);
+  assert.match(sidebar, /className="task-row-actions[^\"]*"/);
+  assert.match(sidebar, /onClick=\{\(\) => onRenameTask\(task\)\}><Pencil/);
+  assert.match(sidebar, /onClick=\{\(\) => onToggleTaskPinned\(task\)\}><Pin/);
+  assert.match(sidebar, /onClick=\{\(\) => onDeleteTask\(task\)\}><Trash2/);
+});
+
 test("the transcript follows Codex's user, process, and answer rhythm", async () => {
   const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
   const timeline = await readFile(path.join(sourceRoot, "app", "components", "ConversationTimeline.jsx"), "utf8");

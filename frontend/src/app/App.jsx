@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lock, Minus, PanelRightOpen, Paperclip, Pencil, Square, SquareTerminal, Trash2, X } from "lucide-react";
+import { Lock, Minus, PanelRightOpen, Paperclip, Square, SquareTerminal, X } from "lucide-react";
 import { Events, Window } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -736,8 +736,8 @@ function App() {
     }
   }, [loadRun, mode, notify]);
 
-  const openRenameTask = useCallback(() => {
-    const task = runDetailRef.current?.task || tasksRef.current.find((item) => item.id === selectedQueuedTaskIDRef.current);
+  const openRenameTask = useCallback((requestedTask) => {
+    const task = requestedTask || runDetailRef.current?.task || tasksRef.current.find((item) => item.id === selectedQueuedTaskIDRef.current);
     if (task) setRenameForm({ taskId: task.id, title: task.title, originalTitle: task.title });
   }, []);
 
@@ -783,11 +783,6 @@ function App() {
     }
     catch (error) { notify("error", errorMessage(error)); }
   }, [loadRunList, loadTasks, mode, notify, requestConfirm, t]);
-
-  const deleteSelectedTask = useCallback(() => {
-    const task = runDetailRef.current?.task || tasksRef.current.find((item) => item.id === selectedQueuedTaskIDRef.current);
-    return deleteTask(task);
-  }, [deleteTask]);
 
   const composerSubmitKey = (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && busy !== "run" && selectedWorkspace) createTaskAndRun();
@@ -1026,6 +1021,7 @@ function App() {
         onSelectWorkspace={selectWorkspace}
         onToggleTaskPinned={toggleTaskPinned}
         onDeleteTask={deleteTask}
+        onRenameTask={openRenameTask}
         onRemoveWorkspace={removeWorkspace}
         onToggleExpanded={toggleWorkspaceExpanded}
         onAddWorkspace={chooseWorkspace}
@@ -1052,11 +1048,7 @@ function App() {
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
           </button>
-          {taskTitleVisible && <span className="app-titlebar-task-actions no-drag ml-auto flex shrink-0 items-center gap-0.5">
-            <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("task.rename")} title={t("task.rename")} onClick={openRenameTask}><Pencil size={14} strokeWidth={2} aria-hidden="true" /></button>
-            <button type="button" className="grid size-7 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive" aria-label={t("task.delete")} title={t("task.delete")} onClick={deleteSelectedTask}><Trash2 size={14} strokeWidth={2} aria-hidden="true" /></button>
-          </span>}
-          {(view !== "tasks" || inspectorCollapsed) && <StatusBadge status={mode === "wails" ? "good" : "warn"} className={`${taskTitleVisible ? "" : "ml-auto"} shrink-0`}>
+          {(view !== "tasks" || inspectorCollapsed) && <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {mode === "wails" ? t("common.local") : t("common.preview")}
           </StatusBadge>}

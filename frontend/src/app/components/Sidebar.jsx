@@ -1,7 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
-import { Boxes, Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pin, Plus, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
+import { Boxes, Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,6 +88,7 @@ function Sidebar({
   onSelectWorkspace,
   onToggleTaskPinned,
   onDeleteTask,
+  onRenameTask,
   onRemoveWorkspace,
   onToggleExpanded,
   onAddWorkspace,
@@ -336,15 +337,16 @@ function Sidebar({
     commitWidth(next);
   };
 
-  const renderTaskActions = (task) => <div className="absolute top-1 right-1 flex h-6 items-center gap-0.5">
+  const renderTaskActions = (task) => <div className="task-row-actions absolute top-1 right-1 flex h-6 items-center gap-0.5">
     <Action size="compact" tone="muted" className={`size-6 border-0 bg-transparent p-0 shadow-none hover:bg-background/70 ${task.pinned ? "text-foreground opacity-70" : "pointer-events-none opacity-0 group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100"}`} aria-label={t(task.pinned ? "common.unpin" : "common.pin")} title={t(task.pinned ? "common.unpin" : "common.pin")} onClick={() => onToggleTaskPinned(task)}><Pin size={13} className={task.pinned ? "fill-current" : ""} aria-hidden="true" /></Action>
+    <Action size="compact" tone="muted" className="pointer-events-none size-6 border-0 bg-transparent p-0 text-muted-foreground opacity-0 shadow-none hover:bg-background/70 hover:text-foreground group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100" aria-label={t("task.rename")} title={t("task.rename")} onClick={() => onRenameTask(task)}><Pencil size={13} strokeWidth={2} aria-hidden="true" /></Action>
     <Action size="compact" tone="muted" className="pointer-events-none size-6 border-0 bg-transparent p-0 text-muted-foreground opacity-0 shadow-none hover:bg-destructive/10 hover:text-destructive group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100" aria-label={t("app.deleteTask")} title={t("app.deleteTask")} onClick={() => onDeleteTask(task)}><Trash2 size={13} aria-hidden="true" /></Action>
   </div>;
 
   const renderPinnedTask = (task) => {
     const selectedRun = runs.find((run) => run.id === selectedRunID);
     const selected = selectedQueuedTaskID === task.id || selectedRun?.task?.id === task.id;
-    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-16 pl-2 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><span className={`block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
+    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-2 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><span className={`block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
   };
 
   const renderWorkspace = (workspace) => {
@@ -381,13 +383,13 @@ function Sidebar({
             if (entry.kind === "queued" || entry.kind === "pinned") {
               const task = entry.item;
               const selected = selectedQueuedTaskID === task.id;
-              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-16 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openQueuedTask(task)}><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
+              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openQueuedTask(task)}><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
             }
             const run = entry.item;
             const task = run.task;
             const title = run.task?.title || run.id;
             const selected = selectedRunID === run.id;
-            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-16 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openRun(run)}><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{title}</span></button>{task && renderTaskActions(task)}</div>;
+            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openRun(run)}><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{title}</span></button>{task && renderTaskActions(task)}</div>;
           })}
           {!taskEntries.length && !runLoading && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
           {runLoading && !taskEntries.length && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{t("task.loading")}</div>}
