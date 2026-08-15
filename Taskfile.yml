@@ -121,6 +121,13 @@ tasks:
         platforms: [windows]
       - go build -o '{{.BIN_DIR}}/oneshot-worker{{.EXE_EXT}}' ./cmd/worker
 
+  build:oneshotfs:
+    desc: Build the macOS remote filesystem helper
+    platforms: [darwin]
+    cmds:
+      - mkdir -p '{{.BIN_DIR}}'
+      - go build -o '{{.BIN_DIR}}/oneshotfs' ./cmd/oneshotfs
+
   build:worker:package:
     internal: true
     cmds:
