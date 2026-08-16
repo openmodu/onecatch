@@ -1,0 +1,5 @@
+{
+  "Replace": {
+    "/Users/ityike/Code/go/src/github.com/openmodu/oneshot/cmd/app/main_android.gen.go": "/Users/ityike/Code/go/src/github.com/openmodu/oneshot/build/android/gen/main_android.gen.go"
+  }
+}
