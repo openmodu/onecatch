@@ -18,6 +18,9 @@ const TerminalDock = lazy(() => import("./TerminalDock.jsx"));
 const MIN_INSPECTOR_WIDTH = 320;
 const DEFAULT_INSPECTOR_WIDTH = 380;
 const INSPECTOR_SNAP_DISTANCE = 24;
+// Keep the conversation titlebar controls inside their pane while the inspector
+// is resized. Full-width inspection remains available through snap/maximize.
+const MIN_CONVERSATION_WIDTH = 180;
 
 // Read-only remote steps may inspect worker-local state, so follow that clone.
 // Writable remote steps synchronize their patch back and clean the worker;
@@ -174,7 +177,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const activeInspector = inspectorTabs.find((tab) => tab.value === inspectorTab) || inspectorTabs[0];
   const inspectorMaximumWidth = () => {
     const workbenchWidth = workbenchRef.current?.getBoundingClientRect().width || window.innerWidth;
-    return Math.max(MIN_INSPECTOR_WIDTH, workbenchWidth - INSPECTOR_SNAP_DISTANCE);
+    return Math.max(MIN_INSPECTOR_WIDTH, workbenchWidth - MIN_CONVERSATION_WIDTH);
   };
   const clampInspectorWidth = (width) => {
     return Math.max(MIN_INSPECTOR_WIDTH, Math.min(width, inspectorMaximumWidth()));

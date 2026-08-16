@@ -308,6 +308,14 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.match(app, /view === "tasks" && inspectorCollapsed && <button[^>]*inspector\.expand/, "a collapsed inspector needs an expand button while creating a task");
 });
 
+test("resizing the inspector keeps the chat titlebar controls inside the conversation pane", async () => {
+  const workbench = await readFile(path.join(sourceRoot, "app", "components", "TaskWorkbench.jsx"), "utf8");
+
+  assert.match(workbench, /const MIN_CONVERSATION_WIDTH = 180;/);
+  assert.match(workbench, /workbenchWidth - MIN_CONVERSATION_WIDTH/);
+  assert.doesNotMatch(workbench, /workbenchWidth - INSPECTOR_SNAP_DISTANCE/);
+});
+
 test("every new task chooses either an Agent or a workflow plus an explicit permission level", async () => {
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
   const newTask = await readFile(path.join(sourceRoot, "app", "components", "NewTaskView.jsx"), "utf8");
