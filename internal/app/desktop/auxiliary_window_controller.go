@@ -10,7 +10,14 @@ import (
 const (
 	settingsWindowName  = "settings"
 	workflowsWindowName = "workflows"
+	inspectorWindowName = "inspector"
 )
+
+// The detached inspector reports its own lifecycle on this application-wide
+// channel so the main window can keep its dock/detach toggle in sync with
+// reality — including when the user closes the window from its title bar
+// rather than from the re-dock button.
+const inspectorWindowEvent = "oneshot:inspector-window"
 
 type auxiliaryWindowController struct {
 	app     *application.App
@@ -50,6 +57,27 @@ func (c *auxiliaryWindowController) OpenWorkflows() {
 	})
 }
 
+// OpenInspector floats the run inspector in its own window. It is deliberately
+// tall and narrow: the point is to park it on a second display beside the
+// workbench, not to reproduce the workbench itself.
+func (c *auxiliaryWindowController) OpenInspector() {
+	c.open(auxiliaryWindowOptions{
+		name:         inspectorWindowName,
+		title:        "状态栏",
+		url:          "/?window=inspector",
+		width:        420,
+		height:       860,
+		minWidth:     320,
+		minHeight:    380,
+		customChrome: true,
+		announce:     inspectorWindowEvent,
+	})
+}
+
+func (c *auxiliaryWindowController) CloseInspector() {
+	c.close(inspectorWindowName)
+}
+
 type auxiliaryWindowOptions struct {
 	name                string
 	title, url          string
@@ -58,6 +86,10 @@ type auxiliaryWindowOptions struct {
 	disableResize       bool
 	hideZoomButton      bool
 	customChrome        bool
+	// announce names an application event emitted with {"open": bool} whenever
+	// this window becomes visible or closes. Empty means the window's lifecycle
+	// is of no interest to the rest of the UI.
+	announce string
 }
 
 func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions) {
@@ -77,6 +109,7 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions) {
 		existing.Show()
 		existing.Restore()
 		existing.Focus()
+		c.announce(options.announce, true)
 		return
 	}
 
@@ -124,6 +157,35 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions) {
 		c.mu.Unlock()
 		window.Show()
 		window.Focus()
+		c.announce(options.announce, true)
+	})
+	// Fires for both the native close button and a programmatic Close(), so a
+	// listener never has to guess which one put the window away.
+	window.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
+		c.mu.Lock()
+		delete(c.loading, options.name)
+		c.mu.Unlock()
+		c.announce(options.announce, false)
 	})
 	c.mu.Unlock()
+}
+
+func (c *auxiliaryWindowController) close(name string) {
+	if c == nil || c.app == nil {
+		return
+	}
+	c.mu.Lock()
+	window, ok := c.app.Window.GetByName(name)
+	c.mu.Unlock()
+	if !ok {
+		return
+	}
+	window.Close()
+}
+
+func (c *auxiliaryWindowController) announce(name string, open bool) {
+	if name == "" || c == nil || c.app == nil {
+		return
+	}
+	c.app.Event.Emit(name, map[string]any{"open": open})
 }

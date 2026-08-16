@@ -14,6 +14,13 @@ const windowKind = launchParameters.get("window");
 const platform = launchParameters.get("platform") === "mobile" ? "mobile" : "desktop";
 document.documentElement.dataset.platform = platform === "mobile" ? "mobile" : desktopPlatform();
 
+// Native chrome installs a sidebar material panel (and its hairline) in every
+// window, sized for a rail. The detached inspector has no rail, so retire that
+// panel here — before React paints — instead of letting it show through.
+if (windowKind === "inspector") {
+  globalThis.webkit?.messageHandlers?.oneshotSidebar?.postMessage({ hidden: true });
+}
+
 // Every native window owns a separate document. Keep their root theme
 // attributes in lockstep when Settings changes the shared preference.
 const syncAppearance = (event) => applyAppearance(event?.data || readAppearance());
@@ -39,6 +46,9 @@ const WindowRoot = lazy(async () => {
   if (windowKind === "workflows") {
     const module = await import("./app/AuxiliaryWindow.jsx");
     return { default: module.WorkflowsWindow };
+  }
+  if (windowKind === "inspector") {
+    return import("./app/InspectorWindow.jsx");
   }
   return import("./app/App.jsx");
 });

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lock, Minus, PanelRightOpen, Square, SquareTerminal, X } from "lucide-react";
+import { Lock, Minus, PanelRightOpen, PictureInPicture2, Square, SquareTerminal, X } from "lucide-react";
 import { Events, Window } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -36,7 +36,8 @@ import LockScreen from "./components/LockScreen.jsx";
 import { buildLockSignal, completionEdge, LOCK_PHASE } from "./lockSignal.js";
 import { notifyStandby } from "./standbyNotify.js";
 import { settingsChangedEvent, workflowsChangedEvent } from "./AuxiliaryWindow.jsx";
-import { INSPECTOR_COMPACT_QUERY, readInspectorPreference, resolveInspectorCollapsed, writeInspectorPreference } from "./inspectorLayout.js";
+import { INSPECTOR_COMPACT_QUERY, readInspectorDetached, readInspectorPreference, resolveInspectorCollapsed, writeInspectorDetached, writeInspectorPreference } from "./inspectorLayout.js";
+import { buildInspectorContext, inspectorContextSignature, INSPECTOR_ACTION_EVENT, INSPECTOR_CONTEXT_EVENT, INSPECTOR_REQUEST_EVENT, INSPECTOR_WINDOW_EVENT } from "./inspectorContext.js";
 import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeOptions.js";
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
@@ -81,6 +82,16 @@ function initialInspectorPreference() {
 
 function initialCompactViewport() {
   return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(INSPECTOR_COMPACT_QUERY).matches;
+}
+
+// Read before the first paint so a restored second-display layout never flashes
+// the docked panel on the way to reopening its own window.
+function initialInspectorDetached() {
+  try {
+    return typeof window === "undefined" ? false : readInspectorDetached(window.localStorage);
+  } catch {
+    return false;
+  }
 }
 
 function App() {
@@ -136,8 +147,11 @@ function App() {
   const [settings, setSettings] = useState(demoSettings);
   const [appDialog, setAppDialog] = useState(null);
   const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
+  const [inspectorDetached, setInspectorDetached] = useState(initialInspectorDetached);
   const [compactViewport, setCompactViewport] = useState(initialCompactViewport);
+  const [terminalCommand, setTerminalCommand] = useState({ version: 0, command: "" });
   const appDialogResolve = useRef(null);
+  const inspectorRestoredRef = useRef(false);
   const runListLoadVersion = useRef(0);
   const runLoadVersion = useRef(0);
   const globalTaskSearchVersion = useRef(0);
@@ -166,7 +180,9 @@ function App() {
   runNextCursorRef.current = runNextCursor;
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID);
-  const inspectorCollapsed = resolveInspectorCollapsed(inspectorPreference, compactViewport);
+  // A detached inspector leaves no dock behind, so the workbench sees the same
+  // "no panel here" layout it uses for a deliberate collapse.
+  const inspectorCollapsed = inspectorDetached || resolveInspectorCollapsed(inspectorPreference, compactViewport);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
@@ -189,6 +205,20 @@ function App() {
       return next;
     });
   }, [compactViewport]);
+
+  // Both toggles move optimistically so the layout responds immediately; the
+  // native window then confirms (or corrects) the state on INSPECTOR_WINDOW_EVENT.
+  const detachInspector = useCallback(() => {
+    setInspectorDetached(true);
+    writeInspectorDetached(window.localStorage, true);
+    void WindowBinding.OpenInspector();
+  }, []);
+
+  const dockInspector = useCallback(() => {
+    setInspectorDetached(false);
+    writeInspectorDetached(window.localStorage, false);
+    void WindowBinding.CloseInspector();
+  }, []);
 
   const notify = useCallback((type, text) => {
     setNotice({ type, text });
@@ -323,6 +353,57 @@ function App() {
     });
     return () => { offSettings(); offWorkflows(); };
   }, [mode, notify]);
+
+  // --- Detached inspector -------------------------------------------------
+  // The inspector may live in its own window. Go owns that window's lifecycle
+  // and reports it here, so a close from the native title bar re-docks the
+  // panel just like the re-dock button does.
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    return Events.On(INSPECTOR_WINDOW_EVENT, (event) => {
+      const open = Boolean(event?.data?.open);
+      setInspectorDetached(open);
+      writeInspectorDetached(window.localStorage, open);
+    });
+  }, [mode]);
+
+  // Reopen a previously detached inspector once per launch, so a second-display
+  // setup survives a restart. A fresh installation is docked and does nothing.
+  useEffect(() => {
+    if (mode !== "wails" || inspectorRestoredRef.current) return;
+    inspectorRestoredRef.current = true;
+    if (readInspectorDetached(window.localStorage)) void WindowBinding.OpenInspector();
+  }, [mode]);
+
+  const inspectorContext = useMemo(
+    () => buildInspectorContext({ mode, workspaceID, runDetail, tasks, selectedQueuedTaskID, draft: taskModal }),
+    [mode, runDetail, selectedQueuedTaskID, taskModal, tasks, workspaceID],
+  );
+  const inspectorContextRef = useRef(inspectorContext);
+  inspectorContextRef.current = inspectorContext;
+  const inspectorSignature = inspectorContextSignature(inspectorContext);
+
+  // Keyed on the signature, not the object: `runDetail` is replaced every 80ms
+  // while an agent streams, but none of the transcript reaches the inspector,
+  // so this fires only when something the panel actually renders changed.
+  useEffect(() => {
+    if (!inspectorDetached || mode !== "wails") return;
+    void Events.Emit(INSPECTOR_CONTEXT_EVENT, inspectorContextRef.current);
+  }, [inspectorDetached, inspectorSignature, mode]);
+
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    const offRequest = Events.On(INSPECTOR_REQUEST_EVENT, () => {
+      void Events.Emit(INSPECTOR_CONTEXT_EVENT, inspectorContextRef.current);
+    });
+    // The terminal dock only exists in this window.
+    const offAction = Events.On(INSPECTOR_ACTION_EVENT, (event) => {
+      if (event?.data?.type !== "open-terminal" || !event.data.command) return;
+      setTerminalCommand((current) => ({ version: current.version + 1, command: event.data.command }));
+    });
+    return () => { offRequest(); offAction(); };
+  }, [mode]);
+  // ------------------------------------------------------------------------
 
   useEffect(() => {
     const timer = window.setTimeout(() => setRunKeyword(runSearchDraft.trim()), 220);
@@ -1114,7 +1195,9 @@ function App() {
             {mode === "wails" ? t("common.local") : t("common.preview")}
           </StatusBadge>}
           {view === "tasks" && !editor && inspectorCollapsed && <button type="button" className={`no-drag grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${terminalVisible ? "bg-accent text-foreground" : "text-muted-foreground"}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => setTerminalToggleVersion((value) => value + 1)}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
-          {view === "tasks" && inspectorCollapsed && <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /></button>}
+          {view === "tasks" && (inspectorDetached
+            ? <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.dock")} title={t("inspector.dockHint")} onClick={dockInspector}><PictureInPicture2 size={16} strokeWidth={2} aria-hidden="true" /></button>
+            : inspectorCollapsed && <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /></button>)}
         </div>
         {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} showBack /> : view === "tasks" ? <TaskWorkbench
           mode={mode}
@@ -1122,6 +1205,7 @@ function App() {
           terminalPreferences={settings.terminal}
           terminalVisible={terminalVisible}
           terminalToggleVersion={terminalToggleVersion}
+          terminalCommand={terminalCommand}
           onTerminalVisibilityChange={setTerminalVisible}
           workspaceID={workspaceID}
           tasks={tasks}
@@ -1133,6 +1217,7 @@ function App() {
           attachments={composerAttachments}
           inspectorCollapsed={inspectorCollapsed}
           onToggleInspector={toggleInspector}
+          onDetachInspector={mode === "wails" ? detachInspector : null}
           newTaskOpen={taskModal}
           taskForm={taskForm}
           workflows={workflows}

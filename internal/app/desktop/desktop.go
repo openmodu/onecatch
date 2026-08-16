@@ -23,6 +23,7 @@ import (
 	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
 	"github.com/openmodu/oneshot/pkg/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"go.uber.org/zap"
 )
@@ -93,18 +94,28 @@ func Run() {
 	var wailsApp *application.App
 	workspaceBinding := wailstransport.NewWorkspaceBinding(service, func() *application.App { return wailsApp })
 	var auxiliaryWindows *auxiliaryWindowController
-	windowBinding := wailstransport.NewWindowBinding(
-		func() {
+	windowBinding := wailstransport.NewWindowBinding(wailstransport.WindowCallbacks{
+		OpenSettings: func() {
 			if auxiliaryWindows != nil {
 				auxiliaryWindows.OpenSettings()
 			}
 		},
-		func() {
+		OpenWorkflows: func() {
 			if auxiliaryWindows != nil {
 				auxiliaryWindows.OpenWorkflows()
 			}
 		},
-	)
+		OpenInspector: func() {
+			if auxiliaryWindows != nil {
+				auxiliaryWindows.OpenInspector()
+			}
+		},
+		CloseInspector: func() {
+			if auxiliaryWindows != nil {
+				auxiliaryWindows.CloseInspector()
+			}
+		},
+	})
 	terminalService := terminalservice.NewService()
 	defer terminalService.Close()
 
@@ -218,6 +229,12 @@ func Run() {
 		},
 	})
 	applyNativeWindowChrome(mainWindow)
+	// The detached inspector only mirrors the main window's selection, so it
+	// must not outlive it — otherwise closing the workbench leaves a frozen
+	// panel behind that keeps the application alive.
+	mainWindow.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
+		auxiliaryWindows.CloseInspector()
+	})
 
 	if err := wailsApp.Run(); err != nil {
 		log.Fatal("wails app failed", zap.Error(err))

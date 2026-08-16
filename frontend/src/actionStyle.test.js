@@ -305,7 +305,8 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.match(css, /\.new-task-layout\s*\{[^}]*justify-content:\s*center/s, "the creation composer should sit in the central working area instead of hugging the window bottom");
   assert.doesNotMatch(workbench, /!newTaskOpen && !inspectorCollapsed/, "new-task mode must not hide the inspector controls");
   assert.doesNotMatch(css, /\.task-workbench\.new-task-active\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+0/s, "new-task mode must respect the saved inspector state");
-  assert.match(app, /view === "tasks" && inspectorCollapsed && <button[^>]*inspector\.expand/, "a collapsed inspector needs an expand button while creating a task");
+  assert.match(app, /inspectorCollapsed && <button[^>]*inspector\.expand/, "a collapsed inspector needs an expand button while creating a task");
+  assert.match(app, /inspectorDetached\s*\r?\n?\s*\? <button[^>]*inspector\.dock/, "a detached inspector offers to dock back rather than to expand into a panel that lives elsewhere");
 });
 
 test("resizing the inspector keeps the chat titlebar controls inside the conversation pane", async () => {

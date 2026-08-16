@@ -49,7 +49,9 @@ export default function NewTaskView({
     }
   };
 
-  return <div className="new-task-screen min-h-0 min-w-0 flex-1 overflow-y-auto">
+  // overflow-y alone would compute overflow-x to `auto`, so a single control
+  // that cannot shrink turns the whole screen into a horizontal scroller.
+  return <div className="new-task-screen min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
     <form className="new-task-layout" aria-busy={busy === "run"} onSubmit={submit}>
       <header className="new-task-intro select-none">
         <h1>{t("task.promptTitle")}</h1>

@@ -17,6 +17,22 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 /**
  * @returns {$CancellablePromise<void>}
  */
+export function CloseInspector() {
+    return $Call.ByID(2568588617);
+}
+
+/**
+ * OpenInspector detaches the run inspector into its own window so it can live
+ * on a second display. CloseInspector puts it back in the main workbench.
+ * @returns {$CancellablePromise<void>}
+ */
+export function OpenInspector() {
+    return $Call.ByID(3451776301);
+}
+
+/**
+ * @returns {$CancellablePromise<void>}
+ */
 export function OpenSettings() {
     return $Call.ByID(1696843073);
 }

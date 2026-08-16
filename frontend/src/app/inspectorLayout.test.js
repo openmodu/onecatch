@@ -2,11 +2,23 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   INSPECTOR_LAYOUT_STORAGE_KEY,
+  parseInspectorDetached,
   parseInspectorPreference,
+  readInspectorDetached,
   readInspectorPreference,
   resolveInspectorCollapsed,
+  writeInspectorDetached,
   writeInspectorPreference,
 } from "./inspectorLayout.js";
+
+function memoryStorage(initial) {
+  const values = new Map(initial ? [[INSPECTOR_LAYOUT_STORAGE_KEY, initial]] : []);
+  return {
+    values,
+    getItem: (key) => values.get(key) || null,
+    setItem: (key, value) => values.set(key, value),
+  };
+}
 
 test("parses only a valid versioned inspector preference", () => {
   assert.equal(parseInspectorPreference('{"inspectorCollapsed":true}'), true);
@@ -43,4 +55,36 @@ test("storage failures do not break the workbench", () => {
   };
   assert.equal(readInspectorPreference(storage), null);
   assert.equal(writeInspectorPreference(storage, false), false);
+  assert.equal(readInspectorDetached(storage), false);
+  assert.equal(writeInspectorDetached(storage, true), false);
+});
+
+test("the inspector is docked unless the record explicitly says otherwise", () => {
+  assert.equal(parseInspectorDetached('{"inspectorDetached":true}'), true);
+  assert.equal(parseInspectorDetached('{"inspectorDetached":false}'), false);
+  assert.equal(parseInspectorDetached('{"inspectorCollapsed":true}'), false);
+  assert.equal(parseInspectorDetached("not-json"), false);
+  assert.equal(parseInspectorDetached(""), false);
+});
+
+test("detaching the inspector preserves the collapse preference and vice versa", () => {
+  const storage = memoryStorage();
+
+  assert.equal(writeInspectorPreference(storage, true), true);
+  assert.equal(writeInspectorDetached(storage, true), true);
+  assert.equal(readInspectorPreference(storage), true);
+  assert.equal(readInspectorDetached(storage), true);
+
+  assert.equal(writeInspectorPreference(storage, false), true);
+  assert.equal(readInspectorDetached(storage), true);
+
+  assert.equal(writeInspectorDetached(storage, false), true);
+  assert.equal(readInspectorPreference(storage), false);
+  assert.equal(readInspectorDetached(storage), false);
+});
+
+test("a layout record written by an older build still reads", () => {
+  const storage = memoryStorage('{"inspectorCollapsed":true}');
+  assert.equal(readInspectorPreference(storage), true);
+  assert.equal(readInspectorDetached(storage), false);
 });
