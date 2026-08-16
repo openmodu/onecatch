@@ -307,6 +307,21 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.match(app, /view === "tasks" && inspectorCollapsed && <button[^>]*inspector\.expand/, "a collapsed inspector needs an expand button while creating a task");
 });
 
+test("new task harness and workflow controls are independent", async () => {
+  const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
+  const newTask = await readFile(path.join(sourceRoot, "app", "components", "NewTaskView.jsx"), "utf8");
+  const runtimeMenu = await readFile(path.join(sourceRoot, "app", "components", "RuntimeProfileMenu.jsx"), "utf8");
+  const harnesses = await readFile(path.join(sourceRoot, "app", "runtimeHarnesses.js"), "utf8");
+  assert.match(newTask, /className="new-task-select workflow"/);
+  assert.match(newTask, /<HarnessSelector value=\{form\} onChange=\{onChange\} runtimes=\{runtimes\}/);
+  assert.match(harnesses, /id: "codex", label: "Codex"/);
+  assert.match(harnesses, /id: "claude", label: "Claude Code"/);
+  assert.match(harnesses, /id: "modu", label: "modu_code"/);
+  assert.doesNotMatch(runtimeMenu, /label=\{t\("task\.harness"\)\}/, "Harness belongs in the composer toolbar, not the model profile menu");
+  assert.match(app, /runtimeSettings=\{settings\.runtimes\?\.\[taskForm\.harness\]\}/);
+  assert.match(app, /SettingsBinding\.InspectClaudeConfiguration/);
+});
+
 test("task editing joins the existing sidebar row hover actions", async () => {
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");

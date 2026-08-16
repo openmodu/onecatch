@@ -27,6 +27,16 @@ export const demoCodexConfiguration = {
   ],
 };
 
+export const demoClaudeConfiguration = {
+  efforts: ["low", "medium", "high", "xhigh", "max"],
+  models: [
+    { model: "fable", displayName: "Fable", alias: true },
+    { model: "opus", displayName: "Opus", alias: true },
+    { model: "sonnet", displayName: "Sonnet", alias: true },
+    { model: "claude-fable-5", displayName: "claude-fable-5", alias: false },
+  ],
+};
+
 export function selectedCodexModel(configuration, selected = "") {
   const models = configuration?.models || [];
   const target = selected || configuration?.model || "";

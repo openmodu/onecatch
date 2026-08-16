@@ -24,7 +24,7 @@ import {
 // be shown before it is applied, so it cannot read them off the live token.
 const ACCENT_SWATCH = { forest: "#694d1f", ocean: "#1f6475", violet: "#684886", amber: "#87501d" };
 import { APPEARANCE_CHANGED_EVENT, accentThemes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
-import { codexEffortValues, codexServiceTierValues, demoCodexConfiguration, selectedCodexModel } from "./codexRuntimeOptions.js";
+import { codexEffortValues, codexServiceTierValues, demoClaudeConfiguration, demoCodexConfiguration, selectedCodexModel } from "./codexRuntimeOptions.js";
 import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
 
 const sectionMeta = (t) => ["runtime", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
@@ -162,12 +162,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     if (id === "claude") {
       setClaudeConfiguration((current) => ({ ...current, loading: true, error: "" }));
       try {
-        const data = mode === "demo" ? { efforts: ["low", "medium", "high", "xhigh", "max"], models: [
-          { model: "fable", displayName: "Fable", alias: true },
-          { model: "opus", displayName: "Opus", alias: true },
-          { model: "sonnet", displayName: "Sonnet", alias: true },
-          { model: "claude-fable-5", displayName: "claude-fable-5", alias: false },
-        ] } : await SettingsBinding.InspectClaudeConfiguration(draft.runtimes.claude);
+        const data = mode === "demo" ? demoClaudeConfiguration : await SettingsBinding.InspectClaudeConfiguration(draft.runtimes.claude);
         setClaudeConfiguration({ loading: false, data, error: "" });
       } catch (error) {
         setClaudeConfiguration((current) => ({ ...current, loading: false, error: message(error, t) }));

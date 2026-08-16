@@ -50,7 +50,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, newTaskOpen, taskForm, workflows, taskRuntimeConfiguration, runtimeSettings, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
@@ -220,6 +220,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       {newTaskOpen ? <NewTaskView
         workspaceID={workspaceID}
         workflows={workflows}
+        runtimes={runtimes}
         form={taskForm}
         busy={busy}
         onChange={onTaskFormChange}

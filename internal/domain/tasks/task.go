@@ -83,7 +83,7 @@ func Validate(task Task) error {
 	if task.ExecutionMode != "" && task.ExecutionMode != ExecutionImmediate && task.ExecutionMode != ExecutionQueued {
 		return ErrInvalid
 	}
-	if task.Harness != "" && task.Harness != "codex" {
+	if task.Harness != "" && task.Harness != "codex" && task.Harness != "claude" && task.Harness != "modu" {
 		return ErrInvalid
 	}
 	if task.Harness == "" && (strings.TrimSpace(task.Model) != "" || strings.TrimSpace(task.ReasoningEffort) != "" || strings.TrimSpace(task.ServiceTier) != "") {

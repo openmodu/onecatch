@@ -37,7 +37,7 @@ import { buildLockSignal, completionEdge, LOCK_PHASE } from "./lockSignal.js";
 import { notifyStandby } from "./standbyNotify.js";
 import { settingsChangedEvent, workflowsChangedEvent } from "./AuxiliaryWindow.jsx";
 import { INSPECTOR_COMPACT_QUERY, readInspectorPreference, resolveInspectorCollapsed, writeInspectorPreference } from "./inspectorLayout.js";
-import { demoCodexConfiguration } from "./codexRuntimeOptions.js";
+import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeOptions.js";
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
 const runStateEvent = "oneshot:run-state";
@@ -255,18 +255,24 @@ function App() {
   useEffect(() => { boot(); }, [boot]);
 
   useEffect(() => {
-    if (!taskModal || taskForm.harness !== "codex" || mode === "loading") return undefined;
+    if (!taskModal || mode === "loading") return undefined;
+    const harness = taskForm.harness || "codex";
+    if (harness !== "codex" && harness !== "claude") {
+      setTaskRuntimeConfiguration({ loading: false, data: null, error: "" });
+      return undefined;
+    }
     if (mode === "demo") {
-      setTaskRuntimeConfiguration({ loading: false, data: demoCodexConfiguration, error: "" });
+      setTaskRuntimeConfiguration({ loading: false, data: harness === "codex" ? demoCodexConfiguration : demoClaudeConfiguration, error: "" });
       return undefined;
     }
     let cancelled = false;
-    setTaskRuntimeConfiguration((current) => ({ ...current, loading: true, error: "" }));
-    SettingsBinding.InspectCodexConfiguration(settings.runtimes?.codex || {})
+    setTaskRuntimeConfiguration({ loading: true, data: null, error: "" });
+    const inspect = harness === "codex" ? SettingsBinding.InspectCodexConfiguration : SettingsBinding.InspectClaudeConfiguration;
+    inspect(settings.runtimes?.[harness] || {})
       .then((data) => { if (!cancelled) setTaskRuntimeConfiguration({ loading: false, data, error: "" }); })
       .catch((error) => { if (!cancelled) setTaskRuntimeConfiguration((current) => ({ ...current, loading: false, error: errorMessage(error) })); });
     return () => { cancelled = true; };
-  }, [mode, settings.runtimes?.codex, taskForm.harness, taskModal]);
+  }, [mode, settings.runtimes, taskForm.harness, taskModal]);
 
   // Settings and workflow definitions are edited in their own WebViews. Wails
   // custom events are application-wide, so the main task window can refresh
@@ -1097,8 +1103,9 @@ function App() {
           newTaskOpen={taskModal}
           taskForm={taskForm}
           workflows={workflows}
+          runtimes={runtimes}
           taskRuntimeConfiguration={taskRuntimeConfiguration}
-          runtimeSettings={settings.runtimes?.codex}
+          runtimeSettings={settings.runtimes?.[taskForm.harness]}
           onTaskFormChange={setTaskForm}
           onChooseTaskAttachments={chooseTaskAttachments}
           onCreateTask={taskModal ? createTaskAndRun : null}

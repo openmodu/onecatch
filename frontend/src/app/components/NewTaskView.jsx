@@ -11,6 +11,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { TUISelect } from "../../ui/primitives.jsx";
 import { fileName } from "../format.js";
+import HarnessSelector from "./HarnessSelector.jsx";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
 
 export default function NewTaskView({
@@ -21,6 +22,7 @@ export default function NewTaskView({
   onChange,
   onChooseAttachments,
   onSubmit,
+  runtimes,
   runtimeConfiguration,
   runtimeSettings,
 }) {
@@ -78,6 +80,7 @@ export default function NewTaskView({
             onChange={(workflowId) => onChange((current) => ({ ...current, workflowId }))}
             options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))}
           />
+          <HarnessSelector value={form} onChange={onChange} runtimes={runtimes} />
           <RuntimeProfileMenu
             className="new-task-runtime"
             value={form}

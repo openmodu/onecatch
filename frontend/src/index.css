@@ -746,7 +746,7 @@
   .new-task-select {
     width: auto !important;
     height: 32px !important;
-    min-width: 120px;
+    min-width: 110px;
     max-width: 220px;
     gap: 6px;
     border-color: transparent !important;
@@ -759,7 +759,47 @@
 
   .new-task-select.workflow { max-width: 240px; }
 
+  .new-task-select.harness {
+    min-width: 98px;
+    max-width: 160px;
+    justify-content: space-between;
+    color: var(--foreground);
+    font-weight: 540;
+  }
+
+  .new-task-select.harness > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .harness-select-menu {
+    width: 190px;
+    padding: 5px;
+    border-radius: 12px;
+  }
+
+  .harness-select-option {
+    min-height: 36px;
+    border-radius: 8px !important;
+  }
+
+  .harness-select-option > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .harness-select-option small {
+    margin-left: auto;
+    color: var(--muted-foreground);
+    font-size: 10px;
+  }
+
   .new-task-runtime {
+    min-width: 190px !important;
     margin-left: auto;
   }
 
@@ -917,6 +957,23 @@
   }
 
   .runtime-profile-message.error { color: var(--destructive); }
+
+  .harness-profile-read-only {
+    height: 32px;
+    max-width: 150px;
+    display: inline-flex;
+    flex: 0 1 auto;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--muted);
+    padding-inline: 11px;
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 540;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 
   .conversation-section {
     padding-inline: var(--conversation-inline-gutter);
@@ -1373,7 +1430,15 @@
     padding: 0 1px;
   }
 
-  .workbench-runtime-profile { margin-left: auto; }
+  .workbench-runtime-controls {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-left: auto;
+  }
+
+  .workbench-runtime-profile { min-width: 0; }
 
   .composer-submit-hint {
     color: var(--muted-foreground);
@@ -1415,7 +1480,9 @@
     .new-task-runtime { order: 5; flex: 1 1 180px; max-width: calc(100% - 142px); margin-left: 0; }
     .new-task-submit-group { order: 6; margin-left: auto; }
     .runtime-profile-trigger { min-width: 0; }
+    .workbench-runtime-controls { max-width: min(100%, 390px); }
     .workbench-runtime-profile { max-width: 220px; }
+    .harness-profile-read-only { max-width: 105px; }
     .new-task-select { max-width: calc(50% - 27px); }
     .new-task-shortcut { display: none; }
     .conversation-list {
