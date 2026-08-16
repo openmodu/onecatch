@@ -69,6 +69,9 @@ func (b *TaskRunBinding) InterruptRun(runID string) (domainworkflows.Run, error)
 func (b *TaskRunBinding) ResumeRun(runID, instruction string) (domainworkflows.Run, error) {
 	return b.service.ResumeRun(context.Background(), runID, instruction)
 }
+func (b *TaskRunBinding) ResumeRunConfigured(runID string, input desktopservice.ResumeRunInput) (domainworkflows.Run, error) {
+	return b.service.ResumeRunConfigured(context.Background(), runID, input)
+}
 func (b *TaskRunBinding) CancelRun(runID string) (domainworkflows.Run, error) {
 	return b.service.CancelRun(context.Background(), runID)
 }

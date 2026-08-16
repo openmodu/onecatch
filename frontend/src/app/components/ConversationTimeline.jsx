@@ -23,7 +23,7 @@ function createTimeLabeler() {
 function messageTime(value, language) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString(language === "en" ? "en-US" : "zh-CN", { hour: "2-digit", minute: "2-digit" });
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString(language === "en" ? "en-US" : "zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 }
 
 async function copyText(value) {

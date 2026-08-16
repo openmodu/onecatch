@@ -41,6 +41,24 @@ import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeO
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
 const runStateEvent = "oneshot:run-state";
+const directAgentWorkflowID = "single_agent";
+
+function firstWorkflowID(items = []) {
+  return items.find((item) => item.id === directAgentWorkflowID)?.id || items[0]?.id || "";
+}
+
+function selectedTaskExecution(form) {
+  const directAgent = form.workflowId === directAgentWorkflowID;
+  return {
+    directAgent,
+    workflowId: form.workflowId,
+    harness: directAgent ? form.harness || "codex" : "",
+    model: directAgent ? form.model : "",
+    reasoningEffort: directAgent ? form.reasoningEffort : "",
+    serviceTier: directAgent ? form.serviceTier : "",
+    sandbox: form.sandbox || "workspace-write",
+  };
+}
 
 function WindowsTitleBar() {
   return <div className="windows-titlebar drag-region hidden h-9 items-center border-b bg-background pl-3 text-xs text-foreground" onDoubleClick={() => void Window.ToggleMaximise()}>
@@ -103,7 +121,7 @@ function App() {
   const [taskModal, setTaskModal] = useState(true);
   const [renameForm, setRenameForm] = useState(null);
   const [workspaceForm, setWorkspaceForm] = useState({ path: "", name: "", defaultSandbox: "" });
-  const [taskForm, setTaskForm] = useState({ prompt: "", workflowId: "", executionMode: "immediate", attachmentPaths: [], harness: "codex", model: "", reasoningEffort: "", serviceTier: "" });
+  const [taskForm, setTaskForm] = useState({ prompt: "", workflowId: directAgentWorkflowID, executionMode: "immediate", attachmentPaths: [], harness: "codex", model: "", reasoningEffort: "", serviceTier: "", sandbox: "workspace-write" });
   const [taskRuntimeConfiguration, setTaskRuntimeConfiguration] = useState({ loading: false, data: null, error: "" });
   const [composerAttachments, setComposerAttachments] = useState([]);
   const [resumePendingRunID, setResumePendingRunID] = useState("");
@@ -234,7 +252,7 @@ function App() {
       setWorkers(workerItems || []);
       setSettings(settingsValue || demoSettings);
       setWorkspaceID((current) => current || orderedWorkspaces[0]?.id || "");
-      setTaskForm((current) => ({ ...current, workflowId: current.workflowId || workflowItems?.[0]?.id || "" }));
+      setTaskForm((current) => ({ ...current, workflowId: workflowItems.some((item) => item.id === current.workflowId) ? current.workflowId : firstWorkflowID(workflowItems) }));
     } catch {
       setMode("demo");
       setRuntimes(demoRuntimes);
@@ -243,7 +261,7 @@ function App() {
       setWorkers(demoWorkers);
       setSettings(demoSettings);
       setWorkspaceID(demoWorkspaces[0].id);
-      setTaskForm((current) => ({ ...current, workflowId: "implement_review" }));
+      setTaskForm((current) => ({ ...current, workflowId: firstWorkflowID(demoWorkflows) }));
       setRunItems([{ ...demoRun.run, task: demoTasks[0] }]);
       setTasks(demoTasks);
       setRunTotal(1);
@@ -254,25 +272,31 @@ function App() {
 
   useEffect(() => { boot(); }, [boot]);
 
+  const inspectRuntimeConfiguration = useCallback(async (harness) => {
+    if (harness !== "codex" && harness !== "claude") return null;
+    if (mode === "demo") return harness === "codex" ? demoCodexConfiguration : demoClaudeConfiguration;
+    const inspect = harness === "codex" ? SettingsBinding.InspectCodexConfiguration : SettingsBinding.InspectClaudeConfiguration;
+    return inspect(settings.runtimes?.[harness] || {});
+  }, [mode, settings.runtimes]);
+
   useEffect(() => {
     if (!taskModal || mode === "loading") return undefined;
+    if (taskForm.workflowId !== directAgentWorkflowID) {
+      setTaskRuntimeConfiguration({ loading: false, data: null, error: "" });
+      return undefined;
+    }
     const harness = taskForm.harness || "codex";
     if (harness !== "codex" && harness !== "claude") {
       setTaskRuntimeConfiguration({ loading: false, data: null, error: "" });
       return undefined;
     }
-    if (mode === "demo") {
-      setTaskRuntimeConfiguration({ loading: false, data: harness === "codex" ? demoCodexConfiguration : demoClaudeConfiguration, error: "" });
-      return undefined;
-    }
     let cancelled = false;
     setTaskRuntimeConfiguration({ loading: true, data: null, error: "" });
-    const inspect = harness === "codex" ? SettingsBinding.InspectCodexConfiguration : SettingsBinding.InspectClaudeConfiguration;
-    inspect(settings.runtimes?.[harness] || {})
+    inspectRuntimeConfiguration(harness)
       .then((data) => { if (!cancelled) setTaskRuntimeConfiguration({ loading: false, data, error: "" }); })
       .catch((error) => { if (!cancelled) setTaskRuntimeConfiguration((current) => ({ ...current, loading: false, error: errorMessage(error) })); });
     return () => { cancelled = true; };
-  }, [mode, settings.runtimes, taskForm.harness, taskModal]);
+  }, [inspectRuntimeConfiguration, mode, taskForm.harness, taskForm.workflowId, taskModal]);
 
   // Settings and workflow definitions are edited in their own WebViews. Wails
   // custom events are application-wide, so the main task window can refresh
@@ -292,7 +316,7 @@ function App() {
       try {
         const items = await WorkflowBinding.ListDefinitions();
         setWorkflows(items || []);
-        setTaskForm((form) => items.some((item) => item.id === form.workflowId) ? form : { ...form, workflowId: items[0]?.id || "" });
+        setTaskForm((form) => items.some((item) => item.id === form.workflowId) ? form : { ...form, workflowId: firstWorkflowID(items) });
       } catch (error) {
         notify("error", errorMessage(error));
       }
@@ -656,10 +680,12 @@ function App() {
   };
 
   const createTaskAndRun = async () => {
-    if (!workspaceID || !taskForm.prompt.trim() || !taskForm.workflowId) { notify("error", t("app.taskFieldsRequired")); return; }
+    const execution = selectedTaskExecution(taskForm);
+    if (!workspaceID || !taskForm.prompt.trim() || !execution.workflowId || !execution.sandbox || (execution.directAgent && !execution.harness)) { notify("error", t("app.taskFieldsRequired")); return; }
     const taskTitle = taskTitleFromPrompt(taskForm.prompt, t("task.createTitle"));
-    const selectedWorkflow = workflows.find((item) => item.id === taskForm.workflowId);
-    if (selectedWorkflow?.steps?.some((step) => step.sandbox === "full") && !await requestConfirm({ title: t("app.fullRunTitle"), description: t("app.fullRunDescription"), detail: t("app.workflowDetail", { name: selectedWorkflow.name }), confirmLabel: t("app.confirmStart"), dangerous: true })) return;
+    const selectedWorkflow = workflows.find((item) => item.id === execution.workflowId);
+    const usesFullSandbox = execution.sandbox === "full" && (execution.directAgent || selectedWorkflow?.steps?.some((step) => step.sandbox === "full"));
+    if (usesFullSandbox && !await requestConfirm({ title: t("app.fullRunTitle"), description: t("app.fullRunDescription"), detail: t("app.workflowDetail", { name: selectedWorkflow.name }), confirmLabel: t("app.confirmStart"), dangerous: true })) return;
     setBusy("run");
     setRunStatus("");
     setRunSearchDraft("");
@@ -667,14 +693,14 @@ function App() {
     try {
       if (mode === "demo") {
         if (taskForm.executionMode === "queued") {
-          const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, title: taskTitle, prompt: taskForm.prompt, workflowId: taskForm.workflowId, harness: taskForm.harness, model: taskForm.model, reasoningEffort: taskForm.reasoningEffort, serviceTier: taskForm.serviceTier, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+          const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
           setTasks((items) => [...items, queuedTask]); setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(queuedTask.id);
         } else {
-          const demoTask = { ...demoTasks[0], title: taskTitle, prompt: taskForm.prompt, workflowId: taskForm.workflowId, harness: taskForm.harness, model: taskForm.model, reasoningEffort: taskForm.reasoningEffort, serviceTier: taskForm.serviceTier, updatedAt: new Date().toISOString() };
+          const demoTask = { ...demoTasks[0], title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, updatedAt: new Date().toISOString() };
           setTasks((items) => items.map((item) => item.id === demoTask.id ? demoTask : item)); setRunItems([{ ...demoRun.run, workflowId: demoTask.workflowId, status: "running", task: demoTask }]); setRunTotal(1); setSelectedQueuedTaskID(""); setSelectedRunID("run_demo"); setRunDetail({ ...demoRun, task: demoTask, run: { ...demoRun.run, workflowId: demoTask.workflowId, status: "running" }, active: true });
         }
       } else {
-        const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, title: taskTitle, prompt: taskForm.prompt, workflowId: taskForm.workflowId, harness: taskForm.harness, model: taskForm.model, reasoningEffort: taskForm.reasoningEffort, serviceTier: taskForm.serviceTier, attachmentPaths: taskForm.attachmentPaths });
+        const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachmentPaths: taskForm.attachmentPaths });
         const preview = await TaskRunBinding.PreviewRun(task.id);
         if (taskForm.executionMode === "queued") {
           const queued = await TaskRunBinding.EnqueueTask(task.id, preview.confirmationToken || "");
@@ -704,7 +730,7 @@ function App() {
 
   // Returns true when the submit was accepted so the composer can clear its
   // local draft; false keeps whatever the user typed.
-  const submitWorkbenchComposer = useCallback(async (modeName = "queue", content = "") => {
+  const submitWorkbenchComposer = useCallback(async (modeName = "queue", content = "", runtimeProfile = null) => {
     const runDetailNow = runDetailRef.current;
     if (!runDetailNow?.run?.id) { setTaskModal(true); return false; }
     const run = runDetailNow.run;
@@ -734,9 +760,9 @@ function App() {
       } else if (run.status === "paused" || run.status === "completed") {
         if (attachments.length) {
           await TaskRunBinding.EnqueueInstruction(run.id, { content: content || t("composer.attachmentInstruction"), attachmentPaths: attachments });
-          await TaskRunBinding.ResumeRun(run.id, "");
+          await TaskRunBinding.ResumeRunConfigured(run.id, { instruction: "", ...runtimeProfile });
         } else {
-          await TaskRunBinding.ResumeRun(run.id, content);
+          await TaskRunBinding.ResumeRunConfigured(run.id, { instruction: content, ...runtimeProfile });
         }
         setResumePendingRunID(run.id);
       }
@@ -890,7 +916,7 @@ function App() {
         saved = editorSourceID ? await WorkflowBinding.UpdateDefinition(editorSourceID, editor) : await WorkflowBinding.CreateDefinition(editor);
         setWorkflows(await WorkflowBinding.ListDefinitions());
       } else setWorkflows((items) => [...items.filter((item) => item.id !== editor.id && item.id !== editorSourceID), editor]);
-      setTaskForm((form) => ({ ...form, workflowId: saved.id })); setEditor(null); setEditorSourceID(""); notify("success", t("app.workflowSaved"));
+      setTaskForm((form) => ({ ...form, workflowId: saved.id, harness: "", model: "", reasoningEffort: "", serviceTier: "" })); setEditor(null); setEditorSourceID(""); notify("success", t("app.workflowSaved"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
@@ -905,7 +931,7 @@ function App() {
         items = await WorkflowBinding.ListDefinitions();
       }
       setWorkflows(items);
-      setTaskForm((form) => form.workflowId === workflow.id ? { ...form, workflowId: items[0]?.id || "" } : form);
+      setTaskForm((form) => form.workflowId === workflow.id ? { ...form, workflowId: firstWorkflowID(items) } : form);
       notify("success", t("app.workflowDeleted"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
@@ -1113,6 +1139,9 @@ function App() {
           runtimes={runtimes}
           taskRuntimeConfiguration={taskRuntimeConfiguration}
           runtimeSettings={settings.runtimes?.[taskForm.harness]}
+          runtimeSettingsByHarness={settings.runtimes}
+          allowFullSandbox={Boolean(settings.security?.allowFullSandbox && selectedWorkspace?.defaultSandbox === "full")}
+          onInspectRuntimeConfiguration={inspectRuntimeConfiguration}
           onTaskFormChange={setTaskForm}
           onChooseTaskAttachments={chooseTaskAttachments}
           onCreateTask={taskModal ? createTaskAndRun : null}

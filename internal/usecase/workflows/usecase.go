@@ -37,6 +37,7 @@ type WorkflowRepository interface {
 	SaveRun(context.Context, domainworkflows.Run, domainworkflows.Definition) error
 	GetRun(context.Context, string) (domainworkflows.Run, error)
 	GetRunDefinition(context.Context, string) (domainworkflows.Definition, error)
+	UpdateRunDefinition(context.Context, string, domainworkflows.Definition) error
 	UpdateRun(context.Context, domainworkflows.Run, int64) (domainworkflows.Run, error)
 	SaveStepRun(context.Context, domainworkflows.StepRun) error
 	ListStepRuns(context.Context, string) ([]domainworkflows.StepRun, error)
@@ -82,6 +83,16 @@ type RunResolution struct {
 	MaxLocalDAGConcurrency int
 	InterruptGraceSeconds  int
 	RuntimeSettings        map[string]domainworkflows.ResolvedRuntimeSettings
+}
+
+// ResumeProfile is a per-follow-up runtime override. A profile change starts a
+// fresh runtime session for the selected step while the workflow conversation
+// and transition history remain attached to the same durable Run.
+type ResumeProfile struct {
+	StepID          string
+	Harness         string
+	Model           string
+	RuntimeSettings domainworkflows.ResolvedRuntimeSettings
 }
 
 type Usecase struct {
@@ -311,6 +322,12 @@ func (s *Usecase) RecoverRun(ctx context.Context, runID string) (domainworkflows
 // ResumeRun resumes the current step from the Run's private workflow snapshot.
 // instruction is injected once into the first resumed step prompt.
 func (s *Usecase) ResumeRun(ctx context.Context, runID, instruction string) (domainworkflows.Run, error) {
+	return s.ResumeRunWithProfile(ctx, runID, instruction, ResumeProfile{})
+}
+
+// ResumeRunWithProfile resumes a run after applying an optional runtime
+// profile to the selected step in its private workflow snapshot.
+func (s *Usecase) ResumeRunWithProfile(ctx context.Context, runID, instruction string, profile ResumeProfile) (domainworkflows.Run, error) {
 	run, err := s.workflows.GetRun(ctx, runID)
 	if err != nil {
 		return domainworkflows.Run{}, err
@@ -318,6 +335,12 @@ func (s *Usecase) ResumeRun(ctx context.Context, runID, instruction string) (dom
 	definition, err := s.workflows.GetRunDefinition(ctx, runID)
 	if err != nil {
 		return run, err
+	}
+	if strings.TrimSpace(profile.Harness) != "" {
+		definition, run, err = s.applyResumeProfile(ctx, definition, run, profile)
+		if err != nil {
+			return run, err
+		}
 	}
 	task, err := s.tasks.GetTask(ctx, run.TaskID)
 	if err != nil {
@@ -366,6 +389,74 @@ func (s *Usecase) ResumeRun(ctx context.Context, runID, instruction string) (dom
 		return resumed, err
 	}
 	return s.drive(ctx, task, workspace, definition, resumed, instruction)
+}
+
+func (s *Usecase) applyResumeProfile(ctx context.Context, definition domainworkflows.Definition, run domainworkflows.Run, profile ResumeProfile) (domainworkflows.Definition, domainworkflows.Run, error) {
+	stepID := strings.TrimSpace(profile.StepID)
+	if stepID == "" {
+		stepID = run.CurrentStepID
+	}
+	stepIndex := -1
+	for index := range definition.Steps {
+		if definition.Steps[index].ID == stepID {
+			stepIndex = index
+			break
+		}
+	}
+	if stepIndex < 0 {
+		return definition, run, fmt.Errorf("workflow step %q not found", stepID)
+	}
+	harness := strings.TrimSpace(profile.Harness)
+	if runtime := agentrun.Runtime(harness); !runtime.Valid() {
+		return definition, run, fmt.Errorf("runtime %q is invalid", harness)
+	}
+
+	definition.Steps = append([]domainworkflows.Step(nil), definition.Steps...)
+	step := &definition.Steps[stepIndex]
+	settings := profile.RuntimeSettings
+	settings.EnvironmentAllowlist = append([]string(nil), settings.EnvironmentAllowlist...)
+	currentSettings := run.RuntimeSettings[harness]
+	changed := step.Runtime != harness || step.Model != profile.Model || !resolvedRuntimeSettingsEqual(currentSettings, settings)
+	step.Runtime = harness
+	step.Model = strings.TrimSpace(profile.Model)
+	if err := domainworkflows.Validate(definition); err != nil {
+		return definition, run, err
+	}
+	if err := s.workflows.UpdateRunDefinition(ctx, run.ID, definition); err != nil {
+		return definition, run, err
+	}
+
+	if run.RuntimeSettings == nil {
+		run.RuntimeSettings = make(map[string]domainworkflows.ResolvedRuntimeSettings)
+	} else {
+		cloned := make(map[string]domainworkflows.ResolvedRuntimeSettings, len(run.RuntimeSettings)+1)
+		for key, value := range run.RuntimeSettings {
+			value.EnvironmentAllowlist = append([]string(nil), value.EnvironmentAllowlist...)
+			cloned[key] = value
+		}
+		run.RuntimeSettings = cloned
+	}
+	run.RuntimeSettings[harness] = settings
+	if changed && run.Sessions != nil {
+		delete(run.Sessions, stepID)
+	}
+	updated, err := s.workflows.UpdateRun(ctx, run, run.Revision)
+	if err != nil {
+		return definition, run, err
+	}
+	return definition, updated, nil
+}
+
+func resolvedRuntimeSettingsEqual(left, right domainworkflows.ResolvedRuntimeSettings) bool {
+	if left.Provider != right.Provider || left.ReasoningEffort != right.ReasoningEffort || left.ServiceTier != right.ServiceTier || len(left.EnvironmentAllowlist) != len(right.EnvironmentAllowlist) {
+		return false
+	}
+	for index := range left.EnvironmentAllowlist {
+		if left.EnvironmentAllowlist[index] != right.EnvironmentAllowlist[index] {
+			return false
+		}
+	}
+	return true
 }
 
 // CancelRun marks a ready or paused run and its task as cancelled. Active runs

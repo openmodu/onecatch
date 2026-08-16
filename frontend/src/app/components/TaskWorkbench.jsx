@@ -11,6 +11,7 @@ import GitInspector from "./inspectors/GitInspector.jsx";
 import EventInspector from "./inspectors/EventInspector.jsx";
 import FileInspector from "./inspectors/FileInspector.jsx";
 import NewTaskView from "./NewTaskView.jsx";
+import { errorMessage } from "../format.js";
 
 const TerminalDock = lazy(() => import("./TerminalDock.jsx"));
 
@@ -50,7 +51,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
@@ -59,6 +60,8 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const [fileInspectorMounted, setFileInspectorMounted] = useState(false);
   const [fileInspectorDirty, setFileInspectorDirty] = useState(false);
   const [terminalMounted, setTerminalMounted] = useState(false);
+  const [continuationRuntimeProfile, setContinuationRuntimeProfile] = useState(null);
+  const [continuationRuntimeConfiguration, setContinuationRuntimeConfiguration] = useState({ loading: false, data: null, error: "" });
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
   const inspectorResizeRef = useRef(null);
@@ -107,9 +110,28 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const activeRuntimeProfile = useMemo(() => {
     if (!activeStep?.runtime) return null;
     const settings = runDetail?.run?.runtimeSettings?.[activeStep.runtime] || {};
-    return { harness: activeStep.runtime, model: activeStep.model || "", reasoningEffort: settings.reasoningEffort || "", serviceTier: settings.serviceTier || "" };
+    return { stepId: activeStep.id, harness: activeStep.runtime, model: activeStep.model || "", reasoningEffort: settings.reasoningEffort || "", serviceTier: settings.serviceTier || "" };
   }, [activeStep, runDetail?.run?.runtimeSettings]);
+  const activeRuntimeProfileSignature = activeRuntimeProfile ? [activeRuntimeProfile.stepId, activeRuntimeProfile.harness, activeRuntimeProfile.model, activeRuntimeProfile.reasoningEffort, activeRuntimeProfile.serviceTier].join("\n") : "";
   const conversationSize = `${signature}:${conversation.length}:${conversation[conversation.length - 1]?.items?.length || 0}`;
+
+  useEffect(() => {
+    setContinuationRuntimeProfile(activeRuntimeProfile);
+  }, [activeRuntimeProfileSignature, selectedRunID]);
+
+  useEffect(() => {
+    const harness = continuationRuntimeProfile?.harness;
+    if (!harness || !onInspectRuntimeConfiguration) {
+      setContinuationRuntimeConfiguration({ loading: false, data: null, error: "" });
+      return undefined;
+    }
+    let cancelled = false;
+    setContinuationRuntimeConfiguration({ loading: harness === "codex" || harness === "claude", data: null, error: "" });
+    onInspectRuntimeConfiguration(harness)
+      .then((data) => { if (!cancelled) setContinuationRuntimeConfiguration({ loading: false, data, error: "" }); })
+      .catch((error) => { if (!cancelled) setContinuationRuntimeConfiguration({ loading: false, data: null, error: errorMessage(error) }); });
+    return () => { cancelled = true; };
+  }, [continuationRuntimeProfile?.harness, onInspectRuntimeConfiguration]);
 
   useEffect(() => {
     if (terminalToggleVersion === terminalToggleVersionRef.current) return;
@@ -228,6 +250,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
         onSubmit={onCreateTask}
         runtimeConfiguration={taskRuntimeConfiguration}
         runtimeSettings={runtimeSettings}
+        allowFullSandbox={allowFullSandbox}
       /> : selectedTask ? <>
         <div className="conversation-scroll min-h-0 min-w-0 flex-1 select-text overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>
           {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
@@ -244,7 +267,11 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           onInterrupt={onInterrupt}
           onCancel={onCancel}
           onSubmit={onSubmit}
-          runtimeProfile={activeRuntimeProfile}
+          runtimeProfile={continuationRuntimeProfile || activeRuntimeProfile}
+          onRuntimeProfileChange={setContinuationRuntimeProfile}
+          runtimes={runtimes}
+          runtimeConfiguration={continuationRuntimeConfiguration}
+          runtimeSettings={runtimeSettingsByHarness?.[(continuationRuntimeProfile || activeRuntimeProfile)?.harness] || {}}
         />}
       </> : <div className="workbench-welcome m-auto max-w-xl select-none p-10 text-center text-muted-foreground"><Kicker>{t("task.welcomeKicker")}</Kicker><h2 className="my-3 text-lg font-semibold text-foreground">{t("task.welcomeTitle")}</h2><p className="mb-6 text-sm leading-relaxed">{t("task.welcomeDescription")}</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>{t("task.newTask")}</Action></div>}
       {terminalMounted && <Suspense fallback={null}><TerminalDock ref={setTerminalDock} mode={mode} workspace={workspace} preferences={terminalPreferences} notify={notify} onVisibilityChange={onTerminalVisibilityChange} /></Suspense>}

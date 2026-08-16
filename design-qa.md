@@ -2,51 +2,48 @@
 
 ## Evidence
 
-- Source visual truth: `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-824f8b1d-08b7-40cd-9220-dee5e86d317a.png`
-- Browser-rendered implementation: `/Users/ityike/.codex/visualizations/2026/08/12/019ff672-80eb-72c1-8979-8c04946edc3e/conversation-tool-expanded.png`
-- Side-by-side comparison: `/Users/ityike/.codex/visualizations/2026/08/12/019ff672-80eb-72c1-8979-8c04946edc3e/conversation-interleaving-comparison.png`
-- Browser state: light theme, 1280 × 720 viewport, paused two-Agent demo conversation, second tool group and command result expanded.
+- Source visual truth: `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-7a8dca3c-44fc-492d-8a7d-6a3747bc9cc6.png`, with the user's explicit correction that the Agent/Workflow relationship should be conveyed through interaction instead of explanatory copy.
+- Browser-rendered implementation: `http://127.0.0.1:4173/`
+- Browser state: light theme, 1280 × 720 viewport, new-task screen with the right inspector open.
 
 ## Findings
 
-No actionable P0, P1, or P2 differences remain in the requested conversation scope.
+No actionable P0, P1, or P2 differences remain in the requested scope.
 
-- Message order: assistant prose, tool-call groups, later prose, and subsequent tool groups remain in provider event order. Tools are no longer hoisted above all prose in a round.
-- Tool-call treatment: adjacent tool calls share one quiet disclosure surface. Each tool keeps its own icon, title, status, command, result, copy action, and nested expansion state.
-- Conversation rhythm: prose stays on the transcript surface while tool details use a thin bordered inset, matching the supplied Claude Code pattern without introducing unrelated cards or separators.
-- Completed-run interaction: the composer remains editable after a successful round, changes to continuation copy, accepts attachments, and exposes a single primary continuation action.
-- Session continuity: continuing a completed serial run reuses the current Agent session. A completed DAG preserves upstream results and reopens only terminal nodes for the follow-up turn.
-
-## Visual Comparison
-
-The side-by-side comparison confirms the requested hierarchy in both reference and implementation: prose appears before a tool group, the tool group can expand to command/result detail, and prose resumes after it. The implementation retains Oneshot's existing sidebar, inspector, warm neutral tokens, and compact typography while adopting the reference's alternating transcript structure.
+- Composer placement: the title and input card now occupy the central working area instead of sitting against the bottom edge.
+- Single-row controls: attachment, Workflow, permission, Harness, runtime profile, and execution stay on one baseline at desktop widths.
+- Execution target: every new task selects exactly one target—either a coding Agent or an orchestrated Workflow. `Agent · Codex` maps internally to the single-Agent runner without exposing `单 Agent 完成` as a second user-facing workflow choice.
+- Compact selection UI: the trigger and menu now size to their content, the redundant “Agent 与工作流二选一” heading is removed, and Agent entries no longer repeat identical explanatory text.
+- Permission control: read-only, workspace access, and full access are explicit task choices. Full access stays disabled unless both application security and the workspace allow it.
+- Direct Agent: selecting Codex, Claude Code, or modu_code exposes the matching model/runtime controls; selecting an orchestrated Workflow hides those per-Agent overrides.
+- Execution semantics: the selected permission is persisted with the task, applied directly to single-Agent runs, and acts as a least-privilege cap across orchestrated workflow steps.
 
 ## Interaction and Accessibility Checks
 
-- Both process disclosures and individual tool rows are keyboard-focusable native `details`/`summary` controls.
-- Tool groups report a localized tool count and runtime through their accessible label.
-- Expanding a tool exposes command and result without changing the surrounding message order.
-- Completed conversations expose an enabled textbox and a localized `继续对话` action only after new text or an attachment is present.
-- Follow-up instructions are persisted as `run.resumed` events and appear as user turns in the transcript.
-- The browser-rendered paused conversation still supports its existing resume and terminate actions.
+- The execution-target trigger has the accessible name “选择 Agent 或工作流” and presents mutually exclusive Agent and Workflow sections.
+- Mutual exclusion is communicated by the single checked radio item across both grouped sections; no instructional “二选一” sentence is shown.
+- Agent, Workflow, and permission entries use radio-menu semantics and visibly identify the active choice.
+- Selecting an orchestrated Workflow immediately removes the Harness and runtime-profile controls.
+- The permission menu explains each access level; full access exposes a proper disabled state in a workspace that cannot grant it.
+- Attachment, immediate/queued execution, status inspector, and keyboard submission remain available.
 
 ## Verification
 
-- Relevant Go packages: `go test ./internal/domain/workflows ./internal/usecase/workflows ./internal/service/desktop` passed.
-- Conversation, i18n, and focused layout tests: 21 passed.
-- Production Vite build: passed.
-- Full static frontend suite: 41 passed and 6 pre-existing sidebar/command-palette assertions failed; none intersects conversation ordering or completed-run continuation.
-- Browser QA: message/tool interleaving, group expansion, command-result expansion, persistent composer, and existing paused-run actions verified.
+- Focused frontend regressions: the new-task workflow and permission assertions pass.
+- Runtime selection unit tests: passed.
+- Focused backend packages: `go test ./internal/domain/tasks ./internal/service/desktop ./internal/repo/tasks` passed.
+- Browser QA: Agent/Workflow mutual exclusion, Codex runtime visibility, orchestrated Workflow switching, permission menu, full-access disabled state, and single-row desktop composition verified with the inspector both open and collapsed.
+- The full static frontend file still reports the 7 pre-existing Sidebar/Command Palette baseline assertions; the new-task tests pass.
 
 ## Implementation Checklist
 
-- [x] Preserve text/tool-call/text ordering within every Agent round.
-- [x] Group only adjacent tool calls.
-- [x] Keep tool rows expandable with command and result details.
-- [x] Keep completed conversations editable.
-- [x] Continue serial runs through the existing Agent session.
-- [x] Continue DAG runs from terminal nodes while preserving upstream context.
-- [x] Cover ordering and completed continuation with frontend and backend regression tests.
-- [x] Compare the reference and browser-rendered implementation visually.
+- [x] Move the new-task composer into the central working area.
+- [x] Require exactly one Agent or Workflow target for each new task.
+- [x] Keep the internal `single_agent` runner out of the user-facing Workflow list.
+- [x] Add task-level read-only, workspace, and full-access controls.
+- [x] Persist and enforce the selected permission in backend run resolution.
+- [x] Verify Workflow and permission switching in the live browser.
+- [x] Keep all task composer controls on one desktop row without clipping.
+- [x] Remove redundant execution-target copy and compact the trigger/menu width.
 
 final result: passed

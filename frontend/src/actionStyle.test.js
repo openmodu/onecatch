@@ -291,7 +291,7 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.match(app, /newTaskOpen=\{taskModal\}/);
   assert.match(workbench, /newTaskOpen \? <NewTaskView/);
   assert.match(newTask, /className="new-task-composer"/);
-  assert.match(newTask, /className="new-task-toolbar"/);
+  assert.match(newTask, /className=\{`new-task-toolbar \$\{directAgent \? "agent-mode" : "workflow-mode"\}`\}/);
   assert.doesNotMatch(newTask, /className="new-task-select execution"/, "execution mode belongs with the final submit action");
   assert.match(newTask, /className=\{`new-task-submit-group \$\{executionMode\}`\}/);
   assert.match(newTask, /DropdownMenuRadioGroup value=\{executionMode\}/);
@@ -302,23 +302,42 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.doesNotMatch(newTask, /onCancel|new-task-cancel/, "navigation back to history replaces a modal-style cancel action");
   assert.match(app, /taskTitleFromPrompt\(taskForm\.prompt/);
   assert.match(css, /\.new-task-layout\s*\{[^}]*max-width:\s*calc\(var\(--conversation-content-width\)/s, "the creation screen must share the chat column width");
+  assert.match(css, /\.new-task-layout\s*\{[^}]*justify-content:\s*center/s, "the creation composer should sit in the central working area instead of hugging the window bottom");
   assert.doesNotMatch(workbench, /!newTaskOpen && !inspectorCollapsed/, "new-task mode must not hide the inspector controls");
   assert.doesNotMatch(css, /\.task-workbench\.new-task-active\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+0/s, "new-task mode must respect the saved inspector state");
   assert.match(app, /view === "tasks" && inspectorCollapsed && <button[^>]*inspector\.expand/, "a collapsed inspector needs an expand button while creating a task");
 });
 
-test("new task harness and workflow controls are independent", async () => {
+test("every new task chooses either an Agent or a workflow plus an explicit permission level", async () => {
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
   const newTask = await readFile(path.join(sourceRoot, "app", "components", "NewTaskView.jsx"), "utf8");
+  const executor = await readFile(path.join(sourceRoot, "app", "components", "TaskExecutorSelector.jsx"), "utf8");
+  const permission = await readFile(path.join(sourceRoot, "app", "components", "TaskPermissionSelector.jsx"), "utf8");
   const runtimeMenu = await readFile(path.join(sourceRoot, "app", "components", "RuntimeProfileMenu.jsx"), "utf8");
   const harnesses = await readFile(path.join(sourceRoot, "app", "runtimeHarnesses.js"), "utf8");
-  assert.match(newTask, /className="new-task-select workflow"/);
-  assert.match(newTask, /<HarnessSelector value=\{form\} onChange=\{onChange\} runtimes=\{runtimes\}/);
+  assert.match(newTask, /<TaskExecutorSelector form=\{form\} workflows=\{workflows\} runtimes=\{runtimes\}/);
+  assert.match(newTask, /<TaskPermissionSelector value=\{form\.sandbox\}/);
+  assert.doesNotMatch(newTask, /<HarnessSelector/, "the Agent is selected by the mutually exclusive execution-target control");
+  assert.match(newTask, /directAgent && <RuntimeProfileMenu/, "model controls only apply to a directly selected Agent");
+  assert.match(executor, /runtimeHarnessOptions\(runtimes/, "the execution target lists available coding Agents");
+  assert.match(executor, /selectTaskExecutionTarget\(current, target\)/, "switching target must clear the mutually exclusive selection");
+  assert.match(executor, /workflow\.id !== directAgentWorkflowID/, "the internal single-Agent definition must not appear as a user-facing workflow");
+  assert.match(executor, /value=\{`agent:\$\{option\.value\}`\}/);
+  assert.match(executor, /value=\{`workflow:\$\{workflow\.id\}`\}/);
+  assert.match(executor, /t\("task\.agentLabel"/, "a directly selected Agent stays visible in the composer");
+  assert.match(permission, /value: "read-only"/);
+  assert.match(permission, /value: "workspace-write"/);
+  assert.match(permission, /value: "full"/);
+  assert.match(permission, /disabled=\{option\.value === "full" && !allowFull\}/);
   assert.match(harnesses, /id: "codex", label: "Codex"/);
   assert.match(harnesses, /id: "claude", label: "Claude Code"/);
   assert.match(harnesses, /id: "modu", label: "modu_code"/);
   assert.doesNotMatch(runtimeMenu, /label=\{t\("task\.harness"\)\}/, "Harness belongs in the composer toolbar, not the model profile menu");
   assert.match(app, /runtimeSettings=\{settings\.runtimes\?\.\[taskForm\.harness\]\}/);
+  assert.match(app, /workflowId: form\.workflowId/);
+  assert.match(app, /sandbox: form\.sandbox \|\| "workspace-write"/);
+  assert.match(app, /CreateTask\(\{[^}]*workflowId: execution\.workflowId[^}]*sandbox: execution\.sandbox/);
+  assert.match(app, /const execution = selectedTaskExecution\(taskForm\)/);
   assert.match(app, /SettingsBinding\.InspectClaudeConfiguration/);
 });
 
@@ -355,7 +374,15 @@ test("completed conversations remain available for a follow-up turn", async () =
   assert.match(composer, /\["running", "paused", "completed"\]\.includes\(runStatus\)/);
   assert.match(composer, /runStatus === "completed"[\s\S]*t\("composer\.continue"\)/);
   assert.match(app, /run\.status === "paused" \|\| run\.status === "completed"/);
-  assert.match(app, /TaskRunBinding\.ResumeRun\(run\.id, content\)/);
+  assert.match(app, /TaskRunBinding\.ResumeRunConfigured\(run\.id, \{ instruction: content, \.\.\.runtimeProfile \}\)/);
+  assert.match(composer, /HarnessSelector value=\{runtimeProfile\} onChange=\{onRuntimeProfileChange\} runtimes=\{runtimes\}/);
+  assert.match(composer, /RuntimeProfileMenu[^>]*onChange=\{onRuntimeProfileChange\}[^>]*configuration=\{runtimeConfiguration\?\.data\}/);
+  assert.match(composer, /readOnly=\{runStatus === "running"\}/, "runtime controls stay editable between completed or paused turns");
+});
+
+test("message hover timestamps include seconds", async () => {
+  const timeline = await readFile(path.join(sourceRoot, "app", "components", "ConversationTimeline.jsx"), "utf8");
+  assert.match(timeline, /toLocaleTimeString\([^)]*\{ hour: "2-digit", minute: "2-digit", second: "2-digit" \}/);
 });
 
 test("tool rows spend their width on the command, not on empty columns", async () => {

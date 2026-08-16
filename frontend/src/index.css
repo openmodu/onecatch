@@ -632,10 +632,11 @@
     min-height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;
+    justify-content: center;
     gap: 18px;
     margin: 0 auto;
-    padding: clamp(64px, 13vh, 132px) var(--conversation-inline-gutter) 14px;
+    padding: clamp(64px, 10vh, 112px) var(--conversation-inline-gutter) clamp(28px, 6vh, 64px);
+    transform: translateY(clamp(-40px, -3.5vh, -20px));
   }
 
   .new-task-intro {
@@ -660,6 +661,7 @@
   }
 
   .new-task-composer {
+    container-type: inline-size;
     display: grid;
     gap: 8px;
     padding: 11px 12px 9px;
@@ -759,9 +761,101 @@
 
   .new-task-select.workflow { max-width: 240px; }
 
+  .new-task-select.executor {
+    min-width: 0;
+    max-width: 196px;
+    flex: 0 1 auto;
+    justify-content: flex-start;
+    color: var(--foreground);
+    font-weight: 540;
+  }
+
+  .new-task-select.executor > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .new-task-select.executor > svg:last-child { margin-left: auto; }
+
+  .task-executor-menu {
+    width: min(264px, calc(100vw - 24px));
+    max-height: min(520px, 70vh);
+    overflow-y: auto;
+    padding: 6px;
+    border-radius: 13px;
+  }
+
+  .task-permission-menu {
+    width: min(300px, calc(100vw - 24px));
+    padding: 6px;
+    border-radius: 13px;
+  }
+
+  .task-executor-heading {
+    padding: 6px 9px 5px;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    font-weight: 620;
+    letter-spacing: .04em;
+  }
+
+  .task-executor-section {
+    padding: 7px 9px 4px;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    font-weight: 560;
+  }
+
+  .task-executor-option {
+    min-height: 48px;
+    align-items: flex-start !important;
+    gap: 8px;
+    border-radius: 9px !important;
+    padding-block: 7px !important;
+  }
+
+  .task-executor-option.agent {
+    min-height: 36px;
+    align-items: center !important;
+  }
+
+  .task-executor-option.agent > svg { margin-top: 0; }
+
+  .task-executor-option > svg {
+    margin-top: 2px;
+    flex: 0 0 auto;
+  }
+
+  .task-executor-option > span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .task-executor-option strong {
+    overflow: hidden;
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 560;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .task-executor-option small {
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    font-weight: 400;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .new-task-select.harness {
-    min-width: 98px;
-    max-width: 160px;
+    min-width: 86px;
+    max-width: 132px;
     justify-content: space-between;
     color: var(--foreground);
     font-weight: 540;
@@ -773,6 +867,23 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .new-task-select.permission {
+    min-width: 96px;
+    max-width: 126px;
+    justify-content: flex-start;
+    color: var(--foreground);
+    font-weight: 540;
+  }
+
+  .new-task-select.permission > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .new-task-select.permission > svg:last-child { margin-left: auto; }
 
   .harness-select-menu {
     width: 190px;
@@ -799,8 +910,24 @@
   }
 
   .new-task-runtime {
-    min-width: 190px !important;
+    min-width: 176px !important;
     margin-left: auto;
+  }
+
+  .new-task-toolbar.workflow-mode .new-task-submit-group { margin-left: auto; }
+
+  @container (max-width: 700px) {
+    .new-task-toolbar { gap: 5px; }
+    .new-task-select.executor { min-width: 110px; max-width: 150px; }
+    .new-task-select.permission { min-width: 84px; max-width: 100px; }
+    .new-task-select.harness { min-width: 74px; max-width: 90px; }
+    .new-task-runtime { min-width: 130px !important; max-width: 145px; }
+    .new-task-submit-action {
+      width: 34px;
+      min-width: 34px;
+      padding-inline: 0 !important;
+    }
+    .new-task-submit-action > span { display: none; }
   }
 
   .new-task-submit-group {
@@ -1468,6 +1595,7 @@
     .new-task-layout {
       gap: 14px;
       padding: 36px 10px 10px;
+      transform: none;
     }
     .new-task-intro h1 { font-size: 22px; }
     .new-task-intro p { margin-top: 6px; }
@@ -1481,6 +1609,8 @@
     .workbench-runtime-profile { max-width: 220px; }
     .harness-profile-read-only { max-width: 105px; }
     .new-task-select { max-width: calc(50% - 27px); }
+    .new-task-select.executor { flex: 1 1 210px; max-width: calc(100% - 46px); }
+    .new-task-select.permission { max-width: 160px; }
     .new-task-shortcut { display: none; }
     .conversation-list {
       gap: 28px;

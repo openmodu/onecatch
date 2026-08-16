@@ -227,6 +227,52 @@ func TestResumeCompletedRunContinuesExistingAgentSession(t *testing.T) {
 	}
 }
 
+func TestResumeCompletedRunAppliesRuntimeProfileAndStartsFreshAgentSession(t *testing.T) {
+	definition := oneStepPauseWorkflow()
+	engine := &scriptedEngine{
+		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true, agentrun.RuntimeClaude: true},
+		scripts: []engineScript{
+			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"first turn done"}`, "codex-session")},
+			{runtime: agentrun.RuntimeClaude, result: success(`{"signal":"approved","content":"follow-up done"}`, "claude-session")},
+		},
+	}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	completed, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil || completed.Status != domainworkflows.RunCompleted {
+		t.Fatalf("completed run = %+v, %v", completed, err)
+	}
+
+	continued, err := usecase.ResumeRunWithProfile(context.Background(), completed.ID, "用 Claude 继续", ResumeProfile{
+		StepID:  "implement",
+		Harness: "claude",
+		Model:   "opus",
+		RuntimeSettings: domainworkflows.ResolvedRuntimeSettings{
+			ReasoningEffort: "high",
+		},
+	})
+	if err != nil || continued.Status != domainworkflows.RunCompleted {
+		t.Fatalf("continued run = %+v, %v", continued, err)
+	}
+	if len(engine.calls) != 2 {
+		t.Fatalf("engine calls = %+v", engine.calls)
+	}
+	request := engine.calls[1]
+	if request.Runtime != agentrun.RuntimeClaude || request.Model != "opus" || request.ReasoningEffort != "high" {
+		t.Fatalf("configured continuation request = %+v", request)
+	}
+	if request.ResumeSessionID != "" {
+		t.Fatalf("changed runtime must not reuse the Codex session, got %q", request.ResumeSessionID)
+	}
+	storedDefinition, err := store.Repos.Workflows.GetRunDefinition(context.Background(), continued.ID)
+	if err != nil || storedDefinition.Steps[0].Runtime != "claude" || storedDefinition.Steps[0].Model != "opus" {
+		t.Fatalf("stored run profile = %+v, %v", storedDefinition.Steps[0], err)
+	}
+	storedRun, err := store.Repos.Workflows.GetRun(context.Background(), continued.ID)
+	if err != nil || storedRun.RuntimeSettings["claude"].ReasoningEffort != "high" || storedRun.Sessions["implement"] != "claude-session" {
+		t.Fatalf("stored configured run = %+v, %v", storedRun, err)
+	}
+}
+
 func TestQueuedInstructionsAreClaimedPriorityFirstAtStepBoundary(t *testing.T) {
 	definition := oneStepPauseWorkflow()
 	engine := &scriptedEngine{

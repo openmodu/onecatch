@@ -62,6 +62,7 @@ type Task struct {
 	Title           string        `json:"title"`
 	Prompt          string        `json:"prompt"`
 	WorkflowID      string        `json:"workflowId"`
+	Sandbox         string        `json:"sandbox,omitempty"`
 	Harness         string        `json:"harness,omitempty"`
 	Model           string        `json:"model,omitempty"`
 	ReasoningEffort string        `json:"reasoningEffort,omitempty"`
@@ -81,6 +82,9 @@ func Validate(task Task) error {
 		return ErrInvalid
 	}
 	if task.ExecutionMode != "" && task.ExecutionMode != ExecutionImmediate && task.ExecutionMode != ExecutionQueued {
+		return ErrInvalid
+	}
+	if task.Sandbox != "" && task.Sandbox != "read-only" && task.Sandbox != "workspace-write" && task.Sandbox != "full" {
 		return ErrInvalid
 	}
 	if task.Harness != "" && task.Harness != "codex" && task.Harness != "claude" && task.Harness != "modu" {

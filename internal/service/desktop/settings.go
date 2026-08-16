@@ -201,9 +201,9 @@ func (a *Service) PreviewRun(ctx context.Context, taskID string) (RunStartPrevie
 	if err != nil {
 		return RunStartPreview{}, mapError(err)
 	}
-	definition, err := a.store.Repos.Workflows.GetDefinition(ctx, task.WorkflowID)
+	definition, _, err := a.resolveRunSettings(ctx, task.ID)
 	if err != nil {
-		return RunStartPreview{}, mapError(err)
+		return RunStartPreview{}, err
 	}
 	settings, err := a.settings.Get(ctx)
 	if err != nil {
@@ -212,11 +212,7 @@ func (a *Service) PreviewRun(ctx context.Context, taskID string) (RunStartPrevie
 	if err := validateDefinitionSettings(definition, settings); err != nil {
 		return RunStartPreview{}, err
 	}
-	workspace, err := a.store.Repos.Tasks.GetWorkspace(ctx, task.WorkspaceID)
-	if err != nil {
-		return RunStartPreview{}, mapError(err)
-	}
-	usesFull := definitionUsesFullSandbox(definition, workspace.DefaultSandbox)
+	usesFull := definitionUsesFullSandbox(definition, "")
 	if usesFull && !settings.Security.AllowFullSandbox {
 		return RunStartPreview{}, coded("security_full_sandbox_disabled", "Full access sandbox is disabled in Settings")
 	}
@@ -225,7 +221,7 @@ func (a *Service) PreviewRun(ctx context.Context, taskID string) (RunStartPrevie
 	if requires {
 		preview.ConfirmationToken, preview.ExpiresAt = randomToken(), time.Now().UTC().Add(2*time.Minute)
 		a.cleanupMu.Lock()
-		a.confirmations[preview.ConfirmationToken] = runConfirmation{TaskID: task.ID, WorkspaceID: workspace.ID, WorkflowID: definition.ID, WorkflowUpdatedAt: definition.UpdatedAt, ExpiresAt: preview.ExpiresAt}
+		a.confirmations[preview.ConfirmationToken] = runConfirmation{TaskID: task.ID, WorkspaceID: task.WorkspaceID, WorkflowID: definition.ID, WorkflowUpdatedAt: definition.UpdatedAt, ExpiresAt: preview.ExpiresAt}
 		a.cleanupMu.Unlock()
 	}
 	return preview, nil
@@ -236,9 +232,9 @@ func (a *Service) validateTaskSecurity(ctx context.Context, taskID, confirmation
 	if err != nil {
 		return mapError(err)
 	}
-	definition, err := a.store.Repos.Workflows.GetDefinition(ctx, task.WorkflowID)
+	definition, _, err := a.resolveRunSettings(ctx, task.ID)
 	if err != nil {
-		return mapError(err)
+		return err
 	}
 	settings, err := a.settings.Get(ctx)
 	if err != nil {
@@ -247,11 +243,7 @@ func (a *Service) validateTaskSecurity(ctx context.Context, taskID, confirmation
 	if err := validateDefinitionSettings(definition, settings); err != nil {
 		return err
 	}
-	workspace, err := a.store.Repos.Tasks.GetWorkspace(ctx, task.WorkspaceID)
-	if err != nil {
-		return mapError(err)
-	}
-	usesFull := definitionUsesFullSandbox(definition, workspace.DefaultSandbox)
+	usesFull := definitionUsesFullSandbox(definition, "")
 	if usesFull && !settings.Security.AllowFullSandbox {
 		return coded("security_full_sandbox_disabled", "Full access sandbox is disabled in Settings")
 	}
@@ -306,27 +298,31 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 		return domainworkflows.Definition{}, workflowuc.RunResolution{}, mapSettingsError(err)
 	}
 	definition.Steps = append([]domainworkflows.Step(nil), definition.Steps...)
+	directAgent := task.Harness != "" && definition.ID == "single_agent" && len(definition.Steps) == 1
 	for index := range definition.Steps {
 		step := &definition.Steps[index]
-		if task.Harness != "" && step.Runtime == task.Harness && task.Model != "" {
+		if directAgent {
+			step.Runtime = task.Harness
+			step.Model = task.Model
+			if step.Model == "" {
+				step.Model = settings.Runtimes[step.Runtime].DefaultModel
+			}
+		} else if task.Harness != "" && step.Runtime == task.Harness && task.Model != "" {
 			step.Model = task.Model
 		} else if step.Model == "" {
 			step.Model = settings.Runtimes[step.Runtime].DefaultModel
 		}
+		if directAgent && task.Sandbox != "" {
+			step.Sandbox = task.Sandbox
+		}
 		step.Sandbox = resolveSandbox(step.Sandbox, settings.Execution.DefaultSandbox, workspace.DefaultSandbox)
+		if !directAgent && task.Sandbox != "" {
+			step.Sandbox = capSandbox(step.Sandbox, task.Sandbox)
+		}
 	}
 	runtimeSettings := make(map[string]domainworkflows.ResolvedRuntimeSettings, len(settings.Runtimes))
 	for id, item := range settings.Runtimes {
-		provider := item.Provider
-		if id == "modu" && provider == "" {
-			provider = "auto"
-		}
-		runtimeSettings[id] = domainworkflows.ResolvedRuntimeSettings{
-			EnvironmentAllowlist: append([]string{}, item.EnvironmentAllowlist...),
-			Provider:             provider,
-			ReasoningEffort:      item.ReasoningEffort,
-			ServiceTier:          item.ServiceTier,
-		}
+		runtimeSettings[id] = resolvedRuntimeSetting(id, item)
 	}
 	if task.Harness != "" {
 		resolved := runtimeSettings[task.Harness]
@@ -341,6 +337,19 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 	return definition, workflowuc.RunResolution{MaxLocalDAGConcurrency: settings.Execution.MaxLocalDAGConcurrency, InterruptGraceSeconds: settings.Execution.InterruptGraceSeconds, RuntimeSettings: runtimeSettings}, nil
 }
 
+func resolvedRuntimeSetting(id string, item domainsettings.RuntimeSettings) domainworkflows.ResolvedRuntimeSettings {
+	provider := item.Provider
+	if id == "modu" && provider == "" {
+		provider = "auto"
+	}
+	return domainworkflows.ResolvedRuntimeSettings{
+		EnvironmentAllowlist: append([]string{}, item.EnvironmentAllowlist...),
+		Provider:             provider,
+		ReasoningEffort:      item.ReasoningEffort,
+		ServiceTier:          item.ServiceTier,
+	}
+}
+
 func resolveSandbox(explicit, globalDefault, workspaceMaximum string) string {
 	value := explicit
 	if value == "" {
@@ -353,6 +362,14 @@ func resolveSandbox(explicit, globalDefault, workspaceMaximum string) string {
 	if maximum == "" {
 		maximum = "workspace-write"
 	}
+	rank := map[string]int{"read-only": 0, "workspace-write": 1, "full": 2}
+	if rank[value] > rank[maximum] {
+		return maximum
+	}
+	return value
+}
+
+func capSandbox(value, maximum string) string {
 	rank := map[string]int{"read-only": 0, "workspace-write": 1, "full": 2}
 	if rank[value] > rank[maximum] {
 		return maximum

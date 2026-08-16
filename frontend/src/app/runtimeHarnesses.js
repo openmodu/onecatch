@@ -4,6 +4,8 @@ export const runtimeHarnesses = [
   { id: "modu", label: "modu_code", supportsReasoning: false, supportsSpeed: false },
 ];
 
+export const directAgentWorkflowID = "single_agent";
+
 export function runtimeHarness(id = "codex") {
   return runtimeHarnesses.find((item) => item.id === id) || { id, label: id || "Codex", supportsReasoning: false, supportsSpeed: false };
 }
@@ -24,4 +26,24 @@ export function runtimeHarnessOptions(runtimes = [], unavailableLabel = "Unavail
 export function selectRuntimeHarness(current, harness) {
   if (current.harness === harness) return current;
   return { ...current, harness, model: "", reasoningEffort: "", serviceTier: "" };
+}
+
+export function taskExecutionTarget(value = {}) {
+  if (value.workflowId === directAgentWorkflowID) return `agent:${value.harness || "codex"}`;
+  return `workflow:${value.workflowId || ""}`;
+}
+
+export function selectTaskExecutionTarget(current, target) {
+  if (target.startsWith("agent:")) {
+    const harness = target.slice("agent:".length) || "codex";
+    return selectRuntimeHarness({ ...current, workflowId: directAgentWorkflowID }, harness);
+  }
+  return {
+    ...current,
+    workflowId: target.slice("workflow:".length),
+    harness: "",
+    model: "",
+    reasoningEffort: "",
+    serviceTier: "",
+  };
 }

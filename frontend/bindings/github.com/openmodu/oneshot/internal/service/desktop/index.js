@@ -15,6 +15,7 @@ export {
     InstructionInput,
     ListRunsInput,
     PermissionDecisionInput,
+    ResumeRunInput,
     RunDetail,
     RunListItem,
     RunListPage,

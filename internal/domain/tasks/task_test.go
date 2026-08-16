@@ -34,3 +34,21 @@ func TestValidateRejectsRuntimeOverridesWithoutHarness(t *testing.T) {
 		t.Fatalf("Validate() error = %v, want %v", err, ErrInvalid)
 	}
 }
+
+func TestValidateAcceptsKnownTaskSandboxes(t *testing.T) {
+	for _, sandbox := range []string{"read-only", "workspace-write", "full"} {
+		task := validTask()
+		task.Sandbox = sandbox
+		if err := Validate(task); err != nil {
+			t.Fatalf("Validate(%q) error = %v", sandbox, err)
+		}
+	}
+}
+
+func TestValidateRejectsUnknownTaskSandbox(t *testing.T) {
+	task := validTask()
+	task.Sandbox = "host-unrestricted"
+	if err := Validate(task); err != ErrInvalid {
+		t.Fatalf("Validate() error = %v, want %v", err, ErrInvalid)
+	}
+}

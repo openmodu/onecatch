@@ -244,6 +244,13 @@ export class CreateTaskInput {
              * @member
              * @type {string | undefined}
              */
+            this["sandbox"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
             this["harness"] = undefined;
         }
         if (/** @type {any} */(false)) {
@@ -284,10 +291,10 @@ export class CreateTaskInput {
      * @returns {CreateTaskInput}
      */
     static createFrom($$source = {}) {
-        const $$createField8_0 = $$createType0;
+        const $$createField9_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("attachmentPaths" in $$parsedSource) {
-            $$parsedSource["attachmentPaths"] = $$createField8_0($$parsedSource["attachmentPaths"]);
+            $$parsedSource["attachmentPaths"] = $$createField9_0($$parsedSource["attachmentPaths"]);
         }
         return new CreateTaskInput(/** @type {Partial<CreateTaskInput>} */($$parsedSource));
     }
@@ -606,6 +613,69 @@ export class PermissionDecisionInput {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new PermissionDecisionInput(/** @type {Partial<PermissionDecisionInput>} */($$parsedSource));
+    }
+}
+
+export class ResumeRunInput {
+    /**
+     * Creates a new ResumeRunInput instance.
+     * @param {Partial<ResumeRunInput>} [$$source = {}] - The source object to create the ResumeRunInput.
+     */
+    constructor($$source = {}) {
+        if (!("instruction" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["instruction"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["stepId"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["harness"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["model"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["reasoningEffort"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["serviceTier"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ResumeRunInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ResumeRunInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ResumeRunInput(/** @type {Partial<ResumeRunInput>} */($$parsedSource));
     }
 }
 

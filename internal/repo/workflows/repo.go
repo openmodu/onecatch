@@ -35,6 +35,7 @@ type WorkflowsRepo interface {
 	SaveRun(context.Context, domainworkflows.Run, domainworkflows.Definition) error
 	GetRun(context.Context, string) (domainworkflows.Run, error)
 	GetRunDefinition(context.Context, string) (domainworkflows.Definition, error)
+	UpdateRunDefinition(context.Context, string, domainworkflows.Definition) error
 	ListRunsByTask(context.Context, string) ([]domainworkflows.Run, error)
 	ListRuns(context.Context, domainworkflows.RunListQuery) (domainworkflows.RunPage, error)
 	UpdateRun(context.Context, domainworkflows.Run, int64) (domainworkflows.Run, error)
@@ -295,6 +296,36 @@ func (r *workflowsImpl) GetRunDefinition(ctx context.Context, runID string) (dom
 		return domainworkflows.Definition{}, fmt.Errorf("get run workflow snapshot: %w", err)
 	}
 	return definition, nil
+}
+
+// UpdateRunDefinition changes only a run's private workflow snapshot. It never
+// mutates the reusable workflow template, which keeps historical and active
+// runs isolated while allowing a follow-up turn to select a different runtime
+// profile for the step it is about to resume.
+func (r *workflowsImpl) UpdateRunDefinition(ctx context.Context, runID string, input domainworkflows.Definition) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if !localfile.ValidID(runID) {
+		return ErrRunNotFound
+	}
+	definition := domainworkflows.Normalize(input)
+	if err := domainworkflows.Validate(definition); err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	run, err := r.getRunLocked(runID)
+	if err != nil {
+		return err
+	}
+	if definition.ID != run.WorkflowID {
+		return ErrStateConflict
+	}
+	if err := localfile.WriteJSONAtomic(r.runDefinitionPath(runID), definition); err != nil {
+		return fmt.Errorf("update run workflow snapshot: %w", err)
+	}
+	return nil
 }
 
 func (r *workflowsImpl) ListRunsByTask(ctx context.Context, taskID string) ([]domainworkflows.Run, error) {

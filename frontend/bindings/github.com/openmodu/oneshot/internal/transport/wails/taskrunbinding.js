@@ -214,6 +214,17 @@ export function ResumeRun(runID, instruction) {
 }
 
 /**
+ * @param {string} runID
+ * @param {desktop$0.ResumeRunInput} input
+ * @returns {$CancellablePromise<workflows$0.Run>}
+ */
+export function ResumeRunConfigured(runID, input) {
+    return $Call.ByID(1493247740, runID, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
  * @param {desktop$0.SearchTasksInput} input
  * @returns {$CancellablePromise<desktop$0.TaskSearchPage>}
  */

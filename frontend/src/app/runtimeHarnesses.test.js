@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { runtimeHarness, runtimeHarnessOptions, selectRuntimeHarness } from "./runtimeHarnesses.js";
+import {
+  runtimeHarness,
+  runtimeHarnessOptions,
+  selectRuntimeHarness,
+  selectTaskExecutionTarget,
+  taskExecutionTarget,
+} from "./runtimeHarnesses.js";
 
 test("runtime harness metadata exposes the supported task runtimes", () => {
   assert.equal(runtimeHarness("codex").label, "Codex");
@@ -35,4 +41,23 @@ test("switching harness clears settings that belong to the previous runtime", ()
     prompt: "keep me",
   });
   assert.equal(selectRuntimeHarness(current, "codex"), current);
+});
+
+test("Agent and workflow are mutually exclusive execution targets", () => {
+  const agent = { workflowId: "single_agent", harness: "codex", model: "gpt", reasoningEffort: "high", serviceTier: "fast" };
+  assert.equal(taskExecutionTarget(agent), "agent:codex");
+
+  const workflow = selectTaskExecutionTarget(agent, "workflow:implement_review");
+  assert.deepEqual(workflow, {
+    workflowId: "implement_review",
+    harness: "",
+    model: "",
+    reasoningEffort: "",
+    serviceTier: "",
+  });
+  assert.equal(taskExecutionTarget(workflow), "workflow:implement_review");
+
+  const claude = selectTaskExecutionTarget(workflow, "agent:claude");
+  assert.equal(claude.workflowId, "single_agent");
+  assert.equal(claude.harness, "claude");
 });

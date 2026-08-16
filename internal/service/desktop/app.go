@@ -60,6 +60,7 @@ type CreateTaskInput struct {
 	Title           string   `json:"title"`
 	Prompt          string   `json:"prompt"`
 	WorkflowID      string   `json:"workflowId"`
+	Sandbox         string   `json:"sandbox,omitempty"`
 	Harness         string   `json:"harness,omitempty"`
 	Model           string   `json:"model,omitempty"`
 	ReasoningEffort string   `json:"reasoningEffort,omitempty"`
@@ -86,6 +87,15 @@ type TaskSearchPage struct {
 type InstructionInput struct {
 	Content         string   `json:"content"`
 	AttachmentPaths []string `json:"attachmentPaths,omitempty"`
+}
+
+type ResumeRunInput struct {
+	Instruction     string `json:"instruction"`
+	StepID          string `json:"stepId,omitempty"`
+	Harness         string `json:"harness,omitempty"`
+	Model           string `json:"model,omitempty"`
+	ReasoningEffort string `json:"reasoningEffort,omitempty"`
+	ServiceTier     string `json:"serviceTier,omitempty"`
 }
 
 type PermissionDecisionInput struct {
@@ -565,7 +575,7 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 		return domaintasks.Task{}, err
 	}
 	now := time.Now().UTC()
-	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: strings.TrimSpace(input.Title), Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Harness: strings.TrimSpace(input.Harness), Model: strings.TrimSpace(input.Model), ReasoningEffort: strings.TrimSpace(input.ReasoningEffort), ServiceTier: strings.TrimSpace(input.ServiceTier), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
+	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: strings.TrimSpace(input.Title), Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Sandbox: strings.TrimSpace(input.Sandbox), Harness: strings.TrimSpace(input.Harness), Model: strings.TrimSpace(input.Model), ReasoningEffort: strings.TrimSpace(input.ReasoningEffort), ServiceTier: strings.TrimSpace(input.ServiceTier), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
 	attachments, err := a.persistAttachments(ctx, task, input.AttachmentPaths)
 	if err != nil {
 		return domaintasks.Task{}, err
@@ -652,6 +662,10 @@ func (a *Service) startRun(ctx context.Context, taskID, confirmationToken string
 }
 
 func (a *Service) ResumeRun(ctx context.Context, runID, instruction string) (domainworkflows.Run, error) {
+	return a.ResumeRunConfigured(ctx, runID, ResumeRunInput{Instruction: instruction})
+}
+
+func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input ResumeRunInput) (domainworkflows.Run, error) {
 	run, err := a.store.Repos.Workflows.GetRun(ctx, runID)
 	if err != nil {
 		return run, coded("run_not_found", "run was not found")
@@ -673,8 +687,30 @@ func (a *Service) ResumeRun(ctx context.Context, runID, instruction string) (dom
 	if err := validateDefinitionSettings(definition, settings); err != nil {
 		return run, err
 	}
+	profile := workflowuc.ResumeProfile{}
+	if harness := strings.TrimSpace(input.Harness); harness != "" {
+		runtime := agentrun.Runtime(harness)
+		if !runtime.Valid() {
+			return run, coded("runtime_unknown", "selected runtime is unknown")
+		}
+		if !a.runtimes.Available(runtime) {
+			return run, coded("runtime_unavailable", "selected runtime is unavailable")
+		}
+		resolved := resolvedRuntimeSetting(harness, settings.Runtimes[harness])
+		if reasoningEffort := strings.TrimSpace(input.ReasoningEffort); reasoningEffort != "" {
+			resolved.ReasoningEffort = reasoningEffort
+		}
+		if serviceTier := strings.TrimSpace(input.ServiceTier); serviceTier != "" {
+			resolved.ServiceTier = serviceTier
+		}
+		model := strings.TrimSpace(input.Model)
+		if model == "" {
+			model = settings.Runtimes[harness].DefaultModel
+		}
+		profile = workflowuc.ResumeProfile{StepID: strings.TrimSpace(input.StepID), Harness: harness, Model: model, RuntimeSettings: resolved}
+	}
 	a.dispatch(run.ID, func(runCtx context.Context) (domainworkflows.Run, error) {
-		return a.orchestrator.ResumeRun(runCtx, run.ID, instruction)
+		return a.orchestrator.ResumeRunWithProfile(runCtx, run.ID, input.Instruction, profile)
 	})
 	return run, nil
 }
@@ -1026,7 +1062,7 @@ func mapError(err error) error {
 
 func builtinDefinitions() []domainworkflows.Definition {
 	return []domainworkflows.Definition{
-		{ID: "single_agent", Name: "单 Agent 完成", Description: "由一个 Codex Agent 执行任务，需要时暂停给人处理。", EntryStepID: "execute", Steps: []domainworkflows.Step{{ID: "execute", Name: "执行", Runtime: "codex", Sandbox: "workspace-write", RolePrompt: "你是负责独立完成任务的本地 Agent。", Instruction: "完成任务、验证结果，并按 outcome contract 汇报。", Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}}}},
+		{ID: "single_agent", Name: "单 Agent 完成", Description: "由选定的 coding agent 持续执行任务，需要时暂停给人处理。", EntryStepID: "execute", Steps: []domainworkflows.Step{{ID: "execute", Name: "执行", Runtime: "codex", Sandbox: "workspace-write", RolePrompt: "你是负责独立完成任务的本地 Agent。", Instruction: "完成任务、验证结果，并按 outcome contract 汇报。", Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}}}},
 		{ID: "implement_review", Name: "实现与审查 Loop", Description: "Codex 实现，Claude Code 审查；有问题就回到实现步骤。", EntryStepID: "implement", Steps: []domainworkflows.Step{
 			{ID: "implement", Name: "实现", Runtime: "codex", Sandbox: "workspace-write", RolePrompt: "你是负责落地代码和测试的实现者。", Instruction: "实现目标、运行验证，并把变更交给审查者。", Transitions: map[string]string{"ready_for_review": "review", "need_human": domainworkflows.TargetPause}},
 			{ID: "review", Name: "审查", Runtime: "claude", Sandbox: "read-only", RolePrompt: "你是独立、严格的代码审查者。", Instruction: "检查需求、实现、风险和测试；有问题要求修改。", Transitions: map[string]string{"changes_requested": "implement", "approved": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}},

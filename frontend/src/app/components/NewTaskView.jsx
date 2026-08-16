@@ -9,10 +9,10 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
-import { TUISelect } from "../../ui/primitives.jsx";
 import { fileName } from "../format.js";
-import HarnessSelector from "./HarnessSelector.jsx";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
+import TaskExecutorSelector from "./TaskExecutorSelector.jsx";
+import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
 
 export default function NewTaskView({
   workspaceID,
@@ -25,9 +25,11 @@ export default function NewTaskView({
   runtimes,
   runtimeConfiguration,
   runtimeSettings,
+  allowFullSandbox,
 }) {
   const { t } = useTranslation();
-  const ready = Boolean(workspaceID && form.prompt.trim() && form.workflowId);
+  const directAgent = form.workflowId === "single_agent";
+  const ready = Boolean(workspaceID && form.prompt.trim() && form.workflowId && form.sandbox && (!directAgent || form.harness));
   const executionMode = form.executionMode === "queued" ? "queued" : "immediate";
   const executionLabel = executionMode === "queued" ? t("task.joinQueue") : t("task.runNow");
   const submitLabel = busy === "run"
@@ -71,17 +73,11 @@ export default function NewTaskView({
           </span>)}
         </div>}
 
-        <div className="new-task-toolbar">
+        <div className={`new-task-toolbar ${directAgent ? "agent-mode" : "workflow-mode"}`}>
           <Button type="button" variant="ghost" size="icon-sm" className="new-task-attach" aria-label={t("task.chooseFiles")} title={`${t("task.chooseFiles")} · ${t("task.attachmentsLimit")}`} onClick={onChooseAttachments}><Paperclip size={16} aria-hidden="true" /></Button>
-          <TUISelect
-            ariaLabel={t("task.workflow")}
-            className="new-task-select workflow"
-            value={form.workflowId}
-            onChange={(workflowId) => onChange((current) => ({ ...current, workflowId }))}
-            options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))}
-          />
-          <HarnessSelector value={form} onChange={onChange} runtimes={runtimes} />
-          <RuntimeProfileMenu
+          <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} onChange={onChange} />
+          <TaskPermissionSelector value={form.sandbox} allowFull={allowFullSandbox} onChange={onChange} />
+          {directAgent && <RuntimeProfileMenu
             className="new-task-runtime"
             value={form}
             onChange={onChange}
@@ -89,7 +85,7 @@ export default function NewTaskView({
             runtimeSettings={runtimeSettings}
             loading={runtimeConfiguration?.loading}
             error={runtimeConfiguration?.error}
-          />
+          />}
           <div className={`new-task-submit-group ${executionMode}`}>
             <Button type="submit" size="sm" className="new-task-submit-action" disabled={!ready || busy === "run"} aria-label={submitLabel} title={submitLabel}>
               {executionMode === "queued" ? <ListPlus size={15} strokeWidth={2.2} aria-hidden="true" /> : <ArrowUp size={15} strokeWidth={2.4} aria-hidden="true" />}

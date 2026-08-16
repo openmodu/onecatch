@@ -218,6 +218,108 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	}
 }
 
+func TestDirectAgentTaskRebindsSingleAgentWorkflowToSelectedHarness(t *testing.T) {
+	app, _ := newStorageTestApp(t)
+	ctx := context.Background()
+	if err := app.InitializeSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{
+		WorkspaceID:     workspace.ID,
+		WorkflowID:      "single_agent",
+		Title:           "Claude coding session",
+		Prompt:          "keep working until the task is complete",
+		Harness:         "claude",
+		Model:           "opus",
+		ReasoningEffort: "high",
+		Sandbox:         "read-only",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	definition, resolution, err := app.resolveRunSettings(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(definition.Steps) != 1 || definition.Steps[0].Runtime != "claude" || definition.Steps[0].Model != "opus" {
+		t.Fatalf("direct Agent definition = %+v", definition)
+	}
+	if definition.Steps[0].Sandbox != "read-only" || task.Sandbox != "read-only" {
+		t.Fatalf("direct Agent sandbox = %q, task = %q", definition.Steps[0].Sandbox, task.Sandbox)
+	}
+	if resolution.RuntimeSettings["claude"].ReasoningEffort != "high" {
+		t.Fatalf("direct Agent runtime settings = %+v", resolution.RuntimeSettings["claude"])
+	}
+}
+
+func TestTaskSandboxCapsOrchestratedWorkflowPermissions(t *testing.T) {
+	app, _ := newStorageTestApp(t)
+	ctx := context.Background()
+	if err := app.InitializeSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	definition := domainworkflows.Definition{ID: "capped_flow", Name: "Capped", EntryStepID: "run", Steps: []domainworkflows.Step{{ID: "run", Name: "Run", Runtime: "codex", Sandbox: "workspace-write", WorkerID: "local", RolePrompt: "Run", Instruction: "Run", Transitions: map[string]string{"completed": domainworkflows.TargetDone}}}}
+	if _, err := app.SaveDefinition(ctx, definition); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: definition.ID, Title: "read-only review", Prompt: "review without edits", Sandbox: "read-only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, _, err := app.resolveRunSettings(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := resolved.Steps[0].Sandbox; got != "read-only" {
+		t.Fatalf("resolved sandbox = %q, want read-only", got)
+	}
+}
+
+func TestDirectAgentTaskFullSandboxRequiresConfirmation(t *testing.T) {
+	app, _ := newStorageTestApp(t)
+	ctx := context.Background()
+	if err := app.InitializeSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	settings, err := app.GetSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Security.AllowFullSandbox = true
+	if _, err := app.UpdateSecuritySettings(ctx, settings.Security, settings.Revision); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir(), DefaultSandbox: "full"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "full Agent", Prompt: "work outside the project", Harness: "codex", Sandbox: "full"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := app.PreviewRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !preview.RequiresFullSandboxConfirmation || preview.ConfirmationToken == "" {
+		t.Fatalf("preview = %+v", preview)
+	}
+}
+
 func TestFullSandboxRequiresGrantConfirmationAndBlocksResumeAfterDowngrade(t *testing.T) {
 	app, orchestrator := newStorageTestApp(t)
 	ctx := context.Background()
