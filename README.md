@@ -10,7 +10,7 @@ Oneshot 是一个 local-first 的桌面 Agent 调度编排工具。用户可以�
 
 ```text
 cmd/
-├── app/                Wails 桌面应用入口
+├── app/                Wails 桌面与移动端统一入口
 ├── oneshotfs/          macOS 远端文件系统挂载工具
 └── worker/             远端执行服务入口
 frontend/               React/Vite 前端、测试和生成的 Wails bindings
@@ -23,7 +23,7 @@ internal/
 └── transport/          Wails 与 HTTP 适配
 clients/oneshot/        Oneshot Go HTTP SDK
 pkg/                    可被外部项目引用的通用 Go 包
-build/desktop/          Wails 配置、图标和 macOS 打包脚本
+build/                  桌面、iOS、Android 构建配置和共享依赖任务
 deploy/                 Worker 的 launchd、systemd 部署模板
 design/                 PRD、issue、设计文档和 prototype
 tools/                  Go 工具依赖声明
@@ -31,8 +31,8 @@ tools/                  Go 工具依赖声明
 
 仓库只维护一个根 `go.mod`。`cmd` 只保留进程入口，不承载可复用业务逻辑；
 仓库内共享代码放进 `internal`，确实需要向仓库外暴露的包才放进 `pkg` 或
-`clients`。React/Vite 源码统一放在 `frontend`，构建产物写入
-`internal/app/desktop/assets/frontend/dist`，再由 Go 嵌入桌面二进制。
+`clients`。React/Vite 源码统一放在 `frontend`，桌面端和移动端共用同一份
+`package.json`、lockfile、bindings 和构建产物，再由 Go 嵌入对应二进制。
 `internal` 的分层边界和新代码归类判据见
 [`internal/README.md`](internal/README.md)。
 
@@ -41,17 +41,24 @@ tools/                  Go 工具依赖声明
 以下命令都从仓库根目录执行：
 
 ```bash
-wails3 task dev:desktop       # 启动 Wails 和 Vite 开发环境
-wails3 task build:desktop     # 构建桌面开发版本
-wails3 task build:worker      # 输出 bin/oneshot-worker
-wails3 task build:oneshotfs   # 输出 bin/oneshotfs，仅支持 macOS
-wails3 task test              # 运行 Go 和前端测试
+go tool wails3 task deps              # 按 lockfile 安装 Go 和 JavaScript 依赖
+go tool wails3 task dev:desktop       # 启动 Wails 和 Vite 开发环境
+go tool wails3 task build:desktop     # 构建桌面开发版本
+go tool wails3 task build:ios         # 构建 iOS 模拟器版本
+go tool wails3 task build:android     # 构建 Android 版本，需要 Android NDK
+go tool wails3 task build:worker      # 输出 bin/oneshot-worker
+go tool wails3 task build:oneshotfs   # 输出 bin/oneshotfs，仅支持 macOS
+go tool wails3 task test              # 运行 Go 和前端测试
 ```
+
+`go.mod` 与 `frontend/package.json` 仍由各自工具管理，但安装入口只有
+`go tool wails3 task deps`。构建过程执行 `go mod download` 和 `npm ci`，不会用
+`go mod tidy` 或 `npm install` 隐式改写 lockfile。
 
 也可以直接调用底层命令：
 
 ```bash
-wails3 dev -config ./build/desktop/config.yml
+go tool wails3 dev -config ./build/desktop/config.yml
 ```
 
 ## 把 Linux 目录挂载到 macOS
@@ -153,6 +160,6 @@ macOS `launchd` 和 Linux `systemd` 模板位于 [`deploy/oneshot-worker`](deplo
 检查：
 
 ```bash
-wails3 task test
-wails3 task build:desktop
+go tool wails3 task test
+go tool wails3 task build:desktop
 ```

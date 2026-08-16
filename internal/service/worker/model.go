@@ -98,14 +98,20 @@ type PatchAckRequest struct {
 
 type WorkspaceMapping struct {
 	ID        string    `json:"id"`
+	Name      string    `json:"name,omitempty"`
 	Path      string    `json:"path"`
+	RemoteURL string    `json:"remoteUrl,omitempty"`
+	Revision  string    `json:"revision,omitempty"`
+	Managed   bool      `json:"managed,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type WorkspacePrepareRequest struct {
-	RemoteURL string `json:"remoteUrl"`
-	Revision  string `json:"revision"`
+	Name      string `json:"name,omitempty"`
+	Path      string `json:"path,omitempty"`
+	RemoteURL string `json:"remoteUrl,omitempty"`
+	Revision  string `json:"revision,omitempty"`
 }
 
 type WorkspacePrepareResult struct {

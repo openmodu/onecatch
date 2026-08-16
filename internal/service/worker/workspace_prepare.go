@@ -71,7 +71,11 @@ func prepareGitWorkspace(ctx context.Context, path, remoteURL, revision string) 
 	if output, err := gitCombinedOutput(ctx, path, "checkout", "--quiet", "--detach", revision); err != nil {
 		return &RemoteError{Code: "worker_workspace_checkout_failed", Message: commandMessage(output, "could not check out the requested revision on the worker")}
 	}
-	if baselineErr := validateWorkspaceBaseline(ctx, path, revision); baselineErr != nil {
+	resolved, err := gitOutput(ctx, path, "rev-parse", "--verify", "HEAD")
+	if err != nil || strings.TrimSpace(string(resolved)) == "" {
+		return &RemoteError{Code: "worker_workspace_revision_missing", Message: "the requested Git revision is unavailable on the worker"}
+	}
+	if baselineErr := validateWorkspaceBaseline(ctx, path, strings.TrimSpace(string(resolved))); baselineErr != nil {
 		return baselineErr
 	}
 	return nil
@@ -83,6 +87,59 @@ func WorkspaceRemoteURL(ctx context.Context, workspace string) (string, error) {
 		return "", RemoteError{Code: "worker_workspace_remote_missing", Message: "the local project has no origin URL"}
 	}
 	return strings.TrimSpace(string(output)), nil
+}
+
+func prepareExistingWorkspace(ctx context.Context, path, revision string) (string, string, *RemoteError) {
+	path = filepath.Clean(strings.TrimSpace(path))
+	revision = strings.TrimSpace(revision)
+	if !filepath.IsAbs(path) {
+		return "", "", &RemoteError{Code: "worker_workspace_prepare_invalid", Message: "an absolute workspace path is required"}
+	}
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return "", "", &RemoteError{Code: "worker_workspace_prepare_invalid", Message: "the worker workspace path is not a directory"}
+	}
+	inside, err := gitOutput(ctx, path, "rev-parse", "--is-inside-work-tree")
+	if err != nil || strings.TrimSpace(string(inside)) != "true" {
+		return "", "", &RemoteError{Code: "worker_workspace_git_required", Message: "the worker workspace path is not a Git worktree"}
+	}
+	status, err := gitOutput(ctx, path, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	if err != nil {
+		return "", "", &RemoteError{Code: "worker_workspace_git_failed", Message: "could not inspect the worker workspace"}
+	}
+	if len(status) != 0 {
+		return "", "", &RemoteError{Code: "worker_workspace_dirty", Message: "the worker workspace has uncommitted changes"}
+	}
+	if revision != "" {
+		if !gitRevisionExists(ctx, path, revision) {
+			if output, fetchErr := gitCombinedOutput(ctx, path, "fetch", "--all", "--prune"); fetchErr != nil {
+				return "", "", &RemoteError{Code: "worker_workspace_fetch_failed", Message: commandMessage(output, "could not fetch the requested revision on the worker")}
+			}
+		}
+		if !gitRevisionExists(ctx, path, revision) {
+			return "", "", &RemoteError{Code: "worker_workspace_revision_missing", Message: "the requested Git revision is unavailable on the worker"}
+		}
+		if output, checkoutErr := gitCombinedOutput(ctx, path, "checkout", "--quiet", "--detach", revision); checkoutErr != nil {
+			return "", "", &RemoteError{Code: "worker_workspace_checkout_failed", Message: commandMessage(output, "could not check out the requested revision on the worker")}
+		}
+	}
+	remoteURL, resolvedRevision := workspaceIdentity(ctx, path)
+	if resolvedRevision == "" {
+		return "", "", &RemoteError{Code: "worker_workspace_git_required", Message: "the worker workspace must contain a Git commit"}
+	}
+	if baselineErr := validateWorkspaceBaseline(ctx, path, resolvedRevision); baselineErr != nil {
+		return "", "", baselineErr
+	}
+	return remoteURL, resolvedRevision, nil
+}
+
+func workspaceIdentity(ctx context.Context, path string) (string, string) {
+	remoteURL, _ := WorkspaceRemoteURL(ctx, path)
+	head, err := gitOutput(ctx, path, "rev-parse", "--verify", "HEAD")
+	if err != nil {
+		return remoteURL, ""
+	}
+	return remoteURL, strings.TrimSpace(string(head))
 }
 
 func normalizeRemoteURL(value string) string {

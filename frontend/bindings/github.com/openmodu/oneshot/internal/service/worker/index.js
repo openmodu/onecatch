@@ -6,5 +6,7 @@ export {
     Health,
     Info,
     UpdateInput,
-    WorkspaceMapping
+    WorkspaceMapping,
+    WorkspacePrepareRequest,
+    WorkspacePrepareResult
 } from "./models.js";

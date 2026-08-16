@@ -9,7 +9,10 @@ import { desktopPlatform } from "./app/platform.js";
 import "./index.css";
 
 applyAppearance(readAppearance());
-document.documentElement.dataset.platform = desktopPlatform();
+const launchParameters = new URLSearchParams(window.location.search);
+const windowKind = launchParameters.get("window");
+const platform = launchParameters.get("platform") === "mobile" ? "mobile" : "desktop";
+document.documentElement.dataset.platform = platform === "mobile" ? "mobile" : desktopPlatform();
 
 // Every native window owns a separate document. Keep their root theme
 // attributes in lockstep when Settings changes the shared preference.
@@ -25,8 +28,10 @@ window.addEventListener("storage", (event) => {
 Events.On(APPEARANCE_CHANGED_EVENT, syncAppearance);
 Events.On(LANGUAGE_CHANGED_EVENT, syncLanguage);
 
-const windowKind = new URLSearchParams(window.location.search).get("window");
 const WindowRoot = lazy(async () => {
+  if (platform === "mobile") {
+    return import("./app/MobileApp.jsx");
+  }
   if (windowKind === "settings") {
     const module = await import("./app/AuxiliaryWindow.jsx");
     return { default: module.SettingsWindow };
