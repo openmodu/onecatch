@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lock, Minus, PanelRightOpen, Paperclip, Square, SquareTerminal, X } from "lucide-react";
+import { Lock, Minus, PanelRightOpen, Square, SquareTerminal, X } from "lucide-react";
 import { Events, Window } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   RuntimeBinding,
   SettingsBinding,
@@ -19,7 +18,7 @@ import {
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
 import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceResults } from "./listNavigation.js";
 import { Action, StatusBadge, TUISelect } from "../ui/primitives.jsx";
-import { copy, errorMessage, fileName } from "./format.js";
+import { copy, errorMessage, fileName, taskTitleFromPrompt } from "./format.js";
 import { loopTemplate } from "./templates.js";
 import { demoRun, demoRuntimes, demoTasks, demoWorkers, demoWorkflows, demoWorkspaces } from "./demoData.js";
 import Sidebar from "./components/Sidebar.jsx";
@@ -38,6 +37,7 @@ import { buildLockSignal, completionEdge, LOCK_PHASE } from "./lockSignal.js";
 import { notifyStandby } from "./standbyNotify.js";
 import { settingsChangedEvent, workflowsChangedEvent } from "./AuxiliaryWindow.jsx";
 import { INSPECTOR_COMPACT_QUERY, readInspectorPreference, resolveInspectorCollapsed, writeInspectorPreference } from "./inspectorLayout.js";
+import { demoCodexConfiguration } from "./codexRuntimeOptions.js";
 
 const runtimeFrameEvent = "oneshot:runtime-frame";
 const runStateEvent = "oneshot:run-state";
@@ -97,10 +97,14 @@ function App() {
   const [editorSourceID, setEditorSourceID] = useState("");
   const [validation, setValidation] = useState([]);
   const [workspaceModal, setWorkspaceModal] = useState(false);
-  const [taskModal, setTaskModal] = useState(false);
+  // A task-less cold start is still an actionable chat surface. Starting in
+  // compose mode avoids flashing the legacy welcome card while the first
+  // workspace's task history is loaded; selecting any history row closes it.
+  const [taskModal, setTaskModal] = useState(true);
   const [renameForm, setRenameForm] = useState(null);
   const [workspaceForm, setWorkspaceForm] = useState({ path: "", name: "", defaultSandbox: "" });
-  const [taskForm, setTaskForm] = useState({ title: "", prompt: "", workflowId: "", executionMode: "immediate", attachmentPaths: [] });
+  const [taskForm, setTaskForm] = useState({ prompt: "", workflowId: "", executionMode: "immediate", attachmentPaths: [], harness: "codex", model: "", reasoningEffort: "", serviceTier: "" });
+  const [taskRuntimeConfiguration, setTaskRuntimeConfiguration] = useState({ loading: false, data: null, error: "" });
   const [composerAttachments, setComposerAttachments] = useState([]);
   const [resumePendingRunID, setResumePendingRunID] = useState("");
   const [notice, setNotice] = useState(null);
@@ -249,6 +253,20 @@ function App() {
   }, []);
 
   useEffect(() => { boot(); }, [boot]);
+
+  useEffect(() => {
+    if (!taskModal || taskForm.harness !== "codex" || mode === "loading") return undefined;
+    if (mode === "demo") {
+      setTaskRuntimeConfiguration({ loading: false, data: demoCodexConfiguration, error: "" });
+      return undefined;
+    }
+    let cancelled = false;
+    setTaskRuntimeConfiguration((current) => ({ ...current, loading: true, error: "" }));
+    SettingsBinding.InspectCodexConfiguration(settings.runtimes?.codex || {})
+      .then((data) => { if (!cancelled) setTaskRuntimeConfiguration({ loading: false, data, error: "" }); })
+      .catch((error) => { if (!cancelled) setTaskRuntimeConfiguration((current) => ({ ...current, loading: false, error: errorMessage(error) })); });
+    return () => { cancelled = true; };
+  }, [mode, settings.runtimes?.codex, taskForm.harness, taskModal]);
 
   // Settings and workflow definitions are edited in their own WebViews. Wails
   // custom events are application-wide, so the main task window can refresh
@@ -632,7 +650,8 @@ function App() {
   };
 
   const createTaskAndRun = async () => {
-    if (!workspaceID || !taskForm.title.trim() || !taskForm.prompt.trim() || !taskForm.workflowId) { notify("error", t("app.taskFieldsRequired")); return; }
+    if (!workspaceID || !taskForm.prompt.trim() || !taskForm.workflowId) { notify("error", t("app.taskFieldsRequired")); return; }
+    const taskTitle = taskTitleFromPrompt(taskForm.prompt, t("task.createTitle"));
     const selectedWorkflow = workflows.find((item) => item.id === taskForm.workflowId);
     if (selectedWorkflow?.steps?.some((step) => step.sandbox === "full") && !await requestConfirm({ title: t("app.fullRunTitle"), description: t("app.fullRunDescription"), detail: t("app.workflowDetail", { name: selectedWorkflow.name }), confirmLabel: t("app.confirmStart"), dangerous: true })) return;
     setBusy("run");
@@ -642,14 +661,14 @@ function App() {
     try {
       if (mode === "demo") {
         if (taskForm.executionMode === "queued") {
-          const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, title: taskForm.title, prompt: taskForm.prompt, workflowId: taskForm.workflowId, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+          const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, title: taskTitle, prompt: taskForm.prompt, workflowId: taskForm.workflowId, harness: taskForm.harness, model: taskForm.model, reasoningEffort: taskForm.reasoningEffort, serviceTier: taskForm.serviceTier, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
           setTasks((items) => [...items, queuedTask]); setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(queuedTask.id);
         } else {
-          const demoTask = { ...demoTasks[0], title: taskForm.title, prompt: taskForm.prompt, workflowId: taskForm.workflowId, updatedAt: new Date().toISOString() };
+          const demoTask = { ...demoTasks[0], title: taskTitle, prompt: taskForm.prompt, workflowId: taskForm.workflowId, harness: taskForm.harness, model: taskForm.model, reasoningEffort: taskForm.reasoningEffort, serviceTier: taskForm.serviceTier, updatedAt: new Date().toISOString() };
           setTasks((items) => items.map((item) => item.id === demoTask.id ? demoTask : item)); setRunItems([{ ...demoRun.run, workflowId: demoTask.workflowId, status: "running", task: demoTask }]); setRunTotal(1); setSelectedQueuedTaskID(""); setSelectedRunID("run_demo"); setRunDetail({ ...demoRun, task: demoTask, run: { ...demoRun.run, workflowId: demoTask.workflowId, status: "running" }, active: true });
         }
       } else {
-        const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, title: taskForm.title, prompt: taskForm.prompt, workflowId: taskForm.workflowId, attachmentPaths: taskForm.attachmentPaths });
+        const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, title: taskTitle, prompt: taskForm.prompt, workflowId: taskForm.workflowId, harness: taskForm.harness, model: taskForm.model, reasoningEffort: taskForm.reasoningEffort, serviceTier: taskForm.serviceTier, attachmentPaths: taskForm.attachmentPaths });
         const preview = await TaskRunBinding.PreviewRun(task.id);
         if (taskForm.executionMode === "queued") {
           const queued = await TaskRunBinding.EnqueueTask(task.id, preview.confirmationToken || "");
@@ -664,7 +683,7 @@ function App() {
         }
         await loadTasks(); await loadRunList();
       }
-      setTaskForm((form) => ({ ...form, title: "", prompt: "", attachmentPaths: [] })); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? t("app.taskQueued") : t("app.runStarted"));
+      setTaskForm((form) => ({ ...form, prompt: "", attachmentPaths: [] })); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? t("app.taskQueued") : t("app.runStarted"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
@@ -784,10 +803,6 @@ function App() {
     catch (error) { notify("error", errorMessage(error)); }
   }, [loadRunList, loadTasks, mode, notify, requestConfirm, t]);
 
-  const composerSubmitKey = (event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && busy !== "run" && selectedWorkspace) createTaskAndRun();
-  };
-
   const runAction = useCallback(async (action) => {
     const runID = selectedRunIDRef.current;
     if (!runID || runActionPending.current) return;
@@ -884,6 +899,7 @@ function App() {
 
   const sidebarWorkspaces = useMemo(() => workspaceResults(workspaces, { query: "", expanded: workspaceExpanded }), [workspaceExpanded, workspaces]);
   const goView = useCallback((next) => {
+    if (next !== "tasks") setTaskModal(false);
     if (next === "settings" || next === "workflows") {
       if (mode === "wails") {
         const open = next === "settings" ? WindowBinding.OpenSettings() : WindowBinding.OpenWorkflows();
@@ -908,19 +924,21 @@ function App() {
   const commandText = location.path ? `${location.label} · ${location.path}` : location.label;
   const selectedTask = runDetail?.task || tasks.find((task) => task.id === selectedQueuedTaskID);
   const selectedTaskStatus = runDetail?.run?.status || selectedTask?.status;
-  const taskTitleVisible = view === "tasks" && !editor && selectedTask;
+  const taskCreateVisible = view === "tasks" && !editor && taskModal;
+  const taskTitleVisible = view === "tasks" && !editor && !taskModal && selectedTask;
   const whiteboardOpen = view === "whiteboard" && !editor;
 
   const toggleWorkspaceSearch = useCallback(() => setWorkspaceSearchOpen((open) => !open), []);
   const clearSidebarSearch = useCallback(() => { setGlobalSearchQuery(""); setGlobalTaskItems([]); }, []);
   const toggleWorkspaceExpanded = useCallback(() => setWorkspaceExpanded((expanded) => !expanded), []);
-  const selectRun = useCallback((item) => { setSelectedQueuedTaskID(""); setSelectedRunID(item.id); loadRun(item.id); }, [loadRun]);
-  const selectQueued = useCallback((task) => { setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(task.id); }, []);
+  const selectRun = useCallback((item) => { setTaskModal(false); setSelectedQueuedTaskID(""); setSelectedRunID(item.id); loadRun(item.id); }, [loadRun]);
+  const selectQueued = useCallback((task) => { setTaskModal(false); setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(task.id); }, []);
   // Stable handler identities keep the memoized Sidebar/TaskWorkbench from
   // re-rendering on every unrelated App state change (toasts, busy flips, the
   // 80ms streaming cadence).
   const openTaskModal = useCallback(() => setTaskModal(true), []);
   const loadMoreRuns = useCallback(() => loadRunList({ cursor: runNextCursorRef.current }), [loadRunList]);
+  const chooseTaskAttachments = useCallback(() => chooseAttachments("task"), [chooseAttachments]);
   const chooseComposerAttachments = useCallback(() => chooseAttachments("composer"), [chooseAttachments]);
   const removeComposerAttachment = useCallback((path) => setComposerAttachments((items) => items.filter((item) => item !== path)), []);
   const interruptRun = useCallback(() => runAction("interrupt"), [runAction]);
@@ -1006,8 +1024,8 @@ function App() {
         tasks={tasks}
         pinnedTasks={pinnedTasks}
         runs={runItems}
-        selectedRunID={selectedRunID}
-        selectedQueuedTaskID={selectedQueuedTaskID}
+        selectedRunID={taskModal ? "" : selectedRunID}
+        selectedQueuedTaskID={taskModal ? "" : selectedQueuedTaskID}
         runLoading={runLoading}
         runTotal={runTotal}
         runHasMore={Boolean(runNextCursor)}
@@ -1035,7 +1053,11 @@ function App() {
 
       {whiteboardOpen ? <WhiteboardPage key={workspaceID || "demo"} workspace={selectedWorkspace} mode={mode} runtimes={runtimes} onClose={() => goView("tasks")} /> : <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
         <div className="app-titlebar drag-region flex h-[52px] shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
-          {taskTitleVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={`${location.label} / ${selectedTask.title}`}>
+          {taskCreateVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={`${location.label} / ${t("task.createTitle")}`}>
+            <span className="max-w-40 shrink truncate text-xs text-muted-foreground">{location.label}</span>
+            <span className="shrink-0 text-muted-foreground/60" aria-hidden="true">/</span>
+            <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{t("task.createTitle")}</strong>
+          </span> : taskTitleVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={`${location.label} / ${selectedTask.title}`}>
             <span className="max-w-40 shrink truncate text-xs text-muted-foreground">{location.label}</span>
             <span className="shrink-0 text-muted-foreground/60" aria-hidden="true">/</span>
             <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{selectedTask.title}</strong>
@@ -1072,6 +1094,14 @@ function App() {
           attachments={composerAttachments}
           inspectorCollapsed={inspectorCollapsed}
           onToggleInspector={toggleInspector}
+          newTaskOpen={taskModal}
+          taskForm={taskForm}
+          workflows={workflows}
+          taskRuntimeConfiguration={taskRuntimeConfiguration}
+          runtimeSettings={settings.runtimes?.codex}
+          onTaskFormChange={setTaskForm}
+          onChooseTaskAttachments={chooseTaskAttachments}
+          onCreateTask={taskModal ? createTaskAndRun : null}
           onNewTask={openTaskModal}
           onChooseAttachments={chooseComposerAttachments}
           onRemoveAttachment={removeComposerAttachment}
@@ -1101,37 +1131,6 @@ function App() {
         <DialogFooter className="mt-1">
           <Button type="button" variant="ghost" disabled={busy === "workspace"} onClick={() => setWorkspaceModal(false)}>{t("common.cancel")}</Button>
           <Button type="submit" disabled={busy === "workspace" || !workspaceForm.path.trim()}>{busy === "workspace" ? t("common.processing") : t("workspace.add")}</Button>
-        </DialogFooter>
-      </form>
-    </Modal>}
-    {taskModal && <Modal className="task-create-dialog gap-0 overflow-hidden p-0 sm:max-w-[520px]" title={t("task.createTitle")} subtitle={t("task.createSubtitle")} onClose={() => setTaskModal(false)}>
-      <form className="task-create-form grid gap-4 px-5 pt-4 pb-5" onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "run") void createTaskAndRun(); }}>
-        <div className="grid gap-1.5">
-          <Label htmlFor="task-create-title">{t("task.name")}</Label>
-          <Input id="task-create-title" autoFocus value={taskForm.title} onChange={(event) => setTaskForm((form) => ({ ...form, title: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.namePlaceholder")} />
-        </div>
-        <div className="grid gap-1.5">
-          <Label htmlFor="task-create-goal">{t("task.goal")}</Label>
-          <Textarea id="task-create-goal" className="min-h-24 resize-y" value={taskForm.prompt} onChange={(event) => setTaskForm((form) => ({ ...form, prompt: event.target.value }))} onKeyDown={composerSubmitKey} placeholder={t("task.goalPlaceholder")} />
-        </div>
-        <div className="grid gap-1.5">
-          <Label>{t("task.workflow")}</Label>
-          <TUISelect ariaLabel={t("task.workflow")} value={taskForm.workflowId} onChange={(workflowId) => setTaskForm((form) => ({ ...form, workflowId }))} options={workflows.map((workflow) => ({ value: workflow.id, label: workflow.name }))} />
-        </div>
-        <div className="grid gap-1.5">
-          <Label>{t("task.executionMode")}</Label>
-          <TUISelect ariaLabel={t("task.executionMode")} value={taskForm.executionMode} onChange={(executionMode) => setTaskForm((form) => ({ ...form, executionMode }))} options={[{ value: "immediate", label: t("task.runNow") }, { value: "queued", label: t("task.joinQueue") }]} />
-        </div>
-        <div className="grid gap-2">
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-muted-foreground">{t("task.attachmentsLimit")}</span>
-            <Button type="button" variant="ghost" size="sm" onClick={() => chooseAttachments("task")}><Paperclip aria-hidden="true" />{t("task.chooseFiles")}</Button>
-          </div>
-          {taskForm.attachmentPaths?.length > 0 && <div className="flex flex-wrap gap-1.5">{taskForm.attachmentPaths.map((path) => <span className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground" key={path}><span className="truncate" title={path}>{fileName(path)}</span><button type="button" className="grid size-4 shrink-0 place-items-center rounded-sm text-muted-foreground hover:bg-accent hover:text-foreground" aria-label={`${t("common.remove")} ${fileName(path)}`} title={t("common.remove")} onClick={() => setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }))}><X size={12} aria-hidden="true" /></button></span>)}</div>}
-        </div>
-        <DialogFooter className="mt-1">
-          <Button type="button" variant="ghost" onClick={() => setTaskModal(false)}>{t("common.cancel")}</Button>
-          <Button type="submit" disabled={busy === "run" || !selectedWorkspace || !taskForm.title.trim() || !taskForm.prompt.trim() || !taskForm.workflowId}>{busy === "run" ? t("task.creating") : taskForm.executionMode === "queued" ? t("task.joinQueue") : t("task.createAndRun")}</Button>
         </DialogFooter>
       </form>
     </Modal>}

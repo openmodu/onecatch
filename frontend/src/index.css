@@ -622,6 +622,302 @@
     --conversation-inline-gutter: clamp(12px, 2.5vw, 24px);
   }
 
+  .new-task-screen {
+    background: var(--background);
+  }
+
+  .new-task-layout {
+    width: 100%;
+    max-width: calc(var(--conversation-content-width) + (var(--conversation-inline-gutter) * 2));
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 18px;
+    margin: 0 auto;
+    padding: clamp(64px, 13vh, 132px) var(--conversation-inline-gutter) 14px;
+  }
+
+  .new-task-intro {
+    padding-inline: 12px;
+    text-align: center;
+  }
+
+  .new-task-intro h1 {
+    margin: 0;
+    color: var(--foreground);
+    font-size: clamp(21px, 2.5vw, 28px);
+    font-weight: 620;
+    letter-spacing: -.03em;
+    line-height: 1.15;
+  }
+
+  .new-task-intro p {
+    margin: 8px 0 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .new-task-composer {
+    display: grid;
+    gap: 8px;
+    padding: 11px 12px 9px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: var(--card);
+    box-shadow: 0 8px 28px color-mix(in oklab, var(--foreground) 8%, transparent), 0 1px 2px color-mix(in oklab, var(--foreground) 5%, transparent);
+    transition: border-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  .new-task-composer:focus-within {
+    border-color: color-mix(in oklab, var(--ring) 38%, var(--border));
+  }
+
+  .new-task-prompt {
+    min-height: 104px !important;
+    max-height: min(32vh, 260px);
+    resize: none;
+    padding: 3px 6px 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--foreground);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .new-task-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 4px;
+  }
+
+  .new-task-attachment {
+    min-width: 0;
+    max-width: 240px;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 6px 4px 9px;
+    border-radius: 8px;
+    background: var(--muted);
+    color: var(--muted-foreground);
+    font-size: 11px;
+  }
+
+  .new-task-attachment > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .new-task-attachment button {
+    width: 18px;
+    height: 18px;
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: inherit;
+  }
+
+  .new-task-attachment button:hover { background: var(--accent); color: var(--foreground); }
+
+  .new-task-toolbar {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-top: 1px;
+  }
+
+  .new-task-attach,
+  .new-task-select {
+    border-radius: 999px !important;
+  }
+
+  .new-task-attach { color: var(--muted-foreground); }
+
+  .new-task-select {
+    width: auto !important;
+    height: 32px !important;
+    min-width: 120px;
+    max-width: 220px;
+    gap: 6px;
+    border-color: transparent !important;
+    background: var(--muted) !important;
+    padding-inline: 10px !important;
+    color: var(--muted-foreground);
+    font-size: 11px !important;
+    box-shadow: none !important;
+  }
+
+  .new-task-select.workflow { max-width: 240px; }
+
+  .new-task-runtime {
+    margin-left: auto;
+  }
+
+  .new-task-submit-group {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .new-task-submit-action {
+    height: 34px !important;
+    min-width: 102px;
+    gap: 7px !important;
+    border-radius: 999px 0 0 999px !important;
+    padding-inline: 12px 10px !important;
+  }
+
+  .new-task-submit-action > span {
+    line-height: 1;
+  }
+
+  .new-task-submit-mode {
+    width: 30px !important;
+    height: 34px !important;
+    border-radius: 0 999px 999px 0 !important;
+    box-shadow: inset 1px 0 color-mix(in oklab, var(--primary-foreground) 24%, transparent);
+  }
+
+  .new-task-submit-mode[data-state="open"] {
+    background: color-mix(in oklab, var(--primary) 86%, black) !important;
+  }
+
+  .new-task-execution-menu {
+    min-width: 190px;
+    border-radius: 12px;
+    padding: 5px;
+  }
+
+  .new-task-execution-option {
+    min-height: 36px;
+    border-radius: 8px !important;
+  }
+
+  .runtime-profile-trigger {
+    width: auto !important;
+    max-width: min(330px, 40vw);
+    height: 32px !important;
+    min-width: 250px;
+    justify-content: flex-end;
+    gap: 6px;
+    border-radius: 999px !important;
+    background: var(--muted) !important;
+    padding-inline: 11px !important;
+    color: var(--foreground) !important;
+    font-size: 12px !important;
+    font-weight: 520;
+    box-shadow: none !important;
+  }
+
+  .runtime-profile-trigger > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .runtime-profile-trigger:hover,
+  .runtime-profile-trigger[data-state="open"] {
+    background: var(--accent) !important;
+  }
+
+  .runtime-profile-menu {
+    width: 320px;
+    padding: 7px;
+    border-radius: 16px;
+    box-shadow: 0 16px 50px color-mix(in oklab, var(--foreground) 14%, transparent), 0 2px 8px color-mix(in oklab, var(--foreground) 7%, transparent);
+  }
+
+  .runtime-profile-row {
+    min-height: 46px;
+    border-radius: 10px !important;
+    padding: 9px 10px !important;
+  }
+
+  .runtime-profile-row.read-only { cursor: default; }
+
+  .runtime-profile-row-copy {
+    min-width: 0;
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+
+  .runtime-profile-row-copy strong {
+    color: var(--foreground);
+    font-size: 14px;
+    font-weight: 620;
+  }
+
+  .runtime-profile-row-copy > span {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .runtime-profile-submenu {
+    width: 308px;
+    max-height: min(420px, var(--radix-dropdown-menu-content-available-height));
+    overflow-y: auto;
+    padding: 6px;
+    border-radius: 14px;
+  }
+
+  .runtime-profile-submenu.compact { width: 210px; }
+
+  .runtime-profile-submenu [data-slot="dropdown-menu-radio-item"] {
+    min-height: 38px;
+    border-radius: 9px;
+    padding-block: 7px;
+  }
+
+  .runtime-profile-option {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .runtime-profile-option strong {
+    overflow: hidden;
+    font-size: 12px;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .runtime-profile-option small {
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .runtime-profile-message {
+    padding: 7px 9px;
+    color: var(--muted-foreground);
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .runtime-profile-message.error { color: var(--destructive); }
+
   .conversation-section {
     padding-inline: var(--conversation-inline-gutter);
   }
@@ -1077,6 +1373,8 @@
     padding: 0 1px;
   }
 
+  .workbench-runtime-profile { margin-left: auto; }
+
   .composer-submit-hint {
     color: var(--muted-foreground);
     font-size: 11px;
@@ -1087,7 +1385,6 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    margin-left: auto;
   }
 
   .workbench-composer-actions button { border-radius: 999px; }
@@ -1106,6 +1403,21 @@
   }
 
   @media (max-width: 760px) {
+    .new-task-layout {
+      gap: 14px;
+      padding: 36px 10px 10px;
+    }
+    .new-task-intro h1 { font-size: 22px; }
+    .new-task-intro p { margin-top: 6px; }
+    .new-task-composer { border-radius: 16px; }
+    .new-task-prompt { min-height: 96px !important; }
+    .new-task-toolbar { flex-wrap: wrap; }
+    .new-task-runtime { order: 5; flex: 1 1 180px; max-width: calc(100% - 142px); margin-left: 0; }
+    .new-task-submit-group { order: 6; margin-left: auto; }
+    .runtime-profile-trigger { min-width: 0; }
+    .workbench-runtime-profile { max-width: 220px; }
+    .new-task-select { max-width: calc(50% - 27px); }
+    .new-task-shortcut { display: none; }
     .conversation-list {
       gap: 28px;
       padding: 22px 0 34px;

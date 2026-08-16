@@ -242,6 +242,34 @@ export class CreateTaskInput {
         if (/** @type {any} */(false)) {
             /**
              * @member
+             * @type {string | undefined}
+             */
+            this["harness"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["model"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["reasoningEffort"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["serviceTier"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
              * @type {string[] | undefined}
              */
             this["attachmentPaths"] = undefined;
@@ -256,10 +284,10 @@ export class CreateTaskInput {
      * @returns {CreateTaskInput}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType0;
+        const $$createField8_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("attachmentPaths" in $$parsedSource) {
-            $$parsedSource["attachmentPaths"] = $$createField4_0($$parsedSource["attachmentPaths"]);
+            $$parsedSource["attachmentPaths"] = $$createField8_0($$parsedSource["attachmentPaths"]);
         }
         return new CreateTaskInput(/** @type {Partial<CreateTaskInput>} */($$parsedSource));
     }

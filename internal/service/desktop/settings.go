@@ -308,7 +308,9 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 	definition.Steps = append([]domainworkflows.Step(nil), definition.Steps...)
 	for index := range definition.Steps {
 		step := &definition.Steps[index]
-		if step.Model == "" {
+		if task.Harness != "" && step.Runtime == task.Harness && task.Model != "" {
+			step.Model = task.Model
+		} else if step.Model == "" {
 			step.Model = settings.Runtimes[step.Runtime].DefaultModel
 		}
 		step.Sandbox = resolveSandbox(step.Sandbox, settings.Execution.DefaultSandbox, workspace.DefaultSandbox)
@@ -325,6 +327,16 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 			ReasoningEffort:      item.ReasoningEffort,
 			ServiceTier:          item.ServiceTier,
 		}
+	}
+	if task.Harness != "" {
+		resolved := runtimeSettings[task.Harness]
+		if task.ReasoningEffort != "" {
+			resolved.ReasoningEffort = task.ReasoningEffort
+		}
+		if task.ServiceTier != "" {
+			resolved.ServiceTier = task.ServiceTier
+		}
+		runtimeSettings[task.Harness] = resolved
 	}
 	return definition, workflowuc.RunResolution{MaxLocalDAGConcurrency: settings.Execution.MaxLocalDAGConcurrency, InterruptGraceSeconds: settings.Execution.InterruptGraceSeconds, RuntimeSettings: runtimeSettings}, nil
 }

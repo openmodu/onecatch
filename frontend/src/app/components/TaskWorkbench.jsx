@@ -10,6 +10,7 @@ import StatusInspector from "./inspectors/StatusInspector.jsx";
 import GitInspector from "./inspectors/GitInspector.jsx";
 import EventInspector from "./inspectors/EventInspector.jsx";
 import FileInspector from "./inspectors/FileInspector.jsx";
+import NewTaskView from "./NewTaskView.jsx";
 
 const TerminalDock = lazy(() => import("./TerminalDock.jsx"));
 
@@ -49,7 +50,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, newTaskOpen, taskForm, workflows, taskRuntimeConfiguration, runtimeSettings, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorTab, setInspectorTab] = useState("status");
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
@@ -97,6 +98,17 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   // eslint-disable-next-line react-hooks/exhaustive-deps -- signature captures every field the builder reads
   const conversation = useMemo(() => (runDetail ? buildRunConversation(runDetail, t) : []), [signature, i18n.resolvedLanguage, t]);
   const pendingInstructions = useMemo(() => (runDetail?.instructions || []).filter((instruction) => instruction.status === "pending"), [runDetail?.instructions]);
+  const activeStep = useMemo(() => {
+    const steps = runDetail?.workflow?.steps || [];
+    const stepRuns = runDetail?.stepRuns || [];
+    const stepID = stepRuns[stepRuns.length - 1]?.stepId || runDetail?.run?.currentStepId;
+    return steps.find((step) => step.id === stepID) || steps[0] || null;
+  }, [runDetail]);
+  const activeRuntimeProfile = useMemo(() => {
+    if (!activeStep?.runtime) return null;
+    const settings = runDetail?.run?.runtimeSettings?.[activeStep.runtime] || {};
+    return { harness: activeStep.runtime, model: activeStep.model || "", reasoningEffort: settings.reasoningEffort || "", serviceTier: settings.serviceTier || "" };
+  }, [activeStep, runDetail?.run?.runtimeSettings]);
   const conversationSize = `${signature}:${conversation.length}:${conversation[conversation.length - 1]?.items?.length || 0}`;
 
   useEffect(() => {
@@ -195,7 +207,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
     inspectorRestoreWidthRef.current = inspectorWidth;
     setInspectorMaximized(true);
   };
-  return <div ref={workbenchRef} className={`task-workbench grid min-h-0 min-w-0 flex-1 overflow-visible ${inspectorCollapsed ? "inspector-collapsed" : "inspector-open"} ${inspectorResizing ? "inspector-resizing" : ""} ${inspectorMaximized ? "inspector-maximized" : ""}`} style={{ "--workbench-inspector-width": `${inspectorWidth}px` }}>
+  return <div ref={workbenchRef} className={`task-workbench grid min-h-0 min-w-0 flex-1 overflow-visible ${inspectorCollapsed ? "inspector-collapsed" : "inspector-open"} ${inspectorResizing ? "inspector-resizing" : ""} ${inspectorMaximized ? "inspector-maximized" : ""} ${newTaskOpen ? "new-task-active" : ""}`} style={{ "--workbench-inspector-width": `${inspectorWidth}px` }}>
     {!inspectorCollapsed && !inspectorMaximized && <div className="workbench-inspector-dock no-drag">
       <StatusBadge status={mode === "wails" ? "good" : "warn"} className="shrink-0">
         <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
@@ -205,7 +217,17 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       <button type="button" className="workbench-inspector-dock-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><PanelRightClose size={16} strokeWidth={2} aria-hidden="true" /></button>
     </div>}
     <section className="conversation-workspace flex min-h-0 min-w-0 flex-col bg-background">
-      {selectedTask ? <>
+      {newTaskOpen ? <NewTaskView
+        workspaceID={workspaceID}
+        workflows={workflows}
+        form={taskForm}
+        busy={busy}
+        onChange={onTaskFormChange}
+        onChooseAttachments={onChooseTaskAttachments}
+        onSubmit={onCreateTask}
+        runtimeConfiguration={taskRuntimeConfiguration}
+        runtimeSettings={runtimeSettings}
+      /> : selectedTask ? <>
         <div className="conversation-scroll min-h-0 min-w-0 flex-1 select-text overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>
           {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
@@ -221,6 +243,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           onInterrupt={onInterrupt}
           onCancel={onCancel}
           onSubmit={onSubmit}
+          runtimeProfile={activeRuntimeProfile}
         />}
       </> : <div className="workbench-welcome m-auto max-w-xl select-none p-10 text-center text-muted-foreground"><Kicker>{t("task.welcomeKicker")}</Kicker><h2 className="my-3 text-lg font-semibold text-foreground">{t("task.welcomeTitle")}</h2><p className="mb-6 text-sm leading-relaxed">{t("task.welcomeDescription")}</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>{t("task.newTask")}</Action></div>}
       {terminalMounted && <Suspense fallback={null}><TerminalDock ref={setTerminalDock} mode={mode} workspace={workspace} preferences={terminalPreferences} notify={notify} onVisibilityChange={onTerminalVisibilityChange} /></Suspense>}
@@ -248,7 +271,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       <div className="workbench-inspector-toolbar"><div className="workbench-inspector-tabs" role="tablist" aria-label={t("inspector.aria")}>{inspectorTabs.map(({ value, label, icon: Icon }) => <button type="button" role="tab" className={inspectorTab === value ? "active" : ""} aria-selected={inspectorTab === value} aria-controls="workbench-inspector-content" title={label} key={value} onClick={() => { setInspectorTab(value); if (value === "files") setFileInspectorMounted(true); }}><Icon size={15} strokeWidth={2} aria-hidden="true" /><span className="sr-only">{label}</span></button>)}</div><strong className="workbench-inspector-title">{activeInspector.label}</strong><div className="workbench-inspector-window-actions">{inspectorMaximized && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}<button type="button" className="workbench-inspector-maximize" aria-label={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} aria-pressed={inspectorMaximized} title={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} onClick={toggleInspectorMaximized}>{inspectorMaximized ? <Minimize2 size={15} strokeWidth={2} aria-hidden="true" /> : <Maximize2 size={15} strokeWidth={2} aria-hidden="true" />}</button><button type="button" className="workbench-inspector-close" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><X size={16} strokeWidth={2} aria-hidden="true" /></button></div></div>
       <div className={`workbench-inspector-body min-h-0 ${inspectorTab === "files" ? "overflow-hidden" : "overflow-y-auto"}`} id="workbench-inspector-content">
         {fileInspectorMounted && <div className={inspectorTab === "files" ? "h-full" : "hidden"}><FileInspector mode={mode} workspaceID={workspaceID} active={inspectorTab === "files"} notify={notify} onDirtyChange={setFileInspectorDirty} /></div>}
-        {inspectorTab === "status" ? <StatusInspector detail={runDetail} queuedTask={selectedQueuedTask} queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} notify={notify} onOpenTerminal={openTerminal} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={runWorkerID} notify={notify} /> : inspectorTab === "events" ? <EventInspector detail={runDetail} /> : null}
+        {inspectorTab === "status" ? <StatusInspector detail={newTaskOpen ? null : runDetail} queuedTask={newTaskOpen ? null : selectedQueuedTask} queuePosition={!newTaskOpen && selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0} draft={newTaskOpen} notify={notify} onOpenTerminal={openTerminal} /> : inspectorTab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} runWorkerID={newTaskOpen ? "" : runWorkerID} notify={notify} /> : inspectorTab === "events" ? <EventInspector detail={newTaskOpen ? null : runDetail} /> : null}
       </div>
     </aside>}
   </div>;

@@ -166,6 +166,7 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	runtime.EnvironmentAllowlist = []string{"ONESHOT_TEST_ENV"}
 	settings.Runtimes["codex"] = runtime
 	claude := settings.Runtimes["claude"]
+	claude.DefaultModel = "claude-snapshot"
 	claude.ReasoningEffort = "high"
 	settings.Runtimes["claude"] = claude
 	modu := settings.Runtimes["modu"]
@@ -185,7 +186,7 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "snapshot", Prompt: "snapshot"})
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "implement_review", Title: "snapshot", Prompt: "snapshot", Harness: "codex", Model: "task-model", ReasoningEffort: "high", ServiceTier: "standard"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,13 +198,16 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Steps[0].Model != "snapshot-model" || run.MaxLocalDAGConcurrency != 7 || run.InterruptGraceSeconds != 22 {
+	if snapshot.Steps[0].Model != "task-model" || run.MaxLocalDAGConcurrency != 7 || run.InterruptGraceSeconds != 22 {
 		t.Fatalf("resolved snapshot missing: run=%+v definition=%+v", run, snapshot)
+	}
+	if snapshot.Steps[1].Model != "claude-snapshot" {
+		t.Fatalf("task Codex override changed another harness: definition=%+v", snapshot)
 	}
 	if got := run.RuntimeSettings["codex"].EnvironmentAllowlist; len(got) != 1 || got[0] != "ONESHOT_TEST_ENV" {
 		t.Fatalf("environment snapshot = %#v", got)
 	}
-	if got := run.RuntimeSettings["codex"]; got.ReasoningEffort != "xhigh" || got.ServiceTier != "priority" {
+	if got := run.RuntimeSettings["codex"]; got.ReasoningEffort != "high" || got.ServiceTier != "standard" {
 		t.Fatalf("Codex model settings snapshot = %#v", got)
 	}
 	if got := run.RuntimeSettings["claude"].ReasoningEffort; got != "high" {

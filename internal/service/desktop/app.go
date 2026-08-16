@@ -60,6 +60,10 @@ type CreateTaskInput struct {
 	Title           string   `json:"title"`
 	Prompt          string   `json:"prompt"`
 	WorkflowID      string   `json:"workflowId"`
+	Harness         string   `json:"harness,omitempty"`
+	Model           string   `json:"model,omitempty"`
+	ReasoningEffort string   `json:"reasoningEffort,omitempty"`
+	ServiceTier     string   `json:"serviceTier,omitempty"`
 	AttachmentPaths []string `json:"attachmentPaths,omitempty"`
 }
 
@@ -561,7 +565,7 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 		return domaintasks.Task{}, err
 	}
 	now := time.Now().UTC()
-	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: strings.TrimSpace(input.Title), Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
+	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: strings.TrimSpace(input.Title), Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Harness: strings.TrimSpace(input.Harness), Model: strings.TrimSpace(input.Model), ReasoningEffort: strings.TrimSpace(input.ReasoningEffort), ServiceTier: strings.TrimSpace(input.ServiceTier), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
 	attachments, err := a.persistAttachments(ctx, task, input.AttachmentPaths)
 	if err != nil {
 		return domaintasks.Task{}, err

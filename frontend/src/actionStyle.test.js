@@ -281,6 +281,32 @@ test("the task title is unified into the app titlebar", async () => {
   assert.doesNotMatch(workbench, /conversation-workspace-head|workflowNameFor|shortID\(runDetail\.run\.id\)/, "task metadata must not repeat in a second header");
 });
 
+test("new tasks are composed inside the chat workspace instead of a modal", async () => {
+  const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
+  const workbench = await readFile(path.join(sourceRoot, "app", "components", "TaskWorkbench.jsx"), "utf8");
+  const newTask = await readFile(path.join(sourceRoot, "app", "components", "NewTaskView.jsx"), "utf8");
+  const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
+  assert.doesNotMatch(app, /task-create-dialog|<Modal[^>]*task\.createTitle/, "task creation must not open a blocking modal");
+  assert.match(app, /const \[taskModal, setTaskModal\] = useState\(true\)/, "a cold start must open the actionable composer instead of the legacy welcome card");
+  assert.match(app, /newTaskOpen=\{taskModal\}/);
+  assert.match(workbench, /newTaskOpen \? <NewTaskView/);
+  assert.match(newTask, /className="new-task-composer"/);
+  assert.match(newTask, /className="new-task-toolbar"/);
+  assert.doesNotMatch(newTask, /className="new-task-select execution"/, "execution mode belongs with the final submit action");
+  assert.match(newTask, /className=\{`new-task-submit-group \$\{executionMode\}`\}/);
+  assert.match(newTask, /DropdownMenuRadioGroup value=\{executionMode\}/);
+  assert.match(newTask, /value="immediate">\{t\("task\.runNow"\)\}/);
+  assert.match(newTask, /value="queued">\{t\("task\.joinQueue"\)\}/);
+  assert.match(newTask, /executionMode === "queued" \? <ListPlus/);
+  assert.doesNotMatch(newTask, /task-create-title|t\("task\.name"\)|<Input\b/, "the first prompt must create the task title instead of asking for a separate name");
+  assert.doesNotMatch(newTask, /onCancel|new-task-cancel/, "navigation back to history replaces a modal-style cancel action");
+  assert.match(app, /taskTitleFromPrompt\(taskForm\.prompt/);
+  assert.match(css, /\.new-task-layout\s*\{[^}]*max-width:\s*calc\(var\(--conversation-content-width\)/s, "the creation screen must share the chat column width");
+  assert.doesNotMatch(workbench, /!newTaskOpen && !inspectorCollapsed/, "new-task mode must not hide the inspector controls");
+  assert.doesNotMatch(css, /\.task-workbench\.new-task-active\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+0/s, "new-task mode must respect the saved inspector state");
+  assert.match(app, /view === "tasks" && inspectorCollapsed && <button[^>]*inspector\.expand/, "a collapsed inspector needs an expand button while creating a task");
+});
+
 test("task editing joins the existing sidebar row hover actions", async () => {
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");

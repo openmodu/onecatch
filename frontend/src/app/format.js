@@ -28,3 +28,16 @@ export function formatDuration(value = 0) {
 export function formatTokens(value = 0) { return new Intl.NumberFormat(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN").format(Number(value) || 0); }
 
 export function fileName(value = "") { return String(value).split(/[\\/]/).pop() || value; }
+
+export function taskTitleFromPrompt(value = "", fallback = "") {
+  const firstLine = String(value)
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .find(Boolean)
+    ?.replace(/^(?:#{1,6}|[-*+]|\d+[.)])\s+/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!firstLine) return fallback;
+  const characters = Array.from(firstLine);
+  return characters.length > 48 ? `${characters.slice(0, 47).join("")}…` : firstLine;
+}

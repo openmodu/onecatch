@@ -57,19 +57,23 @@ type Attachment struct {
 }
 
 type Task struct {
-	ID            string        `json:"id"`
-	WorkspaceID   string        `json:"workspaceId"`
-	Title         string        `json:"title"`
-	Prompt        string        `json:"prompt"`
-	WorkflowID    string        `json:"workflowId"`
-	Status        Status        `json:"status"`
-	Pinned        bool          `json:"pinned,omitempty"`
-	ExecutionMode ExecutionMode `json:"executionMode,omitempty"`
-	Queue         *QueueInfo    `json:"queue,omitempty"`
-	Attachments   []Attachment  `json:"attachments,omitempty"`
-	DeletedAt     time.Time     `json:"deletedAt,omitempty"`
-	CreatedAt     time.Time     `json:"createdAt"`
-	UpdatedAt     time.Time     `json:"updatedAt"`
+	ID              string        `json:"id"`
+	WorkspaceID     string        `json:"workspaceId"`
+	Title           string        `json:"title"`
+	Prompt          string        `json:"prompt"`
+	WorkflowID      string        `json:"workflowId"`
+	Harness         string        `json:"harness,omitempty"`
+	Model           string        `json:"model,omitempty"`
+	ReasoningEffort string        `json:"reasoningEffort,omitempty"`
+	ServiceTier     string        `json:"serviceTier,omitempty"`
+	Status          Status        `json:"status"`
+	Pinned          bool          `json:"pinned,omitempty"`
+	ExecutionMode   ExecutionMode `json:"executionMode,omitempty"`
+	Queue           *QueueInfo    `json:"queue,omitempty"`
+	Attachments     []Attachment  `json:"attachments,omitempty"`
+	DeletedAt       time.Time     `json:"deletedAt,omitempty"`
+	CreatedAt       time.Time     `json:"createdAt"`
+	UpdatedAt       time.Time     `json:"updatedAt"`
 }
 
 func Validate(task Task) error {
@@ -77,6 +81,12 @@ func Validate(task Task) error {
 		return ErrInvalid
 	}
 	if task.ExecutionMode != "" && task.ExecutionMode != ExecutionImmediate && task.ExecutionMode != ExecutionQueued {
+		return ErrInvalid
+	}
+	if task.Harness != "" && task.Harness != "codex" {
+		return ErrInvalid
+	}
+	if task.Harness == "" && (strings.TrimSpace(task.Model) != "" || strings.TrimSpace(task.ReasoningEffort) != "" || strings.TrimSpace(task.ServiceTier) != "") {
 		return ErrInvalid
 	}
 	if task.Status == StatusQueued {

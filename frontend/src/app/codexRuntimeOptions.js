@@ -1,5 +1,32 @@
 const unique = (values) => [...new Set(values.filter(Boolean))];
 
+export const demoCodexConfiguration = {
+  model: "gpt-5.6-sol",
+  reasoningEffort: "medium",
+  serviceTier: "",
+  models: [
+    {
+      id: "gpt-5.6-sol",
+      model: "gpt-5.6-sol",
+      displayName: "GPT-5.6-Sol",
+      description: "Complex, open-ended work",
+      defaultReasoningEffort: "low",
+      reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+      serviceTiers: [{ id: "fast", name: "Fast", description: "1.5× speed" }],
+      isDefault: true,
+    },
+    {
+      id: "gpt-5.6-terra",
+      model: "gpt-5.6-terra",
+      displayName: "GPT-5.6-Terra",
+      description: "Everyday workhorse",
+      defaultReasoningEffort: "medium",
+      reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"],
+      serviceTiers: [{ id: "fast", name: "Fast", description: "1.5× speed" }],
+    },
+  ],
+};
+
 export function selectedCodexModel(configuration, selected = "") {
   const models = configuration?.models || [];
   const target = selected || configuration?.model || "";

@@ -221,6 +221,34 @@ export class Task {
              */
             this["workflowId"] = "";
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["harness"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["model"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["reasoningEffort"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["serviceTier"] = undefined;
+        }
         if (!("status" in $$source)) {
             /**
              * @member
@@ -287,14 +315,14 @@ export class Task {
      * @returns {Task}
      */
     static createFrom($$source = {}) {
-        const $$createField8_0 = $$createType1;
-        const $$createField9_0 = $$createType3;
+        const $$createField12_0 = $$createType1;
+        const $$createField13_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("queue" in $$parsedSource) {
-            $$parsedSource["queue"] = $$createField8_0($$parsedSource["queue"]);
+            $$parsedSource["queue"] = $$createField12_0($$parsedSource["queue"]);
         }
         if ("attachments" in $$parsedSource) {
-            $$parsedSource["attachments"] = $$createField9_0($$parsedSource["attachments"]);
+            $$parsedSource["attachments"] = $$createField13_0($$parsedSource["attachments"]);
         }
         return new Task(/** @type {Partial<Task>} */($$parsedSource));
     }

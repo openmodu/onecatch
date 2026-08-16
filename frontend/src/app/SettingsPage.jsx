@@ -24,7 +24,7 @@ import {
 // be shown before it is applied, so it cannot read them off the live token.
 const ACCENT_SWATCH = { forest: "#694d1f", ocean: "#1f6475", violet: "#684886", amber: "#87501d" };
 import { APPEARANCE_CHANGED_EVENT, accentThemes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
-import { codexEffortValues, codexServiceTierValues, selectedCodexModel } from "./codexRuntimeOptions.js";
+import { codexEffortValues, codexServiceTierValues, demoCodexConfiguration, selectedCodexModel } from "./codexRuntimeOptions.js";
 import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
 
 const sectionMeta = (t) => ["runtime", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
@@ -152,13 +152,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     if (id === "codex") {
       setCodexConfiguration((current) => ({ ...current, loading: true, error: "" }));
       try {
-        const data = mode === "demo" ? {
-          model: "gpt-5.6-sol", reasoningEffort: "medium", serviceTier: "",
-          models: [
-            { id: "gpt-5.6-sol", model: "gpt-5.6-sol", displayName: "GPT-5.6-Sol", description: "Complex, open-ended work", defaultReasoningEffort: "low", reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"], serviceTiers: [{ id: "fast", name: "Fast", description: "1.5× speed" }], isDefault: true },
-            { id: "gpt-5.6-terra", model: "gpt-5.6-terra", displayName: "GPT-5.6-Terra", description: "Everyday workhorse", defaultReasoningEffort: "medium", reasoningEfforts: ["low", "medium", "high", "xhigh", "max", "ultra"], serviceTiers: [{ id: "fast", name: "Fast", description: "1.5× speed" }] },
-          ],
-        } : await SettingsBinding.InspectCodexConfiguration(draft.runtimes.codex);
+        const data = mode === "demo" ? demoCodexConfiguration : await SettingsBinding.InspectCodexConfiguration(draft.runtimes.codex);
         setCodexConfiguration({ loading: false, data, error: "" });
       } catch (error) {
         setCodexConfiguration((current) => ({ ...current, loading: false, error: message(error, t) }));
