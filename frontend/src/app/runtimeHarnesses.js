@@ -10,6 +10,11 @@ export function runtimeHarness(id = "codex") {
   return runtimeHarnesses.find((item) => item.id === id) || { id, label: id || "Codex", supportsReasoning: false, supportsSpeed: false };
 }
 
+export function supportsRuntimeProfile(id = "codex") {
+  const capability = runtimeHarness(id);
+  return capability.supportsReasoning || capability.supportsSpeed;
+}
+
 export function runtimeHarnessOptions(runtimes = [], unavailableLabel = "Unavailable") {
   const statusByID = new Map(runtimes.map((item) => [item.id, item]));
   return runtimeHarnesses.map((item) => {

@@ -779,6 +779,12 @@
 
   .new-task-select.executor > svg:last-child { margin-left: auto; }
 
+  .new-task-select.is-read-only {
+    display: inline-flex;
+    align-items: center;
+    cursor: default;
+  }
+
   .task-executor-menu {
     width: min(264px, calc(100vw - 24px));
     max-height: min(520px, 70vh);
@@ -1559,10 +1565,12 @@
     display: flex;
     align-items: center;
     gap: 7px;
-    margin-left: auto;
   }
 
-  .workbench-runtime-profile { min-width: 0; }
+  .workbench-runtime-profile {
+    min-width: 176px;
+    margin-left: auto;
+  }
 
   .composer-submit-hint {
     color: var(--muted-foreground);
@@ -1575,6 +1583,8 @@
     align-items: center;
     gap: 7px;
   }
+
+  .workbench-composer-actions:not(.profile-visible) .workbench-composer-submit { margin-left: auto; }
 
   .workbench-composer-actions button { border-radius: 999px; }
 

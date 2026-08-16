@@ -1,4 +1,4 @@
-import { ChevronDown } from "lucide-react";
+import { Bot, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,19 +10,22 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { runtimeHarness, runtimeHarnessOptions, selectRuntimeHarness } from "../runtimeHarnesses.js";
 
-export default function HarnessSelector({ value, onChange, runtimes = [], readOnly = false, className = "" }) {
+export default function HarnessSelector({ value, onChange, runtimes = [], readOnly = false, agentLabel = false, className = "" }) {
   const { t } = useTranslation();
   const harness = runtimeHarness(value?.harness);
+  const label = agentLabel ? t("task.agentLabel", { name: harness.label }) : harness.label;
+  const controlLabel = agentLabel ? t("task.executionTarget") : t("task.harness");
+  const controlClass = agentLabel ? "new-task-select executor" : "new-task-select harness";
 
   if (readOnly) {
-    return <span className={`harness-profile-read-only ${className}`.trim()} aria-label={`${t("task.harness")}: ${harness.label}`} title={`${t("task.harness")}: ${harness.label}`}>{harness.label}</span>;
+    return <span className={`${controlClass} is-read-only harness-profile-read-only ${className}`.trim()} aria-label={`${controlLabel}: ${harness.label}`} title={`${controlLabel}: ${harness.label}`}>{agentLabel && <Bot size={14} aria-hidden="true" />}<span>{label}</span></span>;
   }
 
   const options = runtimeHarnessOptions(runtimes, t("task.harnessUnavailable"));
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      <Button type="button" variant="ghost" className={`new-task-select harness ${className}`.trim()} aria-label={t("task.harness")} title={t("task.harness")}>
-        <span>{harness.label}</span><ChevronDown size={14} aria-hidden="true" />
+      <Button type="button" variant="ghost" className={`${controlClass} ${className}`.trim()} aria-label={controlLabel} title={controlLabel}>
+        {agentLabel && <Bot size={14} aria-hidden="true" />}<span>{label}</span><ChevronDown size={14} aria-hidden="true" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent className="harness-select-menu" side="top" align="start" sideOffset={8}>

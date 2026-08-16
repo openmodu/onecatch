@@ -318,7 +318,7 @@ test("every new task chooses either an Agent or a workflow plus an explicit perm
   assert.match(newTask, /<TaskExecutorSelector form=\{form\} workflows=\{workflows\} runtimes=\{runtimes\}/);
   assert.match(newTask, /<TaskPermissionSelector value=\{form\.sandbox\}/);
   assert.doesNotMatch(newTask, /<HarnessSelector/, "the Agent is selected by the mutually exclusive execution-target control");
-  assert.match(newTask, /directAgent && <RuntimeProfileMenu/, "model controls only apply to a directly selected Agent");
+  assert.match(newTask, /showRuntimeProfile && <RuntimeProfileMenu/, "model controls only apply to a directly selected Agent with configurable runtime options");
   assert.match(executor, /runtimeHarnessOptions\(runtimes/, "the execution target lists available coding Agents");
   assert.match(executor, /selectTaskExecutionTarget\(current, target\)/, "switching target must clear the mutually exclusive selection");
   assert.match(executor, /workflow\.id !== directAgentWorkflowID/, "the internal single-Agent definition must not appear as a user-facing workflow");
@@ -375,8 +375,10 @@ test("completed conversations remain available for a follow-up turn", async () =
   assert.match(composer, /runStatus === "completed"[\s\S]*t\("composer\.continue"\)/);
   assert.match(app, /run\.status === "paused" \|\| run\.status === "completed"/);
   assert.match(app, /TaskRunBinding\.ResumeRunConfigured\(run\.id, \{ instruction: content, \.\.\.runtimeProfile \}\)/);
-  assert.match(composer, /HarnessSelector value=\{runtimeProfile\} onChange=\{onRuntimeProfileChange\} runtimes=\{runtimes\}/);
+  assert.match(composer, /HarnessSelector value=\{runtimeProfile\} onChange=\{onRuntimeProfileChange\} runtimes=\{runtimes\}[^>]*agentLabel/);
   assert.match(composer, /RuntimeProfileMenu[^>]*onChange=\{onRuntimeProfileChange\}[^>]*configuration=\{runtimeConfiguration\?\.data\}/);
+  assert.match(composer, /<TaskPermissionSelector value=\{permission\} readOnly/);
+  assert.match(composer, /supportsRuntimeProfile\(runtimeProfile\.harness\)/, "runtimes without model controls must not repeat the Agent name");
   assert.match(composer, /readOnly=\{runStatus === "running"\}/, "runtime controls stay editable between completed or paused turns");
 });
 

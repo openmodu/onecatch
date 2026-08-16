@@ -5,6 +5,7 @@ import {
   runtimeHarnessOptions,
   selectRuntimeHarness,
   selectTaskExecutionTarget,
+  supportsRuntimeProfile,
   taskExecutionTarget,
 } from "./runtimeHarnesses.js";
 
@@ -14,6 +15,9 @@ test("runtime harness metadata exposes the supported task runtimes", () => {
   assert.equal(runtimeHarness("claude").label, "Claude Code");
   assert.equal(runtimeHarness("claude").supportsSpeed, false);
   assert.equal(runtimeHarness("modu").label, "modu_code");
+  assert.equal(supportsRuntimeProfile("codex"), true);
+  assert.equal(supportsRuntimeProfile("claude"), true);
+  assert.equal(supportsRuntimeProfile("modu"), false);
 });
 
 test("runtime harness options preserve choices and flag unavailable binaries", () => {

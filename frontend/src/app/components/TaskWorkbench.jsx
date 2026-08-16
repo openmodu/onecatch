@@ -272,6 +272,9 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           runtimes={runtimes}
           runtimeConfiguration={continuationRuntimeConfiguration}
           runtimeSettings={runtimeSettingsByHarness?.[(continuationRuntimeProfile || activeRuntimeProfile)?.harness] || {}}
+          workflowId={selectedTask?.workflowId || runDetail?.run?.workflowId}
+          workflowName={runDetail?.workflow?.name}
+          permission={selectedTask?.sandbox || activeStep?.sandbox || "workspace-write"}
         />}
       </> : <div className="workbench-welcome m-auto max-w-xl select-none p-10 text-center text-muted-foreground"><Kicker>{t("task.welcomeKicker")}</Kicker><h2 className="my-3 text-lg font-semibold text-foreground">{t("task.welcomeTitle")}</h2><p className="mb-6 text-sm leading-relaxed">{t("task.welcomeDescription")}</p><Action tone="primary" disabled={!workspaceID} onClick={onNewTask}>{t("task.newTask")}</Action></div>}
       {terminalMounted && <Suspense fallback={null}><TerminalDock ref={setTerminalDock} mode={mode} workspace={workspace} preferences={terminalPreferences} notify={notify} onVisibilityChange={onTerminalVisibilityChange} /></Suspense>}

@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { fileName } from "../format.js";
+import { supportsRuntimeProfile } from "../runtimeHarnesses.js";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
 import TaskExecutorSelector from "./TaskExecutorSelector.jsx";
 import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
@@ -29,6 +30,7 @@ export default function NewTaskView({
 }) {
   const { t } = useTranslation();
   const directAgent = form.workflowId === "single_agent";
+  const showRuntimeProfile = directAgent && supportsRuntimeProfile(form.harness);
   const ready = Boolean(workspaceID && form.prompt.trim() && form.workflowId && form.sandbox && (!directAgent || form.harness));
   const executionMode = form.executionMode === "queued" ? "queued" : "immediate";
   const executionLabel = executionMode === "queued" ? t("task.joinQueue") : t("task.runNow");
@@ -77,7 +79,7 @@ export default function NewTaskView({
           <Button type="button" variant="ghost" size="icon-sm" className="new-task-attach" aria-label={t("task.chooseFiles")} title={`${t("task.chooseFiles")} · ${t("task.attachmentsLimit")}`} onClick={onChooseAttachments}><Paperclip size={16} aria-hidden="true" /></Button>
           <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} onChange={onChange} />
           <TaskPermissionSelector value={form.sandbox} allowFull={allowFullSandbox} onChange={onChange} />
-          {directAgent && <RuntimeProfileMenu
+          {showRuntimeProfile && <RuntimeProfileMenu
             className="new-task-runtime"
             value={form}
             onChange={onChange}

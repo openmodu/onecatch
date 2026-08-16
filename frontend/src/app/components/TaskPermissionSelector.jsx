@@ -16,14 +16,21 @@ const permissionOptions = [
   { value: "full", label: "task.permissionFull", description: "task.permissionFullDescription", icon: ShieldCheck },
 ];
 
-export default function TaskPermissionSelector({ value, allowFull = false, onChange }) {
+export default function TaskPermissionSelector({ value, allowFull = false, onChange, readOnly = false, className = "" }) {
   const { t } = useTranslation();
   const selected = permissionOptions.find((option) => option.value === value) || permissionOptions[1];
   const SelectedIcon = selected.icon;
 
+  if (readOnly) {
+    return <span className={`new-task-select permission is-read-only ${className}`.trim()} aria-label={`${t("task.permission")}: ${t(selected.label)}`} title={t("task.permissionDescription")}>
+      <SelectedIcon size={14} aria-hidden="true" />
+      <span>{t(selected.label)}</span>
+    </span>;
+  }
+
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      <Button type="button" variant="ghost" className="new-task-select permission" aria-label={t("task.permission")} title={t("task.permissionDescription")}>
+      <Button type="button" variant="ghost" className={`new-task-select permission ${className}`.trim()} aria-label={t("task.permission")} title={t("task.permissionDescription")}>
         <SelectedIcon size={14} aria-hidden="true" />
         <span>{t(selected.label)}</span>
         <ChevronDown size={14} aria-hidden="true" />
