@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildRunConversation, readableAgentMessage, readableToolTitle, streamingOutcomeContent } from "./runConversation.js";
+import { buildRunConversation, groupRoundItems, readableAgentMessage, readableToolTitle, streamingOutcomeContent } from "./runConversation.js";
 
 test("renders outcome JSON as readable content", () => {
   assert.equal(readableAgentMessage('{"signal":"need_human","content":"请授权浏览器后继续"}'), "请授权浏览器后继续");
@@ -87,6 +87,19 @@ test("keeps tool calls separate and attaches an adjacent tool result", () => {
   assert.deepEqual(round.items.map((item) => item.type), ["message", "tool", "tool", "message"]);
   assert.equal(round.items[1].details[0].text, "3 matches");
   assert.equal(round.items[2].details.length, 0);
+});
+
+test("groups only adjacent process rows and preserves text-tool-text order", () => {
+  const blocks = groupRoundItems([
+    { type: "message", id: "intro", text: "先检查" },
+    { type: "tool", id: "search", kind: "tool_use", text: "rg issue" },
+    { type: "tool", id: "test", kind: "tool_use", text: "npm test" },
+    { type: "message", id: "result", text: "检查完成" },
+    { type: "tool", id: "status", kind: "tool_use", text: "git status" },
+  ]);
+  assert.deepEqual(blocks.map((block) => block.type), ["message", "process", "message", "process"]);
+  assert.deepEqual(blocks[1].items.map((item) => item.id), ["search", "test"]);
+  assert.deepEqual(blocks[3].items.map((item) => item.id), ["status"]);
 });
 
 test("scopes failure to the tool that failed, not the whole failed step", () => {

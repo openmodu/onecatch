@@ -152,16 +152,51 @@ func Resume(input Definition, run Run, now time.Time) (Run, error) {
 	if err := validateRunDefinition(def, run); err != nil {
 		return Run{}, err
 	}
-	if run.Status != RunPaused {
+	if run.Status != RunPaused && run.Status != RunCompleted {
 		return Run{}, fmt.Errorf("%w: resume from %s", ErrInvalidRunState, run.Status)
 	}
 	out := cloneRun(run)
+	if run.Status == RunCompleted {
+		out.CompletedAt = time.Time{}
+		if def.Mode == ModeDAG {
+			resetDAGContinuation(def, &out)
+		}
+	}
 	out.Status = RunRunning
 	out.ConsecutiveFailures = 0
 	out.PauseReason = ""
 	out.LastError = ""
 	out.UpdatedAt = now
 	return out, nil
+}
+
+// A completed DAG has no ready nodes. Continuing it reopens only terminal
+// nodes (steps with no dependants), preserving upstream results as context and
+// resuming each terminal Agent's existing session for the user's follow-up.
+func resetDAGContinuation(def Definition, run *Run) {
+	if run.Nodes == nil {
+		run.Nodes = make(map[string]NodeState, len(def.Steps))
+	}
+	hasDependants := make(map[string]bool, len(def.Steps))
+	for _, step := range def.Steps {
+		for _, dependency := range step.DependsOn {
+			hasDependants[dependency] = true
+		}
+	}
+	for _, step := range def.Steps {
+		if hasDependants[step.ID] {
+			continue
+		}
+		node := run.Nodes[step.ID]
+		node.StepID = step.ID
+		node.Status = NodePending
+		node.Signal = ""
+		node.Content = ""
+		node.Error = ""
+		node.StartedAt = time.Time{}
+		node.FinishedAt = time.Time{}
+		run.Nodes[step.ID] = node
+	}
 }
 
 // Pause stops automatic execution without consuming a transition. It is used

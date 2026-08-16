@@ -1010,7 +1010,7 @@
   .conversation-round-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 24px;
+    gap: 20px;
   }
 
   .conversation-user {
@@ -1107,12 +1107,11 @@
   }
 
   .conversation-process > summary {
-    position: relative;
-    min-height: 38px;
+    min-height: 32px;
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 2px 2px 12px;
+    padding: 2px 2px 6px;
     color: var(--muted-foreground);
     cursor: pointer;
     font-family: var(--font-ui-sans);
@@ -1124,16 +1123,6 @@
   .conversation-process > summary::-webkit-details-marker,
   .conversation-file-changes > summary::-webkit-details-marker {
     display: none;
-  }
-
-  .conversation-process > summary::after {
-    content: "";
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: 1px;
-    background: color-mix(in oklab, var(--border) 78%, transparent);
   }
 
   .conversation-process > summary svg {
@@ -1157,8 +1146,15 @@
   .conversation-process-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 2px;
-    padding: 10px 0 2px;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 11px;
+    background: var(--card);
+  }
+
+  .conversation-process-body > .conversation-tool + .conversation-tool {
+    border-top: 1px solid var(--border);
   }
 
   .conversation-agent-message.error {
@@ -1181,8 +1177,8 @@
   }
 
   .conversation-tool > summary {
-    padding: 0 3px;
-    border-radius: 7px;
+    padding: 0 12px;
+    border-radius: 0;
   }
 
   .conversation-tool > summary:hover {
@@ -1192,7 +1188,7 @@
   /* Tool calls read as a quiet activity feed. They only gain a surface on
      hover/open; the icon and concise verb carry the hierarchy at rest. */
   .conversation-tool-summary {
-    min-height: 34px;
+    min-height: 42px;
     grid-template-columns: 20px minmax(0, 1fr) auto 15px;
     gap: 8px;
   }
@@ -1224,7 +1220,7 @@
     font-family: var(--font-ui-sans);
     font-size: 13px;
     font-weight: 500;
-    line-height: 34px;
+    line-height: 42px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1267,16 +1263,17 @@
   .conversation-tool-caret { color: var(--muted-foreground); opacity: .7; }
   .conversation-tool-caret svg { width: 15px; height: 15px; }
 
-  .conversation-tool[open] { background: color-mix(in oklab, var(--muted) 40%, transparent); }
+  .conversation-tool[open] { background: color-mix(in oklab, var(--muted) 28%, transparent); }
   .conversation-tool[open] > summary {
-    border-radius: 7px;
+    border-radius: 0;
     background: transparent;
   }
 
   .conversation-tool-body {
     gap: 10px;
-    padding: 2px 8px 10px 31px;
+    padding: 2px 12px 12px 40px;
     border-left: 0;
+    border-top: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
   }
   .conversation-tool-body > div {
     overflow: visible;

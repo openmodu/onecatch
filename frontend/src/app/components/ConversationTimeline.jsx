@@ -4,6 +4,7 @@ import { Clipboard } from "@wailsio/runtime";
 import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Copy, FilePenLine, LoaderCircle, Search, Terminal, TriangleAlert, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fileName, formatDuration, formatTime } from "../format.js";
+import { groupRoundItems } from "../runConversation.js";
 import { Action } from "../../ui/primitives.jsx";
 
 const MarkdownContent = lazy(() => import("./MarkdownContent.jsx"));
@@ -114,39 +115,47 @@ function FileChangeGroup({ entries }) {
   </details>;
 }
 
+function ProcessGroup({ entries, active, round, permissionBusy, onPermissionDecision }) {
+  const { t } = useTranslation();
+  const timeLabel = createTimeLabeler();
+  const lastEntry = entries[entries.length - 1];
+  const toolCount = entries.filter((entry) => entry.type === "tool" && entry.kind === "tool_use").length;
+  const duration = roundDuration(round);
+  const label = active
+    ? t("timeline.processing")
+    : toolCount ? t("timeline.ranTools", { count: toolCount })
+      : duration ? t("timeline.processedFor", { duration }) : t("timeline.processed");
+  return <details className="conversation-process" open={active || undefined}>
+    <summary aria-label={`${label} · ${round.runtime}`}><span>{label}</span><ChevronRight className="closed" aria-hidden="true" /><ChevronDown className="opened" aria-hidden="true" /></summary>
+    <div className="conversation-process-body">{entries.map((entry, index) => {
+      if (entry.type === "permission") {
+        return <PermissionTimelineItem key={entry.id} entry={entry} busy={permissionBusy === entry.request?.id} onDecision={onPermissionDecision} time={timeLabel(entry.at)} />;
+      }
+      const running = Boolean(active) && entry === lastEntry && entry.kind === "tool_use";
+      const stalled = !entry.settled && !running && round.status !== "succeeded";
+      return <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={running} stalled={stalled} />;
+    })}</div>
+  </details>;
+}
+
 // One round of the transcript. `buildRunConversation` hands back a stable object
 // reference for any round whose step has finished, so memo() short-circuits every
 // finished round on a stream/poll frame — only the live round is reconciled.
 const ConversationRound = memo(function ConversationRound({ round, active, permissionBusy, onPermissionDecision }) {
   const { t } = useTranslation();
   const timeLabel = createTimeLabeler();
-  // A tool reports its own outcome (entry.failed) whenever the runtime answered
-  // it. Only when it never answered do we fall back to the step: a step that
-  // succeeded left nothing unfinished behind — Codex just does not emit a result
-  // event per command — while a step that died mid-flight did.
-  const processItems = round.items.filter((entry) => entry.type !== "message" && entry.kind !== "file_change");
-  const messages = round.items.filter((entry) => entry.type === "message");
-  const fileChanges = round.items.filter((entry) => entry.kind === "file_change");
-  const lastProcessItem = processItems[processItems.length - 1];
-  const duration = roundDuration(round);
-  const processLabel = active
-    ? t("timeline.processing")
-    : duration ? t("timeline.processedFor", { duration }) : t("timeline.processed");
+  const blocks = groupRoundItems(round.items);
+  const lastItem = round.items[round.items.length - 1];
   return <article className="conversation-round conversation-agent">
     <div className="conversation-round-body">
-      {processItems.length > 0 && <details className="conversation-process" open={active || undefined}>
-        <summary aria-label={`${processLabel} · ${round.runtime}`}><span>{processLabel}</span><ChevronRight className="closed" aria-hidden="true" /><ChevronDown className="opened" aria-hidden="true" /></summary>
-        <div className="conversation-process-body">{processItems.map((entry, index) => {
-          if (entry.type === "permission") {
-            return <PermissionTimelineItem key={entry.id} entry={entry} busy={permissionBusy === entry.request?.id} onDecision={onPermissionDecision} time={timeLabel(entry.at)} />;
-          }
-          const running = Boolean(active) && entry === lastProcessItem && entry.kind === "tool_use";
-          const stalled = !entry.settled && !running && round.status !== "succeeded";
-          return <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} time={timeLabel(entry.at)} running={running} stalled={stalled} />;
-        })}</div>
-      </details>}
-      {messages.map((entry, index) => <div className={`conversation-agent-message ${entry.tone}`} key={entry.id || `message-${index}`}><MessageBody content={entry.text} streaming={entry.streaming} /><MessageActions at={entry.at || round.finishedAt || round.startedAt} content={entry.text} /></div>)}
-      {fileChanges.length > 0 && <FileChangeGroup entries={fileChanges} />}
+      {blocks.map((block) => {
+        if (block.type === "message") {
+          const entry = block.item;
+          return <div className={`conversation-agent-message ${entry.tone}`} key={block.id}><MessageBody content={entry.text} streaming={entry.streaming} /><MessageActions at={entry.at || round.finishedAt || round.startedAt} content={entry.text} /></div>;
+        }
+        if (block.type === "files") return <FileChangeGroup entries={block.items} key={block.id} />;
+        return <ProcessGroup entries={block.items} active={Boolean(active) && lastItem === block.items[block.items.length - 1]} round={round} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} key={block.id} />;
+      })}
       <span className="sr-only">{round.runtime} · {t("timeline.round", { count: round.round })} · <time>{timeLabel(round.finishedAt || round.startedAt)}</time></span>
     </div>
   </article>;

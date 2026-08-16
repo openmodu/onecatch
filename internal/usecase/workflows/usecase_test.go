@@ -182,6 +182,51 @@ func TestResumeRunUsesSnapshotSessionAndHumanInstruction(t *testing.T) {
 	}
 }
 
+func TestResumeCompletedRunContinuesExistingAgentSession(t *testing.T) {
+	definition := oneStepPauseWorkflow()
+	engine := &scriptedEngine{
+		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true},
+		scripts: []engineScript{
+			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"first turn done"}`, "session-1")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"follow-up done"}`, "session-2")},
+		},
+	}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	completed, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil || completed.Status != domainworkflows.RunCompleted {
+		t.Fatalf("completed run = %+v, %v", completed, err)
+	}
+
+	continued, err := usecase.ResumeRun(context.Background(), completed.ID, "继续检查剩余问题")
+	if err != nil || continued.Status != domainworkflows.RunCompleted {
+		t.Fatalf("continued run = %+v, %v", continued, err)
+	}
+	if len(engine.calls) != 2 || engine.calls[1].ResumeSessionID != "session-1" || !strings.Contains(engine.calls[1].Prompt, "继续检查剩余问题") {
+		t.Fatalf("continuation request = %+v", engine.calls)
+	}
+	stepRuns, err := store.Repos.Workflows.ListStepRuns(context.Background(), completed.ID)
+	if err != nil || len(stepRuns) != 2 || stepRuns[1].Attempt != 2 {
+		t.Fatalf("step runs = %+v, %v", stepRuns, err)
+	}
+	events, err := store.Repos.Workflows.ListEvents(context.Background(), completed.ID, 0, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundResume := false
+	for _, event := range events {
+		if event.Type == "run.resumed" && strings.Contains(string(event.Payload), "继续检查剩余问题") {
+			foundResume = true
+		}
+	}
+	if !foundResume {
+		t.Fatalf("missing completed-run resume event: %+v", events)
+	}
+	storedTask, err := store.Repos.Tasks.GetTask(context.Background(), task.ID)
+	if err != nil || storedTask.Status != domaintasks.StatusCompleted {
+		t.Fatalf("stored task = %+v, %v", storedTask, err)
+	}
+}
+
 func TestQueuedInstructionsAreClaimedPriorityFirstAtStepBoundary(t *testing.T) {
 	definition := oneStepPauseWorkflow()
 	engine := &scriptedEngine{

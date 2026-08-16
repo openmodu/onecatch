@@ -244,6 +244,28 @@ function appliedInstructions(instructions) {
   });
 }
 
+// Preserve the provider's natural assistant rhythm instead of hoisting every
+// tool call above the prose for the whole step. Consecutive tool/process rows
+// share one disclosure surface, while messages and file-change groups remain
+// exactly where the runtime emitted them: text -> tools -> text -> tools.
+export function groupRoundItems(items = []) {
+  const blocks = [];
+  for (const item of items) {
+    const type = item.type === "message" ? "message" : item.kind === "file_change" ? "files" : "process";
+    const previous = blocks[blocks.length - 1];
+    if (type === "message") {
+      blocks.push({ type, id: item.id || `message-${blocks.length}`, item });
+      continue;
+    }
+    if (previous?.type === type) {
+      previous.items.push(item);
+      continue;
+    }
+    blocks.push({ type, id: item.id || `${type}-${blocks.length}`, items: [item] });
+  }
+  return blocks;
+}
+
 // A round only changes while its step is live. This fingerprint captures every
 // field roundItems reads, so a finished round is rebuilt zero times: the cache
 // hands back the exact same object reference on every poll/stream frame, which

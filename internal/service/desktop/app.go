@@ -656,8 +656,8 @@ func (a *Service) ResumeRun(ctx context.Context, runID, instruction string) (dom
 	if err != nil {
 		return run, coded("run_not_found", "run was not found")
 	}
-	if run.Status != domainworkflows.RunPaused {
-		return run, coded("run_invalid_state", "only paused runs can be resumed")
+	if run.Status != domainworkflows.RunPaused && run.Status != domainworkflows.RunCompleted {
+		return run, coded("run_invalid_state", "only paused or completed runs can be resumed")
 	}
 	if a.isActive(runID) {
 		return run, coded("run_invalid_state", "run is still stopping")

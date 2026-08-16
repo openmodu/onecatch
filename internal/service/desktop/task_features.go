@@ -85,8 +85,8 @@ func (a *Service) enqueueInstruction(ctx context.Context, runID string, input In
 	if err != nil {
 		return domainworkflows.Instruction{}, coded("run_not_found", "run was not found")
 	}
-	if run.Status != domainworkflows.RunRunning && run.Status != domainworkflows.RunPaused {
-		return domainworkflows.Instruction{}, coded("run_invalid_state", "instructions can only be queued for running or paused runs")
+	if run.Status != domainworkflows.RunRunning && run.Status != domainworkflows.RunPaused && run.Status != domainworkflows.RunCompleted {
+		return domainworkflows.Instruction{}, coded("run_invalid_state", "instructions can only be queued for running, paused, or completed runs")
 	}
 	task, err := a.store.Repos.Tasks.GetTask(ctx, run.TaskID)
 	if err != nil {

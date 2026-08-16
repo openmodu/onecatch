@@ -339,13 +339,23 @@ test("the transcript follows Codex's user, process, and answer rhythm", async ()
   assert.match(css, /\.conversation-user\s*\{[^}]*justify-self:\s*end/s, "user messages must sit on the right");
   assert.match(css, /\.conversation-user\s+\.conversation-bubble\s*\{[^}]*border-radius:/s, "user messages need their own chat bubble treatment");
   assert.doesNotMatch(timeline, /\b(?:Bot|UserRound)\b|conversation-message-avatar/, "Codex-style turns do not need chat avatars");
-  assert.match(timeline, /<details className="conversation-process" open=\{active \|\| undefined\}>/, "tool work must collapse behind one processed row");
+  assert.match(timeline, /groupRoundItems\(round\.items\)/, "provider event order must drive transcript blocks");
+  assert.match(timeline, /<ProcessGroup entries=\{block\.items\}/, "adjacent tool work must collapse into a local process block");
   assert.match(timeline, /className=\{`conversation-agent-message \$\{entry\.tone\}`\}/, "assistant prose must render separately from process chrome");
-  assert.match(timeline, /<FileChangeGroup entries=\{fileChanges\}/, "file edits need a dedicated review card");
+  assert.match(timeline, /<FileChangeGroup entries=\{block\.items\}/, "file edits need a dedicated review card in event order");
   assert.match(timeline, /<MessageActions at=\{item\.at\} content=\{item\.text\} align="end"/, "user messages expose hover actions");
   assert.match(timeline, /<MessageActions at=\{entry\.at \|\| round\.finishedAt \|\| round\.startedAt\} content=\{entry\.text\}/, "assistant messages expose hover actions");
   assert.match(timeline, /<Copy aria-hidden="true"/, "message actions must include a copy control");
   assert.match(css, /\.conversation-user:hover \.conversation-message-actions[^}]*opacity:\s*1/s, "hovering a user turn must reveal its metadata actions");
+});
+
+test("completed conversations remain available for a follow-up turn", async () => {
+  const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
+  const composer = await readFile(path.join(sourceRoot, "app", "components", "Composer.jsx"), "utf8");
+  assert.match(composer, /\["running", "paused", "completed"\]\.includes\(runStatus\)/);
+  assert.match(composer, /runStatus === "completed"[\s\S]*t\("composer\.continue"\)/);
+  assert.match(app, /run\.status === "paused" \|\| run\.status === "completed"/);
+  assert.match(app, /TaskRunBinding\.ResumeRun\(run\.id, content\)/);
 });
 
 test("tool rows spend their width on the command, not on empty columns", async () => {

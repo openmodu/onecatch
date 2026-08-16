@@ -248,6 +248,24 @@ func TestPauseAndResumeKeepCurrentStep(t *testing.T) {
 	}
 }
 
+func TestCompletedSerialRunCanContinueCurrentStep(t *testing.T) {
+	def := reviewLoopDefinition()
+	now := time.Date(2026, 7, 10, 10, 0, 0, 0, time.UTC)
+	run, _ := NewRun(def, "run_completed", now)
+	run, _ = Start(def, run, now.Add(time.Second))
+	run, _ = Advance(def, run, Outcome{Signal: "ready_for_review", Content: "ready"}, now.Add(2*time.Second))
+	run.Sessions["review"] = "review-session"
+	run, _ = Advance(def, run, Outcome{Signal: "approved", Content: "done"}, now.Add(3*time.Second))
+
+	resumed, err := Resume(def, run, now.Add(4*time.Second))
+	if err != nil || resumed.Status != RunRunning || resumed.CurrentStepID != "review" {
+		t.Fatalf("Resume(completed) = %+v, %v", resumed, err)
+	}
+	if !resumed.CompletedAt.IsZero() || resumed.Sessions["review"] != "review-session" {
+		t.Fatalf("completed continuation lost completion/session state: %+v", resumed)
+	}
+}
+
 func TestCancelReadyOrPausedRun(t *testing.T) {
 	def := reviewLoopDefinition()
 	now := time.Now()
@@ -297,6 +315,36 @@ func TestValidateDAG(t *testing.T) {
 	run, err := NewRun(def, "run_dag", time.Now())
 	if err != nil || len(run.Nodes) != 3 || run.Nodes["security"].Status != NodePending {
 		t.Fatalf("NewRun(DAG) = %+v, %v", run, err)
+	}
+}
+
+func TestCompletedDAGContinuationReopensOnlyTerminalNodes(t *testing.T) {
+	def := dagDefinition()
+	now := time.Date(2026, 7, 10, 10, 0, 0, 0, time.UTC)
+	run, err := NewRun(def, "run_dag_completed", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	run.Status = RunCompleted
+	run.CompletedAt = now.Add(time.Minute)
+	run.Nodes["security"] = NodeState{StepID: "security", Status: NodeCompleted, Content: "secure", Attempt: 1}
+	run.Nodes["tests"] = NodeState{StepID: "tests", Status: NodeCompleted, Content: "passing", Attempt: 1}
+	run.Nodes["synthesis"] = NodeState{StepID: "synthesis", Status: NodeCompleted, Content: "applied", Signal: "completed", Attempt: 1}
+	run.Sessions["synthesis"] = "synthesis-session"
+
+	resumed, err := Resume(def, run, now.Add(2*time.Minute))
+	if err != nil || resumed.Status != RunRunning || !resumed.CompletedAt.IsZero() {
+		t.Fatalf("Resume(completed DAG) = %+v, %v", resumed, err)
+	}
+	if resumed.Nodes["security"].Status != NodeCompleted || resumed.Nodes["tests"].Status != NodeCompleted {
+		t.Fatalf("upstream nodes were reopened: %+v", resumed.Nodes)
+	}
+	terminal := resumed.Nodes["synthesis"]
+	if terminal.Status != NodePending || terminal.Content != "" || terminal.Signal != "" || terminal.Attempt != 1 {
+		t.Fatalf("terminal node was not reset for continuation: %+v", terminal)
+	}
+	if resumed.Sessions["synthesis"] != "synthesis-session" {
+		t.Fatalf("terminal session was not preserved: %+v", resumed.Sessions)
 	}
 }
 

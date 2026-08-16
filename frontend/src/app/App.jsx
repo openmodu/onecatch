@@ -716,15 +716,22 @@ function App() {
         if (run.status === "running") {
           const instruction = { id: `instruction_${Date.now()}`, content: content || t("composer.attachmentInstruction"), attachments: [...attachments], status: "pending", priority: modeName === "insert", createdAt: new Date().toISOString() };
           setRunDetail((detail) => ({ ...detail, instructions: [...(detail.instructions || []), instruction] }));
-        } else if (run.status === "paused") {
-          setRunDetail((detail) => ({ ...detail, active: true, run: { ...detail.run, status: "running", pauseReason: "" } }));
+        } else if (run.status === "paused" || run.status === "completed") {
+          const instruction = content || (attachments.length ? t("composer.attachmentInstruction") : "");
+          const at = new Date().toISOString();
+          setRunDetail((detail) => ({
+            ...detail,
+            active: true,
+            run: { ...detail.run, status: "running", pauseReason: "", completedAt: "", updatedAt: at },
+            events: [...(detail.events || []), { seq: Math.max(0, ...(detail.events || []).map((event) => event.seq || 0)) + 1, type: "run.resumed", payload: JSON.stringify({ instruction }), at }],
+          }));
           setRunItems((items) => items.map((item) => item.id === run.id ? { ...item, status: "running" } : item));
         }
       } else if (run.status === "running") {
         const input = { content, attachmentPaths: attachments };
         if (modeName === "insert") await TaskRunBinding.InterruptAndInsert(run.id, input);
         else await TaskRunBinding.EnqueueInstruction(run.id, input);
-      } else if (run.status === "paused") {
+      } else if (run.status === "paused" || run.status === "completed") {
         if (attachments.length) {
           await TaskRunBinding.EnqueueInstruction(run.id, { content: content || t("composer.attachmentInstruction"), attachmentPaths: attachments });
           await TaskRunBinding.ResumeRun(run.id, "");
