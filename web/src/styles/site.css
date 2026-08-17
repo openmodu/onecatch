@@ -1,0 +1,711 @@
+@import "./tokens.generated.css";
+
+/* The site names its own roles, but every value resolves through the
+   application's palette above. That is the whole point of the generated
+   import: change a colour in frontend/src/index.css and it lands here on the
+   next build, in both themes, without a second copy to keep in step.
+   `--info` is not aliased because the application already owns that exact
+   name — aliasing it to itself would be a self-reference and resolve to
+   nothing. */
+:root {
+  --ground: var(--background);
+  --panel: var(--card);
+  --band: var(--sidebar);
+  --ink: var(--foreground);
+  --ink-soft: var(--muted-foreground);
+  --rule: var(--border);
+  --rule-soft: color-mix(in oklab, var(--border) 55%, var(--background));
+  --amber: var(--primary);
+  --amber-ink: var(--primary-foreground);
+  --ok: var(--success);
+  --warn: var(--warning);
+  --sans: var(--font-ui-sans);
+  --mono: var(--font-ui-mono);
+
+  --gutter: 34px;
+  --column: 760px;
+}
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html { -webkit-text-size-adjust: 100%; }
+
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.75;
+    font-synthesis: none;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: inherit; }
+
+  :focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* ---- The spine ---------------------------------------------------------
+     One hairline runs the full length of the page along the left edge of the
+     reading column, and every section hangs a tick on it. The page is read the
+     way a run log is read: top to bottom, one step at a time. */
+  .column {
+    position: relative;
+    max-width: var(--column);
+    margin: 0 auto;
+    padding: 0 24px 0 calc(24px + var(--gutter));
+  }
+
+  .column::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 24px;
+    width: 1px;
+    background: var(--rule);
+  }
+
+  /* The tick hangs off the eyebrow, not off the section box — anchored to the
+     section's padding it floats a whole gutter above the words it marks. */
+  .eyebrow::before {
+    content: "";
+    position: absolute;
+    top: 0.5em;
+    left: calc(-1 * var(--gutter));
+    width: 13px;
+    height: 2px;
+    background: var(--amber);
+  }
+
+  /* ---- Header ------------------------------------------------------------ */
+  .masthead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding-top: 26px;
+    padding-bottom: 26px;
+  }
+
+  .mark {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+  }
+
+  /* The app's own launch mark: a numeral one on the identity colour. */
+  .glyph {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--amber);
+    color: var(--amber-ink);
+    font-size: 15px;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  /* The name does not explain itself, so the promise rides with it — set apart
+     from the wordmark by a rule rather than by shouting. */
+  .tagline {
+    padding-left: 11px;
+    margin-left: 3px;
+    border-left: 1px solid var(--rule);
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+  }
+
+  .masthead-links {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    font-size: 14px;
+    color: var(--ink-soft);
+  }
+
+  .masthead-links a { text-decoration: none; }
+  .masthead-links a:hover { color: var(--ink); }
+
+  .theme-toggle {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: 1px solid var(--rule);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--ink-soft);
+    cursor: pointer;
+  }
+
+  .theme-toggle:hover { border-color: var(--ink-soft); color: var(--ink); }
+  .theme-toggle .sun { display: none; }
+  .theme-toggle .moon { display: block; }
+
+  /* The icon shows the theme you would switch *to*, so it has to track the
+     resolved theme through all three states, not just the stamped ones. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .theme-toggle .sun { display: block; }
+    :root:not([data-theme="light"]) .theme-toggle .moon { display: none; }
+  }
+
+  :root[data-theme="dark"] .theme-toggle .sun { display: block; }
+  :root[data-theme="dark"] .theme-toggle .moon { display: none; }
+  :root[data-theme="light"] .theme-toggle .sun { display: none; }
+  :root[data-theme="light"] .theme-toggle .moon { display: block; }
+
+  /* ---- Type scale -------------------------------------------------------- */
+  h1 {
+    margin: 0;
+    font-size: clamp(2.35rem, 5.4vw, 3.4rem);
+    font-weight: 600;
+    line-height: 1.14;
+    letter-spacing: -0.035em;
+    text-wrap: balance;
+  }
+
+  h2 {
+    margin: 0 0 10px;
+    font-size: 1.75rem;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+  }
+
+  .feature h2 {
+    font-size: 1.1875rem;
+    line-height: 1.5;
+    letter-spacing: -0.015em;
+  }
+
+  p { margin: 0; }
+
+  /* Sans, not mono: SF Mono carries no CJK glyphs, so a Chinese eyebrow set in
+     it silently falls back to a different face at different metrics. Mono stays
+     reserved for the machine's own words — paths, commands, event kinds. */
+  .eyebrow {
+    position: relative;
+    margin: 0 0 14px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0.16em;
+    color: var(--ink-soft);
+  }
+
+  .lede {
+    max-width: 34em;
+    color: var(--ink-soft);
+    font-size: 1.0625rem;
+  }
+
+  code {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    color: var(--ink);
+  }
+
+  /* ---- Hero -------------------------------------------------------------- */
+  .hero { padding: clamp(56px, 11vh, 104px) 0 clamp(48px, 9vh, 88px); }
+
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 26px;
+    padding: 5px 12px 5px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    background: var(--panel);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+  }
+
+  .chip code { font-size: 12px; color: var(--ink-soft); }
+
+  .chip .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--ok);
+  }
+
+  .hero .lede { margin-top: 22px; }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 32px;
+  }
+
+  .button {
+    display: inline-flex;
+    align-items: center;
+    height: 38px;
+    padding: 0 18px;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 130ms ease, border-color 130ms ease;
+  }
+
+  .button.primary { background: var(--amber); color: var(--amber-ink); }
+  .button.primary:hover { background: color-mix(in oklab, var(--amber) 86%, var(--ink)); }
+  .button.ghost { border-color: var(--rule); color: var(--ink); }
+  .button.ghost:hover { border-color: var(--ink-soft); }
+
+  .drives {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 18px;
+    margin-top: 40px;
+    font-size: 13px;
+    color: var(--ink-soft);
+  }
+
+  .drives .label { letter-spacing: 0.1em; }
+
+  .drives .cli {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink);
+  }
+
+  /* ---- Transcript band ---------------------------------------------------
+     The one element that breaks the column. Not a screenshot: the app's real
+     normalized event stream, which is the thing the product actually sells. */
+  .band {
+    padding: clamp(44px, 7vh, 72px) 24px;
+    border-top: 1px solid var(--rule-soft);
+    border-bottom: 1px solid var(--rule-soft);
+    background: var(--band);
+  }
+
+  .terminal {
+    max-width: 920px;
+    margin: 0 auto;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: 0 18px 44px -30px color-mix(in oklab, var(--ink) 55%, transparent);
+  }
+
+  .terminal-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+
+  .terminal-bar .light {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--rule);
+  }
+
+  .terminal-title {
+    margin-left: 6px;
+    font-size: 12.5px;
+    color: var(--ink-soft);
+  }
+
+  .terminal-body {
+    padding: 16px 14px 18px;
+    overflow-x: auto;
+  }
+
+  .stream {
+    margin: 0;
+    min-height: 21.5em;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.85;
+    white-space: pre;
+  }
+
+  .stream .row { display: block; }
+  .stream .kind { display: inline-block; width: 13ch; }
+  .stream .started { color: var(--info); }
+  .stream .reasoning, .stream .tool_result, .stream .usage { color: var(--ink-soft); }
+  .stream .tool_use { color: var(--ink); }
+  .stream .file_change { color: var(--amber); }
+  .stream .result { color: var(--ok); }
+  .stream .result-warn { color: var(--warn); }
+  .stream .divider { color: var(--rule); }
+  .stream .text { color: var(--ink-soft); }
+  .stream .tool_use + .text, .stream .file_change + .text { color: var(--ink); }
+
+  .caret {
+    display: inline-block;
+    width: 7px;
+    height: 1em;
+    background: var(--amber);
+    vertical-align: -2px;
+  }
+
+  .caret.blink { animation: caret 1.05s steps(2, start) infinite; }
+
+  @keyframes caret { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+
+  /* ---- Sections ---------------------------------------------------------- */
+  .section { padding: clamp(52px, 9vh, 86px) 0 0; }
+
+  .features {
+    display: flex;
+    flex-direction: column;
+    gap: 44px;
+    margin-top: 38px;
+  }
+
+  .feature p { color: var(--ink-soft); max-width: 40em; }
+
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 26px;
+    margin-top: 34px;
+  }
+
+  .steps p { color: var(--ink-soft); max-width: 40em; }
+  .steps strong { color: var(--ink); font-weight: 600; }
+
+  /* Scoped to .code on purpose: a bare `pre` rule here also captures the
+     transcript, which is a `pre` too, and boxes it inside its own window. */
+  .code {
+    margin: 22px 0 0;
+    padding: 16px 18px;
+    overflow-x: auto;
+    border: 1px solid var(--rule);
+    border-radius: 12px;
+    background: var(--panel);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.9;
+  }
+
+  .code .prompt { color: var(--ink-soft); user-select: none; }
+  .code .note { color: var(--ink-soft); }
+
+  .note-line {
+    margin-top: 18px;
+    color: var(--ink-soft);
+    font-size: 0.9375rem;
+  }
+
+  /* ---- Workbench view ----------------------------------------------------
+     Built from the application's own tokens and its demo dataset rather than
+     pasted in as a raster shot: it stays sharp at any density, and it follows
+     the reader's theme instead of pinning one theme's screenshot onto both. */
+  /* Three panes is the claim the caption makes, so the view keeps all three on
+     a phone and scrolls inside its own box rather than collapsing — the page
+     body still never scrolls sideways. */
+  .workbench-scroll {
+    max-width: 920px;
+    margin: 0 auto;
+    padding-bottom: 4px;
+    overflow-x: auto;
+  }
+
+  .workbench {
+    display: grid;
+    grid-template-columns: 168px minmax(0, 1fr) 210px;
+    min-width: 700px;
+    overflow: hidden;
+    border: 1px solid var(--rule);
+    border-radius: 14px;
+    background: var(--panel);
+    box-shadow: 0 18px 44px -30px color-mix(in oklab, var(--ink) 55%, transparent);
+    font-size: 11.5px;
+    line-height: 1.6;
+  }
+
+  .wb-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 12px 10px;
+    border-right: 1px solid var(--rule-soft);
+    background: color-mix(in oklab, var(--band) 60%, var(--panel));
+  }
+
+  .wb-brand {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .wb-brand .glyph { width: 17px; height: 17px; border-radius: 5px; font-size: 10px; }
+  .wb-label { margin-bottom: 3px; color: var(--ink-soft); font-size: 10px; letter-spacing: 0.08em; }
+  .wb-row { padding: 4px 7px; border-radius: 6px; color: var(--ink-soft); }
+  .wb-row.project { color: var(--ink); font-weight: 500; }
+  /* Task titles truncate in the rail exactly as they do in the application. */
+  .wb-row.task {
+    padding-left: 15px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* The rail already sits on a tinted ground, so the selected row lifts toward
+     the card colour rather than tinting further and vanishing into it. */
+  .wb-row.on { background: var(--panel); color: var(--ink); font-weight: 500; }
+
+  .wb-main { display: flex; flex-direction: column; min-width: 0; }
+
+  .wb-bar {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 14px;
+    color: var(--ink-soft);
+  }
+
+  .wb-bar strong { color: var(--ink); font-weight: 600; }
+
+  .pill {
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--warn) 14%, transparent);
+    color: var(--warn);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .pill.done { background: color-mix(in oklab, var(--ok) 14%, transparent); color: var(--ok); }
+
+  .wb-thread {
+    display: flex;
+    flex-direction: column;
+    gap: 11px;
+    padding: 4px 14px 14px;
+    min-width: 0;
+  }
+
+  .wb-said {
+    align-self: flex-end;
+    max-width: 76%;
+    padding: 6px 10px;
+    border-radius: 12px;
+    background: var(--band);
+  }
+
+  .wb-agent { color: var(--ink); }
+  .wb-quiet { color: var(--ink-soft); }
+
+  .wb-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 11px;
+    border: 1px solid var(--rule-soft);
+    border-radius: 9px;
+  }
+
+  .wb-card .path { display: block; font-family: var(--mono); font-size: 11px; color: var(--ink); }
+  .wb-card .kindline { display: block; color: var(--ink-soft); font-size: 10px; }
+
+  .wb-composer {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin: auto 10px 10px;
+    padding: 9px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 11px;
+    background: var(--panel);
+    color: var(--ink-soft);
+  }
+
+  .wb-chip {
+    padding: 2px 8px;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .wb-go {
+    margin-left: auto;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--amber);
+    color: var(--amber-ink);
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .wb-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px 12px 14px;
+    border-left: 1px solid var(--rule-soft);
+    background: color-mix(in oklab, var(--band) 45%, var(--panel));
+  }
+
+  .wb-tabs {
+    display: flex;
+    gap: 3px;
+    padding: 2px;
+    border-radius: 7px;
+    background: color-mix(in oklab, var(--band) 80%, transparent);
+    font-size: 10px;
+  }
+
+  .wb-tabs span {
+    padding: 2px 6px;
+    border-radius: 5px;
+    color: var(--ink-soft);
+  }
+
+  .wb-tabs span.on { background: var(--panel); color: var(--ink); font-weight: 500; }
+
+  .wb-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 8px; }
+  .wb-metrics span { display: block; color: var(--ink-soft); font-size: 10px; }
+  .wb-metrics strong { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .wb-steps { display: flex; flex-direction: column; gap: 7px; }
+
+  .wb-step { display: flex; align-items: baseline; gap: 7px; }
+
+  .wb-step i {
+    display: grid;
+    place-items: center;
+    width: 15px;
+    height: 15px;
+    flex: 0 0 auto;
+    border-radius: 50%;
+    background: var(--band);
+    color: var(--ink-soft);
+    font-size: 9px;
+    font-style: normal;
+  }
+
+  .wb-step.on i { background: var(--amber); color: var(--amber-ink); }
+  .wb-step b { display: block; font-weight: 600; }
+  .wb-step small { color: var(--ink-soft); font-size: 10px; }
+
+  .wb-resume {
+    padding: 7px 8px;
+    border: 1px solid var(--rule-soft);
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-soft);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .wb-alert {
+    padding: 7px 9px;
+    border: 1px solid color-mix(in oklab, var(--warn) 34%, transparent);
+    border-radius: 8px;
+    background: color-mix(in oklab, var(--warn) 8%, transparent);
+    color: var(--warn);
+    font-size: 10.5px;
+  }
+
+  .caption {
+    max-width: 920px;
+    margin: 16px auto 0;
+    color: var(--ink-soft);
+    font-size: 12.5px;
+    text-align: center;
+  }
+
+  /* ---- Questions --------------------------------------------------------- */
+  .qa { margin-top: 30px; border-top: 1px solid var(--rule-soft); }
+
+  .qa details { border-bottom: 1px solid var(--rule-soft); }
+
+  .qa summary {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 17px 0;
+    font-size: 1rem;
+    font-weight: 500;
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .qa summary::-webkit-details-marker { display: none; }
+
+  .qa summary::after {
+    content: "+";
+    flex: 0 0 auto;
+    color: var(--ink-soft);
+    font-family: var(--mono);
+    font-size: 15px;
+  }
+
+  .qa details[open] summary::after { content: "–"; }
+  .qa summary:hover { color: var(--amber); }
+  .qa p { padding: 0 0 18px; color: var(--ink-soft); max-width: 40em; }
+
+  /* ---- Footer ------------------------------------------------------------ */
+  .footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: clamp(64px, 11vh, 108px);
+    padding: 26px 0 40px;
+    border-top: 1px solid var(--rule-soft);
+    font-size: 13.5px;
+    color: var(--ink-soft);
+  }
+
+  .footer a { text-decoration: none; }
+  .footer a:hover { color: var(--ink); }
+  .footer .path { font-family: var(--mono); font-size: 12.5px; }
+  .footer-links { display: flex; gap: 16px; }
+
+  @media (max-width: 640px) {
+    :root { --gutter: 20px; }
+    body { font-size: 16px; }
+    /* The two-line break is set for the wide measure; on a phone it wraps again
+       and strands "loop。" on a line of its own. Let balancing do it instead. */
+    .wide-break { display: none; }
+    /* The masthead has no room for the promise once the nav is there. */
+    .tagline { display: none; }
+    .masthead-links { gap: 16px; }
+    .column { padding-right: 18px; padding-left: calc(18px + var(--gutter)); }
+    .column::before { left: 18px; }
+    .stream { font-size: 11px; }
+    .stream .kind { width: 12ch; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .caret.blink { animation: none; }
+    .button { transition: none; }
+  }

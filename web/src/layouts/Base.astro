@@ -1,0 +1,73 @@
+---
+import Masthead from "../components/Masthead.astro";
+import "../styles/site.css";
+
+interface Props {
+  title: string;
+  description: string;
+}
+
+const { title, description } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+---
+
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="canonical" href={canonical} />
+    <meta property="og:title" content={title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:type" content="website" />
+    <script is:inline>
+      // Stamp the stored choice before anything paints, so a reader who picked
+      // the theme opposite to their OS never sees the other one flash first.
+      // Inline and un-bundled on purpose: a deferred module would run too late.
+      (() => {
+        try {
+          const saved = localStorage.getItem("onecatch.landing.theme");
+          if (saved === "dark" || saved === "light") document.documentElement.dataset.theme = saved;
+        } catch { /* private mode: fall back to following the OS */ }
+      })();
+    </script>
+  </head>
+  <body>
+    <div class="column">
+      <Masthead />
+    </div>
+
+    <slot />
+
+    <div class="column">
+      <footer class="footer">
+        <span>OneCatch — One place, catch everything · 本地 Agent 编排</span>
+        <span class="footer-links"
+          ><a class="path" href="https://onecatch.app">onecatch.app</a><a
+            class="path"
+            href="https://github.com/openmodu/onecatch">GitHub</a
+          ></span
+        >
+      </footer>
+    </div>
+
+    <script>
+      // Toggling flips away from whatever is currently resolved — including the
+      // un-stamped "follow the OS" state, where only the media query knows.
+      document.getElementById("theme-toggle")?.addEventListener("click", () => {
+        const root = document.documentElement;
+        const dark = root.dataset.theme
+          ? root.dataset.theme === "dark"
+          : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        const next = dark ? "light" : "dark";
+        root.dataset.theme = next;
+        try {
+          localStorage.setItem("onecatch.landing.theme", next);
+        } catch { /* best effort */ }
+      });
+    </script>
+  </body>
+</html>
