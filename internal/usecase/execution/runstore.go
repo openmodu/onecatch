@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 // runFileName is where each order's run log is persisted, inside the order's
 // managed metadata directory. It is a dotfile so the artifact collector skips
 // it when walking the workspace.
-const runFileName = ".oneshot-run.json"
+const runFileName = ".onecatch-run.json"
 
 // runStore keeps order run logs in memory and mirrors terminal state to disk so
 // the run history (and the session id needed to resume a task) survives a

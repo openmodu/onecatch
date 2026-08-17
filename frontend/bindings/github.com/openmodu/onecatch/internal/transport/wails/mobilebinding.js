@@ -21,7 +21,7 @@ import * as worker$0 from "../../service/worker/models.js";
  * @returns {$CancellablePromise<mobile$0.WorkerStatus>}
  */
 export function CheckWorker(id) {
-    return $Call.ByID(3824989612, id).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(503373925, id).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -31,7 +31,7 @@ export function CheckWorker(id) {
  * @returns {$CancellablePromise<void>}
  */
 export function DeleteWorker(id) {
-    return $Call.ByID(4117233247, id);
+    return $Call.ByID(60094852, id);
 }
 
 /**
@@ -39,7 +39,7 @@ export function DeleteWorker(id) {
  * @returns {$CancellablePromise<mobile$0.RunView>}
  */
 export function GetRun(id) {
-    return $Call.ByID(2607927415, id).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(42850800, id).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -49,14 +49,14 @@ export function GetRun(id) {
  * @returns {$CancellablePromise<void>}
  */
 export function InterruptRun(id) {
-    return $Call.ByID(172162842, id);
+    return $Call.ByID(2935810917, id);
 }
 
 /**
  * @returns {$CancellablePromise<mobile$0.RunView[]>}
  */
 export function ListRuns() {
-    return $Call.ByID(2516220668).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2751141287).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType2($result);
     }));
 }
@@ -65,7 +65,7 @@ export function ListRuns() {
  * @returns {$CancellablePromise<worker$0.Info[]>}
  */
 export function ListWorkers() {
-    return $Call.ByID(1938878169).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1285524968).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType4($result);
     }));
 }
@@ -75,7 +75,7 @@ export function ListWorkers() {
  * @returns {$CancellablePromise<worker$0.WorkspaceMapping[]>}
  */
 export function ListWorkspaces(workerID) {
-    return $Call.ByID(3506091204, workerID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2565852803, workerID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType6($result);
     }));
 }
@@ -86,7 +86,7 @@ export function ListWorkspaces(workerID) {
  * @returns {$CancellablePromise<worker$0.Info>}
  */
 export function PairWorker(baseURL, code) {
-    return $Call.ByID(3942633276, baseURL, code).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1072201499, baseURL, code).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -98,7 +98,7 @@ export function PairWorker(baseURL, code) {
  * @returns {$CancellablePromise<worker$0.WorkspacePrepareResult>}
  */
 export function PrepareWorkspace(workerID, workspaceID, input) {
-    return $Call.ByID(2414549450, workerID, workspaceID, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1084700857, workerID, workspaceID, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType7($result);
     }));
 }
@@ -110,7 +110,7 @@ export function PrepareWorkspace(workerID, workspaceID, input) {
  * @returns {$CancellablePromise<void>}
  */
 export function RemoveWorkspace(workerID, workspaceID, deleteFiles) {
-    return $Call.ByID(2641031735, workerID, workspaceID, deleteFiles);
+    return $Call.ByID(1626531166, workerID, workspaceID, deleteFiles);
 }
 
 /**
@@ -118,7 +118,7 @@ export function RemoveWorkspace(workerID, workspaceID, deleteFiles) {
  * @returns {$CancellablePromise<void>}
  */
 export function RespondPermission(input) {
-    return $Call.ByID(1757616724, input);
+    return $Call.ByID(316387241, input);
 }
 
 /**
@@ -126,7 +126,7 @@ export function RespondPermission(input) {
  * @returns {$CancellablePromise<mobile$0.RunView>}
  */
 export function StartRun(input) {
-    return $Call.ByID(300673931, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2117250808, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -137,7 +137,7 @@ export function StartRun(input) {
  * @returns {$CancellablePromise<workspaces$0.GitSnapshot>}
  */
 export function WorkspaceGitStatus(workerID, workspaceID) {
-    return $Call.ByID(547359395, workerID, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2980083104, workerID, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType8($result);
     }));
 }

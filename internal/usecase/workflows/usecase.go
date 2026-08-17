@@ -14,10 +14,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 const (
@@ -815,7 +815,7 @@ func (s *Usecase) recordGit(ctx context.Context, runID, stepID, phase, workspace
 
 func composePrompt(task domaintasks.Task, definition domainworkflows.Definition, step domainworkflows.Step, run domainworkflows.Run, instruction string) string {
 	parts := []string{
-		"# Oneshot workflow step",
+		"# OneCatch workflow step",
 		"",
 		"## Task",
 		task.Prompt,

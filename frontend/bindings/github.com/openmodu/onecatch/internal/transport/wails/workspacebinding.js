@@ -18,7 +18,7 @@ import * as desktop$0 from "../../service/desktop/models.js";
  * @returns {$CancellablePromise<workspaces$0.Workspace>}
  */
 export function AddWorkspace(input) {
-    return $Call.ByID(3681900251, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(4152638586, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -27,7 +27,7 @@ export function AddWorkspace(input) {
  * @returns {$CancellablePromise<string[]>}
  */
 export function ChooseAttachments() {
-    return $Call.ByID(2255764812).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3384592839).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -36,7 +36,7 @@ export function ChooseAttachments() {
  * @returns {$CancellablePromise<string>}
  */
 export function ChooseDirectory() {
-    return $Call.ByID(1379470121);
+    return $Call.ByID(80681666);
 }
 
 /**
@@ -44,7 +44,7 @@ export function ChooseDirectory() {
  * @returns {$CancellablePromise<workspaces$0.Workspace>}
  */
 export function GetWorkspace(id) {
-    return $Call.ByID(1986993754, id).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1390246223, id).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -54,7 +54,7 @@ export function GetWorkspace(id) {
  * @returns {$CancellablePromise<desktop$0.WorkspaceStatus>}
  */
 export function GetWorkspaceStatus(id) {
-    return $Call.ByID(2337999140, id).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(57993081, id).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType2($result);
     }));
 }
@@ -65,7 +65,7 @@ export function GetWorkspaceStatus(id) {
  * @returns {$CancellablePromise<desktop$0.WorkspaceFileEntry[]>}
  */
 export function ListWorkspaceFiles(workspaceID, directory) {
-    return $Call.ByID(134163371, workspaceID, directory).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3025621542, workspaceID, directory).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType4($result);
     }));
 }
@@ -74,7 +74,7 @@ export function ListWorkspaceFiles(workspaceID, directory) {
  * @returns {$CancellablePromise<workspaces$0.Workspace[]>}
  */
 export function ListWorkspaces() {
-    return $Call.ByID(117281613).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2383037796).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType5($result);
     }));
 }
@@ -84,7 +84,7 @@ export function ListWorkspaces() {
  * @returns {$CancellablePromise<workspaces$0.Workspace>}
  */
 export function OpenWorkspace(id) {
-    return $Call.ByID(2917761272, id).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(538828779, id).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -95,7 +95,7 @@ export function OpenWorkspace(id) {
  * @returns {$CancellablePromise<desktop$0.WorkspaceFileDocument>}
  */
 export function ReadWorkspaceFile(workspaceID, path) {
-    return $Call.ByID(961402126, workspaceID, path).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2305632485, workspaceID, path).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType6($result);
     }));
 }
@@ -105,7 +105,7 @@ export function ReadWorkspaceFile(workspaceID, path) {
  * @returns {$CancellablePromise<void>}
  */
 export function RemoveWorkspace(id) {
-    return $Call.ByID(1963398616, id);
+    return $Call.ByID(1769621719, id);
 }
 
 /**
@@ -114,7 +114,7 @@ export function RemoveWorkspace(id) {
  * @returns {$CancellablePromise<workspaces$0.Workspace>}
  */
 export function SetWorkspacePinned(id, pinned) {
-    return $Call.ByID(1864814896, id, pinned).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(4111845597, id, pinned).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -124,7 +124,7 @@ export function SetWorkspacePinned(id, pinned) {
  * @returns {$CancellablePromise<desktop$0.WorkspaceFileDocument>}
  */
 export function WriteWorkspaceFile(input) {
-    return $Call.ByID(937208877, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2020849016, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType6($result);
     }));
 }

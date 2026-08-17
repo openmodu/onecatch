@@ -28,5 +28,5 @@ dev_mode:
       type: blocking
     - cmd: go tool wails3 task dev:frontend
       type: background
-    - cmd: bin\oneshot.exe
+    - cmd: bin\onecatch.exe
       type: primary

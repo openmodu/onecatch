@@ -1,4 +1,4 @@
-# Oneshot App
+# OneCatch App
 
 `cmd/app` 是桌面、iOS 和 Android 的统一 Wails 入口。桌面构建组装本地
 store、Workflow orchestrator 与 Agent CLI；移动构建组装远端 Worker
@@ -20,7 +20,7 @@ store、Workflow orchestrator 与 Agent CLI；移动构建组装远端 Worker
 go tool wails3 task dev:desktop
 ```
 
-Workspace、Task、Workflow、Run 和事件默认持久化在 `~/.oneshot/`。
+Workspace、Task、Workflow、Run 和事件默认持久化在 `~/.onecatch/`。
 
 iOS 和 Android 不启动本地 CLI，也不直接操作设备文件系统中的 Git 仓库：
 
@@ -41,8 +41,8 @@ go tool wails3 task build:desktop
 go tool wails3 task package:desktop
 ```
 
-安装包输出到 `bin/Oneshot-<version>-<commit>-<arch>.zip`。应用内同时包含
-`Contents/Resources/bin/oneshot-worker`，可以复制到另一台同架构 Mac 上运行。
+安装包输出到 `bin/OneCatch-<version>-<commit>-<arch>.zip`。应用内同时包含
+`Contents/Resources/bin/onecatch-worker`，可以复制到另一台同架构 Mac 上运行。
 默认使用 ad-hoc 签名，适合内部测试；没有 Apple 开发者证书时，首次启动仍需在
 Finder 中右键选择“打开”。
 
@@ -55,7 +55,7 @@ SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" go tool wails3 t
 可通过环境变量覆盖版本号和输出路径：
 
 ```bash
-VERSION=0.1.0 OUTPUT_ZIP=bin/Oneshot-0.1.0-arm64.zip go tool wails3 task package:desktop
+VERSION=0.1.0 OUTPUT_ZIP=bin/OneCatch-0.1.0-arm64.zip go tool wails3 task package:desktop
 ```
 
 脚本只负责构建、组装、签名和压缩。公开分发前还需使用 Apple notary service

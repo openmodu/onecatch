@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	desktopservice "github.com/openmodu/oneshot/internal/service/desktop"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 

@@ -3,10 +3,10 @@ package wailstransport
 import (
 	"context"
 
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	desktopservice "github.com/openmodu/oneshot/internal/service/desktop"
-	"github.com/openmodu/oneshot/internal/service/desktop/runstream"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
+	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
 )
 
 type TaskRunBinding struct{ service *desktopservice.Service }

@@ -51,7 +51,7 @@ func TestUnixProcessRunsInteractiveShellInWorkspace(t *testing.T) {
 	if shell != "sh" {
 		t.Fatalf("shell = %q", shell)
 	}
-	if _, err := process.Write([]byte("pwd; printf 'oneshot-pty-ok\\n'; exit\r")); err != nil {
+	if _, err := process.Write([]byte("pwd; printf 'onecatch-pty-ok\\n'; exit\r")); err != nil {
 		t.Fatal(err)
 	}
 	type readResult struct {
@@ -89,7 +89,7 @@ func TestUnixProcessRunsInteractiveShellInWorkspace(t *testing.T) {
 		t.Fatalf("wait = %d, %v", exitCode, err)
 	}
 	text := strings.ReplaceAll(result.output, "\r", "")
-	if !strings.Contains(text, workspace) || !strings.Contains(text, "oneshot-pty-ok") {
+	if !strings.Contains(text, workspace) || !strings.Contains(text, "onecatch-pty-ok") {
 		t.Fatalf("output = %q", text)
 	}
 }

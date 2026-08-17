@@ -11,7 +11,7 @@ let bindingPromise;
 // and tolerate its absence (browser preview, older backend without the service).
 async function loadBinding() {
   if (!bindingPromise) {
-    bindingPromise = import("../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js")
+    bindingPromise = import("../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js")
       .then((module) => module.NotifyBinding || null)
       .catch(() => null);
   }

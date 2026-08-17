@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, File, FileBraces, FileCode, FileCog, FileText, FileTerminal, Folder, FolderOpen, RefreshCw, Save, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Textarea } from "@/components/ui/textarea";
-import { WorkspaceBinding } from "../../../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+import { WorkspaceBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Action, Kicker } from "../../../ui/primitives.jsx";
 import { errorMessage } from "../../format.js";
 import {
@@ -33,9 +33,9 @@ const DEMO_TREE = {
 };
 
 const DEMO_CONTENT = {
-  "README.md": "# Oneshot\n\nLocal-first Agent workflow workbench.\n",
-  "frontend/package.json": "{\n  \"name\": \"oneshot-desktop-frontend\",\n  \"private\": true\n}\n",
-  "frontend/src/App.jsx": "export default function App() {\n  return <main>Oneshot</main>;\n}\n",
+  "README.md": "# OneCatch\n\nLocal-first Agent workflow workbench.\n",
+  "frontend/package.json": "{\n  \"name\": \"onecatch-desktop-frontend\",\n  \"private\": true\n}\n",
+  "frontend/src/App.jsx": "export default function App() {\n  return <main>OneCatch</main>;\n}\n",
 };
 
 function fileVisual(name = "") {

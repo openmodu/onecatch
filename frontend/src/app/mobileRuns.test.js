@@ -27,11 +27,11 @@ test("mobile run frames append events and settle the run", () => {
 
 test("mobile conversations group follow-up runs into one workspace session", () => {
   const conversations = groupMobileConversations([
-    { id: "turn-2", conversationId: "chat-1", workspaceId: "oneshot", prompt: "follow up", status: "succeeded", startedAt: "2026-08-10T09:10:00Z" },
-    { id: "turn-1", conversationId: "chat-1", workspaceId: "oneshot", prompt: "review iOS", status: "succeeded", startedAt: "2026-08-10T09:00:00Z" },
+    { id: "turn-2", conversationId: "chat-1", workspaceId: "onecatch", prompt: "follow up", status: "succeeded", startedAt: "2026-08-10T09:10:00Z" },
+    { id: "turn-1", conversationId: "chat-1", workspaceId: "onecatch", prompt: "review iOS", status: "succeeded", startedAt: "2026-08-10T09:00:00Z" },
     { id: "turn-3", conversationId: "chat-2", workspaceId: "api", prompt: "check API", status: "running", startedAt: "2026-08-10T10:00:00Z" },
   ]);
-  assert.deepEqual(conversations.map((item) => `${item.workspaceId}:${item.title}`), ["api:check API", "oneshot:review iOS"]);
+  assert.deepEqual(conversations.map((item) => `${item.workspaceId}:${item.title}`), ["api:check API", "onecatch:review iOS"]);
   assert.deepEqual(conversations[1].runs.map((item) => item.id), ["turn-1", "turn-2"]);
 });
 

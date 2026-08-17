@@ -166,7 +166,7 @@ export function NumberField({ field, label, hint, value, error, onChange }) {
 /* Radix throws on an empty-string item value, but several call sites use "" to
    mean "inherit the global default". Swap in a sentinel across the Radix
    boundary and translate it back on the way out. */
-const EMPTY_VALUE = "__oneshot_empty__";
+const EMPTY_VALUE = "__onecatch_empty__";
 const toRadix = (value) => (value === "" || value == null ? EMPTY_VALUE : String(value));
 const fromRadix = (value) => (value === EMPTY_VALUE ? "" : value);
 

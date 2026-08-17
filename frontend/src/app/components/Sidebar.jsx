@@ -30,7 +30,7 @@ import { SIDEBAR_TASK_PREVIEW_LIMIT, buildSidebarTaskEntries, visibleSidebarTask
 import { desktopPlatform, primaryShortcutLabel } from "../platform.js";
 
 const CommandPalette = lazy(() => import("./CommandPalette.jsx"));
-const SIDEBAR_COLLAPSED_STORAGE_KEY = "oneshot.sidebar.collapsed";
+const SIDEBAR_COLLAPSED_STORAGE_KEY = "onecatch.sidebar.collapsed";
 const SIDEBAR_PEEK_WIDTH = 216;
 
 function initialSidebarWidth() {
@@ -162,7 +162,7 @@ function Sidebar({
   useEffect(() => {
     // On macOS the WebView is transparent over a native NSVisualEffectView.
     // Browser previews simply have no such handler and keep the CSS fallback.
-    const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
+    const nativeSidebar = globalThis.webkit?.messageHandlers?.onecatchSidebar;
     if (!nativeSidebar) return;
     document.documentElement.dataset.nativeSidebarMaterial = "true";
     nativeSidebar.postMessage({
@@ -409,7 +409,7 @@ function Sidebar({
         lights, so the rail has to reserve this strip itself — and it doubles
         as the window's drag handle, which is why it is empty. */}
     <div className="drag-region h-[52px] shrink-0 cursor-default" aria-hidden="true" onMouseDown={disarmMacSidebarDoubleClick} onDoubleClick={finishMacSidebarDoubleClick} />
-    <div className="brand grid h-[46px] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-7"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">Oneshot</strong><div className="flex items-center gap-0.5"><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent ${workspaceSearchOpen ? "active bg-accent text-foreground" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={15} strokeWidth={2} aria-hidden="true" /></Action><Action size="compact" tone="muted" className="add-workspace size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent hover:text-foreground" aria-label={t("sidebar.addProject")} title={t("sidebar.addProject")} onClick={onAddWorkspace}><Plus size={15} strokeWidth={2} aria-hidden="true" /></Action></div></div>
+    <div className="brand grid h-[46px] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-7"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">OneCatch</strong><div className="flex items-center gap-0.5"><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent ${workspaceSearchOpen ? "active bg-accent text-foreground" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={15} strokeWidth={2} aria-hidden="true" /></Action><Action size="compact" tone="muted" className="add-workspace size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent hover:text-foreground" aria-label={t("sidebar.addProject")} title={t("sidebar.addProject")} onClick={onAddWorkspace}><Plus size={15} strokeWidth={2} aria-hidden="true" /></Action></div></div>
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
       <div className="project-sections min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-2 pb-3">
         {pinnedTasks.length > 0 && <section className="project-section mb-3 min-w-0 max-w-full" aria-labelledby="pinned-task-heading">

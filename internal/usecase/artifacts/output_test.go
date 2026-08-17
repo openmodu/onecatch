@@ -6,10 +6,10 @@ import (
 	"path/filepath"
 	"testing"
 
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
-	"github.com/openmodu/oneshot/internal/domain/users"
-	repoartifacts "github.com/openmodu/oneshot/internal/repo/artifacts"
-	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
+	"github.com/openmodu/onecatch/internal/domain/users"
+	repoartifacts "github.com/openmodu/onecatch/internal/repo/artifacts"
+	repoorders "github.com/openmodu/onecatch/internal/repo/orders"
 )
 
 func deliveredOrder() domainorders.Order {

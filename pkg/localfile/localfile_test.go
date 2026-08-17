@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/openmodu/oneshot/pkg/localfile"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 func TestWriteJSONAtomicReplacesCompleteSnapshot(t *testing.T) {
@@ -32,7 +32,7 @@ func TestWriteJSONAtomicReplacesCompleteSnapshot(t *testing.T) {
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("snapshot mode = %o, want 600", info.Mode().Perm())
 	}
-	matches, err := filepath.Glob(filepath.Join(filepath.Dir(path), ".oneshot-*.tmp"))
+	matches, err := filepath.Glob(filepath.Join(filepath.Dir(path), ".onecatch-*.tmp"))
 	if err != nil || len(matches) != 0 {
 		t.Fatalf("temporary files = %v, %v", matches, err)
 	}

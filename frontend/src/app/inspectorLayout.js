@@ -1,4 +1,4 @@
-export const INSPECTOR_LAYOUT_STORAGE_KEY = "oneshot.layout.task-workbench.v1";
+export const INSPECTOR_LAYOUT_STORAGE_KEY = "onecatch.layout.task-workbench.v1";
 export const INSPECTOR_COMPACT_QUERY = "(max-width: 1100px)";
 
 function parseLayout(value) {

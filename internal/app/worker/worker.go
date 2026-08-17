@@ -19,21 +19,21 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/repo/git"
-	"github.com/openmodu/oneshot/internal/service/worker"
-	"github.com/openmodu/oneshot/internal/service/worker/daemon"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/internal/repo/git"
+	"github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/service/worker/daemon"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 func Run() {
 	listen := flag.String("listen", "127.0.0.1:9231", "listen address")
 	id := flag.String("id", "worker", "stable worker ID")
-	name := flag.String("name", "Oneshot Worker", "worker display name")
+	name := flag.String("name", "OneCatch Worker", "worker display name")
 	codex := flag.String("codex-binary", "", "Codex binary override")
 	claude := flag.String("claude-binary", "", "Claude binary override")
 	modu := flag.String("modu-binary", "", "Modu Code binary override")
 	maxConcurrency := flag.Int("max-concurrency", 4, "maximum simultaneous runs (<=0 uses the default)")
-	dataDir := flag.String("data-dir", "~/.oneshot-worker", "persistent worker state directory")
+	dataDir := flag.String("data-dir", "~/.onecatch-worker", "persistent worker state directory")
 	pair := flag.Bool("pair", false, "print a one-time desktop pairing code valid for 10 minutes")
 	installService := flag.Bool("install-service", false, "install and start a per-user launchd or systemd service")
 	tlsCert := flag.String("tls-cert", "", "PEM server certificate for HTTPS")
@@ -44,6 +44,9 @@ func Run() {
 	stateRoot, err := expandWorkerPath(*dataDir)
 	if err != nil {
 		log.Fatalf("resolve worker data directory: %v", err)
+	}
+	if err := adoptLegacyWorkerRoot(stateRoot); err != nil {
+		log.Fatalf("adopt pre-rename worker data directory: %v", err)
 	}
 	if (*tlsCert == "") != (*tlsKey == "") {
 		log.Fatal("--tls-cert and --tls-key must be configured together")
@@ -136,7 +139,7 @@ func Run() {
 		}
 		log.Printf("server certificate SHA-256: %s", fingerprint)
 	}
-	log.Printf("oneshot worker %s listening on %s://%s", *id, scheme, *listen)
+	log.Printf("onecatch worker %s listening on %s://%s", *id, scheme, *listen)
 	serveErrors := make(chan error, 1)
 	go func() {
 		if *tlsCert != "" {
@@ -151,7 +154,7 @@ func Run() {
 			log.Fatal(serveErr)
 		}
 	case <-runCtx.Done():
-		log.Printf("shutting down oneshot worker %s", *id)
+		log.Printf("shutting down onecatch worker %s", *id)
 		shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancelShutdown()
 		if err := server.Shutdown(shutdownCtx); err != nil {
@@ -235,6 +238,33 @@ func newPairingCode() (string, error) {
 		buffer[index] = alphabet[int(buffer[index])%len(alphabet)]
 	}
 	return string(buffer[:4]) + "-" + string(buffer[4:]), nil
+}
+
+// adoptLegacyWorkerRoot moves a pre-rename worker state directory into place on
+// first start after the rename. The persistent worker token lives here, so
+// losing it would silently invalidate every desktop that had already paired.
+// Only the default location is adopted, and only when nothing would be
+// overwritten — an explicit --data-dir is always left alone.
+func adoptLegacyWorkerRoot(stateRoot string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	if stateRoot != filepath.Join(home, ".onecatch-worker") {
+		return nil
+	}
+	if _, err := os.Stat(stateRoot); err == nil || !os.IsNotExist(err) {
+		return nil
+	}
+	legacy := filepath.Join(home, ".oneshot-worker")
+	info, err := os.Stat(legacy)
+	if err != nil || !info.IsDir() {
+		return nil
+	}
+	if err := os.Rename(legacy, stateRoot); err != nil {
+		return fmt.Errorf("move %s to %s (your data is untouched; move it manually and restart): %w", legacy, stateRoot, err)
+	}
+	return nil
 }
 
 func expandWorkerPath(value string) (string, error) {

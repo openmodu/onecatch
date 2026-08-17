@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	domainagents "github.com/openmodu/oneshot/internal/domain/agents"
+	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
 )
 
 func TestAgentsRepoSeedCatalog(t *testing.T) {

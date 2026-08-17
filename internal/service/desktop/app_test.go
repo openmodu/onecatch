@@ -9,13 +9,13 @@ import (
 	"testing"
 	"time"
 
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	"github.com/openmodu/oneshot/internal/repo/git"
-	localdata "github.com/openmodu/oneshot/internal/repo/store/local"
-	"github.com/openmodu/oneshot/internal/repo/workspacelock"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
-	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	"github.com/openmodu/onecatch/internal/repo/git"
+	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	"github.com/openmodu/onecatch/internal/repo/workspacelock"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
 )
 
 func runtimeEvent(t *testing.T, seq int64, event agentrun.Event) domainworkflows.RuntimeEvent {
@@ -469,7 +469,7 @@ func TestTaskAttachmentsRenameAndSoftDelete(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(task.Attachments) != 1 || task.Attachments[0].StoredPath == source || !strings.Contains(task.Attachments[0].StoredPath, filepath.Join(".oneshot", "attachments", task.ID)) {
+	if len(task.Attachments) != 1 || task.Attachments[0].StoredPath == source || !strings.Contains(task.Attachments[0].StoredPath, filepath.Join(".onecatch", "attachments", task.ID)) {
 		t.Fatalf("attachments = %+v", task.Attachments)
 	}
 	gotContent, err := os.ReadFile(task.Attachments[0].StoredPath)
@@ -477,7 +477,7 @@ func TestTaskAttachmentsRenameAndSoftDelete(t *testing.T) {
 		t.Fatalf("stored attachment = %q, %v", gotContent, err)
 	}
 	exclude, err := os.ReadFile(filepath.Join(workspacePath, ".git", "info", "exclude"))
-	if err != nil || !strings.Contains(string(exclude), ".oneshot/") {
+	if err != nil || !strings.Contains(string(exclude), ".onecatch/") {
 		t.Fatalf("git exclude = %q, %v", exclude, err)
 	}
 	renamed, err := app.RenameTask(ctx, task.ID, "renamed task")

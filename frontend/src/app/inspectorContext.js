@@ -6,10 +6,10 @@
 // Deliberately excluded: `runtimeEvents`. That is the unbounded transcript, it
 // grows by the frame while an agent streams, and no inspector tab reads it.
 // Keeping it out is what makes one event per real state change affordable.
-export const INSPECTOR_CONTEXT_EVENT = "oneshot:inspector-context";
-export const INSPECTOR_REQUEST_EVENT = "oneshot:inspector-request";
-export const INSPECTOR_ACTION_EVENT = "oneshot:inspector-action";
-export const INSPECTOR_WINDOW_EVENT = "oneshot:inspector-window";
+export const INSPECTOR_CONTEXT_EVENT = "onecatch:inspector-context";
+export const INSPECTOR_REQUEST_EVENT = "onecatch:inspector-request";
+export const INSPECTOR_ACTION_EVENT = "onecatch:inspector-action";
+export const INSPECTOR_WINDOW_EVENT = "onecatch:inspector-window";
 
 // Read-only remote steps may inspect worker-local state, so follow that clone.
 // Writable remote steps synchronize their patch back and clean the worker;

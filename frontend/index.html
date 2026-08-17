@@ -6,7 +6,7 @@
     <script>
         (() => {
             try {
-                const theme = localStorage.getItem("oneshot.appearance.theme");
+                const theme = localStorage.getItem("onecatch.appearance.theme");
                 if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
                 document.documentElement.style.colorScheme = theme === "light" || theme === "dark" ? theme : "light dark";
             } catch { /* Keep the system appearance when storage is unavailable. */ }
@@ -22,7 +22,7 @@
             html:not([data-theme="light"]), html:not([data-theme="light"]) body { background: #1c1c1c; }
         }
     </style>
-    <title>Oneshot</title>
+    <title>OneCatch</title>
 </head>
 <body>
 <div id="root"></div>

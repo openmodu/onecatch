@@ -1,6 +1,6 @@
-export const THEME_STORAGE_KEY = "oneshot.appearance.theme";
-export const ACCENT_STORAGE_KEY = "oneshot.appearance.accent";
-export const APPEARANCE_CHANGED_EVENT = "oneshot:appearance-changed";
+export const THEME_STORAGE_KEY = "onecatch.appearance.theme";
+export const ACCENT_STORAGE_KEY = "onecatch.appearance.accent";
+export const APPEARANCE_CHANGED_EVENT = "onecatch:appearance-changed";
 
 export const themeModes = ["system", "light", "dark"];
 export const accentThemes = ["forest", "ocean", "violet", "amber"];
@@ -32,7 +32,7 @@ export function applyAppearance(appearance, root = typeof document === "undefine
   else root.dataset.theme = theme;
   root.dataset.accent = accent;
   root.style.colorScheme = theme === "system" ? "light dark" : theme;
-  globalThis.webkit?.messageHandlers?.oneshotSidebar?.postMessage({ theme });
+  globalThis.webkit?.messageHandlers?.onecatchSidebar?.postMessage({ theme });
 }
 
 export function saveAppearance(appearance, storage = typeof localStorage === "undefined" ? null : localStorage) {

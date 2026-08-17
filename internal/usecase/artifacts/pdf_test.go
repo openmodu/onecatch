@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
 )
 
 func TestRenderReportProducesValidPDF(t *testing.T) {

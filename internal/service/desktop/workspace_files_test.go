@@ -115,7 +115,7 @@ func TestWorkspaceFilesStayInsideWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	for _, path := range []string{"../outside.txt", ".git/config", ".oneshot/attachments/file"} {
+	for _, path := range []string{"../outside.txt", ".git/config", ".onecatch/attachments/file"} {
 		if _, err := app.ReadWorkspaceFile(ctx, workspace.ID, path); errorCode(err) != "workspace_file_invalid_path" {
 			t.Fatalf("ReadWorkspaceFile(%q) error = %v", path, err)
 		}

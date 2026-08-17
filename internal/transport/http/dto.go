@@ -3,13 +3,13 @@ package httptransport
 import (
 	"time"
 
-	domainartifacts "github.com/openmodu/oneshot/internal/domain/artifacts"
-	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
-	domainbilling "github.com/openmodu/oneshot/internal/domain/billing"
-	domainconversations "github.com/openmodu/oneshot/internal/domain/conversations"
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
-	"github.com/openmodu/oneshot/internal/domain/users"
-	usecaseexecution "github.com/openmodu/oneshot/internal/usecase/execution"
+	domainartifacts "github.com/openmodu/onecatch/internal/domain/artifacts"
+	domainauth "github.com/openmodu/onecatch/internal/domain/auth"
+	domainbilling "github.com/openmodu/onecatch/internal/domain/billing"
+	domainconversations "github.com/openmodu/onecatch/internal/domain/conversations"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
+	"github.com/openmodu/onecatch/internal/domain/users"
+	usecaseexecution "github.com/openmodu/onecatch/internal/usecase/execution"
 )
 
 // This file defines the user-facing response DTOs. They expose only the fields

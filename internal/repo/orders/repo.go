@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
-	pkgsql "github.com/openmodu/oneshot/pkg/sql"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
+	pkgsql "github.com/openmodu/onecatch/pkg/sql"
 	"gorm.io/gorm"
 )
 

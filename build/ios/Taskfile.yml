@@ -12,8 +12,8 @@ includes:
 # For automatically managed signing & provisioning, use `task ios:xcode` and
 # build from the generated Xcode project instead.
 vars:
-  IOS_APP_NAME: '{{.MOBILE_APP_NAME | default "oneshot-mobile"}}'
-  BUNDLE_ID: '{{.BUNDLE_ID | default "com.openmodu.oneshot.mobile"}}'
+  IOS_APP_NAME: '{{.MOBILE_APP_NAME | default "onecatch-mobile"}}'
+  BUNDLE_ID: '{{.BUNDLE_ID | default "app.onecatch.mobile"}}'
   IOS_PLATFORM: '{{.IOS_PLATFORM | default "simulator"}}'
   MIN_IOS_VERSION: '{{.MIN_IOS_VERSION | default "15.0"}}'
   IOS_SDK: '{{if eq .IOS_PLATFORM "device"}}iphoneos{{else}}iphonesimulator{{end}}'
@@ -287,7 +287,7 @@ tasks:
       - build/ios/xcode/project.pbxproj
     cmds:
       - go tool wails3 ios xcode:gen -outdir build/ios/xcode -config build/desktop/config.yml
-      - /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string "Oneshot connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c 'Set :NSLocalNetworkUsageDescription "Oneshot connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist
+      - /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c 'Set :NSLocalNetworkUsageDescription "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist
 
   run:
     summary: Run the application in iOS Simulator

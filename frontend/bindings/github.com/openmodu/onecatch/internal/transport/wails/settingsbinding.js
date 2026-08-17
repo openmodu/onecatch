@@ -21,7 +21,7 @@ import * as agentrun$0 from "../../usecase/agentrun/models.js";
  * @returns {$CancellablePromise<desktop$0.RuntimeInfo>}
  */
 export function CheckRuntimeDraft(input) {
-    return $Call.ByID(736056592, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(626506285, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -31,7 +31,7 @@ export function CheckRuntimeDraft(input) {
  * @returns {$CancellablePromise<desktop$0.CleanupResult>}
  */
 export function ExecuteCleanup(previewToken) {
-    return $Call.ByID(268029348, previewToken).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(767148787, previewToken).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -41,7 +41,7 @@ export function ExecuteCleanup(previewToken) {
  * @returns {$CancellablePromise<desktop$0.DiagnosticsExport>}
  */
 export function ExportDiagnostics(input) {
-    return $Call.ByID(641216505, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2236013680, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType2($result);
     }));
 }
@@ -50,7 +50,7 @@ export function ExportDiagnostics(input) {
  * @returns {$CancellablePromise<settings$0.Settings>}
  */
 export function GetSettings() {
-    return $Call.ByID(2865776490).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2147269751).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -59,7 +59,7 @@ export function GetSettings() {
  * @returns {$CancellablePromise<desktop$0.StorageUsage>}
  */
 export function GetStorageUsage() {
-    return $Call.ByID(1240522467).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3275501654).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType4($result);
     }));
 }
@@ -69,7 +69,7 @@ export function GetStorageUsage() {
  * @returns {$CancellablePromise<agentrun$0.ClaudeConfiguration>}
  */
 export function InspectClaudeConfiguration(input) {
-    return $Call.ByID(1536615305, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2020904538, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType5($result);
     }));
 }
@@ -79,7 +79,7 @@ export function InspectClaudeConfiguration(input) {
  * @returns {$CancellablePromise<agentrun$0.CodexConfiguration>}
  */
 export function InspectCodexConfiguration(input) {
-    return $Call.ByID(1594676568, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1386021425, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType6($result);
     }));
 }
@@ -89,7 +89,7 @@ export function InspectCodexConfiguration(input) {
  * @returns {$CancellablePromise<desktop$0.CleanupPreview>}
  */
 export function PreviewCleanup(input) {
-    return $Call.ByID(2402355121, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3009078482, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType7($result);
     }));
 }
@@ -100,7 +100,7 @@ export function PreviewCleanup(input) {
  * @returns {$CancellablePromise<settings$0.Settings>}
  */
 export function ResetSettingsSection(section, expectedRevision) {
-    return $Call.ByID(948066100, section, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1883644739, section, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -109,7 +109,7 @@ export function ResetSettingsSection(section, expectedRevision) {
  * @returns {$CancellablePromise<void>}
  */
 export function RevealDataRoot() {
-    return $Call.ByID(1269965360);
+    return $Call.ByID(802031439);
 }
 
 /**
@@ -118,7 +118,7 @@ export function RevealDataRoot() {
  * @returns {$CancellablePromise<settings$0.Settings>}
  */
 export function UpdateExecutionSettings(input, expectedRevision) {
-    return $Call.ByID(1394525879, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1464442858, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -129,7 +129,7 @@ export function UpdateExecutionSettings(input, expectedRevision) {
  * @returns {$CancellablePromise<settings$0.Settings>}
  */
 export function UpdateExperimentalSettings(input, expectedRevision) {
-    return $Call.ByID(2917824215, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1096196812, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -140,7 +140,7 @@ export function UpdateExperimentalSettings(input, expectedRevision) {
  * @returns {$CancellablePromise<settings$0.Settings>}
  */
 export function UpdateRuntimeSettings(input, expectedRevision) {
-    return $Call.ByID(3606619381, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2833699548, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -151,7 +151,7 @@ export function UpdateRuntimeSettings(input, expectedRevision) {
  * @returns {$CancellablePromise<settings$0.Settings>}
  */
 export function UpdateSecuritySettings(input, expectedRevision) {
-    return $Call.ByID(2883170103, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(798710068, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -162,7 +162,7 @@ export function UpdateSecuritySettings(input, expectedRevision) {
  * @returns {$CancellablePromise<settings$0.Settings>}
  */
 export function UpdateStorageSettings(input, expectedRevision) {
-    return $Call.ByID(3684762704, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3724926201, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -173,7 +173,7 @@ export function UpdateStorageSettings(input, expectedRevision) {
  * @returns {$CancellablePromise<settings$0.Settings>}
  */
 export function UpdateTerminalSettings(input, expectedRevision) {
-    return $Call.ByID(3346395065, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2545734590, input, expectedRevision).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }

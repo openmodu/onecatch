@@ -3,8 +3,8 @@ package terminal
 import "time"
 
 const (
-	OutputEvent = "oneshot:terminal-output"
-	ExitEvent   = "oneshot:terminal-exit"
+	OutputEvent = "onecatch:terminal-output"
+	ExitEvent   = "onecatch:terminal-exit"
 )
 
 type CreateInput struct {

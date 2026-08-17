@@ -1,4 +1,4 @@
-module github.com/openmodu/oneshot
+module github.com/openmodu/onecatch
 
 go 1.26.1
 

@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
   <key>Label</key>
-  <string>com.openmodu.oneshot-worker</string>
+  <string>app.onecatch.worker</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/oneshot-worker</string>
+    <string>/usr/local/bin/onecatch-worker</string>
     <string>--listen</string>
     <string>0.0.0.0:9231</string>
     <string>--id</string>
@@ -14,11 +14,11 @@
     <string>--name</string>
     <string>Build Mac mini</string>
     <string>--data-dir</string>
-    <string>/Users/worker/.oneshot-worker</string>
+    <string>/Users/worker/.onecatch-worker</string>
     <string>--tls-cert</string>
-    <string>/Users/worker/.config/oneshot-worker/server.pem</string>
+    <string>/Users/worker/.config/onecatch-worker/server.pem</string>
     <string>--tls-key</string>
-    <string>/Users/worker/.config/oneshot-worker/server-key.pem</string>
+    <string>/Users/worker/.config/onecatch-worker/server-key.pem</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
@@ -27,8 +27,8 @@
   <key>ThrottleInterval</key>
   <integer>10</integer>
   <key>StandardOutPath</key>
-  <string>/Users/worker/Library/Logs/oneshot-worker.log</string>
+  <string>/Users/worker/Library/Logs/onecatch-worker.log</string>
   <key>StandardErrorPath</key>
-  <string>/Users/worker/Library/Logs/oneshot-worker.log</string>
+  <string>/Users/worker/Library/Logs/onecatch-worker.log</string>
 </dict>
 </plist>

@@ -17,7 +17,7 @@ const (
 // channel so the main window can keep its dock/detach toggle in sync with
 // reality — including when the user closes the window from its title bar
 // rather than from the re-dock button.
-const inspectorWindowEvent = "oneshot:inspector-window"
+const inspectorWindowEvent = "onecatch:inspector-window"
 
 type auxiliaryWindowController struct {
 	app     *application.App

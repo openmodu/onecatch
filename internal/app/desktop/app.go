@@ -1,6 +1,6 @@
 package desktop
 
 const (
-	Name        = "Oneshot"
-	Description = "Local Agent workflow orchestrator"
+	Name        = "OneCatch"
+	Description = "One place, catch everything"
 )

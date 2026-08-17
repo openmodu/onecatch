@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	loginPathStart = "__ONESHOT_LOGIN_PATH_START__"
-	loginPathEnd   = "__ONESHOT_LOGIN_PATH_END__"
+	loginPathStart = "__ONECATCH_LOGIN_PATH_START__"
+	loginPathEnd   = "__ONECATCH_LOGIN_PATH_END__"
 )
 
 // prepareCommandEnvironment restores the command search path that Finder does
@@ -43,7 +43,7 @@ func loginShellPath() string {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	command := `printf '\n__ONESHOT_LOGIN_PATH_START__%s__ONESHOT_LOGIN_PATH_END__\n' "$PATH"`
+	command := `printf '\n__ONECATCH_LOGIN_PATH_START__%s__ONECATCH_LOGIN_PATH_END__\n' "$PATH"`
 	output, err := exec.CommandContext(ctx, shell, "-ilc", command).CombinedOutput()
 	if err != nil {
 		return ""

@@ -3,7 +3,7 @@ package workflows
 import (
 	"context"
 
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
 // Notifier receives a run ID whenever that run's bounded state changed.

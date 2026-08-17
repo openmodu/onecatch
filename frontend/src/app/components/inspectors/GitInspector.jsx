@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { GitBinding, WorkerBinding } from "../../../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+import { GitBinding, WorkerBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Action, Kicker, TUISelect } from "../../../ui/primitives.jsx";
 import { errorMessage, shortID } from "../../format.js";
 

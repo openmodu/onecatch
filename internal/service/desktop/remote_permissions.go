@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/service/worker"
 )
 
 type remotePermissionTarget struct {

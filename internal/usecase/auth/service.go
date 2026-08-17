@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
-	"github.com/openmodu/oneshot/internal/domain/users"
+	domainauth "github.com/openmodu/onecatch/internal/domain/auth"
+	"github.com/openmodu/onecatch/internal/domain/users"
 )
 
 type Repository interface {
@@ -68,12 +68,12 @@ type Usecase struct {
 
 // NewUsecase builds an auth usecase with secure defaults: a verifier is
 // configured from environment credentials when present, and insecure
-// callbacks require ONESHOT_AUTH_INSECURE_CALLBACKS=1.
+// callbacks require ONECATCH_AUTH_INSECURE_CALLBACKS=1.
 func NewUsecase(repo Repository, sessions SessionStore) *Usecase {
 	return NewUsecaseWithOptions(repo, Options{
 		Verifier:               NewHTTPVerifierFromEnv(),
 		Sessions:               sessions,
-		AllowInsecureCallbacks: os.Getenv("ONESHOT_AUTH_INSECURE_CALLBACKS") == "1",
+		AllowInsecureCallbacks: os.Getenv("ONECATCH_AUTH_INSECURE_CALLBACKS") == "1",
 	})
 }
 
@@ -139,7 +139,7 @@ func (s *Usecase) LoginWithGoogle(ctx context.Context) (domainauth.Session, erro
 		Provider:        "google",
 		ProviderSubject: "local-dev",
 		DisplayName:     "Local Developer",
-		Email:           "dev@oneshot.local",
+		Email:           "dev@onecatch.local",
 	})
 }
 
@@ -310,18 +310,18 @@ func oauthEndpoint(provider string) (string, url.Values) {
 	values.Set("response_type", "code")
 	switch provider {
 	case "google":
-		values.Set("client_id", defaultString(os.Getenv("ONESHOT_GOOGLE_CLIENT_ID"), "oneshot-desktop"))
-		values.Set("redirect_uri", defaultString(os.Getenv("ONESHOT_GOOGLE_REDIRECT_URI"), "oneshot://oauth/google"))
+		values.Set("client_id", defaultString(os.Getenv("ONECATCH_GOOGLE_CLIENT_ID"), "onecatch-desktop"))
+		values.Set("redirect_uri", defaultString(os.Getenv("ONECATCH_GOOGLE_REDIRECT_URI"), "onecatch://oauth/google"))
 		values.Set("scope", "openid email profile")
 		return "https://accounts.google.com/o/oauth2/v2/auth", values
 	case "wechat":
-		values.Set("appid", defaultString(os.Getenv("ONESHOT_WECHAT_APP_ID"), "oneshot-desktop"))
-		values.Set("redirect_uri", defaultString(os.Getenv("ONESHOT_WECHAT_REDIRECT_URI"), "oneshot://oauth/wechat"))
+		values.Set("appid", defaultString(os.Getenv("ONECATCH_WECHAT_APP_ID"), "onecatch-desktop"))
+		values.Set("redirect_uri", defaultString(os.Getenv("ONECATCH_WECHAT_REDIRECT_URI"), "onecatch://oauth/wechat"))
 		values.Set("scope", "snsapi_login")
 		return "https://open.weixin.qq.com/connect/qrconnect", values
 	default:
-		values.Set("client_id", "oneshot-desktop")
-		values.Set("redirect_uri", "oneshot://oauth/"+provider)
-		return "https://auth.oneshot.local/" + provider + "/authorize", values
+		values.Set("client_id", "onecatch-desktop")
+		values.Set("redirect_uri", "onecatch://oauth/"+provider)
+		return "https://auth.onecatch.local/" + provider + "/authorize", values
 	}
 }

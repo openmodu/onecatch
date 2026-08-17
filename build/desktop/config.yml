@@ -6,11 +6,11 @@ version: '3'
 # This information is used to generate the build assets.
 info:
   companyName: "OpenModu" # The name of the company
-  productName: "Oneshot" # The name of the application
-  productIdentifier: "com.openmodu.oneshot" # The unique product identifier
+  productName: "OneCatch" # The name of the application
+  productIdentifier: "app.onecatch" # The unique product identifier
   description: "Local Agent workflow orchestrator" # The application description
   copyright: "(c) 2026, OpenModu" # Copyright text
-  comments: "Oneshot desktop application" # Comments
+  comments: "OneCatch desktop application" # Comments
   version: "0.0.1" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension
@@ -19,8 +19,8 @@ info:
 # iOS build configuration (uncomment to customise iOS project generation)
 # Note: Keys under `ios` OVERRIDE values under `info` when set.
 ios:
-  bundleID: "com.openmodu.oneshot.mobile"
-  displayName: "Oneshot"
+  bundleID: "app.onecatch.mobile"
+  displayName: "OneCatch"
   version: "0.0.1"
   company: "OpenModu"
   comments: "Remote worker client for iOS and Android"
@@ -76,4 +76,4 @@ fileAssociations:
 
 # Other data
 other:
-  - name: Oneshot
+  - name: OneCatch

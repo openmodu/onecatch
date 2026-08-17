@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
-import { SettingsBinding } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+import { SettingsBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -172,7 +172,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
   const refreshUsage = async () => {
     setUsageLoading(true);
     try {
-      setUsage(mode === "demo" ? { totalBytes: 7340032, root: "~/.oneshot", calculatedAt: new Date().toISOString(), categories: [{ name: "workflows", bytes: 163840, files: 4 }, { name: "runs", bytes: 4980736, files: 12 }, { name: "events", bytes: 491520, files: 12 }, { name: "logs", bytes: 1703936, files: 3 }] } : await SettingsBinding.GetStorageUsage());
+      setUsage(mode === "demo" ? { totalBytes: 7340032, root: "~/.onecatch", calculatedAt: new Date().toISOString(), categories: [{ name: "workflows", bytes: 163840, files: 4 }, { name: "runs", bytes: 4980736, files: 12 }, { name: "events", bytes: 491520, files: 12 }, { name: "logs", bytes: 1703936, files: 3 }] } : await SettingsBinding.GetStorageUsage());
     } catch (error) { notify("error", message(error, t)); } finally { setUsageLoading(false); }
   };
   useEffect(() => { if (section === "storage" && !usage && !usageLoading) refreshUsage(); }, [section]);
@@ -193,7 +193,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
   };
   const doExportDiagnostics = async () => {
     try {
-      const result = mode === "demo" ? { path: diagnosticPath || "~/.oneshot/oneshot-diagnostics.zip" } : await SettingsBinding.ExportDiagnostics({ destination: diagnosticPath, runIds: [], ...diagnosticOptions });
+      const result = mode === "demo" ? { path: diagnosticPath || "~/.onecatch/onecatch-diagnostics.zip" } : await SettingsBinding.ExportDiagnostics({ destination: diagnosticPath, runIds: [], ...diagnosticOptions });
       notify("success", t("settings.exportSuccess", { path: result.path }));
     } catch (error) { notify("error", message(error, t)); }
   };
@@ -371,7 +371,7 @@ function StorageSettings({ value, setValue, errors, security, diagnosticOptions,
   const number = (key, next) => setValue({ ...value, [key]: Number(next) });
   return <>
     <SettingsSection title={t("settings.localData")} description={t("settings.localDataDescription")} aside={<SettingsButton tone="cyan" onClick={refreshUsage} disabled={usageLoading}>{usageLoading ? t("settings.calculating") : t("settings.recalculate")}</SettingsButton>} contentClassName="p-4">
-      <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><span className="mb-1 block text-xs text-muted-foreground">{t("settings.dataRoot")}</span><code className="block select-text truncate rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">~/.oneshot/</code></div><SettingsButton tone="muted" onClick={reveal}>{t("settings.revealFinder")}</SettingsButton></div>
+      <div className="flex items-center gap-3"><div className="min-w-0 flex-1"><span className="mb-1 block text-xs text-muted-foreground">{t("settings.dataRoot")}</span><code className="block select-text truncate rounded-md bg-muted px-2 py-1.5 text-xs text-muted-foreground">~/.onecatch/</code></div><SettingsButton tone="muted" onClick={reveal}>{t("settings.revealFinder")}</SettingsButton></div>
       {usage ? <><div className="mt-5 text-xl font-semibold text-foreground">{bytes(usage.totalBytes)} <small className="text-xs font-normal text-muted-foreground">{t("settings.totalUsage")}</small></div><div className="mt-3 grid gap-2">{(usage.categories || []).map((item) => <div className="grid gap-1 text-xs text-muted-foreground" key={item.name}><span>{item.name}</span><b>{bytes(item.bytes)}</b><i className="block h-1.5 rounded-full bg-primary" style={{ width: `${Math.max(3, item.bytes / Math.max(usage.totalBytes, 1) * 100)}%` }} /></div>)}</div><p className="mt-3 mb-0 text-xs text-muted-foreground">{t("settings.lastCalculated", { time: usage.calculatedAt ? new Date(usage.calculatedAt).toLocaleString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN") : t("settings.justNow") })}</p></> : <div className="mt-4 rounded-lg bg-muted p-3 text-xs text-muted-foreground">{usageLoading ? t("settings.calculatingUsage") : t("settings.noUsage")}</div>}
     </SettingsSection>
     <SettingsSection title={t("settings.historyCleanup")} description={t("settings.historyCleanupDescription")} contentClassName="p-4">
@@ -389,7 +389,7 @@ function StorageSettings({ value, setValue, errors, security, diagnosticOptions,
       {value.logLevel === "debug" && <div className="mt-4 rounded-lg bg-warning/10 p-3 text-xs text-warning"><strong className="block">{t("settings.debugWarning")}</strong><span>{t("settings.debugAdvice")}</span></div>}
     </SettingsSection>
     <SettingsSection title={t("settings.exportDiagnostics")} description={t("settings.exportDiagnosticsDescription")} contentClassName="p-4">
-      <SettingsField label={t("settings.zipPath")} hint={t("settings.zipPathHint")}><Input value={diagnosticPath} onChange={(event) => setDiagnosticPath(event.target.value)} placeholder="/Users/me/Desktop/oneshot-diagnostics.zip" /></SettingsField>
+      <SettingsField label={t("settings.zipPath")} hint={t("settings.zipPathHint")}><Input value={diagnosticPath} onChange={(event) => setDiagnosticPath(event.target.value)} placeholder="/Users/me/Desktop/onecatch-diagnostics.zip" /></SettingsField>
       <SettingsSwitchRow checked={diagnosticOptions.includePrompt} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includePrompt: checked })} label={t("settings.includePrompt")} description={security.diagnosticsIncludePrompt ? t("settings.confirmOnExport") : t("settings.authorizeSecurity")} disabled={!security.diagnosticsIncludePrompt} />
       <SettingsSwitchRow checked={diagnosticOptions.includeRawEvents} onChange={(checked) => setDiagnosticOptions({ ...diagnosticOptions, includeRawEvents: checked })} label={t("settings.includeRawEvents")} description={security.diagnosticsIncludeRawEvents ? t("settings.confirmOnExport") : t("settings.authorizeSecurity")} disabled={!security.diagnosticsIncludeRawEvents} />
       <div className="mt-4 flex flex-wrap items-center gap-2"><SettingsButton tone="primary" onClick={exportDiagnostics}>{t("settings.exportZip")}</SettingsButton></div>

@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
 type StorageCategory struct {
@@ -298,7 +298,7 @@ func (a *Service) ExportDiagnostics(ctx context.Context, input DiagnosticsExport
 	}
 	destination := strings.TrimSpace(input.Destination)
 	if destination == "" {
-		destination = filepath.Join(a.DataRoot(), fmt.Sprintf("oneshot-diagnostics-%s.zip", time.Now().Format("20060102-150405")))
+		destination = filepath.Join(a.DataRoot(), fmt.Sprintf("onecatch-diagnostics-%s.zip", time.Now().Format("20060102-150405")))
 	}
 	if filepath.Ext(destination) != ".zip" {
 		destination += ".zip"
@@ -319,7 +319,7 @@ func (a *Service) ExportDiagnostics(ctx context.Context, input DiagnosticsExport
 	secrets := inheritedSecretValues(settings)
 	settings = redactSettingsPaths(settings)
 	usage, _ := a.GetStorageUsage()
-	usage.Root = "$HOME/.oneshot"
+	usage.Root = "$HOME/.onecatch"
 	if err := zipRedactedJSON(archive, "settings.json", settings, secrets); err != nil {
 		_ = closeAll()
 		return DiagnosticsExport{}, coded("diagnostics_export_failed", err.Error())

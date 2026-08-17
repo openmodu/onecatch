@@ -8,20 +8,20 @@ import (
 	"runtime"
 	"strings"
 
-	desktopassets "github.com/openmodu/oneshot/internal/app/desktop/assets"
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
-	"github.com/openmodu/oneshot/internal/repo/git"
-	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
-	localdata "github.com/openmodu/oneshot/internal/repo/store/local"
-	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
-	"github.com/openmodu/oneshot/internal/repo/workspacelock"
-	desktopservice "github.com/openmodu/oneshot/internal/service/desktop"
-	"github.com/openmodu/oneshot/internal/service/desktop/runstate"
-	"github.com/openmodu/oneshot/internal/service/desktop/runstream"
-	terminalservice "github.com/openmodu/oneshot/internal/service/terminal"
-	"github.com/openmodu/oneshot/internal/transport/wails"
-	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
-	"github.com/openmodu/oneshot/pkg/logger"
+	desktopassets "github.com/openmodu/onecatch/internal/app/desktop/assets"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
+	"github.com/openmodu/onecatch/internal/repo/git"
+	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
+	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
+	"github.com/openmodu/onecatch/internal/repo/workspacelock"
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
+	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
+	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
+	terminalservice "github.com/openmodu/onecatch/internal/service/terminal"
+	"github.com/openmodu/onecatch/internal/transport/wails"
+	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
+	"github.com/openmodu/onecatch/pkg/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -43,7 +43,7 @@ func runningAsBundle() bool {
 func Run() {
 	prepareCommandEnvironment()
 
-	log := logger.MustNew(logger.Config{Service: "oneshot-desktop"})
+	log := logger.MustNew(logger.Config{Service: "onecatch-desktop"})
 	defer logger.Sync(log)
 
 	store, err := localdata.OpenStore("")
@@ -61,7 +61,7 @@ func Run() {
 		log.Fatal("open settings", zap.Error(err))
 	}
 	logConfig := func(value domainsettings.Settings) logger.Config {
-		return logger.Config{Service: "oneshot-desktop", Level: value.Storage.LogLevel, File: filepath.Join(store.Data.Paths.Logs, "oneshot.log"), MaxSizeMB: value.Storage.LogMaxSizeMB, MaxBackups: value.Storage.LogMaxBackups, MaxAgeDays: value.Storage.LogMaxAgeDays, Compress: true}
+		return logger.Config{Service: "onecatch-desktop", Level: value.Storage.LogLevel, File: filepath.Join(store.Data.Paths.Logs, "onecatch.log"), MaxSizeMB: value.Storage.LogMaxSizeMB, MaxBackups: value.Storage.LogMaxBackups, MaxAgeDays: value.Storage.LogMaxAgeDays, Compress: true}
 	}
 	managedLog, err := logger.NewManaged(logConfig(settingsValue))
 	if err != nil {

@@ -6,8 +6,8 @@
     {
       "layers" : [
         {
-          "image-name" : "oneshot_icon_final.png",
-          "name" : "oneshot_icon_final",
+          "image-name" : "onecatch_icon_final.png",
+          "name" : "onecatch_icon_final",
           "position" : {
             "scale" : 1,
             "translation-in-points" : [

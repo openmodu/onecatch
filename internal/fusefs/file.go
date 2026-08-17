@@ -8,7 +8,7 @@ import (
 	"syscall"
 
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/openmodu/oneshot/internal/remotefs"
+	"github.com/openmodu/onecatch/internal/remotefs"
 )
 
 type fileHandle struct {

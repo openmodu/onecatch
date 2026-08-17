@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
-	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
 )
 
 type RuntimeDraftInput struct {

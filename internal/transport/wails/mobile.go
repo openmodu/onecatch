@@ -3,9 +3,9 @@ package wailstransport
 import (
 	"context"
 
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	mobileservice "github.com/openmodu/oneshot/internal/service/mobile"
-	"github.com/openmodu/oneshot/internal/service/worker"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	mobileservice "github.com/openmodu/onecatch/internal/service/mobile"
+	"github.com/openmodu/onecatch/internal/service/worker"
 )
 
 type MobileBinding struct{ service *mobileservice.Service }

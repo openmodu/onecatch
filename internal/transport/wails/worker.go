@@ -3,9 +3,9 @@ package wailstransport
 import (
 	"context"
 
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	desktopservice "github.com/openmodu/oneshot/internal/service/desktop"
-	"github.com/openmodu/oneshot/internal/service/worker"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
+	"github.com/openmodu/onecatch/internal/service/worker"
 )
 
 type WorkerBinding struct{ service *desktopservice.Service }

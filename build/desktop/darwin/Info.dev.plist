@@ -4,15 +4,15 @@
         <key>CFBundlePackageType</key>
             <string>APPL</string>
         <key>CFBundleName</key>
-            <string>Oneshot</string>
+            <string>OneCatch</string>
         <key>CFBundleExecutable</key>
-            <string>oneshot</string>
+            <string>onecatch</string>
         <key>CFBundleIdentifier</key>
-            <string>com.openmodu.oneshot</string>
+            <string>app.onecatch</string>
         <key>CFBundleVersion</key>
             <string>0.0.1</string>
         <key>CFBundleGetInfoString</key>
-            <string>Oneshot desktop application</string>
+            <string>OneCatch desktop application</string>
         <key>CFBundleShortVersionString</key>
             <string>0.0.1</string>
         <key>CFBundleIconFile</key>

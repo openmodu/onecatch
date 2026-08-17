@@ -1,4 +1,4 @@
-// Package remotefs defines the file operations needed by the Oneshot remote
+// Package remotefs defines the file operations needed by the OneCatch remote
 // filesystem. Paths passed to a Backend are always slash-separated and
 // relative to the configured workspace root.
 package remotefs

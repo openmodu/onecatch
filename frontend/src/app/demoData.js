@@ -3,7 +3,7 @@ import { singleTemplate, loopTemplate, dagTemplate } from "./templates.js";
 export const demoNow = new Date().toISOString();
 
 export const demoWorkspaces = [
-  { id: "oneshot-demo", name: "oneshot", path: "~/Code/openmodu/oneshot", defaultSandbox: "workspace-write", lastOpenedAt: demoNow },
+  { id: "onecatch-demo", name: "onecatch", path: "~/Code/openmodu/onecatch", defaultSandbox: "workspace-write", lastOpenedAt: demoNow },
 ];
 
 export const demoRuntimes = [
@@ -21,8 +21,8 @@ export const demoWorkflows = [
 export const demoWorkers = [{ id: "mac-mini", name: "Mac mini", baseUrl: "http://192.168.1.20:9231", enabled: true, hasToken: true }];
 
 export const demoTasks = [
-  { id: "task_demo", workspaceId: "oneshot-demo", title: "优化本地 Agent 调度流程", prompt: "梳理并改进工作流执行、暂停与恢复体验。", workflowId: "implement_review", status: "paused", createdAt: demoNow, updatedAt: demoNow },
-  { id: "task_queue_demo", workspaceId: "oneshot-demo", title: "补齐任务页 Git 工作流", prompt: "接通状态、Diff、提交信息生成和推送，并验证异常提示。", workflowId: "single_agent", status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: demoNow, authorized: true }, attachments: [], createdAt: demoNow, updatedAt: demoNow },
+  { id: "task_demo", workspaceId: "onecatch-demo", title: "优化本地 Agent 调度流程", prompt: "梳理并改进工作流执行、暂停与恢复体验。", workflowId: "implement_review", status: "paused", createdAt: demoNow, updatedAt: demoNow },
+  { id: "task_queue_demo", workspaceId: "onecatch-demo", title: "补齐任务页 Git 工作流", prompt: "接通状态、Diff、提交信息生成和推送，并验证异常提示。", workflowId: "single_agent", status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: demoNow, authorized: true }, attachments: [], createdAt: demoNow, updatedAt: demoNow },
 ];
 
 export const demoRun = {
@@ -52,7 +52,7 @@ export const demoRun = {
     { stepRunId: "step_1", seq: 6, kind: "message", text: "## 实现完成\n\n- 已拆分调度层\n- 已补充中断恢复测试\n\n```go\ngo test ./internal/usecase/workflows\n```", at: demoNow },
     { stepRunId: "step_2", seq: 1, kind: "message", text: "我会先运行相关测试，再给出审查结论。", at: demoNow },
     { stepRunId: "step_2", seq: 2, kind: "tool_use", text: "go test ./...", at: demoNow },
-    { stepRunId: "step_2", seq: 3, kind: "tool_result", text: "ok  github.com/openmodu/oneshot/internal/usecase/workflows", at: demoNow },
+    { stepRunId: "step_2", seq: 3, kind: "tool_result", text: "ok  github.com/openmodu/onecatch/internal/usecase/workflows", at: demoNow },
     { stepRunId: "step_2", seq: 4, kind: "message", text: "### 审查结论\n\n| 项目 | 状态 |\n| --- | --- |\n| 核心流程 | ✅ |\n| 中断反馈 | 待完善 |", at: demoNow },
     { stepRunId: "step_2", seq: 5, kind: "result", text: '{"signal":"changes_requested","content":"建议在暂停区域明确展示恢复后的当前步骤。"}', at: demoNow },
   ],

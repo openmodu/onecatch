@@ -1,16 +1,16 @@
 package store
 
 import (
-	"github.com/openmodu/oneshot/internal/repo/agents"
-	"github.com/openmodu/oneshot/internal/repo/artifacts"
-	"github.com/openmodu/oneshot/internal/repo/billing"
-	"github.com/openmodu/oneshot/internal/repo/conversations"
-	"github.com/openmodu/oneshot/internal/repo/orders"
-	"github.com/openmodu/oneshot/internal/repo/sessions"
-	"github.com/openmodu/oneshot/internal/repo/users"
+	"github.com/openmodu/onecatch/internal/repo/agents"
+	"github.com/openmodu/onecatch/internal/repo/artifacts"
+	"github.com/openmodu/onecatch/internal/repo/billing"
+	"github.com/openmodu/onecatch/internal/repo/conversations"
+	"github.com/openmodu/onecatch/internal/repo/orders"
+	"github.com/openmodu/onecatch/internal/repo/sessions"
+	"github.com/openmodu/onecatch/internal/repo/users"
 )
 
-type OneShotRepo struct {
+type OneCatchRepo struct {
 	Agents        agents.AgentsRepo
 	Artifacts     artifacts.ArtifactsRepo
 	Billing       billing.BillingRepo
@@ -20,7 +20,7 @@ type OneShotRepo struct {
 	Users         users.UsersRepo
 }
 
-func NewOneShotRepo(
+func NewOneCatchRepo(
 	agents agents.AgentsRepo,
 	artifacts artifacts.ArtifactsRepo,
 	billing billing.BillingRepo,
@@ -28,8 +28,8 @@ func NewOneShotRepo(
 	orders orders.OrdersRepo,
 	sessions sessions.SessionsRepo,
 	users users.UsersRepo,
-) *OneShotRepo {
-	return &OneShotRepo{
+) *OneCatchRepo {
+	return &OneCatchRepo{
 		Agents:        agents,
 		Artifacts:     artifacts,
 		Billing:       billing,

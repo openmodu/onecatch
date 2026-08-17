@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	launchdLabel = "com.openmodu.oneshot-worker"
-	systemdUnit  = "oneshot-worker.service"
+	launchdLabel = "app.onecatch.worker"
+	systemdUnit  = "onecatch-worker.service"
 )
 
 type Config struct {
@@ -52,7 +52,7 @@ func Install(ctx context.Context, config Config) (Result, error) {
 	switch runtime.GOOS {
 	case "darwin":
 		path := filepath.Join(home, "Library", "LaunchAgents", launchdLabel+".plist")
-		logPath := filepath.Join(home, "Library", "Logs", "oneshot-worker.log")
+		logPath := filepath.Join(home, "Library", "Logs", "onecatch-worker.log")
 		payload, err := RenderLaunchd(config, logPath)
 		if err != nil {
 			return Result{}, err
@@ -116,7 +116,7 @@ func RenderLaunchd(config Config, logPath string) ([]byte, error) {
 
 func RenderSystemd(config Config) []byte {
 	var output strings.Builder
-	output.WriteString("[Unit]\nDescription=Oneshot remote agent worker\nAfter=network-online.target\nWants=network-online.target\n\n")
+	output.WriteString("[Unit]\nDescription=OneCatch remote agent worker\nAfter=network-online.target\nWants=network-online.target\n\n")
 	output.WriteString("[Service]\nType=simple\n")
 	if config.PathEnvironment != "" {
 		output.WriteString("Environment=" + systemdQuote("PATH="+config.PathEnvironment) + "\n")
@@ -181,7 +181,7 @@ func writeAtomic(path string, payload []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".oneshot-service-")
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".onecatch-service-")
 	if err != nil {
 		return err
 	}

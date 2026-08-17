@@ -18,7 +18,7 @@ import {
   TestTube2,
   X,
 } from "lucide-react";
-import { WhiteboardBinding } from "../../../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+import { WhiteboardBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import {
   applyWhiteboardChange,
   createDemoWhiteboardProposal,
@@ -203,7 +203,7 @@ function ActivityRail({ activity }) {
 }
 
 export default function WhiteboardPage({ workspace, mode = "demo", runtimes = [], onClose }) {
-  const storageKey = `oneshot.whiteboard.agent.v7.${workspace?.id || "demo"}`;
+  const storageKey = `onecatch.whiteboard.agent.v7.${workspace?.id || "demo"}`;
   const [board, setBoard] = useState(() => mode === "demo" ? createInitialWhiteboard() : readBoard(storageKey));
   const [proposal, setProposal] = useState(() => normalizeWhiteboardProposal(mode === "demo" ? createDemoWhiteboardProposal() : { runtime: "codex", summary: "", changes: [] }));
   const [selectedIDs, setSelectedIDs] = useState(() => new Set(mode === "demo" ? ["recovery-order", "recovery-file"] : []));
@@ -431,8 +431,8 @@ export default function WhiteboardPage({ workspace, mode = "demo", runtimes = []
 
   return <section className="agent-whiteboard-page">
     <header className="agent-whiteboard-topbar">
-      <button type="button" className="agent-project-back" onClick={onClose}>{workspace?.name || "oneshot"}</button>
-      <span>{workspace?.path || "~/Code/openmodu/oneshot"}</span><Lock size={14} aria-hidden="true" />
+      <button type="button" className="agent-project-back" onClick={onClose}>{workspace?.name || "onecatch"}</button>
+      <span>{workspace?.path || "~/Code/openmodu/onecatch"}</span><Lock size={14} aria-hidden="true" />
       <button type="button" className={`agent-scope-chip ${agentState}`} title={agentSessionID ? `继续会话 ${agentSessionID}` : "新白板会话"}>（{runtimeName(runtime)} · {agentSessionID ? "继续会话" : "仅此框架"}）<Info size={14} aria-hidden="true" /></button>
     </header>
 

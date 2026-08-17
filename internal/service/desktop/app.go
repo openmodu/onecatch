@@ -18,21 +18,21 @@ import (
 	"sync"
 	"time"
 
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	"github.com/openmodu/oneshot/internal/repo/git"
-	settingsrepo "github.com/openmodu/oneshot/internal/repo/settings"
-	localdata "github.com/openmodu/oneshot/internal/repo/store/local"
-	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
-	"github.com/openmodu/oneshot/internal/repo/workspacelock"
-	"github.com/openmodu/oneshot/internal/service/desktop/runstate"
-	"github.com/openmodu/oneshot/internal/service/desktop/runstream"
-	"github.com/openmodu/oneshot/internal/service/worker"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
-	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
-	"github.com/openmodu/oneshot/pkg/localfile"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	"github.com/openmodu/onecatch/internal/repo/git"
+	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
+	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
+	"github.com/openmodu/onecatch/internal/repo/workspacelock"
+	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
+	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
+	"github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 type Error struct {
@@ -540,7 +540,7 @@ func (a *Service) EnsureBuiltinDefinitions(ctx context.Context) error {
 }
 
 // RecoverInterruptedRuns repairs the narrow crash window between persisting a
-// running Run and owning its Agent process. A live lock means another Oneshot
+// running Run and owning its Agent process. A live lock means another OneCatch
 // process is still executing that workspace, so the Run is not changed.
 func (a *Service) RecoverInterruptedRuns(ctx context.Context) error {
 	runs, err := a.store.Repos.Workflows.ListRunsByTask(ctx, "")

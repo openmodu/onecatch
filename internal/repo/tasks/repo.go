@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	"github.com/openmodu/oneshot/pkg/localfile"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 var ErrWorkspacePathExists = errors.New("workspace path already exists")

@@ -409,7 +409,7 @@ public class WailsBridge {
                 return;
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE));
+                vibrator.vibrate(VibrationEffect.createOneCatch(durationMs, VibrationEffect.DEFAULT_AMPLITUDE));
             } else {
                 vibrator.vibrate(durationMs);
             }
@@ -812,7 +812,7 @@ public class WailsBridge {
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 long ms = "impact-heavy".equals(type) || "error".equals(type) ? 40
                         : "impact-light".equals(type) || "selection".equals(type) ? 10 : 20;
-                vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+                vibrator.vibrate(VibrationEffect.createOneCatch(ms, VibrationEffect.DEFAULT_AMPLITUDE));
             } else {
                 vibrator.vibrate(20);
             }

@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	"github.com/openmodu/oneshot/internal/repo/git"
-	localdata "github.com/openmodu/oneshot/internal/repo/store/local"
-	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
-	"github.com/openmodu/oneshot/internal/repo/workspacelock"
-	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	"github.com/openmodu/onecatch/internal/repo/git"
+	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
+	"github.com/openmodu/onecatch/internal/repo/workspacelock"
+	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
 )
 
 func TestStorageUsageDoesNotFollowSymlinks(t *testing.T) {
@@ -97,13 +97,13 @@ func TestDiagnosticsNeverPersistsAllowedEnvironmentValue(t *testing.T) {
 	if err := app.InitializeSettings(ctx); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("ONESHOT_TEST_SECRET", "do-not-export-this-value")
+	t.Setenv("ONECATCH_TEST_SECRET", "do-not-export-this-value")
 	settings, err := app.GetSettings(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	runtime := settings.Runtimes["codex"]
-	runtime.EnvironmentAllowlist = []string{"ONESHOT_TEST_SECRET"}
+	runtime.EnvironmentAllowlist = []string{"ONECATCH_TEST_SECRET"}
 	settings.Runtimes["codex"] = runtime
 	if _, err := app.UpdateRuntimeSettings(ctx, settings.Runtimes, settings.Revision); err != nil {
 		t.Fatal(err)
@@ -163,7 +163,7 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	runtime.DefaultModel = "snapshot-model"
 	runtime.ReasoningEffort = "xhigh"
 	runtime.ServiceTier = "priority"
-	runtime.EnvironmentAllowlist = []string{"ONESHOT_TEST_ENV"}
+	runtime.EnvironmentAllowlist = []string{"ONECATCH_TEST_ENV"}
 	settings.Runtimes["codex"] = runtime
 	claude := settings.Runtimes["claude"]
 	claude.DefaultModel = "claude-snapshot"
@@ -204,7 +204,7 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	if snapshot.Steps[1].Model != "claude-snapshot" {
 		t.Fatalf("task Codex override changed another harness: definition=%+v", snapshot)
 	}
-	if got := run.RuntimeSettings["codex"].EnvironmentAllowlist; len(got) != 1 || got[0] != "ONESHOT_TEST_ENV" {
+	if got := run.RuntimeSettings["codex"].EnvironmentAllowlist; len(got) != 1 || got[0] != "ONECATCH_TEST_ENV" {
 		t.Fatalf("environment snapshot = %#v", got)
 	}
 	if got := run.RuntimeSettings["codex"]; got.ReasoningEffort != "high" || got.ServiceTier != "standard" {

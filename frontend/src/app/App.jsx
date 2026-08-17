@@ -14,7 +14,7 @@ import {
   WorkspaceBinding,
   WorkerBinding,
   WindowBinding,
-} from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+} from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
 import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceResults } from "./listNavigation.js";
 import { Action, StatusBadge, TUISelect } from "../ui/primitives.jsx";
@@ -40,8 +40,8 @@ import { INSPECTOR_COMPACT_QUERY, readInspectorDetached, readInspectorPreference
 import { buildInspectorContext, inspectorContextSignature, INSPECTOR_ACTION_EVENT, INSPECTOR_CONTEXT_EVENT, INSPECTOR_REQUEST_EVENT, INSPECTOR_WINDOW_EVENT } from "./inspectorContext.js";
 import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeOptions.js";
 
-const runtimeFrameEvent = "oneshot:runtime-frame";
-const runStateEvent = "oneshot:run-state";
+const runtimeFrameEvent = "onecatch:runtime-frame";
+const runStateEvent = "onecatch:run-state";
 const directAgentWorkflowID = "single_agent";
 
 function firstWorkflowID(items = []) {
@@ -63,7 +63,7 @@ function selectedTaskExecution(form) {
 
 function WindowsTitleBar() {
   return <div className="windows-titlebar drag-region hidden h-9 items-center border-b bg-background pl-3 text-xs text-foreground" onDoubleClick={() => void Window.ToggleMaximise()}>
-    <span className="windows-titlebar-brand flex items-center gap-2 font-medium"><img className="size-4 rounded-[4px]" src="/appicon.png" alt="" aria-hidden="true" />Oneshot</span>
+    <span className="windows-titlebar-brand flex items-center gap-2 font-medium"><img className="size-4 rounded-[4px]" src="/appicon.png" alt="" aria-hidden="true" />OneCatch</span>
     <div className="no-drag ml-auto flex h-full" onDoubleClick={(event) => event.stopPropagation()}>
       <button type="button" className="windows-caption-button" aria-label="最小化" onClick={() => void Window.Minimise()}><Minus size={14} aria-hidden="true" /></button>
       <button type="button" className="windows-caption-button" aria-label="最大化或还原" onClick={() => void Window.ToggleMaximise()}><Square size={11} aria-hidden="true" /></button>
@@ -566,7 +566,7 @@ function App() {
       liveFramesRef.current.push(frame);
       if (!liveFlushTimerRef.current) liveFlushTimerRef.current = window.setTimeout(flush, 80);
       // Run/step status no longer needs a transcript re-read here: the backend
-      // pushes the bounded run state on the oneshot:run-state channel below.
+      // pushes the bounded run state on the onecatch:run-state channel below.
     });
     return () => {
       off();
@@ -1037,7 +1037,7 @@ function App() {
   // the loudest terminal cue in the chrome. The label is prose, the path is a
   // real filesystem path and keeps the mono face.
   const location = view === "settings"
-    ? { label: t("sidebar.settings"), path: "~/.oneshot" }
+    ? { label: t("sidebar.settings"), path: "~/.onecatch" }
     : selectedWorkspace
       ? { label: selectedWorkspace.name, path: selectedWorkspace.path }
       : { label: t("app.selectWorkspace"), path: "" };
@@ -1071,7 +1071,7 @@ function App() {
   const exitLock = useCallback(() => setLocked(false), []);
 
   useEffect(() => {
-    const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
+    const nativeSidebar = globalThis.webkit?.messageHandlers?.onecatchSidebar;
     if (!nativeSidebar) return undefined;
     nativeSidebar.postMessage({ hidden: locked });
     return () => {

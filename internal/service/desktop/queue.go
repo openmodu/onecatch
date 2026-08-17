@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
 func (a *Service) EnqueueTask(ctx context.Context, taskID, confirmationToken string) (domaintasks.Task, error) {

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	domainartifacts "github.com/openmodu/oneshot/internal/domain/artifacts"
-	pkgsql "github.com/openmodu/oneshot/pkg/sql"
+	domainartifacts "github.com/openmodu/onecatch/internal/domain/artifacts"
+	pkgsql "github.com/openmodu/onecatch/pkg/sql"
 	"gorm.io/gorm"
 )
 

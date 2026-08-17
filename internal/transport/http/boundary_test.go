@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	routing "github.com/openmodu/oneshot/internal/transport/router"
+	routing "github.com/openmodu/onecatch/internal/transport/router"
 )
 
 // loginWechatForTest logs in a second, distinct user via the wechat callback

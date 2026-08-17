@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	"github.com/openmodu/oneshot/internal/service/desktop/runstate"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
 )
 
 // recordingRunStateHub captures every pushed View so a test can assert on the

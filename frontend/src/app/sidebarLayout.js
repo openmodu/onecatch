@@ -1,4 +1,4 @@
-export const SIDEBAR_WIDTH_STORAGE_KEY = "oneshot.layout.sidebar.v1";
+export const SIDEBAR_WIDTH_STORAGE_KEY = "onecatch.layout.sidebar.v1";
 export const SIDEBAR_DEFAULT_WIDTH = 216;
 export const SIDEBAR_MIN_WIDTH = 180;
 export const SIDEBAR_MAX_WIDTH = 480;

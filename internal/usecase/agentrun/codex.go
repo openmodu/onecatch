@@ -92,7 +92,7 @@ func (r *CodexRunner) InspectConfiguration(ctx context.Context, cwd string, envi
 	if err := encoder.Encode(map[string]any{
 		"id": 1, "method": "initialize",
 		"params": map[string]any{
-			"clientInfo":   map[string]string{"name": "oneshot", "title": "Oneshot", "version": "0.1.0"},
+			"clientInfo":   map[string]string{"name": "onecatch", "title": "OneCatch", "version": "0.1.0"},
 			"capabilities": map[string]any{"experimentalApi": true, "requestAttestation": false},
 		},
 	}); err != nil {
@@ -307,7 +307,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 	encoder := json.NewEncoder(stdin)
 	if err := encoder.Encode(map[string]any{
 		"id": 1, "method": "initialize",
-		"params": map[string]any{"clientInfo": map[string]string{"name": "oneshot", "title": "Oneshot", "version": "0.1.0"}},
+		"params": map[string]any{"clientInfo": map[string]string{"name": "onecatch", "title": "OneCatch", "version": "0.1.0"}},
 	}); err != nil {
 		return Result{}, fmt.Errorf("initialize Codex app-server: %w", err)
 	}
@@ -454,7 +454,7 @@ func responseID(raw json.RawMessage) int {
 func respondUnsupportedCodexRequest(encoder *json.Encoder, envelope codexAppEnvelope) error {
 	return encoder.Encode(map[string]any{
 		"id":    envelope.ID,
-		"error": map[string]any{"code": -32601, "message": "Oneshot does not handle interactive app-server requests"},
+		"error": map[string]any{"code": -32601, "message": "OneCatch does not handle interactive app-server requests"},
 	})
 }
 

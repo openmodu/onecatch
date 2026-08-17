@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
-	domainusers "github.com/openmodu/oneshot/internal/domain/users"
-	pkgsql "github.com/openmodu/oneshot/pkg/sql"
+	domainauth "github.com/openmodu/onecatch/internal/domain/auth"
+	domainusers "github.com/openmodu/onecatch/internal/domain/users"
+	pkgsql "github.com/openmodu/onecatch/pkg/sql"
 	"gorm.io/gorm"
 )
 

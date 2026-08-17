@@ -17,8 +17,8 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/openmodu/oneshot/internal/fusefs"
-	"github.com/openmodu/oneshot/internal/remotefs"
+	"github.com/openmodu/onecatch/internal/fusefs"
+	"github.com/openmodu/onecatch/internal/remotefs"
 )
 
 type stringList []string
@@ -46,7 +46,7 @@ func run() int {
 	mountPoint := flag.String("mount", "", "empty local directory used as the mount point")
 	cacheTTL := flag.Duration("cache-ttl", time.Second, "metadata and directory cache lifetime")
 	connectTimeout := flag.Duration("connect-timeout", 10*time.Second, "SSH connection timeout")
-	volumeName := flag.String("volume-name", "Oneshot Remote", "name shown by macOS")
+	volumeName := flag.String("volume-name", "OneCatch Remote", "name shown by macOS")
 	allowOther := flag.Bool("allow-other", false, "allow other local users to access the mount")
 	debug := flag.Bool("debug", false, "enable FUSE protocol logging")
 	flag.Var(&sshOptions, "ssh-option", "additional OpenSSH -o option; may be repeated")
@@ -103,8 +103,8 @@ func run() int {
 		MountOptions: fuse.MountOptions{
 			AllowOther:    *allowOther,
 			Debug:         *debug,
-			FsName:        fmt.Sprintf("oneshotfs#%s:%s", *host, *remoteRoot),
-			Name:          "oneshotfs",
+			FsName:        fmt.Sprintf("onecatchfs#%s:%s", *host, *remoteRoot),
+			Name:          "onecatchfs",
 			MaxBackground: 64,
 			MaxWrite:      1024 * 1024,
 			MaxReadAhead:  1024 * 1024,
@@ -177,7 +177,7 @@ func sanitizeVolumeName(value string) string {
 	value = strings.ReplaceAll(value, ",", "-")
 	value = strings.TrimSpace(value)
 	if value == "" {
-		return "Oneshot Remote"
+		return "OneCatch Remote"
 	}
 	return value
 }

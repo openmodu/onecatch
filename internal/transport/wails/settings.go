@@ -3,9 +3,9 @@ package wailstransport
 import (
 	"context"
 
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
-	desktopservice "github.com/openmodu/oneshot/internal/service/desktop"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type SettingsBinding struct{ service *desktopservice.Service }

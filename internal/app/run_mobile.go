@@ -2,7 +2,7 @@
 
 package app
 
-import "github.com/openmodu/oneshot/internal/app/mobile"
+import "github.com/openmodu/onecatch/internal/app/mobile"
 
 // Run starts the remote-worker workbench on iOS and Android.
 func Run() {

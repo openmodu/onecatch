@@ -42,7 +42,7 @@ func TestPrepareMountPoint(t *testing.T) {
 func TestSanitizeVolumeName(t *testing.T) {
 	tests := map[string]string{
 		" Linux, project ": "Linux- project",
-		"   ":              "Oneshot Remote",
+		"   ":              "OneCatch Remote",
 		"project":          "project",
 	}
 	for input, want := range tests {

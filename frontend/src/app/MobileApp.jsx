@@ -40,7 +40,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MobileBinding } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import MarkdownContent from "./components/MarkdownContent.jsx";
 import { errorMessage, formatTime } from "./format.js";
 import { applyMobileRunFrame, foldMobileEvents, groupMobileConversations, mergeMobileRun } from "./mobileRuns.js";
@@ -118,7 +118,7 @@ function PairSheet({ open, busy, initialURL = "https://", onClose, onPair }) {
     <section className="mobile-sheet" role="dialog" aria-modal="true" aria-labelledby="pair-title">
       <div className="mobile-sheet-handle" />
       <header><div><small>安全配对</small><h2 id="pair-title">连接远端 Worker</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" disabled={busy} onClick={onClose}><X /></button></header>
-      <p className="mobile-sheet-copy">在远端执行 <code>oneshot-worker --pair</code>。配对码 10 分钟内有效且只能使用一次，失效后重新执行命令即可。</p>
+      <p className="mobile-sheet-copy">在远端执行 <code>onecatch-worker --pair</code>。配对码 10 分钟内有效且只能使用一次，失效后重新执行命令即可。</p>
       <form onSubmit={(event) => { event.preventDefault(); void onPair({ baseURL, code }).then((ok) => { if (ok) { setCode(""); onClose(); } }); }}>
         <label><span>Worker 地址</span><Input value={baseURL} inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="https://192.168.1.20:9231" onChange={(event) => setBaseURL(event.target.value)} /></label>
         <label><span>一次性配对码</span><Input value={code} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="例如 ABCD-EFGH" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
@@ -242,8 +242,8 @@ function WorkspaceEditorSheet({ workspace, busy, onClose, onSave, onDelete }) {
       <div className="mobile-sheet-handle" />
       <header><div><small>Remote Workspace</small><h2 id="workspace-editor-title">{editing ? "编辑 Workspace" : "新建 Workspace"}</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" disabled={Boolean(busy)} onClick={onClose}><X /></button></header>
       <form onSubmit={(event) => { event.preventDefault(); void onSave({ id: id.trim(), name: name.trim(), path: source === "existing" ? path.trim() : editing && !workspace.managed ? workspace.path : "", remoteUrl: source === "clone" ? remoteURL.trim() : "", revision: revision.trim() }); }}>
-        <label><span>显示名称</span><Input value={name} placeholder="例如 Oneshot" onChange={(event) => setName(event.target.value)} /></label>
-        <label><span>Workspace ID</span><Input value={id} disabled={editing} autoCapitalize="none" autoCorrect="off" placeholder="oneshot" pattern="[A-Za-z0-9_-]{1,128}" onChange={(event) => setID(event.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} /></label>
+        <label><span>显示名称</span><Input value={name} placeholder="例如 OneCatch" onChange={(event) => setName(event.target.value)} /></label>
+        <label><span>Workspace ID</span><Input value={id} disabled={editing} autoCapitalize="none" autoCorrect="off" placeholder="onecatch" pattern="[A-Za-z0-9_-]{1,128}" onChange={(event) => setID(event.target.value.replace(/[^A-Za-z0-9_-]/g, ""))} /></label>
 		<div className="mobile-workspace-source" role="radiogroup" aria-label="Workspace 来源"><button type="button" className={source === "clone" ? "selected" : ""} role="radio" aria-checked={source === "clone"} disabled={editing} onClick={() => { setSource("clone"); setRevision((value) => value || "HEAD"); }}><Cloud />克隆 Git 仓库</button><button type="button" className={source === "existing" ? "selected" : ""} role="radio" aria-checked={source === "existing"} disabled={editing} onClick={() => { setSource("existing"); setRevision(""); }}><HardDrive />绑定已有目录</button></div>
         {source === "clone" ? <label><span>Git 地址</span><Input value={remoteURL} inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="git@github.com:org/repo.git" onChange={(event) => setRemoteURL(event.target.value)} /></label> : <label><span>Worker 绝对路径</span><Input value={path} autoCapitalize="none" autoCorrect="off" placeholder="/Users/me/Code/project" onChange={(event) => setPath(event.target.value)} /></label>}
 		<label><span>分支、标签或 Commit</span><Input value={revision} autoCapitalize="none" autoCorrect="off" placeholder={source === "clone" ? "HEAD" : "留空保持当前提交"} onChange={(event) => setRevision(event.target.value)} /></label>
@@ -315,7 +315,7 @@ function Sidebar({ open, workspaces, conversations, selectedConversationID, heal
   if (!open) return null;
   return <div className="mobile-drawer-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
     <aside className="mobile-drawer" aria-label="工作区与会话">
-      <header><div><span className="mobile-brand-mark">1</span><strong>Oneshot</strong></div><button type="button" className="mobile-icon-button" aria-label="关闭侧栏" onClick={onClose}><PanelLeftClose /></button></header>
+      <header><div><span className="mobile-brand-mark">1</span><strong>OneCatch</strong></div><button type="button" className="mobile-icon-button" aria-label="关闭侧栏" onClick={onClose}><PanelLeftClose /></button></header>
       <button type="button" className="mobile-new-session" onClick={() => { onNew(); onClose(); }}><PenLine />新建会话</button>
       <button type="button" className="mobile-drawer-home" onClick={() => { onHome(); onClose(); }}><Folder />全部项目<ChevronRight /></button>
       <div className="mobile-drawer-scroll">

@@ -18,7 +18,7 @@ document.documentElement.dataset.platform = platform === "mobile" ? "mobile" : d
 // window, sized for a rail. The detached inspector has no rail, so retire that
 // panel here — before React paints — instead of letting it show through.
 if (windowKind === "inspector") {
-  globalThis.webkit?.messageHandlers?.oneshotSidebar?.postMessage({ hidden: true });
+  globalThis.webkit?.messageHandlers?.onecatchSidebar?.postMessage({ hidden: true });
 }
 
 // Every native window owns a separate document. Keep their root theme
