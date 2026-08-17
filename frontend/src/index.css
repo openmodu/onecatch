@@ -633,6 +633,14 @@
     background-color: color-mix(in oklab, var(--sidebar) 94%, transparent);
   }
 
+  .settings-titlebar-sidebar {
+    background-color: var(--sidebar);
+  }
+
+  :root[data-native-sidebar-material] .settings-titlebar-sidebar {
+    background-color: color-mix(in oklab, var(--sidebar) 94%, transparent);
+  }
+
   .conversation-workspace {
     --conversation-content-width: 920px;
     --conversation-inline-gutter: clamp(12px, 2.5vw, 24px);
@@ -2035,13 +2043,13 @@
 
 /* Auxiliary windows use the native Windows caption as their titlebar. Remove
    the duplicate macOS inset title and reclaim that vertical space. */
-:root[data-platform="windows"] .settings-page > .pointer-events-none,
+:root[data-platform="windows"] .settings-titlebar,
 :root[data-platform="windows"] .workflow-window > .pointer-events-none {
   display: none;
 }
 
-:root[data-platform="windows"] .settings-sidebar .drag-region {
-  display: none;
+:root[data-platform="windows"] .settings-sidebar aside {
+  padding-top: 0;
 }
 
 :root[data-platform="windows"] .settings-content > [data-slot="scroll-area-viewport"] > section {

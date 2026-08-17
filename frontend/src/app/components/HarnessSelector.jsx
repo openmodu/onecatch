@@ -13,7 +13,7 @@ import { runtimeHarness, runtimeHarnessOptions, selectRuntimeHarness } from "../
 export default function HarnessSelector({ value, onChange, runtimes = [], readOnly = false, agentLabel = false, className = "" }) {
   const { t } = useTranslation();
   const harness = runtimeHarness(value?.harness);
-  const label = agentLabel ? t("task.agentLabel", { name: harness.label }) : harness.label;
+  const label = harness.label;
   const controlLabel = agentLabel ? t("task.executionTarget") : t("task.harness");
   const controlClass = agentLabel ? "new-task-select executor" : "new-task-select harness";
 

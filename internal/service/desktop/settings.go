@@ -289,7 +289,7 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 	if err != nil {
 		return domainworkflows.Definition{}, workflowuc.RunResolution{}, mapError(err)
 	}
-	definition, err := a.store.Repos.Workflows.GetDefinition(ctx, task.WorkflowID)
+	definition, err := a.GetDefinition(ctx, task.WorkflowID)
 	if err != nil {
 		return domainworkflows.Definition{}, workflowuc.RunResolution{}, mapError(err)
 	}

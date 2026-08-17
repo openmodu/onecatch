@@ -153,7 +153,9 @@ test("the settings window uses the main window's inset sidebar and draggable chr
   assert.match(settings, /grid-cols-\[216px_minmax\(0,1fr\)\]/);
   assert.match(settings, /settings-page[^\"]*bg-transparent/);
   assert.match(settings, /<ScrollArea className="sidebar settings-sidebar[^\"]*\[clip-path:inset\(8px_4px_8px_8px_round_16px\)\]/);
-  assert.match(settings, /<div className="drag-region h-\[52px\] shrink-0 cursor-default" aria-hidden="true" \/>/);
+  assert.match(settings, /<div className="settings-titlebar drag-region [^"]*h-\[52px\][^"]*grid-cols-\[216px_minmax\(0,1fr\)\]/);
+  assert.match(settings, /settings-titlebar-sidebar/);
+  assert.match(settings, /SettingsKicker className="mb-2 px-2 text-\[13px\]/);
   assert.match(settings, /<header className="drag-region [^"]*"/);
   assert.match(settings, /<div className="no-drag flex shrink-0 items-center gap-2\.5">/);
   assert.match(auxiliary, /nativeSidebar\.postMessage\(\{ width: document\.querySelector\("\.settings-sidebar"\)[^;]*\|\| 216 \}\);/);
@@ -328,6 +330,7 @@ test("every new task chooses either an Agent or a workflow plus an explicit perm
   const permission = await readFile(path.join(sourceRoot, "app", "components", "TaskPermissionSelector.jsx"), "utf8");
   const runtimeMenu = await readFile(path.join(sourceRoot, "app", "components", "RuntimeProfileMenu.jsx"), "utf8");
   const harnesses = await readFile(path.join(sourceRoot, "app", "runtimeHarnesses.js"), "utf8");
+  const workflowLibrary = await readFile(path.join(sourceRoot, "app", "components", "workflow", "WorkflowLibrary.jsx"), "utf8");
   assert.match(newTask, /<TaskExecutorSelector form=\{form\} workflows=\{workflows\} runtimes=\{runtimes\}/);
   assert.match(newTask, /<TaskPermissionSelector value=\{form\.sandbox\}/);
   assert.doesNotMatch(newTask, /<HarnessSelector/, "the Agent is selected by the mutually exclusive execution-target control");
@@ -335,9 +338,12 @@ test("every new task chooses either an Agent or a workflow plus an explicit perm
   assert.match(executor, /runtimeHarnessOptions\(runtimes/, "the execution target lists available coding Agents");
   assert.match(executor, /selectTaskExecutionTarget\(current, target\)/, "switching target must clear the mutually exclusive selection");
   assert.match(executor, /workflow\.id !== directAgentWorkflowID/, "the internal single-Agent definition must not appear as a user-facing workflow");
+  assert.match(workflowLibrary, /workflows\.filter\(\(workflow\) => workflow\.id !== directAgentWorkflowID\)/, "the internal direct-Agent definition must not be editable or deletable in the workflow library");
   assert.match(executor, /value=\{`agent:\$\{option\.value\}`\}/);
   assert.match(executor, /value=\{`workflow:\$\{workflow\.id\}`\}/);
-  assert.match(executor, /t\("task\.agentLabel"/, "a directly selected Agent stays visible in the composer");
+  assert.match(executor, /directAgent\s*\? selectedHarness\.label/, "a directly selected Agent shows only its runtime name");
+  assert.doesNotMatch(executor, /t\("task\.agentLabel"/, "the execution target must not spend width on a redundant Agent prefix");
+  assert.doesNotMatch(executor, /t\("task\.workflowTargetLabel"/, "the execution target must not spend width on a redundant workflow prefix");
   assert.match(permission, /value: "read-only"/);
   assert.match(permission, /value: "workspace-write"/);
   assert.match(permission, /value: "full"/);
@@ -384,6 +390,7 @@ test("the transcript follows Codex's user, process, and answer rhythm", async ()
 test("completed conversations remain available for a follow-up turn", async () => {
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
   const composer = await readFile(path.join(sourceRoot, "app", "components", "Composer.jsx"), "utf8");
+  const harnessSelector = await readFile(path.join(sourceRoot, "app", "components", "HarnessSelector.jsx"), "utf8");
   assert.match(composer, /\["running", "paused", "completed"\]\.includes\(runStatus\)/);
   assert.match(composer, /runStatus === "completed"[\s\S]*t\("composer\.continue"\)/);
   assert.match(app, /run\.status === "paused" \|\| run\.status === "completed"/);
@@ -393,6 +400,8 @@ test("completed conversations remain available for a follow-up turn", async () =
   assert.match(composer, /<TaskPermissionSelector value=\{permission\} readOnly/);
   assert.match(composer, /supportsRuntimeProfile\(runtimeProfile\.harness\)/, "runtimes without model controls must not repeat the Agent name");
   assert.match(composer, /readOnly=\{runStatus === "running"\}/, "runtime controls stay editable between completed or paused turns");
+  assert.doesNotMatch(harnessSelector, /t\("task\.agentLabel"/, "the follow-up runtime selector must not spend width on a redundant Agent prefix");
+  assert.match(composer, /<span>\{workflowLabel\}<\/span>/, "the follow-up workflow selector shows only the workflow name");
 });
 
 test("message hover timestamps include seconds", async () => {

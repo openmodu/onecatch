@@ -133,41 +133,38 @@ func newLocalTestApp(t *testing.T, engine workflowuc.Engine) (*Service, *localda
 	return app, store
 }
 
-func TestBuiltinWorkflowCanBeRenamedAndDeletedWithoutBeingReseeded(t *testing.T) {
-	app, _ := newLocalTestApp(t, completingEngine{})
+func TestDirectAgentWorkflowIsProtectedAndSelfHealing(t *testing.T) {
+	app, store := newLocalTestApp(t, completingEngine{})
 	ctx := context.Background()
-	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
-	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "rename workflow", Prompt: "keep this task runnable"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	updated := builtinDefinitions()[0]
-	updated.ID = "my_single_agent"
 	updated.Name = "My Single Agent"
-	if _, err := app.UpdateDefinition(ctx, "single_agent", updated); err != nil {
+	if _, err := app.UpdateDefinition(ctx, directAgentWorkflowID, updated); errorCode(err) != "workflow_builtin_readonly" {
+		t.Fatalf("UpdateDefinition() error = %v", err)
+	}
+	if err := app.DeleteDefinition(ctx, directAgentWorkflowID); errorCode(err) != "workflow_builtin_readonly" {
+		t.Fatalf("DeleteDefinition() error = %v", err)
+	}
+
+	// Simulate an older build that allowed the backing record to be deleted
+	// after the builtins marker had already been written.
+	if err := store.Repos.Workflows.DeleteDefinition(ctx, directAgentWorkflowID); err != nil {
 		t.Fatal(err)
 	}
 	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := app.GetDefinition(ctx, "single_agent"); errorCode(err) != "workflow_not_found" {
-		t.Fatalf("renamed builtin was recreated: %v", err)
+	if _, err := store.Repos.Workflows.GetDefinition(ctx, directAgentWorkflowID); err != nil {
+		t.Fatalf("EnsureBuiltinDefinitions() did not repair direct Agent definition: %v", err)
 	}
-	migratedTask, err := app.store.Repos.Tasks.GetTask(ctx, task.ID)
-	if err != nil || migratedTask.WorkflowID != updated.ID {
-		t.Fatalf("task workflow reference = %q, %v", migratedTask.WorkflowID, err)
-	}
-	if err := app.DeleteDefinition(ctx, updated.ID); err != nil {
+	if err := store.Repos.Workflows.DeleteDefinition(ctx, directAgentWorkflowID); err != nil {
 		t.Fatal(err)
 	}
-	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
-		t.Fatal(err)
+	definition, err := app.GetDefinition(ctx, directAgentWorkflowID)
+	if err != nil {
+		t.Fatalf("GetDefinition() did not self-heal direct Agent definition: %v", err)
 	}
-	if _, err := app.GetDefinition(ctx, updated.ID); errorCode(err) != "workflow_not_found" {
-		t.Fatalf("deleted builtin was recreated: %v", err)
+	if definition.ID != directAgentWorkflowID || len(definition.Steps) != 1 {
+		t.Fatalf("repaired direct Agent definition = %+v", definition)
 	}
 }
 

@@ -39,6 +39,7 @@ export default function Composer({
   const editable = ["running", "paused", "completed"].includes(runStatus);
   const canSend = Boolean(draft.trim() || attachments.length);
   const directAgent = !workflowId || workflowId === directAgentWorkflowID;
+  const workflowLabel = workflowName || t("task.workflowMode");
   const showRuntimeProfile = Boolean(runtimeProfile && supportsRuntimeProfile(runtimeProfile.harness));
 
   const send = async (modeName) => {
@@ -60,7 +61,7 @@ export default function Composer({
         <div className={`workbench-composer-actions ${showRuntimeProfile ? "profile-visible" : ""}`.trim()}>
           <Button type="button" variant="ghost" size="icon-sm" className="attachment-action" disabled={!editable} aria-label={t("composer.attachment")} title={t("composer.attachment")} onClick={onChooseAttachments}><Paperclip size={16} aria-hidden="true" /></Button>
           {runtimeProfile && <div className="workbench-runtime-controls">
-            {directAgent ? <HarnessSelector value={runtimeProfile} onChange={onRuntimeProfileChange} runtimes={runtimes} readOnly={runStatus === "running"} agentLabel /> : <span className="new-task-select executor is-read-only" aria-label={t("task.workflowTargetLabel", { name: workflowName || t("task.workflowMode") })}><Workflow size={14} aria-hidden="true" /><span>{t("task.workflowTargetLabel", { name: workflowName || t("task.workflowMode") })}</span></span>}
+            {directAgent ? <HarnessSelector value={runtimeProfile} onChange={onRuntimeProfileChange} runtimes={runtimes} readOnly={runStatus === "running"} agentLabel /> : <span className="new-task-select executor is-read-only" aria-label={t("task.workflowTargetLabel", { name: workflowLabel })}><Workflow size={14} aria-hidden="true" /><span>{workflowLabel}</span></span>}
             <TaskPermissionSelector value={permission} readOnly />
           </div>}
           {showRuntimeProfile && <RuntimeProfileMenu className="workbench-runtime-profile" value={runtimeProfile} onChange={onRuntimeProfileChange} configuration={runtimeConfiguration?.data} runtimeSettings={runtimeSettings} loading={runtimeConfiguration?.loading} error={runtimeConfiguration?.error} readOnly={runStatus === "running"} />}

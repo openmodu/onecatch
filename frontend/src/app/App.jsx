@@ -44,8 +44,12 @@ const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
 const directAgentWorkflowID = "single_agent";
 
-function firstWorkflowID(items = []) {
-  return items.find((item) => item.id === directAgentWorkflowID)?.id || items[0]?.id || "";
+function firstWorkflowID() {
+  return directAgentWorkflowID;
+}
+
+function isAvailableExecutionTarget(items = [], id = "") {
+  return id === directAgentWorkflowID || items.some((item) => item.id === id);
 }
 
 function selectedTaskExecution(form) {
@@ -282,7 +286,7 @@ function App() {
       setWorkers(workerItems || []);
       setSettings(settingsValue || demoSettings);
       setWorkspaceID((current) => current || orderedWorkspaces[0]?.id || "");
-      setTaskForm((current) => ({ ...current, workflowId: workflowItems.some((item) => item.id === current.workflowId) ? current.workflowId : firstWorkflowID(workflowItems) }));
+      setTaskForm((current) => ({ ...current, workflowId: isAvailableExecutionTarget(workflowItems, current.workflowId) ? current.workflowId : firstWorkflowID() }));
     } catch {
       setMode("demo");
       setRuntimes(demoRuntimes);
@@ -291,7 +295,7 @@ function App() {
       setWorkers(demoWorkers);
       setSettings(demoSettings);
       setWorkspaceID(demoWorkspaces[0].id);
-      setTaskForm((current) => ({ ...current, workflowId: firstWorkflowID(demoWorkflows) }));
+      setTaskForm((current) => ({ ...current, workflowId: firstWorkflowID() }));
       setRunItems([{ ...demoRun.run, task: demoTasks[0] }]);
       setTasks(demoTasks);
       setRunTotal(1);
@@ -346,7 +350,7 @@ function App() {
       try {
         const items = await WorkflowBinding.ListDefinitions();
         setWorkflows(items || []);
-        setTaskForm((form) => items.some((item) => item.id === form.workflowId) ? form : { ...form, workflowId: firstWorkflowID(items) });
+        setTaskForm((form) => isAvailableExecutionTarget(items, form.workflowId) ? form : { ...form, workflowId: firstWorkflowID() });
       } catch (error) {
         notify("error", errorMessage(error));
       }
@@ -1012,7 +1016,7 @@ function App() {
         items = await WorkflowBinding.ListDefinitions();
       }
       setWorkflows(items);
-      setTaskForm((form) => form.workflowId === workflow.id ? { ...form, workflowId: firstWorkflowID(items) } : form);
+      setTaskForm((form) => form.workflowId === workflow.id ? { ...form, workflowId: firstWorkflowID() } : form);
       notify("success", t("app.workflowDeleted"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };

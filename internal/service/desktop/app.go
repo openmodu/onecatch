@@ -35,6 +35,8 @@ import (
 	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
+const directAgentWorkflowID = "single_agent"
+
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -422,6 +424,9 @@ func (a *Service) CreateDefinition(ctx context.Context, input domainworkflows.De
 }
 
 func (a *Service) UpdateDefinition(ctx context.Context, currentID string, input domainworkflows.Definition) (domainworkflows.Definition, error) {
+	if strings.TrimSpace(currentID) == directAgentWorkflowID {
+		return domainworkflows.Definition{}, coded("workflow_builtin_readonly", "the direct Agent definition is managed by OneCatch")
+	}
 	input, err := a.prepareDefinition(ctx, input)
 	if err != nil {
 		return domainworkflows.Definition{}, err
@@ -469,6 +474,9 @@ func (a *Service) UpdateDefinition(ctx context.Context, currentID string, input 
 }
 
 func (a *Service) DeleteDefinition(ctx context.Context, id string) error {
+	if strings.TrimSpace(id) == directAgentWorkflowID {
+		return coded("workflow_builtin_readonly", "the direct Agent definition is managed by OneCatch")
+	}
 	if err := a.store.Repos.Workflows.DeleteDefinition(ctx, id); err != nil {
 		return mapDefinitionError(err)
 	}
@@ -514,6 +522,12 @@ func (a *Service) ListDefinitions(ctx context.Context) ([]domainworkflows.Defini
 }
 
 func (a *Service) GetDefinition(ctx context.Context, id string) (domainworkflows.Definition, error) {
+	id = strings.TrimSpace(id)
+	if id == directAgentWorkflowID {
+		if err := a.ensureDirectAgentDefinition(ctx); err != nil {
+			return domainworkflows.Definition{}, mapDefinitionError(err)
+		}
+	}
 	definition, err := a.store.Repos.Workflows.GetDefinition(ctx, id)
 	if err != nil {
 		return definition, coded("workflow_not_found", "workflow was not found")
@@ -522,6 +536,12 @@ func (a *Service) GetDefinition(ctx context.Context, id string) (domainworkflows
 }
 
 func (a *Service) EnsureBuiltinDefinitions(ctx context.Context) error {
+	// The direct Agent target is application infrastructure, not a user
+	// workflow. Repair it on every launch even when an older build allowed the
+	// backing definition to be deleted after the seed marker was written.
+	if err := a.ensureDirectAgentDefinition(ctx); err != nil {
+		return err
+	}
 	marker := filepath.Join(a.store.Data.Paths.Workflows, ".builtins-v1")
 	if _, err := os.Stat(marker); err == nil {
 		return nil
@@ -529,6 +549,9 @@ func (a *Service) EnsureBuiltinDefinitions(ctx context.Context) error {
 		return err
 	}
 	for _, definition := range builtinDefinitions() {
+		if definition.ID == directAgentWorkflowID {
+			continue
+		}
 		if _, err := a.store.Repos.Workflows.GetDefinition(ctx, definition.ID); err == nil {
 			continue
 		}
@@ -537,6 +560,19 @@ func (a *Service) EnsureBuiltinDefinitions(ctx context.Context) error {
 		}
 	}
 	return localfile.WriteTextAtomic(marker, "seeded\n")
+}
+
+func (a *Service) ensureDirectAgentDefinition(ctx context.Context) error {
+	if _, err := a.store.Repos.Workflows.GetDefinition(ctx, directAgentWorkflowID); err == nil {
+		return nil
+	} else if !errors.Is(err, repoworkflows.ErrDefinitionNotFound) {
+		return err
+	}
+	_, err := a.store.Repos.Workflows.SaveDefinition(ctx, builtinDefinitions()[0])
+	if errors.Is(err, repoworkflows.ErrDefinitionExists) {
+		return nil
+	}
+	return err
 }
 
 // RecoverInterruptedRuns repairs the narrow crash window between persisting a

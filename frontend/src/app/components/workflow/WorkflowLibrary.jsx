@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { dagTemplate, loopTemplate } from "../../templates.js";
+import { directAgentWorkflowID } from "../../runtimeHarnesses.js";
 
 function workflowPath(workflow) {
   if (workflow?.mode === "dag") {
@@ -114,7 +115,8 @@ function WorkflowDetail({ workflow, runtimes, onEdit }) {
 
 export default function WorkflowLibrary({ workflows, selectedWorkflow, runtimes, editorContent, busy, onSelect, openEditor, deleteWorkflow, canGoBack = false, canGoForward = false, onGoBack, onGoForward }) {
   const { t } = useTranslation();
-  const activeWorkflow = selectedWorkflow || workflows[0] || null;
+  const editableWorkflows = workflows.filter((workflow) => workflow.id !== directAgentWorkflowID);
+  const activeWorkflow = selectedWorkflow && selectedWorkflow.id !== directAgentWorkflowID ? selectedWorkflow : editableWorkflows[0] || null;
   return <div className="workflow-window relative grid h-full min-h-0 grid-cols-[240px_minmax(0,1fr)] overflow-hidden bg-transparent text-foreground">
     <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex h-[52px] select-none items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85" aria-hidden="true">{t("workflow.title")}</div>
 
@@ -126,7 +128,7 @@ export default function WorkflowLibrary({ workflows, selectedWorkflow, runtimes,
         </div>}
       </div>
       <div className="flex items-center justify-between gap-3 px-4 pt-2 pb-3 pl-5">
-        <div className="min-w-0"><strong className="block text-sm font-semibold text-foreground">{t("workflow.title")}</strong><small className="mt-0.5 block truncate text-[11px] text-muted-foreground">{workflows.length}</small></div>
+        <div className="min-w-0"><strong className="block text-sm font-semibold text-foreground">{t("workflow.title")}</strong><small className="mt-0.5 block truncate text-[11px] text-muted-foreground">{editableWorkflows.length}</small></div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="outline" size="icon-sm" aria-label={t("workflow.title")}><Plus aria-hidden="true" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end" collisionPadding={12}>
@@ -137,8 +139,8 @@ export default function WorkflowLibrary({ workflows, selectedWorkflow, runtimes,
       </div>
       <ScrollArea className="min-h-0 flex-1 px-3 pb-4">
         <div className="grid gap-0.5">
-          {workflows.map((workflow) => <WorkflowListItem key={workflow.id} workflow={workflow} selected={activeWorkflow?.id === workflow.id} busy={busy} onSelect={() => onSelect ? onSelect(workflow) : openEditor(workflow)} onEdit={() => openEditor(workflow)} onDelete={() => deleteWorkflow(workflow)} />)}
-          {!workflows.length && <p className="px-3 py-6 text-center text-xs leading-relaxed text-muted-foreground">{t("workflow.runtimeNotice")}</p>}
+          {editableWorkflows.map((workflow) => <WorkflowListItem key={workflow.id} workflow={workflow} selected={activeWorkflow?.id === workflow.id} busy={busy} onSelect={() => onSelect ? onSelect(workflow) : openEditor(workflow)} onEdit={() => openEditor(workflow)} onDelete={() => deleteWorkflow(workflow)} />)}
+          {!editableWorkflows.length && <p className="px-3 py-6 text-center text-xs leading-relaxed text-muted-foreground">{t("workflow.runtimeNotice")}</p>}
         </div>
       </ScrollArea>
     </aside>

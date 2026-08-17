@@ -25,8 +25,8 @@ export default function TaskExecutorSelector({ form, workflows = [], runtimes = 
   const selectedWorkflow = workflows.find((workflow) => workflow.id === form.workflowId);
   const selection = taskExecutionTarget(form);
   const label = directAgent
-    ? t("task.agentLabel", { name: selectedHarness.label })
-    : t("task.workflowTargetLabel", { name: selectedWorkflow?.name || t("task.chooseWorkflow") });
+    ? selectedHarness.label
+    : selectedWorkflow?.name || t("task.chooseWorkflow");
   const availableWorkflows = workflows.filter((workflow) => workflow.id !== directAgentWorkflowID);
   const harnessOptions = runtimeHarnessOptions(runtimes, t("task.harnessUnavailable"));
   const SelectedIcon = directAgent ? Bot : Workflow;
