@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 const (
@@ -139,7 +139,7 @@ func (a *Service) CancelWhiteboardRequest(requestID string) {
 
 func whiteboardAgentPrompt(instruction, canvas string) string {
 	return strings.Join([]string{
-		"You are operating inside Oneshot's collaborative infinite canvas.",
+		"You are operating inside OneCatch's collaborative infinite canvas.",
 		"Your job is to propose useful canvas changes, not to modify workspace files or the canvas directly.",
 		"Read the canvas context, infer relationships, and return a small reviewable patch for the human.",
 		"The canvas context includes selectedObjectId and review.focusedChangeId. Treat them as the human's current focus.",

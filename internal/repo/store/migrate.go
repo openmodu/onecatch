@@ -1,13 +1,13 @@
 package store
 
 import (
-	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
-	repoartifacts "github.com/openmodu/oneshot/internal/repo/artifacts"
-	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
-	repoconversations "github.com/openmodu/oneshot/internal/repo/conversations"
-	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
-	reposessions "github.com/openmodu/oneshot/internal/repo/sessions"
-	repousers "github.com/openmodu/oneshot/internal/repo/users"
+	repoagents "github.com/openmodu/onecatch/internal/repo/agents"
+	repoartifacts "github.com/openmodu/onecatch/internal/repo/artifacts"
+	repobilling "github.com/openmodu/onecatch/internal/repo/billing"
+	repoconversations "github.com/openmodu/onecatch/internal/repo/conversations"
+	repoorders "github.com/openmodu/onecatch/internal/repo/orders"
+	reposessions "github.com/openmodu/onecatch/internal/repo/sessions"
+	repousers "github.com/openmodu/onecatch/internal/repo/users"
 	"gorm.io/gorm"
 )
 

@@ -1,4 +1,4 @@
-// Package localfile provides business-agnostic primitives for Oneshot's local
+// Package localfile provides business-agnostic primitives for OneCatch's local
 // JSON/JSONL persistence.
 package localfile
 
@@ -51,7 +51,7 @@ func writeAtomic(path string, data []byte) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create directory %s: %w", dir, err)
 	}
-	temporary, err := os.CreateTemp(dir, ".oneshot-*.tmp")
+	temporary, err := os.CreateTemp(dir, ".onecatch-*.tmp")
 	if err != nil {
 		return fmt.Errorf("create temporary snapshot: %w", err)
 	}

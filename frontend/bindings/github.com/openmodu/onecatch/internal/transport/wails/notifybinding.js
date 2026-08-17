@@ -23,5 +23,5 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
  * @returns {$CancellablePromise<void>}
  */
 export function Send(title, body) {
-    return $Call.ByID(2761345427, title, body);
+    return $Call.ByID(2032309516, title, body);
 }

@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
 func newTestHub(t *testing.T) *Hub {

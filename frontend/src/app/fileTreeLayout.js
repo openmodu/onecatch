@@ -3,7 +3,7 @@ export const FILE_TREE_MIN_WIDTH = 138;
 export const FILE_EDITOR_MIN_WIDTH = 220;
 export const FILE_TREE_RESIZER_WIDTH = 7;
 export const FILE_TREE_KEYBOARD_STEP = 20;
-export const FILE_TREE_RATIO_STORAGE_KEY = "oneshot.file-inspector.tree-ratio";
+export const FILE_TREE_RATIO_STORAGE_KEY = "onecatch.file-inspector.tree-ratio";
 
 export function clampFileTreeWidth(width, containerWidth) {
   const availableWidth = Number(containerWidth);

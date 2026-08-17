@@ -8,11 +8,11 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
-	workflowuc "github.com/openmodu/oneshot/internal/usecase/workflows"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
 )
 
-const EventName = "oneshot:runtime-frame"
+const EventName = "onecatch:runtime-frame"
 
 type Frame = workflowuc.RuntimeEventFrame
 

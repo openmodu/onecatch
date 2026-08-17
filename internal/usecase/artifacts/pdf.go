@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
 )
 
 // renderReport renders a structurally valid single-page PDF for the order, so
@@ -16,7 +16,7 @@ import (
 // work — the bytes are still present and text-extractable.
 func renderReport(order domainorders.Order) []byte {
 	lines := []string{
-		"OneShot Delivery Report",
+		"OneCatch Delivery Report",
 		"",
 		"Order:   " + order.ID,
 		"Agent:   " + order.AgentName,

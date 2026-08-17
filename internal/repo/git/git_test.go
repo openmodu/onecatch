@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openmodu/oneshot/internal/repo/git"
+	"github.com/openmodu/onecatch/internal/repo/git"
 )
 
 func TestInspectNonRepositoryAndRepositoryStatus(t *testing.T) {
@@ -31,7 +31,7 @@ func TestInspectNonRepositoryAndRepositoryStatus(t *testing.T) {
 	if err != nil || !snapshot.IsRepo || !strings.Contains(snapshot.Status, "?? main.go") {
 		t.Fatalf("repo snapshot = %+v, %v", snapshot, err)
 	}
-	for _, args := range [][]string{{"-C", repo, "config", "user.name", "Oneshot Test"}, {"-C", repo, "config", "user.email", "oneshot@example.test"}} {
+	for _, args := range [][]string{{"-C", repo, "config", "user.name", "OneCatch Test"}, {"-C", repo, "config", "user.email", "onecatch@example.test"}} {
 		if output, err := exec.Command("git", args...).CombinedOutput(); err != nil {
 			t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, output)
 		}

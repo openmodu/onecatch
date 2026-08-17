@@ -8,9 +8,9 @@ import (
 )
 
 func TestMySQLPingWithDSN(t *testing.T) {
-	dsn := os.Getenv("ONESHOT_MYSQL_TEST_DSN")
+	dsn := os.Getenv("ONECATCH_MYSQL_TEST_DSN")
 	if dsn == "" {
-		t.Skip("set ONESHOT_MYSQL_TEST_DSN to run MySQL connectivity test")
+		t.Skip("set ONECATCH_MYSQL_TEST_DSN to run MySQL connectivity test")
 	}
 
 	db, err := NewMySQL(dsn)

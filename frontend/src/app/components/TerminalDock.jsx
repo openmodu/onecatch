@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { ChevronDown, ChevronLeft, ChevronRight, Columns2, Maximize2, Minimize2, Plus, Rows2, Search, SquareTerminal, Trash2, X } from "lucide-react";
 import { Browser, Clipboard, Events } from "@wailsio/runtime";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { TerminalBinding } from "../../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+import { TerminalBinding } from "../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { errorMessage } from "../format.js";
 import { decodeTerminalData, encodeTerminalData } from "../terminalCodec.js";
 import { normalizeTerminalPreferences, resolveTerminalTheme } from "../terminalThemes.js";
@@ -11,8 +11,8 @@ import { paneIDs, paneNode, removePane, splitPane, updateSplitRatio } from "../t
 import TerminalPane from "./TerminalPane.jsx";
 import TerminalSplitLayout from "./TerminalSplitLayout.jsx";
 
-const OUTPUT_EVENT = "oneshot:terminal-output";
-const EXIT_EVENT = "oneshot:terminal-exit";
+const OUTPUT_EVENT = "onecatch:terminal-output";
+const EXIT_EVENT = "onecatch:terminal-exit";
 const DEFAULT_HEIGHT = 286;
 const MIN_HEIGHT = 190;
 const MAX_HEIGHT = 560;

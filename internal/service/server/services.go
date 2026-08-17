@@ -1,13 +1,13 @@
 package server
 
 import (
-	usecaseagents "github.com/openmodu/oneshot/internal/usecase/agents"
-	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
-	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
-	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
-	usecaseconversations "github.com/openmodu/oneshot/internal/usecase/conversations"
-	usecaseexecution "github.com/openmodu/oneshot/internal/usecase/execution"
-	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
+	usecaseagents "github.com/openmodu/onecatch/internal/usecase/agents"
+	usecaseartifacts "github.com/openmodu/onecatch/internal/usecase/artifacts"
+	usecaseauth "github.com/openmodu/onecatch/internal/usecase/auth"
+	usecasebilling "github.com/openmodu/onecatch/internal/usecase/billing"
+	usecaseconversations "github.com/openmodu/onecatch/internal/usecase/conversations"
+	usecaseexecution "github.com/openmodu/onecatch/internal/usecase/execution"
+	usecaseorders "github.com/openmodu/onecatch/internal/usecase/orders"
 )
 
 type Services struct {

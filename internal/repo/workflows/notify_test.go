@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
 type recordingNotifier struct{ dirty []string }

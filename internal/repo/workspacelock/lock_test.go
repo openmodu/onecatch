@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmodu/oneshot/pkg/localfile"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 func TestAcquireRejectsLiveOwnerAndReleaseIsIdempotent(t *testing.T) {

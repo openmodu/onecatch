@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/google/wire"
-	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
-	repoartifacts "github.com/openmodu/oneshot/internal/repo/artifacts"
-	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
-	repoconversations "github.com/openmodu/oneshot/internal/repo/conversations"
-	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
-	reposessions "github.com/openmodu/oneshot/internal/repo/sessions"
-	repousers "github.com/openmodu/oneshot/internal/repo/users"
-	pkgsql "github.com/openmodu/oneshot/pkg/sql"
+	repoagents "github.com/openmodu/onecatch/internal/repo/agents"
+	repoartifacts "github.com/openmodu/onecatch/internal/repo/artifacts"
+	repobilling "github.com/openmodu/onecatch/internal/repo/billing"
+	repoconversations "github.com/openmodu/onecatch/internal/repo/conversations"
+	repoorders "github.com/openmodu/onecatch/internal/repo/orders"
+	reposessions "github.com/openmodu/onecatch/internal/repo/sessions"
+	repousers "github.com/openmodu/onecatch/internal/repo/users"
+	pkgsql "github.com/openmodu/onecatch/pkg/sql"
 	"gorm.io/gorm"
 )
 
@@ -29,7 +29,7 @@ var ProviderSet = wire.NewSet(
 	repoorders.NewOrdersRepo,
 	reposessions.NewSessionsRepo,
 	repousers.NewUsersRepo,
-	NewOneShotRepo,
+	NewOneCatchRepo,
 )
 
 func ProvideData(dsn MySQLDSN) (*Data, func(), error) {

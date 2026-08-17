@@ -1,7 +1,7 @@
 package store
 
 import (
-	pkgsql "github.com/openmodu/oneshot/pkg/sql"
+	pkgsql "github.com/openmodu/onecatch/pkg/sql"
 )
 
 type Data struct {

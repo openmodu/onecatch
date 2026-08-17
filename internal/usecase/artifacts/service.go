@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	domainartifacts "github.com/openmodu/oneshot/internal/domain/artifacts"
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
+	domainartifacts "github.com/openmodu/onecatch/internal/domain/artifacts"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
 )
 
 type Repository interface {
@@ -203,7 +203,7 @@ func (s *Usecase) Share(ctx context.Context, userID string, artifactID string) (
 	return s.repo.SaveShare(ctx, domainartifacts.Share{
 		ArtifactID: artifact.ID,
 		Token:      token,
-		URL:        "https://oneshot.local/share/" + token,
+		URL:        "https://onecatch.local/share/" + token,
 		CreatedAt:  s.now(),
 	})
 }

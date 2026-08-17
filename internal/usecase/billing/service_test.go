@@ -6,9 +6,9 @@ import (
 	"sync"
 	"testing"
 
-	domainbilling "github.com/openmodu/oneshot/internal/domain/billing"
-	"github.com/openmodu/oneshot/internal/domain/users"
-	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
+	domainbilling "github.com/openmodu/onecatch/internal/domain/billing"
+	"github.com/openmodu/onecatch/internal/domain/users"
+	repobilling "github.com/openmodu/onecatch/internal/repo/billing"
 )
 
 func TestConcurrentDebitNeverOverdraws(t *testing.T) {

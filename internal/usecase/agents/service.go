@@ -3,7 +3,7 @@ package agents
 import (
 	"context"
 
-	"github.com/openmodu/oneshot/internal/domain/agents"
+	"github.com/openmodu/onecatch/internal/domain/agents"
 )
 
 type Repository interface {

@@ -4,13 +4,13 @@ import (
 	"errors"
 	"net/http"
 
-	domainagents "github.com/openmodu/oneshot/internal/domain/agents"
-	domainartifacts "github.com/openmodu/oneshot/internal/domain/artifacts"
-	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
-	domainbilling "github.com/openmodu/oneshot/internal/domain/billing"
-	domainconversations "github.com/openmodu/oneshot/internal/domain/conversations"
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
-	"github.com/openmodu/oneshot/pkg/httpx"
+	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
+	domainartifacts "github.com/openmodu/onecatch/internal/domain/artifacts"
+	domainauth "github.com/openmodu/onecatch/internal/domain/auth"
+	domainbilling "github.com/openmodu/onecatch/internal/domain/billing"
+	domainconversations "github.com/openmodu/onecatch/internal/domain/conversations"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
+	"github.com/openmodu/onecatch/pkg/httpx"
 )
 
 func writeError(w http.ResponseWriter, err error) {

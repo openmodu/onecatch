@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/domain/agents"
-	"github.com/openmodu/oneshot/internal/domain/orders"
-	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
+	"github.com/openmodu/onecatch/internal/domain/agents"
+	"github.com/openmodu/onecatch/internal/domain/orders"
+	usecasebilling "github.com/openmodu/onecatch/internal/usecase/billing"
 )
 
 type AgentRepository interface {

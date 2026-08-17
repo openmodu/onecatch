@@ -1,4 +1,4 @@
-package oneshot
+package onecatch
 
 import "time"
 

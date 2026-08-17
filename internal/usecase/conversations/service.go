@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	domainagents "github.com/openmodu/oneshot/internal/domain/agents"
-	domainconversations "github.com/openmodu/oneshot/internal/domain/conversations"
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
-	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
+	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
+	domainconversations "github.com/openmodu/onecatch/internal/domain/conversations"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
+	usecaseorders "github.com/openmodu/onecatch/internal/usecase/orders"
 )
 
 type Repository interface {

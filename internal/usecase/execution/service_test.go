@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
-	"github.com/openmodu/oneshot/internal/domain/users"
-	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
-	repoartifacts "github.com/openmodu/oneshot/internal/repo/artifacts"
-	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
-	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
+	"github.com/openmodu/onecatch/internal/domain/users"
+	repoagents "github.com/openmodu/onecatch/internal/repo/agents"
+	repoartifacts "github.com/openmodu/onecatch/internal/repo/artifacts"
+	repoorders "github.com/openmodu/onecatch/internal/repo/orders"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	usecaseartifacts "github.com/openmodu/onecatch/internal/usecase/artifacts"
 )
 
 // stubEngine simulates a local agent: on Run it writes a deliverable into the

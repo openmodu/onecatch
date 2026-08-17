@@ -7,15 +7,15 @@ import (
 	"os"
 	"strings"
 
-	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
-	"github.com/openmodu/oneshot/internal/domain/orders"
-	"github.com/openmodu/oneshot/internal/domain/users"
-	serverservice "github.com/openmodu/oneshot/internal/service/server"
-	routing "github.com/openmodu/oneshot/internal/transport/router"
-	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
-	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
-	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
-	"github.com/openmodu/oneshot/pkg/httpx"
+	domainauth "github.com/openmodu/onecatch/internal/domain/auth"
+	"github.com/openmodu/onecatch/internal/domain/orders"
+	"github.com/openmodu/onecatch/internal/domain/users"
+	serverservice "github.com/openmodu/onecatch/internal/service/server"
+	routing "github.com/openmodu/onecatch/internal/transport/router"
+	usecaseauth "github.com/openmodu/onecatch/internal/usecase/auth"
+	usecasebilling "github.com/openmodu/onecatch/internal/usecase/billing"
+	usecaseorders "github.com/openmodu/onecatch/internal/usecase/orders"
+	"github.com/openmodu/onecatch/pkg/httpx"
 )
 
 type Server struct {
@@ -31,7 +31,7 @@ func NewServer(services *serverservice.Services) http.Handler {
 
 	// Admin lives under a separate route tree with its own auth, never under
 	// /api and never reachable through the desktop client.
-	newAdminHandler(os.Getenv("ONESHOT_ADMIN_TOKEN"), server.log).register(router)
+	newAdminHandler(os.Getenv("ONECATCH_ADMIN_TOKEN"), server.log).register(router)
 
 	router.Get("/healthz", server.health)
 	router.Group("/api", func(router routing.Router) {

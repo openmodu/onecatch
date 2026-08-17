@@ -31,7 +31,7 @@ func (b *NotifyBinding) Send(title, body string) error {
 	}
 	b.authOnce.Do(func() { _, _ = b.notifier.RequestNotificationAuthorization() })
 	return b.notifier.SendNotification(notifications.NotificationOptions{
-		ID:    fmt.Sprintf("oneshot-standby-%d", b.seq.Add(1)),
+		ID:    fmt.Sprintf("onecatch-standby-%d", b.seq.Add(1)),
 		Title: title,
 		Body:  body,
 	})

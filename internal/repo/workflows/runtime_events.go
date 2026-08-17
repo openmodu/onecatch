@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	"github.com/openmodu/oneshot/pkg/localfile"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 const maxRuntimeEventLine = 8 * 1024 * 1024

@@ -13,7 +13,7 @@ import (
 
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
-	"github.com/openmodu/oneshot/internal/remotefs"
+	"github.com/openmodu/onecatch/internal/remotefs"
 	"github.com/pkg/sftp"
 )
 

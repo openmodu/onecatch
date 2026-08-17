@@ -1,4 +1,4 @@
-package oneshot
+package onecatch
 
 import (
 	"bytes"
@@ -225,7 +225,7 @@ func (c *HTTPClient) DownloadArtifact(ctx context.Context, artifactID string) (A
 		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil && apiErr.Error != "" {
 			return ArtifactDownload{}, errors.New(apiErr.Error)
 		}
-		return ArtifactDownload{}, fmt.Errorf("oneshot api request failed: %s", resp.Status)
+		return ArtifactDownload{}, fmt.Errorf("onecatch api request failed: %s", resp.Status)
 	}
 	content, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -283,7 +283,7 @@ func (c *HTTPClient) do(ctx context.Context, method string, path string, input a
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		message := fmt.Sprintf("oneshot api request failed: %s", resp.Status)
+		message := fmt.Sprintf("onecatch api request failed: %s", resp.Status)
 		var apiErr ErrorResponse
 		if err := json.NewDecoder(resp.Body).Decode(&apiErr); err == nil && apiErr.Error != "" {
 			message = apiErr.Error
@@ -301,7 +301,7 @@ func (c *HTTPClient) do(ctx context.Context, method string, path string, input a
 
 func SaveDownload(fileName string, content []byte) (string, error) {
 	if strings.TrimSpace(fileName) == "" {
-		fileName = "oneshot-report.pdf"
+		fileName = "onecatch-report.pdf"
 	}
 	dir, err := os.UserHomeDir()
 	if err != nil {
@@ -324,7 +324,7 @@ func sessionTokenPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "oneshot", "session.token"), nil
+	return filepath.Join(dir, "onecatch", "session.token"), nil
 }
 
 func loadSessionToken() (string, error) {

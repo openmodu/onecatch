@@ -176,7 +176,7 @@ func normalizeWorkspaceFilePath(path string, allowRoot bool) (string, error) {
 }
 
 func blockedWorkspaceFileName(name string) bool {
-	return strings.EqualFold(name, ".git") || strings.EqualFold(name, ".oneshot")
+	return strings.EqualFold(name, ".git") || strings.EqualFold(name, ".onecatch")
 }
 
 func readWorkspaceFile(root *os.Root, relative string) (WorkspaceFileDocument, error) {
@@ -227,7 +227,7 @@ func replaceWorkspaceFile(root *os.Root, relative string, data []byte, mode os.F
 	if _, err := rand.Read(random); err != nil {
 		return fmt.Errorf("create editor temporary name: %w", err)
 	}
-	temporary := filepath.Join(filepath.Dir(relative), ".oneshot-edit-"+hex.EncodeToString(random)+".tmp")
+	temporary := filepath.Join(filepath.Dir(relative), ".onecatch-edit-"+hex.EncodeToString(random)+".tmp")
 	file, err := root.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
 	if err != nil {
 		return err

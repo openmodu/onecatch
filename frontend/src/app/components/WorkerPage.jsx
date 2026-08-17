@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clipboard } from "@wailsio/runtime";
-import { GitBinding, WorkerBinding } from "../../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+import { GitBinding, WorkerBinding } from "../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -96,7 +96,7 @@ export default function WorkerPage({ mode, workspace, workers, health, checkWork
     try {
       const result = mode === "demo"
         ? {
-          mapping: { id: workspace.id, path: `~/.oneshot-worker/projects/${workspace.id}` },
+          mapping: { id: workspace.id, path: `~/.onecatch-worker/projects/${workspace.id}` },
           local: { isRepo: true, branch: "main", head: "a31f821", status: "", files: [] },
           remote: { isRepo: true, branch: "main", head: "a31f821", status: "", files: [] },
         }

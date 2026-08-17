@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openmodu/oneshot/pkg/localfile"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 var ErrNotFound = errors.New("worker not found")

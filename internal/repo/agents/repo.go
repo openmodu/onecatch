@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	domainagents "github.com/openmodu/oneshot/internal/domain/agents"
-	pkgsql "github.com/openmodu/oneshot/pkg/sql"
+	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
+	pkgsql "github.com/openmodu/onecatch/pkg/sql"
 	"gorm.io/gorm"
 )
 

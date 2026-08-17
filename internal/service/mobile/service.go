@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	"github.com/openmodu/oneshot/internal/service/worker"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
-	"github.com/openmodu/oneshot/pkg/localfile"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	"github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 const RunEventName = "mobile:run"

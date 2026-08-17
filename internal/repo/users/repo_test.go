@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	domainusers "github.com/openmodu/oneshot/internal/domain/users"
-	pkgsql "github.com/openmodu/oneshot/pkg/sql"
+	domainusers "github.com/openmodu/onecatch/internal/domain/users"
+	pkgsql "github.com/openmodu/onecatch/pkg/sql"
 )
 
 func TestFindOrCreateByIdentityReusesProviderSubject(t *testing.T) {
@@ -55,7 +55,7 @@ func TestFindOrCreateByIdentityLinksByRequestedUserID(t *testing.T) {
 		Provider:        "google",
 		ProviderSubject: "local-dev",
 		DisplayName:     "Local Developer",
-		Email:           "dev@oneshot.local",
+		Email:           "dev@onecatch.local",
 	})
 	if err != nil {
 		t.Fatalf("google identity error = %v", err)
@@ -80,9 +80,9 @@ func TestFindOrCreateByIdentityRequiresProviderSubject(t *testing.T) {
 }
 
 func TestUsersRepoMySQLSchemaWithDSN(t *testing.T) {
-	dsn := os.Getenv("ONESHOT_MYSQL_TEST_DSN")
+	dsn := os.Getenv("ONECATCH_MYSQL_TEST_DSN")
 	if dsn == "" {
-		t.Skip("set ONESHOT_MYSQL_TEST_DSN to run users repo MySQL schema test")
+		t.Skip("set ONECATCH_MYSQL_TEST_DSN to run users repo MySQL schema test")
 	}
 
 	db, err := pkgsql.NewMySQL(dsn)
@@ -102,7 +102,7 @@ func TestUsersRepoMySQLSchemaWithDSN(t *testing.T) {
 		Provider:        "google",
 		ProviderSubject: "mysql-schema-test",
 		DisplayName:     "MySQL Schema Test",
-		Email:           "mysql-schema-test@oneshot.local",
+		Email:           "mysql-schema-test@onecatch.local",
 	})
 	if err != nil {
 		t.Fatalf("FindOrCreateByIdentity() error = %v", err)
@@ -111,7 +111,7 @@ func TestUsersRepoMySQLSchemaWithDSN(t *testing.T) {
 		Provider:        "google",
 		ProviderSubject: "mysql-schema-test",
 		DisplayName:     "MySQL Schema Test",
-		Email:           "mysql-schema-test@oneshot.local",
+		Email:           "mysql-schema-test@onecatch.local",
 	})
 	if err != nil {
 		t.Fatalf("FindOrCreateByIdentity() repeat error = %v", err)

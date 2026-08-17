@@ -15,7 +15,7 @@ import * as desktop$0 from "../../service/desktop/models.js";
  * @returns {$CancellablePromise<void>}
  */
 export function Cancel(requestID) {
-    return $Call.ByID(699510945, requestID);
+    return $Call.ByID(2417671258, requestID);
 }
 
 /**
@@ -23,7 +23,7 @@ export function Cancel(requestID) {
  * @returns {$CancellablePromise<desktop$0.WhiteboardProposal>}
  */
 export function ProposeChanges(input) {
-    return $Call.ByID(232958860, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(212571879, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }

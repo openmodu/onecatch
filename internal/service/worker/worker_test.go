@@ -15,8 +15,8 @@ import (
 	"testing"
 	"time"
 
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type fakeGit struct{ path string }
@@ -155,7 +155,7 @@ func TestPairingRejectsPlainHTTPUnlessExplicitlyAllowed(t *testing.T) {
 }
 
 func TestServerAuthenticatesAndStreamsMappedWorkspace(t *testing.T) {
-	t.Setenv("ONESHOT_WORKER_TEST_ENV", "remote-value")
+	t.Setenv("ONECATCH_WORKER_TEST_ENV", "remote-value")
 	engine := capturingEngine{requests: make(chan agentrun.Request, 1)}
 	server := httptest.NewServer(NewServer("remote-1", "Remote", "secret", map[string]string{"project": "/tmp/project"}, engine, 0).Handler())
 	defer server.Close()
@@ -174,7 +174,7 @@ func TestServerAuthenticatesAndStreamsMappedWorkspace(t *testing.T) {
 		t.Fatalf("health = %+v, %v", health, err)
 	}
 	var events []agentrun.Event
-	result, err := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-1", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Model: "gpt-test", ReasoningEffort: "high", ServiceTier: "priority", Provider: "anthropic", Sandbox: agentrun.SandboxReadOnly, Prompt: "review", EnvironmentAllowlist: []string{"ONESHOT_WORKER_TEST_ENV"}, TimeoutSeconds: 60}, func(e agentrun.Event) { events = append(events, e) })
+	result, err := client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-1", WorkspaceID: "project", Runtime: agentrun.RuntimeCodex, Model: "gpt-test", ReasoningEffort: "high", ServiceTier: "priority", Provider: "anthropic", Sandbox: agentrun.SandboxReadOnly, Prompt: "review", EnvironmentAllowlist: []string{"ONECATCH_WORKER_TEST_ENV"}, TimeoutSeconds: 60}, func(e agentrun.Event) { events = append(events, e) })
 	if err != nil || !result.Succeeded || len(events) != 1 || events[0].Text != "/tmp/project" {
 		t.Fatalf("execute result=%+v events=%+v err=%v", result, events, err)
 	}
@@ -182,7 +182,7 @@ func TestServerAuthenticatesAndStreamsMappedWorkspace(t *testing.T) {
 	if request.Model != "gpt-test" || request.ReasoningEffort != "high" || request.ServiceTier != "priority" || request.Provider != "anthropic" || !request.RuntimeDefaultsResolved {
 		t.Fatalf("remote model settings = %+v", request)
 	}
-	if !containsEnvironment(request.Environment, "ONESHOT_WORKER_TEST_ENV=remote-value") {
+	if !containsEnvironment(request.Environment, "ONECATCH_WORKER_TEST_ENV=remote-value") {
 		t.Fatalf("remote environment = %#v", request.Environment)
 	}
 	_, err = client.Execute(context.Background(), config, ExecuteRequest{RunID: "run-2", WorkspaceID: "missing", Runtime: agentrun.RuntimeCodex, Prompt: "review"}, nil)

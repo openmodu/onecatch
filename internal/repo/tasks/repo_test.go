@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	localdata "github.com/openmodu/oneshot/internal/repo/store/local"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
 )
 
 func TestTasksRepoPersistsAcrossReopen(t *testing.T) {
 	ctx := context.Background()
-	root := filepath.Join(t.TempDir(), ".oneshot")
+	root := filepath.Join(t.TempDir(), ".onecatch")
 	store, err := localdata.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
@@ -23,7 +23,7 @@ func TestTasksRepoPersistsAcrossReopen(t *testing.T) {
 	now := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
 	workspace := domainworkspaces.Workspace{
 		ID:             "ws_1",
-		Name:           "Oneshot",
+		Name:           "OneCatch",
 		Path:           filepath.Join(t.TempDir(), "project"),
 		DefaultSandbox: "workspace-write",
 		CreatedAt:      now,
@@ -77,7 +77,7 @@ func TestTasksRepoPersistsAcrossReopen(t *testing.T) {
 
 func TestWorkspaceListPrioritizesPinnedThenRecent(t *testing.T) {
 	ctx := context.Background()
-	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".oneshot"))
+	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
 	if err != nil {
 		t.Fatal(err)
 	}

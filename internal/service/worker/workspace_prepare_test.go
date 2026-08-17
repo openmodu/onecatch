@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openmodu/oneshot/internal/repo/git"
+	"github.com/openmodu/onecatch/internal/repo/git"
 )
 
 func TestPrepareWorkspaceClonesUpdatesAndPersistsMapping(t *testing.T) {

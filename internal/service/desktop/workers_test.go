@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/service/worker"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type remoteWritingEngine struct{}

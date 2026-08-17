@@ -9,8 +9,8 @@ import (
 	"sync"
 	"time"
 
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
-	"github.com/openmodu/oneshot/pkg/localfile"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 var ErrStateConflict = errors.New("settings state conflict")

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/domain/billing"
+	"github.com/openmodu/onecatch/internal/domain/billing"
 )
 
 type Repository interface {

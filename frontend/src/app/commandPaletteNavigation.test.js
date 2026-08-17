@@ -29,10 +29,10 @@ test("command palette shortcuts resolve numbered results and commands", () => {
 
 test("command palette project results filter names and paths with stable shortcuts", () => {
   const workspaces = [
-    { id: "one", name: "oneshot", path: "/code/openmodu/oneshot" },
+    { id: "one", name: "onecatch", path: "/code/openmodu/onecatch" },
     { id: "two", name: "learning", path: "/documents/children" },
   ];
-  assert.deepEqual(commandPaletteWorkspaceResults(workspaces, "ONESHOT", 2), [
+  assert.deepEqual(commandPaletteWorkspaceResults(workspaces, "ONECATCH", 2), [
     { workspace: workspaces[0], shortcutLabel: "⌘3" },
   ]);
   assert.deepEqual(commandPaletteWorkspaceResults(workspaces, "documents", 0), [

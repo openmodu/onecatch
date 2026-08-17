@@ -1,20 +1,20 @@
 [Unit]
-Description=Oneshot remote agent worker
+Description=OneCatch remote agent worker
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-User=oneshot
-Group=oneshot
-ExecStart=/usr/local/bin/oneshot-worker \
+User=onecatch
+Group=onecatch
+ExecStart=/usr/local/bin/onecatch-worker \
   --listen 0.0.0.0:9231 \
   --id linux-builder \
   --name "Linux builder" \
-  --data-dir /var/lib/oneshot-worker \
-  --tls-cert /etc/oneshot-worker/server.pem \
-  --tls-key /etc/oneshot-worker/server-key.pem
-StateDirectory=oneshot-worker
+  --data-dir /var/lib/onecatch-worker \
+  --tls-cert /etc/onecatch-worker/server.pem \
+  --tls-key /etc/onecatch-worker/server-key.pem
+StateDirectory=onecatch-worker
 StateDirectoryMode=0700
 Restart=on-failure
 RestartSec=5s

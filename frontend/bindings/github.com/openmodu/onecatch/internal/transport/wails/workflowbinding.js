@@ -15,7 +15,7 @@ import * as workflows$0 from "../../domain/workflows/models.js";
  * @returns {$CancellablePromise<workflows$0.Definition>}
  */
 export function CreateDefinition(input) {
-    return $Call.ByID(4224247160, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2803166911, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -25,7 +25,7 @@ export function CreateDefinition(input) {
  * @returns {$CancellablePromise<void>}
  */
 export function DeleteDefinition(id) {
-    return $Call.ByID(2306684411, id);
+    return $Call.ByID(3824034184, id);
 }
 
 /**
@@ -33,7 +33,7 @@ export function DeleteDefinition(id) {
  * @returns {$CancellablePromise<workflows$0.Definition>}
  */
 export function GetDefinition(id) {
-    return $Call.ByID(1429362090, id).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(579660535, id).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -42,7 +42,7 @@ export function GetDefinition(id) {
  * @returns {$CancellablePromise<workflows$0.Definition[]>}
  */
 export function ListDefinitions() {
-    return $Call.ByID(3448552853).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1835566588).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -53,7 +53,7 @@ export function ListDefinitions() {
  * @returns {$CancellablePromise<workflows$0.Definition>}
  */
 export function UpdateDefinition(id, input) {
-    return $Call.ByID(531214141, id, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1104574822, id, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -63,7 +63,7 @@ export function UpdateDefinition(id, input) {
  * @returns {$CancellablePromise<workflows$0.ValidationIssue[]>}
  */
 export function ValidateDefinition(input) {
-    return $Call.ByID(2406493830, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2733369461, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }

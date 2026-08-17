@@ -63,7 +63,7 @@ func moduCommandArgs(req Request) []string {
 	}
 	args = append(args, "-p", req.Prompt, "-json")
 	if req.Sandbox != SandboxReadOnly {
-		// Writable Oneshot runs are already authorized and cannot stop for an
+		// Writable OneCatch runs are already authorized and cannot stop for an
 		// interactive approval prompt in print mode.
 		args = append(args, "--no-approve")
 	}

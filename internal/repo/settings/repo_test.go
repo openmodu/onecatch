@@ -8,8 +8,8 @@ import (
 	"sync"
 	"testing"
 
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
-	"github.com/openmodu/oneshot/pkg/localfile"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 func TestDefaultsSaveAndRevisionConflict(t *testing.T) {

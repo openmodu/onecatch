@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	domainagents "github.com/openmodu/oneshot/internal/domain/agents"
-	domainartifacts "github.com/openmodu/oneshot/internal/domain/artifacts"
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
+	domainartifacts "github.com/openmodu/onecatch/internal/domain/artifacts"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 // OrderRepository is the slice of order persistence the worker needs.

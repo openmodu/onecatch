@@ -4,8 +4,8 @@ includes:
   common: ../Taskfile.common.yml
 
 vars:
-  ANDROID_APP_NAME: '{{.MOBILE_APP_NAME | default "oneshot-mobile"}}'
-  APP_ID: '{{.APP_ID | default "com.openmodu.oneshot.mobile"}}'
+  ANDROID_APP_NAME: '{{.MOBILE_APP_NAME | default "onecatch-mobile"}}'
+  APP_ID: '{{.APP_ID | default "app.onecatch.mobile"}}'
   MIN_SDK: '21'
   TARGET_SDK: '35'
   # The emulator runs the host architecture; physical devices are arm64

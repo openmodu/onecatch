@@ -1,5 +1,5 @@
 // Package localdata owns local embedded resources and their lifecycle. It
-// creates ~/.oneshot by default and exposes paths used by atomic snapshots,
+// creates ~/.onecatch by default and exposes paths used by atomic snapshots,
 // append-only event storage and workspace locks.
 package localdata
 
@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	repotasks "github.com/openmodu/oneshot/internal/repo/tasks"
-	repoworkflows "github.com/openmodu/oneshot/internal/repo/workflows"
+	repotasks "github.com/openmodu/onecatch/internal/repo/tasks"
+	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
 )
 
 type Paths struct {
@@ -43,7 +43,7 @@ func DefaultRoot() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve home directory: %w", err)
 	}
-	return filepath.Join(home, ".oneshot"), nil
+	return filepath.Join(home, ".onecatch"), nil
 }
 
 func ResolvePaths(root string) (Paths, error) {
@@ -78,9 +78,48 @@ func ResolvePaths(root string) (Paths, error) {
 	}, nil
 }
 
+// legacyRootName is the directory this application used before it was renamed
+// to OneCatch. Installations that predate the rename keep every workspace, task
+// and run under it.
+const legacyRootName = ".oneshot"
+
+// adoptLegacyRoot moves a pre-rename data directory into place the first time
+// the renamed application starts. It only ever fires for the default root and
+// only when there is nothing to overwrite, so an explicit --data-dir, a test
+// temp dir, or a second launch all skip it untouched.
+//
+// A failure here is deliberately fatal rather than silent: continuing would
+// open an empty directory and present the user with an application that has
+// apparently forgotten all of their work.
+func adoptLegacyRoot(root string) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil // Without a home directory there is no legacy root to find.
+	}
+	defaultRoot := filepath.Join(home, ".onecatch")
+	if root != defaultRoot {
+		return nil
+	}
+	if _, err := os.Stat(root); err == nil || !os.IsNotExist(err) {
+		return nil
+	}
+	legacy := filepath.Join(home, legacyRootName)
+	info, err := os.Stat(legacy)
+	if err != nil || !info.IsDir() {
+		return nil
+	}
+	if err := os.Rename(legacy, root); err != nil {
+		return fmt.Errorf("move %s to %s (rename left your data in place; move it manually and restart): %w", legacy, root, err)
+	}
+	return nil
+}
+
 func Open(root string) (*Data, error) {
 	paths, err := ResolvePaths(root)
 	if err != nil {
+		return nil, err
+	}
+	if err := adoptLegacyRoot(paths.Root); err != nil {
 		return nil, err
 	}
 	for _, dir := range []string{paths.Root, paths.Workspaces, paths.Tasks, paths.Workflows, paths.Runs, paths.Locks, paths.Logs} {

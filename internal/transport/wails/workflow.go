@@ -3,8 +3,8 @@ package wailstransport
 import (
 	"context"
 
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	desktopservice "github.com/openmodu/oneshot/internal/service/desktop"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
 
 type WorkflowBinding struct{ service *desktopservice.Service }

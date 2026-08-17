@@ -2,7 +2,7 @@
 
 package app
 
-import "github.com/openmodu/oneshot/internal/app/desktop"
+import "github.com/openmodu/onecatch/internal/app/desktop"
 
 // Run starts the desktop workbench on desktop operating systems.
 func Run() {

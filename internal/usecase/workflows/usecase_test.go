@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
-	localdata "github.com/openmodu/oneshot/internal/repo/store/local"
-	"github.com/openmodu/oneshot/internal/repo/workspacelock"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	"github.com/openmodu/onecatch/internal/repo/workspacelock"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type engineScript struct {
@@ -376,7 +376,7 @@ func TestUnavailableRuntimePausesWithoutFallback(t *testing.T) {
 
 func setupUsecase(t *testing.T, definition domainworkflows.Definition, engine Engine) (*Usecase, *localdata.Store, domaintasks.Task) {
 	t.Helper()
-	root := filepath.Join(t.TempDir(), ".oneshot")
+	root := filepath.Join(t.TempDir(), ".onecatch")
 	store, err := localdata.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)

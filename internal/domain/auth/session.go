@@ -4,7 +4,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/domain/users"
+	"github.com/openmodu/onecatch/internal/domain/users"
 )
 
 var ErrUnauthenticated = errors.New("unauthenticated")

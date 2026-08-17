@@ -6,8 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 
-	routing "github.com/openmodu/oneshot/internal/transport/router"
-	"github.com/openmodu/oneshot/pkg/httpx"
+	routing "github.com/openmodu/onecatch/internal/transport/router"
+	"github.com/openmodu/onecatch/pkg/httpx"
 )
 
 // errAdminForbidden is intentionally generic so denials don't reveal whether
@@ -23,7 +23,7 @@ var errAdminForbidden = errors.New("forbidden")
 //
 // Rules this scaffold enforces:
 //   - Admin routes are never mounted under /api and are never reachable through
-//     the desktop oneshot client / Wails bindings (which only call /api/*).
+//     the desktop onecatch client / Wails bindings (which only call /api/*).
 //   - Admin auth is independent: a shared admin token via the X-Admin-Token
 //     header. Missing/empty config means admin is CLOSED — every request 403s.
 //   - Insufficient privilege returns 403 (not 401), and admin access is audited.

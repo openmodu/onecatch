@@ -1,5 +1,5 @@
 {
   "Replace": {
-    "/Users/ityike/Code/go/src/github.com/openmodu/oneshot/cmd/app/main_ios.gen.go": "/Users/ityike/Code/go/src/github.com/openmodu/oneshot/build/ios/xcode/gen/main_ios.gen.go"
+    "/Users/ityike/Code/go/src/github.com/openmodu/onecatch/cmd/app/main_ios.gen.go": "/Users/ityike/Code/go/src/github.com/openmodu/onecatch/build/ios/xcode/gen/main_ios.gen.go"
   }
 }

@@ -4,21 +4,21 @@ import (
 	"os"
 	"path/filepath"
 
-	desktopassets "github.com/openmodu/oneshot/internal/app/desktop/assets"
-	mobileservice "github.com/openmodu/oneshot/internal/service/mobile"
-	wailstransport "github.com/openmodu/oneshot/internal/transport/wails"
-	"github.com/openmodu/oneshot/pkg/logger"
+	desktopassets "github.com/openmodu/onecatch/internal/app/desktop/assets"
+	mobileservice "github.com/openmodu/onecatch/internal/service/mobile"
+	wailstransport "github.com/openmodu/onecatch/internal/transport/wails"
+	"github.com/openmodu/onecatch/pkg/logger"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"go.uber.org/zap"
 )
 
 const (
-	Name        = "Oneshot"
+	Name        = "OneCatch"
 	Description = "Remote Agent worker workbench"
 )
 
 func Run() {
-	log := logger.MustNew(logger.Config{Service: "oneshot-mobile"})
+	log := logger.MustNew(logger.Config{Service: "onecatch-mobile"})
 	defer logger.Sync(log)
 
 	root := application.Mobile.StoragePath()
@@ -27,9 +27,9 @@ func Run() {
 		if err != nil {
 			log.Fatal("resolve mobile storage", zap.Error(err))
 		}
-		root = filepath.Join(configRoot, "oneshot-mobile")
+		root = filepath.Join(configRoot, "onecatch-mobile")
 	} else {
-		root = filepath.Join(root, "oneshot")
+		root = filepath.Join(root, "onecatch")
 	}
 	service, err := mobileservice.NewService(root)
 	if err != nil {

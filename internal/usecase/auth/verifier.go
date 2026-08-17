@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/domain/users"
+	"github.com/openmodu/onecatch/internal/domain/users"
 )
 
 // HTTPVerifier exchanges OAuth authorization codes with the real providers
@@ -32,11 +32,11 @@ type HTTPVerifier struct {
 func NewHTTPVerifierFromEnv() IdentityVerifier {
 	verifier := &HTTPVerifier{
 		client:             &http.Client{Timeout: 10 * time.Second},
-		googleClientID:     os.Getenv("ONESHOT_GOOGLE_CLIENT_ID"),
-		googleClientSecret: os.Getenv("ONESHOT_GOOGLE_CLIENT_SECRET"),
-		googleRedirectURI:  os.Getenv("ONESHOT_GOOGLE_REDIRECT_URI"),
-		wechatAppID:        os.Getenv("ONESHOT_WECHAT_APP_ID"),
-		wechatSecret:       os.Getenv("ONESHOT_WECHAT_APP_SECRET"),
+		googleClientID:     os.Getenv("ONECATCH_GOOGLE_CLIENT_ID"),
+		googleClientSecret: os.Getenv("ONECATCH_GOOGLE_CLIENT_SECRET"),
+		googleRedirectURI:  os.Getenv("ONECATCH_GOOGLE_REDIRECT_URI"),
+		wechatAppID:        os.Getenv("ONECATCH_WECHAT_APP_ID"),
+		wechatSecret:       os.Getenv("ONECATCH_WECHAT_APP_SECRET"),
 	}
 	if verifier.googleClientSecret == "" && verifier.wechatSecret == "" {
 		return nil

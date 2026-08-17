@@ -26,7 +26,7 @@ func stubBinary(t *testing.T, stdout, stderr string, code int) string {
 	path := filepath.Join(dir, "stub.sh")
 	script := "#!/bin/sh\n"
 	if stdout != "" {
-		script += "cat <<'ONESHOT_EOF'\n" + stdout + "\nONESHOT_EOF\n"
+		script += "cat <<'ONECATCH_EOF'\n" + stdout + "\nONECATCH_EOF\n"
 	}
 	if stderr != "" {
 		script += "printf '%s' " + shellQuote(stderr) + " 1>&2\n"
@@ -118,7 +118,7 @@ func TestCodexRunnerPassesModelSettingsToAppServer(t *testing.T) {
 	request := Request{
 		Workspace: t.TempDir(), Prompt: "implement it", Sandbox: SandboxWorkspaceWrite,
 		Model: "gpt-test", ReasoningEffort: "high", ServiceTier: "priority",
-		Environment: append(os.Environ(), "ONESHOT_CODEX_CAPTURE="+capture),
+		Environment: append(os.Environ(), "ONECATCH_CODEX_CAPTURE="+capture),
 	}
 	if _, err := runner.Run(context.Background(), request, nil); err != nil {
 		t.Fatal(err)
@@ -136,7 +136,7 @@ func TestCodexRunnerPassesModelSettingsToAppServer(t *testing.T) {
 
 	standardCapture := filepath.Join(t.TempDir(), "standard.jsonl")
 	request.ServiceTier = "standard"
-	request.Environment = append(os.Environ(), "ONESHOT_CODEX_CAPTURE="+standardCapture)
+	request.Environment = append(os.Environ(), "ONECATCH_CODEX_CAPTURE="+standardCapture)
 	if _, err := runner.Run(context.Background(), request, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestCodexRunnerDoesNotFallbackWhenAppServerIsUnavailable(t *testing.T) {
 	bin := filepath.Join(dir, "codex")
 	capture := filepath.Join(dir, "invocations.txt")
 	script := `#!/bin/sh
-printf '%s\n' "$*" >> "$ONESHOT_CODEX_CAPTURE"
+printf '%s\n' "$*" >> "$ONECATCH_CODEX_CAPTURE"
 echo 'app-server unavailable' >&2
 exit 1
 `
@@ -168,7 +168,7 @@ exit 1
 	_, err := NewCodexRunner(bin).Run(context.Background(), Request{
 		Workspace:   dir,
 		Prompt:      "must not run through exec",
-		Environment: append(os.Environ(), "ONESHOT_CODEX_CAPTURE="+capture),
+		Environment: append(os.Environ(), "ONECATCH_CODEX_CAPTURE="+capture),
 	}, nil)
 	if err == nil || !strings.Contains(err.Error(), "app-server unavailable") {
 		t.Fatalf("error = %v", err)
@@ -220,7 +220,7 @@ func stubCodexAppServerBinary(t *testing.T) string {
 	script := `#!/bin/sh
 [ "$1" = "app-server" ] || { echo "expected app-server" >&2; exit 9; }
 while IFS= read -r line; do
-  [ -n "$ONESHOT_CODEX_CAPTURE" ] && printf '%s\n' "$line" >> "$ONESHOT_CODEX_CAPTURE"
+  [ -n "$ONECATCH_CODEX_CAPTURE" ] && printf '%s\n' "$line" >> "$ONECATCH_CODEX_CAPTURE"
   case "$line" in
     *'"id":1'*)
       printf '%s\n' '{"id":1,"result":{}}'
@@ -266,14 +266,14 @@ func TestClaudeRunnerInspectsModelOptions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "claude")
 	script := `#!/bin/sh
 [ "$1" = "--help" ] || { echo "expected --help" >&2; exit 2; }
-cat <<'ONESHOT_EOF'
+cat <<'ONECATCH_EOF'
 Options:
   --effort <level>  Effort level for the current session (low, medium, high, xhigh, max)
   --model <model>  Model for the current session. Provide an alias for the latest
                    model (e.g. 'fable', 'opus', or 'sonnet') or a model's full
                    name (e.g. 'claude-fable-5').
   -n, --name <name>  Session name
-ONESHOT_EOF
+ONECATCH_EOF
 `
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -304,17 +304,17 @@ func TestClaudeRunnerPassesSelectedModel(t *testing.T) {
 	path := filepath.Join(dir, "claude")
 	capture := filepath.Join(dir, "args.txt")
 	script := `#!/bin/sh
-printf '%s\n' "$@" > "$ONESHOT_CLAUDE_CAPTURE"
-cat <<'ONESHOT_EOF'
+printf '%s\n' "$@" > "$ONECATCH_CLAUDE_CAPTURE"
+cat <<'ONECATCH_EOF'
 ` + claudeStream + `
-ONESHOT_EOF
+ONECATCH_EOF
 `
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	_, err := NewClaudeRunner(path).Run(context.Background(), Request{
 		Workspace: dir, Prompt: "go", Model: "opus", ReasoningEffort: "high",
-		Environment: append(os.Environ(), "ONESHOT_CLAUDE_CAPTURE="+capture),
+		Environment: append(os.Environ(), "ONECATCH_CLAUDE_CAPTURE="+capture),
 	}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -373,7 +373,7 @@ IFS= read -r prompt
 printf '%s\n' '{"type":"system","subtype":"init","session_id":"permission-session"}'
 printf '%s\n' '{"type":"control_request","request_id":"permission-1","request":{"subtype":"can_use_tool","tool_name":"WebFetch","input":{"url":"https://v3.wails.io/guides/mobile/"},"permission_suggestions":[{"type":"addRules","rules":[{"toolName":"WebFetch","ruleContent":"domain:v3.wails.io"}],"behavior":"allow","destination":"session"}],"title":"Fetch v3.wails.io","display_name":"Fetch URL","tool_use_id":"tool-1"}}'
 IFS= read -r response
-printf '%s\n%s\n' "$prompt" "$response" > "$ONESHOT_CLAUDE_CAPTURE"
+printf '%s\n%s\n' "$prompt" "$response" > "$ONECATCH_CLAUDE_CAPTURE"
 printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"done","session_id":"permission-session","usage":{"input_tokens":2,"output_tokens":1}}'
 `
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
@@ -382,7 +382,7 @@ printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"d
 	var events []Event
 	result, err := NewClaudeRunner(path).Run(context.Background(), Request{
 		Workspace: dir, Prompt: "research Wails mobile", Sandbox: SandboxReadOnly,
-		Environment: append(os.Environ(), "ONESHOT_CLAUDE_CAPTURE="+capture),
+		Environment: append(os.Environ(), "ONECATCH_CLAUDE_CAPTURE="+capture),
 		PermissionHandler: func(_ context.Context, request PermissionRequest) (PermissionDecision, error) {
 			if request.ID != "permission-1" || request.ToolName != "WebFetch" || request.Input["url"] != "https://v3.wails.io/guides/mobile/" {
 				t.Fatalf("permission request = %+v", request)
@@ -635,9 +635,9 @@ func stubModuPrintBinary(t *testing.T, output string) string {
 [ "$2" = "finish the task" ] || { echo "wrong prompt" >&2; exit 2; }
 [ "$3" = "-json" ] || { echo "missing -json" >&2; exit 2; }
 [ "$4" = "--no-approve" ] || { echo "missing --no-approve" >&2; exit 2; }
-cat <<'ONESHOT_EOF'
+cat <<'ONECATCH_EOF'
 ` + output + `
-ONESHOT_EOF
+ONECATCH_EOF
 `
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatalf("write Modu print stub: %v", err)
@@ -663,7 +663,7 @@ func TestRunnerDrainsStdoutAfterOversizedLine(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=TestOversizedLineHelperProcess")
-	cmd.Env = append(os.Environ(), "ONESHOT_OVERSIZED_LINE_HELPER=1")
+	cmd.Env = append(os.Environ(), "ONECATCH_OVERSIZED_LINE_HELPER=1")
 
 	_, err := streamProcess(ctx, cmd, &claudeParser{}, fixedClock(), nil)
 	if err == nil {
@@ -678,7 +678,7 @@ func TestRunnerDrainsStdoutAfterOversizedLine(t *testing.T) {
 }
 
 func TestOversizedLineHelperProcess(t *testing.T) {
-	if os.Getenv("ONESHOT_OVERSIZED_LINE_HELPER") != "1" {
+	if os.Getenv("ONECATCH_OVERSIZED_LINE_HELPER") != "1" {
 		return
 	}
 	_, _ = os.Stdout.Write(bytes.Repeat([]byte{'x'}, 9*1024*1024))

@@ -15,7 +15,7 @@ import * as terminal$0 from "../../service/terminal/models.js";
  * @returns {$CancellablePromise<void>}
  */
 export function CloseTerminal(sessionID) {
-    return $Call.ByID(3528885996, sessionID);
+    return $Call.ByID(1581903745, sessionID);
 }
 
 /**
@@ -23,7 +23,7 @@ export function CloseTerminal(sessionID) {
  * @returns {$CancellablePromise<terminal$0.Session>}
  */
 export function CreateTerminal(input) {
-    return $Call.ByID(1146900124, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(4022663755, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -32,7 +32,7 @@ export function CreateTerminal(input) {
  * @returns {$CancellablePromise<terminal$0.Session[]>}
  */
 export function ListTerminals() {
-    return $Call.ByID(1965288193).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(406951560).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -44,7 +44,7 @@ export function ListTerminals() {
  * @returns {$CancellablePromise<void>}
  */
 export function ResizeTerminal(sessionID, rows, cols) {
-    return $Call.ByID(4075997816, sessionID, rows, cols);
+    return $Call.ByID(973760411, sessionID, rows, cols);
 }
 
 /**
@@ -53,7 +53,7 @@ export function ResizeTerminal(sessionID, rows, cols) {
  * @returns {$CancellablePromise<void>}
  */
 export function WriteTerminal(sessionID, data) {
-    return $Call.ByID(1964404923, sessionID, data);
+    return $Call.ByID(2707372554, sessionID, data);
 }
 
 // Private type creation functions

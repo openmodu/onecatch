@@ -4,8 +4,8 @@ set -eu
 
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 project_root="$(CDPATH= cd -- "$script_dir/../../.." && pwd)"
-binary="$project_root/bin/oneshot"
-app_bundle="$project_root/bin/Oneshot.dev.app"
+binary="$project_root/bin/onecatch"
+app_bundle="$project_root/bin/OneCatch.dev.app"
 contents="$app_bundle/Contents"
 macos_dir="$contents/MacOS"
 resources_dir="$contents/Resources"
@@ -16,8 +16,8 @@ if [ ! -x "$binary" ]; then
 fi
 
 mkdir -p "$macos_dir" "$resources_dir"
-cp "$binary" "$macos_dir/oneshot"
-chmod +x "$macos_dir/oneshot"
+cp "$binary" "$macos_dir/onecatch"
+chmod +x "$macos_dir/onecatch"
 cp "$script_dir/Info.dev.plist" "$contents/Info.plist"
 cp "$script_dir/icons.icns" "$resources_dir/icons.icns"
 
@@ -31,4 +31,4 @@ fi
 codesign --force --deep --sign - "$app_bundle" >/dev/null
 
 cd "$project_root"
-exec "$macos_dir/oneshot"
+exec "$macos_dir/onecatch"

@@ -1,8 +1,8 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 
-export const LANGUAGE_STORAGE_KEY = "oneshot.language";
-export const LANGUAGE_CHANGED_EVENT = "oneshot:language-changed";
+export const LANGUAGE_STORAGE_KEY = "onecatch.language";
+export const LANGUAGE_CHANGED_EVENT = "onecatch:language-changed";
 export const supportedLanguages = ["zh-CN", "en"];
 
 const zh = {
@@ -490,7 +490,7 @@ const zh = {
   "worker.preflightClean": "工作区干净",
   "worker.preflightChanges": "{{count}} 个改动",
   "worker.empty": "还没有远端 Worker",
-  "worker.emptyDescription": "在另一台机器启动 oneshot-worker，输入启动日志中的一次性配对码即可连接。",
+  "worker.emptyDescription": "在另一台机器启动 onecatch-worker，输入启动日志中的一次性配对码即可连接。",
   "worker.command": "Worker 启动",
   "worker.commandDescription": "在 B 侧执行一次，安装并启动当前用户的常驻服务；项目由 Worker 自动管理",
   "worker.commandWorkerID": "B 侧 Worker ID",
@@ -606,7 +606,7 @@ Object.assign(zh, {
   "workflow.validateDag": "校验 DAG",
   "workflow.dagValidationHint": "保存前会检查环、未知依赖和并行写冲突。",
   "app.workspacePathRequired": "请输入工作目录路径",
-  "app.windowAria": "Oneshot 窗口",
+  "app.windowAria": "OneCatch 窗口",
   "app.fullWorkspaceTitle": "以完全访问权限加入工作目录？",
   "app.fullWorkspaceDescription": "Agent 可以在这个工作目录之外读取和写入。只应对完全信任的项目和工作流使用。",
   "app.fullWorkspaceDetail": "这会成为该工作目录新运行的默认权限。",
@@ -644,7 +644,7 @@ Object.assign(zh, {
   "app.fullWorkflowTitle": "保存包含完全访问权限的工作流？",
   "app.fullWorkflowDescription": "这个工作流包含可在工作目录之外读写的节点。保存后每次启动仍会再次确认。",
   "app.confirmSave": "确认并保存",
-  "app.workflowSaved": "工作流已保存到 ~/.oneshot/",
+  "app.workflowSaved": "工作流已保存到 ~/.onecatch/",
   "app.selectWorkspace": "选择一个工作目录",
   "settings.section.runtime": "运行环境",
   "settings.section.runtimeDescription": "管理本机运行环境",
@@ -685,7 +685,7 @@ Object.assign(zh, {
   "settings.unsaved": "有未保存修改",
   "settings.localSettings": "本地设置",
   "settings.interface": "界面",
-  "settings.interfaceDescription": "调整 Oneshot 的外观与显示方式。",
+  "settings.interfaceDescription": "调整 OneCatch 的外观与显示方式。",
   "settings.language": "语言",
   "settings.languageDescription": "控制导航、设置和系统提示的显示语言。任务内容与 Agent 输出保持原文。",
   "settings.colorMode": "显示模式",
@@ -800,7 +800,7 @@ Object.assign(zh, {
   "settings.allowRawEvents": "允许诊断包包含原始运行事件",
   "settings.rawEventsDescription": "可能包含本地命令、模型输出和工具调用摘要。",
   "settings.localData": "本地数据",
-  "settings.localDataDescription": "数据根目录固定为 ~/.oneshot/，统计只扫描已知子目录且不会跟随符号链接。",
+  "settings.localDataDescription": "数据根目录固定为 ~/.onecatch/，统计只扫描已知子目录且不会跟随符号链接。",
   "settings.calculating": "计算中…",
   "settings.recalculate": "重新计算",
   "settings.dataRoot": "数据根目录",
@@ -928,7 +928,7 @@ const en = {
   "workflow.validateDag": "Validate DAG",
   "workflow.dagValidationHint": "Saving checks cycles, unknown dependencies, and parallel write conflicts.",
   "app.workspacePathRequired": "Enter a workspace path",
-  "app.windowAria": "Oneshot window",
+  "app.windowAria": "OneCatch window",
   "app.fullWorkspaceTitle": "Add this workspace with full access?",
   "app.fullWorkspaceDescription": "The agent can read and write outside this workspace. Use this only for projects and workflows you fully trust.",
   "app.fullWorkspaceDetail": "This becomes the default permission for new runs in this workspace.",
@@ -966,7 +966,7 @@ const en = {
   "app.fullWorkflowTitle": "Save a workflow with full access?",
   "app.fullWorkflowDescription": "This workflow contains nodes that can read and write outside the workspace. Each start will still require confirmation.",
   "app.confirmSave": "Confirm and save",
-  "app.workflowSaved": "Workflow saved to ~/.oneshot/",
+  "app.workflowSaved": "Workflow saved to ~/.onecatch/",
   "app.selectWorkspace": "Select a workspace",
   "settings.section.runtime": "Runtimes",
   "settings.section.runtimeDescription": "Manage the local runtime environment",
@@ -1007,7 +1007,7 @@ const en = {
   "settings.unsaved": "Unsaved changes",
   "settings.localSettings": "Local settings",
   "settings.interface": "Interface",
-  "settings.interfaceDescription": "Adjust how Oneshot looks and displays content.",
+  "settings.interfaceDescription": "Adjust how OneCatch looks and displays content.",
   "settings.language": "Language",
   "settings.languageDescription": "Controls the language used by navigation, settings, and system messages. Task content and agent output keep their original language.",
   "settings.colorMode": "Appearance",
@@ -1122,7 +1122,7 @@ const en = {
   "settings.allowRawEvents": "Allow raw runtime events in diagnostics",
   "settings.rawEventsDescription": "May include local commands, model output, and tool-call summaries.",
   "settings.localData": "Local data",
-  "settings.localDataDescription": "The data root is fixed at ~/.oneshot/. Usage scans only known subdirectories and does not follow symbolic links.",
+  "settings.localDataDescription": "The data root is fixed at ~/.onecatch/. Usage scans only known subdirectories and does not follow symbolic links.",
   "settings.calculating": "Calculating…",
   "settings.recalculate": "Recalculate",
   "settings.dataRoot": "Data root",
@@ -1664,7 +1664,7 @@ const en = {
   "worker.preflightClean": "Clean worktree",
   "worker.preflightChanges": "{{count}} change(s)",
   "worker.empty": "No remote workers yet",
-  "worker.emptyDescription": "Start oneshot-worker on another machine, then enter the one-time code shown in its startup log.",
+  "worker.emptyDescription": "Start onecatch-worker on another machine, then enter the one-time code shown in its startup log.",
   "worker.command": "WORKER STARTUP",
   "worker.commandDescription": "Run once on B to install and start a per-user service; the Worker manages project storage",
   "worker.commandWorkerID": "Worker ID on B",

@@ -2,14 +2,14 @@ package server
 
 import (
 	"github.com/google/wire"
-	"github.com/openmodu/oneshot/internal/repo/store"
-	usecaseagents "github.com/openmodu/oneshot/internal/usecase/agents"
-	usecaseartifacts "github.com/openmodu/oneshot/internal/usecase/artifacts"
-	usecaseauth "github.com/openmodu/oneshot/internal/usecase/auth"
-	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
-	usecaseconversations "github.com/openmodu/oneshot/internal/usecase/conversations"
-	usecaseexecution "github.com/openmodu/oneshot/internal/usecase/execution"
-	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
+	"github.com/openmodu/onecatch/internal/repo/store"
+	usecaseagents "github.com/openmodu/onecatch/internal/usecase/agents"
+	usecaseartifacts "github.com/openmodu/onecatch/internal/usecase/artifacts"
+	usecaseauth "github.com/openmodu/onecatch/internal/usecase/auth"
+	usecasebilling "github.com/openmodu/onecatch/internal/usecase/billing"
+	usecaseconversations "github.com/openmodu/onecatch/internal/usecase/conversations"
+	usecaseexecution "github.com/openmodu/onecatch/internal/usecase/execution"
+	usecaseorders "github.com/openmodu/onecatch/internal/usecase/orders"
 )
 
 var UsecaseProviderSet = wire.NewSet(
@@ -37,31 +37,31 @@ var UsecaseProviderSet = wire.NewSet(
 	usecaseorders.NewUsecase,
 )
 
-func ProvideAgentRepository(repos *store.OneShotRepo) usecaseagents.Repository {
+func ProvideAgentRepository(repos *store.OneCatchRepo) usecaseagents.Repository {
 	return repos.Agents
 }
 
-func ProvideArtifactRepository(repos *store.OneShotRepo) usecaseartifacts.Repository {
+func ProvideArtifactRepository(repos *store.OneCatchRepo) usecaseartifacts.Repository {
 	return repos.Artifacts
 }
 
-func ProvideArtifactOrderRepository(repos *store.OneShotRepo) usecaseartifacts.OrderRepository {
+func ProvideArtifactOrderRepository(repos *store.OneCatchRepo) usecaseartifacts.OrderRepository {
 	return repos.Orders
 }
 
-func ProvideAuthRepository(repos *store.OneShotRepo) usecaseauth.Repository {
+func ProvideAuthRepository(repos *store.OneCatchRepo) usecaseauth.Repository {
 	return repos.Users
 }
 
-func ProvideAuthSessionStore(repos *store.OneShotRepo) usecaseauth.SessionStore {
+func ProvideAuthSessionStore(repos *store.OneCatchRepo) usecaseauth.SessionStore {
 	return repos.Sessions
 }
 
-func ProvideBillingRepository(repos *store.OneShotRepo) usecasebilling.Repository {
+func ProvideBillingRepository(repos *store.OneCatchRepo) usecasebilling.Repository {
 	return repos.Billing
 }
 
-func ProvideExecutionOrderRepository(repos *store.OneShotRepo) usecaseexecution.OrderRepository {
+func ProvideExecutionOrderRepository(repos *store.OneCatchRepo) usecaseexecution.OrderRepository {
 	return repos.Orders
 }
 
@@ -69,15 +69,15 @@ func ProvideExecutionArtifactRecorder(artifacts *usecaseartifacts.Usecase) useca
 	return artifacts
 }
 
-func ProvideExecutionAgentResolver(repos *store.OneShotRepo) usecaseexecution.AgentResolver {
+func ProvideExecutionAgentResolver(repos *store.OneCatchRepo) usecaseexecution.AgentResolver {
 	return repos.Agents
 }
 
-func ProvideOrderAgentRepository(repos *store.OneShotRepo) usecaseorders.AgentRepository {
+func ProvideOrderAgentRepository(repos *store.OneCatchRepo) usecaseorders.AgentRepository {
 	return repos.Agents
 }
 
-func ProvideOrderRepository(repos *store.OneShotRepo) usecaseorders.Repository {
+func ProvideOrderRepository(repos *store.OneCatchRepo) usecaseorders.Repository {
 	return repos.Orders
 }
 
@@ -85,7 +85,7 @@ func ProvideOrderRunSessionReader(execution *usecaseexecution.Usecase) usecaseor
 	return execution
 }
 
-func ProvideConversationRepository(repos *store.OneShotRepo) usecaseconversations.Repository {
+func ProvideConversationRepository(repos *store.OneCatchRepo) usecaseconversations.Repository {
 	return repos.Conversations
 }
 

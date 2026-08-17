@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
-const EventName = "oneshot:run-state"
+const EventName = "onecatch:run-state"
 
 // defaultCoalesce batches the burst of writes a single step transition
 // produces (update run, save step run, claim instructions) into one frame.

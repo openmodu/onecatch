@@ -15,7 +15,7 @@ import * as desktop$0 from "../../service/desktop/models.js";
  * @returns {$CancellablePromise<desktop$0.RuntimeInfo>}
  */
 export function CheckRuntime(runtime) {
-    return $Call.ByID(2758933670, runtime).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3278120559, runtime).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -24,7 +24,7 @@ export function CheckRuntime(runtime) {
  * @returns {$CancellablePromise<desktop$0.RuntimeInfo[]>}
  */
 export function ListRuntimes() {
-    return $Call.ByID(2989448467).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2569787766).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -34,7 +34,7 @@ export function ListRuntimes() {
  * @returns {$CancellablePromise<desktop$0.RuntimeInfo>}
  */
 export function UpdateRuntimeConfig(input) {
-    return $Call.ByID(2961119003, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(735334632, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }

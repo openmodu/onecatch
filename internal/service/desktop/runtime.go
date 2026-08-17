@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type RuntimeConfig struct {

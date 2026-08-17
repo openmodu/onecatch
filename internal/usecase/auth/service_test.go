@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
-	"github.com/openmodu/oneshot/internal/domain/users"
-	repousers "github.com/openmodu/oneshot/internal/repo/users"
+	domainauth "github.com/openmodu/onecatch/internal/domain/auth"
+	"github.com/openmodu/onecatch/internal/domain/users"
+	repousers "github.com/openmodu/onecatch/internal/repo/users"
 )
 
 func TestUsecaseSessionLifecycle(t *testing.T) {

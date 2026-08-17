@@ -7,16 +7,16 @@ import (
 
 func testConfig() Config {
 	return Config{
-		Binary: "/Applications/Oneshot.app/Contents/Resources/bin/oneshot-worker",
+		Binary: "/Applications/OneCatch.app/Contents/Resources/bin/onecatch-worker",
 		Listen: "0.0.0.0:9231", ID: "build-mac", Name: "Build & Test Mac",
-		DataDir: "/Users/worker/.oneshot-worker", TLSCert: "/Users/worker/certs/server.pem",
+		DataDir: "/Users/worker/.onecatch-worker", TLSCert: "/Users/worker/certs/server.pem",
 		TLSKey: "/Users/worker/certs/server-key.pem", MaxConcurrency: 4,
 		PathEnvironment: "/opt/homebrew/bin:/usr/bin:/bin",
 	}
 }
 
 func TestRenderLaunchdEscapesValuesAndNeverEmbedsToken(t *testing.T) {
-	payload, err := RenderLaunchd(testConfig(), "/Users/worker/Library/Logs/oneshot-worker.log")
+	payload, err := RenderLaunchd(testConfig(), "/Users/worker/Library/Logs/onecatch-worker.log")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -24,7 +24,7 @@ func TestRenderLaunchdEscapesValuesAndNeverEmbedsToken(t *testing.T) {
 	for _, expected := range []string{
 		"<string>Build &amp; Test Mac</string>",
 		"<string>--data-dir</string>",
-		"<string>/Users/worker/.oneshot-worker</string>",
+		"<string>/Users/worker/.onecatch-worker</string>",
 		"<key>PATH</key>",
 	} {
 		if !strings.Contains(value, expected) {
@@ -39,9 +39,9 @@ func TestRenderLaunchdEscapesValuesAndNeverEmbedsToken(t *testing.T) {
 func TestRenderSystemdQuotesArgumentsAndRestarts(t *testing.T) {
 	value := string(RenderSystemd(testConfig()))
 	for _, expected := range []string{
-		`ExecStart="/Applications/Oneshot.app/Contents/Resources/bin/oneshot-worker"`,
+		`ExecStart="/Applications/OneCatch.app/Contents/Resources/bin/onecatch-worker"`,
 		`"--name" "Build & Test Mac"`,
-		`"--data-dir" "/Users/worker/.oneshot-worker"`,
+		`"--data-dir" "/Users/worker/.onecatch-worker"`,
 		"Restart=on-failure",
 		"WantedBy=default.target",
 	} {

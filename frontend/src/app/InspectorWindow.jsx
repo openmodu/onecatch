@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PictureInPicture2 } from "lucide-react";
 import { Events } from "@wailsio/runtime";
-import { WindowBinding } from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+import { WindowBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import InspectorPanel from "./components/inspectors/InspectorPanel.jsx";
 import { INSPECTOR_ACTION_EVENT, INSPECTOR_CONTEXT_EVENT, INSPECTOR_REQUEST_EVENT } from "./inspectorContext.js";
 

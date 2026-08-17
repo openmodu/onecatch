@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	domainauth "github.com/openmodu/oneshot/internal/domain/auth"
+	domainauth "github.com/openmodu/onecatch/internal/domain/auth"
 )
 
 // memorySessionStore is the default SessionStore for tests and the in-process

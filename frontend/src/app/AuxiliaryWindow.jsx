@@ -7,7 +7,7 @@ import {
   WorkflowBinding,
   WorkspaceBinding,
   WorkerBinding,
-} from "../../bindings/github.com/openmodu/oneshot/internal/transport/wails/index.js";
+} from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
 import { copy, errorMessage } from "./format.js";
 import { loopTemplate } from "./templates.js";
@@ -19,8 +19,8 @@ const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.j
 const WorkerPage = lazy(() => import("./components/WorkerPage.jsx"));
 const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
 
-export const settingsChangedEvent = "oneshot:settings-changed";
-export const workflowsChangedEvent = "oneshot:workflows-changed";
+export const settingsChangedEvent = "onecatch:settings-changed";
+export const workflowsChangedEvent = "onecatch:workflows-changed";
 
 const emptyWorkerForm = () => ({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
 const editWorkerForm = (worker) => ({ id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled });
@@ -135,7 +135,7 @@ export function SettingsWindow() {
   }, [mode]);
 
   useEffect(() => {
-    const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
+    const nativeSidebar = globalThis.webkit?.messageHandlers?.onecatchSidebar;
     if (!nativeSidebar || mode === "loading") return;
     document.documentElement.dataset.nativeSidebarMaterial = "true";
     nativeSidebar.postMessage({ width: document.querySelector(".settings-sidebar")?.getBoundingClientRect().width || 216 });
@@ -265,7 +265,7 @@ export function WorkflowsWindow() {
 
   useEffect(() => { void load(); }, [load]);
   useEffect(() => {
-    const nativeSidebar = globalThis.webkit?.messageHandlers?.oneshotSidebar;
+    const nativeSidebar = globalThis.webkit?.messageHandlers?.onecatchSidebar;
     if (!nativeSidebar || mode === "loading") return;
     document.documentElement.dataset.nativeSidebarMaterial = "true";
     nativeSidebar.postMessage({ width: document.querySelector(".workflow-sidebar")?.getBoundingClientRect().width || 240 });

@@ -1,7 +1,7 @@
 package desktop
 
 import (
-	desktopassets "github.com/openmodu/oneshot/internal/app/desktop/assets"
+	desktopassets "github.com/openmodu/onecatch/internal/app/desktop/assets"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -18,7 +18,7 @@ func inheritNativeWindowAppearance(window, source *application.WebviewWindow) {
 	})
 }
 
-// applyNativeWindowChrome keeps every full-size-content Oneshot window on the
+// applyNativeWindowChrome keeps every full-size-content OneCatch window on the
 // same native path: continuous corners, the outer hairline and the inset
 // sidebar material are installed together and disabled at edge-to-edge sizes.
 func applyNativeWindowChrome(window *application.WebviewWindow) {

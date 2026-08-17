@@ -11,12 +11,12 @@ import (
 // TestLiveCodexProducesFile drives the real codex CLI end to end: it asks the
 // agent to write a file into a fresh workspace and asserts both that the file
 // lands on disk and that the runner captured a final message. It is skipped
-// unless ONESHOT_LIVE=1, so the normal suite never spends model credits.
+// unless ONECATCH_LIVE=1, so the normal suite never spends model credits.
 //
-//	ONESHOT_LIVE=1 go test ./internal/usecase/agentrun -run TestLiveCodex -v
+//	ONECATCH_LIVE=1 go test ./internal/usecase/agentrun -run TestLiveCodex -v
 func TestLiveCodexProducesFile(t *testing.T) {
-	if os.Getenv("ONESHOT_LIVE") != "1" {
-		t.Skip("set ONESHOT_LIVE=1 to run the live codex smoke test")
+	if os.Getenv("ONECATCH_LIVE") != "1" {
+		t.Skip("set ONECATCH_LIVE=1 to run the live codex smoke test")
 	}
 	r := NewCodexRunner("")
 	if !r.Available() {
@@ -50,10 +50,10 @@ func TestLiveCodexProducesFile(t *testing.T) {
 }
 
 // TestLiveClaudeProducesFile is the Claude Code counterpart to the codex smoke
-// test. Skipped unless ONESHOT_LIVE=1.
+// test. Skipped unless ONECATCH_LIVE=1.
 func TestLiveClaudeProducesFile(t *testing.T) {
-	if os.Getenv("ONESHOT_LIVE") != "1" {
-		t.Skip("set ONESHOT_LIVE=1 to run the live claude smoke test")
+	if os.Getenv("ONECATCH_LIVE") != "1" {
+		t.Skip("set ONECATCH_LIVE=1 to run the live claude smoke test")
 	}
 	r := NewClaudeRunner("")
 	if !r.Available() {

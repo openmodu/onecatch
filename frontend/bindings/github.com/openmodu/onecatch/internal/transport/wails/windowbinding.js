@@ -18,7 +18,7 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
  * @returns {$CancellablePromise<void>}
  */
 export function CloseInspector() {
-    return $Call.ByID(2568588617);
+    return $Call.ByID(956610578);
 }
 
 /**
@@ -27,19 +27,19 @@ export function CloseInspector() {
  * @returns {$CancellablePromise<void>}
  */
 export function OpenInspector() {
-    return $Call.ByID(3451776301);
+    return $Call.ByID(2908288200);
 }
 
 /**
  * @returns {$CancellablePromise<void>}
  */
 export function OpenSettings() {
-    return $Call.ByID(1696843073);
+    return $Call.ByID(2874510250);
 }
 
 /**
  * @returns {$CancellablePromise<void>}
  */
 export function OpenWorkflows() {
-    return $Call.ByID(2572810030);
+    return $Call.ByID(3483995735);
 }

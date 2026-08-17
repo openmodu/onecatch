@@ -26,7 +26,7 @@ func prepareGitWorkspace(ctx context.Context, path, remoteURL, revision string) 
 		if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 			return &RemoteError{Code: "worker_workspace_prepare_failed", Message: "could not create the workspace parent directory"}
 		}
-		temporary, err := os.MkdirTemp(filepath.Dir(path), ".oneshot-clone-")
+		temporary, err := os.MkdirTemp(filepath.Dir(path), ".onecatch-clone-")
 		if err != nil {
 			return &RemoteError{Code: "worker_workspace_prepare_failed", Message: "could not create a temporary clone directory"}
 		}

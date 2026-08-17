@@ -5,12 +5,12 @@ import (
 	"errors"
 	"testing"
 
-	domainorders "github.com/openmodu/oneshot/internal/domain/orders"
-	"github.com/openmodu/oneshot/internal/domain/users"
-	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
-	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
-	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
-	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
+	domainorders "github.com/openmodu/onecatch/internal/domain/orders"
+	"github.com/openmodu/onecatch/internal/domain/users"
+	repoagents "github.com/openmodu/onecatch/internal/repo/agents"
+	repobilling "github.com/openmodu/onecatch/internal/repo/billing"
+	repoorders "github.com/openmodu/onecatch/internal/repo/orders"
+	usecasebilling "github.com/openmodu/onecatch/internal/usecase/billing"
 )
 
 // stubSessions is a RunSessionReader returning a fixed resumable session.

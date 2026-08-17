@@ -88,7 +88,7 @@ export function SettingsNumberField({ field, label, hint, value, error, onChange
   );
 }
 
-const EMPTY_VALUE = "__oneshot_empty__";
+const EMPTY_VALUE = "__onecatch_empty__";
 const toRadix = (value) => (value === "" || value == null ? EMPTY_VALUE : String(value));
 const fromRadix = (value) => (value === EMPTY_VALUE ? "" : value);
 

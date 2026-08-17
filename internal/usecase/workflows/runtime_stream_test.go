@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type collectingPublisher struct{ frames []RuntimeEventFrame }

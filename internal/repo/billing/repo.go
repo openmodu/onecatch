@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	domainbilling "github.com/openmodu/oneshot/internal/domain/billing"
-	"github.com/openmodu/oneshot/internal/domain/users"
-	pkgsql "github.com/openmodu/oneshot/pkg/sql"
+	domainbilling "github.com/openmodu/onecatch/internal/domain/billing"
+	"github.com/openmodu/onecatch/internal/domain/users"
+	pkgsql "github.com/openmodu/onecatch/pkg/sql"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )

@@ -36,7 +36,7 @@ function shellQuote(value) {
 
 export function buildWorkerCommand({ workerID }) {
   return [
-    "oneshot-worker \\",
+    "onecatch-worker \\",
     "  --install-service \\",
     "  --listen 0.0.0.0:9231 \\",
     `  --id ${shellQuote(workerID || "mac-mini")} \\`,

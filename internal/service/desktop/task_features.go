@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	domaintasks "github.com/openmodu/oneshot/internal/domain/tasks"
-	domainworkflows "github.com/openmodu/oneshot/internal/domain/workflows"
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
 const (
@@ -70,7 +70,7 @@ func (a *Service) DeleteTask(ctx context.Context, taskID string) error {
 		return err
 	}
 	if workspace.Path != "" {
-		_ = os.RemoveAll(filepath.Join(workspace.Path, ".oneshot", "attachments", task.ID))
+		_ = os.RemoveAll(filepath.Join(workspace.Path, ".onecatch", "attachments", task.ID))
 	}
 	go a.reconcileWorkspaceQueue(task.WorkspaceID)
 	return nil
@@ -168,11 +168,11 @@ func (a *Service) persistAttachments(ctx context.Context, task domaintasks.Task,
 	if err != nil {
 		return nil, err
 	}
-	root := filepath.Join(workspace.Path, ".oneshot", "attachments", task.ID)
+	root := filepath.Join(workspace.Path, ".onecatch", "attachments", task.ID)
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, fmt.Errorf("create attachment directory: %w", err)
 	}
-	_ = excludeLocalOneshot(workspace.Path)
+	_ = excludeLocalOneCatch(workspace.Path)
 	var total int64
 	items := make([]domaintasks.Attachment, 0, len(paths))
 	for _, source := range paths {
@@ -235,14 +235,14 @@ func copyFileAtomic(source, destination string) error {
 	return os.Rename(temp, destination)
 }
 
-func excludeLocalOneshot(workspace string) error {
+func excludeLocalOneCatch(workspace string) error {
 	gitDir := filepath.Join(workspace, ".git")
 	if info, err := os.Stat(gitDir); err != nil || !info.IsDir() {
 		return nil
 	}
 	path := filepath.Join(gitDir, "info", "exclude")
 	content, _ := os.ReadFile(path)
-	if strings.Contains(string(content), "\n.oneshot/\n") || strings.HasPrefix(string(content), ".oneshot/\n") {
+	if strings.Contains(string(content), "\n.onecatch/\n") || strings.HasPrefix(string(content), ".onecatch/\n") {
 		return nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
@@ -253,7 +253,7 @@ func excludeLocalOneshot(workspace string) error {
 		return err
 	}
 	defer file.Close()
-	_, err = file.WriteString("\n.oneshot/\n")
+	_, err = file.WriteString("\n.onecatch/\n")
 	return err
 }
 

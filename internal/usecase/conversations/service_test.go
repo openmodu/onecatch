@@ -5,15 +5,15 @@ import (
 	"errors"
 	"testing"
 
-	domainconversations "github.com/openmodu/oneshot/internal/domain/conversations"
-	"github.com/openmodu/oneshot/internal/domain/users"
-	repoagents "github.com/openmodu/oneshot/internal/repo/agents"
-	repobilling "github.com/openmodu/oneshot/internal/repo/billing"
-	repoconversations "github.com/openmodu/oneshot/internal/repo/conversations"
-	repoorders "github.com/openmodu/oneshot/internal/repo/orders"
-	usecaseagents "github.com/openmodu/oneshot/internal/usecase/agents"
-	usecasebilling "github.com/openmodu/oneshot/internal/usecase/billing"
-	usecaseorders "github.com/openmodu/oneshot/internal/usecase/orders"
+	domainconversations "github.com/openmodu/onecatch/internal/domain/conversations"
+	"github.com/openmodu/onecatch/internal/domain/users"
+	repoagents "github.com/openmodu/onecatch/internal/repo/agents"
+	repobilling "github.com/openmodu/onecatch/internal/repo/billing"
+	repoconversations "github.com/openmodu/onecatch/internal/repo/conversations"
+	repoorders "github.com/openmodu/onecatch/internal/repo/orders"
+	usecaseagents "github.com/openmodu/onecatch/internal/usecase/agents"
+	usecasebilling "github.com/openmodu/onecatch/internal/usecase/billing"
+	usecaseorders "github.com/openmodu/onecatch/internal/usecase/orders"
 )
 
 // noResume satisfies orders.RunSessionReader; the conversation tests never

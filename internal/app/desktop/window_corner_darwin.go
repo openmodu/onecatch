@@ -11,13 +11,13 @@ package desktop
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 
-@interface OneshotTitlebarDoubleClickHandler : NSObject <NSGestureRecognizerDelegate>
+@interface OneCatchTitlebarDoubleClickHandler : NSObject <NSGestureRecognizerDelegate>
 @property(nonatomic, assign) NSWindow *window;
 @property(nonatomic, assign) CGFloat titlebarHeight;
 - (void)handleDoubleClick:(NSClickGestureRecognizer *)recognizer;
 @end
 
-@implementation OneshotTitlebarDoubleClickHandler
+@implementation OneCatchTitlebarDoubleClickHandler
 - (BOOL)gestureRecognizerShouldBegin:(NSGestureRecognizer *)recognizer {
 	NSPoint point = [recognizer locationInView:recognizer.view];
 	return point.y >= NSHeight(recognizer.view.bounds) - self.titlebarHeight;
@@ -30,33 +30,33 @@ package desktop
 }
 @end
 
-static char oneshotTitlebarDoubleClickKey;
-static char oneshotSidebarMaterialKey;
-static char oneshotCanvasBackdropKey;
-static char oneshotSidebarBorderKey;
-static char oneshotSidebarBridgeKey;
-static char oneshotWindowBorderOverlayKey;
-static NSString *const oneshotSidebarMessageName = @"oneshotSidebar";
-static const CGFloat oneshotSidebarCornerRadius = 16.0;
+static char onecatchTitlebarDoubleClickKey;
+static char onecatchSidebarMaterialKey;
+static char onecatchCanvasBackdropKey;
+static char onecatchSidebarBorderKey;
+static char onecatchSidebarBridgeKey;
+static char onecatchWindowBorderOverlayKey;
+static NSString *const onecatchSidebarMessageName = @"onecatchSidebar";
+static const CGFloat onecatchSidebarCornerRadius = 16.0;
 // The rail is an inset floating panel, not a flush column: it clears the window
 // edge on the left, top and bottom, and leaves a gap before the content panel.
-static const CGFloat oneshotSidebarInset = 8.0;
-static const CGFloat oneshotSidebarGutter = 4.0;
+static const CGFloat onecatchSidebarInset = 8.0;
+static const CGFloat onecatchSidebarGutter = 4.0;
 
-static NSRect oneshotSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
-	CGFloat width = MAX(0.0, MIN(railWidth, NSWidth(bounds)) - oneshotSidebarInset - oneshotSidebarGutter);
-	return NSMakeRect(NSMinX(bounds) + oneshotSidebarInset,
-	                  NSMinY(bounds) + oneshotSidebarInset,
+static NSRect onecatchSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
+	CGFloat width = MAX(0.0, MIN(railWidth, NSWidth(bounds)) - onecatchSidebarInset - onecatchSidebarGutter);
+	return NSMakeRect(NSMinX(bounds) + onecatchSidebarInset,
+	                  NSMinY(bounds) + onecatchSidebarInset,
 	                  width,
-	                  MAX(0.0, NSHeight(bounds) - oneshotSidebarInset * 2.0));
+	                  MAX(0.0, NSHeight(bounds) - onecatchSidebarInset * 2.0));
 }
 
-static NSRect oneshotCompactSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
-	CGFloat width = MAX(0.0, MIN(railWidth, NSWidth(bounds)) - oneshotSidebarInset - oneshotSidebarGutter);
+static NSRect onecatchCompactSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
+	CGFloat width = MAX(0.0, MIN(railWidth, NSWidth(bounds)) - onecatchSidebarInset - onecatchSidebarGutter);
 	CGFloat outerHeight = MIN(560.0, NSHeight(bounds));
-	CGFloat height = MAX(0.0, outerHeight - oneshotSidebarInset * 2.0);
-	return NSMakeRect(NSMinX(bounds) + oneshotSidebarInset,
-	                  NSMaxY(bounds) - oneshotSidebarInset - height,
+	CGFloat height = MAX(0.0, outerHeight - onecatchSidebarInset * 2.0);
+	return NSMakeRect(NSMinX(bounds) + onecatchSidebarInset,
+	                  NSMaxY(bounds) - onecatchSidebarInset - height,
 	                  width,
 	                  height);
 }
@@ -69,7 +69,7 @@ static NSRect oneshotCompactSidebarPanelFrame(NSRect bounds, CGFloat railWidth) 
 // AppKit strokes a dark hairline around a stock light window and a light one
 // around a dark window. Hidden-titlebar/full-size-content windows lose that
 // contrast edge, so resolve an equivalent colour ourselves.
-static NSColor *oneshotFrameBorderColor(NSAppearance *appearance) {
+static NSColor *onecatchFrameBorderColor(NSAppearance *appearance) {
 	NSAppearanceName match = [appearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
 	if ([match isEqualToString:NSAppearanceNameDarkAqua]) {
 		return [NSColor colorWithWhite:1.0 alpha:0.22];
@@ -77,7 +77,7 @@ static NSColor *oneshotFrameBorderColor(NSAppearance *appearance) {
 	return [NSColor colorWithWhite:0.0 alpha:0.18];
 }
 
-static NSColor *oneshotSidebarBorderColor(NSAppearance *appearance) {
+static NSColor *onecatchSidebarBorderColor(NSAppearance *appearance) {
 	NSAppearanceName match = [appearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
 	if ([match isEqualToString:NSAppearanceNameDarkAqua]) {
 		return [NSColor colorWithWhite:1.0 alpha:0.22];
@@ -85,12 +85,12 @@ static NSColor *oneshotSidebarBorderColor(NSAppearance *appearance) {
 	return [NSColor colorWithWhite:0.0 alpha:0.14];
 }
 
-static CGFloat oneshotDeviceHairlineWidth(NSWindow *window) {
+static CGFloat onecatchDeviceHairlineWidth(NSWindow *window) {
 	CGFloat scale = window.backingScaleFactor;
 	return scale > 0.0 ? 1.0 / scale : 1.0;
 }
 
-static NSColor *oneshotCanvasColor(NSAppearance *appearance) {
+static NSColor *onecatchCanvasColor(NSAppearance *appearance) {
 	NSAppearanceName match = [appearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
 	if ([match isEqualToString:NSAppearanceNameDarkAqua]) {
 		return [NSColor colorWithSRGBRed:0x1C / 255.0 green:0x1C / 255.0 blue:0x1C / 255.0 alpha:1.0];
@@ -98,12 +98,12 @@ static NSColor *oneshotCanvasColor(NSAppearance *appearance) {
 	return [NSColor colorWithSRGBRed:0xF5 / 255.0 green:0xF5 / 255.0 blue:0xF0 / 255.0 alpha:1.0];
 }
 
-static WKWebView *oneshotFindWebView(NSView *view) {
+static WKWebView *onecatchFindWebView(NSView *view) {
 	if ([view isKindOfClass:[WKWebView class]]) {
 		return (WKWebView *)view;
 	}
 	for (NSView *child in view.subviews) {
-		WKWebView *found = oneshotFindWebView(child);
+		WKWebView *found = onecatchFindWebView(child);
 		if (found != nil) {
 			return found;
 		}
@@ -115,40 +115,40 @@ static WKWebView *oneshotFindWebView(NSView *view) {
 // layers. WKWebView therefore covers every straight section and only leaves a
 // trace at antialiased corners. Keep the stroke in a sibling above WebKit and
 // opt it out of hit-testing so it remains purely visual.
-@interface OneshotWindowBorderView : NSView
+@interface OneCatchWindowBorderView : NSView
 @end
 
-@implementation OneshotWindowBorderView
+@implementation OneCatchWindowBorderView
 - (NSView *)hitTest:(NSPoint)point {
 	return nil;
 }
 @end
 
-static NSView *oneshotInstallWindowBorderOverlay(NSWindow *window) {
-	NSView *borderView = objc_getAssociatedObject(window, &oneshotWindowBorderOverlayKey);
+static NSView *onecatchInstallWindowBorderOverlay(NSWindow *window) {
+	NSView *borderView = objc_getAssociatedObject(window, &onecatchWindowBorderOverlayKey);
 	if (borderView != nil) {
 		return borderView;
 	}
 
-	WKWebView *webView = oneshotFindWebView(window.contentView);
+	WKWebView *webView = onecatchFindWebView(window.contentView);
 	if (webView == nil || webView.superview == nil) {
 		return nil;
 	}
 
 	NSView *container = webView.superview;
-	OneshotWindowBorderView *overlay = [[OneshotWindowBorderView alloc] initWithFrame:container.bounds];
+	OneCatchWindowBorderView *overlay = [[OneCatchWindowBorderView alloc] initWithFrame:container.bounds];
 	overlay.wantsLayer = YES;
 	overlay.layer.backgroundColor = [NSColor clearColor].CGColor;
 	overlay.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
 	[container addSubview:overlay positioned:NSWindowAbove relativeTo:webView];
-	objc_setAssociatedObject(window, &oneshotWindowBorderOverlayKey, overlay, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	objc_setAssociatedObject(window, &onecatchWindowBorderOverlayKey, overlay, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	borderView = overlay;
 	[overlay release];
 	return borderView;
 }
 
-static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
-	NSView *borderView = oneshotInstallWindowBorderOverlay(window);
+static void onecatchUpdateWindowBorder(NSWindow *window, CGFloat radius) {
+	NSView *borderView = onecatchInstallWindowBorderOverlay(window);
 	if (borderView.layer == nil) {
 		return;
 	}
@@ -156,20 +156,20 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 	borderView.layer.contentsScale = window.backingScaleFactor;
 	borderView.layer.cornerRadius = radius;
 	borderView.layer.cornerCurve = kCACornerCurveContinuous;
-	borderView.layer.borderWidth = radius > 0.0 ? oneshotDeviceHairlineWidth(window) : 0.0;
-	borderView.layer.borderColor = oneshotFrameBorderColor(window.effectiveAppearance).CGColor;
+	borderView.layer.borderWidth = radius > 0.0 ? onecatchDeviceHairlineWidth(window) : 0.0;
+	borderView.layer.borderColor = onecatchFrameBorderColor(window.effectiveAppearance).CGColor;
 }
 
-@interface OneshotSidebarBridge : NSObject <WKScriptMessageHandler>
+@interface OneCatchSidebarBridge : NSObject <WKScriptMessageHandler>
 @property(nonatomic, assign) NSWindow *window;
 @property(nonatomic, assign) NSVisualEffectView *effectView;
 @property(nonatomic, assign) NSView *canvasView;
 @property(nonatomic, assign) NSView *borderView;
 @end
 
-@implementation OneshotSidebarBridge
+@implementation OneCatchSidebarBridge
 - (void)userContentController:(WKUserContentController *)userContentController didReceiveScriptMessage:(WKScriptMessage *)message {
-	if (![message.name isEqualToString:oneshotSidebarMessageName]) {
+	if (![message.name isEqualToString:onecatchSidebarMessageName]) {
 		return;
 	}
 
@@ -211,17 +211,17 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 		self.effectView.frame = useFlushRail
 			? NSMakeRect(NSMinX(bounds), NSMinY(bounds), MIN(width.doubleValue, NSWidth(bounds)), NSHeight(bounds))
 			: useCompactRail
-				? oneshotCompactSidebarPanelFrame(bounds, width.doubleValue)
-				: oneshotSidebarPanelFrame(bounds, width.doubleValue);
+				? onecatchCompactSidebarPanelFrame(bounds, width.doubleValue)
+				: onecatchSidebarPanelFrame(bounds, width.doubleValue);
 		self.effectView.autoresizingMask = useCompactRail
 			? NSViewMinYMargin | NSViewMaxXMargin
 			: NSViewHeightSizable | NSViewMaxXMargin;
-		self.effectView.layer.cornerRadius = useFlushRail ? 0.0 : oneshotSidebarCornerRadius;
+		self.effectView.layer.cornerRadius = useFlushRail ? 0.0 : onecatchSidebarCornerRadius;
 		self.canvasView.frame = bounds;
 		self.borderView.frame = self.effectView.frame;
 		self.borderView.autoresizingMask = self.effectView.autoresizingMask;
-		self.borderView.layer.cornerRadius = useFlushRail ? 0.0 : oneshotSidebarCornerRadius;
-		self.borderView.layer.borderWidth = useFlushRail ? 0.0 : oneshotDeviceHairlineWidth(self.window);
+		self.borderView.layer.cornerRadius = useFlushRail ? 0.0 : onecatchSidebarCornerRadius;
+		self.borderView.layer.borderWidth = useFlushRail ? 0.0 : onecatchDeviceHairlineWidth(self.window);
 	}
 	if (hidden != nil) {
 		self.effectView.hidden = hidden.boolValue;
@@ -245,11 +245,11 @@ static void oneshotUpdateWindowBorder(NSWindow *window, CGFloat radius) {
 // native effect view sits directly below it and covers only the sidebar. CSS
 // makes that one page region transparent; the main column still paints the
 // opaque canvas, so live resize never exposes the desktop there.
-static void oneshotInstallSidebarMaterial(NSWindow *window) {
-	if (objc_getAssociatedObject(window, &oneshotSidebarMaterialKey) != nil) {
+static void onecatchInstallSidebarMaterial(NSWindow *window) {
+	if (objc_getAssociatedObject(window, &onecatchSidebarMaterialKey) != nil) {
 		return;
 	}
-	WKWebView *webView = oneshotFindWebView(window.contentView);
+	WKWebView *webView = onecatchFindWebView(window.contentView);
 	if (webView == nil || webView.superview == nil) {
 		return;
 	}
@@ -257,42 +257,42 @@ static void oneshotInstallSidebarMaterial(NSWindow *window) {
 	NSView *container = webView.superview;
 	NSView *canvasView = [[NSView alloc] initWithFrame:container.bounds];
 	canvasView.wantsLayer = YES;
-	canvasView.layer.backgroundColor = oneshotCanvasColor(window.effectiveAppearance).CGColor;
+	canvasView.layer.backgroundColor = onecatchCanvasColor(window.effectiveAppearance).CGColor;
 	canvasView.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
 	NSVisualEffectView *effectView = [[NSVisualEffectView alloc]
-		initWithFrame:oneshotSidebarPanelFrame(container.bounds, 216.0)];
+		initWithFrame:onecatchSidebarPanelFrame(container.bounds, 216.0)];
 	effectView.material = NSVisualEffectMaterialSidebar;
 	effectView.blendingMode = NSVisualEffectBlendingModeBehindWindow;
 	effectView.state = NSVisualEffectStateFollowsWindowActiveState;
 	effectView.emphasized = NO;
 	effectView.autoresizingMask = NSViewHeightSizable | NSViewMaxXMargin;
 	effectView.wantsLayer = YES;
-	effectView.layer.cornerRadius = oneshotSidebarCornerRadius;
+	effectView.layer.cornerRadius = onecatchSidebarCornerRadius;
 	effectView.layer.cornerCurve = kCACornerCurveContinuous;
 	effectView.layer.masksToBounds = YES;
-	OneshotWindowBorderView *borderView = [[OneshotWindowBorderView alloc] initWithFrame:effectView.frame];
+	OneCatchWindowBorderView *borderView = [[OneCatchWindowBorderView alloc] initWithFrame:effectView.frame];
 	borderView.wantsLayer = YES;
 	borderView.layer.backgroundColor = [NSColor clearColor].CGColor;
-	borderView.layer.cornerRadius = oneshotSidebarCornerRadius;
+	borderView.layer.cornerRadius = onecatchSidebarCornerRadius;
 	borderView.layer.cornerCurve = kCACornerCurveContinuous;
-	borderView.layer.borderWidth = oneshotDeviceHairlineWidth(window);
-	borderView.layer.borderColor = oneshotSidebarBorderColor(window.effectiveAppearance).CGColor;
+	borderView.layer.borderWidth = onecatchDeviceHairlineWidth(window);
+	borderView.layer.borderColor = onecatchSidebarBorderColor(window.effectiveAppearance).CGColor;
 	borderView.autoresizingMask = NSViewHeightSizable | NSViewMaxXMargin;
 	[container addSubview:canvasView positioned:NSWindowBelow relativeTo:webView];
 	[container addSubview:effectView positioned:NSWindowBelow relativeTo:webView];
 	[container addSubview:borderView positioned:NSWindowAbove relativeTo:webView];
 
-	OneshotSidebarBridge *bridge = [[OneshotSidebarBridge alloc] init];
+	OneCatchSidebarBridge *bridge = [[OneCatchSidebarBridge alloc] init];
 	bridge.window = window;
 	bridge.effectView = effectView;
 	bridge.canvasView = canvasView;
 	bridge.borderView = borderView;
-	[webView.configuration.userContentController addScriptMessageHandler:bridge name:oneshotSidebarMessageName];
+	[webView.configuration.userContentController addScriptMessageHandler:bridge name:onecatchSidebarMessageName];
 
-	objc_setAssociatedObject(window, &oneshotSidebarMaterialKey, effectView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-	objc_setAssociatedObject(window, &oneshotCanvasBackdropKey, canvasView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-	objc_setAssociatedObject(window, &oneshotSidebarBorderKey, borderView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-	objc_setAssociatedObject(window, &oneshotSidebarBridgeKey, bridge, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	objc_setAssociatedObject(window, &onecatchSidebarMaterialKey, effectView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	objc_setAssociatedObject(window, &onecatchCanvasBackdropKey, canvasView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	objc_setAssociatedObject(window, &onecatchSidebarBorderKey, borderView, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	objc_setAssociatedObject(window, &onecatchSidebarBridgeKey, bridge, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	[canvasView release];
 	[effectView release];
 	[borderView release];
@@ -304,7 +304,7 @@ static void oneshotInstallSidebarMaterial(NSWindow *window) {
 	NSString *script =
 		@"document.documentElement.dataset.nativeSidebarMaterial='true';"
 		 "var sidebar=document.querySelector('.sidebar');"
-		 "window.webkit.messageHandlers.oneshotSidebar.postMessage({"
+		 "window.webkit.messageHandlers.onecatchSidebar.postMessage({"
 		 "width:sidebar?.dataset.visible==='false'?0:(sidebar?.getBoundingClientRect().width||216),"
 			 "theme:document.documentElement.dataset.theme||'system'"
 			 "});";
@@ -320,17 +320,17 @@ static void oneshotInstallSidebarMaterial(NSWindow *window) {
 // frame, WebView base and under-page colour must stay clear so the native
 // sidebar material remains visible. The sibling canvas view installed above
 // is the synchronous opaque fallback for the main column.
-static void oneshotMatchBackgroundToCanvas(NSWindow *window) {
-	NSColor *canvas = oneshotCanvasColor(window.effectiveAppearance);
+static void onecatchMatchBackgroundToCanvas(NSWindow *window) {
+	NSColor *canvas = onecatchCanvasColor(window.effectiveAppearance);
 	window.backgroundColor = [NSColor clearColor];
 	NSView *frame = window.contentView.superview;
 	frame.wantsLayer = YES;
 	frame.layer.backgroundColor = [NSColor clearColor].CGColor;
-	NSView *canvasView = objc_getAssociatedObject(window, &oneshotCanvasBackdropKey);
+	NSView *canvasView = objc_getAssociatedObject(window, &onecatchCanvasBackdropKey);
 	if (canvasView.layer != nil) {
 		canvasView.layer.backgroundColor = canvas.CGColor;
 	}
-	WKWebView *webView = oneshotFindWebView(window.contentView);
+	WKWebView *webView = onecatchFindWebView(window.contentView);
 	if (webView == nil) {
 		return;
 	}
@@ -347,45 +347,45 @@ static void oneshotMatchBackgroundToCanvas(NSWindow *window) {
 	}
 }
 
-@interface OneshotAppearanceObserver : NSObject
+@interface OneCatchAppearanceObserver : NSObject
 @property(nonatomic, assign) NSWindow *window;
 @end
 
-@implementation OneshotAppearanceObserver
+@implementation OneCatchAppearanceObserver
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
 	if ([keyPath isEqualToString:@"effectiveAppearance"]) {
-		oneshotMatchBackgroundToCanvas(self.window);
-		NSView *borderView = objc_getAssociatedObject(self.window, &oneshotWindowBorderOverlayKey);
+		onecatchMatchBackgroundToCanvas(self.window);
+		NSView *borderView = objc_getAssociatedObject(self.window, &onecatchWindowBorderOverlayKey);
 		if (borderView.layer != nil && borderView.layer.borderWidth > 0.0) {
-			borderView.layer.borderColor = oneshotFrameBorderColor(self.window.effectiveAppearance).CGColor;
+			borderView.layer.borderColor = onecatchFrameBorderColor(self.window.effectiveAppearance).CGColor;
 		}
-		NSView *sidebarBorder = objc_getAssociatedObject(self.window, &oneshotSidebarBorderKey);
+		NSView *sidebarBorder = objc_getAssociatedObject(self.window, &onecatchSidebarBorderKey);
 		if (sidebarBorder.layer != nil) {
-			sidebarBorder.layer.borderColor = oneshotSidebarBorderColor(self.window.effectiveAppearance).CGColor;
+			sidebarBorder.layer.borderColor = onecatchSidebarBorderColor(self.window.effectiveAppearance).CGColor;
 		}
 	}
 }
 @end
 
-static char oneshotAppearanceObserverKey;
+static char onecatchAppearanceObserverKey;
 
-static void oneshotInstallAppearanceObserver(NSWindow *window) {
-	if (objc_getAssociatedObject(window, &oneshotAppearanceObserverKey) != nil) {
+static void onecatchInstallAppearanceObserver(NSWindow *window) {
+	if (objc_getAssociatedObject(window, &onecatchAppearanceObserverKey) != nil) {
 		return;
 	}
-	OneshotAppearanceObserver *observer = [[OneshotAppearanceObserver alloc] init];
+	OneCatchAppearanceObserver *observer = [[OneCatchAppearanceObserver alloc] init];
 	observer.window = window;
 	[window addObserver:observer forKeyPath:@"effectiveAppearance" options:NSKeyValueObservingOptionNew context:NULL];
-	objc_setAssociatedObject(window, &oneshotAppearanceObserverKey, observer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	objc_setAssociatedObject(window, &onecatchAppearanceObserverKey, observer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	[observer release];
 }
 
-static void oneshotInstallTitlebarDoubleClick(NSWindow *window) {
-	if (objc_getAssociatedObject(window, &oneshotTitlebarDoubleClickKey) != nil) {
+static void onecatchInstallTitlebarDoubleClick(NSWindow *window) {
+	if (objc_getAssociatedObject(window, &onecatchTitlebarDoubleClickKey) != nil) {
 		return;
 	}
 
-	OneshotTitlebarDoubleClickHandler *handler = [[OneshotTitlebarDoubleClickHandler alloc] init];
+	OneCatchTitlebarDoubleClickHandler *handler = [[OneCatchTitlebarDoubleClickHandler alloc] init];
 	handler.window = window;
 	handler.titlebarHeight = 80.0;
 
@@ -407,12 +407,12 @@ static void oneshotInstallTitlebarDoubleClick(NSWindow *window) {
 	// titlebar double-click without ever intercepting ordinary clicks.
 	recognizer.delaysPrimaryMouseButtonEvents = NO;
 	[window.contentView addGestureRecognizer:recognizer];
-	objc_setAssociatedObject(window, &oneshotTitlebarDoubleClickKey, handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+	objc_setAssociatedObject(window, &onecatchTitlebarDoubleClickKey, handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 	[recognizer release];
 	[handler release];
 }
 
-static BOOL oneshotAcceptsFirstMouse(id self, SEL _cmd, NSEvent *event) {
+static BOOL onecatchAcceptsFirstMouse(id self, SEL _cmd, NSEvent *event) {
 	return YES;
 }
 
@@ -429,24 +429,24 @@ static BOOL oneshotAcceptsFirstMouse(id self, SEL _cmd, NSEvent *event) {
 // the selector, so calling this on every corner-radius pass (window
 // maximize/fullscreen toggles) is harmless. Scoped to this process: WKWebView
 // is a shared framework class, but this app only ever creates one instance.
-static void oneshotEnableClickToFocus(NSWindow *window) {
-	WKWebView *webView = oneshotFindWebView(window.contentView);
+static void onecatchEnableClickToFocus(NSWindow *window) {
+	WKWebView *webView = onecatchFindWebView(window.contentView);
 	if (webView == nil) {
 		return;
 	}
-	class_addMethod([webView class], @selector(acceptsFirstMouse:), (IMP)oneshotAcceptsFirstMouse, "c@:@");
+	class_addMethod([webView class], @selector(acceptsFirstMouse:), (IMP)onecatchAcceptsFirstMouse, "c@:@");
 }
 
-static void oneshotSetWindowCornerRadius(void *handle, double radius) {
+static void onecatchSetWindowCornerRadius(void *handle, double radius) {
 	NSWindow *window = (__bridge NSWindow *)handle;
 	if (window == nil || window.contentView == nil) {
 		return;
 	}
-	oneshotInstallTitlebarDoubleClick(window);
-	oneshotInstallAppearanceObserver(window);
-	oneshotEnableClickToFocus(window);
-	oneshotMatchBackgroundToCanvas(window);
-	oneshotInstallSidebarMaterial(window);
+	onecatchInstallTitlebarDoubleClick(window);
+	onecatchInstallAppearanceObserver(window);
+	onecatchEnableClickToFocus(window);
+	onecatchMatchBackgroundToCanvas(window);
+	onecatchInstallSidebarMaterial(window);
 
 	NSView *frame = window.contentView.superview;
 	frame.wantsLayer = YES;
@@ -454,11 +454,11 @@ static void oneshotSetWindowCornerRadius(void *handle, double radius) {
 	frame.layer.cornerCurve = kCACornerCurveContinuous;
 	frame.layer.masksToBounds = radius > 0;
 	frame.layer.borderWidth = 0.0;
-	oneshotUpdateWindowBorder(window, radius);
+	onecatchUpdateWindowBorder(window, radius);
 	[window invalidateShadow];
 }
 
-static void oneshotSetWindowZoomButtonHidden(void *handle, bool hidden) {
+static void onecatchSetWindowZoomButtonHidden(void *handle, bool hidden) {
 	NSWindow *window = (__bridge NSWindow *)handle;
 	if (window == nil) {
 		return;
@@ -468,7 +468,7 @@ static void oneshotSetWindowZoomButtonHidden(void *handle, bool hidden) {
 	zoomButton.hidden = hidden;
 }
 
-static void oneshotSetApplicationIcon(void *icon, int length) {
+static void onecatchSetApplicationIcon(void *icon, int length) {
 	if (icon == nil || length <= 0) {
 		return;
 	}
@@ -480,7 +480,7 @@ static void oneshotSetApplicationIcon(void *icon, int length) {
 	[image release];
 }
 
-static void oneshotSetWindowAppearance(void *targetHandle, void *sourceHandle) {
+static void onecatchSetWindowAppearance(void *targetHandle, void *sourceHandle) {
 	NSWindow *target = (__bridge NSWindow *)targetHandle;
 	NSWindow *source = (__bridge NSWindow *)sourceHandle;
 	if (target == nil || source == nil) {
@@ -497,26 +497,26 @@ func setNativeWindowCornerRadius(window unsafe.Pointer, radius float64) {
 	if window == nil {
 		return
 	}
-	C.oneshotSetWindowCornerRadius(window, C.double(radius))
+	C.onecatchSetWindowCornerRadius(window, C.double(radius))
 }
 
 func setNativeWindowZoomButtonHidden(window unsafe.Pointer, hidden bool) {
 	if window == nil {
 		return
 	}
-	C.oneshotSetWindowZoomButtonHidden(window, C.bool(hidden))
+	C.onecatchSetWindowZoomButtonHidden(window, C.bool(hidden))
 }
 
 func setNativeApplicationIcon(icon []byte) {
 	if len(icon) == 0 {
 		return
 	}
-	C.oneshotSetApplicationIcon(unsafe.Pointer(&icon[0]), C.int(len(icon)))
+	C.onecatchSetApplicationIcon(unsafe.Pointer(&icon[0]), C.int(len(icon)))
 }
 
 func setNativeWindowAppearance(window, source unsafe.Pointer) {
 	if window == nil || source == nil {
 		return
 	}
-	C.oneshotSetWindowAppearance(window, source)
+	C.onecatchSetWindowAppearance(window, source)
 }

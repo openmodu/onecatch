@@ -27,7 +27,7 @@ import * as workflows$1 from "../../usecase/workflows/models.js";
  * @returns {$CancellablePromise<workflows$0.Run>}
  */
 export function CancelRun(runID) {
-    return $Call.ByID(2952756379, runID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1714304680, runID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -37,7 +37,7 @@ export function CancelRun(runID) {
  * @returns {$CancellablePromise<tasks$0.Task>}
  */
 export function CreateTask(input) {
-    return $Call.ByID(2803831009, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2719115984, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -47,7 +47,7 @@ export function CreateTask(input) {
  * @returns {$CancellablePromise<void>}
  */
 export function DeleteTask(taskID) {
-    return $Call.ByID(1846023434, taskID);
+    return $Call.ByID(3834834523, taskID);
 }
 
 /**
@@ -56,7 +56,7 @@ export function DeleteTask(taskID) {
  * @returns {$CancellablePromise<workflows$0.Instruction>}
  */
 export function EnqueueInstruction(runID, input) {
-    return $Call.ByID(53463086, runID, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(4268144915, runID, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType2($result);
     }));
 }
@@ -67,7 +67,7 @@ export function EnqueueInstruction(runID, input) {
  * @returns {$CancellablePromise<tasks$0.Task>}
  */
 export function EnqueueTask(taskID, confirmationToken) {
-    return $Call.ByID(2501238223, taskID, confirmationToken).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(730833856, taskID, confirmationToken).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -77,7 +77,7 @@ export function EnqueueTask(taskID, confirmationToken) {
  * @returns {$CancellablePromise<desktop$0.RunDetail>}
  */
 export function GetRun(runID) {
-    return $Call.ByID(888742489, runID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(700987492, runID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -87,7 +87,7 @@ export function GetRun(runID) {
  * @returns {$CancellablePromise<runstream$0.Frame[]>}
  */
 export function GetRunStreamSnapshot(runID) {
-    return $Call.ByID(1329783073, runID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2473884600, runID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType5($result);
     }));
 }
@@ -98,7 +98,7 @@ export function GetRunStreamSnapshot(runID) {
  * @returns {$CancellablePromise<workflows$0.Instruction>}
  */
 export function InterruptAndInsert(runID, input) {
-    return $Call.ByID(4081297089, runID, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3458601712, runID, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType2($result);
     }));
 }
@@ -108,7 +108,7 @@ export function InterruptAndInsert(runID, input) {
  * @returns {$CancellablePromise<workflows$0.Run>}
  */
 export function InterruptRun(runID) {
-    return $Call.ByID(2909524340, runID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(292099625, runID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -119,7 +119,7 @@ export function InterruptRun(runID) {
  * @returns {$CancellablePromise<desktop$0.WorkflowEventView[]>}
  */
 export function ListRunEvents(runID, afterSeq) {
-    return $Call.ByID(2736700172, runID, afterSeq).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2042597943, runID, afterSeq).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType7($result);
     }));
 }
@@ -129,7 +129,7 @@ export function ListRunEvents(runID, afterSeq) {
  * @returns {$CancellablePromise<desktop$0.RunListPage>}
  */
 export function ListRuns(input) {
-    return $Call.ByID(3525855338, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(768937475, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType8($result);
     }));
 }
@@ -139,7 +139,7 @@ export function ListRuns(input) {
  * @returns {$CancellablePromise<workflows$0.Run[]>}
  */
 export function ListRunsByTask(taskID) {
-    return $Call.ByID(3708882194, taskID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(413122787, taskID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType9($result);
     }));
 }
@@ -149,7 +149,7 @@ export function ListRunsByTask(taskID) {
  * @returns {$CancellablePromise<tasks$0.Task[]>}
  */
 export function ListTasks(workspaceID) {
-    return $Call.ByID(1403259930, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3566902885, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType10($result);
     }));
 }
@@ -159,7 +159,7 @@ export function ListTasks(workspaceID) {
  * @returns {$CancellablePromise<desktop$0.RunStartPreview>}
  */
 export function PreviewRun(taskID) {
-    return $Call.ByID(2359662625, taskID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(864427724, taskID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType11($result);
     }));
 }
@@ -169,7 +169,7 @@ export function PreviewRun(taskID) {
  * @returns {$CancellablePromise<tasks$0.Task[]>}
  */
 export function QueueSnapshot(workspaceID) {
-    return $Call.ByID(1119978231, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1492889848, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType10($result);
     }));
 }
@@ -180,7 +180,7 @@ export function QueueSnapshot(workspaceID) {
  * @returns {$CancellablePromise<void>}
  */
 export function RemoveInstruction(runID, instructionID) {
-    return $Call.ByID(1889218408, runID, instructionID);
+    return $Call.ByID(1562733667, runID, instructionID);
 }
 
 /**
@@ -189,7 +189,7 @@ export function RemoveInstruction(runID, instructionID) {
  * @returns {$CancellablePromise<tasks$0.Task>}
  */
 export function RenameTask(taskID, title) {
-    return $Call.ByID(314595695, taskID, title).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(4111900838, taskID, title).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -199,7 +199,7 @@ export function RenameTask(taskID, title) {
  * @returns {$CancellablePromise<void>}
  */
 export function RespondPermission(input) {
-    return $Call.ByID(2232428978, input);
+    return $Call.ByID(2953322829, input);
 }
 
 /**
@@ -208,7 +208,7 @@ export function RespondPermission(input) {
  * @returns {$CancellablePromise<workflows$0.Run>}
  */
 export function ResumeRun(runID, instruction) {
-    return $Call.ByID(1736828276, runID, instruction).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1628819071, runID, instruction).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -219,7 +219,7 @@ export function ResumeRun(runID, instruction) {
  * @returns {$CancellablePromise<workflows$0.Run>}
  */
 export function ResumeRunConfigured(runID, input) {
-    return $Call.ByID(1493247740, runID, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1746256047, runID, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -229,7 +229,7 @@ export function ResumeRunConfigured(runID, input) {
  * @returns {$CancellablePromise<desktop$0.TaskSearchPage>}
  */
 export function SearchTasks(input) {
-    return $Call.ByID(2092779278, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3760506421, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType12($result);
     }));
 }
@@ -240,7 +240,7 @@ export function SearchTasks(input) {
  * @returns {$CancellablePromise<tasks$0.Task>}
  */
 export function SetTaskPinned(taskID, pinned) {
-    return $Call.ByID(3365865999, taskID, pinned).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1072326008, taskID, pinned).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -251,7 +251,7 @@ export function SetTaskPinned(taskID, pinned) {
  * @returns {$CancellablePromise<workflows$0.Run>}
  */
 export function StartRun(taskID, confirmationToken) {
-    return $Call.ByID(3618065209, taskID, confirmationToken).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2093366980, taskID, confirmationToken).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }

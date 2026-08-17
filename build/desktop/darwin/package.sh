@@ -4,10 +4,10 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
-APP_NAME=Oneshot
-EXECUTABLE_NAME=oneshot
+APP_NAME=OneCatch
+EXECUTABLE_NAME=onecatch
 BINARY="$REPO_ROOT/bin/$EXECUTABLE_NAME"
-WORKER_BINARY="$REPO_ROOT/bin/oneshot-worker"
+WORKER_BINARY="$REPO_ROOT/bin/onecatch-worker"
 INFO_PLIST="$SCRIPT_DIR/Info.plist"
 ASSETS_CAR="$SCRIPT_DIR/Assets.car"
 ICON_FILE="$SCRIPT_DIR/icons.icns"
@@ -51,7 +51,7 @@ case "$OUTPUT_ZIP" in
     *) OUTPUT_ZIP="$REPO_ROOT/$OUTPUT_ZIP" ;;
 esac
 
-STAGING_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/oneshot-package.XXXXXX")
+STAGING_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/onecatch-package.XXXXXX")
 cleanup() {
     rm -rf -- "${STAGING_ROOT:?}"
 }
@@ -62,7 +62,7 @@ CONTENTS="$APP_BUNDLE/Contents"
 mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources/bin" "$(dirname -- "$OUTPUT_ZIP")"
 
 install -m 0755 "$BINARY" "$CONTENTS/MacOS/$EXECUTABLE_NAME"
-install -m 0755 "$WORKER_BINARY" "$CONTENTS/Resources/bin/oneshot-worker"
+install -m 0755 "$WORKER_BINARY" "$CONTENTS/Resources/bin/onecatch-worker"
 install -m 0644 "$INFO_PLIST" "$CONTENTS/Info.plist"
 install -m 0644 "$ASSETS_CAR" "$CONTENTS/Resources/Assets.car"
 install -m 0644 "$ICON_FILE" "$CONTENTS/Resources/icons.icns"

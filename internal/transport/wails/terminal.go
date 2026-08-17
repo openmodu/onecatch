@@ -1,6 +1,6 @@
 package wailstransport
 
-import terminalservice "github.com/openmodu/oneshot/internal/service/terminal"
+import terminalservice "github.com/openmodu/onecatch/internal/service/terminal"
 
 type TerminalBinding struct{ service *terminalservice.Service }
 

@@ -1,6 +1,6 @@
 package wailstransport
 
-import desktopservice "github.com/openmodu/oneshot/internal/service/desktop"
+import desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 
 type RuntimeBinding struct{ service *desktopservice.Service }
 

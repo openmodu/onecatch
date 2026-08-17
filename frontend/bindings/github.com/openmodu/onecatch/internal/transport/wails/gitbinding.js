@@ -18,7 +18,7 @@ import * as desktop$0 from "../../service/desktop/models.js";
  * @returns {$CancellablePromise<desktop$0.GitCommitResult>}
  */
 export function CommitAndPush(input) {
-    return $Call.ByID(2536911288, input).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(3686420851, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
 }
@@ -29,7 +29,7 @@ export function CommitAndPush(input) {
  * @returns {$CancellablePromise<workspaces$0.GitSnapshot>}
  */
 export function CreateBranch(workspaceID, name) {
-    return $Call.ByID(1013873682, workspaceID, name).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(386178559, workspaceID, name).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -40,7 +40,7 @@ export function CreateBranch(workspaceID, name) {
  * @returns {$CancellablePromise<string>}
  */
 export function Diff(workspaceID, staged) {
-    return $Call.ByID(2116315901, workspaceID, staged);
+    return $Call.ByID(2232574956, workspaceID, staged);
 }
 
 /**
@@ -49,7 +49,7 @@ export function Diff(workspaceID, staged) {
  * @returns {$CancellablePromise<string>}
  */
 export function GenerateCommitMessage(workspaceID, runtime) {
-    return $Call.ByID(2894798831, workspaceID, runtime);
+    return $Call.ByID(3701958332, workspaceID, runtime);
 }
 
 /**
@@ -57,7 +57,7 @@ export function GenerateCommitMessage(workspaceID, runtime) {
  * @returns {$CancellablePromise<workspaces$0.GitBranch[]>}
  */
 export function ListBranches(workspaceID) {
-    return $Call.ByID(1322663810, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(2288714503, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -67,7 +67,7 @@ export function ListBranches(workspaceID) {
  * @returns {$CancellablePromise<void>}
  */
 export function StageAll(workspaceID) {
-    return $Call.ByID(1978456475, workspaceID);
+    return $Call.ByID(1739534166, workspaceID);
 }
 
 /**
@@ -75,7 +75,7 @@ export function StageAll(workspaceID) {
  * @returns {$CancellablePromise<workspaces$0.GitSnapshot>}
  */
 export function Status(workspaceID) {
-    return $Call.ByID(1138908624, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(14488049, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }
@@ -86,7 +86,7 @@ export function Status(workspaceID) {
  * @returns {$CancellablePromise<workspaces$0.GitSnapshot>}
  */
 export function SwitchBranch(workspaceID, name) {
-    return $Call.ByID(2695371654, workspaceID, name).then(/** @type {($result: any) => any} */(($result) => {
+    return $Call.ByID(1535096791, workspaceID, name).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
     }));
 }

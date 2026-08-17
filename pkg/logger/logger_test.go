@@ -9,7 +9,7 @@ import (
 )
 
 func TestNewWritesFile(t *testing.T) {
-	logFile := filepath.Join(t.TempDir(), "oneshot.log")
+	logFile := filepath.Join(t.TempDir(), "onecatch.log")
 	log, err := New(Config{
 		Service:       "test",
 		File:          logFile,

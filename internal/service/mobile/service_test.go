@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	gitrepo "github.com/openmodu/oneshot/internal/repo/git"
-	"github.com/openmodu/oneshot/internal/service/worker"
-	"github.com/openmodu/oneshot/internal/usecase/agentrun"
+	gitrepo "github.com/openmodu/onecatch/internal/repo/git"
+	"github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type mobileTestEngine struct {
@@ -35,7 +35,7 @@ func (e *mobileTestEngine) Run(_ context.Context, request agentrun.Request, sink
 func TestRemoteWorkerLifecycleAndReadOnlyRun(t *testing.T) {
 	workspace := initMobileTestRepo(t)
 	engine := &mobileTestEngine{}
-	server := worker.NewServer("mobile-worker", "Mobile Worker", "secret", map[string]string{"oneshot": workspace}, engine, 1)
+	server := worker.NewServer("mobile-worker", "Mobile Worker", "secret", map[string]string{"onecatch": workspace}, engine, 1)
 	server.SetGitInspector(gitrepo.New(""))
 	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
 	httpServer := httptest.NewServer(server.Handler())
@@ -64,12 +64,12 @@ func TestRemoteWorkerLifecycleAndReadOnlyRun(t *testing.T) {
 		t.Fatalf("health = %+v", status.Health)
 	}
 	workspaces, err := service.ListWorkspaces(context.Background(), paired.ID)
-	if err != nil || len(workspaces) != 1 || workspaces[0].ID != "oneshot" {
+	if err != nil || len(workspaces) != 1 || workspaces[0].ID != "onecatch" {
 		t.Fatalf("workspaces = %+v, err=%v", workspaces, err)
 	}
 
 	run, err := service.StartRun(context.Background(), StartRunInput{
-		WorkerID: paired.ID, WorkspaceID: "oneshot", Runtime: "codex", Prompt: "review this repository",
+		WorkerID: paired.ID, WorkspaceID: "onecatch", Runtime: "codex", Prompt: "review this repository",
 	})
 	if err != nil {
 		t.Fatalf("start run: %v", err)
@@ -112,7 +112,7 @@ func TestStartRunRejectsDirtyRemoteWorkspace(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(workspace, "dirty.txt"), []byte("dirty"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	server := worker.NewServer("dirty-worker", "Dirty Worker", "secret", map[string]string{"oneshot": workspace}, &mobileTestEngine{}, 1)
+	server := worker.NewServer("dirty-worker", "Dirty Worker", "secret", map[string]string{"onecatch": workspace}, &mobileTestEngine{}, 1)
 	server.SetGitInspector(gitrepo.New(""))
 	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
 	httpServer := httptest.NewServer(server.Handler())
@@ -127,7 +127,7 @@ func TestStartRunRejectsDirtyRemoteWorkspace(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = service.StartRun(context.Background(), StartRunInput{
-		WorkerID: "dirty-worker", WorkspaceID: "oneshot", Runtime: "codex", Prompt: "review",
+		WorkerID: "dirty-worker", WorkspaceID: "onecatch", Runtime: "codex", Prompt: "review",
 	})
 	if err == nil || err.Error() != "mobile_workspace_dirty: the mapped workspace must be clean before a mobile run" {
 		t.Fatalf("start dirty run error = %v", err)
@@ -176,7 +176,7 @@ func TestManageRemoteWorkspaceLifecycle(t *testing.T) {
 
 func TestRunHistoryPersistsAcrossServiceRestart(t *testing.T) {
 	workspace := initMobileTestRepo(t)
-	server := worker.NewServer("history-worker", "History Worker", "secret", map[string]string{"oneshot": workspace}, &mobileTestEngine{}, 1)
+	server := worker.NewServer("history-worker", "History Worker", "secret", map[string]string{"onecatch": workspace}, &mobileTestEngine{}, 1)
 	server.SetGitInspector(gitrepo.New(""))
 	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
 	httpServer := httptest.NewServer(server.Handler())
@@ -191,7 +191,7 @@ func TestRunHistoryPersistsAcrossServiceRestart(t *testing.T) {
 		t.Fatal(err)
 	}
 	run, err := service.StartRun(context.Background(), StartRunInput{
-		WorkerID: "history-worker", WorkspaceID: "oneshot", Runtime: "codex", Prompt: "remember this run",
+		WorkerID: "history-worker", WorkspaceID: "onecatch", Runtime: "codex", Prompt: "remember this run",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -228,7 +228,7 @@ func TestRunHistoryPersistsAcrossServiceRestart(t *testing.T) {
 
 func TestFollowUpKeepsConversationID(t *testing.T) {
 	workspace := initMobileTestRepo(t)
-	server := worker.NewServer("conversation-worker", "Conversation Worker", "secret", map[string]string{"oneshot": workspace}, &mobileTestEngine{}, 1)
+	server := worker.NewServer("conversation-worker", "Conversation Worker", "secret", map[string]string{"onecatch": workspace}, &mobileTestEngine{}, 1)
 	server.SetGitInspector(gitrepo.New(""))
 	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
 	httpServer := httptest.NewServer(server.Handler())
@@ -243,7 +243,7 @@ func TestFollowUpKeepsConversationID(t *testing.T) {
 		t.Fatal(err)
 	}
 	first, err := service.StartRun(context.Background(), StartRunInput{
-		WorkerID: "conversation-worker", WorkspaceID: "oneshot", Runtime: "codex", Prompt: "first turn",
+		WorkerID: "conversation-worker", WorkspaceID: "onecatch", Runtime: "codex", Prompt: "first turn",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -257,7 +257,7 @@ func TestFollowUpKeepsConversationID(t *testing.T) {
 		}
 	}
 	second, err := service.StartRun(context.Background(), StartRunInput{
-		WorkerID: "conversation-worker", WorkspaceID: "oneshot", ConversationID: first.ConversationID,
+		WorkerID: "conversation-worker", WorkspaceID: "onecatch", ConversationID: first.ConversationID,
 		Runtime: "codex", Prompt: "follow up", ResumeSessionID: "session-mobile",
 	})
 	if err != nil {

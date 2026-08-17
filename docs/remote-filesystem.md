@@ -1,13 +1,13 @@
-# oneshotfs：把 Linux 项目挂载到 macOS
+# onecatchfs：把 Linux 项目挂载到 macOS
 
-`oneshotfs` 让 macOS 程序通过普通文件 API 直接访问 Linux 项目。Mac 运行 Codex 和 `oneshotfs`；Linux 只提供 OpenSSH 的 SFTP 子系统，不需要安装 Codex、Oneshot 或 FUSE。
+`onecatchfs` 让 macOS 程序通过普通文件 API 直接访问 Linux 项目。Mac 运行 Codex 和 `onecatchfs`；Linux 只提供 OpenSSH 的 SFTP 子系统，不需要安装 Codex、OneCatch 或 FUSE。
 
 ```text
 Codex / 编辑器 / Finder
           │ macOS 文件 API
         macFUSE
           │
-      oneshotfs
+      onecatchfs
           │ 一条持久 SSH/SFTP 连接
        Linux 项目目录
 ```
@@ -22,14 +22,14 @@ Mac 需要安装 [macFUSE](https://macfuse.github.io/)，Linux 需要运行带 S
 ssh -o BatchMode=yes dev-linux true
 ```
 
-`oneshotfs` 调用 Mac 自带的 `ssh`，因此会继承 `~/.ssh/config` 中的 Host 别名、IdentityFile、ProxyJump 和 host key 策略。它不会接收或保存 SSH 密码。
+`onecatchfs` 调用 Mac 自带的 `ssh`，因此会继承 `~/.ssh/config` 中的 Host 别名、IdentityFile、ProxyJump 和 host key 策略。它不会接收或保存 SSH 密码。
 
 ## 构建和挂载
 
 ```bash
-wails3 task build:oneshotfs
+wails3 task build:onecatchfs
 mkdir -p "$HOME/Volumes/linux-project"
-./bin/oneshotfs \
+./bin/onecatchfs \
   --host dev-linux \
   --root /home/dev/project \
   --mount "$HOME/Volumes/linux-project"
@@ -71,8 +71,8 @@ ssh dev-linux 'cd /home/dev/project && go test ./...'
 ```bash
 go test ./internal/remotefs ./internal/fusefs
 go test -race ./internal/remotefs ./internal/fusefs
-go vet ./internal/remotefs ./internal/fusefs ./cmd/oneshotfs
-go build -o /tmp/oneshotfs ./cmd/oneshotfs
+go vet ./internal/remotefs ./internal/fusefs ./cmd/onecatchfs
+go build -o /tmp/onecatchfs ./cmd/onecatchfs
 ```
 
 `internal/remotefs` 的集成测试会启动本机 OpenSSH `sftp-server`，验证真实协议读写和路径隔离。macFUSE 已安装时，`internal/fusefs` 还会自动执行一次真实挂载、写入和卸载；未安装时该用例会显示 `SKIP`。

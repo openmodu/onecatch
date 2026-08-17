@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"strings"
 
-	domainworkspaces "github.com/openmodu/oneshot/internal/domain/workspaces"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 )
 
 type Inspector struct {

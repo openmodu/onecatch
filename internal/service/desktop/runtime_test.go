@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	domainsettings "github.com/openmodu/oneshot/internal/domain/settings"
+	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
 )
 
 func TestRuntimeRegistryCachesVersionChecks(t *testing.T) {
@@ -17,11 +17,11 @@ func TestRuntimeRegistryCachesVersionChecks(t *testing.T) {
 	root := t.TempDir()
 	counter := filepath.Join(root, "checks")
 	binary := filepath.Join(root, "runtime")
-	script := "#!/bin/sh\nprintf 'checked\\n' >> \"$ONESHOT_RUNTIME_TEST_COUNTER\"\nprintf 'runtime 1.0\\n'\n"
+	script := "#!/bin/sh\nprintf 'checked\\n' >> \"$ONECATCH_RUNTIME_TEST_COUNTER\"\nprintf 'runtime 1.0\\n'\n"
 	if err := os.WriteFile(binary, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("ONESHOT_RUNTIME_TEST_COUNTER", counter)
+	t.Setenv("ONECATCH_RUNTIME_TEST_COUNTER", counter)
 	registry, err := NewRuntimeRegistry(root)
 	if err != nil {
 		t.Fatal(err)
