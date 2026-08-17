@@ -306,7 +306,7 @@
   }
 
   .task-workbench.inspector-open {
-    grid-template-columns: minmax(0, 1fr) var(--workbench-inspector-width, 380px);
+    grid-template-columns: minmax(var(--conversation-min-width, 620px), 1fr) var(--workbench-inspector-width, 380px);
   }
 
   .task-workbench.inspector-collapsed {
@@ -944,7 +944,7 @@
   .new-task-toolbar.workflow-mode .new-task-submit-group { margin-left: auto; }
 
   @container (max-width: 700px) {
-    .new-task-toolbar { gap: 5px; }
+    .new-task-toolbar { flex-wrap: nowrap; gap: 5px; }
     .new-task-select.executor { min-width: 110px; max-width: 150px; }
     .new-task-select.permission { min-width: 84px; max-width: 100px; }
     .new-task-select.harness { min-width: 74px; max-width: 90px; }
@@ -954,8 +954,8 @@
     .new-task-runtime { order: 5; min-width: 130px !important; max-width: 100%; margin-left: 0; }
     .new-task-submit-group { order: 6; margin-left: auto; }
     .new-task-submit-action {
-      width: 34px;
-      min-width: 34px;
+      width: 34px !important;
+      min-width: 34px !important;
       padding-inline: 0 !important;
     }
     .new-task-submit-action > span { display: none; }

@@ -309,11 +309,15 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.match(app, /inspectorDetached\s*\r?\n?\s*\? <button[^>]*inspector\.dock/, "a detached inspector offers to dock back rather than to expand into a panel that lives elsewhere");
 });
 
-test("resizing the inspector keeps the chat titlebar controls inside the conversation pane", async () => {
+test("resizing the inspector preserves the minimum usable conversation width", async () => {
   const workbench = await readFile(path.join(sourceRoot, "app", "components", "TaskWorkbench.jsx"), "utf8");
+  const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
 
-  assert.match(workbench, /const MIN_CONVERSATION_WIDTH = 180;/);
+  assert.match(workbench, /const MIN_CONVERSATION_WIDTH = 620;/);
   assert.match(workbench, /workbenchWidth - MIN_CONVERSATION_WIDTH/);
+  assert.match(workbench, /new ResizeObserver\(keepConversationUsable\)/);
+  assert.match(css, /\.task-workbench\.inspector-open\s*\{[^}]*grid-template-columns:\s*minmax\(var\(--conversation-min-width,\s*620px\),\s*1fr\)/s);
+  assert.match(css, /@container \(max-width:\s*700px\)\s*\{[\s\S]*?\.new-task-toolbar\s*\{[^}]*flex-wrap:\s*nowrap[^}]*\}[\s\S]*?\.new-task-submit-action\s*\{[^}]*min-width:\s*34px\s*!important/s);
   assert.doesNotMatch(workbench, /workbenchWidth - INSPECTOR_SNAP_DISTANCE/);
 });
 

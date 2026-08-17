@@ -2,9 +2,9 @@
 
 ## Evidence
 
-- Source visual truth: `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-320a9220-f511-4a32-989c-c3a63291e792.png`, showing the existing-session composer diverging from the new-task layout through a large empty gap and duplicated `modu_code` controls.
+- Source visual truth: `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-6bab2bc9-8924-48dd-a225-a6760678ca94.png`, showing the new-task composer squeezed by an expanded inspector until the execution control wrapped onto a second row.
 - Browser-rendered implementation: `http://127.0.0.1:4173/`
-- Browser state: light theme, 1280 × 720 viewport, paused existing Workflow conversation.
+- Browser state: light theme, 1280 × 720 viewport, new-task screen with the inspector expanded to the maximum allowed width.
 
 ## Findings
 
@@ -15,6 +15,9 @@ No actionable P0, P1, or P2 differences remain in the requested scope.
 - Existing direct-Agent session: the execution target appears once as `Agent · runtime`; a runtime-profile control only appears when the selected runtime actually supports model, reasoning, or speed configuration.
 - Duplicate removal: `modu_code` no longer renders as both the execution target and a redundant runtime-profile pill.
 - Alignment: the execution target and permission remain at the left edge of the toolbar, while runtime profile and stop/resume/continue actions remain grouped on the right without a dead middle control slot.
+- Minimum conversation width: inspector resizing stops once the conversation reaches 620 px, preventing the side panel from consuming the composer's usable control area.
+- Narrow-container behavior: at the minimum width, the toolbar switches to compact Agent, permission, runtime, and icon-only execution controls while preserving a single row.
+- Resize recovery: a `ResizeObserver` re-clamps the saved inspector width when the window or sidebar changes size, so a formerly valid inspector width cannot squeeze the conversation after a resize.
 - Execution target: every new task selects exactly one target—either a coding Agent or an orchestrated Workflow. `Agent · Codex` maps internally to the single-Agent runner without exposing `单 Agent 完成` as a second user-facing workflow choice.
 - Compact selection UI: the trigger and menu now size to their content, the redundant “Agent 与工作流二选一” heading is removed, and Agent entries no longer repeat identical explanatory text.
 - Permission control: read-only, workspace access, and full access are explicit task choices. Full access stays disabled unless both application security and the workspace allow it.
@@ -36,7 +39,7 @@ No actionable P0, P1, or P2 differences remain in the requested scope.
 - Focused frontend regressions: existing-session Agent/Workflow, permission, completed-conversation, and new-task execution-target assertions pass.
 - Runtime selection unit tests: 9 passed, including configurable-profile visibility for Codex/Claude Code and profile suppression for `modu_code`.
 - Production frontend build: passed.
-- Browser QA: paused existing Workflow conversation verified with Workflow and permission controls on the left, runtime profile and actions on the right, and no duplicated runtime control.
+- Browser QA: inspector expanded by keyboard to its maximum width; conversation measured exactly 620 px, inspector stopped at 436 px, and all five toolbar controls remained on the same vertical baseline.
 - Static diff validation: `git diff --check` passed.
 
 ## Implementation Checklist
@@ -52,5 +55,7 @@ No actionable P0, P1, or P2 differences remain in the requested scope.
 - [x] Reuse the new-task control layout in existing conversations.
 - [x] Remove the duplicated `modu_code` runtime control.
 - [x] Preserve paused/completed direct-Agent switching for follow-up turns.
+- [x] Preserve a 620 px minimum conversation width while resizing the inspector.
+- [x] Keep the new-task controls on one row at that minimum width.
 
 final result: passed
