@@ -18,7 +18,10 @@ const DEFAULT_INSPECTOR_WIDTH = 380;
 const INSPECTOR_SNAP_DISTANCE = 24;
 // Keep the conversation titlebar controls inside their pane while the inspector
 // is resized. Full-width inspection remains available through snap/maximize.
-const MIN_CONVERSATION_WIDTH = 180;
+// The composer needs this much room to keep its primary controls on one row.
+// Inspector resizing must yield before it turns the conversation into a narrow
+// utility rail; compact viewports collapse the inspector separately.
+const MIN_CONVERSATION_WIDTH = 620;
 
 // Cheap fingerprint of everything buildRunConversation reads, so a poll tick
 // that returns a fresh `runDetail` object with identical content does not force
@@ -211,6 +214,16 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
     inspectorRestoreWidthRef.current = width;
     setInspectorWidth(width);
   };
+
+  useEffect(() => {
+    const element = workbenchRef.current;
+    if (!element || typeof ResizeObserver === "undefined") return undefined;
+    const keepConversationUsable = () => setInspectorWidth((width) => clampInspectorWidth(width));
+    const observer = new ResizeObserver(keepConversationUsable);
+    observer.observe(element);
+    keepConversationUsable();
+    return () => observer.disconnect();
+  }, []);
   const closeInspector = () => {
     if (fileInspectorDirty && !globalThis.confirm(t("files.discardAllConfirm"))) return;
     if (inspectorMaximized) setInspectorWidth(clampInspectorWidth(inspectorRestoreWidthRef.current));
@@ -234,7 +247,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
     inspectorRestoreWidthRef.current = inspectorWidth;
     setInspectorMaximized(true);
   };
-  return <div ref={workbenchRef} className={`task-workbench grid min-h-0 min-w-0 flex-1 overflow-visible ${inspectorCollapsed ? "inspector-collapsed" : "inspector-open"} ${inspectorResizing ? "inspector-resizing" : ""} ${inspectorMaximized ? "inspector-maximized" : ""} ${newTaskOpen ? "new-task-active" : ""}`} style={{ "--workbench-inspector-width": `${inspectorWidth}px` }}>
+  return <div ref={workbenchRef} className={`task-workbench grid min-h-0 min-w-0 flex-1 overflow-visible ${inspectorCollapsed ? "inspector-collapsed" : "inspector-open"} ${inspectorResizing ? "inspector-resizing" : ""} ${inspectorMaximized ? "inspector-maximized" : ""} ${newTaskOpen ? "new-task-active" : ""}`} style={{ "--workbench-inspector-width": `${inspectorWidth}px`, "--conversation-min-width": `${MIN_CONVERSATION_WIDTH}px` }}>
     {!inspectorCollapsed && !inspectorMaximized && <div className="workbench-inspector-dock no-drag">
       <StatusBadge status={mode === "wails" ? "good" : "warn"} className="shrink-0">
         <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
