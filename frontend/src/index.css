@@ -306,7 +306,11 @@
   }
 
   .task-workbench.inspector-open {
-    grid-template-columns: minmax(var(--conversation-min-width, 620px), 1fr) var(--workbench-inspector-width, 380px);
+    /* JS clamps the inspector so the conversation keeps 620px whenever the
+       window can afford it. The zero grid minimum is the narrow-window safety
+       valve: both panes remain inside the viewport instead of clipping the
+       inspector's right-side actions. */
+    grid-template-columns: minmax(0, 1fr) minmax(0, var(--workbench-inspector-width, 380px));
   }
 
   .task-workbench.inspector-collapsed {

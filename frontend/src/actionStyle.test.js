@@ -302,7 +302,8 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.match(newTask, /executionMode === "queued" \? <ListPlus/);
   assert.doesNotMatch(newTask, /task-create-title|t\("task\.name"\)|<Input\b/, "the first prompt must create the task title instead of asking for a separate name");
   assert.doesNotMatch(newTask, /onCancel|new-task-cancel/, "navigation back to history replaces a modal-style cancel action");
-  assert.match(app, /taskTitleFromPrompt\(taskForm\.prompt/);
+  assert.match(app, /taskTitleFromPrompt\(taskForm\.prompt/, "demo mode keeps a deterministic title fallback");
+  assert.match(app, /TaskRunBinding\.CreateTask\(\{[^}]*title:\s*""/, "desktop task creation leaves the title empty so the selected Agent can generate it");
   assert.match(css, /\.new-task-layout\s*\{[^}]*max-width:\s*calc\(var\(--conversation-content-width\)/s, "the creation screen must share the chat column width");
   assert.match(css, /\.new-task-layout\s*\{[^}]*justify-content:\s*center/s, "the creation composer should sit in the central working area instead of hugging the window bottom");
   assert.doesNotMatch(workbench, /!newTaskOpen && !inspectorCollapsed/, "new-task mode must not hide the inspector controls");
@@ -316,9 +317,10 @@ test("resizing the inspector preserves the minimum usable conversation width", a
   const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
 
   assert.match(workbench, /const MIN_CONVERSATION_WIDTH = 620;/);
-  assert.match(workbench, /workbenchWidth - MIN_CONVERSATION_WIDTH/);
+  assert.match(workbench, /Math\.min\(MIN_CONVERSATION_WIDTH, Math\.floor\(workbenchWidth \/ 2\)\)/, "compact two-pane layouts must reserve visible space for both panes");
+  assert.match(workbench, /workbenchWidth - reservedConversationWidth/);
   assert.match(workbench, /new ResizeObserver\(keepConversationUsable\)/);
-  assert.match(css, /\.task-workbench\.inspector-open\s*\{[^}]*grid-template-columns:\s*minmax\(var\(--conversation-min-width,\s*620px\),\s*1fr\)/s);
+  assert.match(css, /\.task-workbench\.inspector-open\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*var\(--workbench-inspector-width,\s*380px\)\)/s);
   assert.match(css, /@container \(max-width:\s*700px\)\s*\{[\s\S]*?\.new-task-toolbar\s*\{[^}]*flex-wrap:\s*nowrap[^}]*\}[\s\S]*?\.new-task-submit-action\s*\{[^}]*min-width:\s*34px\s*!important/s);
   assert.doesNotMatch(workbench, /workbenchWidth - INSPECTOR_SNAP_DISTANCE/);
 });

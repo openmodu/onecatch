@@ -604,14 +604,20 @@ func (a *Service) RecoverInterruptedRuns(ctx context.Context) error {
 }
 
 func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domaintasks.Task, error) {
-	if _, err := a.GetWorkspace(ctx, strings.TrimSpace(input.WorkspaceID)); err != nil {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(input.WorkspaceID))
+	if err != nil {
 		return domaintasks.Task{}, err
 	}
-	if _, err := a.GetDefinition(ctx, strings.TrimSpace(input.WorkflowID)); err != nil {
+	definition, err := a.GetDefinition(ctx, strings.TrimSpace(input.WorkflowID))
+	if err != nil {
 		return domaintasks.Task{}, err
+	}
+	title := strings.TrimSpace(input.Title)
+	if title == "" {
+		title = a.generateTaskTitle(ctx, workspace.Path, definition, input)
 	}
 	now := time.Now().UTC()
-	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: strings.TrimSpace(input.Title), Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Sandbox: strings.TrimSpace(input.Sandbox), Harness: strings.TrimSpace(input.Harness), Model: strings.TrimSpace(input.Model), ReasoningEffort: strings.TrimSpace(input.ReasoningEffort), ServiceTier: strings.TrimSpace(input.ServiceTier), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
+	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: title, Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Sandbox: strings.TrimSpace(input.Sandbox), Harness: strings.TrimSpace(input.Harness), Model: strings.TrimSpace(input.Model), ReasoningEffort: strings.TrimSpace(input.ReasoningEffort), ServiceTier: strings.TrimSpace(input.ServiceTier), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
 	attachments, err := a.persistAttachments(ctx, task, input.AttachmentPaths)
 	if err != nil {
 		return domaintasks.Task{}, err

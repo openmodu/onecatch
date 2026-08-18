@@ -174,7 +174,12 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const runWorkerID = useMemo(() => activeWorkerID(runDetail), [runDetail]);
   const inspectorMaximumWidth = () => {
     const workbenchWidth = workbenchRef.current?.getBoundingClientRect().width || window.innerWidth;
-    return Math.max(MIN_INSPECTOR_WIDTH, workbenchWidth - MIN_CONVERSATION_WIDTH);
+    // Below the ideal two-pane width, share the available room instead of
+    // preserving a 620px conversation track that pushes the inspector's
+    // right edge outside the window. At normal sizes the conversation still
+    // keeps its full minimum width.
+    const reservedConversationWidth = Math.min(MIN_CONVERSATION_WIDTH, Math.floor(workbenchWidth / 2));
+    return Math.max(MIN_INSPECTOR_WIDTH, workbenchWidth - reservedConversationWidth);
   };
   const clampInspectorWidth = (width) => {
     return Math.max(MIN_INSPECTOR_WIDTH, Math.min(width, inspectorMaximumWidth()));
