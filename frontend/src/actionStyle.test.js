@@ -293,7 +293,8 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.match(app, /newTaskOpen=\{taskModal\}/);
   assert.match(workbench, /newTaskOpen \? <NewTaskView/);
   assert.match(newTask, /className="new-task-composer"/);
-  assert.match(newTask, /className=\{`new-task-toolbar \$\{directAgent \? "agent-mode" : "workflow-mode"\}`\}/);
+  assert.match(newTask, /className=\{`new-task-toolbar \$\{directAgent \? "agent-mode" : "workflow-mode"\} \$\{showRuntimeProfile \? "has-runtime-profile" : "no-runtime-profile"\}`\}/);
+  assert.match(css, /\.new-task-toolbar\.no-runtime-profile \.new-task-submit-group\s*\{\s*margin-left:\s*auto;/, "Agents without model controls must keep the run action aligned to the right");
   assert.doesNotMatch(newTask, /className="new-task-select execution"/, "execution mode belongs with the final submit action");
   assert.match(newTask, /className=\{`new-task-submit-group \$\{executionMode\}`\}/);
   assert.match(newTask, /DropdownMenuRadioGroup value=\{executionMode\}/);

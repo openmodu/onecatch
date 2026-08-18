@@ -953,7 +953,8 @@
     margin-left: auto;
   }
 
-  .new-task-toolbar.workflow-mode .new-task-submit-group { margin-left: auto; }
+  .new-task-toolbar.workflow-mode .new-task-submit-group,
+  .new-task-toolbar.no-runtime-profile .new-task-submit-group { margin-left: auto; }
 
   @container (max-width: 700px) {
     .new-task-toolbar { flex-wrap: nowrap; gap: 5px; }

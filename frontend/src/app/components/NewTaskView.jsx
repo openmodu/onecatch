@@ -82,7 +82,7 @@ export default function NewTaskView({
           </span>)}
         </div>}
 
-        <div className={`new-task-toolbar ${directAgent ? "agent-mode" : "workflow-mode"}`}>
+        <div className={`new-task-toolbar ${directAgent ? "agent-mode" : "workflow-mode"} ${showRuntimeProfile ? "has-runtime-profile" : "no-runtime-profile"}`}>
           <Button type="button" variant="ghost" size="icon-sm" className="new-task-attach" aria-label={t("task.chooseFiles")} title={`${t("task.chooseFiles")} · ${t("task.attachmentsLimit")}`} onClick={onChooseAttachments}><Paperclip size={16} aria-hidden="true" /></Button>
           <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} onChange={onChange} />
           <TaskPermissionSelector value={form.sandbox} allowFull={allowFullSandbox} onChange={onChange} />
