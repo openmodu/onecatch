@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { WhiteboardBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
+import { shouldSubmitComposer } from "../../composerKeyboard.js";
 import {
   applyWhiteboardChange,
   createDemoWhiteboardProposal,
@@ -224,6 +225,7 @@ export default function WhiteboardPage({ workspace, mode = "demo", runtimes = []
   const rootRef = useRef(null);
   const gestureRef = useRef(null);
   const activeRequestRef = useRef("");
+  const composingRef = useRef(false);
   const streamedChangeIDsRef = useRef(new Set());
   const liveChangeTimerRef = useRef(0);
   const objectByID = useMemo(() => new Map(board.objects.map((object) => [object.id, object])), [board.objects]);
@@ -473,7 +475,7 @@ export default function WhiteboardPage({ workspace, mode = "demo", runtimes = []
         </div>
 
         <form className="agent-composer" onSubmit={submitAgent}>
-          <textarea aria-label="给 Agent 的白板指令" value={instruction} placeholder="让 Agent 基于这个框架继续…" onChange={(event) => setInstruction(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
+          <textarea aria-label="给 Agent 的白板指令" value={instruction} placeholder="让 Agent 基于这个框架继续…" onChange={(event) => setInstruction(event.target.value)} onCompositionStart={() => { composingRef.current = true; }} onCompositionEnd={() => { window.setTimeout(() => { composingRef.current = false; }, 100); }} onKeyDown={(event) => { if (shouldSubmitComposer(event, composingRef.current)) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
           <div className="agent-composer-meta"><span>@ 框架</span><span># {selectedObjectID ? "1 个选中项" : "选中项"}</span><button type="button"><Paperclip size={14} aria-hidden="true" />附件</button><small>Enter 提交</small></div>
           <select aria-label="Agent 运行时" value={runtime} onChange={(event) => { setRuntime(event.target.value); setAgentSessionID(""); }}>{(availableRuntimes.length ? availableRuntimes : [{ id: "codex", name: "Codex" }]).map((item) => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}</select>
           <button className="agent-composer-submit" type={agentBusy ? "button" : "submit"} aria-label={agentBusy ? "停止 Agent 白板操作" : "提交给 Agent"} disabled={!agentBusy && !instruction.trim()} onClick={agentBusy ? stopAgent : undefined}>{agentBusy ? <X size={18} aria-hidden="true" /> : <Send size={18} aria-hidden="true" />}</button>

@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { ArrowUp, ChevronDown, ListPlus, Paperclip, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -9,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
+import { shouldSubmitComposer } from "../composerKeyboard.js";
 import { fileName } from "../format.js";
 import { supportsRuntimeProfile } from "../runtimeHarnesses.js";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
@@ -29,6 +31,7 @@ export default function NewTaskView({
   allowFullSandbox,
 }) {
   const { t } = useTranslation();
+  const composing = useRef(false);
   const directAgent = form.workflowId === "single_agent";
   const showRuntimeProfile = directAgent && supportsRuntimeProfile(form.harness);
   const ready = Boolean(workspaceID && form.prompt.trim() && form.workflowId && form.sandbox && (!directAgent || form.harness));
@@ -43,7 +46,7 @@ export default function NewTaskView({
     if (!event.nativeEvent.isComposing && busy !== "run") void onSubmit();
   };
   const submitFromComposer = (event) => {
-    if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && ready && busy !== "run") {
+    if (shouldSubmitComposer(event, composing.current) && ready && busy !== "run") {
       event.preventDefault();
       void onSubmit();
     }
@@ -67,6 +70,8 @@ export default function NewTaskView({
           aria-label={t("task.goal")}
           placeholder={t("task.goalPlaceholder")}
           onChange={(event) => onChange((current) => ({ ...current, prompt: event.target.value }))}
+          onCompositionStart={() => { composing.current = true; }}
+          onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }}
           onKeyDown={submitFromComposer}
         />
 
