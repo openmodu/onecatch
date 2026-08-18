@@ -11,9 +11,9 @@ import (
 
 var ErrProtocol = errors.New("workflow outcome protocol error")
 
-// ParseOutcome accepts either a single JSON object or a single json fenced
-// block. Extra prose is rejected: orchestration must never infer control flow
-// from an ambiguous model response.
+// ParseOutcome accepts a JSON object, a single JSON-fenced block, or a terminal
+// JSON object after provider prose. Content after the object is rejected:
+// orchestration must never infer control flow from the middle of a response.
 func ParseOutcome(text string) (Outcome, error) {
 	raw, err := unwrapOutcomeJSON(strings.TrimSpace(text))
 	if err != nil {
@@ -46,6 +46,12 @@ func unwrapOutcomeJSON(text string) (string, error) {
 		return "", fmt.Errorf("%w: response is empty", ErrProtocol)
 	}
 	if !strings.HasPrefix(text, "```") {
+		if strings.HasPrefix(text, "{") {
+			return text, nil
+		}
+		if terminal := terminalJSONObject(text); terminal != "" {
+			return terminal, nil
+		}
 		return text, nil
 	}
 	lines := strings.Split(text, "\n")
@@ -57,4 +63,24 @@ func unwrapOutcomeJSON(text string) (string, error) {
 		return "", fmt.Errorf("%w: malformed JSON fenced block", ErrProtocol)
 	}
 	return body, nil
+}
+
+// Some runtimes preserve a short assistant handoff before the outcome despite
+// being instructed to return only JSON. Accept that provider quirk only when a
+// complete JSON object is the terminal value. Trailing prose remains invalid,
+// so orchestration never guesses a control signal from the middle of a reply.
+func terminalJSONObject(text string) string {
+	for index := strings.LastIndex(text, "{"); index >= 0; index = strings.LastIndex(text[:index], "{") {
+		candidate := strings.TrimSpace(text[index:])
+		dec := json.NewDecoder(strings.NewReader(candidate))
+		var value map[string]any
+		if err := dec.Decode(&value); err != nil {
+			continue
+		}
+		var extra any
+		if err := dec.Decode(&extra); errors.Is(err, io.EOF) {
+			return candidate
+		}
+	}
+	return ""
 }

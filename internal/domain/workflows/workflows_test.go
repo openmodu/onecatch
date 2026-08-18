@@ -101,7 +101,8 @@ func TestParseOutcome(t *testing.T) {
 	}{
 		{name: "raw", text: `{"signal":"approved","content":"looks good"}`, want: Outcome{Signal: "approved", Content: "looks good"}},
 		{name: "fenced", text: "```json\n{\"signal\":\"approved\",\"content\":\"完成\"}\n```", want: Outcome{Signal: "approved", Content: "完成"}},
-		{name: "extra prose", text: "done\n{\"signal\":\"approved\",\"content\":\"ok\"}", wantErr: true},
+		{name: "terminal object after provider prose", text: "所有测试通过，工作区干净。\n\n{\"signal\":\"completed\",\"content\":\"提交成功\"}", want: Outcome{Signal: "completed", Content: "提交成功"}},
+		{name: "trailing prose", text: "{\"signal\":\"approved\",\"content\":\"ok\"}\ndone", wantErr: true},
 		{name: "unknown field", text: `{"signal":"approved","content":"ok","target":"$done"}`, wantErr: true},
 		{name: "missing content", text: `{"signal":"approved","content":""}`, wantErr: true},
 		{name: "multiple values", text: `{"signal":"approved","content":"ok"} {}`, wantErr: true},

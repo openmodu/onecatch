@@ -90,14 +90,18 @@ export function readableAgentMessage(value, streaming = false) {
   const text = String(value || "").trim();
   if (!text) return "";
   const fenced = text.match(/^```(?:json)?[\t ]*\r?\n([\s\S]*?)\r?\n```$/i);
-  const candidate = fenced ? fenced[1].trim() : text;
-  try {
-    const parsed = JSON.parse(candidate);
-    if (parsed && typeof parsed === "object" && typeof parsed.content === "string") {
-      return parsed.content.trim();
+  const candidates = fenced
+    ? [fenced[1].trim()]
+    : [text, ...[...text.matchAll(/\{/g)].map((match) => text.slice(match.index).trim()).reverse()];
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && typeof parsed === "object" && typeof parsed.signal === "string" && typeof parsed.content === "string") {
+        return parsed.content.trim();
+      }
+    } catch {
+      // Keep looking for a terminal outcome object after provider prose.
     }
-  } catch {
-    // Ordinary assistant prose is already the preferred display form.
   }
   if (streaming) {
     const projected = streamingOutcomeContent(value);

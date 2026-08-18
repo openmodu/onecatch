@@ -10,6 +10,13 @@ test("renders outcome JSON as readable content", () => {
   assert.equal(readableAgentMessage("普通回复"), "普通回复");
 });
 
+test("renders a terminal outcome after provider prose as readable content", () => {
+  assert.equal(
+    readableAgentMessage('所有测试通过，工作区干净。\n\n{"signal":"completed","content":"提交成功"}'),
+    "提交成功",
+  );
+});
+
 test("projects content from an incomplete streamed outcome envelope", () => {
   assert.equal(streamingOutcomeContent('{"signal":"changes_requested","cont'), "");
   assert.equal(streamingOutcomeContent('{"signal":"changes_requested","content":"正在**修'), "正在**修");
