@@ -126,6 +126,51 @@ func TestExecuteTaskRunsReviewLoopAndResumesEachStepSession(t *testing.T) {
 	}
 }
 
+func TestDirectAgentUsesPlainPromptsAndNaturalReplies(t *testing.T) {
+	definition := domainworkflows.Definition{
+		ID: "single_agent", Name: "Single Agent", EntryStepID: "execute",
+		Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
+		Steps: []domainworkflows.Step{{
+			ID: "execute", Name: "Execute", Runtime: "codex", RolePrompt: "unused", Instruction: "unused",
+			Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause},
+		}},
+	}
+	engine := &scriptedEngine{
+		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true},
+		scripts: []engineScript{
+			{runtime: agentrun.RuntimeCodex, result: success("Committed the changes.", "session-1")},
+			{runtime: agentrun.RuntimeCodex, result: success("Pushed the commit.", "session-2")},
+		},
+	}
+	usecase, store, task := setupUsecase(t, definition, engine)
+
+	completed, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil || completed.Status != domainworkflows.RunCompleted {
+		t.Fatalf("completed run = %+v, %v", completed, err)
+	}
+	if got := engine.calls[0].Prompt; got != task.Prompt {
+		t.Fatalf("direct Agent prompt = %q, want %q", got, task.Prompt)
+	}
+	if strings.Contains(engine.calls[0].Prompt, "workflow step") || strings.Contains(engine.calls[0].Prompt, "Allowed outcomes") {
+		t.Fatalf("direct Agent received workflow protocol: %s", engine.calls[0].Prompt)
+	}
+	stepRuns, err := store.Repos.Workflows.ListStepRuns(context.Background(), completed.ID)
+	if err != nil || len(stepRuns) != 1 || stepRuns[0].Signal != "completed" || stepRuns[0].Content != "Committed the changes." {
+		t.Fatalf("direct Agent step runs = %+v, %v", stepRuns, err)
+	}
+
+	continued, err := usecase.ResumeRun(context.Background(), completed.ID, "Push the commit.")
+	if err != nil || continued.Status != domainworkflows.RunCompleted {
+		t.Fatalf("continued run = %+v, %v", continued, err)
+	}
+	if got := engine.calls[1].Prompt; got != "Push the commit." {
+		t.Fatalf("continued direct Agent prompt = %q", got)
+	}
+	if engine.calls[1].ResumeSessionID != "session-1" {
+		t.Fatalf("continued session = %q", engine.calls[1].ResumeSessionID)
+	}
+}
+
 func TestResumeRunUsesSnapshotSessionAndHumanInstruction(t *testing.T) {
 	definition := oneStepPauseWorkflow()
 	engine := &scriptedEngine{

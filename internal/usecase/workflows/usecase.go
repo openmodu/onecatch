@@ -21,6 +21,7 @@ import (
 )
 
 const (
+	directAgentWorkflowID         = "single_agent"
 	PauseReasonInterrupted        = "interrupted"
 	PauseReasonRuntimeUnavailable = "runtime_unavailable"
 	PauseReasonWorkspaceLocked    = "workspace_locked"
@@ -642,7 +643,16 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			continue
 		}
 
-		outcome, protocolErr := domainworkflows.ParseOutcome(result.FinalMessage)
+		var outcome domainworkflows.Outcome
+		var protocolErr error
+		if directAgentDefinition(definition) {
+			outcome = domainworkflows.Outcome{Signal: "completed", Content: strings.TrimSpace(result.FinalMessage)}
+			if outcome.Content == "" {
+				outcome.Content = "Agent completed successfully."
+			}
+		} else {
+			outcome, protocolErr = domainworkflows.ParseOutcome(result.FinalMessage)
+		}
 		if protocolErr == nil {
 			if _, declared := step.Transitions[outcome.Signal]; !declared {
 				protocolErr = domainworkflows.ErrUnknownSignal{StepID: step.ID, Signal: outcome.Signal}
@@ -814,6 +824,9 @@ func (s *Usecase) recordGit(ctx context.Context, runID, stepID, phase, workspace
 }
 
 func composePrompt(task domaintasks.Task, definition domainworkflows.Definition, step domainworkflows.Step, run domainworkflows.Run, instruction string) string {
+	if directAgentDefinition(definition) {
+		return composeDirectAgentPrompt(task, step, run, instruction)
+	}
 	parts := []string{
 		"# OneCatch workflow step",
 		"",
@@ -857,6 +870,34 @@ func composePrompt(task domaintasks.Task, definition domainworkflows.Definition,
 		"The signal must be one of the allowed outcomes above. Do not invent a target or another signal.",
 	)
 	return strings.Join(parts, "\n") + "\n"
+}
+
+func directAgentDefinition(definition domainworkflows.Definition) bool {
+	return definition.ID == directAgentWorkflowID && len(definition.Steps) == 1
+}
+
+func composeDirectAgentPrompt(task domaintasks.Task, step domainworkflows.Step, run domainworkflows.Run, instruction string) string {
+	taskPrompt := strings.TrimSpace(task.Prompt)
+	humanInstruction := strings.TrimSpace(instruction)
+	if run.Sessions[step.ID] != "" {
+		if humanInstruction != "" {
+			return humanInstruction
+		}
+		return "Continue the task."
+	}
+
+	prompt := taskPrompt
+	if humanInstruction != "" && humanInstruction != taskPrompt {
+		prompt = strings.TrimSpace(prompt + "\n\n" + humanInstruction)
+	}
+	if len(task.Attachments) == 0 {
+		return prompt
+	}
+	parts := []string{prompt, "", "Attachments:"}
+	for _, attachment := range task.Attachments {
+		parts = append(parts, fmt.Sprintf("- %s: %s", attachment.Name, attachment.StoredPath))
+	}
+	return strings.Join(parts, "\n")
 }
 
 func (s *Usecase) claimInstructionText(ctx context.Context, runID string) (string, error) {
