@@ -1,4 +1,4 @@
-import { ChevronDown, Eye, Shield, ShieldCheck } from "lucide-react";
+import { Eye, Shield, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -33,7 +33,6 @@ export default function TaskPermissionSelector({ value, allowFull = false, onCha
       <Button type="button" variant="ghost" className={`new-task-select permission ${className}`.trim()} aria-label={t("task.permission")} title={t("task.permissionDescription")}>
         <SelectedIcon size={14} aria-hidden="true" />
         <span>{t(selected.label)}</span>
-        <ChevronDown size={14} aria-hidden="true" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent className="task-permission-menu" side="top" align="start" sideOffset={8}>

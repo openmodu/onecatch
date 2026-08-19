@@ -1,12 +1,15 @@
 import { useRef } from "react";
-import { ArrowUp, ChevronDown, ListPlus, Paperclip, X } from "lucide-react";
+import { ArrowUp, ListPlus, Mic, Paperclip, Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +35,7 @@ export default function NewTaskView({
 }) {
   const { t } = useTranslation();
   const composing = useRef(false);
+  const promptRef = useRef(null);
   const directAgent = form.workflowId === "single_agent";
   const showRuntimeProfile = directAgent && supportsRuntimeProfile(form.harness);
   const ready = Boolean(workspaceID && form.prompt.trim() && form.workflowId && form.sandbox && (!directAgent || form.harness));
@@ -63,6 +67,7 @@ export default function NewTaskView({
 
       <div className="new-task-composer">
         <Textarea
+          ref={promptRef}
           id="task-create-goal"
           className="new-task-prompt"
           autoFocus
@@ -83,7 +88,20 @@ export default function NewTaskView({
         </div>}
 
         <div className={`new-task-toolbar ${directAgent ? "agent-mode" : "workflow-mode"} ${showRuntimeProfile ? "has-runtime-profile" : "no-runtime-profile"}`}>
-          <Button type="button" variant="ghost" size="icon-sm" className="new-task-attach" aria-label={t("task.chooseFiles")} title={`${t("task.chooseFiles")} · ${t("task.attachmentsLimit")}`} onClick={onChooseAttachments}><Paperclip size={16} aria-hidden="true" /></Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="ghost" size="icon-sm" className="new-task-add" aria-label={t("task.addAndConfigure")} title={t("task.addAndConfigure")}><Plus size={18} aria-hidden="true" /></Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="task-executor-menu new-task-add-menu" side="top" align="start" sideOffset={8}>
+              <DropdownMenuItem onSelect={() => onChooseAttachments?.()}><Paperclip size={14} aria-hidden="true" /><span>{t("task.chooseFiles")}</span></DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuLabel className="task-executor-section">{t("task.executionMode")}</DropdownMenuLabel>
+              <DropdownMenuRadioGroup value={executionMode} onValueChange={(nextMode) => onChange((current) => ({ ...current, executionMode: nextMode }))}>
+                <DropdownMenuRadioItem className="task-executor-option agent" value="immediate"><ArrowUp size={14} aria-hidden="true" /><span><strong>{t("task.runNow")}</strong></span></DropdownMenuRadioItem>
+                <DropdownMenuRadioItem className="task-executor-option agent" value="queued"><ListPlus size={14} aria-hidden="true" /><span><strong>{t("task.joinQueue")}</strong></span></DropdownMenuRadioItem>
+              </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} onChange={onChange} />
           <TaskPermissionSelector value={form.sandbox} allowFull={allowFullSandbox} onChange={onChange} />
           {showRuntimeProfile && <RuntimeProfileMenu
@@ -95,22 +113,11 @@ export default function NewTaskView({
             loading={runtimeConfiguration?.loading}
             error={runtimeConfiguration?.error}
           />}
+          <Button type="button" variant="ghost" size="icon-sm" className="new-task-voice" aria-label={t("task.voiceInput")} title={t("task.voiceInput")} onClick={() => promptRef.current?.focus()}><Mic size={17} aria-hidden="true" /></Button>
           <div className={`new-task-submit-group ${executionMode}`}>
-            <Button type="submit" size="sm" className="new-task-submit-action" disabled={!ready || busy === "run"} aria-label={submitLabel} title={submitLabel}>
+            <Button type="submit" size="icon-sm" className="new-task-submit-action" disabled={!ready || busy === "run"} aria-label={submitLabel} title={submitLabel}>
               {executionMode === "queued" ? <ListPlus size={15} strokeWidth={2.2} aria-hidden="true" /> : <ArrowUp size={15} strokeWidth={2.4} aria-hidden="true" />}
-              <span>{submitLabel}</span>
             </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" size="icon-sm" className="new-task-submit-mode" aria-label={`${t("task.executionMode")}: ${executionLabel}`} title={`${t("task.executionMode")}: ${executionLabel}`}><ChevronDown size={13} aria-hidden="true" /></Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="new-task-execution-menu" side="top" align="end" sideOffset={8}>
-                <DropdownMenuRadioGroup value={executionMode} onValueChange={(nextMode) => onChange((current) => ({ ...current, executionMode: nextMode }))}>
-                  <DropdownMenuRadioItem className="new-task-execution-option" value="immediate">{t("task.runNow")}</DropdownMenuRadioItem>
-                  <DropdownMenuRadioItem className="new-task-execution-option" value="queued">{t("task.joinQueue")}</DropdownMenuRadioItem>
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
           </div>
         </div>
       </div>

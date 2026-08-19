@@ -37,6 +37,40 @@ export const demoClaudeConfiguration = {
   ],
 };
 
+const claudeAliasLabels = {
+  fable: "Fable 5",
+  opus: "Opus 5",
+  sonnet: "Sonnet 5",
+  haiku: "Haiku 4.5",
+};
+
+export function claudeModelDisplayLabel(model = {}) {
+  const value = String(model.model || model.id || "");
+  const aliasLabel = claudeAliasLabels[value.toLowerCase()];
+  if (model.alias && aliasLabel) return aliasLabel;
+  const versioned = value.toLowerCase().match(/^claude-([a-z]+)-(\d+)(?:[-.](\d+))?/);
+  if (versioned) {
+    const family = `${versioned[1][0].toUpperCase()}${versioned[1].slice(1)}`;
+    return `${family} ${versioned[2]}${versioned[3] ? `.${versioned[3]}` : ""}`;
+  }
+  return model.displayName || value;
+}
+
+export function groupedClaudeModels(models = []) {
+  const aliases = models.filter((model) => model.alias);
+  return aliases.length
+    ? { primary: aliases, more: models.filter((model) => !model.alias) }
+    : { primary: models, more: [] };
+}
+
+export function defaultClaudeModel(models = [], configured = "") {
+  return configured
+    || models.find((model) => model.alias && model.model === "opus")?.model
+    || models.find((model) => model.alias)?.model
+    || models[0]?.model
+    || "";
+}
+
 export function selectedCodexModel(configuration, selected = "") {
   const models = configuration?.models || [];
   const target = selected || configuration?.model || "";
