@@ -1,0 +1,61 @@
+---
+// A faithful view of the workbench, built from the application tokens and
+// its demo dataset rather than embedded as a raster screenshot: it stays sharp
+// at any density, follows the reader's theme instead of pinning one theme's
+// screenshot onto both, and cannot drift from the palette it is drawn with.
+---
+
+<div class="band">
+<div class="workbench-scroll">
+  <div class="workbench">
+    <div class="wb-rail">
+      <div class="wb-brand"><span class="glyph" aria-hidden="true">1</span>OneCatch</div>
+      <p class="wb-label">项目</p>
+      <div class="wb-row project">onecatch</div>
+      <div class="wb-row task">补齐任务页 Git 工作流</div>
+      <div class="wb-row task on">优化本地 Agent 调度流程</div>
+    </div>
+
+    <div class="wb-main">
+      <div class="wb-bar">onecatch / <strong>优化本地 Agent 调度流程</strong><span class="pill">等待介入</span></div>
+      <div class="wb-thread">
+        <div class="wb-said">梳理并改进工作流执行、暂停与恢复体验。</div>
+        <div class="wb-agent">我先检查中断和恢复的现有实现，再补齐缺失的状态反馈。</div>
+        <div class="wb-quiet">运行了 1 个工具 ›</div>
+        <div class="wb-card">
+          <span><span class="path">internal/usecase/workflows/usecase.go</span><span class="kindline">file_change · 已编辑</span></span>
+          <span class="wb-quiet">›</span>
+        </div>
+        <div class="wb-agent">我会先运行相关测试，再给出审查结论。</div>
+      </div>
+      <div class="wb-composer">
+        <span>补充指令并恢复运行…</span>
+        <span class="wb-chip">实现与审查 Loop</span>
+        <span class="wb-chip">只读</span>
+        <span class="wb-go">恢复运行</span>
+      </div>
+    </div>
+
+    <div class="wb-panel">
+      <div class="wb-tabs"><span class="on">状态</span><span>文件</span><span>Git</span><span>事件</span></div>
+      <div class="wb-metrics">
+        <div><span>输入总 Token</span><strong>18.2k</strong></div>
+        <div><span>输出总 Token</span><strong>1.4k</strong></div>
+        <div><span>Agent 耗时</span><strong>42s</strong></div>
+        <div><span>执行次数</span><strong>2</strong></div>
+      </div>
+      <div class="wb-steps">
+        <p class="wb-label">工作流</p>
+        <div class="wb-step"><i>1</i><span><b>实现</b><small>codex · 成功</small></span></div>
+        <div class="wb-step on"><i>2</i><span><b>审查</b><small>claude · 成功</small></span></div>
+      </div>
+      <div>
+        <p class="wb-label">恢复会话</p>
+        <div class="wb-resume">claude --resume 45db32aa</div>
+      </div>
+      <p class="wb-alert">暂停：工作流请求人工介入</p>
+    </div>
+  </div>
+  </div>
+  <p class="caption">工作台、对话、状态三栏同屏。状态栏可以整块分离成独立窗口，放到副屏上。</p>
+</div>

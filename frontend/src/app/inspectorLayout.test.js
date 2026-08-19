@@ -28,11 +28,10 @@ test("parses only a valid versioned inspector preference", () => {
   assert.equal(parseInspectorPreference(""), null);
 });
 
-test("saved user preference overrides the compact viewport default", () => {
-  assert.equal(resolveInspectorCollapsed(null, true), true);
-  assert.equal(resolveInspectorCollapsed(null, false), false);
-  assert.equal(resolveInspectorCollapsed(false, true), false);
-  assert.equal(resolveInspectorCollapsed(true, false), true);
+test("the inspector starts collapsed and respects an explicit user preference", () => {
+  assert.equal(resolveInspectorCollapsed(null), true);
+  assert.equal(resolveInspectorCollapsed(false), false);
+  assert.equal(resolveInspectorCollapsed(true), true);
 });
 
 test("reads and writes the inspector preference without depending on browser storage", () => {
