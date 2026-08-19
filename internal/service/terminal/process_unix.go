@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -55,19 +54,16 @@ func startProcess(input CreateInput) (terminalProcess, string, error) {
 func terminalEnvironment(environment []string) []string {
 	filtered := environment[:0]
 	for _, value := range environment {
-		if strings.HasPrefix(value, "TERM=") || strings.HasPrefix(value, "COLORTERM=") {
+		if strings.HasPrefix(value, "TERM=") || strings.HasPrefix(value, "COLORTERM=") || strings.HasPrefix(value, "TERM_PROGRAM=") {
 			continue
 		}
 		filtered = append(filtered, value)
 	}
-	terminalType := "xterm-256color"
-	if runtime.GOOS == "darwin" {
-		// termenv skips OSC colour probes for screen/tmux terminals. That avoids
-		// terminal replies being echoed into the shell when a nested CLI exits
-		// quickly inside WKWebView's PTY bridge, while preserving 256 colours.
-		terminalType = "screen-256color"
-	}
-	return append(filtered, "TERM="+terminalType, "COLORTERM=truecolor")
+	// Bubble Tea v2 queries synchronized-output mode for most TERM_PROGRAM
+	// values. WKWebView's xterm bridge can acknowledge that query but fail to
+	// flush the first full-screen frame, so use its conservative Apple Terminal
+	// path while retaining truthful xterm capabilities through TERM.
+	return append(filtered, "TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=Apple_Terminal")
 }
 
 func (p *unixProcess) Read(data []byte) (int, error) {

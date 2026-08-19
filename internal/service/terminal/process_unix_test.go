@@ -6,25 +6,19 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"runtime"
 	"strings"
 	"testing"
 	"time"
 )
 
-func TestTerminalEnvironmentAvoidsMacOSTerminalProbeReplies(t *testing.T) {
-	environment := terminalEnvironment([]string{"PATH=/usr/bin", "TERM=old", "COLORTERM=old"})
-	expectedTerm := "TERM=xterm-256color"
-	if runtime.GOOS == "darwin" {
-		expectedTerm = "TERM=screen-256color"
+func TestTerminalEnvironmentDescribesEmbeddedXTerm(t *testing.T) {
+	environment := terminalEnvironment([]string{"PATH=/usr/bin", "TERM=old", "COLORTERM=old", "TERM_PROGRAM=old"})
+	for _, expected := range []string{"TERM=xterm-256color", "COLORTERM=truecolor", "TERM_PROGRAM=Apple_Terminal"} {
+		if !containsEnvironmentValue(environment, expected) {
+			t.Fatalf("environment = %q, expected %q", environment, expected)
+		}
 	}
-	if !containsEnvironmentValue(environment, expectedTerm) {
-		t.Fatalf("environment = %q, expected %q", environment, expectedTerm)
-	}
-	if !containsEnvironmentValue(environment, "COLORTERM=truecolor") {
-		t.Fatalf("environment = %q, expected truecolor", environment)
-	}
-	for _, stale := range []string{"TERM=old", "COLORTERM=old"} {
+	for _, stale := range []string{"TERM=old", "COLORTERM=old", "TERM_PROGRAM=old"} {
 		if containsEnvironmentValue(environment, stale) {
 			t.Fatalf("environment retained stale value %q: %q", stale, environment)
 		}
