@@ -1,5 +1,4 @@
 export const INSPECTOR_LAYOUT_STORAGE_KEY = "onecatch.layout.task-workbench.v1";
-export const INSPECTOR_COMPACT_QUERY = "(max-width: 1100px)";
 
 function parseLayout(value) {
   if (!value) return {};
@@ -59,8 +58,9 @@ export function writeInspectorDetached(storage, inspectorDetached) {
   return writeLayout(storage, { inspectorDetached });
 }
 
-// A saved user choice always wins. The compact breakpoint is only the default
-// for installations where the user has not made an explicit choice yet.
-export function resolveInspectorCollapsed(preference, compactViewport) {
-  return typeof preference === "boolean" ? preference : compactViewport;
+// The status panel starts closed until the user explicitly opens it. Compact
+// viewport transitions are handled separately so they can close both side
+// panels once without preventing a deliberate reopen at the minimum width.
+export function resolveInspectorCollapsed(preference) {
+  return typeof preference === "boolean" ? preference : true;
 }

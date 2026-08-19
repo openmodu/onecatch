@@ -28,6 +28,7 @@ import {
 } from "../sidebarLayout.js";
 import { SIDEBAR_TASK_PREVIEW_LIMIT, buildSidebarTaskEntries, visibleSidebarTaskEntries } from "../sidebarNavigation.js";
 import { desktopPlatform, primaryShortcutLabel } from "../platform.js";
+import { collapsePanelAtCompact } from "../responsiveLayout.js";
 
 const CommandPalette = lazy(() => import("./CommandPalette.jsx"));
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "onecatch.sidebar.collapsed";
@@ -98,12 +99,13 @@ function Sidebar({
   onSelectQueued,
   onGoView,
   onCollapsedChange,
+  compactViewport,
 }) {
   const { t, i18n } = useTranslation();
   const [width, setWidth] = useState(initialSidebarWidth);
   const [resizing, setResizing] = useState(false);
   const [appearance, setAppearance] = useState(readAppearance);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(initialSidebarCollapsed);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => collapsePanelAtCompact(initialSidebarCollapsed(), compactViewport));
   const [sidebarPeeked, setSidebarPeeked] = useState(false);
   const [expandedWorkspaceID, setExpandedWorkspaceID] = useState(workspaceID);
   const [taskListExpanded, setTaskListExpanded] = useState(false);
@@ -181,6 +183,12 @@ function Sidebar({
   useEffect(() => {
     onCollapsedChange?.(sidebarCollapsed);
   }, [onCollapsedChange, sidebarCollapsed]);
+
+  useEffect(() => {
+    if (!compactViewport) return;
+    setSidebarPeeked(false);
+    setSidebarCollapsed((current) => collapsePanelAtCompact(current, compactViewport));
+  }, [compactViewport]);
 
   useEffect(() => {
     if (!pendingSearchTask || pendingSearchTask.workspace.id !== workspaceID) return;

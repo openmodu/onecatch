@@ -36,9 +36,10 @@ import LockScreen from "./components/LockScreen.jsx";
 import { buildLockSignal, completionEdge, LOCK_PHASE } from "./lockSignal.js";
 import { notifyStandby } from "./standbyNotify.js";
 import { settingsChangedEvent, workflowsChangedEvent } from "./AuxiliaryWindow.jsx";
-import { INSPECTOR_COMPACT_QUERY, readInspectorDetached, readInspectorPreference, resolveInspectorCollapsed, writeInspectorDetached, writeInspectorPreference } from "./inspectorLayout.js";
+import { readInspectorDetached, readInspectorPreference, resolveInspectorCollapsed, writeInspectorDetached, writeInspectorPreference } from "./inspectorLayout.js";
 import { buildInspectorContext, inspectorContextSignature, INSPECTOR_ACTION_EVENT, INSPECTOR_CONTEXT_EVENT, INSPECTOR_REQUEST_EVENT, INSPECTOR_WINDOW_EVENT } from "./inspectorContext.js";
 import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeOptions.js";
+import { collapsePanelAtCompact, COMPACT_LAYOUT_QUERY } from "./responsiveLayout.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
@@ -85,7 +86,7 @@ function initialInspectorPreference() {
 }
 
 function initialCompactViewport() {
-  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(INSPECTOR_COMPACT_QUERY).matches;
+  return typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia(COMPACT_LAYOUT_QUERY).matches;
 }
 
 // Read before the first paint so a restored second-display layout never flashes
@@ -150,7 +151,7 @@ function App() {
   const [workerForm, setWorkerForm] = useState({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
   const [settings, setSettings] = useState(demoSettings);
   const [appDialog, setAppDialog] = useState(null);
-  const [inspectorPreference, setInspectorPreference] = useState(initialInspectorPreference);
+  const [inspectorPreference, setInspectorPreference] = useState(() => collapsePanelAtCompact(initialInspectorPreference(), initialCompactViewport()));
   const [inspectorDetached, setInspectorDetached] = useState(initialInspectorDetached);
   const [compactViewport, setCompactViewport] = useState(initialCompactViewport);
   const [terminalCommand, setTerminalCommand] = useState({ version: 0, command: "" });
@@ -186,13 +187,16 @@ function App() {
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID);
   // A detached inspector leaves no dock behind, so the workbench sees the same
   // "no panel here" layout it uses for a deliberate collapse.
-  const inspectorCollapsed = inspectorDetached || resolveInspectorCollapsed(inspectorPreference, compactViewport);
+  const inspectorCollapsed = inspectorDetached || resolveInspectorCollapsed(inspectorPreference);
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
-    const media = window.matchMedia(INSPECTOR_COMPACT_QUERY);
-    const update = (event) => setCompactViewport(event.matches);
-    setCompactViewport(media.matches);
+    const media = window.matchMedia(COMPACT_LAYOUT_QUERY);
+    const update = (event) => {
+      setCompactViewport(event.matches);
+      setInspectorPreference((current) => collapsePanelAtCompact(current, event.matches));
+    };
+    update(media);
     if (typeof media.addEventListener === "function") {
       media.addEventListener("change", update);
       return () => media.removeEventListener("change", update);
@@ -203,12 +207,12 @@ function App() {
 
   const toggleInspector = useCallback(() => {
     setInspectorPreference((current) => {
-      const collapsed = resolveInspectorCollapsed(current, compactViewport);
+      const collapsed = resolveInspectorCollapsed(current);
       const next = !collapsed;
       writeInspectorPreference(window.localStorage, next);
       return next;
     });
-  }, [compactViewport]);
+  }, []);
 
   // Both toggles move optimistically so the layout responds immediately; the
   // native window then confirms (or corrects) the state on INSPECTOR_WINDOW_EVENT.
@@ -1173,6 +1177,7 @@ function App() {
         onSelectQueued={selectQueued}
         onGoView={goView}
         onCollapsedChange={setSidebarCollapsed}
+        compactViewport={compactViewport}
       />
 
       {whiteboardOpen ? <WhiteboardPage key={workspaceID || "demo"} workspace={selectedWorkspace} mode={mode} runtimes={runtimes} onClose={() => goView("tasks")} /> : <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
