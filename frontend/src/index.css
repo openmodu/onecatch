@@ -549,16 +549,22 @@
 
   .workbench-inspector-tabs {
     display: inline-flex;
-    flex: 0 0 auto;
+    min-width: 0;
+    flex: 1 1 auto;
     align-items: center;
     gap: 2px;
+    overflow-x: auto;
     padding: 3px;
     border-radius: 8px;
     background: color-mix(in oklab, var(--muted) 72%, transparent);
+    scrollbar-width: none;
   }
+
+  .workbench-inspector-tabs::-webkit-scrollbar { display: none; }
 
   .workbench-inspector-tabs button {
     display: grid;
+    flex: 0 0 auto;
     place-items: center;
     border: 0;
     background: transparent;
@@ -591,6 +597,7 @@
 
   .workbench-inspector-title {
     min-width: 0;
+    flex: 0 1 auto;
     overflow: hidden;
     color: var(--foreground);
     font-size: 12px;
