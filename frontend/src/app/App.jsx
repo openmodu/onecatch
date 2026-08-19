@@ -1190,7 +1190,7 @@ function App() {
             <span className="max-w-40 shrink truncate text-xs text-muted-foreground">{location.label}</span>
             <span className="shrink-0 text-muted-foreground/60" aria-hidden="true">/</span>
             <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{selectedTask.title}</strong>
-            <StatusPill status={selectedTaskStatus} active={runDetail?.active} />
+            {selectedTask.workflowId && selectedTask.workflowId !== directAgentWorkflowID && <StatusPill status={selectedTaskStatus} active={runDetail?.active} />}
           </span> : <span className="flex min-w-0 items-baseline gap-2" title={commandText}>
             <strong className="shrink-0 text-[13px] font-semibold text-foreground">{location.label}</strong>
             {location.path && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{location.path}</span>}

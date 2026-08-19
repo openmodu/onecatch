@@ -29,10 +29,20 @@ import {
 import { SIDEBAR_TASK_PREVIEW_LIMIT, buildSidebarTaskEntries, visibleSidebarTaskEntries } from "../sidebarNavigation.js";
 import { desktopPlatform, primaryShortcutLabel } from "../platform.js";
 import { collapsePanelAtCompact } from "../responsiveLayout.js";
+import { directAgentWorkflowID } from "../runtimeHarnesses.js";
+import RuntimeHarnessIcon from "./RuntimeHarnessIcon.jsx";
 
 const CommandPalette = lazy(() => import("./CommandPalette.jsx"));
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "onecatch.sidebar.collapsed";
 const SIDEBAR_PEEK_WIDTH = 216;
+
+function TaskExecutionIcon({ task, workflowID = "" }) {
+  const selectedWorkflowID = task?.workflowId || workflowID;
+  if (selectedWorkflowID === directAgentWorkflowID || (!selectedWorkflowID && task?.harness)) {
+    return <RuntimeHarnessIcon harness={task?.harness || "codex"} size={14} className="project-task-runtime-icon" aria-hidden="true" />;
+  }
+  return <Workflow size={14} className="project-task-runtime-icon" aria-hidden="true" />;
+}
 
 function initialSidebarWidth() {
   if (typeof window === "undefined") return SIDEBAR_DEFAULT_WIDTH;
@@ -354,7 +364,7 @@ function Sidebar({
   const renderPinnedTask = (task) => {
     const selectedRun = runs.find((run) => run.id === selectedRunID);
     const selected = selectedQueuedTaskID === task.id || selectedRun?.task?.id === task.id;
-    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-2 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><span className={`block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
+    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><TaskExecutionIcon task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
   };
 
   const renderWorkspace = (workspace) => {
@@ -391,13 +401,13 @@ function Sidebar({
             if (entry.kind === "queued" || entry.kind === "pinned") {
               const task = entry.item;
               const selected = selectedQueuedTaskID === task.id;
-              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openQueuedTask(task)}><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
+              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openQueuedTask(task)}><TaskExecutionIcon task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
             }
             const run = entry.item;
             const task = run.task;
             const title = run.task?.title || run.id;
             const selected = selectedRunID === run.id;
-            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openRun(run)}><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{title}</span></button>{task && renderTaskActions(task)}</div>;
+            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openRun(run)}>{task && <TaskExecutionIcon task={task} workflowID={run.workflowId} />}<span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{title}</span></button>{task && renderTaskActions(task)}</div>;
           })}
           {!taskEntries.length && !runLoading && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
           {runLoading && !taskEntries.length && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{t("task.loading")}</div>}
@@ -410,7 +420,7 @@ function Sidebar({
   };
 
   const widthBounds = typeof window === "undefined" ? sidebarWidthBounds() : sidebarWidthBounds(window.innerWidth);
-  return <div className={`sidebar-shell relative z-30 h-full min-h-0 shrink-0 ${sidebarCollapsed ? "is-collapsed" : ""}`} style={{ width: sidebarCollapsed ? 0 : `${width}px` }}>
+  return <div className={`sidebar-shell relative z-50 h-full min-h-0 shrink-0 ${sidebarCollapsed ? "is-collapsed" : ""}`} style={{ width: sidebarCollapsed ? 0 : `${width}px` }}>
     <button ref={sidebarToggleRef} type="button" className={`sidebar-visibility-toggle no-drag fixed top-3 left-[92px] z-50 grid place-items-center text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none ${sidebarCollapsed ? "text-foreground" : ""}`} aria-label={sidebarCollapsed ? t("sidebar.expandPanel") : t("sidebar.collapsePanel")} aria-expanded={!sidebarCollapsed} aria-controls="app-sidebar-content" title={sidebarCollapsed ? t("sidebar.expandPanel") : t("sidebar.collapsePanel")} onClick={toggleSidebar} onPointerEnter={revealSidebar} onPointerLeave={releaseSidebarPeekBlock} onFocus={revealSidebar} onBlur={releaseSidebarPeekBlock}>{sidebarCollapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}</button>
     <aside id="app-sidebar-content" data-visible={sidebarVisible ? "true" : "false"} className={`sidebar z-30 flex min-h-0 shrink-0 select-none flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)] ${resizing ? "resizing" : ""} ${sidebarCollapsed ? "absolute top-0 left-0 h-[min(560px,calc(100vh-16px))] transition-[opacity,transform] duration-150" : "relative h-full"} ${sidebarVisible ? "translate-x-0 opacity-100" : "pointer-events-none invisible -translate-x-2 opacity-0"}`} style={{ width: `${sidebarDisplayWidth}px` }} aria-label={t("app.windowAria")} aria-hidden={!sidebarVisible} onPointerEnter={revealSidebar} onPointerLeave={scheduleSidebarHide}>
     {/* Traffic-light gutter. The window hides its titlebar and insets the

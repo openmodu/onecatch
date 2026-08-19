@@ -104,15 +104,16 @@ function PermissionTimelineItem({ entry, busy, onDecision, time }) {
   </section>;
 }
 
-function FileChangeGroup({ entries }) {
+function FileChangeGroup({ entries, onReview }) {
   const { t } = useTranslation();
-  const label = entries.length === 1
-    ? t("timeline.editedFile", { name: fileName(entries[0].text) })
-    : t("timeline.editedFiles", { count: entries.length });
-  return <details className="conversation-file-changes">
+  const paths = [...new Set(entries.flatMap((entry) => String(entry.text || "").split("\n")).map((path) => path.trim()).filter(Boolean))];
+  const label = paths.length === 1
+    ? t("timeline.editedFile", { name: fileName(paths[0]) })
+    : t("timeline.editedFiles", { count: paths.length });
+  return <div className="conversation-file-changes-card"><details className="conversation-file-changes">
     <summary aria-label={label}><span className="conversation-file-changes-summary"><span className="conversation-file-changes-icon"><FilePenLine aria-hidden="true" /></span><span><strong>{label}</strong><small>{t("timeline.fileChange")}</small></span><span className="conversation-file-changes-caret"><ChevronRight className="closed" /><ChevronDown className="opened" /></span></span></summary>
-    <div className="conversation-file-changes-list">{entries.map((entry, index) => <div key={entry.id || `${entry.text}-${index}`}><FilePenLine aria-hidden="true" /><span title={entry.text}>{entry.text}</span></div>)}</div>
-  </details>;
+    <div className="conversation-file-changes-list">{paths.map((path) => <div key={path}><FilePenLine aria-hidden="true" /><span title={path}>{path}</span></div>)}</div>
+  </details>{onReview && <Action size="compact" tone="muted" className="conversation-review-action" onClick={onReview}>{t("review.open")}</Action>}</div>;
 }
 
 function ProcessGroup({ entries, active, round, permissionBusy, onPermissionDecision }) {
@@ -141,7 +142,7 @@ function ProcessGroup({ entries, active, round, permissionBusy, onPermissionDeci
 // One round of the transcript. `buildRunConversation` hands back a stable object
 // reference for any round whose step has finished, so memo() short-circuits every
 // finished round on a stream/poll frame — only the live round is reconciled.
-const ConversationRound = memo(function ConversationRound({ round, active, permissionBusy, onPermissionDecision }) {
+const ConversationRound = memo(function ConversationRound({ round, active, permissionBusy, onPermissionDecision, onReview }) {
   const { t } = useTranslation();
   const timeLabel = createTimeLabeler();
   const blocks = groupRoundItems(round.items);
@@ -153,7 +154,7 @@ const ConversationRound = memo(function ConversationRound({ round, active, permi
           const entry = block.item;
           return <div className={`conversation-agent-message ${entry.tone}`} key={block.id}><MessageBody content={entry.text} streaming={entry.streaming} /><MessageActions at={entry.at || round.finishedAt || round.startedAt} content={entry.text} /></div>;
         }
-        if (block.type === "files") return <FileChangeGroup entries={block.items} key={block.id} />;
+        if (block.type === "files") return <FileChangeGroup entries={block.items} onReview={onReview} key={block.id} />;
         return <ProcessGroup entries={block.items} active={Boolean(active) && lastItem === block.items[block.items.length - 1]} round={round} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} key={block.id} />;
       })}
       <span className="sr-only">{round.runtime} · {t("timeline.round", { count: round.round })} · <time>{timeLabel(round.finishedAt || round.startedAt)}</time></span>
@@ -164,7 +165,7 @@ const ConversationRound = memo(function ConversationRound({ round, active, permi
 // The timeline can grow to hundreds of rows; poll-driven parent re-renders must
 // not rebuild it unless `items`/`active` actually change, hence memo() paired
 // with the memoized conversation array the parent feeds in.
-function ConversationTimeline({ items, active, permissionBusy = "", onPermissionDecision }) {
+function ConversationTimeline({ items, active, permissionBusy = "", onPermissionDecision, onReview }) {
   const { t } = useTranslation();
   const rounds = items.filter((item) => item.type === "round");
   const lastRound = rounds[rounds.length - 1];
@@ -172,7 +173,7 @@ function ConversationTimeline({ items, active, permissionBusy = "", onPermission
     <div className="conversation-list">
       {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
         <div className="conversation-bubble"><MessageBody content={item.text} /></div><MessageActions at={item.at} content={item.text} align="end" />
-      </div> : <ConversationRound key={item.id} round={item} active={Boolean(active) && item === lastRound} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />)}
+      </div> : <ConversationRound key={item.id} round={item} active={Boolean(active) && item === lastRound} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={onReview} />)}
       {!items.length && <p className="muted-copy">{t("timeline.empty")}</p>}
     </div>
   </div>;

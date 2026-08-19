@@ -10,6 +10,7 @@ import InspectorPanel from "./inspectors/InspectorPanel.jsx";
 import NewTaskView from "./NewTaskView.jsx";
 import { activeWorkerID, sortQueuedTasks } from "../inspectorContext.js";
 import { errorMessage } from "../format.js";
+import { preferredReviewInspectorWidth } from "../reviewLayout.js";
 
 const TerminalDock = lazy(() => import("./TerminalDock.jsx"));
 
@@ -53,6 +54,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const [terminalMounted, setTerminalMounted] = useState(false);
   const [continuationRuntimeProfile, setContinuationRuntimeProfile] = useState(null);
   const [continuationRuntimeConfiguration, setContinuationRuntimeConfiguration] = useState({ loading: false, data: null, error: "" });
+  const [reviewRequest, setReviewRequest] = useState(0);
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
   const inspectorResizeRef = useRef(null);
@@ -184,6 +186,13 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const clampInspectorWidth = (width) => {
     return Math.max(MIN_INSPECTOR_WIDTH, Math.min(width, inspectorMaximumWidth()));
   };
+  const openReview = () => {
+    const workbenchWidth = workbenchRef.current?.getBoundingClientRect().width || window.innerWidth;
+    setInspectorMaximized(false);
+    setInspectorWidth(clampInspectorWidth(preferredReviewInspectorWidth(workbenchWidth)));
+    if (inspectorCollapsed) onToggleInspector();
+    setReviewRequest((value) => value + 1);
+  };
   const beginInspectorResize = (event) => {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -276,7 +285,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
         allowFullSandbox={allowFullSandbox}
       /> : selectedTask ? <>
         <div className="conversation-scroll min-h-0 min-w-0 flex-1 select-text overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>
-          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
+          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={openReview} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
         {runDetail && <Composer
           runStatus={runStatus}
@@ -330,6 +339,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0}
       draft={newTaskOpen}
       runWorkerID={runWorkerID}
+      reviewRequest={reviewRequest}
       notify={notify}
       onOpenTerminal={openTerminal}
       onDirtyChange={setFileInspectorDirty}

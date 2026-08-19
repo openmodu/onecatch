@@ -240,8 +240,7 @@ const TerminalDock = forwardRef(function TerminalDock({ mode, workspace, prefere
   const closeSearch = () => { runtimeRef.current.get(focusedRef.current || activeRef.current)?.search.clearDecorations(); setSearchOpen(false); focusActive(); };
   const openLink = useCallback((uri) => { try { const url = new URL(uri); if (url.protocol === "http:" || url.protocol === "https:") void Browser.OpenURL(url); } catch { /* Ignore malformed terminal output. */ } }, []);
   const activatePane = useCallback((id) => { focusedRef.current = id; setFocusedID(id); }, []);
-  const resizeSplit = useCallback((splitID, ratio) => {
-    const rootID = activeRef.current;
+  const resizeSplit = useCallback((rootID, splitID, ratio) => {
     setTabs((items) => items.map((item) => item.id === rootID ? { ...item, splitLayout: updateSplitRatio(item.splitLayout || paneNode(rootID), splitID, ratio) } : item));
   }, []);
 
@@ -280,11 +279,18 @@ const TerminalDock = forwardRef(function TerminalDock({ mode, workspace, prefere
     </header>
     <div className="terminal-viewport" aria-hidden={!open}>
       <div className="terminal-pane-layout">
-        <TerminalSplitLayout node={activeLayout} onRatioChange={resizeSplit} resizeLabel={t("terminal.resizeSplit")} renderPane={(paneID) => {
-          const pane = tabs.find((item) => item.id === paneID);
-          if (!pane) return null;
-          return <TerminalPane key={pane.id} tabID={pane.id} active theme={config.theme} onReady={registerRuntime} onData={writeTab} onResize={resizePTY} onCopy={copy} onSearch={openSearch} onOpenLink={openLink} onActivate={activatePane} onClose={closePane} closeLabel={t("terminal.closePane")} canClose={hasSplit} />;
-        }} />
+        {rootTabs.map((rootTab) => {
+          const layout = rootTab.splitLayout || paneNode(rootTab.id);
+          const layoutHasSplit = paneIDs(layout).length > 1;
+          const active = rootTab.id === activeID;
+          return <div className={`terminal-tab-layout ${active ? "active" : ""}`} key={rootTab.id} aria-hidden={!active}>
+            <TerminalSplitLayout node={layout} onRatioChange={(splitID, ratio) => resizeSplit(rootTab.id, splitID, ratio)} resizeLabel={t("terminal.resizeSplit")} renderPane={(paneID) => {
+              const pane = tabs.find((item) => item.id === paneID);
+              if (!pane) return null;
+              return <TerminalPane key={pane.id} tabID={pane.id} active={active} theme={config.theme} onReady={registerRuntime} onData={writeTab} onResize={resizePTY} onCopy={copy} onSearch={openSearch} onOpenLink={openLink} onActivate={activatePane} onClose={closePane} closeLabel={t("terminal.closePane")} canClose={layoutHasSplit} />;
+            }} />
+          </div>;
+        })}
       </div>
       {!tabs.length && <button type="button" className="terminal-empty" onClick={() => void createTab()}><Plus size={14} aria-hidden="true" />{t("terminal.start")}</button>}
       {searchOpen && <form className="terminal-search" onSubmit={(event) => { event.preventDefault(); search(); }}><Search size={13} aria-hidden="true" /><input className="terminal-search-input" value={searchQuery} placeholder={t("terminal.searchPlaceholder")} aria-label={t("terminal.search")} onChange={(event) => { setSearchQuery(event.target.value); search("next", event.target.value); }} onKeyDown={(event) => { if (event.key === "Escape") { event.preventDefault(); closeSearch(); } }} /><span className={searchFound ? "" : "not-found"}>{searchQuery && !searchFound ? t("terminal.noMatches") : ""}</span><button type="button" aria-label={t("terminal.previousMatch")} onClick={() => search("previous")}><ChevronLeft size={13} /></button><button type="button" aria-label={t("terminal.nextMatch")} onClick={() => search("next")}><ChevronRight size={13} /></button><button type="button" aria-label={t("common.close")} onClick={closeSearch}><X size={13} /></button></form>}

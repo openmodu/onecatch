@@ -12,6 +12,7 @@ export default function TerminalPane({ tabID, active, theme, onReady, onData, on
   const hostRef = useRef(null);
   const mountRef = useRef(null);
   const terminalRef = useRef(null);
+  const fitRef = useRef(null);
   const activeRef = useRef(active);
   activeRef.current = active;
 
@@ -28,6 +29,7 @@ export default function TerminalPane({ tabID, active, theme, onReady, onData, on
     terminal.loadAddon(links);
     terminal.open(mount);
     terminalRef.current = terminal;
+    fitRef.current = fit;
     const input = terminal.onData((data) => onData(tabID, data));
     terminal.attachCustomKeyEventHandler((event) => {
       if (event.type !== "keydown") return true;
@@ -175,6 +177,7 @@ export default function TerminalPane({ tabID, active, theme, onReady, onData, on
       terminalDocument.defaultView?.removeEventListener("blur", cancelStuckSelection);
       terminal.dispose();
       terminalRef.current = null;
+      fitRef.current = null;
       onReady(tabID, null);
     };
   }, [onActivate, onCopy, onData, onOpenLink, onReady, onResize, onSearch, tabID]);
@@ -182,6 +185,27 @@ export default function TerminalPane({ tabID, active, theme, onReady, onData, on
   useEffect(() => {
     if (terminalRef.current) terminalRef.current.options.theme = resolveTerminalTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!active) return undefined;
+    let secondFrame = 0;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        const host = hostRef.current;
+        const terminal = terminalRef.current;
+        const fit = fitRef.current;
+        if (!host || !terminal || !fit || host.offsetWidth <= 0 || host.offsetHeight <= 0) return;
+        fit.fit();
+        terminal.refresh(0, terminal.rows - 1);
+        terminal.focus();
+        onResize(tabID, terminal.rows, terminal.cols);
+      });
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      cancelAnimationFrame(secondFrame);
+    };
+  }, [active, onResize, tabID]);
 
   return <div className={`terminal-host ${active ? "active" : ""}`} ref={hostRef} style={{ "--terminal-pane-background": resolveTerminalTheme(theme).background }} aria-hidden={!active} onMouseDown={() => onActivate(tabID)} onFocusCapture={() => onActivate(tabID)}>
     <div className="terminal-mount" ref={mountRef} />

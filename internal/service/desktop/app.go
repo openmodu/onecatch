@@ -707,6 +707,21 @@ func (a *Service) ResumeRun(ctx context.Context, runID, instruction string) (dom
 	return a.ResumeRunConfigured(ctx, runID, ResumeRunInput{Instruction: instruction})
 }
 
+func validateResumeHarness(task domaintasks.Task, definition domainworkflows.Definition, requested string) error {
+	requested = strings.TrimSpace(requested)
+	if requested == "" || task.WorkflowID != directAgentWorkflowID {
+		return nil
+	}
+	locked := strings.TrimSpace(task.Harness)
+	if locked == "" && len(definition.Steps) > 0 {
+		locked = strings.TrimSpace(definition.Steps[0].Runtime)
+	}
+	if locked != "" && requested != locked {
+		return coded("runtime_locked", "the Agent selected for this conversation cannot be changed")
+	}
+	return nil
+}
+
 func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input ResumeRunInput) (domainworkflows.Run, error) {
 	run, err := a.store.Repos.Workflows.GetRun(ctx, runID)
 	if err != nil {
@@ -721,6 +736,13 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 	definition, err := a.store.Repos.Workflows.GetRunDefinition(ctx, runID)
 	if err != nil {
 		return run, mapError(err)
+	}
+	task, err := a.store.Repos.Tasks.GetTask(ctx, run.TaskID)
+	if err != nil {
+		return run, coded("task_not_found", "task was not found")
+	}
+	if err := validateResumeHarness(task, definition, input.Harness); err != nil {
+		return run, err
 	}
 	settings, err := a.settings.Get(ctx)
 	if err != nil {

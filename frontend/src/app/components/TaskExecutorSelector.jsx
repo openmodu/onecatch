@@ -1,4 +1,4 @@
-import { Bot, ChevronDown, Workflow } from "lucide-react";
+import { ChevronDown, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,7 @@ import {
   selectTaskExecutionTarget,
   taskExecutionTarget,
 } from "../runtimeHarnesses.js";
+import RuntimeHarnessIcon from "./RuntimeHarnessIcon.jsx";
 
 export default function TaskExecutorSelector({ form, workflows = [], runtimes = [], onChange }) {
   const { t } = useTranslation();
@@ -29,14 +30,14 @@ export default function TaskExecutorSelector({ form, workflows = [], runtimes = 
     : selectedWorkflow?.name || t("task.chooseWorkflow");
   const availableWorkflows = workflows.filter((workflow) => workflow.id !== directAgentWorkflowID);
   const harnessOptions = runtimeHarnessOptions(runtimes, t("task.harnessUnavailable"));
-  const SelectedIcon = directAgent ? Bot : Workflow;
-
   const selectTarget = (target) => onChange?.((current) => selectTaskExecutionTarget(current, target));
 
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
       <Button type="button" variant="ghost" className="new-task-select executor" aria-label={t("task.executionTarget")} title={t("task.executionTarget")}>
-        <SelectedIcon size={14} aria-hidden="true" />
+        {directAgent
+          ? <RuntimeHarnessIcon harness={selectedHarness.id} size={14} aria-hidden="true" />
+          : <Workflow size={14} aria-hidden="true" />}
         <span>{label}</span>
         <ChevronDown size={14} aria-hidden="true" />
       </Button>
@@ -45,7 +46,7 @@ export default function TaskExecutorSelector({ form, workflows = [], runtimes = 
       <DropdownMenuRadioGroup value={selection} onValueChange={selectTarget}>
         <DropdownMenuLabel className="task-executor-section">{t("task.agentMode")}</DropdownMenuLabel>
         {harnessOptions.map((option) => <DropdownMenuRadioItem className="task-executor-option agent" value={`agent:${option.value}`} disabled={option.disabled} key={`agent:${option.value}`}>
-          <Bot size={14} aria-hidden="true" />
+          <RuntimeHarnessIcon harness={option.value} size={14} aria-hidden="true" />
           <span><strong>{option.label}</strong>{option.meta && <small>{option.meta}</small>}</span>
         </DropdownMenuRadioItem>)}
         {availableWorkflows.length > 0 && <DropdownMenuSeparator />}

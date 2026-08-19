@@ -27,6 +27,21 @@ func runtimeEvent(t *testing.T, seq int64, event agentrun.Event) domainworkflows
 	return domainworkflows.RuntimeEvent{Seq: seq, At: event.At, Payload: payload}
 }
 
+func TestValidateResumeHarnessLocksDirectAgentConversation(t *testing.T) {
+	definition := domainworkflows.Definition{Steps: []domainworkflows.Step{{Runtime: "codex"}}}
+	task := domaintasks.Task{WorkflowID: directAgentWorkflowID, Harness: "codex"}
+	if err := validateResumeHarness(task, definition, "codex"); err != nil {
+		t.Fatalf("same Agent was rejected: %v", err)
+	}
+	if err := validateResumeHarness(task, definition, "claude"); errorCode(err) != "runtime_locked" {
+		t.Fatalf("changed Agent error = %v", err)
+	}
+	task.WorkflowID = "review_loop"
+	if err := validateResumeHarness(task, definition, "claude"); err != nil {
+		t.Fatalf("workflow runtime override was rejected: %v", err)
+	}
+}
+
 func TestFoldRuntimeEventViewsCollapsesDurableStream(t *testing.T) {
 	at := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
 	base := agentrun.Event{Kind: agentrun.KindMessage, StreamID: "message-1", At: at}

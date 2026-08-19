@@ -22,7 +22,7 @@ export const demoWorkers = [{ id: "mac-mini", name: "Mac mini", baseUrl: "http:/
 
 export const demoTasks = [
   { id: "task_demo", workspaceId: "onecatch-demo", title: "优化本地 Agent 调度流程", prompt: "梳理并改进工作流执行、暂停与恢复体验。", workflowId: "implement_review", status: "paused", createdAt: demoNow, updatedAt: demoNow },
-  { id: "task_queue_demo", workspaceId: "onecatch-demo", title: "补齐任务页 Git 工作流", prompt: "接通状态、Diff、提交信息生成和推送，并验证异常提示。", workflowId: "single_agent", status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: demoNow, authorized: true }, attachments: [], createdAt: demoNow, updatedAt: demoNow },
+  { id: "task_queue_demo", workspaceId: "onecatch-demo", title: "补齐任务页 Git 工作流", prompt: "接通状态、Diff、提交信息生成和推送，并验证异常提示。", workflowId: "single_agent", harness: "codex", status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: demoNow, authorized: true }, attachments: [], createdAt: demoNow, updatedAt: demoNow },
 ];
 
 export const demoRun = {

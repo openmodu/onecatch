@@ -610,6 +610,7 @@
   .workbench-inspector-body {
     min-width: 0;
     background: transparent;
+    container-type: inline-size;
     overscroll-behavior: contain;
   }
 
@@ -618,7 +619,8 @@
      titlebar — here the window's own titlebar strip sits above it. */
   .inspector-window-panel {
     grid-template-rows: 36px minmax(0, 1fr);
-    height: 100%;
+    height: auto;
+    min-height: 0;
     margin: 0 8px 8px;
     overflow: hidden;
     border: 1px solid color-mix(in oklab, var(--border) 48%, transparent);
@@ -818,6 +820,26 @@
   }
 
   .new-task-select.executor > svg:last-child { margin-left: auto; }
+
+  .runtime-harness-icon {
+    display: block;
+    flex: 0 0 auto;
+    object-fit: contain;
+  }
+
+  .project-task-runtime-icon {
+    position: absolute;
+    left: 8px;
+    flex: 0 0 auto;
+    color: currentColor;
+    opacity: .8;
+  }
+
+  :root[data-theme="dark"] .runtime-harness-icon-modu { filter: invert(1); }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .runtime-harness-icon-modu { filter: invert(1); }
+  }
 
   .new-task-select.is-read-only {
     display: inline-flex;
@@ -1233,10 +1255,12 @@
 
   .conversation-message-actions {
     z-index: 2;
-    height: 24px;
+    box-sizing: border-box;
+    height: 27px;
     display: flex;
     align-items: center;
     gap: 3px;
+    padding-top: 3px;
     color: var(--muted-foreground);
     opacity: 0;
     pointer-events: none;
@@ -1247,7 +1271,7 @@
   .conversation-user .conversation-message-actions,
   .conversation-agent-message .conversation-message-actions {
     position: absolute;
-    top: calc(100% + 3px);
+    top: 100%;
   }
 
   .conversation-user .conversation-message-actions { right: 4px; }
@@ -1480,6 +1504,11 @@
   }
   .conversation-tool-body pre { max-height: 220px; padding: 9px 10px; overflow: auto; border: 0; border-radius: 8px; background: var(--muted); }
 
+  .conversation-file-changes-card {
+    position: relative;
+    min-width: 0;
+  }
+
   .conversation-file-changes {
     min-width: 0;
     overflow: hidden;
@@ -1489,7 +1518,8 @@
   }
 
   .conversation-file-changes > summary {
-    padding: 14px 16px;
+    display: block;
+    padding: 14px 92px 14px 16px;
     cursor: pointer;
     list-style: none;
   }
@@ -1517,8 +1547,8 @@
 
   .conversation-file-changes-icon svg { width: 18px; height: 18px; }
   .conversation-file-changes-summary > span:nth-child(2) { min-width: 0; display: grid; gap: 2px; }
-  .conversation-file-changes-summary strong { overflow: hidden; color: var(--foreground); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
-  .conversation-file-changes-summary small { color: var(--success); font-size: 12px; }
+  .conversation-file-changes-summary strong { overflow: hidden; color: var(--foreground); font-size: 14px; font-weight: 600; line-height: 20px; text-overflow: ellipsis; white-space: nowrap; }
+  .conversation-file-changes-summary small { color: var(--success); font-size: 12px; line-height: 18px; }
   .conversation-file-changes-caret { color: var(--muted-foreground); }
   .conversation-file-changes-caret svg { width: 16px; height: 16px; }
   .conversation-file-changes-caret .opened,
@@ -1545,6 +1575,231 @@
 
   .conversation-file-changes-list svg { width: 15px; height: 15px; color: var(--success); }
   .conversation-file-changes-list span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .conversation-review-action {
+    position: absolute;
+    z-index: 2;
+    top: 35px;
+    right: 42px;
+    transform: translateY(-50%);
+    border-color: color-mix(in oklab, var(--border) 78%, transparent) !important;
+    background: color-mix(in oklab, var(--card) 92%, transparent) !important;
+    color: var(--foreground) !important;
+  }
+
+  .conversation-review-action:hover,
+  .conversation-review-action:focus-visible {
+    background: var(--accent) !important;
+  }
+
+  .review-panel {
+    height: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-rows: 46px minmax(0, 1fr);
+    background: var(--card);
+  }
+
+  .review-toolbar {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 8px 0 14px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in oklab, var(--card) 94%, var(--muted));
+  }
+
+  .review-toolbar > div:first-child {
+    min-width: 0;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+
+  .review-toolbar strong { color: var(--foreground); font-size: 13px; font-weight: 650; }
+  .review-toolbar > div:first-child span { color: var(--muted-foreground); font-size: 11px; white-space: nowrap; }
+  .review-toolbar button { flex: 0 0 auto; }
+
+  .review-stats {
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-family: var(--font-ui-mono);
+    font-size: 12px;
+    font-style: normal;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .review-stats b,
+  .review-file-stats b,
+  .review-file-tree button b { color: var(--success); font-weight: 600; }
+  .review-stats em,
+  .review-file-stats em,
+  .review-file-tree button em { color: var(--destructive); font-style: normal; font-weight: 600; }
+
+  .review-layout {
+    min-height: 0;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(190px, 27%);
+  }
+
+  .review-diff-scroll {
+    min-width: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    background: color-mix(in oklab, var(--background) 88%, var(--card));
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 42%, transparent) transparent;
+    scrollbar-width: thin;
+  }
+
+  .review-file {
+    min-width: 620px;
+    border-bottom: 1px solid var(--border);
+    background: var(--card);
+    scroll-margin-top: 0;
+  }
+
+  .review-file > header {
+    position: sticky;
+    z-index: 3;
+    top: 0;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 7px;
+    height: 36px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border);
+    background: color-mix(in oklab, var(--card) 96%, var(--muted));
+  }
+
+  .review-file > header > svg { color: var(--muted-foreground); }
+  .review-file > header > strong { overflow: hidden; font: 600 12px/1.2 var(--font-ui-mono); text-overflow: ellipsis; white-space: nowrap; }
+  .review-file-stats { display: inline-flex; gap: 6px; font: 11px/1 var(--font-ui-mono); }
+  .review-hunk + .review-hunk { border-top: 1px solid var(--border); }
+
+  .review-hunk-header {
+    display: grid;
+    grid-template-columns: 74px minmax(0, 1fr);
+    align-items: center;
+    min-height: 28px;
+    background: color-mix(in oklab, var(--info) 8%, var(--card));
+    color: var(--info);
+    font-size: 10px;
+  }
+
+  .review-hunk-header span { padding-left: 12px; font-weight: 650; }
+  .review-hunk-header code { overflow: hidden; font: 11px/1.4 var(--font-ui-mono); text-overflow: ellipsis; white-space: nowrap; }
+
+  .review-diff-line {
+    min-height: 21px;
+    display: grid;
+    grid-template-columns: 42px 42px 18px minmax(max-content, 1fr);
+    align-items: stretch;
+    color: var(--foreground);
+    font: 11.5px/21px var(--font-ui-mono);
+    font-variant-ligatures: none;
+  }
+
+  .review-diff-line.add { background: color-mix(in oklab, var(--success) 12%, var(--card)); }
+  .review-diff-line.delete { background: color-mix(in oklab, var(--destructive) 11%, var(--card)); }
+  .review-diff-line.meta { color: var(--muted-foreground); }
+
+  .review-line-number {
+    padding: 0 7px;
+    border-right: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
+    color: var(--muted-foreground);
+    text-align: right;
+    user-select: none;
+  }
+
+  .review-line-marker { color: var(--muted-foreground); text-align: center; user-select: none; }
+  .review-diff-line.add .review-line-marker { color: var(--success); }
+  .review-diff-line.delete .review-line-marker { color: var(--destructive); }
+  .review-diff-line code { padding-right: 18px; white-space: pre; }
+
+  .review-files {
+    min-width: 0;
+    overflow: hidden;
+    border-left: 1px solid var(--border);
+    background: color-mix(in oklab, var(--sidebar) 64%, var(--card));
+  }
+
+  .review-files-heading {
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 11px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted-foreground);
+    font-size: 11px;
+  }
+
+  .review-files-heading strong { color: var(--foreground); font-size: 11px; }
+  .review-file-tree { height: calc(100% - 36px); overflow: auto; padding: 7px; }
+  .review-file-tree section + section { margin-top: 7px; }
+
+  .review-directory {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr);
+    align-items: center;
+    gap: 5px;
+    height: 24px;
+    padding: 0 6px;
+    color: var(--muted-foreground);
+    font: 10px/1 var(--font-ui-mono);
+  }
+
+  .review-directory span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .review-file-tree button {
+    width: 100%;
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 5px;
+    height: 28px;
+    padding: 0 6px 0 15px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--muted-foreground);
+    font: 11px/1 var(--font-ui-mono);
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .review-file-tree button:hover,
+  .review-file-tree button.active { background: var(--accent); color: var(--foreground); }
+  .review-file-tree button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .review-file-tree button b,
+  .review-file-tree button em { font-size: 9px; }
+
+  .review-empty {
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+
+  .review-empty svg { width: 17px; height: 17px; }
+  .review-no-preview { margin: 0; padding: 28px 14px; color: var(--muted-foreground); font-size: 11px; }
+
+  @container (max-width: 560px) {
+    .review-layout { grid-template-columns: minmax(0, 1fr); }
+    .review-files { display: none; }
+    .review-file { min-width: 520px; }
+  }
 
   .workbench-composer {
     z-index: 4;
@@ -1634,8 +1889,22 @@
 
   .workbench-composer-actions button { border-radius: 999px; }
 
+  .composer-running-trigger {
+    min-width: 94px;
+    justify-content: center;
+    border-color: color-mix(in oklab, var(--primary) 24%, var(--border));
+    background: color-mix(in oklab, var(--primary) 8%, var(--secondary));
+    color: var(--foreground);
+  }
+
+  .composer-running-icon {
+    color: var(--primary);
+    animation: spin 1.4s linear infinite;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .conversation-tool-state-icon.spinning { animation: none; }
+    .composer-running-icon { animation: none; }
     .conversation-message-actions { transition: none; }
   }
 
@@ -2318,6 +2587,19 @@
     min-width: 0;
     min-height: 0;
     overflow: hidden;
+  }
+
+  .terminal-tab-layout {
+    position: absolute;
+    inset: 0;
+    display: none;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .terminal-tab-layout.active {
+    display: block;
   }
 
   .terminal-split-canvas {

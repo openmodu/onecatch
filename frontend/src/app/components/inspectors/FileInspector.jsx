@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, File, FileBraces, FileCode, FileCog, FileText, FileTerminal, Folder, FolderOpen, RefreshCw, Save, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { Textarea } from "@/components/ui/textarea";
 import { WorkspaceBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Action, Kicker } from "../../../ui/primitives.jsx";
 import { errorMessage } from "../../format.js";
@@ -393,9 +392,9 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
           </div>
           <div className="file-editor-stage relative min-h-0 min-w-0 overflow-hidden">
             <pre className="file-editor-highlight pointer-events-none absolute inset-0 m-0 overflow-hidden bg-transparent" aria-hidden="true"><code ref={highlightedCodeRef} className={`language-${highlighted.language}`} dangerouslySetInnerHTML={{ __html: `${highlighted.html}${draft.endsWith("\n") ? " " : ""}` }} /></pre>
-            <Textarea
+            <textarea
               ref={editorRef}
-              className="file-editor-textarea absolute inset-0 h-full min-h-0 w-full resize-none overflow-auto rounded-none border-0 bg-transparent px-3 py-3 font-mono text-[12px] leading-5 whitespace-pre field-sizing-fixed"
+              className="file-editor-textarea absolute inset-0 h-full min-h-0 w-full resize-none overflow-auto rounded-none border-0 bg-transparent px-3 py-3 font-mono text-[12px] leading-5 whitespace-pre outline-none"
               aria-label={t("files.editor", { path: document.path })}
               spellCheck="false"
               wrap="off"
