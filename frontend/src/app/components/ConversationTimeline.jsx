@@ -1,4 +1,4 @@
-import { lazy, memo, Suspense, useEffect, useState } from "react";
+import { lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clipboard } from "@wailsio/runtime";
 import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Copy, FilePenLine, LoaderCircle, Search, Terminal, TriangleAlert, Wrench } from "lucide-react";
@@ -57,6 +57,40 @@ function MessageActions({ at, content, align = "start" }) {
     <Button type="button" variant="ghost" size="icon-xs" className="conversation-message-copy" aria-label={copyLabel} title={copyLabel} onClick={copyMessage}>{copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}</Button>
   </div>;
 }
+
+const UserMessage = memo(function UserMessage({ item }) {
+  const { t } = useTranslation();
+  const contentId = useId();
+  const contentRef = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content || expanded) return undefined;
+    const measure = () => setOverflowing(content.scrollHeight > content.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [expanded, item.text]);
+
+  return <div className="conversation-user">
+    <div className={`conversation-bubble ${overflowing ? "has-disclosure" : ""}`}>
+      <div ref={contentRef} id={contentId} className={`conversation-user-message-content ${expanded ? "is-expanded" : "is-collapsed"} ${overflowing ? "has-overflow" : ""}`}>
+        <MessageBody content={item.text} />
+      </div>
+      {overflowing && <Button type="button" variant="ghost" size="sm" className="conversation-user-disclosure" aria-expanded={expanded} aria-controls={contentId} onClick={() => setExpanded((current) => !current)}>
+        <span>{t(expanded ? "timeline.showLess" : "timeline.showMore")}</span><ChevronDown className={expanded ? "is-expanded" : ""} aria-hidden="true" />
+      </Button>}
+    </div>
+    <MessageActions at={item.at} content={item.text} align="end" />
+  </div>;
+});
 
 function roundDuration(round) {
   const startedAt = new Date(round.startedAt || 0).getTime();
@@ -171,9 +205,7 @@ function ConversationTimeline({ items, active, permissionBusy = "", onPermission
   const lastRound = rounds[rounds.length - 1];
   return <div className="conversation-section">
     <div className="conversation-list">
-      {items.map((item) => item.type === "user" ? <div className="conversation-user" key={item.id}>
-        <div className="conversation-bubble"><MessageBody content={item.text} /></div><MessageActions at={item.at} content={item.text} align="end" />
-      </div> : <ConversationRound key={item.id} round={item} active={Boolean(active) && item === lastRound} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={onReview} />)}
+      {items.map((item) => item.type === "user" ? <UserMessage item={item} key={item.id} /> : <ConversationRound key={item.id} round={item} active={Boolean(active) && item === lastRound} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={onReview} />)}
       {!items.length && <p className="muted-copy">{t("timeline.empty")}</p>}
     </div>
   </div>;

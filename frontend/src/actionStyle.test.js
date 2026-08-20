@@ -435,6 +435,17 @@ test("message hover timestamps include seconds", async () => {
   assert.match(timeline, /toLocaleTimeString\([^)]*\{ hour: "2-digit", minute: "2-digit", second: "2-digit" \}/);
 });
 
+test("long user messages collapse behind a measured disclosure", async () => {
+  const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
+  const timeline = await readFile(path.join(sourceRoot, "app", "components", "ConversationTimeline.jsx"), "utf8");
+  assert.match(timeline, /content\.scrollHeight > content\.clientHeight \+ 1/, "overflow must follow rendered height instead of a brittle character count");
+  assert.match(timeline, /aria-expanded=\{expanded\}/, "the disclosure must expose its state to assistive technology");
+  assert.match(timeline, /t\(expanded \? "timeline\.showLess" : "timeline\.showMore"\)/, "the disclosure must support both expansion and collapse");
+  assert.match(css, /\.conversation-user-message-content\.is-collapsed\s*\{[^}]*max-height:[^;]+;[^}]*overflow:\s*hidden/s);
+  assert.match(css, /\.conversation-user-message-content\.is-collapsed\.has-overflow::after\s*\{[^}]*linear-gradient/s, "collapsed prose needs a quiet fade into its action");
+  assert.match(css, /\.conversation-user-disclosure\s*\{[^}]*width:\s*fit-content[^}]*justify-content:\s*flex-start/s, "the disclosure belongs at the bubble's lower-left edge");
+});
+
 test("tool rows spend their width on the command, not on empty columns", async () => {
   const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
   // The command owns the flexible track; only the transient state and caret
