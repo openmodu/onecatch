@@ -199,12 +199,26 @@ const ConversationRound = memo(function ConversationRound({ round, active, permi
 // The timeline can grow to hundreds of rows; poll-driven parent re-renders must
 // not rebuild it unless `items`/`active` actually change, hence memo() paired
 // with the memoized conversation array the parent feeds in.
-function ConversationTimeline({ items, active, permissionBusy = "", onPermissionDecision, onReview }) {
+function ConversationTimeline({ items, active, hiddenCount = 0, onLoadEarlier, permissionBusy = "", onPermissionDecision, onReview }) {
   const { t } = useTranslation();
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
   const rounds = items.filter((item) => item.type === "round");
   const lastRound = rounds[rounds.length - 1];
+  const loadEarlier = async () => {
+    setLoadingEarlier(true);
+    try {
+      await onLoadEarlier?.();
+    } finally {
+      setLoadingEarlier(false);
+    }
+  };
   return <div className="conversation-section">
     <div className="conversation-list">
+      {hiddenCount > 0 && <div className="flex justify-center py-2">
+        <Button type="button" variant="outline" size="sm" disabled={loadingEarlier} onClick={loadEarlier}>
+          {loadingEarlier ? t("common.loading") : t("timeline.loadEarlier", { count: hiddenCount })}
+        </Button>
+      </div>}
       {items.map((item) => item.type === "user" ? <UserMessage item={item} key={item.id} /> : <ConversationRound key={item.id} round={item} active={Boolean(active) && item === lastRound} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={onReview} />)}
       {!items.length && <p className="muted-copy">{t("timeline.empty")}</p>}
     </div>

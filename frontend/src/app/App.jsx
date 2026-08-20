@@ -17,7 +17,7 @@ import {
 } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { ConfirmDialog } from "./components/settings/ConfirmDialog.jsx";
 import { demoSettings } from "./settingsDefaults.js";
-import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceResults } from "./listNavigation.js";
+import { mergeRunItems, preserveByFingerprint, runDetailFingerprint, runItemFingerprint, sortWorkspaces, workspaceResults } from "./listNavigation.js";
 import { StatusBadge, TUISelect } from "../ui/primitives.jsx";
 import { copy, errorMessage, fileName, taskTitleFromPrompt } from "./format.js";
 import { loopTemplate } from "./templates.js";
@@ -570,6 +570,36 @@ function App() {
     loadTasks();
   }, [loadRunList, loadTasks, mode, runKeyword, runStatus, workspaceID]);
 
+  // Opening a run ships only the newest slice of its transcript, because every
+  // entry becomes a mounted Markdown component. These runs are the ones the user
+  // asked to see in full; the choice has to survive the reloads that follow.
+  const expandedTranscripts = useRef(new Set());
+
+  const withFullTranscript = useCallback(async (runID, detail) => {
+    if (!expandedTranscripts.current.has(runID)) return detail;
+    try {
+      const runtimeEvents = await TaskRunBinding.GetRunTranscript(runID) || [];
+      return { ...detail, runtimeEvents, runtimeEventsTotal: runtimeEvents.length };
+    } catch {
+      // The window is still a usable view of the run; the control stays offered.
+      return detail;
+    }
+  }, []);
+
+  const loadEarlierTranscript = useCallback(async (runID) => {
+    if (!runID || mode !== "wails") return;
+    expandedTranscripts.current.add(runID);
+    try {
+      const runtimeEvents = await TaskRunBinding.GetRunTranscript(runID) || [];
+      setRunDetail((current) => current?.run?.id === runID
+        ? { ...current, runtimeEvents, runtimeEventsTotal: runtimeEvents.length }
+        : current);
+    } catch (error) {
+      expandedTranscripts.current.delete(runID);
+      notify("error", errorMessage(error));
+    }
+  }, [mode, notify]);
+
   const loadRun = useCallback(async (runID, silent = false) => {
     if (!runID) return;
     const loadVersion = ++runLoadVersion.current;
@@ -577,6 +607,7 @@ function App() {
     if (mode === "demo") { setRunDetail((current) => current?.run?.id === runID ? current : demo.demoRun); return; }
     try {
       let detail = await TaskRunBinding.GetRun(runID);
+      detail = await withFullTranscript(runID, detail);
       // GetRun is durable truth; the in-memory snapshot fills the small gap
       // between the latest 500ms persistence batch and this read. Revisions
       // make overlap with already-delivered Wails events harmless.
@@ -596,12 +627,12 @@ function App() {
       // Keep the same object reference when a poll returns identical data, so an
       // idle refresh (or the fast post-action nudge) triggers no re-render and
       // therefore no flicker.
-      setRunDetail((current) => preserveEqualValue(current, detail));
+      setRunDetail((current) => preserveByFingerprint(current, detail, runDetailFingerprint));
       setRunItems((items) => {
         let changed = false;
         const next = items.map((item) => {
           if (item.id !== runID) return item;
-          const merged = preserveEqualValue(item, { ...detail.run, task: detail.task });
+          const merged = preserveByFingerprint(item, { ...detail.run, task: detail.task }, runItemFingerprint);
           if (merged !== item) changed = true;
           return merged;
         });
@@ -609,7 +640,7 @@ function App() {
       });
       if (!silent) setSelectedRunID(runID);
     } catch (error) { if (loadVersion === runLoadVersion.current && !silent) notify("error", errorMessage(error)); }
-  }, [mode, notify]);
+  }, [mode, notify, withFullTranscript]);
 
   useEffect(() => { if (selectedRunID) loadRun(selectedRunID, true); }, [loadRun, selectedRunID]);
 
@@ -1303,6 +1334,7 @@ function App() {
           onInterrupt={interruptRun}
           onCancel={cancelRun}
           onRemoveInstruction={removeQueuedInstruction}
+          onLoadEarlierTranscript={loadEarlierTranscript}
           onPermissionDecision={respondPermission}
           notify={notify}
         /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} /></Suspense>}

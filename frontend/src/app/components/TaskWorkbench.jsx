@@ -45,7 +45,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, onDetachInspector, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onPermissionDecision, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, onDetachInspector, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onNewTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onLoadEarlierTranscript, onPermissionDecision, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
@@ -94,6 +94,9 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const signature = conversationSignature(runDetail);
   // eslint-disable-next-line react-hooks/exhaustive-deps -- signature captures every field the builder reads
   const conversation = useMemo(() => (runDetail ? buildRunConversation(runDetail, t) : []), [signature, i18n.resolvedLanguage, t]);
+  // Opening a run ships only the newest slice of a long transcript. What is
+  // missing is offered rather than silently dropped.
+  const hiddenTranscriptCount = Math.max(0, (runDetail?.runtimeEventsTotal || 0) - (runDetail?.runtimeEvents || []).length);
   const pendingInstructions = useMemo(() => (runDetail?.instructions || []).filter((instruction) => instruction.status === "pending"), [runDetail?.instructions]);
   const activeStep = useMemo(() => {
     const steps = runDetail?.workflow?.steps || [];
@@ -285,7 +288,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
         allowFullSandbox={allowFullSandbox}
       /> : selectedTask ? <>
         <div className="conversation-scroll min-h-0 min-w-0 flex-1 select-text overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>
-          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={openReview} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
+          {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} hiddenCount={hiddenTranscriptCount} onLoadEarlier={() => onLoadEarlierTranscript?.(runDetail?.run?.id)} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={openReview} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
         {runDetail && <Composer
           runStatus={runStatus}
