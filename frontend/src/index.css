@@ -83,6 +83,7 @@
    it, and keep the markers on their own lines. */
 :root {
   --radius: 0.5rem;
+  --chat-font-size: 14px;
 
   /* No webfont is bundled — the system stack resolves to SF Pro on macOS, which
      is what a Wails desktop shell should look like. Mono is reserved for paths,
@@ -90,6 +91,11 @@
   --font-ui-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
   --font-ui-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 }
+
+:root[data-chat-font-size="small"] { --chat-font-size: 13px; }
+:root[data-chat-font-size="standard"] { --chat-font-size: 14px; }
+:root[data-chat-font-size="large"] { --chat-font-size: 16px; }
+:root[data-chat-font-size="extra-large"] { --chat-font-size: 18px; }
 
 /* ---- Light: the mirage cream canvas, with cards lifted above it ---------- */
 :root {
@@ -1526,7 +1532,7 @@
   .conversation-agent .markdown-content {
     color: var(--card-foreground);
     font-family: var(--font-ui-sans);
-    font-size: 14px;
+    font-size: var(--chat-font-size);
     line-height: 1.65;
   }
 
