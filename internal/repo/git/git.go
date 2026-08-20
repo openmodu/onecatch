@@ -36,10 +36,11 @@ func (i *Inspector) Inspect(ctx context.Context, workspace string) (domainworksp
 	if strings.TrimSpace(inside) != "true" {
 		return domainworkspaces.GitSnapshot{IsRepo: false}, nil
 	}
-	status, err := i.run(ctx, workspace, "status", "--porcelain=v1", "--untracked-files=all")
+	status, err := i.run(ctx, workspace, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 	if err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
+	files := parseStatus(status)
 	diffStat, err := i.run(ctx, workspace, "diff", "--stat", "--no-ext-diff")
 	if err != nil {
 		return domainworkspaces.GitSnapshot{}, err
@@ -64,15 +65,17 @@ func (i *Inspector) Inspect(ctx context.Context, workspace string) (domainworksp
 		Branch:     strings.TrimSpace(branch),
 		Ahead:      ahead,
 		Behind:     behind,
-		Status:     strings.TrimSpace(status),
+		Status:     statusText(files),
 		DiffStat:   strings.TrimSpace(diffStat),
 		StagedStat: strings.TrimSpace(stagedStat),
-		Files:      parseStatus(status),
+		Files:      files,
 	}, nil
 }
 
 func (i *Inspector) Diff(ctx context.Context, workspace string, staged bool) (string, error) {
-	args := []string{"diff", "--no-ext-diff", "--no-color"}
+	// core.quotePath=false keeps non-ASCII paths verbatim so diff headers match
+	// the paths reported by parseStatus.
+	args := []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-color"}
 	if staged {
 		args = append(args, "--cached")
 	}
@@ -190,20 +193,33 @@ func (i *Inspector) validBranchName(ctx context.Context, workspace, name string)
 	return name, nil
 }
 
+// parseStatus reads NUL separated `git status --porcelain=v1 -z` records. The
+// record separator matters: the newline format C-quotes paths that are not
+// plain ASCII, and its "XY path" prefix starts with a space whenever a change
+// is unstaged, so trimming the payload would eat the first path's first byte.
 func parseStatus(value string) []domainworkspaces.GitFile {
-	lines := strings.Split(strings.TrimSpace(value), "\n")
-	files := make([]domainworkspaces.GitFile, 0, len(lines))
-	for _, line := range lines {
-		if len(line) < 3 {
+	records := strings.Split(value, "\x00")
+	files := make([]domainworkspaces.GitFile, 0, len(records))
+	for position := 0; position < len(records); position++ {
+		record := records[position]
+		if len(record) < 4 || record[2] != ' ' {
 			continue
 		}
-		path := strings.TrimSpace(line[3:])
-		if index := strings.LastIndex(path, " -> "); index >= 0 {
-			path = path[index+4:]
+		index, worktree := record[0], record[1]
+		if index == 'R' || index == 'C' || worktree == 'R' || worktree == 'C' {
+			position++ // renames and copies emit the original path as the next record
 		}
-		files = append(files, domainworkspaces.GitFile{Path: path, Index: string(line[0]), Worktree: string(line[1])})
+		files = append(files, domainworkspaces.GitFile{Path: record[3:], Index: string(index), Worktree: string(worktree)})
 	}
 	return files
+}
+
+func statusText(files []domainworkspaces.GitFile) string {
+	lines := make([]string, 0, len(files))
+	for _, file := range files {
+		lines = append(lines, fmt.Sprintf("%s%s %s", file.Index, file.Worktree, file.Path))
+	}
+	return strings.Join(lines, "\n")
 }
 
 func (i *Inspector) run(ctx context.Context, workspace string, args ...string) (string, error) {

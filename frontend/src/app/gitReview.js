@@ -1,4 +1,7 @@
-const stripPrefix = (value = "") => value === "/dev/null" ? "" : value.replace(/^[ab]\//, "").replace(/^"|"$/g, "");
+const stripPrefix = (value = "") => {
+  const unquoted = value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
+  return unquoted === "/dev/null" ? "" : unquoted.replace(/^[ab]\//, "");
+};
 
 function lineKind(line) {
   if (line.startsWith("+")) return "add";
@@ -15,7 +18,7 @@ export function parseUnifiedDiff(value = "", scope = "worktree") {
   let newLine = 0;
 
   for (const rawLine of String(value).split("\n")) {
-    const header = rawLine.match(/^diff --git a\/(.+) b\/(.+)$/);
+    const header = rawLine.match(/^diff --git "?a\/(.+?)"? "?b\/(.+?)"?$/);
     if (header) {
       file = { path: stripPrefix(header[2]), oldPath: stripPrefix(header[1]), scope, hunks: [], additions: 0, deletions: 0 };
       files.push(file);
@@ -23,11 +26,13 @@ export function parseUnifiedDiff(value = "", scope = "worktree") {
       continue;
     }
     if (!file) continue;
-    if (rawLine.startsWith("+++ ")) {
+    // Only the preamble carries "+++"/"---" headers. Inside a hunk those are
+    // ordinary added or deleted lines whose own text starts with "++"/"--".
+    if (!hunk && rawLine.startsWith("+++ ")) {
       file.path = stripPrefix(rawLine.slice(4)) || file.path;
       continue;
     }
-    if (rawLine.startsWith("--- ")) {
+    if (!hunk && rawLine.startsWith("--- ")) {
       file.oldPath = stripPrefix(rawLine.slice(4)) || file.oldPath;
       continue;
     }

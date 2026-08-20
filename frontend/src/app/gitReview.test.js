@@ -38,3 +38,33 @@ test("combines staged, worktree and untracked changes into one review", () => {
   assert.equal(review.deletions, 1);
   assert.deepEqual(review.files[1].scopes, ["untracked"]);
 });
+
+test("keeps diff body lines that look like file headers inside the hunk", () => {
+  const [file] = parseUnifiedDiff(`diff --git a/docs/config.toml b/docs/config.toml
+--- a/docs/config.toml
++++ b/docs/config.toml
+@@ -1,2 +1,2 @@
++++ title = "guide"
+--- draft = true
+ body = ""
+`);
+  assert.equal(file.path, "docs/config.toml");
+  assert.equal(file.hunks.length, 1);
+  assert.deepEqual(file.hunks[0].lines.map((line) => [line.kind, line.text]), [
+    ["add", '++ title = "guide"'],
+    ["delete", "-- draft = true"],
+    ["context", 'body = ""'],
+  ]);
+});
+
+test("reads quoted paths from diff headers", () => {
+  const [file] = parseUnifiedDiff(`diff --git "a/文档/说明.md" "b/文档/说明.md"
+--- "a/文档/说明.md"
++++ "b/文档/说明.md"
+@@ -1 +1,2 @@
+ first
++second
+`);
+  assert.equal(file.path, "文档/说明.md");
+  assert.equal(file.additions, 1);
+});

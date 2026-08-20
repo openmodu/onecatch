@@ -54,6 +54,7 @@ export default function ReviewPanel({ mode, workspaceID, active, onClose, notify
   const [loading, setLoading] = useState(false);
   const [selectedPath, setSelectedPath] = useState("");
   const fileRefs = useRef(new Map());
+  const diffScroll = useRef(null);
 
   const load = useCallback(async () => {
     if (!workspaceID || !active) return;
@@ -106,7 +107,13 @@ export default function ReviewPanel({ mode, workspaceID, active, onClose, notify
 
   const selectFile = (path) => {
     setSelectedPath(path);
-    fileRefs.current.get(path)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    const node = fileRefs.current.get(path);
+    const scroller = diffScroll.current;
+    if (!node || !scroller) return;
+    // Scrolling the diff column itself keeps the surrounding workbench still,
+    // which scrollIntoView cannot promise once an ancestor can scroll too.
+    const top = scroller.scrollTop + node.getBoundingClientRect().top - scroller.getBoundingClientRect().top;
+    scroller.scrollTo({ top, behavior: "smooth" });
   };
 
   return <section className="review-panel" aria-label={t("review.title")}>
@@ -120,7 +127,7 @@ export default function ReviewPanel({ mode, workspaceID, active, onClose, notify
       <Button type="button" variant="ghost" size="icon-sm" aria-label={t("common.close")} title={t("common.close")} onClick={onClose}><X aria-hidden="true" /></Button>
     </header>
     <div className="review-layout">
-      <div className="review-diff-scroll">
+      <div className="review-diff-scroll" ref={diffScroll}>
         {loading && !review.files.length ? <div className="review-empty"><LoaderCircle className="animate-spin" aria-hidden="true" />{t("common.loading")}</div>
           : review.files.length ? review.files.map((file) => <article className="review-file" key={file.path} ref={(node) => { if (node) fileRefs.current.set(file.path, node); else fileRefs.current.delete(file.path); }}>
             <header>
