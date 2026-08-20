@@ -14,9 +14,11 @@ import (
 	"github.com/openmodu/onecatch/internal/repo/git"
 	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
 	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	repotasks "github.com/openmodu/onecatch/internal/repo/tasks"
 	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
+	"github.com/openmodu/onecatch/internal/service/desktop/listchange"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
 	terminalservice "github.com/openmodu/onecatch/internal/service/terminal"
@@ -57,6 +59,13 @@ func Run() {
 	// their writes push without threading the hub through either constructor.
 	runStateHub := runstate.NewHub()
 	store.Repos.Workflows = repoworkflows.WithNotifier(store.Repos.Workflows, runStateHub)
+	// The sidebar's task and run lists used to stay fresh by re-reading every
+	// task and run file on a 1.4s timer. Decorating the task repository lets the
+	// writes announce themselves instead; run writes already reach runStateHub,
+	// which forwards to this hub where its emitter is installed below.
+	listHub := listchange.NewHub()
+	store.Repos.Tasks = repotasks.WithNotifier(store.Repos.Tasks, listHub)
+	defer listHub.Close()
 	settingsValue, err := settingsrepo.NewSettingsRepo(store.Data.Paths.Root).Get(context.Background())
 	if err != nil {
 		log.Fatal("open settings", zap.Error(err))
@@ -179,6 +188,12 @@ func Run() {
 	defer unsubscribeRunStream()
 	runStateHub.SetEmitter(func(view runstate.View) {
 		wailsApp.Event.Emit(runstate.EventName, view)
+		// Every run mutation already lands here, so the run list rides along
+		// rather than needing its own decorator.
+		listHub.MarkDirty()
+	})
+	listHub.SetEmitter(func() {
+		wailsApp.Event.Emit(listchange.EventName, nil)
 	})
 	// ListRuntimes serves its cache immediately and re-probes in the background;
 	// this is how a corrected status reaches windows that already rendered.

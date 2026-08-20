@@ -55,6 +55,10 @@ import { scheduleIdle } from "./scheduleIdle.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
+const listsChangedEvent = "onecatch:lists-changed";
+// A dropped event should cost a stale list for a while, not forever. Long
+// enough that an idle window is genuinely idle.
+const LIST_HEARTBEAT_MS = 30_000;
 const directAgentWorkflowID = "single_agent";
 
 function firstWorkflowID() {
@@ -710,21 +714,42 @@ function App() {
     };
   }, [loadRun, mode, selectedRunID]);
 
-  // Self-scheduling poll for the task queue + run list, same ref-driven cadence.
+  // The task queue and run list refresh when Go says a write moved them.
+  //
+  // This used to be a self-scheduling poll running as often as every 1.4
+  // seconds, which re-read every task file twice and up to fifty run files per
+  // tick to almost always find nothing had changed. The timer that remains is a
+  // safety net for a dropped event, not the mechanism — and it stops entirely
+  // while the window is hidden, where a refresh has nobody to show anything to.
   useEffect(() => {
     if (!workspaceID || mode !== "wails") return undefined;
     let stopped = false;
-    let timer;
-    const cadence = () => {
-      const tasksActive = tasksRef.current.some((task) => task.status === "queued" || task.status === "running");
-      return runDetailRef.current?.active || tasksActive ? 1400 : 4500;
+    let pending = 0;
+    let timer = 0;
+    const refresh = () => {
+      if (stopped || document.visibilityState === "hidden") return;
+      void Promise.all([loadTasks(), loadRunList()]);
     };
-    const tick = async () => {
-      await Promise.all([loadTasks(), loadRunList()]);
-      if (!stopped) timer = window.setTimeout(tick, cadence());
+    // Go already coalesces a burst of writes; this absorbs the rest, and keeps
+    // a single user action from firing two refreshes.
+    const scheduleRefresh = () => {
+      if (stopped || pending) return;
+      pending = window.setTimeout(() => { pending = 0; refresh(); }, 120);
     };
-    timer = window.setTimeout(tick, cadence());
-    return () => { stopped = true; window.clearTimeout(timer); };
+    const off = Events.On(listsChangedEvent, scheduleRefresh);
+    const heartbeat = () => {
+      refresh();
+      if (!stopped) timer = window.setTimeout(heartbeat, LIST_HEARTBEAT_MS);
+    };
+    timer = window.setTimeout(heartbeat, LIST_HEARTBEAT_MS);
+    document.addEventListener("visibilitychange", scheduleRefresh);
+    return () => {
+      stopped = true;
+      off();
+      document.removeEventListener("visibilitychange", scheduleRefresh);
+      window.clearTimeout(timer);
+      window.clearTimeout(pending);
+    };
   }, [loadRunList, loadTasks, mode, workspaceID]);
 
   useEffect(() => {
