@@ -21,11 +21,39 @@
         @media (prefers-color-scheme: dark) {
             html:not([data-theme="light"]), html:not([data-theme="light"]) body { background: #1c1c1c; }
         }
+
+        /* A window is revealed as soon as the Wails runtime is ready, which is
+           well before React has mounted. Without something in #root that gap is
+           an empty pane. The skeleton costs a few hundred bytes and is replaced
+           by the real screen on first render. */
+        .boot-skeleton { display: flex; height: 100%; --boot-skeleton-ink: rgba(28, 25, 20, 0.07); }
+        html[data-theme="dark"] .boot-skeleton { --boot-skeleton-ink: rgba(255, 255, 255, 0.07); }
+        @media (prefers-color-scheme: dark) {
+            html:not([data-theme="light"]) .boot-skeleton { --boot-skeleton-ink: rgba(255, 255, 255, 0.07); }
+        }
+        .boot-skeleton-rail { width: 216px; flex: none; padding: 52px 12px 16px; }
+        .boot-skeleton-body { flex: 1; padding: 52px 24px 24px; }
+        .boot-skeleton i {
+            display: block; border-radius: 8px; background: var(--boot-skeleton-ink);
+            margin-bottom: 10px; height: 34px;
+        }
+        .boot-skeleton-body i { height: 68px; }
+        .boot-skeleton-body i:first-child { height: 22px; width: 200px; margin-bottom: 20px; }
     </style>
     <title>OneCatch</title>
 </head>
 <body>
 <div id="root"></div>
+<script>
+    // Only the settings window opens on demand from a keystroke, so it is the
+    // one that benefits from a placeholder; the others are already on screen.
+    if (new URLSearchParams(location.search).get("window") === "settings") {
+        document.getElementById("root").innerHTML =
+            '<div class="boot-skeleton"><div class="boot-skeleton-rail">'
+            + '<i></i><i></i><i></i><i></i><i></i><i></i>'
+            + '</div><div class="boot-skeleton-body"><i></i><i></i><i></i><i></i></div></div>';
+    }
+</script>
 <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>

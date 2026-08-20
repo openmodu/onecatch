@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	desktopassets "github.com/openmodu/onecatch/internal/app/desktop/assets"
 	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
@@ -85,9 +86,6 @@ func Run() {
 	if err := service.InitializeSettings(context.Background()); err != nil {
 		log.Fatal("initialize settings", zap.Error(err))
 	}
-	if err := service.RecoverInterruptedRuns(context.Background()); err != nil {
-		log.Fatal("recover interrupted runs", zap.Error(err))
-	}
 	if err := service.EnsureBuiltinDefinitions(context.Background()); err != nil {
 		log.Fatal("create builtin workflows", zap.Error(err))
 	}
@@ -157,6 +155,12 @@ func Run() {
 						_, _ = response.Write(desktopassets.AppIcon)
 						return
 					}
+					// Bundle filenames carry a content hash, so a given URL can
+					// never change meaning. Saying so lets the webview reuse the
+					// parsed bundle instead of refetching it for every window.
+					if strings.HasPrefix(request.URL.Path, "/assets/") {
+						response.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+					}
 					next.ServeHTTP(response, request)
 				})
 			},
@@ -175,6 +179,11 @@ func Run() {
 	defer unsubscribeRunStream()
 	runStateHub.SetEmitter(func(view runstate.View) {
 		wailsApp.Event.Emit(runstate.EventName, view)
+	})
+	// ListRuntimes serves its cache immediately and re-probes in the background;
+	// this is how a corrected status reaches windows that already rendered.
+	runtimes.SetRuntimesChanged(func(items []desktopservice.RuntimeInfo) {
+		wailsApp.Event.Emit(runtimesChangedEvent, items)
 	})
 	menu := wailsApp.NewMenu()
 	if runtime.GOOS == "darwin" {
@@ -231,9 +240,39 @@ func Run() {
 	applyNativeWindowChrome(mainWindow)
 	// The detached inspector only mirrors the main window's selection, so it
 	// must not outlive it — otherwise closing the workbench leaves a frozen
-	// panel behind that keeps the application alive.
-	mainWindow.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) {
+	// panel behind that keeps the application alive. Retained windows the user
+	// cannot see go the same way, for the same reason.
+	// A hook rather than a listener: listeners are dispatched concurrently with
+	// Wails' own teardown, and this has to finish deciding before the window is
+	// gone.
+	mainWindow.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
 		auxiliaryWindows.CloseInspector()
+		if auxiliaryWindows.ReleaseHiddenWindows() {
+			// A settings or workflow window is still on screen, so the
+			// application outlives the workbench exactly as it did before.
+			return
+		}
+		// Everything else was hidden bookkeeping. Quit explicitly instead of
+		// leaving it to the last-window-closed rule, which would be racing the
+		// teardown of the windows just released.
+		wailsApp.Quit()
+	})
+	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		// Recovering interrupted runs walks every run on disk. It used to sit in
+		// front of window creation, so the whole scan was charged to the launch
+		// the user is watching; nothing in it is needed to paint the workbench,
+		// and its progress reaches the UI over the run-state channel either way.
+		// A failure here must not take down an application that has already
+		// started, so it is logged rather than fatal.
+		go func() {
+			if err := service.RecoverInterruptedRuns(context.Background()); err != nil {
+				log.Error("recover interrupted runs", zap.Error(err))
+			}
+		}()
+		// Build the settings webview while the machine is idle, so opening it
+		// later is a Show() rather than a second full bundle load. Delayed so it
+		// competes with nothing during the launch it is meant to keep fast.
+		time.AfterFunc(3*time.Second, auxiliaryWindows.PrewarmSettings)
 	})
 
 	if err := wailsApp.Run(); err != nil {
