@@ -169,13 +169,17 @@ test("settings renders directly through shadcn instead of the TUI compatibility 
   const controls = await readFile(path.join(sourceRoot, "app", "components", "settings", "SettingsControls.jsx"), "utf8");
   const workerPage = await readFile(path.join(sourceRoot, "app", "components", "WorkerPage.jsx"), "utf8");
   const workerModal = await readFile(path.join(sourceRoot, "app", "components", "WorkerModal.jsx"), "utf8");
-  for (const [name, source] of [["settings", settings], ["worker page", workerPage], ["worker dialog", workerModal]]) {
+  // The confirmation dialog lives beside the controls it borrows rather than
+  // inside the settings screen, so that a window needing only the dialog does
+  // not load the whole screen with it.
+  const confirmDialog = await readFile(path.join(sourceRoot, "app", "components", "settings", "ConfirmDialog.jsx"), "utf8");
+  for (const [name, source] of [["settings", settings], ["worker page", workerPage], ["worker dialog", workerModal], ["confirm dialog", confirmDialog]]) {
     assert.doesNotMatch(source, /ui\/primitives|\bTUISelect\b|<(?:button|input|select|textarea)\b/, `${name} still uses the TUI layer or raw form controls`);
   }
   for (const component of ["Button", "Card", "Input", "Label", "Select", "Switch"]) {
     assert.match(controls, new RegExp(`components/ui/${component.toLowerCase()}`), `${component} must come from shadcn`);
   }
-  assert.match(settings, /components\/ui\/dialog/);
+  assert.match(confirmDialog, /components\/ui\/dialog/);
   assert.match(settings, /components\/ui\/scroll-area/);
 });
 

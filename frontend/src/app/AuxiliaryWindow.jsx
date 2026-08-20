@@ -8,7 +8,11 @@ import {
   WorkspaceBinding,
   WorkerBinding,
 } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
-import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
+import SettingsPage from "./SettingsPage.jsx";
+import { ConfirmDialog } from "./components/settings/ConfirmDialog.jsx";
+import { demoSettings } from "./settingsDefaults.js";
+import { scheduleIdle } from "./scheduleIdle.js";
+import { auxiliaryWindowShownEvent, runtimesChangedEvent, settingsChangedEvent, workflowsChangedEvent } from "./auxiliaryWindowEvents.js";
 import { copy, errorMessage } from "./format.js";
 import { loopTemplate } from "./templates.js";
 import { nextWorkflowDefinitionID } from "./workflowIds.js";
@@ -18,9 +22,6 @@ const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary
 const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
 const WorkerPage = lazy(() => import("./components/WorkerPage.jsx"));
 const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
-
-export const settingsChangedEvent = "onecatch:settings-changed";
-export const workflowsChangedEvent = "onecatch:workflows-changed";
 
 const emptyWorkerForm = () => ({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
 const editWorkerForm = (worker) => ({ id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled });
@@ -45,15 +46,6 @@ function loadSettingsSupport() {
     WorkerBinding.ListWorkers(),
   ]);
   return settingsSupportPromise;
-}
-
-function scheduleIdle(callback) {
-  if (typeof window.requestIdleCallback === "function") {
-    const id = window.requestIdleCallback(callback, { timeout: 600 });
-    return () => window.cancelIdleCallback(id);
-  }
-  const id = window.setTimeout(callback, 0);
-  return () => window.clearTimeout(id);
 }
 
 function LoadingWindow() {
@@ -132,6 +124,34 @@ export function SettingsWindow() {
       });
     });
     return () => { active = false; cancelIdle(); };
+  }, [mode]);
+
+  // The window survives its own close as a hidden webview, so a reopen is a
+  // Show() with whatever was on screen last time still in state. Reconcile the
+  // two things that can have moved on: the settings themselves (edited from the
+  // workbench) and the runtime probe.
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    return Events.On(auxiliaryWindowShownEvent, async (event) => {
+      if (event?.data?.name !== "settings") return;
+      try {
+        const [value, runtimeItems, workerItems] = await Promise.all([
+          SettingsBinding.GetSettings(), RuntimeBinding.ListRuntimes(), WorkerBinding.ListWorkers(),
+        ]);
+        setSettings(value || demoSettings);
+        setRuntimes(runtimeItems || []);
+        setWorkers(workerItems || []);
+      } catch {
+        // What is on screen stays usable; the next reopen retries.
+      }
+    });
+  }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    return Events.On(runtimesChangedEvent, (event) => {
+      if (Array.isArray(event?.data)) setRuntimes(event.data);
+    });
   }, [mode]);
 
   useEffect(() => {
@@ -264,6 +284,11 @@ export function WorkflowsWindow() {
   }, []);
 
   useEffect(() => { void load(); }, [load]);
+  // Retained across a close like the settings window, so a reopen has to
+  // reconcile rather than assume its state is current.
+  useEffect(() => Events.On(auxiliaryWindowShownEvent, (event) => {
+    if (event?.data?.name === "workflows") void load();
+  }), [load]);
   useEffect(() => {
     const nativeSidebar = globalThis.webkit?.messageHandlers?.onecatchSidebar;
     if (!nativeSidebar || mode === "loading") return;

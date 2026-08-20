@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lock, Minus, PanelRightOpen, PictureInPicture2, Square, SquareTerminal, X } from "lucide-react";
 import { Events, Window } from "@wailsio/runtime";
@@ -15,31 +15,43 @@ import {
   WorkerBinding,
   WindowBinding,
 } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
-import SettingsPage, { ConfirmDialog, demoSettings } from "./SettingsPage.jsx";
+import { ConfirmDialog } from "./components/settings/ConfirmDialog.jsx";
+import { demoSettings } from "./settingsDefaults.js";
 import { mergeRunItems, preserveEqualValue, sortWorkspaces, workspaceResults } from "./listNavigation.js";
-import { Action, StatusBadge, TUISelect } from "../ui/primitives.jsx";
+import { StatusBadge, TUISelect } from "../ui/primitives.jsx";
 import { copy, errorMessage, fileName, taskTitleFromPrompt } from "./format.js";
 import { loopTemplate } from "./templates.js";
-import { demoRun, demoRuntimes, demoTasks, demoWorkers, demoWorkflows, demoWorkspaces } from "./demoData.js";
+// Demo fixtures back the fallback the UI drops into when the Wails bindings are
+// missing — running the frontend standalone in a browser. That is a development
+// path, so the fixtures are fetched on demand instead of riding along in the
+// workbench's first load. Every reader below is behind `mode === "demo"`, which
+// is only set once this holder is populated.
+let demo = null;
 import Sidebar from "./components/Sidebar.jsx";
 import TaskWorkbench from "./components/TaskWorkbench.jsx";
 import StatusPill from "./components/StatusPill.jsx";
-import WorkflowLibrary from "./components/workflow/WorkflowLibrary.jsx";
-import WorkflowEditor from "./components/workflow/WorkflowEditor.jsx";
-import WorkerPage from "./components/WorkerPage.jsx";
-import WorkerModal from "./components/WorkerModal.jsx";
 import Modal from "./components/Modal.jsx";
-import WhiteboardPage from "./components/whiteboard/WhiteboardPage.jsx";
+
+// Everything below is reachable from the workbench but never on screen when it
+// first paints. Importing them eagerly put the settings screen, the workflow
+// editor and the whiteboard into the first load the user waits through.
+const SettingsPage = lazy(() => import("./SettingsPage.jsx"));
+const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary.jsx"));
+const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
+const WorkerPage = lazy(() => import("./components/WorkerPage.jsx"));
+const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
+const WhiteboardPage = lazy(() => import("./components/whiteboard/WhiteboardPage.jsx"));
 import { applyRunState, applyRuntimeFrames } from "./runtimeStream.js";
 import { nextWorkflowDefinitionID } from "./workflowIds.js";
 import LockScreen from "./components/LockScreen.jsx";
 import { buildLockSignal, completionEdge, LOCK_PHASE } from "./lockSignal.js";
 import { notifyStandby } from "./standbyNotify.js";
-import { settingsChangedEvent, workflowsChangedEvent } from "./AuxiliaryWindow.jsx";
+import { runtimesChangedEvent, settingsChangedEvent, workflowsChangedEvent } from "./auxiliaryWindowEvents.js";
 import { readInspectorDetached, readInspectorPreference, resolveInspectorCollapsed, writeInspectorDetached, writeInspectorPreference } from "./inspectorLayout.js";
 import { buildInspectorContext, inspectorContextSignature, INSPECTOR_ACTION_EVENT, INSPECTOR_CONTEXT_EVENT, INSPECTOR_REQUEST_EVENT, INSPECTOR_WINDOW_EVENT } from "./inspectorContext.js";
 import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeOptions.js";
 import { collapsePanelAtCompact, COMPACT_LAYOUT_QUERY } from "./responsiveLayout.js";
+import { scheduleIdle } from "./scheduleIdle.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
@@ -91,6 +103,13 @@ function initialCompactViewport() {
 
 // Read before the first paint so a restored second-display layout never flashes
 // the docked panel on the way to reopening its own window.
+// Fallback for the lazily loaded views. They are all whole-pane screens, so the
+// placeholder holds the pane rather than collapsing the layout under it.
+function ViewLoading() {
+  const { t } = useTranslation();
+  return <div className="flex min-h-0 flex-1 items-center justify-center bg-background text-sm text-muted-foreground">{t("task.opening")}</div>;
+}
+
 function initialInspectorDetached() {
   try {
     return typeof window === "undefined" ? false : readInspectorDetached(window.localStorage);
@@ -269,46 +288,84 @@ function App() {
     if (mode === "wails") WorkspaceBinding.OpenWorkspace(nextWorkspaceID).then((opened) => setWorkspaces((items) => items.map((item) => item.id === opened.id ? opened : item))).catch((error) => notify("error", errorMessage(error)));
   }, [mode, notify, workspaceID]);
 
+  // Boot is split by what the shell actually cannot draw without.
+  //
+  // Only the workspace list and settings qualify: everything else fills in
+  // behind a rendered window. Waiting on all five calls meant the slowest one
+  // set the time to first paint, and the slowest is ListRuntimes, which may
+  // spawn `<cli> --version` per runtime. Half a second of process startup used
+  // to sit in front of an empty window.
   const boot = useCallback(async () => {
+    let firstWorkspaceID = "";
     try {
-      const [runtimeItems, workspaceItems, workflowItems, workerItems, settingsValue] = await Promise.all([
-        RuntimeBinding.ListRuntimes(), WorkspaceBinding.ListWorkspaces(), WorkflowBinding.ListDefinitions(), WorkerBinding.ListWorkers(), SettingsBinding.GetSettings(),
+      const [workspaceItems, settingsValue] = await Promise.all([
+        WorkspaceBinding.ListWorkspaces(), SettingsBinding.GetSettings(),
       ]);
-      let orderedWorkspaces = sortWorkspaces(workspaceItems || []);
-      if (orderedWorkspaces[0]) {
-        try {
-          const openedWorkspace = await WorkspaceBinding.OpenWorkspace(orderedWorkspaces[0].id);
-          orderedWorkspaces = sortWorkspaces(orderedWorkspaces.map((item) => item.id === openedWorkspace.id ? openedWorkspace : item));
-        } catch {
-          // Preference bookkeeping must not prevent the local workbench from opening.
-        }
-      }
+      const orderedWorkspaces = sortWorkspaces(workspaceItems || []);
+      firstWorkspaceID = orderedWorkspaces[0]?.id || "";
       setMode("wails");
-      setRuntimes(runtimeItems || []);
       setWorkspaces(orderedWorkspaces);
-      setWorkflows(workflowItems || []);
-      setWorkers(workerItems || []);
       setSettings(settingsValue || demoSettings);
-      setWorkspaceID((current) => current || orderedWorkspaces[0]?.id || "");
-      setTaskForm((current) => ({ ...current, workflowId: isAvailableExecutionTarget(workflowItems, current.workflowId) ? current.workflowId : firstWorkflowID() }));
+      setWorkspaceID((current) => current || firstWorkspaceID);
     } catch {
-      setMode("demo");
-      setRuntimes(demoRuntimes);
-      setWorkspaces(sortWorkspaces(demoWorkspaces));
-      setWorkflows(demoWorkflows);
-      setWorkers(demoWorkers);
+      demo = await import("./demoData.js");
+      setRuntimes(demo.demoRuntimes);
+      setWorkspaces(sortWorkspaces(demo.demoWorkspaces));
+      setWorkflows(demo.demoWorkflows);
+      setWorkers(demo.demoWorkers);
       setSettings(demoSettings);
-      setWorkspaceID(demoWorkspaces[0].id);
+      setWorkspaceID(demo.demoWorkspaces[0].id);
       setTaskForm((current) => ({ ...current, workflowId: firstWorkflowID() }));
-      setRunItems([{ ...demoRun.run, task: demoTasks[0] }]);
-      setTasks(demoTasks);
+      setRunItems([{ ...demo.demoRun.run, task: demo.demoTasks[0] }]);
+      setTasks(demo.demoTasks);
       setRunTotal(1);
       setSelectedRunID("run_demo");
-      setRunDetail(demoRun);
+      setRunDetail(demo.demoRun);
+      // Set last: everything reading `demo` is guarded by this mode.
+      setMode("demo");
+      return;
     }
+    // Marking the workspace as opened is bookkeeping for the next launch's sort
+    // order. It never gated the first paint's correctness, only its timing, so
+    // it no longer runs before it.
+    if (!firstWorkspaceID) return;
+    WorkspaceBinding.OpenWorkspace(firstWorkspaceID)
+      .then((opened) => setWorkspaces((items) => sortWorkspaces(items.map((item) => item.id === opened.id ? opened : item))))
+      .catch(() => {
+        // Preference bookkeeping must not disturb an open workbench.
+      });
   }, []);
 
   useEffect(() => { boot(); }, [boot]);
+
+  // The rest of the workbench's reference data. None of it is needed to draw
+  // the shell, so it loads once the window is idle rather than in front of it.
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    let active = true;
+    const cancelIdle = scheduleIdle(() => {
+      Promise.allSettled([RuntimeBinding.ListRuntimes(), WorkflowBinding.ListDefinitions(), WorkerBinding.ListWorkers()])
+        .then(([runtimeResult, workflowResult, workerResult]) => {
+          if (!active) return;
+          if (runtimeResult.status === "fulfilled") setRuntimes(runtimeResult.value || []);
+          if (workerResult.status === "fulfilled") setWorkers(workerResult.value || []);
+          if (workflowResult.status !== "fulfilled") return;
+          const workflowItems = workflowResult.value || [];
+          setWorkflows(workflowItems);
+          setTaskForm((current) => ({ ...current, workflowId: isAvailableExecutionTarget(workflowItems, current.workflowId) ? current.workflowId : firstWorkflowID() }));
+        });
+    });
+    return () => { active = false; cancelIdle(); };
+  }, [mode]);
+
+  // A cached runtime status is served immediately and re-probed in the
+  // background; this is how the corrected list arrives.
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    return Events.On(runtimesChangedEvent, (event) => {
+      if (Array.isArray(event?.data)) setRuntimes(event.data);
+    });
+  }, [mode]);
 
   const inspectRuntimeConfiguration = useCallback(async (harness) => {
     if (harness !== "codex" && harness !== "claude") return null;
@@ -426,8 +483,8 @@ function App() {
       try {
         if (mode === "demo") {
           const keyword = globalSearchQuery.trim().toLocaleLowerCase();
-          const workspaceByID = new Map(demoWorkspaces.map((workspace) => [workspace.id, workspace]));
-          const items = demoTasks.map((task) => ({ task, workspace: workspaceByID.get(task.workspaceId), latestRun: demoRun.run.taskId === task.id ? demoRun.run : null }))
+          const workspaceByID = new Map(demo.demoWorkspaces.map((workspace) => [workspace.id, workspace]));
+          const items = demo.demoTasks.map((task) => ({ task, workspace: workspaceByID.get(task.workspaceId), latestRun: demo.demoRun.run.taskId === task.id ? demo.demoRun.run : null }))
             .filter((item) => item.workspace && (!keyword || `${item.task.title}\n${item.task.prompt}\n${item.workspace.name}\n${item.workspace.path}`.toLocaleLowerCase().includes(keyword)))
             .slice(0, 50);
           if (loadVersion === globalTaskSearchVersion.current) setGlobalTaskItems(items);
@@ -459,7 +516,7 @@ function App() {
       }
       if (mode === "demo") {
         const keyword = runKeyword.toLocaleLowerCase();
-        const items = [{ ...demoRun.run, task: demoTasks[0] }].filter((item) => (!runStatus || item.status === runStatus) && (!keyword || `${item.id}\n${item.task.title}\n${Object.values(item.sessions || {}).join("\n")}`.toLocaleLowerCase().includes(keyword)));
+        const items = [{ ...demo.demoRun.run, task: demo.demoTasks[0] }].filter((item) => (!runStatus || item.status === runStatus) && (!keyword || `${item.id}\n${item.task.title}\n${Object.values(item.sessions || {}).join("\n")}`.toLocaleLowerCase().includes(keyword)));
         if (loadVersion !== runListLoadVersion.current) return;
         setRunItems(items);
         setRunTotal(items.length);
@@ -483,8 +540,8 @@ function App() {
     if (!workspaceID || mode === "loading") return;
     try {
       if (mode === "demo") {
-        setTasks(demoTasks);
-        setPinnedTasks(demoTasks.filter((task) => task.pinned));
+        setTasks(demo.demoTasks);
+        setPinnedTasks(demo.demoTasks.filter((task) => task.pinned));
         return;
       }
       const [workspaceTasks, allTasks] = await Promise.all([
@@ -517,7 +574,7 @@ function App() {
     if (!runID) return;
     const loadVersion = ++runLoadVersion.current;
     const liveGeneration = liveFrameGenerationRef.current;
-    if (mode === "demo") { setRunDetail((current) => current?.run?.id === runID ? current : demoRun); return; }
+    if (mode === "demo") { setRunDetail((current) => current?.run?.id === runID ? current : demo.demoRun); return; }
     try {
       let detail = await TaskRunBinding.GetRun(runID);
       // GetRun is durable truth; the in-memory snapshot fills the small gap
@@ -785,8 +842,8 @@ function App() {
           const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
           setTasks((items) => [...items, queuedTask]); setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(queuedTask.id);
         } else {
-          const demoTask = { ...demoTasks[0], title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, updatedAt: new Date().toISOString() };
-          setTasks((items) => items.map((item) => item.id === demoTask.id ? demoTask : item)); setRunItems([{ ...demoRun.run, workflowId: demoTask.workflowId, status: "running", task: demoTask }]); setRunTotal(1); setSelectedQueuedTaskID(""); setSelectedRunID("run_demo"); setRunDetail({ ...demoRun, task: demoTask, run: { ...demoRun.run, workflowId: demoTask.workflowId, status: "running" }, active: true });
+          const demoTask = { ...demo.demoTasks[0], title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, updatedAt: new Date().toISOString() };
+          setTasks((items) => items.map((item) => item.id === demoTask.id ? demoTask : item)); setRunItems([{ ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running", task: demoTask }]); setRunTotal(1); setSelectedQueuedTaskID(""); setSelectedRunID("run_demo"); setRunDetail({ ...demo.demoRun, task: demoTask, run: { ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running" }, active: true });
         }
       } else {
         const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, title: "", prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachmentPaths: taskForm.attachmentPaths });
@@ -1180,7 +1237,7 @@ function App() {
         compactViewport={compactViewport}
       />
 
-      {whiteboardOpen ? <WhiteboardPage key={workspaceID || "demo"} workspace={selectedWorkspace} mode={mode} runtimes={runtimes} onClose={() => goView("tasks")} /> : <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+      {whiteboardOpen ? <Suspense fallback={<ViewLoading />}><WhiteboardPage key={workspaceID || "demo"} workspace={selectedWorkspace} mode={mode} runtimes={runtimes} onClose={() => goView("tasks")} /></Suspense> : <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
         <div className="app-titlebar drag-region flex h-[52px] shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
           {taskCreateVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={`${location.label} / ${t("task.createTitle")}`}>
             <span className="max-w-40 shrink truncate text-xs text-muted-foreground">{location.label}</span>
@@ -1208,7 +1265,7 @@ function App() {
             ? <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.dock")} title={t("inspector.dockHint")} onClick={dockInspector}><PictureInPicture2 size={16} strokeWidth={2} aria-hidden="true" /></button>
             : inspectorCollapsed && <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /></button>)}
         </div>
-        {editor ? <WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} showBack /> : view === "tasks" ? <TaskWorkbench
+        {editor ? <Suspense fallback={<ViewLoading />}><WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} showBack /></Suspense> : view === "tasks" ? <TaskWorkbench
           mode={mode}
           workspace={selectedWorkspace}
           terminalPreferences={settings.terminal}
@@ -1248,7 +1305,7 @@ function App() {
           onRemoveInstruction={removeQueuedInstruction}
           onPermissionDecision={respondPermission}
           notify={notify}
-        /> : view === "workflows" ? <WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /> : <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} />}
+        /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} /></Suspense>}
       </main>}
     </div>
     {workspaceModal && <Modal className="workspace-create-dialog gap-0 overflow-hidden p-0 sm:max-w-[480px]" title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => busy !== "workspace" && setWorkspaceModal(false)}>
@@ -1272,7 +1329,7 @@ function App() {
       </form>
     </Modal>}
     {renameForm && <Modal className="gap-5 p-5 sm:max-w-md" title={t("task.renameTitle")} subtitle={t("task.renameSubtitle")} onClose={() => busy !== "rename" && setRenameForm(null)}><form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "rename") void renameSelectedTask(); }}><div className="grid gap-2"><Label htmlFor="rename-task-title">{t("task.name")}</Label><Input id="rename-task-title" autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} /></div><DialogFooter className="pt-1"><Button type="button" variant="outline" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>{t("common.cancel")}</Button><Button type="submit" disabled={busy === "rename" || !renameForm.title.trim()}>{busy === "rename" ? t("common.saving") : t("task.saveName")}</Button></DialogFooter></form></Modal>}
-    {workerModal && <WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} />}
+    {workerModal && <Suspense fallback={null}><WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} /></Suspense>}
     <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
     {locked && <LockScreen signal={lockSignal} workspaceName={selectedWorkspace?.name || ""} onExit={exitLock} />}

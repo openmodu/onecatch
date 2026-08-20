@@ -4,7 +4,6 @@ import { Events } from "@wailsio/runtime";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -26,6 +25,8 @@ const ACCENT_SWATCH = { forest: "#694d1f", ocean: "#1f6475", violet: "#684886", 
 import { APPEARANCE_CHANGED_EVENT, accentThemes, chatFontSizes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
 import { codexEffortValues, codexServiceTierValues, demoClaudeConfiguration, demoCodexConfiguration, selectedCodexModel } from "./codexRuntimeOptions.js";
 import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
+import { ConfirmDialog } from "./components/settings/ConfirmDialog.jsx";
+import { demoSettings } from "./settingsDefaults.js";
 
 const sectionMeta = (t) => ["runtime", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -33,40 +34,6 @@ const message = (error, t) => String(error?.message || error || t("common.unknow
 const bytes = (value = 0) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : value < 1073741824 ? `${(value / 1048576).toFixed(1)} MB` : `${(value / 1073741824).toFixed(1)} GB`;
 const sectionKey = (section) => section === "runtime" ? "runtimes" : section;
 const runtimeIds = ["codex", "claude", "modu"];
-
-export const demoSettings = {
-  schemaVersion: 1, revision: 1,
-  runtimes: { codex: { binary: "", defaultModel: "", reasoningEffort: "", serviceTier: "", environmentAllowlist: [] }, claude: { binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] }, modu: { binary: "", defaultModel: "", provider: "auto", environmentAllowlist: [] } },
-  terminal: { shell: "", arguments: [], theme: "system" },
-  execution: { maxTransitions: 20, maxConsecutiveFailures: 3, stepTimeoutSeconds: 1800, maxLocalDAGConcurrency: 4, interruptGraceSeconds: 10, defaultSandbox: "workspace-write" },
-  security: { allowFullSandbox: false, confirmFullSandboxEveryRun: true, diagnosticsIncludePrompt: false, diagnosticsIncludeRawEvents: false },
-  storage: { completedRunRetentionDays: 0, logLevel: "info", logMaxSizeMB: 20, logMaxBackups: 5, logMaxAgeDays: 14 },
-  experimental: { remoteWorkersEnabled: false },
-};
-
-export function ConfirmDialog({ dialog, busy = false, onCancel, onConfirm }) {
-  const { t } = useTranslation();
-  if (!dialog) return null;
-  return <Dialog open onOpenChange={(open) => !open && !busy && onCancel()}>
-    <DialogContent
-      showCloseButton={false}
-      className="sm:max-w-md"
-      onEscapeKeyDown={(event) => busy && event.preventDefault()}
-      onPointerDownOutside={(event) => busy && event.preventDefault()}
-    >
-      <DialogHeader>
-        <SettingsKicker>{dialog.eyebrow || t(dialog.dangerous ? "modal.dangerous" : "modal.confirmChange")}</SettingsKicker>
-        <DialogTitle>{dialog.title}</DialogTitle>
-        <DialogDescription>{dialog.description}</DialogDescription>
-      </DialogHeader>
-      {dialog.detail && <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{dialog.detail}</div>}
-      <DialogFooter>
-        <SettingsButton tone="muted" disabled={busy} onClick={onCancel}>{dialog.cancelLabel || t("common.cancel")}</SettingsButton>
-        <SettingsButton autoFocus tone={dialog.dangerous ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>{busy ? t("common.processing") : dialog.confirmLabel || t("common.confirm")}</SettingsButton>
-      </DialogFooter>
-    </DialogContent>
-  </Dialog>;
-}
 
 export default function SettingsPage({ mode, value, runtimes, onChange, notify, workersPanel }) {
   const { t, i18n } = useTranslation();
