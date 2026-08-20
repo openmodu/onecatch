@@ -734,6 +734,15 @@ export class RunDetail {
              */
             this["runtimeEvents"] = [];
         }
+        if (!("runtimeEventsTotal" in $$source)) {
+            /**
+             * RuntimeEventsTotal is how many entries the transcript has in full, which
+             * may exceed the window carried in RuntimeEvents.
+             * @member
+             * @type {number}
+             */
+            this["runtimeEventsTotal"] = 0;
+        }
         if (!("instructions" in $$source)) {
             /**
              * @member
@@ -772,7 +781,7 @@ export class RunDetail {
         const $$createField4_0 = $$createType6;
         const $$createField5_0 = $$createType8;
         const $$createField6_0 = $$createType10;
-        const $$createField7_0 = $$createType12;
+        const $$createField8_0 = $$createType12;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("run" in $$parsedSource) {
             $$parsedSource["run"] = $$createField0_0($$parsedSource["run"]);
@@ -796,7 +805,7 @@ export class RunDetail {
             $$parsedSource["runtimeEvents"] = $$createField6_0($$parsedSource["runtimeEvents"]);
         }
         if ("instructions" in $$parsedSource) {
-            $$parsedSource["instructions"] = $$createField7_0($$parsedSource["instructions"]);
+            $$parsedSource["instructions"] = $$createField8_0($$parsedSource["instructions"]);
         }
         return new RunDetail(/** @type {Partial<RunDetail>} */($$parsedSource));
     }

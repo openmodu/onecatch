@@ -156,10 +156,19 @@ type RunDetail struct {
 	StepRuns      []domainworkflows.StepRun     `json:"stepRuns"`
 	Events        []WorkflowEventView           `json:"events"`
 	RuntimeEvents []RuntimeEventView            `json:"runtimeEvents"`
-	Instructions  []domainworkflows.Instruction `json:"instructions"`
-	Active        bool                          `json:"active"`
-	LastError     string                        `json:"lastError,omitempty"`
+	// RuntimeEventsTotal is how many entries the transcript has in full, which
+	// may exceed the window carried in RuntimeEvents.
+	RuntimeEventsTotal int                           `json:"runtimeEventsTotal"`
+	Instructions       []domainworkflows.Instruction `json:"instructions"`
+	Active             bool                          `json:"active"`
+	LastError          string                        `json:"lastError,omitempty"`
 }
+
+// runtimeTranscriptWindow bounds what opening a run ships to the UI. A long
+// session's transcript is unbounded, and every entry becomes a mounted
+// component, so the newest slice is sent first and the rest is fetched only if
+// the user scrolls back for it.
+const runtimeTranscriptWindow = 400
 
 type Service struct {
 	store             *localdata.Store
@@ -915,42 +924,68 @@ func (a *Service) GetRunDetail(ctx context.Context, runID string) (RunDetail, er
 		if listErr != nil {
 			return RunDetail{}, listErr
 		}
-		enrichStepRunUsage(&detail.StepRuns[stepIndex], items)
-		detail.RuntimeEvents = append(detail.RuntimeEvents, foldRuntimeEventViews(stepRun.ID, items)...)
+		views, usage := foldRuntimeEventViews(stepRun.ID, items, needsUsageBackfill(detail.StepRuns[stepIndex]))
+		applyUsageBackfill(&detail.StepRuns[stepIndex], usage)
+		detail.RuntimeEvents = append(detail.RuntimeEvents, views...)
+	}
+	detail.RuntimeEventsTotal = len(detail.RuntimeEvents)
+	if len(detail.RuntimeEvents) > runtimeTranscriptWindow {
+		// Keep the newest end of the transcript. The frontend renders every
+		// entry it is given through a Markdown pipeline, so a long history is
+		// paid for in mounted components even though the user is looking at the
+		// bottom of it; RuntimeEventsTotal tells it to offer the rest.
+		detail.RuntimeEvents = detail.RuntimeEvents[len(detail.RuntimeEvents)-runtimeTranscriptWindow:]
 	}
 	return detail, nil
 }
 
-// enrichStepRunUsage derives the cache breakdown for runs written before the
-// detailed fields were added. Runtime event Raw values already retain the
-// provider's terminal usage object, so this is a read-only compatibility layer
-// rather than a risky migration of users' JSONL history.
-func enrichStepRunUsage(stepRun *domainworkflows.StepRun, items []domainworkflows.RuntimeEvent) {
-	for index := len(items) - 1; index >= 0; index-- {
-		var event agentrun.Event
-		if json.Unmarshal(items[index].Payload, &event) != nil || event.Raw == "" {
-			continue
+// GetRunTranscript returns the whole folded transcript, without the window
+// GetRunDetail applies. It backs the frontend's "load earlier" control.
+func (a *Service) GetRunTranscript(ctx context.Context, runID string) ([]RuntimeEventView, error) {
+	stepRuns, err := a.store.Repos.Workflows.ListStepRuns(ctx, runID)
+	if err != nil {
+		return nil, err
+	}
+	out := []RuntimeEventView{}
+	for _, stepRun := range stepRuns {
+		items, listErr := a.store.Repos.Workflows.ListRuntimeEvents(ctx, runID, stepRun.ID, 0, 10_000)
+		if listErr != nil {
+			return nil, listErr
 		}
-		usage, ok := usageFromRuntimeRaw(event.Raw)
-		if !ok {
-			continue
-		}
-		if usage.InputTokens > stepRun.InputTokens {
-			stepRun.InputTokens = usage.InputTokens
-		}
-		if usage.OutputTokens > stepRun.OutputTokens {
-			stepRun.OutputTokens = usage.OutputTokens
-		}
-		if usage.CachedInputTokens > stepRun.CachedInputTokens {
-			stepRun.CachedInputTokens = usage.CachedInputTokens
-		}
-		if usage.CacheCreationInputTokens > stepRun.CacheCreationInputTokens {
-			stepRun.CacheCreationInputTokens = usage.CacheCreationInputTokens
-		}
-		if usage.ReasoningOutputTokens > stepRun.ReasoningOutputTokens {
-			stepRun.ReasoningOutputTokens = usage.ReasoningOutputTokens
-		}
-		return
+		views, _ := foldRuntimeEventViews(stepRun.ID, items, false)
+		out = append(out, views...)
+	}
+	return out, nil
+}
+
+// needsUsageBackfill reports whether a step run predates the detailed usage
+// fields. A run finished by the current code writes them at completion, so the
+// derivation below is a compatibility layer for old data — and skipping it lets
+// the fold pass ignore Raw entirely for everything written since.
+func needsUsageBackfill(stepRun domainworkflows.StepRun) bool {
+	return stepRun.InputTokens == 0 && stepRun.OutputTokens == 0 &&
+		stepRun.CachedInputTokens == 0 && stepRun.CacheCreationInputTokens == 0 &&
+		stepRun.ReasoningOutputTokens == 0
+}
+
+// applyUsageBackfill fills in a step run's token breakdown from what the fold
+// pass recovered. It only ever raises a value, so a partially populated step run
+// keeps whatever it already recorded.
+func applyUsageBackfill(stepRun *domainworkflows.StepRun, usage agentrun.Usage) {
+	if usage.InputTokens > stepRun.InputTokens {
+		stepRun.InputTokens = usage.InputTokens
+	}
+	if usage.OutputTokens > stepRun.OutputTokens {
+		stepRun.OutputTokens = usage.OutputTokens
+	}
+	if usage.CachedInputTokens > stepRun.CachedInputTokens {
+		stepRun.CachedInputTokens = usage.CachedInputTokens
+	}
+	if usage.CacheCreationInputTokens > stepRun.CacheCreationInputTokens {
+		stepRun.CacheCreationInputTokens = usage.CacheCreationInputTokens
+	}
+	if usage.ReasoningOutputTokens > stepRun.ReasoningOutputTokens {
+		stepRun.ReasoningOutputTokens = usage.ReasoningOutputTokens
 	}
 }
 
@@ -989,13 +1024,24 @@ func usageFromRuntimeRaw(raw string) (agentrun.Usage, bool) {
 	}
 }
 
-func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEvent) []RuntimeEventView {
+// foldRuntimeEventViews collapses a step's stored events into the transcript
+// the UI renders. When withUsage is set it also reports the last usage it saw,
+// in the same pass: a stored payload is several kilobytes of provider JSON, and
+// decoding the whole file once per thing we want out of it made opening a run
+// cost three passes over the same megabytes.
+func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEvent, withUsage bool) ([]RuntimeEventView, agentrun.Usage) {
 	views := make([]RuntimeEventView, 0, len(items))
 	streamIndexes := make(map[string]int)
+	var usage agentrun.Usage
 	for _, item := range items {
 		var event agentrun.Event
 		if json.Unmarshal(item.Payload, &event) != nil {
 			continue
+		}
+		if withUsage && event.Raw != "" {
+			if found, ok := usageFromRuntimeRaw(event.Raw); ok {
+				usage = found
+			}
 		}
 		at := item.At
 		if !event.At.IsZero() {
@@ -1030,7 +1076,7 @@ func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEven
 		current.At = view.At
 		views[index] = current
 	}
-	return views
+	return views, usage
 }
 
 func (a *Service) dispatch(runID string, execute func(context.Context) (domainworkflows.Run, error)) {

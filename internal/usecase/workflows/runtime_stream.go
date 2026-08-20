@@ -242,8 +242,21 @@ func (c *runtimeEventCollector) Close() error {
 	return c.err
 }
 
+// retainsRaw reports whether an event's original provider line is worth
+// storing. Raw is the whole JSONL line the runtime emitted — for a tool result
+// or a message that is the entire payload a second time, and it dominates the
+// file: on a real transcript it was 2.7MB of 3.3MB. Nothing reads it back
+// except the usage backfill, which only ever finds usage on the terminal
+// events, so those are the only ones that keep it.
+func retainsRaw(kind agentrun.EventKind) bool {
+	return kind == agentrun.KindUsage || kind == agentrun.KindResult
+}
+
 func (s *Usecase) newRuntimeCollector(runID, stepRunID string) *runtimeEventCollector {
 	persist := func(event agentrun.Event) (int64, error) {
+		if !retainsRaw(event.Kind) {
+			event.Raw = ""
+		}
 		payload, err := json.Marshal(event)
 		if err != nil {
 			return 0, err

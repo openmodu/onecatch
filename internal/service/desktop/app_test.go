@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"fmt"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -55,9 +56,9 @@ func TestFoldRuntimeEventViewsCollapsesDurableStream(t *testing.T) {
 	end.Phase, end.Revision, end.Text = agentrun.StreamEnd, 3, "hello!"
 	atomic := agentrun.Event{Kind: agentrun.KindUsage, At: at}
 
-	views := foldRuntimeEventViews("step-1", []domainworkflows.RuntimeEvent{
+	views, _ := foldRuntimeEventViews("step-1", []domainworkflows.RuntimeEvent{
 		runtimeEvent(t, 1, start), runtimeEvent(t, 2, first), runtimeEvent(t, 3, second), runtimeEvent(t, 4, end), runtimeEvent(t, 5, atomic),
-	})
+	}, false)
 	if len(views) != 2 {
 		t.Fatalf("views = %+v", views)
 	}
@@ -96,7 +97,8 @@ func TestEnrichStepRunUsageRecoversHistoricalProviderDetails(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			at := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
 			items := []domainworkflows.RuntimeEvent{runtimeEvent(t, 1, agentrun.Event{Kind: test.kind, Raw: test.raw, At: at})}
-			enrichStepRunUsage(&test.step, items)
+			_, usage := foldRuntimeEventViews("step-1", items, true)
+			applyUsageBackfill(&test.step, usage)
 			if test.step.InputTokens != test.want.InputTokens || test.step.CachedInputTokens != test.want.CachedInputTokens || test.step.CacheCreationInputTokens != test.want.CacheCreationInputTokens || test.step.OutputTokens != test.want.OutputTokens || test.step.ReasoningOutputTokens != test.want.ReasoningOutputTokens {
 				t.Fatalf("step = %+v, want usage %+v", test.step, test.want)
 			}
@@ -565,5 +567,60 @@ func TestInterruptAndInsertResumesWithPriorityInstruction(t *testing.T) {
 			t.Fatalf("resumed run did not complete: %+v", detail.Run)
 		}
 		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+// A transcript grows without bound and every entry becomes a mounted component
+// in the frontend, so opening a run must not hand over the whole history. The
+// window has to keep the newest end — that is where the user is looking — and
+// say how much it left behind, or the omission is indistinguishable from a run
+// that never had those turns.
+func TestGetRunDetailWindowsTheTranscriptToItsNewestEnd(t *testing.T) {
+	at := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
+	items := make([]domainworkflows.RuntimeEvent, 0, runtimeTranscriptWindow+40)
+	for index := range runtimeTranscriptWindow + 40 {
+		items = append(items, runtimeEvent(t, int64(index+1), agentrun.Event{
+			Kind: agentrun.KindMessage,
+			Text: fmt.Sprintf("entry-%d", index+1),
+			At:   at.Add(time.Duration(index) * time.Second),
+		}))
+	}
+	views, _ := foldRuntimeEventViews("step-1", items, false)
+	if len(views) != len(items) {
+		t.Fatalf("folded %d views from %d atomic events", len(views), len(items))
+	}
+
+	windowed := views
+	if len(windowed) > runtimeTranscriptWindow {
+		windowed = windowed[len(windowed)-runtimeTranscriptWindow:]
+	}
+	if len(windowed) != runtimeTranscriptWindow {
+		t.Fatalf("window = %d entries, want %d", len(windowed), runtimeTranscriptWindow)
+	}
+	if last := windowed[len(windowed)-1]; last.Text != fmt.Sprintf("entry-%d", len(items)) {
+		t.Fatalf("window ends at %q, want the newest entry", last.Text)
+	}
+	if first := windowed[0]; first.Text != fmt.Sprintf("entry-%d", len(items)-runtimeTranscriptWindow+1) {
+		t.Fatalf("window starts at %q, want the oldest entry still inside it", first.Text)
+	}
+}
+
+// The usage backfill is a compatibility layer for runs written before the token
+// fields existed. A step run that already recorded them must not send the fold
+// pass hunting through Raw for something it already knows.
+func TestNeedsUsageBackfillOnlyForStepRunsWithoutTokens(t *testing.T) {
+	if !needsUsageBackfill(domainworkflows.StepRun{}) {
+		t.Fatal("a step run with no recorded tokens must be backfilled")
+	}
+	for name, stepRun := range map[string]domainworkflows.StepRun{
+		"input":     {InputTokens: 1},
+		"output":    {OutputTokens: 1},
+		"cached":    {CachedInputTokens: 1},
+		"creation":  {CacheCreationInputTokens: 1},
+		"reasoning": {ReasoningOutputTokens: 1},
+	} {
+		if needsUsageBackfill(stepRun) {
+			t.Errorf("%s: a step run that recorded tokens must not be backfilled", name)
+		}
 	}
 }

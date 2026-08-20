@@ -48,6 +48,9 @@ func (b *TaskRunBinding) StartRun(taskID, confirmationToken string) (domainworkf
 func (b *TaskRunBinding) GetRun(runID string) (desktopservice.RunDetail, error) {
 	return b.service.GetRunDetail(context.Background(), runID)
 }
+func (b *TaskRunBinding) GetRunTranscript(runID string) ([]desktopservice.RuntimeEventView, error) {
+	return b.service.GetRunTranscript(context.Background(), runID)
+}
 func (b *TaskRunBinding) GetRunStreamSnapshot(runID string) []runstream.Frame {
 	return b.service.GetRunStreamSnapshot(runID)
 }
