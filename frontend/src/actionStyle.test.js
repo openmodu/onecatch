@@ -463,9 +463,13 @@ test("select options keep long labels and metadata from overlapping", async () =
   // The option row is now a shadcn SelectItem, so this asserts the behaviour
   // rather than the old .ui-select__* class names: both halves truncate, the
   // metadata is width-capped so it cannot crowd out the label, and the full
-  // text stays reachable through title.
-  assert.match(primitives, /className="truncate" title=\{option\.label\}/);
-  assert.match(primitives, /max-w-\[42%\][^"]*truncate[^>]*title=\{option\.meta\}/);
+  // text stays reachable through title. Radix wraps the row in a shrink-to-fit
+  // ItemText span, so the row has to be stretched to the item width first —
+  // otherwise the percentage cap resolves against the label's own width and
+  // chops short values down to "l…".
+  assert.match(primitives, /className="\[&>span:last-child\]:w-full \[&>span:last-child\]:min-w-0"/);
+  assert.match(primitives, /className="min-w-0 flex-1 truncate" title=\{option\.label\}/);
+  assert.match(primitives, /max-w-\[50%\][^"]*truncate[^>]*title=\{option\.meta\}/);
 });
 
 test("select tolerates the empty-string option value Radix rejects", async () => {

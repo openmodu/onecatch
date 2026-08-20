@@ -1,0 +1,10 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "onecatch-frontend",
+      "url": "http://localhost:9245",
+      "port": 9245
+    }
+  ]
+}

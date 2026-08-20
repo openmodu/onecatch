@@ -190,10 +190,10 @@ export function TUISelect({ value, onChange, options = [], ariaLabel, disabled =
       </SelectTrigger>
       <SelectContent>
         {normalized.map((option, index) => (
-          <SelectItem key={`${option.value}-${index}`} value={option.value} disabled={option.disabled}>
-            <span className="truncate" title={option.label}>{option.label}</span>
+          <SelectItem key={`${option.value}-${index}`} value={option.value} disabled={option.disabled} className="[&>span:last-child]:w-full [&>span:last-child]:min-w-0">
+            <span className="min-w-0 flex-1 truncate" title={option.label}>{option.label}</span>
             {option.meta && (
-              <span className="ml-auto max-w-[42%] truncate text-xs text-muted-foreground" title={option.meta}>
+              <span className="max-w-[50%] shrink-0 truncate text-xs text-muted-foreground" title={option.meta}>
                 {option.meta}
               </span>
             )}
