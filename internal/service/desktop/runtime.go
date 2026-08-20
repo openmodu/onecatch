@@ -4,12 +4,14 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
 	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 type RuntimeConfig struct {
@@ -39,10 +41,14 @@ type RuntimeRegistry struct {
 	config             RuntimeConfig
 	settings           map[string]domainsettings.RuntimeSettings
 	statusCache        map[string]runtimeStatusCacheEntry
+	statusPath         string
+	statusRefreshing   bool
 	interruptGrace     time.Duration
 	engine             *agentrun.Engine
 	permissionMu       sync.Mutex
 	pendingPermissions map[string]*pendingPermission
+	changedMu          sync.RWMutex
+	changed            func([]RuntimeInfo)
 }
 
 type pendingPermission struct {
@@ -54,16 +60,75 @@ type pendingPermission struct {
 
 const runtimeStatusCacheTTL = 5 * time.Minute
 
+// runtimeStatusFile persists the last probe result across restarts. Probing
+// spawns `<binary> --version` per runtime — hundreds of milliseconds of process
+// startup for the Node-based CLIs — and the in-memory cache alone means every
+// cold launch pays it again before the runtime list can be shown.
+const runtimeStatusFile = "runtime-status.json"
+
 type runtimeStatusCacheEntry struct {
-	configured string
-	info       RuntimeInfo
+	Configured string      `json:"configured"`
+	Info       RuntimeInfo `json:"info"`
+}
+
+type runtimeStatusSnapshot struct {
+	Version int                                `json:"version"`
+	Entries map[string]runtimeStatusCacheEntry `json:"entries"`
 }
 
 func NewRuntimeRegistry(root string) (*RuntimeRegistry, error) {
-	_ = root
 	registry := &RuntimeRegistry{pendingPermissions: make(map[string]*pendingPermission), statusCache: make(map[string]runtimeStatusCacheEntry)}
+	if strings.TrimSpace(root) != "" {
+		registry.statusPath = filepath.Join(root, runtimeStatusFile)
+		registry.loadStatusCache()
+	}
 	registry.replace(RuntimeConfig{})
 	return registry, nil
+}
+
+// SetRuntimesChanged registers the sink for background probe results. It is
+// wired once during startup, before any window exists, so a plain guarded field
+// is enough.
+func (r *RuntimeRegistry) SetRuntimesChanged(notify func([]RuntimeInfo)) {
+	r.changedMu.Lock()
+	r.changed = notify
+	r.changedMu.Unlock()
+}
+
+func (r *RuntimeRegistry) notifyRuntimesChanged(items []RuntimeInfo) {
+	r.changedMu.RLock()
+	notify := r.changed
+	r.changedMu.RUnlock()
+	if notify != nil {
+		notify(items)
+	}
+}
+
+// loadStatusCache seeds the in-memory cache from disk. A missing or unreadable
+// snapshot is not an error: it only means the next List() probes for real.
+func (r *RuntimeRegistry) loadStatusCache() {
+	var snapshot runtimeStatusSnapshot
+	if err := localfile.ReadJSON(r.statusPath, &snapshot); err != nil || snapshot.Version != 1 {
+		return
+	}
+	for id, entry := range snapshot.Entries {
+		if entry.Info.ID == id {
+			r.statusCache[id] = entry
+		}
+	}
+}
+
+// persistStatusCacheLocked must be called with probeMu held.
+func (r *RuntimeRegistry) persistStatusCacheLocked() {
+	if r.statusPath == "" {
+		return
+	}
+	entries := make(map[string]runtimeStatusCacheEntry, len(r.statusCache))
+	for id, entry := range r.statusCache {
+		entries[id] = entry
+	}
+	// A failed write only costs the next launch one probe round.
+	_ = localfile.WriteJSONAtomic(r.statusPath, runtimeStatusSnapshot{Version: 1, Entries: entries})
 }
 
 func (r *RuntimeRegistry) Available(runtime agentrun.Runtime) bool {
@@ -171,9 +236,50 @@ func (r *RuntimeRegistry) ResolvePermission(runID, requestID, decision string) e
 	}
 }
 
+type runtimeSpec struct {
+	runtime    agentrun.Runtime
+	name       string
+	configured string
+}
+
+func runtimeSpecs(config RuntimeConfig) []runtimeSpec {
+	return []runtimeSpec{
+		{agentrun.RuntimeCodex, "Codex", config.CodexBinary},
+		{agentrun.RuntimeClaude, "Claude Code", config.ClaudeBinary},
+		{agentrun.RuntimeModu, "Modu Code", config.ModuBinary},
+	}
+}
+
+// probeRuntimes runs the given probes concurrently and writes each result into
+// items at its own index.
+func probeRuntimes(engine *agentrun.Engine, specs []runtimeSpec, indexes []int, items []RuntimeInfo) {
+	type probeResult struct {
+		index int
+		info  RuntimeInfo
+	}
+	results := make(chan probeResult, len(indexes))
+	for _, index := range indexes {
+		go func(index int, spec runtimeSpec) {
+			results <- probeResult{index: index, info: runtimeInfo(engine, spec.runtime, spec.name, spec.configured)}
+		}(index, specs[index])
+	}
+	for range indexes {
+		result := <-results
+		items[result.index] = result.info
+	}
+}
+
+// List reports the status of every known runtime.
+//
+// A cached entry is returned even once it has aged past the TTL, because the
+// only way to refresh it is to spawn `<binary> --version` — half a second of
+// process startup that must never sit in front of a window's first paint. The
+// stale entry goes out immediately and a background refresh pushes the
+// corrected list through SetRuntimesChanged. Only a runtime with no usable
+// entry at all (first ever launch, or a binary path the user just changed) is
+// probed synchronously, since there is nothing else to show for it.
 func (r *RuntimeRegistry) List() []RuntimeInfo {
 	r.probeMu.Lock()
-	defer r.probeMu.Unlock()
 	if r.statusCache == nil {
 		r.statusCache = make(map[string]runtimeStatusCacheEntry)
 	}
@@ -181,40 +287,71 @@ func (r *RuntimeRegistry) List() []RuntimeInfo {
 	config := r.config
 	engine := r.engine
 	r.mu.RUnlock()
-	type runtimeSpec struct {
-		runtime    agentrun.Runtime
-		name       string
-		configured string
-	}
-	specs := []runtimeSpec{
-		{agentrun.RuntimeCodex, "Codex", config.CodexBinary},
-		{agentrun.RuntimeClaude, "Claude Code", config.ClaudeBinary},
-		{agentrun.RuntimeModu, "Modu Code", config.ModuBinary},
-	}
+	specs := runtimeSpecs(config)
 	items := make([]RuntimeInfo, len(specs))
-	type probeResult struct {
-		index int
-		info  RuntimeInfo
-	}
-	results := make(chan probeResult, len(specs))
-	pending := 0
+	var uncached []int
+	stale := false
 	for index, spec := range specs {
 		cached, ok := r.statusCache[string(spec.runtime)]
-		if ok && cached.configured == spec.configured && time.Since(cached.info.CheckedAt) < runtimeStatusCacheTTL {
-			items[index] = cached.info
+		if !ok || cached.Configured != spec.configured {
+			uncached = append(uncached, index)
 			continue
 		}
-		pending++
-		go func(index int, spec runtimeSpec) {
-			results <- probeResult{index: index, info: runtimeInfo(engine, spec.runtime, spec.name, spec.configured)}
-		}(index, spec)
+		items[index] = cached.Info
+		if time.Since(cached.Info.CheckedAt) >= runtimeStatusCacheTTL {
+			stale = true
+		}
 	}
-	for range pending {
-		result := <-results
-		items[result.index] = result.info
-		r.statusCache[string(specs[result.index].runtime)] = runtimeStatusCacheEntry{configured: specs[result.index].configured, info: result.info}
+	if len(uncached) > 0 {
+		probeRuntimes(engine, specs, uncached, items)
+		for _, index := range uncached {
+			r.statusCache[string(specs[index].runtime)] = runtimeStatusCacheEntry{Configured: specs[index].configured, Info: items[index]}
+		}
+		r.persistStatusCacheLocked()
+	}
+	refresh := stale && !r.statusRefreshing
+	if refresh {
+		r.statusRefreshing = true
+	}
+	r.probeMu.Unlock()
+	if refresh {
+		go r.refreshStatus()
 	}
 	return items
+}
+
+// refreshStatus re-probes every runtime off the caller's path and announces the
+// result only when it differs from what the UI was already shown.
+func (r *RuntimeRegistry) refreshStatus() {
+	r.probeMu.Lock()
+	r.mu.RLock()
+	config := r.config
+	engine := r.engine
+	r.mu.RUnlock()
+	specs := runtimeSpecs(config)
+	items := make([]RuntimeInfo, len(specs))
+	indexes := make([]int, len(specs))
+	previous := make([]RuntimeInfo, len(specs))
+	for index, spec := range specs {
+		indexes[index] = index
+		previous[index] = r.statusCache[string(spec.runtime)].Info
+	}
+	probeRuntimes(engine, specs, indexes, items)
+	for index, spec := range specs {
+		r.statusCache[string(spec.runtime)] = runtimeStatusCacheEntry{Configured: spec.configured, Info: items[index]}
+	}
+	r.persistStatusCacheLocked()
+	r.statusRefreshing = false
+	r.probeMu.Unlock()
+
+	for index := range items {
+		// CheckedAt moves on every probe; only a real status change is worth a
+		// re-render in every open window.
+		if previous[index].Available != items[index].Available || previous[index].Version != items[index].Version {
+			r.notifyRuntimesChanged(items)
+			return
+		}
+	}
 }
 
 func (r *RuntimeRegistry) Check(runtime string) (RuntimeInfo, error) {
@@ -250,10 +387,15 @@ func (r *RuntimeRegistry) Update(input RuntimeConfigInput) (RuntimeInfo, error) 
 	r.config = config
 	r.engine = newRuntimeEngine(config)
 	r.mu.Unlock()
-	r.invalidateStatusCache()
+	r.invalidateRuntimeStatus(input.Runtime)
 	return r.Check(input.Runtime)
 }
 
+// ApplySettings deliberately does not drop the status cache. It runs on every
+// startup and after every settings save, including saves that touch nothing a
+// runtime probe depends on. Entries are keyed by the configured binary path, so
+// a path that actually changed is re-probed by List() on its own; a path that
+// did not is refreshed in the background once its TTL expires.
 func (r *RuntimeRegistry) ApplySettings(runtimes map[string]domainsettings.RuntimeSettings, interruptGraceSeconds int) {
 	r.mu.Lock()
 	copySettings := make(map[string]domainsettings.RuntimeSettings, len(runtimes))
@@ -265,12 +407,16 @@ func (r *RuntimeRegistry) ApplySettings(runtimes map[string]domainsettings.Runti
 	config := RuntimeConfig{CodexBinary: runtimes["codex"].Binary, ClaudeBinary: runtimes["claude"].Binary, ModuBinary: runtimes["modu"].Binary}
 	r.replace(config)
 	r.mu.Unlock()
-	r.invalidateStatusCache()
 }
 
-func (r *RuntimeRegistry) invalidateStatusCache() {
+// invalidateRuntimeStatus forces the next List() to probe one runtime for real.
+// It exists for the explicit "check this runtime" actions, where the path may be
+// unchanged while its reality is not — the user just installed or removed the
+// CLI — and a stale-serving List() would otherwise answer from the cache.
+func (r *RuntimeRegistry) invalidateRuntimeStatus(id string) {
 	r.probeMu.Lock()
-	r.statusCache = make(map[string]runtimeStatusCacheEntry)
+	delete(r.statusCache, id)
+	r.persistStatusCacheLocked()
 	r.probeMu.Unlock()
 }
 

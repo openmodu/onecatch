@@ -266,8 +266,14 @@ func (a *Service) GetRunStreamSnapshot(runID string) []runstream.Frame {
 	return a.runStreams.Snapshot(runID)
 }
 
-func (a *Service) ListRuntimes() []RuntimeInfo                      { return a.runtimes.List() }
-func (a *Service) CheckRuntime(runtime string) (RuntimeInfo, error) { return a.runtimes.Check(runtime) }
+func (a *Service) ListRuntimes() []RuntimeInfo { return a.runtimes.List() }
+
+// CheckRuntime answers "is this runtime available right now", so unlike
+// ListRuntimes it must not serve a cached probe.
+func (a *Service) CheckRuntime(runtime string) (RuntimeInfo, error) {
+	a.runtimes.invalidateRuntimeStatus(runtime)
+	return a.runtimes.Check(runtime)
+}
 func (a *Service) UpdateRuntimeConfig(input RuntimeConfigInput) (RuntimeInfo, error) {
 	current, err := a.settings.Get(context.Background())
 	if err != nil {
