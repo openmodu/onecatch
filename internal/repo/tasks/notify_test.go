@@ -9,8 +9,8 @@ import (
 
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
-	repotasks "github.com/openmodu/onecatch/internal/repo/tasks"
 	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	repotasks "github.com/openmodu/onecatch/internal/repo/tasks"
 )
 
 type countingNotifier struct{ marks int }
@@ -59,17 +59,32 @@ func TestNotifyingRepoMarksEveryListVisibleWrite(t *testing.T) {
 	if notifier.marks != 1 {
 		t.Fatalf("marks after save = %d, want 1", notifier.marks)
 	}
+	updatedAt := time.Now().UTC()
+	updated, err := repo.UpdateTaskTitle(ctx, "task_1", "demo", "refined", updatedAt)
+	if err != nil || !updated {
+		t.Fatalf("UpdateTaskTitle() = %t, %v", updated, err)
+	}
+	if notifier.marks != 2 {
+		t.Fatalf("marks after title update = %d, want 2", notifier.marks)
+	}
+	updated, err = repo.UpdateTaskTitle(ctx, "task_1", "demo", "stale", updatedAt)
+	if err != nil || updated {
+		t.Fatalf("stale UpdateTaskTitle() = %t, %v", updated, err)
+	}
+	if notifier.marks != 2 {
+		t.Fatalf("marks after skipped title update = %d, want 2", notifier.marks)
+	}
 	if err := repo.DeleteTask(ctx, "task_1"); err != nil {
 		t.Fatal(err)
 	}
-	if notifier.marks != 2 {
-		t.Fatalf("marks after delete = %d, want 2", notifier.marks)
+	if notifier.marks != 3 {
+		t.Fatalf("marks after delete = %d, want 3", notifier.marks)
 	}
 	if err := repo.SaveWorkspace(ctx, workspace); err != nil {
 		t.Fatal(err)
 	}
-	if notifier.marks != 3 {
-		t.Fatalf("marks after workspace save = %d, want 3", notifier.marks)
+	if notifier.marks != 4 {
+		t.Fatalf("marks after workspace save = %d, want 4", notifier.marks)
 	}
 }
 

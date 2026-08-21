@@ -728,7 +728,9 @@ function App() {
     let timer = 0;
     const refresh = () => {
       if (stopped || document.visibilityState === "hidden") return;
-      void Promise.all([loadTasks(), loadRunList()]);
+      const refreshes = [loadTasks(), loadRunList()];
+      if (selectedRunIDRef.current) refreshes.push(loadRun(selectedRunIDRef.current, true));
+      void Promise.all(refreshes);
     };
     // Go already coalesces a burst of writes; this absorbs the rest, and keeps
     // a single user action from firing two refreshes.
@@ -750,7 +752,7 @@ function App() {
       window.clearTimeout(timer);
       window.clearTimeout(pending);
     };
-  }, [loadRunList, loadTasks, mode, workspaceID]);
+  }, [loadRun, loadRunList, loadTasks, mode, workspaceID]);
 
   useEffect(() => {
     if (!selectedQueuedTaskID || mode !== "wails") return undefined;

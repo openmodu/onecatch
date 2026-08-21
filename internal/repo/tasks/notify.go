@@ -2,6 +2,7 @@ package tasks
 
 import (
 	"context"
+	"time"
 
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
@@ -37,6 +38,15 @@ func (r *notifyingRepo) SaveTask(ctx context.Context, task domaintasks.Task) err
 	}
 	r.notify.MarkDirty()
 	return nil
+}
+
+func (r *notifyingRepo) UpdateTaskTitle(ctx context.Context, id, expected, title string, updatedAt time.Time) (bool, error) {
+	updated, err := r.TasksRepo.UpdateTaskTitle(ctx, id, expected, title, updatedAt)
+	if err != nil || !updated {
+		return updated, err
+	}
+	r.notify.MarkDirty()
+	return true, nil
 }
 
 func (r *notifyingRepo) DeleteTask(ctx context.Context, id string) error {

@@ -23,6 +23,7 @@ type TasksRepo interface {
 	GetWorkspace(context.Context, string) (domainworkspaces.Workspace, error)
 	ListWorkspaces(context.Context) ([]domainworkspaces.Workspace, error)
 	SaveTask(context.Context, domaintasks.Task) error
+	UpdateTaskTitle(context.Context, string, string, string, time.Time) (bool, error)
 	GetTask(context.Context, string) (domaintasks.Task, error)
 	ListTasks(context.Context, string) ([]domaintasks.Task, error)
 	DeleteTask(context.Context, string) error
@@ -107,6 +108,36 @@ func (r *tasksImpl) SaveTask(ctx context.Context, task domaintasks.Task) error {
 	return nil
 }
 
+// UpdateTaskTitle replaces only the title when it still matches expected.
+// Keeping the comparison and write under the repository lock prevents an
+// asynchronous title refinement from overwriting concurrent task state writes.
+func (r *tasksImpl) UpdateTaskTitle(ctx context.Context, id, expected, title string, updatedAt time.Time) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if !localfile.ValidID(id) {
+		return false, domaintasks.ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	task, err := r.getTaskLocked(id)
+	if err != nil {
+		return false, err
+	}
+	if task.Title != expected {
+		return false, nil
+	}
+	task.Title = strings.TrimSpace(title)
+	task.UpdatedAt = updatedAt
+	if err := domaintasks.Validate(task); err != nil {
+		return false, err
+	}
+	if err := localfile.WriteJSONAtomic(r.taskPath(task.ID), task); err != nil {
+		return false, fmt.Errorf("update task title: %w", err)
+	}
+	return true, nil
+}
+
 func (r *tasksImpl) GetTask(ctx context.Context, id string) (domaintasks.Task, error) {
 	if err := ctx.Err(); err != nil {
 		return domaintasks.Task{}, err
@@ -116,6 +147,10 @@ func (r *tasksImpl) GetTask(ctx context.Context, id string) (domaintasks.Task, e
 	}
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	return r.getTaskLocked(id)
+}
+
+func (r *tasksImpl) getTaskLocked(id string) (domaintasks.Task, error) {
 	var task domaintasks.Task
 	if err := localfile.ReadJSON(r.taskPath(id), &task); errors.Is(err, os.ErrNotExist) {
 		return domaintasks.Task{}, domaintasks.ErrNotFound

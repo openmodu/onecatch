@@ -314,7 +314,7 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.doesNotMatch(newTask, /task-create-title|t\("task\.name"\)|<Input\b/, "the first prompt must create the task title instead of asking for a separate name");
   assert.doesNotMatch(newTask, /onCancel|new-task-cancel/, "navigation back to history replaces a modal-style cancel action");
   assert.match(app, /taskTitleFromPrompt\(taskForm\.prompt/, "demo mode keeps a deterministic title fallback");
-  assert.match(app, /TaskRunBinding\.CreateTask\(\{[^}]*title:\s*""/, "desktop task creation leaves the title empty so the selected Agent can generate it");
+  assert.match(app, /TaskRunBinding\.CreateTask\(\{[^}]*title:\s*""/, "desktop task creation leaves the title empty so the backend can seed it immediately and refine it asynchronously");
   assert.match(css, /\.new-task-layout\s*\{[^}]*max-width:\s*calc\(var\(--conversation-content-width\)/s, "the creation screen must share the chat column width");
   assert.match(css, /\.new-task-layout\s*\{[^}]*justify-content:\s*center/s, "the creation composer should sit in the central working area instead of hugging the window bottom");
   assert.doesNotMatch(workbench, /!newTaskOpen && !inspectorCollapsed/, "new-task mode must not hide the inspector controls");

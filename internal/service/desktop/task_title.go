@@ -15,6 +15,21 @@ const maxTaskTitlePromptCharacters = 8000
 
 var taskTitlePrefix = regexp.MustCompile(`(?i)^(?:task\s+title|title|任务标题|标题)\s*[:：]\s*`)
 
+func (a *Service) refineTaskTitleAsync(taskID, provisionalTitle, workspace string, definition domainworkflows.Definition, input CreateTaskInput) {
+	if a.rootCtx.Err() != nil {
+		return
+	}
+	a.wg.Add(1)
+	go func() {
+		defer a.wg.Done()
+		title := a.generateTaskTitle(a.rootCtx, workspace, definition, input)
+		if title == provisionalTitle || a.rootCtx.Err() != nil {
+			return
+		}
+		_, _ = a.store.Repos.Tasks.UpdateTaskTitle(a.rootCtx, taskID, provisionalTitle, title, time.Now().UTC())
+	}()
+}
+
 func (a *Service) generateTaskTitle(ctx context.Context, workspace string, definition domainworkflows.Definition, input CreateTaskInput) string {
 	fallback := taskTitleFromPrompt(input.Prompt, "新建任务")
 	if strings.TrimSpace(input.Prompt) == "" {

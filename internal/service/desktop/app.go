@@ -628,8 +628,9 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 		return domaintasks.Task{}, err
 	}
 	title := strings.TrimSpace(input.Title)
-	if title == "" {
-		title = a.generateTaskTitle(ctx, workspace.Path, definition, input)
+	refineTitle := title == ""
+	if refineTitle {
+		title = taskTitleFromPrompt(input.Prompt, "新建任务")
 	}
 	now := time.Now().UTC()
 	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: title, Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Sandbox: strings.TrimSpace(input.Sandbox), Harness: strings.TrimSpace(input.Harness), Model: strings.TrimSpace(input.Model), ReasoningEffort: strings.TrimSpace(input.ReasoningEffort), ServiceTier: strings.TrimSpace(input.ServiceTier), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
@@ -640,6 +641,9 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 	task.Attachments = attachments
 	if err := a.store.Repos.Tasks.SaveTask(ctx, task); err != nil {
 		return domaintasks.Task{}, coded("task_invalid", err.Error())
+	}
+	if refineTitle {
+		a.refineTaskTitleAsync(task.ID, title, workspace.Path, definition, input)
 	}
 	return task, nil
 }
