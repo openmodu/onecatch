@@ -29,6 +29,7 @@ test("shows every harness agent without nested tabs", () => {
 test("uses a frameless collapsible list for harness configuration", () => {
   assert.doesNotMatch(source, /settings\.harnessAgents/);
   const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
+  assert.match(harness, /<h2 id="harness-list-title"[\s\S]*?settings\.harnessList/);
   assert.match(harness, /aria-expanded=\{isExpanded\}/);
   assert.match(harness, /aria-controls=\{panelID\}/);
   assert.match(harness, /divide-y divide-border\/70 border-y/);

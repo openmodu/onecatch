@@ -278,7 +278,9 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
     claude: { name: "Claude Code", command: "claude", env: "ANTHROPIC_API_KEY, HTTPS_PROXY" },
     modu: { name: "Modu Code", command: "modu_code", env: t("settings.optionalEnv") },
   };
-  return <div className="divide-y divide-border/70 border-y border-border/70">
+  return <section aria-labelledby="harness-list-title">
+    <h2 id="harness-list-title" className="mb-3 text-[15px] font-semibold text-foreground">{t("settings.harnessList")}</h2>
+    <div className="divide-y divide-border/70 border-y border-border/70">
     {runtimeIds.map((id) => {
       const integration = value[id]?.integration || (id === "modu" ? "sdk" : "cli");
       const nativeModu = id === "modu" && integration === "sdk";
@@ -335,7 +337,8 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
         </div>}
       </section>;
     })}
-  </div>;
+    </div>
+  </section>;
 }
 
 function ExecutionSettings({ value, setValue, errors }) {
