@@ -10,7 +10,7 @@ test("places Harness between runtime and terminal in settings navigation", () =>
 
 test("keeps appearance separate and moves all runtime controls into Harness", () => {
   assert.match(source, /section === "runtime" && <InterfaceSettings/);
-  assert.match(source, /section === "harness"[\s\S]*?<HarnessSettings/);
+  assert.match(source, /section === "harness" && <HarnessSettings/);
   assert.doesNotMatch(source, /function RuntimeEnvironmentSettings/);
   assert.match(source, /const harnessFields = \["integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "provider"\]/);
 });
@@ -27,7 +27,7 @@ test("shows every harness agent without nested tabs", () => {
 });
 
 test("uses a frameless collapsible list for harness configuration", () => {
-  assert.match(source, /<SettingsSection bare title=\{t\("settings\.harnessAgents"\)\}/);
+  assert.doesNotMatch(source, /settings\.harnessAgents/);
   const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
   assert.match(harness, /aria-expanded=\{isExpanded\}/);
   assert.match(harness, /aria-controls=\{panelID\}/);

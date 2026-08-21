@@ -15,7 +15,7 @@ The annotated source identifies the obsolete local runtime block and clarifies t
 
 ## Focused region comparison evidence
 
-The sidebar and the Harness list were inspected at readable scale because they contain the marked source regions. Harness occupies the annotated sidebar slot and presents Codex, Claude Code, and Modu Code as a lightweight divided list without nested cards or tab navigation. Each row keeps identity and health visible while its configuration can be expanded independently.
+The sidebar and the Harness list were inspected at readable scale because they contain the marked source regions. Harness occupies the annotated sidebar slot and presents Codex, Claude Code, and Modu Code as a lightweight divided list without nested cards, tab navigation, or a redundant second section heading. Each row keeps identity and health visible while its configuration can be expanded independently.
 
 ## Fidelity surfaces
 

@@ -37,7 +37,7 @@ export function SettingsKicker({ children, className = "" }) {
   return <span className={cn("text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground", className)}>{children}</span>;
 }
 
-export function SettingsSection({ title, description, aside, children, className = "", contentClassName = "", bare = false }) {
+export function SettingsSection({ title, description, aside, children, className = "", contentClassName = "" }) {
   return (
     <section className={cn("mb-6", className)}>
       <div className="flex items-start justify-between gap-6 px-0.5 pb-3.5">
@@ -47,9 +47,9 @@ export function SettingsSection({ title, description, aside, children, className
         </div>
         {aside}
       </div>
-      {bare ? <div className={contentClassName}>{children}</div> : <Card className="gap-0 overflow-hidden border-border/80 bg-card/72 py-0 shadow-[0_8px_26px_color-mix(in_oklab,var(--foreground)_4%,transparent)] backdrop-blur-sm">
+      <Card className="gap-0 overflow-hidden border-border/80 bg-card/72 py-0 shadow-[0_8px_26px_color-mix(in_oklab,var(--foreground)_4%,transparent)] backdrop-blur-sm">
         <CardContent className={cn("px-0", contentClassName)}>{children}</CardContent>
-      </Card>}
+      </Card>
     </section>
   );
 }
