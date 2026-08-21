@@ -4,6 +4,7 @@ import test from "node:test";
 
 const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 const composer = readFileSync(new URL("./components/Composer.jsx", import.meta.url), "utf8");
+const styles = readFileSync(new URL("../index.css", import.meta.url), "utf8");
 
 test("single-Agent tasks omit the redundant titlebar status", () => {
   assert.match(app, /selectedTask\.workflowId && selectedTask\.workflowId !== directAgentWorkflowID && <StatusPill/);
@@ -15,4 +16,14 @@ test("single-Agent composer has one state-aware primary control", () => {
   assert.match(composer, /onSelect=\{onInterrupt\}/);
   assert.match(composer, /onSelect=\{onCancel\}/);
   assert.match(composer, /composer\.sendMessage/);
+});
+
+test("session runtime profile uses the same intrinsic width as new task", () => {
+  assert.match(styles, /\.workbench-runtime-profile\s*\{[^}]*width:\s*auto;[^}]*min-width:\s*138px;[^}]*max-width:\s*220px;/s);
+  assert.doesNotMatch(styles, /\.workbench-runtime-profile\s*\{[^}]*min-width:\s*224px;/s);
+});
+
+test("narrow new-task flex growth does not widen the session Codex label", () => {
+  assert.match(styles, /\.new-task-toolbar \.new-task-select\.executor\s*\{\s*flex:\s*1 1 210px;/);
+  assert.doesNotMatch(styles, /(?:^|,)\s*\.new-task-select\.executor\s*\{\s*flex:\s*1 1 210px;/m);
 });

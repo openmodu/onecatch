@@ -2079,8 +2079,9 @@
   }
 
   .workbench-runtime-profile {
-    width: 224px;
-    min-width: 224px;
+    width: auto;
+    min-width: 138px;
+    max-width: 220px;
     margin-left: auto;
   }
 
@@ -2142,10 +2143,10 @@
     .new-task-runtime { min-width: 96px !important; max-width: 150px; }
     .runtime-profile-trigger { min-width: 0; }
     .workbench-runtime-controls { max-width: min(100%, 390px); }
-    .workbench-runtime-profile { max-width: 220px; }
+    .workbench-runtime-profile { min-width: 106px; max-width: 160px; }
     .harness-profile-read-only { max-width: 105px; }
     .new-task-select { max-width: calc(50% - 27px); }
-    .new-task-select.executor { flex: 1 1 210px; max-width: calc(100% - 46px); }
+    .new-task-toolbar .new-task-select.executor { flex: 1 1 210px; max-width: calc(100% - 46px); }
     .new-task-select.permission { max-width: 160px; }
     .new-task-shortcut { display: none; }
     .conversation-list {

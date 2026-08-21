@@ -243,7 +243,7 @@ func Run() {
 		Frameless:        runtime.GOOS == "windows",
 		Width:            1280,
 		Height:           800,
-		MinWidth:         1080,
+		MinWidth:         860,
 		MinHeight:        720,
 		BackgroundColour: application.NewRGB(245, 245, 240),
 		URL:              "/",
@@ -253,6 +253,12 @@ func Run() {
 		},
 	})
 	applyNativeWindowChrome(mainWindow)
+	// Re-assert the constraint after AppKit has created the native window. The
+	// option is the source of truth for startup; the runtime call also covers
+	// restored/dev windows whose frame was applied after option initialisation.
+	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		mainWindow.SetMinSize(860, 720)
+	})
 	// The detached inspector only mirrors the main window's selection, so it
 	// must not outlive it — otherwise closing the workbench leaves a frozen
 	// panel behind that keeps the application alive. Retained windows the user

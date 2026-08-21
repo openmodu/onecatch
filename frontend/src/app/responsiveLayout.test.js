@@ -8,6 +8,8 @@ test("the compact layout covers the desktop window's minimum width", () => {
   const minimumWidth = Number(desktopApp.match(/MinWidth:\s*(\d+)/)?.[1]);
 
   assert.ok(Number.isFinite(minimumWidth));
+  assert.equal(minimumWidth, 860);
+  assert.match(desktopApp, /WindowRuntimeReady[\s\S]*?SetMinSize\(860, 720\)/);
   assert.ok(minimumWidth <= COMPACT_LAYOUT_MAX_WIDTH);
   assert.equal(COMPACT_LAYOUT_QUERY, "(max-width: 1100px)");
 });
