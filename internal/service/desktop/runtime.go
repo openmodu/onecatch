@@ -567,7 +567,8 @@ func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, config
 	version := ""
 	if available {
 		if runtime == agentrun.RuntimeModu {
-			if _, ok := engine.Runner(runtime).(*agentrun.ModuSDKRunner); ok {
+			integration, _ := engine.Runner(runtime).(interface{ ModuIntegration() string })
+			if integration != nil && integration.ModuIntegration() == "sdk" {
 				version = "Native Go SDK"
 			} else {
 				version = "Print · NDJSON"

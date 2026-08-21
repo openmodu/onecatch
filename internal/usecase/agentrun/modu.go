@@ -39,6 +39,8 @@ func defaultModuBinary() string {
 
 func (r *ModuRunner) Runtime() Runtime { return RuntimeModu }
 
+func (r *ModuRunner) ModuIntegration() string { return "cli" }
+
 func (r *ModuRunner) Available() bool {
 	_, err := exec.LookPath(r.binary)
 	return err == nil

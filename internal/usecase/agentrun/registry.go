@@ -39,14 +39,10 @@ type Config struct {
 
 // NewEngine builds an engine with all standard local runtime runners.
 func NewEngine(cfg Config) *Engine {
-	var modu Runner = NewModuSDKRunner(ModuSDKOptions{ConfigPath: cfg.ModuConfigPath, AgentDir: cfg.ModuAgentDir})
-	if cfg.ModuIntegration == "cli" {
-		modu = NewModuRunner(cfg.ModuBinary)
-	}
 	return NewEngineWithRunners(
 		NewCodexRunner(cfg.CodexBinary),
 		NewClaudeRunner(cfg.ClaudeBinary),
-		modu,
+		newModuRuntimeRunner(cfg),
 	)
 }
 

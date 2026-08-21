@@ -1,3 +1,5 @@
+//go:build !onecatch_worker
+
 package agentrun
 
 import (

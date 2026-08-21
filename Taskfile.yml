@@ -117,7 +117,7 @@ tasks:
         platforms: [darwin, linux]
       - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BIN_DIR}}' | Out-Null"
         platforms: [windows]
-      - go build -o '{{.BIN_DIR}}/onecatch-worker{{.EXE_EXT}}' ./cmd/worker
+      - go build -tags onecatch_worker -o '{{.BIN_DIR}}/onecatch-worker{{.EXE_EXT}}' ./cmd/worker
 
   build:onecatchfs:
     desc: Build the macOS remote filesystem helper
@@ -133,7 +133,7 @@ tasks:
         platforms: [darwin, linux]
       - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BIN_DIR}}' | Out-Null"
         platforms: [windows]
-      - go build -tags production -trimpath -buildvcs=false -ldflags="-w -s" -o '{{.BIN_DIR}}/onecatch-worker{{.EXE_EXT}}' ./cmd/worker
+      - go build -tags production,onecatch_worker -trimpath -buildvcs=false -ldflags="-w -s" -o '{{.BIN_DIR}}/onecatch-worker{{.EXE_EXT}}' ./cmd/worker
 
   dev:frontend:
     internal: true

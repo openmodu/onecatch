@@ -1,19 +1,15 @@
+//go:build !onecatch_worker
+
 package agentrun
 
 import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
 	codingagent "github.com/openmodu/modu/pkg/coding_agent"
-	"github.com/openmodu/modu/pkg/coding_agent/plugins/extension"
-	_ "github.com/openmodu/modu/pkg/coding_agent/plugins/extension/cron"
-	_ "github.com/openmodu/modu/pkg/coding_agent/plugins/extension/goal"
-	_ "github.com/openmodu/modu/pkg/coding_agent/plugins/extension/subagent"
-	_ "github.com/openmodu/modu/pkg/coding_agent/plugins/extension/workflow"
 	codingtools "github.com/openmodu/modu/pkg/coding_agent/tools"
 	"github.com/openmodu/modu/pkg/provider"
 	"github.com/openmodu/modu/pkg/types"
@@ -44,6 +40,8 @@ func NewModuSDKRunner(options ...ModuSDKOptions) *ModuSDKRunner {
 
 func (r *ModuSDKRunner) Runtime() Runtime { return RuntimeModu }
 
+func (r *ModuSDKRunner) ModuIntegration() string { return "sdk" }
+
 // The SDK is linked into the application, but it is runnable only after Modu
 // can resolve a model and provider from its configured source.
 func (r *ModuSDKRunner) Available() bool {
@@ -60,18 +58,8 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 		return Result{}, fmt.Errorf("resolve modu native SDK configuration: %w", err)
 	}
 	toolSet := codingtools.ToolSetCoding
-	var extensions []extension.Extension
 	if req.Sandbox == SandboxReadOnly {
 		toolSet = codingtools.ToolSetReadOnly
-	} else {
-		extensionOptions := extension.LoadOptions{}
-		if r.agentDir != "" {
-			extensionOptions.ConfigPath = filepath.Join(r.agentDir, "extensions.yaml")
-		}
-		extensions, err = extension.LoadEnabled(extensionOptions)
-		if err != nil {
-			return Result{}, fmt.Errorf("load modu extensions: %w", err)
-		}
 	}
 	session, err := codingagent.NewCodingSession(codingagent.CodingSessionOptions{
 		Cwd:             req.Workspace,
@@ -82,7 +70,6 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 		ScopedModels:    scopedModels,
 		ModelConfigPath: r.modelConfigPath(),
 		ResumeSessionID: strings.TrimSpace(req.ResumeSessionID),
-		Extensions:      extensions,
 		ToolProvider:    newModuSDKToolProvider(toolSet),
 	})
 	if err != nil {

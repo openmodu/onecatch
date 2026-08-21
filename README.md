@@ -101,7 +101,7 @@ chmod 600 ~/.config/onecatch-worker/server-key.pem
 构建并启动 Worker。首次启动会在 `~/.onecatch-worker/` 生成持久 Token，并打印一个 10 分钟内有效、只能使用一次的配对码：
 
 ```bash
-go build -o onecatch-worker ./cmd/worker
+go build -tags onecatch_worker -o onecatch-worker ./cmd/worker
 ./onecatch-worker \
   --listen 0.0.0.0:9231 \
   --id mac-mini \

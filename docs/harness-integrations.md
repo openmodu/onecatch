@@ -7,7 +7,7 @@ an `agentrun.Result`, so workflows do not depend on the transport.
 
 ## Modu native SDK
 
-Select **Settings → Runtime → Modu Code → Native Go SDK**. The configuration
+Open **Settings → Harness**, expand **Modu Code**, and select **Native Go SDK**. The configuration
 source can be either Modu's shared `~/.modu/config.toml` or an isolated file.
 When the isolated path is empty, OneCatch uses
 `<data-root>/harnesses/modu/config.toml` and keeps sessions and extensions in
@@ -47,13 +47,21 @@ if err := session.Prompt(ctx, prompt); err != nil {
 session.WaitForIdle()
 ```
 
-OneCatch additionally loads Modu's enabled extensions for writable nodes,
-applies model/provider overrides, maps token usage and streaming tool/message
-events, and strictly filters the tool catalog for read-only workflow nodes.
+The embedded runner intentionally uses Modu's core coding tool provider without
+the optional research/web provider or bundled extensions. OneCatch owns workflow
+orchestration itself, and this keeps browser, HTML extraction, workflow VM, cron,
+goal, and subagent dependencies out of the desktop binary. It still applies
+model/provider overrides, maps token usage and streaming tool/message events,
+and strictly filters the tool catalog for read-only workflow nodes. Use Modu CLI
+mode when a task needs the full standalone `modu_code` extension set.
+
+The bundled remote worker is built with the `onecatch_worker` build tag and uses
+the Modu CLI adapter. This prevents the SDK graph from being duplicated into both
+the desktop executable and its packaged worker.
 
 ## Adding Grok Build or Pi
 
 Add one adapter implementing `agentrun.Runner`, register its runtime ID in the
-engine, and add its `RuntimeSettings` metadata and settings Tab. Process and SDK
+engine, and add its `RuntimeSettings` metadata and collapsible Harness section. Process and SDK
 integrations should stay inside the adapter; orchestration, persistence, remote
 execution, and the UI consume only normalized events.
