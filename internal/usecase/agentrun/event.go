@@ -119,6 +119,10 @@ const (
 // runtime-agnostic view suitable for display and persistence.
 type Event struct {
 	Kind EventKind `json:"kind"`
+	// Usage is the latest cumulative token accounting for this step. Runtimes
+	// that report usage before completion attach it to KindUsage so the desktop
+	// can update its metrics while the agent is still running.
+	Usage *Usage `json:"usage,omitempty"`
 	// StreamID is stable for all chunks belonging to one logical message,
 	// reasoning block, or tool output. Empty identifies an atomic event.
 	StreamID string `json:"streamId,omitempty"`

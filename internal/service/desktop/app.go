@@ -1038,9 +1038,13 @@ func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEven
 		if json.Unmarshal(item.Payload, &event) != nil {
 			continue
 		}
-		if withUsage && event.Raw != "" {
-			if found, ok := usageFromRuntimeRaw(event.Raw); ok {
-				usage = found
+		if withUsage {
+			if event.Usage != nil {
+				usage = *event.Usage
+			} else if event.Raw != "" {
+				if found, ok := usageFromRuntimeRaw(event.Raw); ok {
+					usage = found
+				}
 			}
 		}
 		at := item.At

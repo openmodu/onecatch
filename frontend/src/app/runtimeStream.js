@@ -26,6 +26,44 @@ function frameEvent(frame) {
   };
 }
 
+function applyUsageFrame(stepRuns, frame) {
+  if (frame.kind !== "usage" || !frame.usage || !frame.stepRunId) return stepRuns;
+  const index = stepRuns.findIndex((step) => step.id === frame.stepRunId);
+  if (index < 0) return stepRuns;
+  const current = stepRuns[index];
+  const fields = ["inputTokens", "cachedInputTokens", "cacheCreationInputTokens", "outputTokens", "reasoningOutputTokens"];
+  const next = { ...current };
+  let changed = false;
+  for (const field of fields) {
+    const value = Number(frame.usage[field]) || 0;
+    if (value > (Number(current[field]) || 0)) {
+      next[field] = value;
+      changed = true;
+    }
+  }
+  if (!changed) return stepRuns;
+  const result = [...stepRuns];
+  result[index] = next;
+  return result;
+}
+
+function preserveLiveUsage(currentSteps, incomingSteps) {
+  const currentByID = new Map(currentSteps.map((step) => [step.id, step]));
+  const fields = ["inputTokens", "cachedInputTokens", "cacheCreationInputTokens", "outputTokens", "reasoningOutputTokens"];
+  return incomingSteps.map((step) => {
+    const current = currentByID.get(step.id);
+    if (!current) return step;
+    let next = step;
+    for (const field of fields) {
+      if ((Number(current[field]) || 0) > (Number(next[field]) || 0)) {
+        if (next === step) next = { ...step };
+        next[field] = current[field];
+      }
+    }
+    return next;
+  });
+}
+
 // Applies best-effort Wails frames to the durable RunDetail returned by GetRun.
 // Revisions make snapshot replay and duplicate transport delivery idempotent.
 export function applyRuntimeFrames(detail, incoming) {
@@ -39,8 +77,10 @@ export function applyRuntimeFrames(detail, incoming) {
   });
 
   let changed = false;
+  let stepRuns = detail.stepRuns || [];
   for (const frame of incoming) {
     if (!frame || (frame.runId && frame.runId !== detail.run?.id)) continue;
+    stepRuns = applyUsageFrame(stepRuns, frame);
     if (!isStreamEvent(frame)) {
       const key = atomicKey(frame);
       if (atomics.has(key)) continue;
@@ -94,7 +134,8 @@ export function applyRuntimeFrames(detail, incoming) {
     changed = true;
   }
 
-  return changed ? { ...detail, runtimeEvents: events } : detail;
+  const usageChanged = stepRuns !== (detail.stepRuns || []);
+  return changed || usageChanged ? { ...detail, runtimeEvents: events, stepRuns } : detail;
 }
 
 export function applyRuntimeFrame(detail, frame) {
@@ -109,7 +150,7 @@ export function applyRuntimeFrame(detail, frame) {
 export function applyRunState(detail, view) {
   if (!detail || !view || view.runId !== detail.run?.id) return detail;
   const nextRun = view.run || detail.run;
-  const nextStepRuns = view.stepRuns || detail.stepRuns || [];
+  const nextStepRuns = preserveLiveUsage(detail.stepRuns || [], view.stepRuns || detail.stepRuns || []);
   const nextInstructions = view.instructions || detail.instructions || [];
   const nextActive = Boolean(view.active);
   // A pushed run revision can lag a value the frontend just wrote optimistically

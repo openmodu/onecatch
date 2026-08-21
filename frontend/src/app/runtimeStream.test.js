@@ -44,6 +44,29 @@ test("ignores another run and deduplicates atomic events", () => {
   assert.equal(next.runtimeEvents.length, 1);
 });
 
+test("applies cumulative usage frames to a running step", () => {
+  const current = {
+    run: { id: "run-1" },
+    stepRuns: [{ id: "step-1", status: "running", inputTokens: 0, outputTokens: 0 }],
+    runtimeEvents: [],
+  };
+  const next = applyRuntimeFrame(current, {
+    runId: "run-1", stepRunId: "step-1", seq: 3, kind: "usage",
+    usage: { inputTokens: 120, cachedInputTokens: 90, outputTokens: 12, reasoningOutputTokens: 4 },
+  });
+  assert.deepEqual(next.stepRuns[0], {
+    id: "step-1", status: "running", inputTokens: 120, cachedInputTokens: 90,
+    outputTokens: 12, reasoningOutputTokens: 4,
+  });
+
+  const stale = applyRuntimeFrame(next, {
+    runId: "run-1", stepRunId: "step-1", seq: 4, kind: "usage",
+    usage: { inputTokens: 100, cachedInputTokens: 80, outputTokens: 10 },
+  });
+  assert.equal(stale.stepRuns[0].inputTokens, 120);
+  assert.equal(stale.stepRuns[0].cachedInputTokens, 90);
+});
+
 test("keeps correlated atomic tool results instead of treating their id as a stream", () => {
   const current = {
     run: { id: "run-1" },
@@ -94,6 +117,22 @@ test("applyRunState merges bounded state and preserves the transcript", () => {
   assert.equal(next.active, false);
   assert.deepEqual(next.runtimeEvents, current.runtimeEvents, "transcript is untouched");
   assert.equal(next.task.id, "task-1", "unrelated fields survive");
+});
+
+test("applyRunState does not erase newer live usage with a stale bounded snapshot", () => {
+  const current = {
+    run: { id: "run-1", status: "running", revision: 3 },
+    stepRuns: [{ id: "s1", status: "running", inputTokens: 120, cachedInputTokens: 90, outputTokens: 12 }],
+    runtimeEvents: [], instructions: [], active: true,
+  };
+  const next = applyRunState(current, {
+    runId: "run-1", run: { id: "run-1", status: "running", revision: 3 },
+    stepRuns: [{ id: "s1", status: "running", inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 }],
+    active: true,
+  });
+  assert.equal(next.stepRuns[0].inputTokens, 120);
+  assert.equal(next.stepRuns[0].cachedInputTokens, 90);
+  assert.equal(next.stepRuns[0].outputTokens, 12);
 });
 
 test("applyRunState ignores a view for a different run", () => {

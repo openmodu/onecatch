@@ -106,6 +106,17 @@ func TestEnrichStepRunUsageRecoversHistoricalProviderDetails(t *testing.T) {
 	}
 }
 
+func TestFoldRuntimeEventViewsReadsStructuredLiveUsage(t *testing.T) {
+	at := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
+	want := agentrun.Usage{InputTokens: 120, CachedInputTokens: 90, OutputTokens: 12, ReasoningOutputTokens: 4}
+	_, got := foldRuntimeEventViews("step-1", []domainworkflows.RuntimeEvent{
+		runtimeEvent(t, 1, agentrun.Event{Kind: agentrun.KindUsage, Usage: &want, At: at}),
+	}, true)
+	if got != want {
+		t.Fatalf("usage = %+v, want %+v", got, want)
+	}
+}
+
 type completingEngine struct{}
 
 func (completingEngine) Available(agentrun.Runtime) bool { return true }

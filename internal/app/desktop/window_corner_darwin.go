@@ -35,7 +35,6 @@ static char onecatchSidebarMaterialKey;
 static char onecatchCanvasBackdropKey;
 static char onecatchSidebarBorderKey;
 static char onecatchSidebarBridgeKey;
-static char onecatchWindowBorderOverlayKey;
 static NSString *const onecatchSidebarMessageName = @"onecatchSidebar";
 static const CGFloat onecatchSidebarCornerRadius = 16.0;
 // The rail is an inset floating panel, not a flush column: it clears the window
@@ -66,17 +65,6 @@ static NSRect onecatchCompactSidebarPanelFrame(NSRect bounds, CGFloat railWidth)
 // Resolved against the window's effective appearance at apply
 // time — WebKit copies NSColor values into plain RGBA on assignment, so a
 // dynamic NSColor would freeze at whatever appearance was active on first set.
-// AppKit strokes a dark hairline around a stock light window and a light one
-// around a dark window. Hidden-titlebar/full-size-content windows lose that
-// contrast edge, so resolve an equivalent colour ourselves.
-static NSColor *onecatchFrameBorderColor(NSAppearance *appearance) {
-	NSAppearanceName match = [appearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
-	if ([match isEqualToString:NSAppearanceNameDarkAqua]) {
-		return [NSColor colorWithWhite:1.0 alpha:0.22];
-	}
-	return [NSColor colorWithWhite:0.0 alpha:0.18];
-}
-
 static NSColor *onecatchSidebarBorderColor(NSAppearance *appearance) {
 	NSAppearanceName match = [appearance bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]];
 	if ([match isEqualToString:NSAppearanceNameDarkAqua]) {
@@ -111,10 +99,8 @@ static WKWebView *onecatchFindWebView(NSView *view) {
 	return nil;
 }
 
-// A border placed on the frame layer is underneath AppKit's child-view
-// layers. WKWebView therefore covers every straight section and only leaves a
-// trace at antialiased corners. Keep the stroke in a sibling above WebKit and
-// opt it out of hit-testing so it remains purely visual.
+// The sidebar stroke sits above WebKit and opts out of hit-testing so it
+// remains purely visual.
 @interface OneCatchWindowBorderView : NSView
 @end
 
@@ -123,42 +109,6 @@ static WKWebView *onecatchFindWebView(NSView *view) {
 	return nil;
 }
 @end
-
-static NSView *onecatchInstallWindowBorderOverlay(NSWindow *window) {
-	NSView *borderView = objc_getAssociatedObject(window, &onecatchWindowBorderOverlayKey);
-	if (borderView != nil) {
-		return borderView;
-	}
-
-	WKWebView *webView = onecatchFindWebView(window.contentView);
-	if (webView == nil || webView.superview == nil) {
-		return nil;
-	}
-
-	NSView *container = webView.superview;
-	OneCatchWindowBorderView *overlay = [[OneCatchWindowBorderView alloc] initWithFrame:container.bounds];
-	overlay.wantsLayer = YES;
-	overlay.layer.backgroundColor = [NSColor clearColor].CGColor;
-	overlay.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
-	[container addSubview:overlay positioned:NSWindowAbove relativeTo:webView];
-	objc_setAssociatedObject(window, &onecatchWindowBorderOverlayKey, overlay, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-	borderView = overlay;
-	[overlay release];
-	return borderView;
-}
-
-static void onecatchUpdateWindowBorder(NSWindow *window, CGFloat radius) {
-	NSView *borderView = onecatchInstallWindowBorderOverlay(window);
-	if (borderView.layer == nil) {
-		return;
-	}
-	borderView.frame = borderView.superview.bounds;
-	borderView.layer.contentsScale = window.backingScaleFactor;
-	borderView.layer.cornerRadius = radius;
-	borderView.layer.cornerCurve = kCACornerCurveContinuous;
-	borderView.layer.borderWidth = radius > 0.0 ? onecatchDeviceHairlineWidth(window) : 0.0;
-	borderView.layer.borderColor = onecatchFrameBorderColor(window.effectiveAppearance).CGColor;
-}
 
 @interface OneCatchSidebarBridge : NSObject <WKScriptMessageHandler>
 @property(nonatomic, assign) NSWindow *window;
@@ -355,10 +305,6 @@ static void onecatchMatchBackgroundToCanvas(NSWindow *window) {
 - (void)observeValueForKeyPath:(NSString *)keyPath ofObject:(id)object change:(NSDictionary *)change context:(void *)context {
 	if ([keyPath isEqualToString:@"effectiveAppearance"]) {
 		onecatchMatchBackgroundToCanvas(self.window);
-		NSView *borderView = objc_getAssociatedObject(self.window, &onecatchWindowBorderOverlayKey);
-		if (borderView.layer != nil && borderView.layer.borderWidth > 0.0) {
-			borderView.layer.borderColor = onecatchFrameBorderColor(self.window.effectiveAppearance).CGColor;
-		}
 		NSView *sidebarBorder = objc_getAssociatedObject(self.window, &onecatchSidebarBorderKey);
 		if (sidebarBorder.layer != nil) {
 			sidebarBorder.layer.borderColor = onecatchSidebarBorderColor(self.window.effectiveAppearance).CGColor;
@@ -437,7 +383,7 @@ static void onecatchEnableClickToFocus(NSWindow *window) {
 	class_addMethod([webView class], @selector(acceptsFirstMouse:), (IMP)onecatchAcceptsFirstMouse, "c@:@");
 }
 
-static void onecatchSetWindowCornerRadius(void *handle, double radius) {
+static void onecatchInstallNativeWindowChrome(void *handle) {
 	NSWindow *window = (__bridge NSWindow *)handle;
 	if (window == nil || window.contentView == nil) {
 		return;
@@ -447,14 +393,6 @@ static void onecatchSetWindowCornerRadius(void *handle, double radius) {
 	onecatchEnableClickToFocus(window);
 	onecatchMatchBackgroundToCanvas(window);
 	onecatchInstallSidebarMaterial(window);
-
-	NSView *frame = window.contentView.superview;
-	frame.wantsLayer = YES;
-	frame.layer.cornerRadius = radius;
-	frame.layer.cornerCurve = kCACornerCurveContinuous;
-	frame.layer.masksToBounds = radius > 0;
-	frame.layer.borderWidth = 0.0;
-	onecatchUpdateWindowBorder(window, radius);
 	[window invalidateShadow];
 }
 
@@ -493,11 +431,11 @@ import "C"
 
 import "unsafe"
 
-func setNativeWindowCornerRadius(window unsafe.Pointer, radius float64) {
+func installNativeWindowChrome(window unsafe.Pointer) {
 	if window == nil {
 		return
 	}
-	C.onecatchSetWindowCornerRadius(window, C.double(radius))
+	C.onecatchInstallNativeWindowChrome(window)
 }
 
 func setNativeWindowZoomButtonHidden(window unsafe.Pointer, hidden bool) {

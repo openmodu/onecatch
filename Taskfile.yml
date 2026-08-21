@@ -42,6 +42,8 @@ tasks:
       - go tool wails3 generate icons -input ../../internal/app/desktop/assets/appicon.png -macfilename darwin/icons.icns
 
   build:
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '{{if eq OS "darwin"}}12.0{{end}}'
     cmds:
       - task: common:build:frontend
         vars:
@@ -50,7 +52,7 @@ tasks:
           PRODUCTION: '{{if eq .DEV "true"}}false{{else}}true{{end}}'
       - go build {{.BUILD_FLAGS}} -o '{{.OUTPUT}}' ./cmd/app
     vars:
-      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l" {{if eq OS "darwin"}}-ldflags="-extldflags=-mmacosx-version-min=12.0"{{end}}{{else}}-tags production -trimpath -buildvcs=false -ldflags="{{if eq OS "darwin"}}-extldflags=-mmacosx-version-min=12.0 {{end}}-w -s"{{end}}'
       OUTPUT: '{{.OUTPUT | default (printf "%s/%s%s" .BIN_DIR .APP_NAME .EXE_EXT)}}'
 
   dev:desktop:

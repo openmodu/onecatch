@@ -24,6 +24,7 @@ test("summarizes total and detailed token usage across steps", () => {
     cacheCreationInputTokens: 50,
     outputTokens: 400,
     reasoningOutputTokens: 140,
+    cacheHitRate: (1100 / 1500) * 100,
   });
 });
 
@@ -34,5 +35,6 @@ test("keeps older step data compatible when detailed fields are absent", () => {
     cacheCreationInputTokens: 0,
     outputTokens: 7,
     reasoningOutputTokens: 0,
+    cacheHitRate: 0,
   });
 });

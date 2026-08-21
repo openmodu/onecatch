@@ -263,6 +263,7 @@ type codexAppState struct {
 	final         string
 	sessionID     string
 	usage         Usage
+	usageEmitted  bool
 	completed     bool
 	failed        bool
 	messageOpen   map[string]bool
@@ -503,13 +504,18 @@ func (s *codexAppState) handleNotification(method string, raw json.RawMessage, l
 			breakdown = params.TokenUsage.Last
 		}
 		s.usage = breakdown.usage()
+		usage := s.usage
+		s.usageEmitted = true
+		sink(Event{Kind: KindUsage, Usage: &usage, Raw: line, At: at})
 	case "turn/completed":
 		s.completed = params.Turn.Status == "completed"
 		s.failed = params.Turn.Status == "failed" || params.Turn.Status == "interrupted"
 		if s.failed {
 			sink(Event{Kind: KindError, Text: codexRawText(params.Turn.Error), Raw: line, At: at})
-		} else {
-			sink(Event{Kind: KindUsage, Raw: line, At: at})
+		} else if !s.usageEmitted {
+			// Older app-server versions may only make usage available at the end.
+			usage := s.usage
+			sink(Event{Kind: KindUsage, Usage: &usage, Raw: line, At: at})
 		}
 	case "error":
 		s.failed = true

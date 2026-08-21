@@ -18,31 +18,27 @@ func inheritNativeWindowAppearance(window, source *application.WebviewWindow) {
 	})
 }
 
-// applyNativeWindowChrome keeps every full-size-content OneCatch window on the
-// same native path: continuous corners, the outer hairline and the inset
-// sidebar material are installed together and disabled at edge-to-edge sizes.
+// applyNativeWindowChrome installs the native sidebar, background and input
+// behaviour. AppKit keeps ownership of the outer window shape so its standard
+// corner radius follows the host macOS release and the selected window style.
 func applyNativeWindowChrome(window *application.WebviewWindow) {
 	if window == nil {
 		return
 	}
-	applyCorner := func(radius float64) {
+	apply := func() {
 		application.InvokeSync(func() {
-			setNativeWindowCornerRadius(window.NativeWindow(), radius)
+			installNativeWindowChrome(window.NativeWindow())
 			setNativeApplicationIcon(desktopassets.AppIcon)
 		})
 	}
-	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { applyCorner(26) })
-	window.OnWindowEvent(events.Common.WindowMaximise, func(*application.WindowEvent) { applyCorner(0) })
-	window.OnWindowEvent(events.Common.WindowUnMaximise, func(*application.WindowEvent) { applyCorner(26) })
-	window.OnWindowEvent(events.Common.WindowFullscreen, func(*application.WindowEvent) { applyCorner(0) })
-	window.OnWindowEvent(events.Common.WindowUnFullscreen, func(*application.WindowEvent) { applyCorner(26) })
+	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { apply() })
 
 	// Auxiliary windows are created while the application is already running,
 	// so their native view may exist before the runtime-ready listener is added.
 	// Do not dispatch before App.Run for the startup window: its main queue has
 	// not started yet and a synchronous dispatch would wait forever.
 	if window.NativeWindow() != nil {
-		applyCorner(26)
+		apply()
 	}
 }
 

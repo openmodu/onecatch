@@ -109,6 +109,11 @@ func TestCodexRunnerStreamsAppServerMessagesAndCommandOutput(t *testing.T) {
 	if countKind(events, KindToolUse) != 1 || countKind(events, KindUsage) != 1 {
 		t.Fatalf("events = %+v", events)
 	}
+	for _, event := range events {
+		if event.Kind == KindUsage && (event.Usage == nil || event.Usage.InputTokens != 17 || event.Usage.CachedInputTokens != 11) {
+			t.Fatalf("live usage event = %+v", event)
+		}
+	}
 }
 
 func TestCodexRunnerPassesModelSettingsToAppServer(t *testing.T) {

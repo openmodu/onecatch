@@ -21,7 +21,7 @@ function TokenMetric({ label, total, details = [] }) {
   return <div className="px-1.5 py-3" title={`${label}：${formatTokens(total)}`}>
     <span className="block text-[11px] text-muted-foreground">{label}</span>
     <strong className="mt-1 block text-[17px] font-semibold tabular-nums text-foreground">{formatTokens(total)}</strong>
-    {visibleDetails.length > 0 && <small className="mt-1 block text-[11px] leading-snug text-muted-foreground">{visibleDetails.map((item) => `${item.label} ${formatTokens(item.value)}`).join(" · ")}</small>}
+    {visibleDetails.length > 0 && <small className="mt-1 block text-[11px] leading-snug text-muted-foreground">{visibleDetails.map((item) => `${item.label} ${item.display || formatTokens(item.value)}`).join(" · ")}</small>}
   </div>;
 }
 
@@ -71,7 +71,7 @@ export default function StatusInspector({ detail, queuedTask, queuePosition, dra
     </div>
     {/* Spacing and a shared tint group the four metrics without table rules. */}
     <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-lg bg-muted/35 p-1.5">
-      <TokenMetric label={t("inspector.inputTokens")} total={tokenUsage.inputTokens} details={[{ label: t("inspector.cacheRead"), value: tokenUsage.cachedInputTokens }, { label: t("inspector.cacheWrite"), value: tokenUsage.cacheCreationInputTokens }]} />
+      <TokenMetric label={t("inspector.inputTokens")} total={tokenUsage.inputTokens} details={[{ label: t("inspector.cacheHitRate"), value: tokenUsage.inputTokens, display: `${tokenUsage.cacheHitRate.toFixed(1)}%` }, { label: t("inspector.cacheRead"), value: tokenUsage.cachedInputTokens }, { label: t("inspector.cacheWrite"), value: tokenUsage.cacheCreationInputTokens }]} />
       <TokenMetric label={t("inspector.outputTokens")} total={tokenUsage.outputTokens} details={[{ label: t("inspector.reasoning"), value: tokenUsage.reasoningOutputTokens }]} />
       <div className="px-1.5 py-3"><span className="block text-[11px] text-muted-foreground">{t("inspector.duration")}</span><strong className="mt-1 block text-[17px] font-semibold tabular-nums text-foreground">{formatDuration(duration)}</strong></div>
       <div className="px-1.5 py-3"><span className="block text-[11px] text-muted-foreground">{t("inspector.executions")}</span><strong className="mt-1 block text-[17px] font-semibold tabular-nums text-foreground">{stepRuns.length}</strong></div>

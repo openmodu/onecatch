@@ -15,5 +15,9 @@ export function summarizeTokenUsage(stepRuns = []) {
     summary.reasoningOutputTokens += Number(step.reasoningOutputTokens) || 0;
   }
 
+  summary.cacheHitRate = summary.inputTokens > 0
+    ? (summary.cachedInputTokens / summary.inputTokens) * 100
+    : 0;
+
   return summary;
 }

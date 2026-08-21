@@ -298,6 +298,16 @@ export class Event {
         }
         if (/** @type {any} */(false)) {
             /**
+             * Usage is the latest cumulative token accounting for this step. Runtimes
+             * that report usage before completion attach it to KindUsage so the desktop
+             * can update its metrics while the agent is still running.
+             * @member
+             * @type {Usage | null | undefined}
+             */
+            this["usage"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * StreamID is stable for all chunks belonging to one logical message,
              * reasoning block, or tool output. Empty identifies an atomic event.
              * @member
@@ -384,10 +394,14 @@ export class Event {
      * @returns {Event}
      */
     static createFrom($$source = {}) {
-        const $$createField7_0 = $$createType8;
+        const $$createField1_0 = $$createType8;
+        const $$createField8_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("usage" in $$parsedSource) {
+            $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
+        }
         if ("permission" in $$parsedSource) {
-            $$parsedSource["permission"] = $$createField7_0($$parsedSource["permission"]);
+            $$parsedSource["permission"] = $$createField8_0($$parsedSource["permission"]);
         }
         return new Event(/** @type {Partial<Event>} */($$parsedSource));
     }
@@ -561,8 +575,8 @@ export class PermissionRequest {
      * @returns {PermissionRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType9;
-        const $$createField4_0 = $$createType11;
+        const $$createField3_0 = $$createType11;
+        const $$createField4_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("input" in $$parsedSource) {
             $$parsedSource["input"] = $$createField3_0($$parsedSource["input"]);
@@ -633,7 +647,7 @@ export class Result {
      * @returns {Result}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType12;
+        const $$createField1_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
@@ -757,14 +771,15 @@ const $$createType3 = CodexModelInfo.createFrom;
 const $$createType4 = $Create.Array($$createType3);
 const $$createType5 = CodexServiceTier.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = PermissionRequest.createFrom;
+const $$createType7 = Usage.createFrom;
 const $$createType8 = $Create.Nullable($$createType7);
-const $$createType9 = $Create.Map($Create.Any, $Create.Any);
-var $$createType10 = /** @type {(...args: any[]) => any} */(function $$initCreateType10(...args) {
-    if ($$createType10 === $$initCreateType10) {
-        $$createType10 = $$createType9;
+const $$createType9 = PermissionRequest.createFrom;
+const $$createType10 = $Create.Nullable($$createType9);
+const $$createType11 = $Create.Map($Create.Any, $Create.Any);
+var $$createType12 = /** @type {(...args: any[]) => any} */(function $$initCreateType12(...args) {
+    if ($$createType12 === $$initCreateType12) {
+        $$createType12 = $$createType11;
     }
-    return $$createType10(...args);
+    return $$createType12(...args);
 });
-const $$createType11 = $Create.Array($$createType10);
-const $$createType12 = Usage.createFrom;
+const $$createType13 = $Create.Array($$createType12);

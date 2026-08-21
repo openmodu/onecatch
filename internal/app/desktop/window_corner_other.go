@@ -4,7 +4,7 @@ package desktop
 
 import "unsafe"
 
-func setNativeWindowCornerRadius(_ unsafe.Pointer, _ float64) {}
+func installNativeWindowChrome(_ unsafe.Pointer) {}
 
 func setNativeWindowZoomButtonHidden(_ unsafe.Pointer, _ bool) {}
 

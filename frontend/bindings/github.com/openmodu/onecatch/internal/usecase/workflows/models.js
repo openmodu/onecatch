@@ -50,6 +50,16 @@ export class RuntimeEventFrame {
         }
         if (/** @type {any} */(false)) {
             /**
+             * Usage is the latest cumulative token accounting for this step. Runtimes
+             * that report usage before completion attach it to KindUsage so the desktop
+             * can update its metrics while the agent is still running.
+             * @member
+             * @type {agentrun$0.Usage | null | undefined}
+             */
+            this["usage"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * StreamID is stable for all chunks belonging to one logical message,
              * reasoning block, or tool output. Empty identifies an atomic event.
              * @member
@@ -136,15 +146,21 @@ export class RuntimeEventFrame {
      * @returns {RuntimeEventFrame}
      */
     static createFrom($$source = {}) {
-        const $$createField10_0 = $$createType1;
+        const $$createField4_0 = $$createType1;
+        const $$createField11_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("usage" in $$parsedSource) {
+            $$parsedSource["usage"] = $$createField4_0($$parsedSource["usage"]);
+        }
         if ("permission" in $$parsedSource) {
-            $$parsedSource["permission"] = $$createField10_0($$parsedSource["permission"]);
+            $$parsedSource["permission"] = $$createField11_0($$parsedSource["permission"]);
         }
         return new RuntimeEventFrame(/** @type {Partial<RuntimeEventFrame>} */($$parsedSource));
     }
 }
 
 // Private type creation functions
-const $$createType0 = agentrun$0.PermissionRequest.createFrom;
+const $$createType0 = agentrun$0.Usage.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = agentrun$0.PermissionRequest.createFrom;
+const $$createType3 = $Create.Nullable($$createType2);
