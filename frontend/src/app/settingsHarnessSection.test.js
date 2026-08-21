@@ -8,11 +8,11 @@ test("places Harness between runtime and terminal in settings navigation", () =>
   assert.match(source, /\["runtime", "harness", "terminal"/);
 });
 
-test("separates runtime environment and harness agent controls", () => {
-  assert.match(source, /section === "runtime"[\s\S]*?<RuntimeEnvironmentSettings/);
+test("keeps appearance separate and moves all runtime controls into Harness", () => {
+  assert.match(source, /section === "runtime" && <InterfaceSettings/);
   assert.match(source, /section === "harness"[\s\S]*?<HarnessSettings/);
-  assert.match(source, /const runtimeEnvironmentFields = \["integration", "configSource", "configPath", "binary", "environmentAllowlist"\]/);
-  assert.match(source, /const harnessAgentFields = \["defaultModel", "reasoningEffort", "serviceTier", "provider"\]/);
+  assert.doesNotMatch(source, /function RuntimeEnvironmentSettings/);
+  assert.match(source, /const harnessFields = \["integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "provider"\]/);
 });
 
 test("shows every harness agent without nested tabs", () => {
@@ -20,4 +20,8 @@ test("shows every harness agent without nested tabs", () => {
   assert.doesNotMatch(harness, /<Tabs|TabsList|TabsTrigger|TabsContent/);
   assert.match(harness, /runtimeIds\.map/);
   assert.match(harness, /<RuntimeSettingsCard key=\{id\}/);
+  assert.match(harness, /settings\.integrationMode/);
+  assert.match(harness, /settings\.moduConfigSource/);
+  assert.match(harness, /settings\.binaryPath/);
+  assert.match(harness, /settings\.defaultModel/);
 });
