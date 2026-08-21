@@ -1,7 +1,7 @@
 import { useId, useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,7 +37,7 @@ export function SettingsKicker({ children, className = "" }) {
   return <span className={cn("text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground", className)}>{children}</span>;
 }
 
-export function SettingsSection({ title, description, aside, children, className = "", contentClassName = "" }) {
+export function SettingsSection({ title, description, aside, children, className = "", contentClassName = "", bare = false }) {
   return (
     <section className={cn("mb-6", className)}>
       <div className="flex items-start justify-between gap-6 px-0.5 pb-3.5">
@@ -47,23 +47,10 @@ export function SettingsSection({ title, description, aside, children, className
         </div>
         {aside}
       </div>
-      <Card className="gap-0 overflow-hidden border-border/80 bg-card/72 py-0 shadow-[0_8px_26px_color-mix(in_oklab,var(--foreground)_4%,transparent)] backdrop-blur-sm">
+      {bare ? <div className={contentClassName}>{children}</div> : <Card className="gap-0 overflow-hidden border-border/80 bg-card/72 py-0 shadow-[0_8px_26px_color-mix(in_oklab,var(--foreground)_4%,transparent)] backdrop-blur-sm">
         <CardContent className={cn("px-0", contentClassName)}>{children}</CardContent>
-      </Card>
+      </Card>}
     </section>
-  );
-}
-
-export function RuntimeSettingsCard({ title, description, aside, children, className = "" }) {
-  return (
-    <Card className={cn("mx-4 mb-3 gap-3 border-0 bg-muted/55 py-4 shadow-none last:mb-4", className)}>
-      <CardHeader className="gap-1 px-4">
-        <CardTitle className="text-sm">{title}</CardTitle>
-        {description && <CardDescription className="text-xs leading-relaxed">{description}</CardDescription>}
-        {aside && <CardAction>{aside}</CardAction>}
-      </CardHeader>
-      <CardContent className="px-4">{children}</CardContent>
-    </Card>
   );
 }
 

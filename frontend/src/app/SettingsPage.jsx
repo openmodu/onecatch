@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
+import { ChevronDown } from "lucide-react";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,6 @@ import {
   SettingsField,
   SettingsKicker,
   SettingsNumberField,
-  RuntimeSettingsCard,
   SettingsSection,
   SettingsSelect,
   SettingsSwitchRow,
@@ -215,7 +215,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
         {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><SettingsButton tone="muted" onClick={reload}>{t("settings.reload")}</SettingsButton></div>}
         {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
         {section === "runtime" && <InterfaceSettings i18n={i18n} />}
-        {section === "harness" && <SettingsSection title={t("settings.harnessAgents")} description={t("settings.harnessAgentsDescription")}><HarnessSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} /></SettingsSection>}
+        {section === "harness" && <SettingsSection bare title={t("settings.harnessAgents")} description={t("settings.harnessAgentsDescription")}><HarnessSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} /></SettingsSection>}
         {section === "terminal" && <TerminalSettings value={draft.terminal || demoSettings.terminal} setValue={(next) => setSectionValue("terminal", next)} errors={errorsByField} />}
         {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
         {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
@@ -271,13 +271,14 @@ function TerminalSettings({ value, setValue, errors }) {
 
 function HarnessSettings({ value, setValue, status, runtimes, check, errors, codexConfiguration, claudeConfiguration }) {
   const { t, i18n } = useTranslation();
+  const [expanded, setExpanded] = useState({ codex: true, claude: false, modu: false });
   const update = (id, field, next) => setValue({ ...value, [id]: { ...value[id], [field]: next } });
   const meta = {
     codex: { name: "Codex", command: "codex", env: "OPENAI_API_KEY, HTTPS_PROXY" },
     claude: { name: "Claude Code", command: "claude", env: "ANTHROPIC_API_KEY, HTTPS_PROXY" },
     modu: { name: "Modu Code", command: "modu_code", env: t("settings.optionalEnv") },
   };
-  return <div className="grid gap-4 px-4 py-4">
+  return <div className="divide-y divide-border/70 border-y border-border/70">
     {runtimeIds.map((id) => {
       const integration = value[id]?.integration || (id === "modu" ? "sdk" : "cli");
       const nativeModu = id === "modu" && integration === "sdk";
@@ -305,9 +306,18 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
       const configurationError = id === "codex" ? codexConfiguration.error : id === "claude" ? claudeConfiguration.error : "";
       const modelHint = id === "codex" && codexData ? t("settings.codexDetectedValue", { value: codexData.model || t("settings.runtimeDefault") }) : id === "claude" && claudeData ? t("settings.claudeModelsDetected", { count: claudeData.models?.length || 0 }) : t("settings.runtimeDecides");
       const configurationMessage = id === "codex" ? codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || (codexData && t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })) : id === "claude" ? claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || (claudeData && t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })) : "";
-      return <RuntimeSettingsCard key={id} className="mx-0 mb-0 last:mb-0" title={meta[id].name} description={id === "modu" ? t(nativeModu ? "settings.moduSDKDescription" : "settings.moduDescription") : t("settings.harnessAgentDescription", { harness: meta[id].name })} aside={<Badge variant="outline" className={current.available ? "border-success/25 bg-success/8 text-success" : current.error ? "border-destructive/25 bg-destructive/8 text-destructive" : "text-muted-foreground"}><i className="size-1.5 rounded-full bg-current" />{statusText}</Badge>}>
-        {configurationMessage && <div className={`mb-4 rounded-lg px-3 py-2 text-xs leading-relaxed ${configurationError ? "select-text bg-destructive/8 text-destructive" : "bg-primary/6 text-muted-foreground"}`} role={configurationError ? "alert" : "status"}>{configurationMessage}</div>}
-        <div className="grid grid-cols-2 gap-4">
+      const description = id === "modu" ? t(nativeModu ? "settings.moduSDKDescription" : "settings.moduDescription") : t("settings.harnessAgentDescription", { harness: meta[id].name });
+      const isExpanded = expanded[id];
+      const panelID = `harness-${id}-settings`;
+      return <section key={id}>
+        <button type="button" className="group flex w-full items-center gap-4 rounded-lg px-1 py-4 text-left transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50" aria-expanded={isExpanded} aria-controls={panelID} onClick={() => setExpanded((current) => ({ ...current, [id]: !current[id] }))}>
+          <span className="min-w-0 flex-1"><strong className="block text-sm font-semibold text-foreground">{meta[id].name}</strong><span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{description}</span></span>
+          <Badge variant="outline" className={`shrink-0 ${current.available ? "border-success/25 bg-success/8 text-success" : current.error ? "border-destructive/25 bg-destructive/8 text-destructive" : "text-muted-foreground"}`}><i className="size-1.5 rounded-full bg-current" />{statusText}</Badge>
+          <ChevronDown size={16} className={`shrink-0 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} aria-hidden="true" />
+        </button>
+        {isExpanded && <div id={panelID} className="px-1 pb-6">
+          {configurationMessage && <div className={`mb-4 rounded-lg px-3 py-2 text-xs leading-relaxed ${configurationError ? "select-text bg-destructive/8 text-destructive" : "bg-primary/6 text-muted-foreground"}`} role={configurationError ? "alert" : "status"}>{configurationMessage}</div>}
+          <div className="grid grid-cols-2 gap-4">
           {id === "modu" && <SettingsField className="col-span-2" label={t("settings.integrationMode")} hint={t("settings.integrationModeHint")}><SettingsSelect ariaLabel={t("settings.integrationMode")} value={integration} onChange={(next) => update(id, "integration", next)} options={[{ value: "sdk", label: t("settings.integration.sdk"), meta: t("settings.integration.sdkMeta") }, { value: "cli", label: t("settings.integration.cli"), meta: t("settings.integration.cliMeta") }]} /></SettingsField>}
           {nativeModu && <SettingsField className="col-span-2" label={t("settings.moduConfigSource")} hint={t("settings.moduConfigSourceHint")}><SettingsSelect ariaLabel={t("settings.moduConfigSource")} value={moduConfigSource} onChange={(next) => update(id, "configSource", next)} options={[{ value: "onecatch", label: t("settings.moduConfig.onecatch"), meta: t("settings.moduConfig.onecatchMeta") }, { value: "shared", label: t("settings.moduConfig.shared"), meta: "~/.modu/config.toml" }]} /></SettingsField>}
           {nativeModu && moduConfigSource === "onecatch" && <SettingsField className="col-span-2" label={t("settings.moduConfigPath")} hint={t("settings.moduConfigPathHint")} error={errors[`${id}.configPath`]}><Input value={value[id]?.configPath || ""} aria-invalid={Boolean(errors[`${id}.configPath`])} onChange={(event) => update(id, "configPath", event.target.value)} placeholder={t("settings.moduConfigDefaultPath")} /></SettingsField>}
@@ -320,9 +330,10 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
           {id === "claude" && <SettingsField className="col-span-2" label={t("settings.reasoningEffort")} hint={t("settings.claudeEffortsDetected", { count: claudeEffortValues.length })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.claude?.reasoningEffort || ""} onChange={(reasoningEffort) => update("claude", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...claudeEffortValues.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
           {id === "codex" && <SettingsField className="col-span-2" label={t("settings.speed")} hint={t("settings.codexDetectedValue", { value: detectedTier })} error={errors[`${id}.serviceTier`]}><SettingsSelect ariaLabel={t("settings.speed")} value={value.codex?.serviceTier || ""} onChange={(serviceTier) => update("codex", "serviceTier", serviceTier)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedTier }, ...(codexData ? serviceTierValues : ["standard", "fast", "priority", "flex"]).map((tier) => ({ value: tier, label: t(`settings.speed.${tier}`, { defaultValue: tierDetails.get(tier)?.name || tier }), meta: tierDetails.get(tier)?.description || tier }))]} /></SettingsField>}
           {id === "modu" && <SettingsField className="col-span-2" label={t("common.provider")} hint={t("settings.providerHint")} error={errors[`${id}.provider`]}><SettingsSelect ariaLabel={t("common.provider")} value={value[id]?.provider || "auto"} onChange={(provider) => update(id, "provider", provider)} options={[{ value: "auto", label: t("settings.autoDetect") }, { value: "openai", label: "OpenAI / Compatible" }, { value: "anthropic", label: "Anthropic" }, { value: "gemini", label: "Gemini" }]} /></SettingsField>}
-        </div>
-        <div className="mt-4 flex justify-end"><SettingsButton tone="cyan" disabled={current.checking || configurationLoading} onClick={() => check(id)}>{current.checking || configurationLoading ? t("settings.checking") : id === "codex" ? t("settings.refreshCodexConfig") : id === "claude" ? t("settings.refreshClaudeModels") : t("settings.testConfig")}</SettingsButton></div>
-      </RuntimeSettingsCard>;
+          </div>
+          <div className="mt-4 flex justify-end"><SettingsButton tone="cyan" disabled={current.checking || configurationLoading} onClick={() => check(id)}>{current.checking || configurationLoading ? t("settings.checking") : id === "codex" ? t("settings.refreshCodexConfig") : id === "claude" ? t("settings.refreshClaudeModels") : t("settings.testConfig")}</SettingsButton></div>
+        </div>}
+      </section>;
     })}
   </div>;
 }

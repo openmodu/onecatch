@@ -19,9 +19,17 @@ test("shows every harness agent without nested tabs", () => {
   const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
   assert.doesNotMatch(harness, /<Tabs|TabsList|TabsTrigger|TabsContent/);
   assert.match(harness, /runtimeIds\.map/);
-  assert.match(harness, /<RuntimeSettingsCard key=\{id\}/);
+  assert.match(harness, /<section key=\{id\}>/);
   assert.match(harness, /settings\.integrationMode/);
   assert.match(harness, /settings\.moduConfigSource/);
   assert.match(harness, /settings\.binaryPath/);
   assert.match(harness, /settings\.defaultModel/);
+});
+
+test("uses a frameless collapsible list for harness configuration", () => {
+  assert.match(source, /<SettingsSection bare title=\{t\("settings\.harnessAgents"\)\}/);
+  const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
+  assert.match(harness, /aria-expanded=\{isExpanded\}/);
+  assert.match(harness, /aria-controls=\{panelID\}/);
+  assert.match(harness, /divide-y divide-border\/70 border-y/);
 });

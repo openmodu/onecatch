@@ -15,12 +15,12 @@ The annotated source identifies the obsolete local runtime block and clarifies t
 
 ## Focused region comparison evidence
 
-The sidebar and the first content card were inspected at readable scale because they contain the marked source regions. Harness occupies the annotated empty sidebar slot, uses the existing selected-navigation treatment, and presents Codex, Claude Code, and Modu Code as vertically stacked cards without nested tab navigation. No additional focused asset comparison was needed because this screen has no image, logo, illustration, or custom icon assets.
+The sidebar and the Harness list were inspected at readable scale because they contain the marked source regions. Harness occupies the annotated sidebar slot and presents Codex, Claude Code, and Modu Code as a lightweight divided list without nested cards or tab navigation. Each row keeps identity and health visible while its configuration can be expanded independently.
 
 ## Fidelity surfaces
 
 - Fonts and typography: Existing OneCatch font stacks, weights, sizes, and hierarchy are preserved. The new sidebar label and descriptions match adjacent navigation entries.
-- Spacing and layout rhythm: Sidebar item height, padding, selected radius, section heading rhythm, and stacked cards reuse existing settings components and tokens.
+- Spacing and layout rhythm: Tight title/status rows and more generous expanded content create clear rhythm. Dividers and whitespace replace the previous nested-card frames.
 - Colors and visual tokens: No new colors or gradients were introduced. Selected and neutral states use the existing theme tokens.
 - Image quality and assets: Not applicable; neither target region contains image assets.
 - Copy and content: Appearance describes only language, display, and theme. Harness describes integration, runtime environment, and Agent defaults together.
@@ -31,6 +31,8 @@ The sidebar and the first content card were inspected at readable scale because 
 - Confirmed Appearance contains no local runtime or executable controls.
 - Selected Harness from the new sidebar entry.
 - Confirmed Codex, Claude Code, and Modu Code cards are visible together with no tablist inside Harness.
+- Confirmed the initial state has one expanded Harness and two collapsed Harnesses.
+- Expanded Modu Code, verified its SDK controls, then collapsed Codex independently.
 - Confirmed the Modu Code card exposes Native Go SDK, shared/isolated configuration, model, provider, and configuration testing.
 - Edited the Modu default model and confirmed the unsaved-settings bar appeared.
 - Discarded the edit and confirmed the field returned to its saved value.
