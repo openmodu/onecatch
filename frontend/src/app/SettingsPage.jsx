@@ -310,13 +310,9 @@ function RuntimeEnvironmentSettings({ value, setValue, status, runtimes, check, 
 
 function HarnessSettings({ value, setValue, check, errors, codexConfiguration, claudeConfiguration }) {
   const { t } = useTranslation();
-  const [activeHarness, setActiveHarness] = useState("codex");
   const update = (id, field, next) => setValue({ ...value, [id]: { ...value[id], [field]: next } });
   const names = { codex: "Codex", claude: "Claude Code", modu: "Modu Code" };
-  return <Tabs value={activeHarness} onValueChange={setActiveHarness} className="gap-0">
-    <TabsList variant="line" className="mx-4 mt-3 mb-4 w-[calc(100%-2rem)] justify-start border-b border-border/70" aria-label={t("settings.harnessTabs")}>
-      {runtimeIds.map((id) => <TabsTrigger key={id} value={id} className="flex-none px-4 pb-2.5">{names[id]}</TabsTrigger>)}
-    </TabsList>
+  return <div className="grid gap-4 px-4 py-4">
     {runtimeIds.map((id) => {
       const codexData = codexConfiguration.data;
       const claudeData = claudeConfiguration.data;
@@ -339,7 +335,7 @@ function HarnessSettings({ value, setValue, check, errors, codexConfiguration, c
       const configurationError = id === "codex" ? codexConfiguration.error : id === "claude" ? claudeConfiguration.error : "";
       const modelHint = id === "codex" && codexData ? t("settings.codexDetectedValue", { value: codexData.model || t("settings.runtimeDefault") }) : id === "claude" && claudeData ? t("settings.claudeModelsDetected", { count: claudeData.models?.length || 0 }) : t("settings.runtimeDecides");
       const configurationMessage = id === "codex" ? codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || (codexData && t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })) : id === "claude" ? claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || (claudeData && t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })) : "";
-      return <TabsContent key={id} value={id}><RuntimeSettingsCard title={names[id]} description={t("settings.harnessAgentDescription", { harness: names[id] })}>
+      return <RuntimeSettingsCard key={id} className="mx-0 mb-0 last:mb-0" title={names[id]} description={t("settings.harnessAgentDescription", { harness: names[id] })}>
         {configurationMessage && <div className={`mb-4 rounded-lg px-3 py-2 text-xs leading-relaxed ${configurationError ? "select-text bg-destructive/8 text-destructive" : "bg-primary/6 text-muted-foreground"}`} role={configurationError ? "alert" : "status"}>{configurationMessage}</div>}
         <div className="grid grid-cols-2 gap-4">
           <SettingsField className={id === "claude" || id === "modu" ? "col-span-2" : ""} label={t("settings.defaultModel")} hint={modelHint} error={errors[`${id}.defaultModel`]}>{modelOptions.length > 1 ? <SettingsSelect ariaLabel={t("settings.defaultModel")} value={value[id]?.defaultModel || ""} onChange={updateModel} options={modelOptions} /> : <Input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} />}</SettingsField>
@@ -349,9 +345,9 @@ function HarnessSettings({ value, setValue, check, errors, codexConfiguration, c
           {id === "modu" && <SettingsField className="col-span-2" label={t("common.provider")} hint={t("settings.providerHint")} error={errors[`${id}.provider`]}><SettingsSelect ariaLabel={t("common.provider")} value={value[id]?.provider || "auto"} onChange={(provider) => update(id, "provider", provider)} options={[{ value: "auto", label: t("settings.autoDetect") }, { value: "openai", label: "OpenAI / Compatible" }, { value: "anthropic", label: "Anthropic" }, { value: "gemini", label: "Gemini" }]} /></SettingsField>}
         </div>
         {id !== "modu" && <div className="mt-4 flex justify-end"><SettingsButton tone="cyan" disabled={configurationLoading} onClick={() => check(id)}>{configurationLoading ? t("settings.checking") : id === "codex" ? t("settings.refreshCodexConfig") : t("settings.refreshClaudeModels")}</SettingsButton></div>}
-      </RuntimeSettingsCard></TabsContent>;
+      </RuntimeSettingsCard>;
     })}
-  </Tabs>;
+  </div>;
 }
 
 function ExecutionSettings({ value, setValue, errors }) {

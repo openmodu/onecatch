@@ -14,3 +14,10 @@ test("separates runtime environment and harness agent controls", () => {
   assert.match(source, /const runtimeEnvironmentFields = \["integration", "configSource", "configPath", "binary", "environmentAllowlist"\]/);
   assert.match(source, /const harnessAgentFields = \["defaultModel", "reasoningEffort", "serviceTier", "provider"\]/);
 });
+
+test("shows every harness agent without nested tabs", () => {
+  const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
+  assert.doesNotMatch(harness, /<Tabs|TabsList|TabsTrigger|TabsContent/);
+  assert.match(harness, /runtimeIds\.map/);
+  assert.match(harness, /<RuntimeSettingsCard key=\{id\}/);
+});
