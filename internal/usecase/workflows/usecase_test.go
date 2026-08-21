@@ -54,6 +54,22 @@ type fixedGitInspector struct {
 	calls int
 }
 
+type blockingEngine struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (e *blockingEngine) Available(agentrun.Runtime) bool { return true }
+func (e *blockingEngine) Run(ctx context.Context, _ agentrun.Request, _ agentrun.Sink) (agentrun.Result, error) {
+	close(e.started)
+	select {
+	case <-ctx.Done():
+		return agentrun.Result{}, ctx.Err()
+	case <-e.release:
+		return success("done", "session"), nil
+	}
+}
+
 func (g *fixedGitInspector) Inspect(context.Context, string) (domainworkspaces.GitSnapshot, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -168,6 +184,52 @@ func TestDirectAgentUsesPlainPromptsAndNaturalReplies(t *testing.T) {
 	}
 	if engine.calls[1].ResumeSessionID != "session-1" {
 		t.Fatalf("continued session = %q", engine.calls[1].ResumeSessionID)
+	}
+}
+
+func TestTaskCompletionPreservesTitleUpdatedDuringRun(t *testing.T) {
+	definition := domainworkflows.Definition{
+		ID: "single_agent", Name: "Single Agent", EntryStepID: "execute",
+		Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
+		Steps: []domainworkflows.Step{{
+			ID: "execute", Name: "Execute", Runtime: "codex", RolePrompt: "unused", Instruction: "unused",
+			Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause},
+		}},
+	}
+	engine := &blockingEngine{started: make(chan struct{}), release: make(chan struct{})}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	run, err := usecase.StartTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, executeErr := usecase.ExecuteRun(context.Background(), run.ID)
+		done <- executeErr
+	}()
+	select {
+	case <-engine.started:
+	case <-time.After(time.Second):
+		t.Fatal("run did not reach the Agent")
+	}
+	if updated, updateErr := store.Repos.Tasks.UpdateTaskTitle(context.Background(), task.ID, task.Title, "异步生成的标题", time.Now().UTC()); updateErr != nil || !updated {
+		t.Fatalf("UpdateTaskTitle() = %t, %v", updated, updateErr)
+	}
+	close(engine.release)
+	select {
+	case executeErr := <-done:
+		if executeErr != nil {
+			t.Fatal(executeErr)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("run did not complete")
+	}
+	stored, err := store.Repos.Tasks.GetTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Title != "异步生成的标题" || stored.Status != domaintasks.StatusCompleted {
+		t.Fatalf("completed task = %+v", stored)
 	}
 }
 

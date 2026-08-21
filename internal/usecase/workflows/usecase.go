@@ -30,6 +30,7 @@ const (
 type TaskRepository interface {
 	GetTask(context.Context, string) (domaintasks.Task, error)
 	SaveTask(context.Context, domaintasks.Task) error
+	UpdateTaskStatus(context.Context, string, domaintasks.Status, time.Time) (domaintasks.Task, error)
 	GetWorkspace(context.Context, string) (domainworkspaces.Workspace, error)
 }
 
@@ -802,9 +803,12 @@ func (s *Usecase) nextAttempt(ctx context.Context, runID, stepID string) (int, e
 }
 
 func (s *Usecase) setTaskStatus(ctx context.Context, task *domaintasks.Task, status domaintasks.Status) error {
-	task.Status = status
-	task.UpdatedAt = s.now()
-	return s.tasks.SaveTask(ctx, *task)
+	updated, err := s.tasks.UpdateTaskStatus(ctx, task.ID, status, s.now())
+	if err != nil {
+		return err
+	}
+	*task = updated
+	return nil
 }
 
 func (s *Usecase) appendEvent(ctx context.Context, runID, eventType, stepID string, payload any) error {

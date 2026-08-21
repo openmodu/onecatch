@@ -74,17 +74,27 @@ func TestNotifyingRepoMarksEveryListVisibleWrite(t *testing.T) {
 	if notifier.marks != 2 {
 		t.Fatalf("marks after skipped title update = %d, want 2", notifier.marks)
 	}
+	task, err := repo.UpdateTaskStatus(ctx, "task_1", domaintasks.StatusRunning, updatedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if task.Title != "refined" || task.Status != domaintasks.StatusRunning {
+		t.Fatalf("task after status update = %+v", task)
+	}
+	if notifier.marks != 3 {
+		t.Fatalf("marks after status update = %d, want 3", notifier.marks)
+	}
 	if err := repo.DeleteTask(ctx, "task_1"); err != nil {
 		t.Fatal(err)
 	}
-	if notifier.marks != 3 {
-		t.Fatalf("marks after delete = %d, want 3", notifier.marks)
+	if notifier.marks != 4 {
+		t.Fatalf("marks after delete = %d, want 4", notifier.marks)
 	}
 	if err := repo.SaveWorkspace(ctx, workspace); err != nil {
 		t.Fatal(err)
 	}
-	if notifier.marks != 4 {
-		t.Fatalf("marks after workspace save = %d, want 4", notifier.marks)
+	if notifier.marks != 5 {
+		t.Fatalf("marks after workspace save = %d, want 5", notifier.marks)
 	}
 }
 

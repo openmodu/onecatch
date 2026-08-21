@@ -24,6 +24,7 @@ type TasksRepo interface {
 	ListWorkspaces(context.Context) ([]domainworkspaces.Workspace, error)
 	SaveTask(context.Context, domaintasks.Task) error
 	UpdateTaskTitle(context.Context, string, string, string, time.Time) (bool, error)
+	UpdateTaskStatus(context.Context, string, domaintasks.Status, time.Time) (domaintasks.Task, error)
 	GetTask(context.Context, string) (domaintasks.Task, error)
 	ListTasks(context.Context, string) ([]domaintasks.Task, error)
 	DeleteTask(context.Context, string) error
@@ -136,6 +137,32 @@ func (r *tasksImpl) UpdateTaskTitle(ctx context.Context, id, expected, title str
 		return false, fmt.Errorf("update task title: %w", err)
 	}
 	return true, nil
+}
+
+// UpdateTaskStatus changes only execution state, preserving metadata that may
+// have been updated while a long-running Agent held an older task snapshot.
+func (r *tasksImpl) UpdateTaskStatus(ctx context.Context, id string, status domaintasks.Status, updatedAt time.Time) (domaintasks.Task, error) {
+	if err := ctx.Err(); err != nil {
+		return domaintasks.Task{}, err
+	}
+	if !localfile.ValidID(id) {
+		return domaintasks.Task{}, domaintasks.ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	task, err := r.getTaskLocked(id)
+	if err != nil {
+		return domaintasks.Task{}, err
+	}
+	task.Status = status
+	task.UpdatedAt = updatedAt
+	if err := domaintasks.Validate(task); err != nil {
+		return domaintasks.Task{}, err
+	}
+	if err := localfile.WriteJSONAtomic(r.taskPath(task.ID), task); err != nil {
+		return domaintasks.Task{}, fmt.Errorf("update task status: %w", err)
+	}
+	return task, nil
 }
 
 func (r *tasksImpl) GetTask(ctx context.Context, id string) (domaintasks.Task, error) {

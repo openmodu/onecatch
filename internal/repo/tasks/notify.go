@@ -49,6 +49,15 @@ func (r *notifyingRepo) UpdateTaskTitle(ctx context.Context, id, expected, title
 	return true, nil
 }
 
+func (r *notifyingRepo) UpdateTaskStatus(ctx context.Context, id string, status domaintasks.Status, updatedAt time.Time) (domaintasks.Task, error) {
+	task, err := r.TasksRepo.UpdateTaskStatus(ctx, id, status, updatedAt)
+	if err != nil {
+		return task, err
+	}
+	r.notify.MarkDirty()
+	return task, nil
+}
+
 func (r *notifyingRepo) DeleteTask(ctx context.Context, id string) error {
 	if err := r.TasksRepo.DeleteTask(ctx, id); err != nil {
 		return err
