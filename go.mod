@@ -2,11 +2,6 @@ module github.com/openmodu/onecatch
 
 go 1.26.1
 
-// Modu is developed as the adjacent local repository. Keep the required version
-// for release provenance while using the local SDK changes before they are
-// published to GitHub.
-replace github.com/openmodu/modu => ../modu
-
 require (
 	github.com/UserExistsError/conpty v0.1.4
 	github.com/creack/pty v1.1.24
