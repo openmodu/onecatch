@@ -7,7 +7,7 @@
 // drag the whole settings screen and its controls into their first load.
 export const demoSettings = {
   schemaVersion: 1, revision: 1,
-  runtimes: { codex: { binary: "", defaultModel: "", reasoningEffort: "", serviceTier: "", environmentAllowlist: [] }, claude: { binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] }, modu: { binary: "", defaultModel: "", provider: "auto", environmentAllowlist: [] } },
+  runtimes: { codex: { integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", serviceTier: "", environmentAllowlist: [] }, claude: { integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] }, modu: { integration: "sdk", configSource: "shared", configPath: "", binary: "", defaultModel: "", provider: "auto", environmentAllowlist: [] } },
   terminal: { shell: "", arguments: [], theme: "system" },
   execution: { maxTransitions: 20, maxConsecutiveFailures: 3, stepTimeoutSeconds: 1800, maxLocalDAGConcurrency: 4, interruptGraceSeconds: 10, defaultSandbox: "workspace-write" },
   security: { allowFullSandbox: false, confirmFullSandboxEveryRun: true, diagnosticsIncludePrompt: false, diagnosticsIncludeRawEvents: false },

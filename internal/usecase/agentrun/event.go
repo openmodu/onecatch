@@ -1,5 +1,5 @@
-// Package agentrun runs local CLI coding agents (Codex, Claude Code, Modu Code) as
-// subprocesses for long-horizon tasks, normalizing their heterogeneous
+// Package agentrun runs local coding-agent harnesses for long-horizon tasks,
+// normalizing their heterogeneous SDK and process event streams
 // streaming output into a single event model the rest of the product consumes.
 //
 // Each supported runtime speaks a different wire format on stdout:
@@ -9,8 +9,8 @@
 //   - Claude Code (`claude -p --output-format stream-json`) emits JSONL:
 //     system{init}, assistant{message.content[]}, user{tool_result},
 //     result{success|error}.
-//   - Modu Code (`modu_code -p ... -json`) emits NDJSON lifecycle, message,
-//     tool execution, and session completion events.
+//   - Modu Code can use its in-process Go SDK or the legacy print-mode NDJSON
+//     adapter (`modu_code -p ... -json`).
 //
 // Adapters translate all three into the [Event] stream below so callers never have
 // to branch on the underlying runtime.
@@ -26,7 +26,7 @@ const (
 	RuntimeCodex Runtime = "codex"
 	// RuntimeClaude drives Anthropic's Claude Code via `claude -p`.
 	RuntimeClaude Runtime = "claude"
-	// RuntimeModu drives Modu Code via its non-interactive print mode.
+	// RuntimeModu drives Modu Code via its native SDK or print mode.
 	RuntimeModu Runtime = "modu"
 )
 

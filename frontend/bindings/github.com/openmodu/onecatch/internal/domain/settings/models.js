@@ -108,6 +108,27 @@ export class RuntimeSettings {
              * @member
              * @type {string | undefined}
              */
+            this["integration"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["configSource"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["configPath"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
             this["binary"] = undefined;
         }
         if (/** @type {any} */(false)) {
@@ -155,10 +176,10 @@ export class RuntimeSettings {
      * @returns {RuntimeSettings}
      */
     static createFrom($$source = {}) {
-        const $$createField5_0 = $$createType0;
+        const $$createField8_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("environmentAllowlist" in $$parsedSource) {
-            $$parsedSource["environmentAllowlist"] = $$createField5_0($$parsedSource["environmentAllowlist"]);
+            $$parsedSource["environmentAllowlist"] = $$createField8_0($$parsedSource["environmentAllowlist"]);
         }
         return new RuntimeSettings(/** @type {Partial<RuntimeSettings>} */($$parsedSource));
     }

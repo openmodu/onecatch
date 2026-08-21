@@ -4,6 +4,9 @@ import "testing"
 
 func TestDefaultsAreSafeAndValid(t *testing.T) {
 	got := Defaults()
+	if got.Runtimes["modu"].Integration != "sdk" || got.Runtimes["modu"].ConfigSource != "shared" || got.Runtimes["codex"].Integration != "cli" {
+		t.Fatalf("runtime integrations = %#v", got.Runtimes)
+	}
 	if err := Validate(got); err != nil {
 		t.Fatal(err)
 	}
@@ -18,6 +21,44 @@ func TestDefaultsAreSafeAndValid(t *testing.T) {
 	}
 	if got.Terminal.Theme != "system" || got.Terminal.Shell != "" {
 		t.Fatalf("terminal defaults = %+v", got.Terminal)
+	}
+}
+
+func TestNormalizeMigratesRuntimeIntegrations(t *testing.T) {
+	input := Defaults()
+	input.Runtimes["codex"] = RuntimeSettings{}
+	input.Runtimes["claude"] = RuntimeSettings{}
+	input.Runtimes["modu"] = RuntimeSettings{}
+	got, err := Normalize(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Runtimes["codex"].Integration != "cli" || got.Runtimes["claude"].Integration != "cli" || got.Runtimes["modu"].Integration != "sdk" || got.Runtimes["modu"].ConfigSource != "shared" {
+		t.Fatalf("normalized integrations = %#v", got.Runtimes)
+	}
+	if err := Validate(got); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNormalizeAndValidateModuConfigSource(t *testing.T) {
+	input := Defaults()
+	input.Runtimes["modu"] = RuntimeSettings{Integration: "sdk", ConfigSource: " OneCatch ", ConfigPath: " /tmp/onecatch-modu/config.toml "}
+	got, err := Normalize(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	modu := got.Runtimes["modu"]
+	if modu.ConfigSource != "onecatch" || modu.ConfigPath != "/tmp/onecatch-modu/config.toml" {
+		t.Fatalf("modu config = %+v", modu)
+	}
+	if err := Validate(got); err != nil {
+		t.Fatal(err)
+	}
+	modu.ConfigSource = "unknown"
+	got.Runtimes["modu"] = modu
+	if err := Validate(got); err == nil {
+		t.Fatal("invalid Modu config source was accepted")
 	}
 }
 

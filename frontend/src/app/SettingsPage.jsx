@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   SettingsButton,
   SettingsField,
@@ -257,16 +258,24 @@ function TerminalSettings({ value, setValue, errors }) {
 
 function RuntimeSettings({ value, setValue, status, runtimes, check, errors, codexConfiguration, claudeConfiguration }) {
   const { t, i18n } = useTranslation();
+  const [activeRuntime, setActiveRuntime] = useState("codex");
   const update = (id, field, next) => setValue({ ...value, [id]: { ...value[id], [field]: next } });
   const meta = {
     codex: { name: "Codex", command: "codex", description: t("settings.runtimeDescription"), env: "OPENAI_API_KEY, HTTPS_PROXY" },
     claude: { name: "Claude Code", command: "claude", description: t("settings.runtimeDescription"), env: "ANTHROPIC_API_KEY, HTTPS_PROXY" },
-    modu: { name: "Modu Code", command: "modu_code", description: t("settings.moduDescription"), env: t("settings.optionalEnv") },
+    modu: { name: "Modu Code", command: "modu_code", description: t((value.modu?.integration || "sdk") === "sdk" ? "settings.moduSDKDescription" : "settings.moduDescription"), env: t("settings.optionalEnv") },
   };
-  return <div className="grid gap-3">
-    <aside className="rounded-lg bg-muted/45 p-4 text-xs leading-relaxed text-muted-foreground" aria-labelledby="runtime-path-help-title"><strong className="text-sm text-foreground" id="runtime-path-help-title">{t("settings.runtimePathHelpTitle")}</strong><p className="mt-1 mb-3">{t("settings.runtimePathHelpDescription")}</p><div className="grid grid-cols-2 gap-3"><code className="select-text rounded-md bg-background/70 p-3 text-info">command -v codex<br />command -v claude<br />command -v modu_code</code><code className="select-text break-all rounded-md bg-background/70 p-3 text-info">/opt/homebrew/bin/codex<br />/usr/local/bin/claude<br />~/go/bin/modu_code</code></div></aside>
+  const activeIntegration = value[activeRuntime]?.integration || (activeRuntime === "modu" ? "sdk" : "cli");
+  return <Tabs value={activeRuntime} onValueChange={setActiveRuntime} className="gap-0">
+    <TabsList variant="line" className="mx-4 mt-3 mb-4 w-[calc(100%-2rem)] justify-start border-b border-border/70" aria-label={t("settings.harnessTabs")}>
+      {runtimeIds.map((id) => <TabsTrigger key={id} value={id} className="flex-none px-4 pb-2.5">{meta[id].name}</TabsTrigger>)}
+    </TabsList>
+    {activeIntegration === "cli" && <aside className="mx-4 mb-4 rounded-lg bg-muted/45 p-4 text-xs leading-relaxed text-muted-foreground" aria-labelledby="runtime-path-help-title"><strong className="text-sm text-foreground" id="runtime-path-help-title">{t("settings.runtimePathHelpTitle")}</strong><p className="mt-1 mb-3">{t("settings.runtimePathHelpDescription")}</p><div className="grid grid-cols-2 gap-3"><code className="select-text rounded-md bg-background/70 p-3 text-info">command -v {meta[activeRuntime].command}</code><code className="select-text break-all rounded-md bg-background/70 p-3 text-info">/usr/local/bin/{meta[activeRuntime].command}</code></div></aside>}
     {runtimeIds.map((id) => {
       const current = status[id] || runtimes.find((item) => item.id === id) || {};
+      const integration = value[id]?.integration || (id === "modu" ? "sdk" : "cli");
+      const nativeModu = id === "modu" && integration === "sdk";
+      const moduConfigSource = value.modu?.configSource || "shared";
       const statusText = current.checking ? t("settings.checkingCommand") : current.available ? `${current.version || t("common.available")}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN")}` : ""}` : current.error || t("settings.notDetected");
       const codexData = codexConfiguration.data;
       const claudeData = claudeConfiguration.data;
@@ -288,21 +297,25 @@ function RuntimeSettings({ value, setValue, status, runtimes, check, errors, cod
       const configurationLoading = id === "codex" ? codexConfiguration.loading : id === "claude" ? claudeConfiguration.loading : false;
       const modelHint = id === "codex" && codexData ? t("settings.codexDetectedValue", { value: codexData.model || t("settings.runtimeDefault") }) : id === "claude" && claudeData ? t("settings.claudeModelsDetected", { count: claudeData.models?.length || 0 }) : t("settings.runtimeDecides");
       const configurationMessage = id === "codex" ? codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || (codexData && t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })) : id === "claude" ? claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || (claudeData && t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })) : "";
-      return <RuntimeSettingsCard key={id} title={meta[id].name} description={meta[id].description} aside={<Badge variant="outline" className={current.available ? "border-success/25 bg-success/8 text-success" : current.error ? "border-destructive/25 bg-destructive/8 text-destructive" : "text-muted-foreground"}><i className="size-1.5 rounded-full bg-current" />{statusText}</Badge>}>
+      return <TabsContent key={id} value={id}><RuntimeSettingsCard title={meta[id].name} description={meta[id].description} aside={<Badge variant="outline" className={current.available ? "border-success/25 bg-success/8 text-success" : current.error ? "border-destructive/25 bg-destructive/8 text-destructive" : "text-muted-foreground"}><i className="size-1.5 rounded-full bg-current" />{statusText}</Badge>}>
         {configurationMessage && <div className={`mb-4 rounded-lg px-3 py-2 text-xs leading-relaxed ${codexConfiguration.error || claudeConfiguration.error ? "select-text bg-destructive/8 text-destructive" : "bg-primary/6 text-muted-foreground"}`} role={codexConfiguration.error || claudeConfiguration.error ? "alert" : "status"}>{configurationMessage}</div>}
         <div className="grid grid-cols-2 gap-4">
-          <SettingsField label={t("settings.binaryPath")} hint={t("settings.useCommand", { command: meta[id].command })} error={errors[`${id}.binary`]}><Input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={meta[id].command} /></SettingsField>
+          {id === "modu" && <SettingsField className="col-span-2" label={t("settings.integrationMode")} hint={t("settings.integrationModeHint")}><SettingsSelect ariaLabel={t("settings.integrationMode")} value={integration} onChange={(next) => update(id, "integration", next)} options={[{ value: "sdk", label: t("settings.integration.sdk"), meta: t("settings.integration.sdkMeta") }, { value: "cli", label: t("settings.integration.cli"), meta: t("settings.integration.cliMeta") }]} /></SettingsField>}
+          {nativeModu && <SettingsField className="col-span-2" label={t("settings.moduConfigSource")} hint={t("settings.moduConfigSourceHint")}><SettingsSelect ariaLabel={t("settings.moduConfigSource")} value={moduConfigSource} onChange={(next) => update(id, "configSource", next)} options={[{ value: "onecatch", label: t("settings.moduConfig.onecatch"), meta: t("settings.moduConfig.onecatchMeta") }, { value: "shared", label: t("settings.moduConfig.shared"), meta: "~/.modu/config.toml" }]} /></SettingsField>}
+          {nativeModu && moduConfigSource === "onecatch" && <SettingsField className="col-span-2" label={t("settings.moduConfigPath")} hint={t("settings.moduConfigPathHint")} error={errors[`${id}.configPath`]}><Input value={value[id]?.configPath || ""} aria-invalid={Boolean(errors[`${id}.configPath`])} onChange={(event) => update(id, "configPath", event.target.value)} placeholder={t("settings.moduConfigDefaultPath")} /></SettingsField>}
+          {nativeModu && <div className="col-span-2 rounded-lg bg-primary/6 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground"><strong className="block text-foreground">{t("settings.moduNativeConfig")}</strong><span className="mt-1 block">{t("settings.moduNativeConfigDescription")}</span><code className="mt-2 block select-text text-info">{moduConfigSource === "shared" ? "~/.modu/config.toml" : value[id]?.configPath || t("settings.moduConfigDefaultPath")}</code></div>}
+          {!nativeModu && <SettingsField label={t("settings.binaryPath")} hint={t("settings.useCommand", { command: meta[id].command })} error={errors[`${id}.binary`]}><Input value={value[id]?.binary || ""} aria-invalid={Boolean(errors[`${id}.binary`])} onChange={(event) => update(id, "binary", event.target.value)} placeholder={meta[id].command} /></SettingsField>}
           <SettingsField label={t("settings.defaultModel")} hint={modelHint} error={errors[`${id}.defaultModel`]}>{modelOptions.length > 1 ? <SettingsSelect ariaLabel={t("settings.defaultModel")} value={value[id]?.defaultModel || ""} onChange={updateModel} options={modelOptions} /> : <Input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} />}</SettingsField>
           {id === "codex" && <SettingsField label={t("settings.reasoningEffort")} hint={t("settings.codexDetectedValue", { value: detectedEffort })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.codex?.reasoningEffort || ""} onChange={(reasoningEffort) => update("codex", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedEffort }, ...(codexData && effortValues.length ? effortValues : ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]).map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
           {id === "claude" && <SettingsField className="col-span-2" label={t("settings.reasoningEffort")} hint={t("settings.claudeEffortsDetected", { count: claudeEffortValues.length })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.claude?.reasoningEffort || ""} onChange={(reasoningEffort) => update("claude", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...claudeEffortValues.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
           {id === "codex" && <SettingsField label={t("settings.speed")} hint={t("settings.codexDetectedValue", { value: detectedTier })} error={errors[`${id}.serviceTier`]}><SettingsSelect ariaLabel={t("settings.speed")} value={value.codex?.serviceTier || ""} onChange={(serviceTier) => update("codex", "serviceTier", serviceTier)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedTier }, ...(codexData ? serviceTierValues : ["standard", "fast", "priority", "flex"]).map((tier) => ({ value: tier, label: t(`settings.speed.${tier}`, { defaultValue: tierDetails.get(tier)?.name || tier }), meta: tierDetails.get(tier)?.description || tier }))]} /></SettingsField>}
           {id === "modu" && <SettingsField className="col-span-2" label={t("common.provider")} hint={t("settings.providerHint")} error={errors[`${id}.provider`]}><SettingsSelect ariaLabel={t("common.provider")} value={value[id]?.provider || "auto"} onChange={(provider) => update(id, "provider", provider)} options={[{ value: "auto", label: t("settings.autoDetect") }, { value: "openai", label: "OpenAI / Compatible" }, { value: "anthropic", label: "Anthropic" }, { value: "gemini", label: "Gemini" }]} /></SettingsField>}
-          <SettingsField className="col-span-2" label={t("settings.envAllowlist")} hint={t("settings.envAllowlistHint")} error={errors[`${id}.environmentAllowlist`]}><Input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder={meta[id].env} /></SettingsField>
+          {!nativeModu && <SettingsField className="col-span-2" label={t("settings.envAllowlist")} hint={t("settings.envAllowlistHint")} error={errors[`${id}.environmentAllowlist`]}><Input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder={meta[id].env} /></SettingsField>}
         </div>
         <div className="mt-4 flex justify-end"><SettingsButton tone="cyan" disabled={current.checking || configurationLoading} onClick={() => check(id)}>{current.checking || configurationLoading ? t("settings.checking") : id === "codex" ? t("settings.refreshCodexConfig") : id === "claude" ? t("settings.refreshClaudeModels") : t("settings.testConfig")}</SettingsButton></div>
-      </RuntimeSettingsCard>;
+      </RuntimeSettingsCard></TabsContent>;
     })}
-  </div>;
+  </Tabs>;
 }
 
 function ExecutionSettings({ value, setValue, errors }) {
@@ -386,6 +399,7 @@ function validateSection(section, draft, t) {
     const forbidden = (key) => ["PATH", "HOME", "SHELL", "BASH_ENV", "ENV", "ZDOTDIR"].includes(key) || key.startsWith("DYLD_") || key.startsWith("LD_");
     for (const id of ["codex", "claude", "modu"]) {
       const runtime = draft.runtimes[id];
+      if (id === "modu" && !["sdk", "cli"].includes(runtime.integration || "sdk")) add(`${id}.integration`, t("settings.validation.invalidIntegration"));
       if (/[\r\n\0]/.test(runtime.binary || "")) add(`${id}.binary`, t("settings.validation.pathCharacters"));
       if (/[\r\n\0]/.test(runtime.defaultModel || "")) add(`${id}.defaultModel`, t("settings.validation.modelCharacters"));
       if (id === "codex" && !["", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"].includes(runtime.reasoningEffort || "")) add(`${id}.reasoningEffort`, t("settings.validation.invalidReasoningEffort"));

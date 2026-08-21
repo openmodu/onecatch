@@ -34,6 +34,9 @@ type Settings struct {
 }
 
 type RuntimeSettings struct {
+	Integration          string   `json:"integration,omitempty"`
+	ConfigSource         string   `json:"configSource,omitempty"`
+	ConfigPath           string   `json:"configPath,omitempty"`
 	Binary               string   `json:"binary,omitempty"`
 	DefaultModel         string   `json:"defaultModel,omitempty"`
 	ReasoningEffort      string   `json:"reasoningEffort,omitempty"`
@@ -81,9 +84,9 @@ func Defaults() Settings {
 		SchemaVersion: CurrentSchemaVersion,
 		Revision:      1,
 		Runtimes: map[string]RuntimeSettings{
-			"codex":  {},
-			"claude": {},
-			"modu":   {},
+			"codex":  {Integration: "cli"},
+			"claude": {Integration: "cli"},
+			"modu":   {Integration: "sdk", ConfigSource: "shared"},
 		},
 		Terminal: TerminalSettings{Theme: "system"},
 		Execution: ExecutionSettings{
@@ -116,7 +119,7 @@ func Normalize(input Settings) (Settings, error) {
 	}
 	for _, id := range []string{"codex", "claude", "modu"} {
 		if _, ok := input.Runtimes[id]; !ok {
-			input.Runtimes[id] = RuntimeSettings{}
+			input.Runtimes[id] = defaults.Runtimes[id]
 		}
 	}
 	if input.Execution.MaxTransitions == 0 {
@@ -162,6 +165,19 @@ func Normalize(input Settings) (Settings, error) {
 		input.Storage.LogMaxAgeDays = defaults.Storage.LogMaxAgeDays
 	}
 	for id, runtime := range input.Runtimes {
+		runtime.Integration = strings.ToLower(strings.TrimSpace(runtime.Integration))
+		if runtime.Integration == "" {
+			if id == "modu" {
+				runtime.Integration = "sdk"
+			} else {
+				runtime.Integration = "cli"
+			}
+		}
+		runtime.ConfigSource = strings.ToLower(strings.TrimSpace(runtime.ConfigSource))
+		if id == "modu" && runtime.ConfigSource == "" {
+			runtime.ConfigSource = "shared"
+		}
+		runtime.ConfigPath = strings.TrimSpace(runtime.ConfigPath)
 		runtime.Binary = strings.TrimSpace(runtime.Binary)
 		runtime.DefaultModel = strings.TrimSpace(runtime.DefaultModel)
 		runtime.ReasoningEffort = strings.ToLower(strings.TrimSpace(runtime.ReasoningEffort))
@@ -189,8 +205,20 @@ func Validate(input Settings) error {
 		if id != "codex" && id != "claude" && id != "modu" {
 			return fmt.Errorf("unknown runtime %q", id)
 		}
-		if strings.ContainsAny(runtime.Binary+runtime.DefaultModel+runtime.ReasoningEffort+runtime.ServiceTier+runtime.Provider, "\r\n\x00") {
+		if strings.ContainsAny(runtime.Integration+runtime.ConfigSource+runtime.ConfigPath+runtime.Binary+runtime.DefaultModel+runtime.ReasoningEffort+runtime.ServiceTier+runtime.Provider, "\r\n\x00") {
 			return fmt.Errorf("runtime %s contains control characters", id)
+		}
+		if id == "modu" {
+			if !contains([]string{"", "sdk", "cli"}, runtime.Integration) {
+				return errors.New("modu integration must be sdk or cli")
+			}
+			if !contains([]string{"", "shared", "onecatch"}, runtime.ConfigSource) {
+				return errors.New("modu config source must be shared or onecatch")
+			}
+		} else if runtime.Integration != "" && runtime.Integration != "cli" {
+			return fmt.Errorf("runtime %s only supports cli integration", id)
+		} else if runtime.ConfigSource != "" || runtime.ConfigPath != "" {
+			return fmt.Errorf("runtime %s does not support config source settings", id)
 		}
 		if id == "codex" {
 			if !contains([]string{"", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}, runtime.ReasoningEffort) {

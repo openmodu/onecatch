@@ -10,6 +10,62 @@ import (
 	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
 )
 
+func TestModuRuntimeStatusCacheIncludesIntegration(t *testing.T) {
+	sdk := runtimeSpecs(RuntimeConfig{ModuIntegration: "sdk"})[2]
+	cli := runtimeSpecs(RuntimeConfig{ModuIntegration: "cli"})[2]
+	if sdk.cacheKey == cli.cacheKey {
+		t.Fatal("Modu SDK and CLI share a runtime status cache key")
+	}
+}
+
+func TestRuntimeRegistryResolvesIsolatedModuPaths(t *testing.T) {
+	root := t.TempDir()
+	registry, err := NewRuntimeRegistry(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath, agentDir := registry.moduSDKPaths(domainsettings.RuntimeSettings{Integration: "sdk", ConfigSource: "onecatch"})
+	wantDir := filepath.Join(root, "harnesses", "modu")
+	if configPath != filepath.Join(wantDir, "config.toml") || agentDir != wantDir {
+		t.Fatalf("isolated paths = (%q, %q), want directory %q", configPath, agentDir, wantDir)
+	}
+	configPath, agentDir = registry.moduSDKPaths(domainsettings.RuntimeSettings{Integration: "sdk", ConfigSource: "shared"})
+	if configPath != "" || agentDir != "" {
+		t.Fatalf("shared paths = (%q, %q), want Modu defaults", configPath, agentDir)
+	}
+}
+
+func TestRuntimeRegistryCopiesSharedModuConfigOnFirstIsolation(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	shared := filepath.Join(home, ".modu", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(shared), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(shared, []byte("version = 2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	registry, err := NewRuntimeRegistry(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := domainsettings.Defaults().Runtimes
+	modu := settings["modu"]
+	modu.ConfigSource = "onecatch"
+	settings["modu"] = modu
+	registry.ApplySettings(settings, 10)
+	target := filepath.Join(root, "harnesses", "modu", "config.toml")
+	data, err := os.ReadFile(target)
+	if err != nil || string(data) != "version = 2\n" {
+		t.Fatalf("isolated config = %q, %v", data, err)
+	}
+	info, err := os.Stat(target)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("isolated config permissions = %v, %v", info, err)
+	}
+}
+
 func TestRuntimeRegistryCachesVersionChecks(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("shell helper is Unix-only")

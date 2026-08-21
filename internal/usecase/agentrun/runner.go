@@ -77,11 +77,11 @@ type Request struct {
 // from the engine's goroutine; implementations must not block for long.
 type Sink func(Event)
 
-// Runner drives a single local agent runtime.
+// Runner drives a single local agent runtime through either an SDK or process adapter.
 type Runner interface {
 	// Runtime is the runtime this runner drives.
 	Runtime() Runtime
-	// Available reports whether the runtime's CLI is installed and runnable.
+	// Available reports whether the configured adapter is available.
 	Available() bool
 	// Run executes req to completion, delivering events to sink as they
 	// arrive, and returns the terminal result. A non-nil error means the run

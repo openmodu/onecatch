@@ -26,20 +26,27 @@ type Engine struct {
 	runners map[Runtime]Runner
 }
 
-// Config configures the engine's runners with optional binary overrides. Empty
-// paths fall back to the CLI name resolved from PATH.
+// Config configures the engine's adapters and optional binary overrides. Empty
+// CLI paths fall back to the command name resolved from PATH.
 type Config struct {
-	CodexBinary  string
-	ClaudeBinary string
-	ModuBinary   string
+	CodexBinary     string
+	ClaudeBinary    string
+	ModuBinary      string
+	ModuIntegration string
+	ModuConfigPath  string
+	ModuAgentDir    string
 }
 
 // NewEngine builds an engine with all standard local runtime runners.
 func NewEngine(cfg Config) *Engine {
+	var modu Runner = NewModuSDKRunner(ModuSDKOptions{ConfigPath: cfg.ModuConfigPath, AgentDir: cfg.ModuAgentDir})
+	if cfg.ModuIntegration == "cli" {
+		modu = NewModuRunner(cfg.ModuBinary)
+	}
 	return NewEngineWithRunners(
 		NewCodexRunner(cfg.CodexBinary),
 		NewClaudeRunner(cfg.ClaudeBinary),
-		NewModuRunner(cfg.ModuBinary),
+		modu,
 	)
 }
 

@@ -678,7 +678,7 @@ export const Runtime = {
     RuntimeClaude: "claude",
 
     /**
-     * RuntimeModu drives Modu Code via its non-interactive print mode.
+     * RuntimeModu drives Modu Code via its native SDK or print mode.
      */
     RuntimeModu: "modu",
 };

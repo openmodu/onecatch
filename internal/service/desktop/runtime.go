@@ -15,9 +15,12 @@ import (
 )
 
 type RuntimeConfig struct {
-	CodexBinary  string `json:"codexBinary,omitempty"`
-	ClaudeBinary string `json:"claudeBinary,omitempty"`
-	ModuBinary   string `json:"moduBinary,omitempty"`
+	CodexBinary     string `json:"codexBinary,omitempty"`
+	ClaudeBinary    string `json:"claudeBinary,omitempty"`
+	ModuBinary      string `json:"moduBinary,omitempty"`
+	ModuIntegration string `json:"moduIntegration,omitempty"`
+	ModuConfigPath  string `json:"moduConfigPath,omitempty"`
+	ModuAgentDir    string `json:"moduAgentDir,omitempty"`
 }
 
 type RuntimeConfigInput struct {
@@ -42,6 +45,7 @@ type RuntimeRegistry struct {
 	settings           map[string]domainsettings.RuntimeSettings
 	statusCache        map[string]runtimeStatusCacheEntry
 	statusPath         string
+	dataRoot           string
 	statusRefreshing   bool
 	interruptGrace     time.Duration
 	engine             *agentrun.Engine
@@ -77,7 +81,7 @@ type runtimeStatusSnapshot struct {
 }
 
 func NewRuntimeRegistry(root string) (*RuntimeRegistry, error) {
-	registry := &RuntimeRegistry{pendingPermissions: make(map[string]*pendingPermission), statusCache: make(map[string]runtimeStatusCacheEntry)}
+	registry := &RuntimeRegistry{dataRoot: strings.TrimSpace(root), pendingPermissions: make(map[string]*pendingPermission), statusCache: make(map[string]runtimeStatusCacheEntry)}
 	if strings.TrimSpace(root) != "" {
 		registry.statusPath = filepath.Join(root, runtimeStatusFile)
 		registry.loadStatusCache()
@@ -240,13 +244,14 @@ type runtimeSpec struct {
 	runtime    agentrun.Runtime
 	name       string
 	configured string
+	cacheKey   string
 }
 
 func runtimeSpecs(config RuntimeConfig) []runtimeSpec {
 	return []runtimeSpec{
-		{agentrun.RuntimeCodex, "Codex", config.CodexBinary},
-		{agentrun.RuntimeClaude, "Claude Code", config.ClaudeBinary},
-		{agentrun.RuntimeModu, "Modu Code", config.ModuBinary},
+		{agentrun.RuntimeCodex, "Codex", config.CodexBinary, config.CodexBinary},
+		{agentrun.RuntimeClaude, "Claude Code", config.ClaudeBinary, config.ClaudeBinary},
+		{agentrun.RuntimeModu, "Modu Code", config.ModuBinary, strings.Join([]string{config.ModuIntegration, config.ModuBinary, config.ModuConfigPath, config.ModuAgentDir}, "\x00")},
 	}
 }
 
@@ -293,7 +298,7 @@ func (r *RuntimeRegistry) List() []RuntimeInfo {
 	stale := false
 	for index, spec := range specs {
 		cached, ok := r.statusCache[string(spec.runtime)]
-		if !ok || cached.Configured != spec.configured {
+		if !ok || cached.Configured != spec.cacheKey {
 			uncached = append(uncached, index)
 			continue
 		}
@@ -305,7 +310,7 @@ func (r *RuntimeRegistry) List() []RuntimeInfo {
 	if len(uncached) > 0 {
 		probeRuntimes(engine, specs, uncached, items)
 		for _, index := range uncached {
-			r.statusCache[string(specs[index].runtime)] = runtimeStatusCacheEntry{Configured: specs[index].configured, Info: items[index]}
+			r.statusCache[string(specs[index].runtime)] = runtimeStatusCacheEntry{Configured: specs[index].cacheKey, Info: items[index]}
 		}
 		r.persistStatusCacheLocked()
 	}
@@ -338,7 +343,7 @@ func (r *RuntimeRegistry) refreshStatus() {
 	}
 	probeRuntimes(engine, specs, indexes, items)
 	for index, spec := range specs {
-		r.statusCache[string(spec.runtime)] = runtimeStatusCacheEntry{Configured: spec.configured, Info: items[index]}
+		r.statusCache[string(spec.runtime)] = runtimeStatusCacheEntry{Configured: spec.cacheKey, Info: items[index]}
 	}
 	r.persistStatusCacheLocked()
 	r.statusRefreshing = false
@@ -397,6 +402,7 @@ func (r *RuntimeRegistry) Update(input RuntimeConfigInput) (RuntimeInfo, error) 
 // a path that actually changed is re-probed by List() on its own; a path that
 // did not is refreshed in the background once its TTL expires.
 func (r *RuntimeRegistry) ApplySettings(runtimes map[string]domainsettings.RuntimeSettings, interruptGraceSeconds int) {
+	r.ensureIsolatedModuConfig(runtimes["modu"])
 	r.mu.Lock()
 	copySettings := make(map[string]domainsettings.RuntimeSettings, len(runtimes))
 	for id, item := range runtimes {
@@ -404,9 +410,44 @@ func (r *RuntimeRegistry) ApplySettings(runtimes map[string]domainsettings.Runti
 	}
 	r.settings = copySettings
 	r.interruptGrace = time.Duration(interruptGraceSeconds) * time.Second
-	config := RuntimeConfig{CodexBinary: runtimes["codex"].Binary, ClaudeBinary: runtimes["claude"].Binary, ModuBinary: runtimes["modu"].Binary}
+	config := RuntimeConfig{CodexBinary: runtimes["codex"].Binary, ClaudeBinary: runtimes["claude"].Binary, ModuBinary: runtimes["modu"].Binary, ModuIntegration: runtimes["modu"].Integration}
+	config.ModuConfigPath, config.ModuAgentDir = r.moduSDKPaths(runtimes["modu"])
 	r.replace(config)
 	r.mu.Unlock()
+}
+
+func (r *RuntimeRegistry) ensureIsolatedModuConfig(settings domainsettings.RuntimeSettings) {
+	if settings.Integration == "cli" || settings.ConfigSource != "onecatch" || strings.TrimSpace(settings.ConfigPath) != "" {
+		return
+	}
+	target, _ := r.moduSDKPaths(settings)
+	if target == "" {
+		return
+	}
+	if _, err := os.Stat(target); err == nil || !os.IsNotExist(err) {
+		return
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".modu", "config.toml"))
+	if err != nil {
+		return
+	}
+	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+		return
+	}
+	file, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return
+	}
+	if _, err = file.Write(data); err != nil {
+		_ = file.Close()
+		_ = os.Remove(target)
+		return
+	}
+	_ = file.Close()
 }
 
 // invalidateRuntimeStatus forces the next List() to probe one runtime for real.
@@ -440,7 +481,12 @@ func (r *RuntimeRegistry) CheckDraft(runtime string, input domainsettings.Runtim
 			return input.Binary
 		}
 		return ""
-	}()})
+	}(), ModuIntegration: input.Integration})
+	if runtime == "modu" {
+		engineConfig := agentrun.Config{ModuBinary: input.Binary, ModuIntegration: input.Integration}
+		engineConfig.ModuConfigPath, engineConfig.ModuAgentDir = r.moduSDKPaths(input)
+		engine = agentrun.NewEngine(engineConfig)
+	}
 	return runtimeInfo(engine, agentrun.Runtime(runtime), name, input.Binary), nil
 }
 
@@ -450,7 +496,31 @@ func (r *RuntimeRegistry) replace(config RuntimeConfig) {
 }
 
 func newRuntimeEngine(config RuntimeConfig) *agentrun.Engine {
-	return agentrun.NewEngine(agentrun.Config{CodexBinary: config.CodexBinary, ClaudeBinary: config.ClaudeBinary, ModuBinary: config.ModuBinary})
+	return agentrun.NewEngine(agentrun.Config{CodexBinary: config.CodexBinary, ClaudeBinary: config.ClaudeBinary, ModuBinary: config.ModuBinary, ModuIntegration: config.ModuIntegration, ModuConfigPath: config.ModuConfigPath, ModuAgentDir: config.ModuAgentDir})
+}
+
+func (r *RuntimeRegistry) moduSDKPaths(settings domainsettings.RuntimeSettings) (string, string) {
+	if settings.Integration == "cli" || settings.ConfigSource != "onecatch" {
+		return "", ""
+	}
+	configPath := expandHomePath(settings.ConfigPath)
+	if configPath == "" {
+		configPath = filepath.Join(r.dataRoot, "harnesses", "modu", "config.toml")
+	}
+	return configPath, filepath.Dir(configPath)
+}
+
+func expandHomePath(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "~" || strings.HasPrefix(path, "~/") {
+		if home, err := os.UserHomeDir(); err == nil {
+			path = filepath.Join(home, strings.TrimPrefix(path, "~/"))
+		}
+	}
+	if path == "" {
+		return ""
+	}
+	return filepath.Clean(path)
 }
 
 func allowedEnvironment(allowlist []string) []string {
@@ -497,7 +567,11 @@ func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, config
 	version := ""
 	if available {
 		if runtime == agentrun.RuntimeModu {
-			version = "Print · NDJSON"
+			if _, ok := engine.Runner(runtime).(*agentrun.ModuSDKRunner); ok {
+				version = "Native Go SDK"
+			} else {
+				version = "Print · NDJSON"
+			}
 			return RuntimeInfo{ID: string(runtime), Name: name, Available: true, Version: version, CheckedAt: time.Now().UTC()}
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
