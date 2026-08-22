@@ -283,9 +283,24 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 	if req.ServiceTier == "fast" {
 		commandArgs = append(commandArgs, "-c", "features.fast_mode=true")
 	}
+	environment := req.Environment
+	if req.Remote != nil {
+		var err error
+		req, err = prepareRemoteRequest(req)
+		if err != nil {
+			return Result{}, err
+		}
+		remote, err := setupRemoteCodex(req)
+		if err != nil {
+			return Result{}, err
+		}
+		defer remote.cleanup()
+		commandArgs = append(commandArgs, remote.args...)
+		environment = mergeEnvironment(environment, remote.env)
+	}
 	cmd := exec.CommandContext(ctx, r.binary, commandArgs...)
 	cmd.Dir = req.Workspace
-	cmd.Env = req.Environment
+	cmd.Env = environment
 	if req.InterruptGrace > 0 {
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = req.InterruptGrace

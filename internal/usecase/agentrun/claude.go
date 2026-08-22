@@ -166,10 +166,28 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 		args = append(args, "--effort", req.ReasoningEffort)
 	}
 
+	environment := req.Environment
+	if req.Remote != nil {
+		var err error
+		req, err = prepareRemoteRequest(req)
+		if err != nil {
+			return Result{}, err
+		}
+		remote, err := setupRemoteClaude(req)
+		if err != nil {
+			return Result{}, err
+		}
+		defer remote.cleanup()
+		args = append(args, remote.args...)
+		environment = mergeEnvironment(environment, remote.env)
+	}
+
 	cmd := exec.CommandContext(ctx, r.binary, args...)
-	// Claude Code operates on its current working directory.
+	// Claude Code operates on its current working directory. For a remote run
+	// this is only where the harness process lives — the agent's commands run
+	// on the target, in the session's own directory.
 	cmd.Dir = req.Workspace
-	cmd.Env = req.Environment
+	cmd.Env = environment
 	if req.InterruptGrace > 0 {
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = req.InterruptGrace

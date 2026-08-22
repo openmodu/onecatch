@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
 // Sandbox controls how much access the agent's tool calls are granted. It maps
@@ -32,7 +34,22 @@ type Request struct {
 	Runtime Runtime
 	// Workspace is the working directory the agent operates in. Files it
 	// produces here become the task's deliverables. Must exist.
+	//
+	// When Remote is set this is still a real local directory — the harness
+	// process needs one — but it is not where the agent's work happens. The
+	// agent's commands run in Remote.Root on the target, and the deliverables
+	// land there.
 	Workspace string
+
+	// Remote, when set, runs the agent's shell commands on another machine
+	// while the agent itself, and the credentials it holds, stay here.
+	//
+	// Claude reaches the target through a transparently remote shell and has
+	// its unredirectable native file tools denied. Codex uses its remote-
+	// environment protocol, so both shell commands and native fs tools are
+	// redirected. Neither adapter falls back to local execution if its seam
+	// cannot be established.
+	Remote *seam.Target
 	// Prompt is the task description handed to the agent.
 	Prompt string
 	// Model optionally overrides the runtime's default model.
