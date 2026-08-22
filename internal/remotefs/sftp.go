@@ -12,13 +12,55 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openmodu/onecatch/internal/sshcredentials"
+	"github.com/openmodu/onecatch/internal/sshendpoint"
 	"github.com/pkg/sftp"
 )
+
+const sshDiagnosticLimit = 16 * 1024
+
+// boundedTailBuffer retains enough of OpenSSH's stderr to explain failures
+// without allowing a long-lived SSH process to grow memory without bound.
+type boundedTailBuffer struct {
+	mu        sync.Mutex
+	data      []byte
+	truncated bool
+}
+
+func (b *boundedTailBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if len(p) >= sshDiagnosticLimit {
+		b.data = append(b.data[:0], p[len(p)-sshDiagnosticLimit:]...)
+		b.truncated = true
+		return len(p), nil
+	}
+	if overflow := len(b.data) + len(p) - sshDiagnosticLimit; overflow > 0 {
+		copy(b.data, b.data[overflow:])
+		b.data = b.data[:len(b.data)-overflow]
+		b.truncated = true
+	}
+	b.data = append(b.data, p...)
+	return len(p), nil
+}
+
+func (b *boundedTailBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	result := string(b.data)
+	if b.truncated {
+		return "...\n" + result
+	}
+	return result
+}
 
 type SFTPConfig struct {
 	Host                string
 	Root                string
+	Username            string
+	CredentialID        string
 	SSHBinary           string
+	AskPassBinary       string
 	SSHOptions          []string
 	ConnectTimeout      time.Duration
 	ServerAliveInterval time.Duration
@@ -50,7 +92,10 @@ func NewSFTPBackend(ctx context.Context, config SFTPConfig) (*SFTPBackend, error
 	if binary == "" {
 		binary = "ssh"
 	}
-	args := sshArguments(config)
+	args, err := sshArguments(config)
+	if err != nil {
+		return nil, err
+	}
 	cmd := exec.CommandContext(ctx, binary, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -60,8 +105,16 @@ func NewSFTPBackend(ctx context.Context, config SFTPConfig) (*SFTPBackend, error
 	if err != nil {
 		return nil, fmt.Errorf("open SSH stdin: %w", err)
 	}
+	var sshStderr boundedTailBuffer
 	if config.Stderr != nil {
-		cmd.Stderr = config.Stderr
+		cmd.Stderr = io.MultiWriter(config.Stderr, &sshStderr)
+	} else {
+		cmd.Stderr = &sshStderr
+	}
+	if err := sshcredentials.ConfigureCommand(cmd, config.CredentialID, config.AskPassBinary); err != nil {
+		_ = stdout.Close()
+		_ = stdin.Close()
+		return nil, fmt.Errorf("configure SSH password authentication: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start SSH SFTP subsystem: %w", err)
@@ -83,6 +136,9 @@ func NewSFTPBackend(ctx context.Context, config SFTPConfig) (*SFTPBackend, error
 		_ = stdin.Close()
 		_ = cmd.Process.Kill()
 		<-wait
+		if diagnostic := strings.TrimSpace(sshStderr.String()); diagnostic != "" {
+			return nil, fmt.Errorf("start SFTP client: %w; ssh: %s", err, diagnostic)
+		}
 		return nil, fmt.Errorf("start SFTP client: %w", err)
 	}
 	backend, err := newSFTPBackend(client, config.Root)
@@ -118,7 +174,11 @@ func newSFTPBackend(client *sftp.Client, configuredRoot string) (*SFTPBackend, e
 	}, nil
 }
 
-func sshArguments(config SFTPConfig) []string {
+func sshArguments(config SFTPConfig) ([]string, error) {
+	endpoint, err := sshendpoint.Parse(config.Host)
+	if err != nil {
+		return nil, err
+	}
 	connectTimeout := config.ConnectTimeout
 	if connectTimeout <= 0 {
 		connectTimeout = 10 * time.Second
@@ -138,19 +198,38 @@ func sshArguments(config SFTPConfig) []string {
 		}
 		return result
 	}
+	batchMode := "yes"
+	if config.CredentialID != "" {
+		batchMode = "no"
+	}
 	args := []string{
-		"-o", "BatchMode=yes",
+		"-o", "BatchMode=" + batchMode,
 		"-o", "ClearAllForwardings=yes",
+		"-o", "SendEnv=-*",
 		"-o", fmt.Sprintf("ConnectTimeout=%d", seconds(connectTimeout)),
 		"-o", fmt.Sprintf("ServerAliveInterval=%d", seconds(aliveInterval)),
 		"-o", fmt.Sprintf("ServerAliveCountMax=%d", aliveCount),
+	}
+	if endpoint.Port != 0 {
+		args = append(args, "-p", fmt.Sprintf("%d", endpoint.Port))
+	}
+	if config.CredentialID != "" {
+		args = append(args,
+			"-o", "PubkeyAuthentication=no",
+			"-o", "KbdInteractiveAuthentication=no",
+			"-o", "PreferredAuthentications=password",
+			"-o", "NumberOfPasswordPrompts=1",
+		)
 	}
 	for _, option := range config.SSHOptions {
 		if strings.TrimSpace(option) != "" {
 			args = append(args, "-o", option)
 		}
 	}
-	return append(args, "-s", config.Host, "sftp")
+	if username := strings.TrimSpace(config.Username); username != "" {
+		args = append(args, "-l", username)
+	}
+	return append(args, "-s", endpoint.Host, "sftp"), nil
 }
 
 func (b *SFTPBackend) Lstat(name string) (os.FileInfo, error) {
@@ -167,6 +246,13 @@ func (b *SFTPBackend) ReadDir(name string) ([]os.FileInfo, error) {
 		return nil, err
 	}
 	return b.client.ReadDir(remote)
+}
+
+// RealPath returns the canonical absolute path on the server while preserving
+// the backend's root boundary. Protocol adapters use it when their client has
+// a first-class canonicalize operation; FUSE callers do not need it.
+func (b *SFTPBackend) RealPath(name string) (string, error) {
+	return b.resolveExisting(name)
 }
 
 func (b *SFTPBackend) OpenFile(name string, flags int, mode os.FileMode) (File, error) {

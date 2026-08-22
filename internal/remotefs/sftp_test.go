@@ -2,6 +2,7 @@ package remotefs
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"os"
@@ -63,16 +64,20 @@ func TestWithinRootUsesPathBoundary(t *testing.T) {
 
 func TestSSHArguments(t *testing.T) {
 	t.Parallel()
-	got := sshArguments(SFTPConfig{
+	got, err := sshArguments(SFTPConfig{
 		Host:                "devbox",
 		ConnectTimeout:      4 * time.Second,
 		ServerAliveInterval: 12 * time.Second,
 		ServerAliveCountMax: 2,
 		SSHOptions:          []string{"ProxyJump=bastion", "Compression=yes"},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := []string{
 		"-o", "BatchMode=yes",
 		"-o", "ClearAllForwardings=yes",
+		"-o", "SendEnv=-*",
 		"-o", "ConnectTimeout=4",
 		"-o", "ServerAliveInterval=12",
 		"-o", "ServerAliveCountMax=2",
@@ -82,6 +87,61 @@ func TestSSHArguments(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("sshArguments() = %#v, want %#v", got, want)
+	}
+}
+
+func TestSSHArgumentsUseAskPassForPasswordCredential(t *testing.T) {
+	got, err := sshArguments(SFTPConfig{
+		Host: "devbox", Username: "deploy", CredentialID: "sshcred_0123456789abcdef0123456789abcdef",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(got, " ")
+	for _, expected := range []string{
+		"BatchMode=no", "PubkeyAuthentication=no", "PreferredAuthentications=password",
+		"NumberOfPasswordPrompts=1", "-l deploy", "-s devbox sftp",
+	} {
+		if !strings.Contains(joined, expected) {
+			t.Errorf("SSH arguments do not contain %q: %v", expected, got)
+		}
+	}
+	if strings.Contains(joined, "0123456789abcdef0123456789abcdef") {
+		t.Fatalf("credential identifier leaked into SSH argv: %v", got)
+	}
+}
+
+func TestSSHArgumentsSplitHostAndPort(t *testing.T) {
+	t.Parallel()
+	got, err := sshArguments(SFTPConfig{Host: "192.168.5.98:2222"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(got, " ")
+	if !strings.Contains(joined, "-p 2222") || !strings.Contains(joined, "-s 192.168.5.98 sftp") {
+		t.Fatalf("SSH arguments did not split host and port: %v", got)
+	}
+	if strings.Contains(joined, "192.168.5.98:2222") {
+		t.Fatalf("host:port was passed as a hostname: %v", got)
+	}
+}
+
+func TestNewSFTPBackendReportsOpenSSHDiagnostic(t *testing.T) {
+	sshStub := filepath.Join(t.TempDir(), "ssh-stub")
+	if err := os.WriteFile(sshStub, []byte("#!/bin/sh\nprintf '%s\\n' 'Host key verification failed.' >&2\nexit 255\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := NewSFTPBackend(context.Background(), SFTPConfig{
+		Host:      "devbox",
+		Root:      "/srv/project",
+		SSHBinary: sshStub,
+	})
+	if err == nil {
+		t.Fatal("NewSFTPBackend unexpectedly succeeded")
+	}
+	if got := err.Error(); !strings.Contains(got, "Host key verification failed.") {
+		t.Fatalf("error = %q, want the OpenSSH diagnostic", got)
 	}
 }
 
