@@ -51,13 +51,20 @@ tasks:
             ref: .BUILD_FLAGS
           PRODUCTION: '{{if eq .DEV "true"}}false{{else}}true{{end}}'
       - go build {{.BUILD_FLAGS}} -o '{{.OUTPUT}}' ./cmd/app
+      - cmd: go build {{.BUILD_FLAGS}} -o '{{.BIN_DIR}}/onecatchsh' ./cmd/onecatchsh
+        platforms: [darwin, linux]
+      - go build {{.BUILD_FLAGS}} -o '{{.BIN_DIR}}/onecatch-askpass{{.EXE_EXT}}' ./cmd/onecatch-askpass
     vars:
       BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l" {{if eq OS "darwin"}}-ldflags="-extldflags=-mmacosx-version-min=12.0"{{end}}{{else}}-tags production -trimpath -buildvcs=false -ldflags="{{if eq OS "darwin"}}-extldflags=-mmacosx-version-min=12.0 {{end}}-w -s"{{end}}'
       OUTPUT: '{{.OUTPUT | default (printf "%s/%s%s" .BIN_DIR .APP_NAME .EXE_EXT)}}'
 
   dev:desktop:
     desc: Start the Wails desktop app and Vite dev server
+    env:
+      ONECATCH_SSH_ASKPASS: '{{.ROOT_DIR}}/{{.BIN_DIR}}/onecatch-askpass{{.EXE_EXT}}'
     cmds:
+      - task: build:shell
+      - task: build:askpass
       - cmd: ./build/desktop/dev-session.sh go tool wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
         platforms: [darwin]
       - cmd: go tool wails3 dev -config ./build/desktop/config.windows.yml -port {{.VITE_PORT}}
@@ -126,6 +133,22 @@ tasks:
       - mkdir -p '{{.BIN_DIR}}'
       - go build -o '{{.BIN_DIR}}/onecatchfs' ./cmd/onecatchfs
 
+  build:shell:
+    desc: Build the agent shell used by remote runs
+    platforms: [darwin, linux]
+    cmds:
+      - mkdir -p '{{.BIN_DIR}}'
+      - go build -o '{{.BIN_DIR}}/onecatchsh' ./cmd/onecatchsh
+
+  build:askpass:
+    desc: Build the SSH password helper used by Remote FS workspaces
+    cmds:
+      - cmd: mkdir -p '{{.BIN_DIR}}'
+        platforms: [darwin, linux]
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BIN_DIR}}' | Out-Null"
+        platforms: [windows]
+      - go build -o '{{.BIN_DIR}}/onecatch-askpass{{.EXE_EXT}}' ./cmd/onecatch-askpass
+
   build:worker:package:
     internal: true
     cmds:
@@ -154,6 +177,11 @@ tasks:
     dir: frontend
     cmds:
       - npm test
+
+  test:conformance:
+    desc: Verify the Claude Code and Codex seams still have the shape the adapters expect
+    cmds:
+      - go test -tags conformance -count=1 -timeout 300s ./internal/usecase/agentrun/...
 
   test:
     desc: Run the repository test suite

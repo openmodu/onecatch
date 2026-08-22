@@ -178,6 +178,71 @@ export class GitSnapshot {
     }
 }
 
+/**
+ * RemoteFS identifies a directory reached through the user's OpenSSH
+ * configuration. The local Agent keeps running on this machine; only its
+ * command and filesystem operations are redirected to this target.
+ */
+export class RemoteFS {
+    /**
+     * Creates a new RemoteFS instance.
+     * @param {Partial<RemoteFS>} [$$source = {}] - The source object to create the RemoteFS.
+     */
+    constructor($$source = {}) {
+        if (!("host" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["host"] = "";
+        }
+        if (!("root" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["root"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["username"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["credentialId"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["sshOptions"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RemoteFS instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RemoteFS}
+     */
+    static createFrom($$source = {}) {
+        const $$createField4_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("sshOptions" in $$parsedSource) {
+            $$parsedSource["sshOptions"] = $$createField4_0($$parsedSource["sshOptions"]);
+        }
+        return new RemoteFS(/** @type {Partial<RemoteFS>} */($$parsedSource));
+    }
+}
+
 export class Workspace {
     /**
      * Creates a new Workspace instance.
@@ -204,6 +269,13 @@ export class Workspace {
              * @type {string}
              */
             this["path"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {RemoteFS | null | undefined}
+             */
+            this["remoteFs"] = undefined;
         }
         if (!("defaultSandbox" in $$source)) {
             /**
@@ -250,7 +322,11 @@ export class Workspace {
      * @returns {Workspace}
      */
     static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("remoteFs" in $$parsedSource) {
+            $$parsedSource["remoteFs"] = $$createField3_0($$parsedSource["remoteFs"]);
+        }
         return new Workspace(/** @type {Partial<Workspace>} */($$parsedSource));
     }
 }
@@ -258,3 +334,6 @@ export class Workspace {
 // Private type creation functions
 const $$createType0 = GitFile.createFrom;
 const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = $Create.Array($Create.Any);
+const $$createType3 = RemoteFS.createFrom;
+const $$createType4 = $Create.Nullable($$createType3);

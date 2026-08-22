@@ -8,6 +8,8 @@ APP_NAME=OneCatch
 EXECUTABLE_NAME=onecatch
 BINARY="$REPO_ROOT/bin/$EXECUTABLE_NAME"
 WORKER_BINARY="$REPO_ROOT/bin/onecatch-worker"
+SHELL_BINARY="$REPO_ROOT/bin/onecatchsh"
+ASKPASS_BINARY="$REPO_ROOT/bin/onecatch-askpass"
 INFO_PLIST="$SCRIPT_DIR/Info.plist"
 ASSETS_CAR="$SCRIPT_DIR/Assets.car"
 ICON_FILE="$SCRIPT_DIR/icons.icns"
@@ -24,7 +26,7 @@ if [ ! -x "$PLIST_BUDDY" ]; then
     exit 1
 fi
 
-for input in "$BINARY" "$WORKER_BINARY" "$INFO_PLIST" "$ASSETS_CAR" "$ICON_FILE"; do
+for input in "$BINARY" "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY" "$INFO_PLIST" "$ASSETS_CAR" "$ICON_FILE"; do
     if [ ! -f "$input" ]; then
         echo "error: required build input not found: $input" >&2
         exit 1
@@ -36,6 +38,14 @@ if [ ! -x "$BINARY" ]; then
 fi
 if [ ! -x "$WORKER_BINARY" ]; then
     echo "error: built worker is not executable: $WORKER_BINARY" >&2
+    exit 1
+fi
+if [ ! -x "$SHELL_BINARY" ]; then
+    echo "error: built agent shell is not executable: $SHELL_BINARY" >&2
+    exit 1
+fi
+if [ ! -x "$ASKPASS_BINARY" ]; then
+    echo "error: built SSH askpass helper is not executable: $ASKPASS_BINARY" >&2
     exit 1
 fi
 
@@ -63,6 +73,8 @@ mkdir -p "$CONTENTS/MacOS" "$CONTENTS/Resources/bin" "$(dirname -- "$OUTPUT_ZIP"
 
 install -m 0755 "$BINARY" "$CONTENTS/MacOS/$EXECUTABLE_NAME"
 install -m 0755 "$WORKER_BINARY" "$CONTENTS/Resources/bin/onecatch-worker"
+install -m 0755 "$SHELL_BINARY" "$CONTENTS/Resources/bin/onecatchsh"
+install -m 0755 "$ASKPASS_BINARY" "$CONTENTS/Resources/bin/onecatch-askpass"
 install -m 0644 "$INFO_PLIST" "$CONTENTS/Info.plist"
 install -m 0644 "$ASSETS_CAR" "$CONTENTS/Resources/Assets.car"
 install -m 0644 "$ICON_FILE" "$CONTENTS/Resources/icons.icns"

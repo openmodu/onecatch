@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -22,6 +23,7 @@ import (
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	"github.com/openmodu/onecatch/internal/remotefs"
 	"github.com/openmodu/onecatch/internal/repo/git"
 	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
 	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
@@ -30,6 +32,8 @@ import (
 	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
 	"github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/sshcredentials"
+	"github.com/openmodu/onecatch/internal/sshendpoint"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
 	"github.com/openmodu/onecatch/pkg/localfile"
@@ -47,9 +51,11 @@ func (e Error) Error() string { return e.Code + ": " + e.Message }
 func coded(code, message string) error { return Error{Code: code, Message: message} }
 
 type AddWorkspaceInput struct {
-	Path           string `json:"path"`
-	Name           string `json:"name,omitempty"`
-	DefaultSandbox string `json:"defaultSandbox,omitempty"`
+	Path           string                     `json:"path"`
+	Name           string                     `json:"name,omitempty"`
+	DefaultSandbox string                     `json:"defaultSandbox,omitempty"`
+	RemoteFS       *domainworkspaces.RemoteFS `json:"remoteFs,omitempty"`
+	Password       string                     `json:"password,omitempty"`
 }
 
 type WorkspaceStatus struct {
@@ -149,13 +155,13 @@ type RuntimeEventView struct {
 }
 
 type RunDetail struct {
-	Run           domainworkflows.Run           `json:"run"`
-	Task          domaintasks.Task              `json:"task"`
-	Workspace     domainworkspaces.Workspace    `json:"workspace"`
-	Workflow      domainworkflows.Definition    `json:"workflow"`
-	StepRuns      []domainworkflows.StepRun     `json:"stepRuns"`
-	Events        []WorkflowEventView           `json:"events"`
-	RuntimeEvents []RuntimeEventView            `json:"runtimeEvents"`
+	Run           domainworkflows.Run        `json:"run"`
+	Task          domaintasks.Task           `json:"task"`
+	Workspace     domainworkspaces.Workspace `json:"workspace"`
+	Workflow      domainworkflows.Definition `json:"workflow"`
+	StepRuns      []domainworkflows.StepRun  `json:"stepRuns"`
+	Events        []WorkflowEventView        `json:"events"`
+	RuntimeEvents []RuntimeEventView         `json:"runtimeEvents"`
 	// RuntimeEventsTotal is how many entries the transcript has in full, which
 	// may exceed the window carried in RuntimeEvents.
 	RuntimeEventsTotal int                           `json:"runtimeEventsTotal"`
@@ -194,6 +200,8 @@ type Service struct {
 	runStates         *runstate.Hub
 	whiteboardMu      sync.Mutex
 	whiteboardRuns    map[string]context.CancelFunc
+	remoteFSProbe     func(context.Context, domainworkspaces.RemoteFS) (string, error)
+	remoteCredentials sshcredentials.Store
 }
 
 func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitrepo.Inspector) *Service {
@@ -202,10 +210,12 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 		store: store, orchestrator: orchestrator, runtimes: runtimes, git: git,
 		rootCtx: ctx, rootCancel: cancel, active: make(map[string]context.CancelFunc), lastErrors: make(map[string]string),
 		workers: worker.NewRegistry(filepath.Join(store.Data.Paths.Root, "workers.json")), workerClient: worker.NewClient(),
-		settings:       settingsrepo.NewSettingsRepo(store.Data.Paths.Root),
-		cleanupPlans:   make(map[string]cleanupPlan),
-		confirmations:  make(map[string]runConfirmation),
-		whiteboardRuns: make(map[string]context.CancelFunc),
+		settings:          settingsrepo.NewSettingsRepo(store.Data.Paths.Root),
+		cleanupPlans:      make(map[string]cleanupPlan),
+		confirmations:     make(map[string]runConfirmation),
+		whiteboardRuns:    make(map[string]context.CancelFunc),
+		remoteFSProbe:     canonicalRemoteFSRoot,
+		remoteCredentials: sshcredentials.KeyringStore{},
 	}
 	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
 	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, preparations: newRemotePreparationRegistry()})
@@ -299,24 +309,99 @@ func (a *Service) UpdateRuntimeConfig(input RuntimeConfigInput) (RuntimeInfo, er
 }
 
 func (a *Service) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (domainworkspaces.Workspace, error) {
-	path := strings.TrimSpace(input.Path)
-	if path == "" {
+	workspacePath := strings.TrimSpace(input.Path)
+	identity := workspacePath
+	var remoteFS *domainworkspaces.RemoteFS
+	var stagedCredentialID string
+	credentialCommitted := false
+	credentials := a.remoteCredentials
+	if credentials == nil {
+		credentials = sshcredentials.KeyringStore{}
+	}
+	defer func() {
+		if stagedCredentialID != "" && !credentialCommitted {
+			_ = credentials.Delete(stagedCredentialID)
+		}
+	}()
+	if input.RemoteFS != nil {
+		remote := domainworkspaces.RemoteFS{
+			Host:     strings.TrimSpace(input.RemoteFS.Host),
+			Root:     pathpkg.Clean(strings.TrimSpace(input.RemoteFS.Root)),
+			Username: strings.TrimSpace(input.RemoteFS.Username),
+		}
+		for _, option := range input.RemoteFS.SSHOptions {
+			if option = strings.TrimSpace(option); option != "" {
+				remote.SSHOptions = append(remote.SSHOptions, option)
+			}
+		}
+		if remote.Host == "" {
+			return domainworkspaces.Workspace{}, coded("remote_fs_invalid", "SSH host is required")
+		}
+		endpoint, err := sshendpoint.Parse(remote.Host)
+		if err != nil {
+			return domainworkspaces.Workspace{}, coded("remote_fs_invalid", err.Error())
+		}
+		remote.Host = endpoint.String()
+		if !pathpkg.IsAbs(remote.Root) {
+			return domainworkspaces.Workspace{}, coded("remote_fs_invalid", "remote root must be absolute")
+		}
+		if strings.ContainsAny(remote.Username, "\x00\r\n") {
+			return domainworkspaces.Workspace{}, coded("remote_fs_invalid", "SSH username contains invalid characters")
+		}
+		if input.Password != "" {
+			if remote.Username == "" {
+				return domainworkspaces.Workspace{}, coded("remote_fs_credentials_invalid", "SSH username is required for password authentication")
+			}
+			if len(input.Password) > 2048 || strings.ContainsAny(input.Password, "\x00\r\n") {
+				return domainworkspaces.Workspace{}, coded("remote_fs_credentials_invalid", "SSH password contains unsupported characters or is too long")
+			}
+			credentialID, err := sshcredentials.NewID()
+			if err != nil {
+				return domainworkspaces.Workspace{}, coded("remote_fs_credentials_unavailable", err.Error())
+			}
+			if err := credentials.Set(credentialID, input.Password); err != nil {
+				return domainworkspaces.Workspace{}, coded("remote_fs_credentials_unavailable", err.Error())
+			}
+			remote.CredentialID = credentialID
+			stagedCredentialID = credentialID
+		}
+		probe := a.remoteFSProbe
+		if probe == nil {
+			probe = canonicalRemoteFSRoot
+		}
+		canonical, err := probe(ctx, remote)
+		if err != nil {
+			return domainworkspaces.Workspace{}, coded("remote_fs_unavailable", err.Error())
+		}
+		remote.Root = pathpkg.Clean(canonical)
+		remoteFS = &remote
+		workspacePath = remote.Root
+		identity = "ssh://" + remote.Host + remote.Root
+		if remote.Username != "" {
+			identity = "ssh://" + remote.Username + "@" + remote.Host + remote.Root
+		}
+	}
+	if workspacePath == "" {
 		return domainworkspaces.Workspace{}, coded("workspace_invalid", "path is required")
 	}
-	abs, err := filepath.Abs(path)
-	if err != nil {
-		return domainworkspaces.Workspace{}, coded("workspace_invalid", "path cannot be resolved")
-	}
-	if resolved, resolveErr := filepath.EvalSymlinks(abs); resolveErr == nil {
-		abs = resolved
-	}
-	info, err := os.Stat(abs)
-	if err != nil || !info.IsDir() {
-		return domainworkspaces.Workspace{}, coded("workspace_not_found", "directory does not exist")
+	if remoteFS == nil {
+		abs, err := filepath.Abs(workspacePath)
+		if err != nil {
+			return domainworkspaces.Workspace{}, coded("workspace_invalid", "path cannot be resolved")
+		}
+		if resolved, resolveErr := filepath.EvalSymlinks(abs); resolveErr == nil {
+			abs = resolved
+		}
+		info, err := os.Stat(abs)
+		if err != nil || !info.IsDir() {
+			return domainworkspaces.Workspace{}, coded("workspace_not_found", "directory does not exist")
+		}
+		workspacePath = filepath.Clean(abs)
+		identity = workspacePath
 	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
-		name = filepath.Base(abs)
+		name = pathpkg.Base(filepath.ToSlash(workspacePath))
 	}
 	sandbox := strings.TrimSpace(input.DefaultSandbox)
 	if sandbox == "" {
@@ -327,6 +412,9 @@ func (a *Service) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (do
 		sandbox = settings.Execution.DefaultSandbox
 	}
 	if sandbox == string(agentrun.SandboxFull) {
+		if remoteFS != nil {
+			return domainworkspaces.Workspace{}, coded("remote_fs_full_sandbox_unsupported", "remote FS workspaces support read-only or workspace-write sandboxing")
+		}
 		settings, settingsErr := a.settings.Get(ctx)
 		if settingsErr != nil {
 			return domainworkspaces.Workspace{}, mapSettingsError(settingsErr)
@@ -336,15 +424,34 @@ func (a *Service) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (do
 		}
 	}
 	now := time.Now().UTC()
-	workspace := domainworkspaces.Workspace{ID: workspaceID(abs), Name: name, Path: filepath.Clean(abs), DefaultSandbox: sandbox, CreatedAt: now, LastOpenedAt: now}
+	workspace := domainworkspaces.Workspace{ID: workspaceID(identity), Name: name, Path: workspacePath, RemoteFS: remoteFS, DefaultSandbox: sandbox, CreatedAt: now, LastOpenedAt: now}
+	oldCredentialID := ""
 	if current, getErr := a.store.Repos.Tasks.GetWorkspace(ctx, workspace.ID); getErr == nil {
 		workspace.CreatedAt = current.CreatedAt
 		workspace.Pinned = current.Pinned
+		if current.RemoteFS != nil {
+			oldCredentialID = current.RemoteFS.CredentialID
+		}
 	}
 	if err := a.store.Repos.Tasks.SaveWorkspace(ctx, workspace); err != nil {
 		return domainworkspaces.Workspace{}, err
 	}
+	credentialCommitted = true
+	if oldCredentialID != "" && oldCredentialID != stagedCredentialID {
+		_ = credentials.Delete(oldCredentialID)
+	}
 	return workspace, nil
+}
+
+func canonicalRemoteFSRoot(ctx context.Context, remote domainworkspaces.RemoteFS) (string, error) {
+	backend, err := remotefs.NewSFTPBackend(ctx, remotefs.SFTPConfig{
+		Host: remote.Host, Root: remote.Root, Username: remote.Username, CredentialID: remote.CredentialID, SSHOptions: remote.SSHOptions,
+	})
+	if err != nil {
+		return "", err
+	}
+	defer backend.Close()
+	return backend.RealPath(".")
 }
 
 func (a *Service) ListWorkspaces(ctx context.Context) ([]domainworkspaces.Workspace, error) {
@@ -400,6 +507,9 @@ func (a *Service) GetWorkspaceStatus(ctx context.Context, id string) (WorkspaceS
 	workspace, err := a.GetWorkspace(ctx, id)
 	if err != nil {
 		return WorkspaceStatus{}, err
+	}
+	if workspace.RemoteFS != nil {
+		return WorkspaceStatus{Workspace: workspace}, nil
 	}
 	snapshot, err := a.git.Inspect(ctx, workspace.Path)
 	if err != nil {
@@ -643,7 +753,13 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 		return domaintasks.Task{}, coded("task_invalid", err.Error())
 	}
 	if refineTitle {
-		a.refineTaskTitleAsync(task.ID, title, workspace.Path, definition, input)
+		titleWorkspace := workspace.Path
+		if workspace.RemoteFS != nil {
+			// Title generation is explicitly tool-free. It still needs a valid
+			// local cwd for the harness process, so never hand it the remote path.
+			titleWorkspace = os.TempDir()
+		}
+		a.refineTaskTitleAsync(task.ID, title, titleWorkspace, definition, input)
 	}
 	return task, nil
 }

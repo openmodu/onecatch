@@ -5,8 +5,9 @@ $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
 $binRoot = Join-Path $repoRoot "bin"
 $appBinary = Join-Path $binRoot "onecatch.exe"
 $workerBinary = Join-Path $binRoot "onecatch-worker.exe"
+$askPassBinary = Join-Path $binRoot "onecatch-askpass.exe"
 
-foreach ($inputPath in @($appBinary, $workerBinary)) {
+foreach ($inputPath in @($appBinary, $workerBinary, $askPassBinary)) {
     if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
         throw "Required build input not found: $inputPath"
     }
@@ -34,6 +35,7 @@ try {
     New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
     Copy-Item -LiteralPath $appBinary -Destination (Join-Path $packageRoot "onecatch.exe")
     Copy-Item -LiteralPath $workerBinary -Destination (Join-Path $packageRoot "onecatch-worker.exe")
+    Copy-Item -LiteralPath $askPassBinary -Destination (Join-Path $packageRoot "onecatch-askpass.exe")
     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $outputZip) | Out-Null
     Compress-Archive -LiteralPath $packageRoot -DestinationPath $outputZip -CompressionLevel Optimal -Force
 } finally {

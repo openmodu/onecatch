@@ -181,7 +181,7 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 		return dagResult{step: step, stepRun: stepRun, err: err}
 	}
 	_ = s.appendEvent(ctx, run.ID, "step.started", step.ID, map[string]any{"stepRunId": stepRun.ID, "attempt": attempt, "runtime": step.Runtime, "workerId": step.WorkerID, "mode": "dag"})
-	if err := s.recordGit(ctx, run.ID, step.ID, "before", workspace.Path); err != nil {
+	if err := s.recordGit(ctx, run.ID, step.ID, "before", workspace); err != nil {
 		return dagResult{step: step, stepRun: stepRun, err: err}
 	}
 	var release func() error
@@ -193,7 +193,7 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 		}
 		defer release()
 	}
-	request := agentrun.Request{RunID: run.ID, StepRunID: stepRun.ID, Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeDAGPrompt(task, definition, step, run, instruction), Model: step.Model, ReasoningEffort: resolvedReasoningEffort(run, step.Runtime), ServiceTier: resolvedServiceTier(run, step.Runtime), Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: run.Sessions[step.ID], EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second, RuntimeDefaultsResolved: true}
+	request := agentrun.Request{RunID: run.ID, StepRunID: stepRun.ID, Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeDAGPrompt(task, definition, step, run, instruction), Model: step.Model, ReasoningEffort: resolvedReasoningEffort(run, step.Runtime), ServiceTier: resolvedServiceTier(run, step.Runtime), Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: run.Sessions[step.ID], EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second, RuntimeDefaultsResolved: true, Remote: workspaceRemoteTarget(workspace)}
 	collector := s.newRuntimeCollector(run.ID, stepRun.ID)
 	result, err := s.dispatchStep(ctx, definition, step, workspace.ID, request, collector.Sink())
 	if streamErr := collector.Close(); streamErr != nil && err == nil {
@@ -213,7 +213,7 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 		}
 	}
 	_ = s.workflows.SaveStepRun(context.Background(), stepRun)
-	_ = s.recordGit(context.Background(), run.ID, step.ID, "after", workspace.Path)
+	_ = s.recordGit(context.Background(), run.ID, step.ID, "after", workspace)
 	return dagResult{step: step, stepRun: stepRun, result: result, err: err}
 }
 

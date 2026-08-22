@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -102,9 +103,15 @@ func (a *Service) ProposeWhiteboardChangesWithSink(input WhiteboardProposalInput
 		}()
 	}
 	defer cancel()
+	harnessWorkspace := workspace.Path
+	if workspace.RemoteFS != nil {
+		// Whiteboard proposals receive the canvas in the prompt and are
+		// explicitly tool-free; they only need an existing cwd for the CLI.
+		harnessWorkspace = os.TempDir()
+	}
 	result, err := a.runtimes.Run(runCtx, agentrun.Request{
 		Runtime:         runtime,
-		Workspace:       workspace.Path,
+		Workspace:       harnessWorkspace,
 		Prompt:          whiteboardAgentPrompt(instruction, canvas),
 		Sandbox:         agentrun.SandboxReadOnly,
 		ResumeSessionID: strings.TrimSpace(input.SessionID),

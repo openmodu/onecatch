@@ -10,11 +10,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	"github.com/openmodu/onecatch/internal/remotefs"
 )
 
 const maxWorkspaceFileBytes = 2 << 20
@@ -43,9 +47,16 @@ type WriteWorkspaceFileInput struct {
 }
 
 func (a *Service) ListWorkspaceFiles(ctx context.Context, workspaceID, directory string) ([]WorkspaceFileEntry, error) {
-	root, relative, err := a.openWorkspaceRoot(ctx, workspaceID, directory, true)
+	workspace, relative, err := a.resolveWorkspaceFile(ctx, workspaceID, directory, true)
 	if err != nil {
 		return nil, err
+	}
+	if workspace.RemoteFS != nil {
+		return listRemoteWorkspaceFiles(ctx, *workspace.RemoteFS, relative)
+	}
+	root, err := os.OpenRoot(workspace.Path)
+	if err != nil {
+		return nil, mapWorkspaceFileError(err)
 	}
 	defer root.Close()
 
@@ -96,9 +107,16 @@ func (a *Service) ListWorkspaceFiles(ctx context.Context, workspaceID, directory
 }
 
 func (a *Service) ReadWorkspaceFile(ctx context.Context, workspaceID, path string) (WorkspaceFileDocument, error) {
-	root, relative, err := a.openWorkspaceRoot(ctx, workspaceID, path, false)
+	workspace, relative, err := a.resolveWorkspaceFile(ctx, workspaceID, path, false)
 	if err != nil {
 		return WorkspaceFileDocument{}, err
+	}
+	if workspace.RemoteFS != nil {
+		return readRemoteWorkspaceFile(ctx, *workspace.RemoteFS, relative)
+	}
+	root, err := os.OpenRoot(workspace.Path)
+	if err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
 	}
 	defer root.Close()
 	return readWorkspaceFile(root, relative)
@@ -111,9 +129,16 @@ func (a *Service) WriteWorkspaceFile(ctx context.Context, input WriteWorkspaceFi
 	if !utf8.ValidString(input.Content) || strings.IndexByte(input.Content, 0) >= 0 {
 		return WorkspaceFileDocument{}, coded("workspace_file_not_text", "only UTF-8 text files can be edited")
 	}
-	root, relative, err := a.openWorkspaceRoot(ctx, input.WorkspaceID, input.Path, false)
+	workspace, relative, err := a.resolveWorkspaceFile(ctx, input.WorkspaceID, input.Path, false)
 	if err != nil {
 		return WorkspaceFileDocument{}, err
+	}
+	if workspace.RemoteFS != nil {
+		return writeRemoteWorkspaceFile(ctx, *workspace.RemoteFS, relative, input.Content, input.ExpectedHash)
+	}
+	root, err := os.OpenRoot(workspace.Path)
+	if err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
 	}
 	defer root.Close()
 
@@ -135,22 +160,189 @@ func (a *Service) WriteWorkspaceFile(ctx context.Context, input WriteWorkspaceFi
 }
 
 func (a *Service) openWorkspaceRoot(ctx context.Context, workspaceID, path string, allowRoot bool) (*os.Root, string, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, "", err
-	}
-	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
+	workspace, relative, err := a.resolveWorkspaceFile(ctx, workspaceID, path, allowRoot)
 	if err != nil {
 		return nil, "", err
 	}
-	relative, err := normalizeWorkspaceFilePath(path, allowRoot)
-	if err != nil {
-		return nil, "", err
+	if workspace.RemoteFS != nil {
+		return nil, "", coded("workspace_file_remote", "remote workspace requires the SFTP file adapter")
 	}
 	root, err := os.OpenRoot(workspace.Path)
 	if err != nil {
 		return nil, "", mapWorkspaceFileError(err)
 	}
 	return root, relative, nil
+}
+
+func (a *Service) resolveWorkspaceFile(ctx context.Context, workspaceID, path string, allowRoot bool) (domainworkspaces.Workspace, string, error) {
+	if err := ctx.Err(); err != nil {
+		return domainworkspaces.Workspace{}, "", err
+	}
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
+	if err != nil {
+		return domainworkspaces.Workspace{}, "", err
+	}
+	relative, err := normalizeWorkspaceFilePath(path, allowRoot)
+	if err != nil {
+		return domainworkspaces.Workspace{}, "", err
+	}
+	return workspace, relative, nil
+}
+
+func openRemoteWorkspace(ctx context.Context, target domainworkspaces.RemoteFS) (*remotefs.SFTPBackend, error) {
+	backend, err := remotefs.NewSFTPBackend(ctx, remotefs.SFTPConfig{
+		Host: target.Host, Root: target.Root, Username: target.Username, CredentialID: target.CredentialID, SSHOptions: target.SSHOptions,
+	})
+	if err != nil {
+		return nil, coded("remote_fs_unavailable", err.Error())
+	}
+	return backend, nil
+}
+
+func remoteRelativePath(relative string) string {
+	if relative == "." {
+		return "."
+	}
+	return filepath.ToSlash(relative)
+}
+
+func listRemoteWorkspaceFiles(ctx context.Context, target domainworkspaces.RemoteFS, relative string) ([]WorkspaceFileEntry, error) {
+	backend, err := openRemoteWorkspace(ctx, target)
+	if err != nil {
+		return nil, err
+	}
+	defer backend.Close()
+	items, err := backend.ReadDir(remoteRelativePath(relative))
+	if err != nil {
+		return nil, mapWorkspaceFileError(err)
+	}
+	entries := make([]WorkspaceFileEntry, 0, len(items))
+	for _, item := range items {
+		if blockedWorkspaceFileName(item.Name()) || item.Mode()&os.ModeSymlink != 0 || (!item.IsDir() && !item.Mode().IsRegular()) {
+			continue
+		}
+		itemPath := item.Name()
+		if relative != "." {
+			itemPath = pathpkg.Join(remoteRelativePath(relative), item.Name())
+		}
+		entries = append(entries, WorkspaceFileEntry{
+			Name:       item.Name(),
+			Path:       itemPath,
+			Directory:  item.IsDir(),
+			Size:       item.Size(),
+			ModifiedAt: item.ModTime().UTC().Format(time.RFC3339Nano),
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Directory != entries[j].Directory {
+			return entries[i].Directory
+		}
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
+	return entries, nil
+}
+
+func readRemoteWorkspaceFile(ctx context.Context, target domainworkspaces.RemoteFS, relative string) (WorkspaceFileDocument, error) {
+	backend, err := openRemoteWorkspace(ctx, target)
+	if err != nil {
+		return WorkspaceFileDocument{}, err
+	}
+	defer backend.Close()
+	return readRemoteFile(backend, remoteRelativePath(relative))
+}
+
+func readRemoteFile(backend *remotefs.SFTPBackend, relative string) (WorkspaceFileDocument, error) {
+	info, err := backend.Lstat(relative)
+	if err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return WorkspaceFileDocument{}, coded("workspace_file_invalid_path", "symbolic links are not editable")
+	}
+	if !info.Mode().IsRegular() {
+		return WorkspaceFileDocument{}, coded("workspace_file_invalid_path", "path is not a regular file")
+	}
+	if info.Size() > maxWorkspaceFileBytes {
+		return WorkspaceFileDocument{}, coded("workspace_file_too_large", "file exceeds the 2 MiB editor limit")
+	}
+	file, err := backend.OpenFile(relative, os.O_RDONLY, 0)
+	if err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
+	}
+	defer file.Close()
+	data, err := io.ReadAll(io.NewSectionReader(file, 0, info.Size()))
+	if err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
+	}
+	if !utf8.Valid(data) || bytes.IndexByte(data, 0) >= 0 {
+		return WorkspaceFileDocument{}, coded("workspace_file_not_text", "only UTF-8 text files can be edited")
+	}
+	hash := sha256.Sum256(data)
+	return WorkspaceFileDocument{
+		Path:       relative,
+		Content:    string(data),
+		Hash:       hex.EncodeToString(hash[:]),
+		Size:       int64(len(data)),
+		ModifiedAt: info.ModTime().UTC().Format(time.RFC3339Nano),
+	}, nil
+}
+
+func writeRemoteWorkspaceFile(ctx context.Context, target domainworkspaces.RemoteFS, relative, content, expectedHash string) (WorkspaceFileDocument, error) {
+	backend, err := openRemoteWorkspace(ctx, target)
+	if err != nil {
+		return WorkspaceFileDocument{}, err
+	}
+	defer backend.Close()
+	relative = remoteRelativePath(relative)
+	current, err := readRemoteFile(backend, relative)
+	if err != nil {
+		return WorkspaceFileDocument{}, err
+	}
+	if expectedHash != "" && expectedHash != current.Hash {
+		return WorkspaceFileDocument{}, coded("workspace_file_conflict", "file changed since it was opened")
+	}
+	info, err := backend.Lstat(relative)
+	if err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
+	}
+	random := make([]byte, 8)
+	if _, err := rand.Read(random); err != nil {
+		return WorkspaceFileDocument{}, fmt.Errorf("create editor temporary name: %w", err)
+	}
+	temporary := pathpkg.Join(pathpkg.Dir(relative), ".onecatch-edit-"+hex.EncodeToString(random)+".tmp")
+	file, err := backend.OpenFile(temporary, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
+	if err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
+	}
+	keep := false
+	defer func() {
+		_ = file.Close()
+		if !keep {
+			_ = backend.Remove(temporary)
+		}
+	}()
+	data := []byte(content)
+	for offset := 0; offset < len(data); {
+		written, writeErr := file.WriteAt(data[offset:], int64(offset))
+		if writeErr != nil {
+			return WorkspaceFileDocument{}, mapWorkspaceFileError(writeErr)
+		}
+		if written == 0 {
+			return WorkspaceFileDocument{}, io.ErrShortWrite
+		}
+		offset += written
+	}
+	if err := file.Sync(); err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
+	}
+	if err := file.Close(); err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
+	}
+	if err := backend.Rename(temporary, relative); err != nil {
+		return WorkspaceFileDocument{}, mapWorkspaceFileError(err)
+	}
+	keep = true
+	return readRemoteFile(backend, relative)
 }
 
 func normalizeWorkspaceFilePath(path string, allowRoot bool) (string, error) {

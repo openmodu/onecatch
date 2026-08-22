@@ -11,7 +11,7 @@ import ReviewPanel from "./ReviewPanel.jsx";
 // the workbench dock and the detached inspector window so the two surfaces can
 // never drift apart. Everything window-specific — the frame, and which buttons
 // sit on the right of the toolbar — is supplied by the caller.
-export default function InspectorPanel({ className = "", mode, workspaceID, detail, queuedTask, queuePosition = 0, draft = false, runWorkerID = "", reviewRequest = 0, notify, onOpenTerminal, onDirtyChange, actions = null }) {
+export default function InspectorPanel({ className = "", mode, workspaceID, remoteFS = null, detail, queuedTask, queuePosition = 0, draft = false, runWorkerID = "", reviewRequest = 0, notify, onOpenTerminal, onDirtyChange, actions = null }) {
   const { t } = useTranslation();
   const [tab, setTab] = useState("status");
   const [fileInspectorMounted, setFileInspectorMounted] = useState(false);
@@ -21,8 +21,7 @@ export default function InspectorPanel({ className = "", mode, workspaceID, deta
   const tabs = [
     { value: "status", label: t("inspector.status"), icon: Activity },
     { value: "files", label: t("inspector.files"), icon: FileCode2 },
-    { value: "git", label: t("inspector.git"), icon: GitBranch },
-    { value: "review", label: t("review.title"), icon: FileDiff },
+    ...(!remoteFS ? [{ value: "git", label: t("inspector.git"), icon: GitBranch }, { value: "review", label: t("review.title"), icon: FileDiff }] : []),
     { value: "events", label: t("inspector.events"), icon: ListTree },
   ];
   const activeTab = tabs.find((item) => item.value === tab) || tabs[0];

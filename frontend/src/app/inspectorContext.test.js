@@ -39,9 +39,11 @@ test("orders the queue by enqueue time and reports a 1-based position", () => {
 });
 
 test("published context carries what the panel renders and drops the transcript", () => {
-  const context = buildInspectorContext({ mode: "wails", workspaceID: "ws_1", runDetail, tasks: [] });
+  const remoteFS = { host: "devbox", root: "/srv/app" };
+  const context = buildInspectorContext({ mode: "wails", workspaceID: "ws_1", remoteFS, runDetail, tasks: [] });
   assert.equal(context.mode, "wails");
   assert.equal(context.workspaceID, "ws_1");
+  assert.deepEqual(context.remoteFS, remoteFS);
   assert.equal(context.runWorkerID, "worker-a");
   assert.equal(context.detail.run.id, "run_1");
   assert.deepEqual(context.detail.events, runDetail.events);

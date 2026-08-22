@@ -80,6 +80,9 @@ func (a *Service) PrepareWorkerWorkspace(ctx context.Context, workerID, workspac
 	if err != nil {
 		return WorkerWorkspaceSetup{}, err
 	}
+	if workspace.RemoteFS != nil {
+		return WorkerWorkspaceSetup{}, coded("remote_fs_local_agent_required", "remote FS workspaces cannot be mapped to a remote worker")
+	}
 	revision, err := worker.WorkspaceBaseline(ctx, workspace.Path)
 	if err != nil {
 		return WorkerWorkspaceSetup{}, err

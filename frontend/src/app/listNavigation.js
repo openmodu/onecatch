@@ -17,7 +17,7 @@ export function workspaceResults(items = [], { query = "", expanded = false, lim
   // workspace updates lastOpenedAt, but navigation must not make its row jump.
   const sorted = [...items];
   const needle = query.trim().toLocaleLowerCase();
-  if (needle) return sorted.filter((item) => `${item.name || ""}\n${item.path || ""}`.toLocaleLowerCase().includes(needle));
+  if (needle) return sorted.filter((item) => `${item.name || ""}\n${item.path || ""}\n${item.remoteFs?.username || ""}\n${item.remoteFs?.host || ""}`.toLocaleLowerCase().includes(needle));
   if (expanded || sorted.length <= limit) return sorted;
   return sorted.slice(0, limit);
 }
@@ -25,7 +25,7 @@ export function workspaceResults(items = [], { query = "", expanded = false, lim
 export function workspaceSections(items = [], { selectedID = "", query = "", expanded = false, limit = COMPACT_WORKSPACE_LIMIT } = {}) {
   const sorted = sortWorkspaces(items);
   const needle = query.trim().toLocaleLowerCase();
-  const filtered = needle ? sorted.filter((item) => `${item.name || ""}\n${item.path || ""}`.toLocaleLowerCase().includes(needle)) : sorted;
+  const filtered = needle ? sorted.filter((item) => `${item.name || ""}\n${item.path || ""}\n${item.remoteFs?.username || ""}\n${item.remoteFs?.host || ""}`.toLocaleLowerCase().includes(needle)) : sorted;
   const pinned = filtered.filter((item) => item.pinned);
   const projects = filtered.filter((item) => !item.pinned);
   if (needle || expanded || projects.length <= limit) return { pinned, projects };

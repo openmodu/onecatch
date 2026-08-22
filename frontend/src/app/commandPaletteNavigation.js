@@ -19,7 +19,7 @@ export function commandPaletteWorkspaceResults(workspaces, query, taskCount, lim
   const normalized = String(query || "").trim().toLocaleLowerCase();
   if (!normalized) return [];
   return workspaces
-    .filter((workspace) => `${workspace.name}\n${workspace.path}`.toLocaleLowerCase().includes(normalized))
+    .filter((workspace) => `${workspace.name}\n${workspace.path}\n${workspace.remoteFs?.username || ""}\n${workspace.remoteFs?.host || ""}`.toLocaleLowerCase().includes(normalized))
     .slice(0, limit)
     .map((workspace, index) => ({
       workspace,

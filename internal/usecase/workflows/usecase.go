@@ -18,6 +18,7 @@ import (
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
 const (
@@ -127,6 +128,9 @@ func (s *Usecase) dispatchStep(ctx context.Context, definition domainworkflows.D
 	stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
 	defer cancel()
 	if !localStep(step) {
+		if request.Remote != nil {
+			return agentrun.Result{}, fmt.Errorf("remote_fs_local_agent_required: remote FS workspaces require a local workflow node")
+		}
 		if s.remote == nil {
 			return agentrun.Result{}, fmt.Errorf("worker_unavailable: remote executor is not configured")
 		}
@@ -527,7 +531,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		if err := s.appendEvent(ctx, run.ID, "step.started", step.ID, map[string]any{"stepRunId": stepRun.ID, "attempt": attempt, "runtime": step.Runtime}); err != nil {
 			return run, err
 		}
-		if err := s.recordGit(ctx, run.ID, step.ID, "before", workspace.Path); err != nil {
+		if err := s.recordGit(ctx, run.ID, step.ID, "before", workspace); err != nil {
 			return run, err
 		}
 
@@ -579,6 +583,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			Provider:                resolvedRuntimeProvider(run, step.Runtime),
 			InterruptGrace:          time.Duration(run.InterruptGraceSeconds) * time.Second,
 			RuntimeDefaultsResolved: true,
+			Remote:                  workspaceRemoteTarget(workspace),
 		}
 		result, runErr := s.dispatchStep(ctx, definition, step, workspace.ID, request, collector.Sink())
 		if streamErr := collector.Close(); streamErr != nil && runErr == nil {
@@ -588,7 +593,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			run.Sessions[step.ID] = result.SessionID
 			stepRun.SessionIDAfter = result.SessionID
 		}
-		if err := s.recordGit(ctx, run.ID, step.ID, "after", workspace.Path); err != nil && ctx.Err() == nil {
+		if err := s.recordGit(ctx, run.ID, step.ID, "after", workspace); err != nil && ctx.Err() == nil {
 			return run, err
 		}
 
@@ -816,15 +821,28 @@ func (s *Usecase) appendEvent(ctx context.Context, runID, eventType, stepID stri
 	return err
 }
 
-func (s *Usecase) recordGit(ctx context.Context, runID, stepID, phase, workspace string) error {
-	if s.git == nil {
+func (s *Usecase) recordGit(ctx context.Context, runID, stepID, phase string, workspace domainworkspaces.Workspace) error {
+	if s.git == nil || workspace.RemoteFS != nil {
 		return nil
 	}
-	snapshot, err := s.git.Inspect(ctx, workspace)
+	snapshot, err := s.git.Inspect(ctx, workspace.Path)
 	if err != nil {
 		return s.appendEvent(ctx, runID, "git.inspect_failed", stepID, map[string]any{"phase": phase, "error": err.Error()})
 	}
 	return s.appendEvent(ctx, runID, "git.snapshot", stepID, map[string]any{"phase": phase, "snapshot": snapshot})
+}
+
+func workspaceRemoteTarget(workspace domainworkspaces.Workspace) *seam.Target {
+	if workspace.RemoteFS == nil {
+		return nil
+	}
+	return &seam.Target{
+		Host:         workspace.RemoteFS.Host,
+		Root:         workspace.RemoteFS.Root,
+		Username:     workspace.RemoteFS.Username,
+		CredentialID: workspace.RemoteFS.CredentialID,
+		SSHOptions:   append([]string{}, workspace.RemoteFS.SSHOptions...),
+	}
 }
 
 func composePrompt(task domaintasks.Task, definition domainworkflows.Definition, step domainworkflows.Step, run domainworkflows.Run, instruction string) string {

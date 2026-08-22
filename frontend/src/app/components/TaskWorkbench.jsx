@@ -66,6 +66,10 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const terminalCommandVersionRef = useRef(terminalCommand?.version || 0);
 
   const runTerminalAction = useCallback((action) => {
+    if (workspace?.remoteFs) {
+      notify?.("error", t("terminal.remoteFSUnavailable"));
+      return;
+    }
     const dock = terminalDockRef.current;
     if (dock) {
       if (action.type === "open") void dock.open(action.command);
@@ -74,7 +78,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
     }
     pendingTerminalActionsRef.current.push(action);
     setTerminalMounted(true);
-  }, []);
+  }, [notify, t, workspace?.remoteFs]);
   const setTerminalDock = useCallback((dock) => {
     terminalDockRef.current = dock;
     if (!dock || !pendingTerminalActionsRef.current.length) return;
@@ -268,9 +272,9 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
     {!inspectorCollapsed && !inspectorMaximized && <div className="workbench-inspector-dock no-drag">
       <StatusBadge status={mode === "wails" ? "good" : "warn"} className="shrink-0">
         <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-        {mode === "wails" ? t("common.local") : t("common.preview")}
+        {mode === "wails" ? t(workspace?.remoteFs ? "workspace.remoteFS" : "common.local") : t("common.preview")}
       </StatusBadge>
-      <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>
+      {!workspace?.remoteFs && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
       <button type="button" className="workbench-inspector-dock-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><PanelRightClose size={16} strokeWidth={2} aria-hidden="true" /></button>
     </div>}
     <section className="conversation-workspace flex min-h-0 min-w-0 flex-col bg-background">
@@ -337,6 +341,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       className="workbench-inspector open min-h-0 min-w-0"
       mode={mode}
       workspaceID={workspaceID}
+      remoteFS={workspace?.remoteFs}
       detail={runDetail}
       queuedTask={selectedQueuedTask}
       queuePosition={selectedQueuedTask ? queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1 : 0}
@@ -344,10 +349,10 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       runWorkerID={runWorkerID}
       reviewRequest={reviewRequest}
       notify={notify}
-      onOpenTerminal={openTerminal}
+      onOpenTerminal={workspace?.remoteFs ? null : openTerminal}
       onDirtyChange={setFileInspectorDirty}
       actions={<>
-        {inspectorMaximized && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
+        {inspectorMaximized && !workspace?.remoteFs && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
         {onDetachInspector && <button type="button" className="workbench-inspector-detach" aria-label={t("inspector.detach")} title={t("inspector.detachHint")} onClick={detachInspector}><SquareArrowOutUpRight size={15} strokeWidth={2} aria-hidden="true" /></button>}
         <button type="button" className="workbench-inspector-maximize" aria-label={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} aria-pressed={inspectorMaximized} title={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} onClick={toggleInspectorMaximized}>{inspectorMaximized ? <Minimize2 size={15} strokeWidth={2} aria-hidden="true" /> : <Maximize2 size={15} strokeWidth={2} aria-hidden="true" />}</button>
         <button type="button" className="workbench-inspector-close" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><X size={16} strokeWidth={2} aria-hidden="true" /></button>

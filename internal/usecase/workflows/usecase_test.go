@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -17,6 +18,7 @@ import (
 	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
 type engineScript struct {
@@ -641,6 +643,32 @@ func TestExecuteSerialDispatchesConfiguredRemoteStep(t *testing.T) {
 	}
 	if remote.workerID != "mac-mini" || remote.workspaceID != "ws_1" || !remote.hasDeadline || len(engine.calls) != 0 {
 		t.Fatalf("remote dispatch = %+v, local calls = %d", remote, len(engine.calls))
+	}
+}
+
+func TestRemoteFSWorkspaceRoutesLocalAgentToTarget(t *testing.T) {
+	definition := domainworkflows.Definition{ID: "remote_fs", Name: "Remote FS", Mode: domainworkflows.ModeSerial, EntryStepID: "edit", Policy: domainworkflows.Policy{MaxTransitions: 5, MaxConsecutiveFailures: 2, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{{ID: "edit", Name: "Edit", Runtime: "codex", Sandbox: "workspace-write", RolePrompt: "Edit", Instruction: "Edit remotely", Transitions: map[string]string{"completed": domainworkflows.TargetDone}}}}
+	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true}, scripts: []engineScript{{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"completed","content":"done"}`, "session")}}}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	workspace, err := store.Repos.Tasks.GetWorkspace(context.Background(), task.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace.Path = "/srv/project"
+	workspace.RemoteFS = &domainworkspaces.RemoteFS{Host: "devbox", Root: "/srv/project", Username: "deploy", CredentialID: "sshcred_0123456789abcdef0123456789abcdef", SSHOptions: []string{"ProxyJump=bastion"}}
+	if err := store.Repos.Tasks.SaveWorkspace(context.Background(), workspace); err != nil {
+		t.Fatal(err)
+	}
+	run, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil || run.Status != domainworkflows.RunCompleted {
+		t.Fatalf("run = %+v, %v", run, err)
+	}
+	if len(engine.calls) != 1 {
+		t.Fatalf("engine calls = %d", len(engine.calls))
+	}
+	want := &seam.Target{Host: "devbox", Root: "/srv/project", Username: "deploy", CredentialID: "sshcred_0123456789abcdef0123456789abcdef", SSHOptions: []string{"ProxyJump=bastion"}}
+	if !reflect.DeepEqual(engine.calls[0].Remote, want) {
+		t.Fatalf("remote target = %+v, want %+v", engine.calls[0].Remote, want)
 	}
 }
 

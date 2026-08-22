@@ -61,6 +61,12 @@ const listsChangedEvent = "onecatch:lists-changed";
 const LIST_HEARTBEAT_MS = 30_000;
 const directAgentWorkflowID = "single_agent";
 
+const emptyWorkspaceForm = () => ({ source: "local", path: "", remoteHost: "", remoteRoot: "", remoteUsername: "", remotePassword: "", name: "", defaultSandbox: "" });
+
+function workspaceLocation(workspace) {
+  return workspace?.remoteFs ? `${workspace.remoteFs.username ? `${workspace.remoteFs.username}@` : ""}${workspace.remoteFs.host}:${workspace.remoteFs.root}` : workspace?.path || "";
+}
+
 function firstWorkflowID() {
   return directAgentWorkflowID;
 }
@@ -159,7 +165,7 @@ function App() {
   // workspace's task history is loaded; selecting any history row closes it.
   const [taskModal, setTaskModal] = useState(true);
   const [renameForm, setRenameForm] = useState(null);
-  const [workspaceForm, setWorkspaceForm] = useState({ path: "", name: "", defaultSandbox: "" });
+  const [workspaceForm, setWorkspaceForm] = useState(emptyWorkspaceForm);
   const [taskForm, setTaskForm] = useState({ prompt: "", workflowId: directAgentWorkflowID, executionMode: "immediate", attachmentPaths: [], harness: "codex", model: "", reasoningEffort: "", serviceTier: "", sandbox: "workspace-write" });
   const [taskRuntimeConfiguration, setTaskRuntimeConfiguration] = useState({ loading: false, data: null, error: "" });
   const [composerAttachments, setComposerAttachments] = useState([]);
@@ -287,6 +293,8 @@ function App() {
     setSelectedQueuedTaskID("");
     setRunDetail(null);
     setResumePendingRunID("");
+    setTaskForm((form) => ({ ...form, attachmentPaths: [] }));
+    setComposerAttachments([]);
     setGlobalSearchQuery("");
     setWorkspaceSearchOpen(false);
     if (mode === "wails") WorkspaceBinding.OpenWorkspace(nextWorkspaceID).then((opened) => setWorkspaces((items) => items.map((item) => item.id === opened.id ? opened : item))).catch((error) => notify("error", errorMessage(error)));
@@ -445,8 +453,8 @@ function App() {
   }, [mode]);
 
   const inspectorContext = useMemo(
-    () => buildInspectorContext({ mode, workspaceID, runDetail, tasks, selectedQueuedTaskID, draft: taskModal }),
-    [mode, runDetail, selectedQueuedTaskID, taskModal, tasks, workspaceID],
+    () => buildInspectorContext({ mode, workspaceID, remoteFS: selectedWorkspace?.remoteFs || null, runDetail, tasks, selectedQueuedTaskID, draft: taskModal }),
+    [mode, runDetail, selectedQueuedTaskID, selectedWorkspace?.remoteFs, taskModal, tasks, workspaceID],
   );
   const inspectorContextRef = useRef(inspectorContext);
   inspectorContextRef.current = inspectorContext;
@@ -489,7 +497,7 @@ function App() {
           const keyword = globalSearchQuery.trim().toLocaleLowerCase();
           const workspaceByID = new Map(demo.demoWorkspaces.map((workspace) => [workspace.id, workspace]));
           const items = demo.demoTasks.map((task) => ({ task, workspace: workspaceByID.get(task.workspaceId), latestRun: demo.demoRun.run.taskId === task.id ? demo.demoRun.run : null }))
-            .filter((item) => item.workspace && (!keyword || `${item.task.title}\n${item.task.prompt}\n${item.workspace.name}\n${item.workspace.path}`.toLocaleLowerCase().includes(keyword)))
+            .filter((item) => item.workspace && (!keyword || `${item.task.title}\n${item.task.prompt}\n${item.workspace.name}\n${item.workspace.path}\n${item.workspace.remoteFs?.username || ""}\n${item.workspace.remoteFs?.host || ""}`.toLocaleLowerCase().includes(keyword)))
             .slice(0, 50);
           if (loadVersion === globalTaskSearchVersion.current) setGlobalTaskItems(items);
           return;
@@ -769,27 +777,39 @@ function App() {
   }, [loadRun, mode, notify, selectedQueuedTaskID, tasks]);
 
   const chooseWorkspace = useCallback(async () => {
-    if (mode === "demo") { setWorkspaceForm((form) => ({ ...form, path: "/Users/demo/Code/my-project", name: "my-project" })); setWorkspaceModal(true); return; }
+    setWorkspaceForm(mode === "demo" ? { ...emptyWorkspaceForm(), path: "/Users/demo/Code/my-project", name: "my-project" } : emptyWorkspaceForm());
+    setWorkspaceModal(true);
+  }, [mode]);
+
+  const browseWorkspace = useCallback(async () => {
+    if (mode === "demo") { setWorkspaceForm((form) => ({ ...form, source: "local", path: "/Users/demo/Code/my-project" })); return; }
     try {
       const path = await WorkspaceBinding.ChooseDirectory();
-      if (path) { setWorkspaceForm({ path, name: "", defaultSandbox: "" }); setWorkspaceModal(true); }
+      if (path) setWorkspaceForm((form) => ({ ...form, source: "local", path }));
     } catch (error) { notify("error", errorMessage(error)); }
   }, [mode, notify]);
 
   const addWorkspace = async () => {
-    if (!workspaceForm.path.trim()) { notify("error", t("app.workspacePathRequired")); return; }
+    const remote = workspaceForm.source === "remote";
+    if (!remote && !workspaceForm.path.trim()) { notify("error", t("app.workspacePathRequired")); return; }
+    if (remote && (!workspaceForm.remoteHost.trim() || !workspaceForm.remoteRoot.trim())) { notify("error", t("app.remoteFSFieldsRequired")); return; }
+    if (remote && workspaceForm.remotePassword && !workspaceForm.remoteUsername.trim()) { notify("error", t("app.remoteFSCredentialsRequired")); return; }
     if (workspaceForm.defaultSandbox === "full" && !await requestConfirm({ title: t("app.fullWorkspaceTitle"), description: t("app.fullWorkspaceDescription"), detail: t("app.fullWorkspaceDetail"), confirmLabel: t("app.confirmFullAccess"), dangerous: true })) return;
     setBusy("workspace");
     try {
+      const payload = remote
+        ? { path: workspaceForm.remoteRoot.trim(), name: workspaceForm.name, defaultSandbox: workspaceForm.defaultSandbox || "workspace-write", remoteFs: { host: workspaceForm.remoteHost.trim(), root: workspaceForm.remoteRoot.trim(), username: workspaceForm.remoteUsername.trim() }, ...(workspaceForm.remotePassword ? { password: workspaceForm.remotePassword } : {}) }
+        : { path: workspaceForm.path.trim(), name: workspaceForm.name, defaultSandbox: workspaceForm.defaultSandbox };
       if (mode === "demo") {
-        const item = { ...workspaceForm, id: `workspace-${Date.now()}`, name: workspaceForm.name || workspaceForm.path.split("/").pop(), lastOpenedAt: new Date().toISOString() };
+        const { password: _password, ...safePayload } = payload;
+        const item = { ...safePayload, id: `workspace-${Date.now()}`, name: payload.name || payload.path.split("/").pop(), lastOpenedAt: new Date().toISOString() };
         setWorkspaces((items) => [item, ...items]); selectWorkspace(item.id);
       } else {
-        const item = await WorkspaceBinding.AddWorkspace(workspaceForm);
+        const item = await WorkspaceBinding.AddWorkspace(payload);
         setWorkspaces(await WorkspaceBinding.ListWorkspaces()); selectWorkspace(item.id);
       }
       setWorkspaceModal(false); notify("success", t("app.workspaceAdded"));
-    } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
+    } catch (error) { notify("error", errorMessage(error)); } finally { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setBusy(""); }
   };
 
   const toggleTaskPinned = useCallback(async (task) => {
@@ -1162,7 +1182,7 @@ function App() {
   const location = view === "settings"
     ? { label: t("sidebar.settings"), path: "~/.onecatch" }
     : selectedWorkspace
-      ? { label: selectedWorkspace.name, path: selectedWorkspace.path }
+      ? { label: selectedWorkspace.name, path: workspaceLocation(selectedWorkspace) }
       : { label: t("app.selectWorkspace"), path: "" };
   const commandText = location.path ? `${location.label} · ${location.path}` : location.label;
   const selectedTask = runDetail?.task || tasks.find((task) => task.id === selectedQueuedTaskID);
@@ -1352,10 +1372,10 @@ function App() {
           allowFullSandbox={Boolean(settings.security?.allowFullSandbox && selectedWorkspace?.defaultSandbox === "full")}
           onInspectRuntimeConfiguration={inspectRuntimeConfiguration}
           onTaskFormChange={setTaskForm}
-          onChooseTaskAttachments={chooseTaskAttachments}
+          onChooseTaskAttachments={selectedWorkspace?.remoteFs ? null : chooseTaskAttachments}
           onCreateTask={taskModal ? createTaskAndRun : null}
           onNewTask={openTaskModal}
-          onChooseAttachments={chooseComposerAttachments}
+          onChooseAttachments={selectedWorkspace?.remoteFs ? null : chooseComposerAttachments}
           onRemoveAttachment={removeComposerAttachment}
           onSubmit={submitWorkbenchComposer}
           onInterrupt={interruptRun}
@@ -1367,23 +1387,49 @@ function App() {
         /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} /></Suspense>}
       </main>}
     </div>
-    {workspaceModal && <Modal className="workspace-create-dialog gap-0 overflow-hidden p-0 sm:max-w-[480px]" title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => busy !== "workspace" && setWorkspaceModal(false)}>
+    {workspaceModal && <Modal className="workspace-create-dialog max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[480px]" title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => { if (busy !== "workspace") { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceModal(false); } }}>
       <form className="grid gap-4 px-5 pt-4 pb-5" aria-busy={busy === "workspace"} onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "workspace") void addWorkspace(); }}>
         <div className="grid gap-1.5">
-          <Label htmlFor="workspace-create-path">{t("workspace.path")}</Label>
-          <Input id="workspace-create-path" className="font-mono text-[13px]" autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" />
+          <Label id="workspace-create-source-label">{t("workspace.source")}</Label>
+          <TUISelect ariaLabel={t("workspace.source")} value={workspaceForm.source} onChange={(source) => setWorkspaceForm((form) => ({ ...form, source, defaultSandbox: source === "remote" && (form.defaultSandbox === "" || form.defaultSandbox === "full") ? "workspace-write" : form.defaultSandbox }))} options={[{ value: "local", label: t("workspace.localDirectory") }, { value: "remote", label: t("workspace.remoteFS") }]} />
         </div>
+        {workspaceForm.source === "local" ? <div className="grid gap-1.5">
+          <Label htmlFor="workspace-create-path">{t("workspace.path")}</Label>
+          <div className="flex gap-2"><Input id="workspace-create-path" className="min-w-0 flex-1 font-mono text-[13px]" autoFocus value={workspaceForm.path} onChange={(event) => setWorkspaceForm((form) => ({ ...form, path: event.target.value }))} placeholder="/Users/me/Code/project" /><Button type="button" variant="outline" disabled={busy === "workspace"} onClick={browseWorkspace}>{t("workspace.browse")}</Button></div>
+        </div> : <>
+          <div className="grid gap-1.5">
+            <Label htmlFor="workspace-create-remote-host">{t("workspace.sshHost")}</Label>
+            <Input id="workspace-create-remote-host" className="font-mono text-[13px]" autoFocus autoCapitalize="none" autoCorrect="off" spellCheck="false" value={workspaceForm.remoteHost} onChange={(event) => setWorkspaceForm((form) => ({ ...form, remoteHost: event.target.value }))} placeholder="192.168.5.98:22" />
+            <p className="m-0 text-[11px] leading-relaxed text-muted-foreground">{t("workspace.sshHostHint")}</p>
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="workspace-create-remote-root">{t("workspace.remoteRoot")}</Label>
+            <Input id="workspace-create-remote-root" className="font-mono text-[13px]" autoCapitalize="none" autoCorrect="off" spellCheck="false" value={workspaceForm.remoteRoot} onChange={(event) => setWorkspaceForm((form) => ({ ...form, remoteRoot: event.target.value }))} placeholder="/srv/project" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid min-w-0 gap-1.5">
+              <Label htmlFor="workspace-create-remote-username">{t("workspace.sshUsername")}</Label>
+              <Input id="workspace-create-remote-username" autoComplete="username" autoCapitalize="none" autoCorrect="off" spellCheck="false" value={workspaceForm.remoteUsername} onChange={(event) => setWorkspaceForm((form) => ({ ...form, remoteUsername: event.target.value }))} placeholder="deploy" />
+            </div>
+            <div className="grid min-w-0 gap-1.5">
+              <Label htmlFor="workspace-create-remote-password">{t("workspace.sshPassword")}</Label>
+              <Input id="workspace-create-remote-password" type="password" autoComplete="current-password" value={workspaceForm.remotePassword} onChange={(event) => setWorkspaceForm((form) => ({ ...form, remotePassword: event.target.value }))} placeholder={t("workspace.sshPasswordPlaceholder")} />
+            </div>
+          </div>
+          <p className="-mt-1 m-0 text-[11px] leading-relaxed text-muted-foreground">{t("workspace.sshPasswordHint")}</p>
+          <p className="-mt-1 m-0 rounded-md border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">{t("workspace.remoteFSDescription")}</p>
+        </>}
         <div className="grid gap-1.5">
           <Label htmlFor="workspace-create-name">{t("workspace.displayName")}</Label>
           <Input id="workspace-create-name" value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder={t("workspace.defaultName")} />
         </div>
         <div className="grid gap-1.5">
           <Label id="workspace-create-sandbox-label">{t("workspace.defaultSandbox")}</Label>
-          <TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={[{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} />
+          <TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={workspaceForm.source === "remote" ? [{ value: "workspace-write", label: t("workspace.write") }, { value: "read-only", label: t("workspace.readOnly") }] : [{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} />
         </div>
         <DialogFooter className="mt-1">
-          <Button type="button" variant="ghost" disabled={busy === "workspace"} onClick={() => setWorkspaceModal(false)}>{t("common.cancel")}</Button>
-          <Button type="submit" disabled={busy === "workspace" || !workspaceForm.path.trim()}>{busy === "workspace" ? t("common.processing") : t("workspace.add")}</Button>
+          <Button type="button" variant="ghost" disabled={busy === "workspace"} onClick={() => { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceModal(false); }}>{t("common.cancel")}</Button>
+          <Button type="submit" disabled={busy === "workspace" || (workspaceForm.source === "remote" ? !workspaceForm.remoteHost.trim() || !workspaceForm.remoteRoot.trim() || (Boolean(workspaceForm.remotePassword) && !workspaceForm.remoteUsername.trim()) : !workspaceForm.path.trim())}>{busy === "workspace" ? t("common.processing") : t("workspace.add")}</Button>
         </DialogFooter>
       </form>
     </Modal>}

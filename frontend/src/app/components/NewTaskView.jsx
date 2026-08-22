@@ -93,8 +93,7 @@ export default function NewTaskView({
               <Button type="button" variant="ghost" size="icon-sm" className="new-task-add" aria-label={t("task.addAndConfigure")} title={t("task.addAndConfigure")}><Plus size={18} aria-hidden="true" /></Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="task-executor-menu new-task-add-menu" side="top" align="start" sideOffset={8}>
-              <DropdownMenuItem onSelect={() => onChooseAttachments?.()}><Paperclip size={14} aria-hidden="true" /><span>{t("task.chooseFiles")}</span></DropdownMenuItem>
-              <DropdownMenuSeparator />
+              {onChooseAttachments && <><DropdownMenuItem onSelect={() => onChooseAttachments()}><Paperclip size={14} aria-hidden="true" /><span>{t("task.chooseFiles")}</span></DropdownMenuItem><DropdownMenuSeparator /></>}
               <DropdownMenuLabel className="task-executor-section">{t("task.executionMode")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={executionMode} onValueChange={(nextMode) => onChange((current) => ({ ...current, executionMode: nextMode }))}>
                 <DropdownMenuRadioItem className="task-executor-option agent" value="immediate"><ArrowUp size={14} aria-hidden="true" /><span><strong>{t("task.runNow")}</strong></span></DropdownMenuRadioItem>

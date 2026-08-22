@@ -31,12 +31,16 @@ test("command palette project results filter names and paths with stable shortcu
   const workspaces = [
     { id: "one", name: "onecatch", path: "/code/openmodu/onecatch" },
     { id: "two", name: "learning", path: "/documents/children" },
+    { id: "three", name: "backend", path: "/srv/backend", remoteFs: { host: "devbox", root: "/srv/backend" } },
   ];
   assert.deepEqual(commandPaletteWorkspaceResults(workspaces, "ONECATCH", 2), [
     { workspace: workspaces[0], shortcutLabel: "⌘3" },
   ]);
   assert.deepEqual(commandPaletteWorkspaceResults(workspaces, "documents", 0), [
     { workspace: workspaces[1], shortcutLabel: "⌘1" },
+  ]);
+  assert.deepEqual(commandPaletteWorkspaceResults(workspaces, "DEVBOX", 1), [
+    { workspace: workspaces[2], shortcutLabel: "⌘2" },
   ]);
   assert.deepEqual(commandPaletteWorkspaceResults(workspaces, "", 0), []);
 });

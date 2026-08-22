@@ -11,6 +11,7 @@ import (
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	taskrepo "github.com/openmodu/onecatch/internal/repo/tasks"
 )
 
 func TestTasksRepoPersistsAcrossReopen(t *testing.T) {
@@ -100,5 +101,33 @@ func TestWorkspaceListPrioritizesPinnedThenRecent(t *testing.T) {
 	}
 	if len(got) != 3 || got[0].ID != "pinned" || got[1].ID != "recent" || got[2].ID != "older" {
 		t.Fatalf("ListWorkspaces() order = %+v", got)
+	}
+}
+
+func TestWorkspaceRemoteLocationIncludesSSHHost(t *testing.T) {
+	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	ctx := context.Background()
+	first := domainworkspaces.Workspace{ID: "remote-a", Name: "A", Path: "/srv/project", RemoteFS: &domainworkspaces.RemoteFS{Host: "host-a", Root: "/srv/project"}}
+	second := domainworkspaces.Workspace{ID: "remote-b", Name: "B", Path: "/srv/project", RemoteFS: &domainworkspaces.RemoteFS{Host: "host-b", Root: "/srv/project"}}
+	if err := store.Repos.Tasks.SaveWorkspace(ctx, first); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.Repos.Tasks.SaveWorkspace(ctx, second); err != nil {
+		t.Fatalf("same root on another host should be allowed: %v", err)
+	}
+	otherUser := first
+	otherUser.ID = "remote-a-other-user"
+	otherUser.RemoteFS = &domainworkspaces.RemoteFS{Host: "host-a", Root: "/srv/project", Username: "other"}
+	if err := store.Repos.Tasks.SaveWorkspace(ctx, otherUser); err != nil {
+		t.Fatalf("same host and root for another user should be allowed: %v", err)
+	}
+	duplicate := first
+	duplicate.ID = "remote-a-copy"
+	if err := store.Repos.Tasks.SaveWorkspace(ctx, duplicate); !errors.Is(err, taskrepo.ErrWorkspacePathExists) {
+		t.Fatalf("duplicate remote location error = %v", err)
 	}
 }

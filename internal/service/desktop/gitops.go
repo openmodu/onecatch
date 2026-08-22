@@ -23,9 +23,19 @@ type GitCommitResult struct {
 	Pushed     bool   `json:"pushed"`
 }
 
+func requireLocalGitWorkspace(workspace domainworkspaces.Workspace) error {
+	if workspace.RemoteFS != nil {
+		return coded("remote_fs_git_unavailable", "Git controls are not available for remote FS workspaces")
+	}
+	return nil
+}
+
 func (a *Service) GitStatus(ctx context.Context, workspaceID string) (domainworkspaces.GitSnapshot, error) {
 	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
 	if err != nil {
+		return domainworkspaces.GitSnapshot{}, err
+	}
+	if err := requireLocalGitWorkspace(workspace); err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
 	return a.git.Inspect(ctx, workspace.Path)
@@ -36,12 +46,18 @@ func (a *Service) GitDiff(ctx context.Context, workspaceID string, staged bool) 
 	if err != nil {
 		return "", err
 	}
+	if err := requireLocalGitWorkspace(workspace); err != nil {
+		return "", err
+	}
 	return a.git.Diff(ctx, workspace.Path, staged)
 }
 
 func (a *Service) GitStageAll(ctx context.Context, workspaceID string) error {
 	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
 	if err != nil {
+		return err
+	}
+	if err := requireLocalGitWorkspace(workspace); err != nil {
 		return err
 	}
 	return a.git.StageAll(ctx, workspace.Path)
@@ -52,12 +68,18 @@ func (a *Service) GitListBranches(ctx context.Context, workspaceID string) ([]do
 	if err != nil {
 		return nil, err
 	}
+	if err := requireLocalGitWorkspace(workspace); err != nil {
+		return nil, err
+	}
 	return a.git.ListBranches(ctx, workspace.Path)
 }
 
 func (a *Service) GitSwitchBranch(ctx context.Context, workspaceID, name string) (domainworkspaces.GitSnapshot, error) {
 	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
 	if err != nil {
+		return domainworkspaces.GitSnapshot{}, err
+	}
+	if err := requireLocalGitWorkspace(workspace); err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
 	if err := a.git.SwitchBranch(ctx, workspace.Path, name); err != nil {
@@ -71,6 +93,9 @@ func (a *Service) GitCreateBranch(ctx context.Context, workspaceID, name string)
 	if err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
+	if err := requireLocalGitWorkspace(workspace); err != nil {
+		return domainworkspaces.GitSnapshot{}, err
+	}
 	if err := a.git.CreateBranch(ctx, workspace.Path, name); err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
@@ -80,6 +105,9 @@ func (a *Service) GitCreateBranch(ctx context.Context, workspaceID, name string)
 func (a *Service) GenerateCommitMessage(ctx context.Context, workspaceID, requestedRuntime string) (string, error) {
 	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
 	if err != nil {
+		return "", err
+	}
+	if err := requireLocalGitWorkspace(workspace); err != nil {
 		return "", err
 	}
 	diff, err := a.git.Diff(ctx, workspace.Path, false)
@@ -125,6 +153,9 @@ func (a *Service) GenerateCommitMessage(ctx context.Context, workspaceID, reques
 func (a *Service) GitCommitAndPush(ctx context.Context, input GitCommitInput) (GitCommitResult, error) {
 	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(input.WorkspaceID))
 	if err != nil {
+		return GitCommitResult{}, err
+	}
+	if err := requireLocalGitWorkspace(workspace); err != nil {
 		return GitCommitResult{}, err
 	}
 	if err := a.git.StageAll(ctx, workspace.Path); err != nil {

@@ -69,7 +69,7 @@ func (a *Service) DeleteTask(ctx context.Context, taskID string) error {
 	if err := a.store.Repos.Tasks.DeleteTask(ctx, task.ID); err != nil {
 		return err
 	}
-	if workspace.Path != "" {
+	if workspace.Path != "" && workspace.RemoteFS == nil {
 		_ = os.RemoveAll(filepath.Join(workspace.Path, ".onecatch", "attachments", task.ID))
 	}
 	go a.reconcileWorkspaceQueue(task.WorkspaceID)
@@ -167,6 +167,9 @@ func (a *Service) persistAttachments(ctx context.Context, task domaintasks.Task,
 	workspace, err := a.store.Repos.Tasks.GetWorkspace(ctx, task.WorkspaceID)
 	if err != nil {
 		return nil, err
+	}
+	if workspace.RemoteFS != nil {
+		return nil, coded("remote_fs_attachments_unsupported", "attachments are not available for remote FS workspaces")
 	}
 	root := filepath.Join(workspace.Path, ".onecatch", "attachments", task.ID)
 	if err := os.MkdirAll(root, 0o700); err != nil {

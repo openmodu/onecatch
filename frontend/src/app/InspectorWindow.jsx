@@ -6,7 +6,7 @@ import { WindowBinding } from "../../bindings/github.com/openmodu/onecatch/inter
 import InspectorPanel from "./components/inspectors/InspectorPanel.jsx";
 import { INSPECTOR_ACTION_EVENT, INSPECTOR_CONTEXT_EVENT, INSPECTOR_REQUEST_EVENT } from "./inspectorContext.js";
 
-const emptyContext = { mode: "wails", workspaceID: "", runWorkerID: "", draft: false, detail: null, queuedTask: null, queuePosition: 0 };
+const emptyContext = { mode: "wails", workspaceID: "", remoteFS: null, runWorkerID: "", draft: false, detail: null, queuedTask: null, queuePosition: 0 };
 
 // The run inspector, floated out of the workbench so it can live on a second
 // display. It holds no data of its own: the main window stays the single source
@@ -50,13 +50,14 @@ export default function InspectorWindow() {
       className="inspector-window-panel grid min-h-0 min-w-0"
       mode={context.mode}
       workspaceID={context.workspaceID}
+      remoteFS={context.remoteFS}
       detail={context.detail}
       queuedTask={context.queuedTask}
       queuePosition={context.queuePosition}
       draft={context.draft}
       runWorkerID={context.runWorkerID}
       notify={notify}
-      onOpenTerminal={openTerminal}
+      onOpenTerminal={context.remoteFS ? null : openTerminal}
     />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}
   </div>;

@@ -2,19 +2,22 @@ package desktop
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
 
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	"github.com/openmodu/onecatch/internal/repo/git"
 	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
+	"github.com/openmodu/onecatch/internal/sshcredentials"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
 )
@@ -159,6 +162,25 @@ func newLocalTestApp(t *testing.T, engine workflowuc.Engine) (*Service, *localda
 		t.Fatal(err)
 	}
 	return app, store
+}
+
+type recordingCredentialStore struct {
+	values  map[string]string
+	deleted []string
+}
+
+func (s *recordingCredentialStore) Set(id, password string) error {
+	if s.values == nil {
+		s.values = map[string]string{}
+	}
+	s.values[id] = password
+	return nil
+}
+
+func (s *recordingCredentialStore) Delete(id string) error {
+	delete(s.values, id)
+	s.deleted = append(s.deleted, id)
+	return nil
 }
 
 func TestDirectAgentWorkflowIsProtectedAndSelfHealing(t *testing.T) {
@@ -518,6 +540,121 @@ func TestTaskAttachmentsRenameAndSoftDelete(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Dir(task.Attachments[0].StoredPath)); !os.IsNotExist(err) {
 		t.Fatalf("attachment directory still exists: %v", err)
+	}
+}
+
+func TestAddRemoteFSWorkspacePersistsCanonicalSSHTarget(t *testing.T) {
+	ctx := context.Background()
+	app, _ := newLocalTestApp(t, completingEngine{})
+	app.remoteFSProbe = func(_ context.Context, remote domainworkspaces.RemoteFS) (string, error) {
+		if remote.Host != "devbox:2222" || remote.Root != "/srv/project" || !reflect.DeepEqual(remote.SSHOptions, []string{"ProxyJump=bastion"}) {
+			t.Fatalf("probe target = %+v", remote)
+		}
+		return "/data/project", nil
+	}
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{
+		Name: "Remote project", DefaultSandbox: "workspace-write",
+		RemoteFS: &domainworkspaces.RemoteFS{Host: " devbox:2222 ", Root: "/srv/project", SSHOptions: []string{" ProxyJump=bastion "}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workspace.Path != "/data/project" || workspace.RemoteFS == nil || workspace.RemoteFS.Root != "/data/project" || workspace.RemoteFS.Host != "devbox:2222" {
+		t.Fatalf("workspace = %+v", workspace)
+	}
+	stored, err := app.GetWorkspace(ctx, workspace.ID)
+	if err != nil || !reflect.DeepEqual(stored.RemoteFS, workspace.RemoteFS) {
+		t.Fatalf("stored workspace = %+v, %v", stored, err)
+	}
+}
+
+func TestAddRemoteFSWorkspaceStoresPasswordOutsideWorkspace(t *testing.T) {
+	ctx := context.Background()
+	app, _ := newLocalTestApp(t, completingEngine{})
+	credentials := &recordingCredentialStore{}
+	app.remoteCredentials = credentials
+	app.remoteFSProbe = func(_ context.Context, remote domainworkspaces.RemoteFS) (string, error) {
+		if remote.Username != "ityike" || !sshcredentials.ValidID(remote.CredentialID) {
+			t.Fatalf("probe target = %+v", remote)
+		}
+		if credentials.values[remote.CredentialID] != "correct horse battery staple" {
+			t.Fatal("probe ran before the password was available in the credential store")
+		}
+		return "/home/ityike/Work/code", nil
+	}
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{
+		Name: "Password remote", DefaultSandbox: "workspace-write", Password: "correct horse battery staple",
+		RemoteFS: &domainworkspaces.RemoteFS{Host: "192.168.5.98", Root: "/home/ityike/Work/code", Username: "ityike"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if workspace.RemoteFS == nil || workspace.RemoteFS.Username != "ityike" || !sshcredentials.ValidID(workspace.RemoteFS.CredentialID) {
+		t.Fatalf("workspace = %+v", workspace)
+	}
+	encoded, err := json.Marshal(workspace)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "correct horse battery staple") {
+		t.Fatalf("workspace persisted the SSH password: %s", encoded)
+	}
+}
+
+func TestAddRemoteFSWorkspaceDeletesStagedPasswordWhenProbeFails(t *testing.T) {
+	app, _ := newLocalTestApp(t, completingEngine{})
+	credentials := &recordingCredentialStore{}
+	app.remoteCredentials = credentials
+	app.remoteFSProbe = func(_ context.Context, _ domainworkspaces.RemoteFS) (string, error) {
+		return "", fmt.Errorf("authentication rejected")
+	}
+	_, err := app.AddWorkspace(context.Background(), AddWorkspaceInput{
+		Password: "temporary secret",
+		RemoteFS: &domainworkspaces.RemoteFS{Host: "devbox", Root: "/srv/project", Username: "deploy"},
+	})
+	if errorCode(err) != "remote_fs_unavailable" {
+		t.Fatalf("error = %v", err)
+	}
+	if len(credentials.values) != 0 || len(credentials.deleted) != 1 {
+		t.Fatalf("staged credentials = %v, deleted = %v", credentials.values, credentials.deleted)
+	}
+}
+
+func TestRemoteWorkspaceNeverStoresOrDeletesAttachmentsAtRemotePathLocally(t *testing.T) {
+	ctx := context.Background()
+	app, store := newLocalTestApp(t, completingEngine{})
+	coincidentalLocalPath := t.TempDir()
+	workspace := domainworkspaces.Workspace{
+		ID: "remote-project", Name: "Remote", Path: coincidentalLocalPath,
+		RemoteFS: &domainworkspaces.RemoteFS{Host: "devbox", Root: coincidentalLocalPath},
+	}
+	if err := store.Repos.Tasks.SaveWorkspace(ctx, workspace); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(t.TempDir(), "reference.txt")
+	if err := os.WriteFile(source, []byte("reference"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "remote", Prompt: "work", AttachmentPaths: []string{source}}); errorCode(err) != "remote_fs_attachments_unsupported" {
+		t.Fatalf("remote attachment error = %v", err)
+	}
+	now := time.Now().UTC()
+	task := domaintasks.Task{ID: "task-remote", WorkspaceID: workspace.ID, Title: "Remote", Prompt: "work", WorkflowID: "single_agent", Status: domaintasks.StatusReady, CreatedAt: now, UpdatedAt: now}
+	if err := store.Repos.Tasks.SaveTask(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(coincidentalLocalPath, ".onecatch", "attachments", task.ID, "keep.txt")
+	if err := os.MkdirAll(filepath.Dir(marker), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(marker, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.DeleteTask(ctx, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("remote path was mutated locally: %v", err)
 	}
 }
 

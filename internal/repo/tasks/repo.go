@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -57,7 +58,7 @@ func (r *tasksImpl) SaveWorkspace(ctx context.Context, workspace domainworkspace
 		return err
 	}
 	for _, item := range items {
-		if item.ID != workspace.ID && filepath.Clean(item.Path) == filepath.Clean(workspace.Path) {
+		if item.ID != workspace.ID && sameWorkspaceLocation(item, workspace) {
 			return ErrWorkspacePathExists
 		}
 	}
@@ -65,6 +66,15 @@ func (r *tasksImpl) SaveWorkspace(ctx context.Context, workspace domainworkspace
 		return fmt.Errorf("save workspace: %w", err)
 	}
 	return nil
+}
+
+func sameWorkspaceLocation(left, right domainworkspaces.Workspace) bool {
+	if left.RemoteFS == nil || right.RemoteFS == nil {
+		return left.RemoteFS == nil && right.RemoteFS == nil && filepath.Clean(left.Path) == filepath.Clean(right.Path)
+	}
+	return strings.EqualFold(strings.TrimSpace(left.RemoteFS.Host), strings.TrimSpace(right.RemoteFS.Host)) &&
+		strings.EqualFold(strings.TrimSpace(left.RemoteFS.Username), strings.TrimSpace(right.RemoteFS.Username)) &&
+		path.Clean(left.RemoteFS.Root) == path.Clean(right.RemoteFS.Root)
 }
 
 func (r *tasksImpl) GetWorkspace(ctx context.Context, id string) (domainworkspaces.Workspace, error) {

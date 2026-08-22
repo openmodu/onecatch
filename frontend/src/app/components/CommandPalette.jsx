@@ -52,7 +52,7 @@ export default function CommandPalette({
       workspace,
       icon: Folder,
       label: workspace.name,
-      meta: workspace.path,
+      meta: workspace.remoteFs ? `${workspace.remoteFs.username ? `${workspace.remoteFs.username}@` : ""}${workspace.remoteFs.host}:${workspace.remoteFs.root}` : workspace.path,
       shortcutLabel,
       shortcutKey: "",
     })), [normalizedQuery, taskItems.length, workspaces]);

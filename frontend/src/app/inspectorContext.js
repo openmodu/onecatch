@@ -48,11 +48,12 @@ function inspectorDetail(runDetail) {
   };
 }
 
-export function buildInspectorContext({ mode, workspaceID, runDetail, tasks = [], selectedQueuedTaskID = "", draft = false } = {}) {
+export function buildInspectorContext({ mode, workspaceID, remoteFS = null, runDetail, tasks = [], selectedQueuedTaskID = "", draft = false } = {}) {
   const queuedTask = selectedQueuedTaskID ? tasks.find((task) => task.id === selectedQueuedTaskID) || null : null;
   return {
     mode: mode || "",
     workspaceID: workspaceID || "",
+    remoteFS,
     runWorkerID: draft ? "" : activeWorkerID(runDetail),
     draft: Boolean(draft),
     detail: draft ? null : inspectorDetail(runDetail),
@@ -71,6 +72,7 @@ export function inspectorContextSignature(context) {
   return [
     context?.mode || "",
     context?.workspaceID || "",
+    context?.remoteFS ? `${context.remoteFS.host}:${context.remoteFS.root}` : "",
     context?.runWorkerID || "",
     context?.draft ? 1 : 0,
     context?.queuedTask?.id || "",

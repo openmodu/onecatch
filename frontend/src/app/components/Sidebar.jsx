@@ -36,6 +36,8 @@ const CommandPalette = lazy(() => import("./CommandPalette.jsx"));
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "onecatch.sidebar.collapsed";
 const SIDEBAR_PEEK_WIDTH = 216;
 
+const workspaceLocation = (workspace) => workspace?.remoteFs ? `${workspace.remoteFs.username ? `${workspace.remoteFs.username}@` : ""}${workspace.remoteFs.host}:${workspace.remoteFs.root}` : workspace?.path || "";
+
 function TaskExecutionIcon({ task, workflowID = "" }) {
   const selectedWorkflowID = task?.workflowId || workflowID;
   if (selectedWorkflowID === directAgentWorkflowID || (!selectedWorkflowID && task?.harness)) {
@@ -372,7 +374,7 @@ function Sidebar({
     const expanded = expandedWorkspaceID === workspace.id;
     const taskPanelID = `workspace-tasks-${encodeURIComponent(workspace.id)}`;
     return <div className={`workspace-row group relative block w-full min-w-0 max-w-full overflow-hidden ${active ? "active" : ""} ${expanded ? "expanded" : ""}`} key={workspace.id}>
-      <button className={`workspace-item grid h-8 w-full min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-2 rounded-lg py-0 pr-14 pl-2 text-left transition-colors hover:bg-accent/70 hover:text-foreground ${active ? "text-foreground" : "text-muted-foreground"}`} title={workspace.path} aria-expanded={expanded} aria-controls={taskPanelID} onClick={() => toggleProject(workspace)}>
+      <button className={`workspace-item grid h-8 w-full min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-2 rounded-lg py-0 pr-14 pl-2 text-left transition-colors hover:bg-accent/70 hover:text-foreground ${active ? "text-foreground" : "text-muted-foreground"}`} title={workspaceLocation(workspace)} aria-expanded={expanded} aria-controls={taskPanelID} onClick={() => toggleProject(workspace)}>
         {expanded ? <FolderOpen size={16} strokeWidth={2} aria-hidden="true" className="text-muted-foreground" /> : <Folder size={16} strokeWidth={2} aria-hidden="true" className="text-muted-foreground" />}
         <span className="min-w-0"><strong className="block truncate text-[13px] font-medium leading-none">{workspace.name}</strong></span>
       </button>

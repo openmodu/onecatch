@@ -6,5 +6,6 @@ export {
     GitBranch,
     GitFile,
     GitSnapshot,
+    RemoteFS,
     Workspace
 } from "./models.js";
