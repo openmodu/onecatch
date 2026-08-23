@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
@@ -210,28 +211,27 @@ done
 	}
 }
 
-func TestGrokSessionArgs(t *testing.T) {
-	args, err := grokSessionArgs(Request{Sandbox: SandboxReadOnly, Model: "grok-4.6", ReasoningEffort: "xhigh"})
-	if err != nil {
-		t.Fatalf("session args: %v", err)
-	}
-	if argValue(args, "--sandbox") != "read-only" {
-		t.Fatalf("sandbox = %q", argValue(args, "--sandbox"))
-	}
-	if argValue(args, "--model") != "grok-4.6" || argValue(args, "--reasoning-effort") != "xhigh" {
-		t.Fatalf("model/effort not passed: %v", args)
-	}
-
-	write, err := grokSessionArgs(Request{Sandbox: SandboxWorkspaceWrite})
-	if err != nil {
-		t.Fatalf("session args: %v", err)
-	}
-	if argValue(write, "--sandbox") != "workspace" {
-		t.Fatalf("workspace sandbox = %q", argValue(write, "--sandbox"))
+func TestGrokSandboxMapping(t *testing.T) {
+	for _, testCase := range []struct {
+		sandbox Sandbox
+		want    string
+	}{
+		{SandboxReadOnly, "read-only"},
+		{SandboxWorkspaceWrite, "workspace"},
+		{"", "workspace"},
+		{SandboxFull, "none"},
+	} {
+		command, err := grokCommand(Request{Sandbox: testCase.sandbox})
+		if err != nil {
+			t.Fatalf("sandbox %q: %v", testCase.sandbox, err)
+		}
+		if !containsArgs(command.environment, "GROK_SANDBOX="+testCase.want) {
+			t.Fatalf("sandbox %q produced %v, want GROK_SANDBOX=%s", testCase.sandbox, command.environment, testCase.want)
+		}
 	}
 	// An unmapped sandbox must fail the run rather than silently start Grok
-	// with whatever profile happened to be default.
-	if _, err := grokSessionArgs(Request{Sandbox: Sandbox("invented")}); err == nil {
+	// with whatever profile happened to be configured.
+	if _, err := grokCommand(Request{Sandbox: Sandbox("invented")}); err == nil {
 		t.Fatal("an unknown sandbox must be rejected")
 	}
 }
@@ -410,5 +410,62 @@ done
 	}
 	if !asked.SuppressAlwaysAllow {
 		t.Fatal("always-allow must be suppressed when the agent did not offer it")
+	}
+}
+
+// TestGrokLaunchIsAcceptedByTheRealBinary is the test the stub suite cannot be.
+//
+// A shell stub accepts any argv, so every stub-based test passed while the real
+// binary rejected the invocation with "unexpected argument '--sandbox'": model
+// and effort belong to the `agent` command, not to its `stdio` subcommand, and
+// the sandbox is not a flag on that path at all. Grok's ACP handshake needs no
+// credentials and spends no quota, so the argument vector can be checked against
+// the real CLI whenever it happens to be installed.
+func TestGrokLaunchIsAcceptedByTheRealBinary(t *testing.T) {
+	runner := NewGrokRunner("")
+	if !runner.Available() {
+		t.Skip("grok CLI not installed")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	configuration, err := runner.InspectConfiguration(ctx, t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatalf("the real grok binary rejected our launch: %v", err)
+	}
+	if len(configuration.Models) == 0 {
+		t.Fatal("the handshake reported no models")
+	}
+}
+
+func TestGrokCommandPlacesFlagsBeforeTheSubcommand(t *testing.T) {
+	command, err := grokCommand(Request{Sandbox: SandboxReadOnly, Model: "grok-4.6", ReasoningEffort: "xhigh"})
+	if err != nil {
+		t.Fatalf("command: %v", err)
+	}
+	// `grok agent stdio` itself takes only debug and socket options; model and
+	// effort are the parent command's and must precede the subcommand.
+	want := []string{"agent", "--model", "grok-4.6", "--reasoning-effort", "xhigh", "stdio"}
+	if strings.Join(command.args, " ") != strings.Join(want, " ") {
+		t.Fatalf("args = %v, want %v", command.args, want)
+	}
+	// The sandbox has no flag on this path, so it travels as the environment
+	// variable Grok documents as its equivalent.
+	if !containsArgs(command.environment, "GROK_SANDBOX=read-only") {
+		t.Fatalf("sandbox not applied to the environment: %v", command.environment)
+	}
+	if containsArgs(command.args, "--sandbox") {
+		t.Fatal("--sandbox is not accepted by `grok agent stdio` and must not be passed")
+	}
+
+	plain, err := grokCommand(Request{Sandbox: SandboxWorkspaceWrite})
+	if err != nil {
+		t.Fatalf("command: %v", err)
+	}
+	if strings.Join(plain.args, " ") != "agent stdio" {
+		t.Fatalf("an unconfigured run should launch plainly, got %v", plain.args)
+	}
+	if !containsArgs(plain.environment, "GROK_SANDBOX=workspace") {
+		t.Fatalf("sandbox = %v", plain.environment)
 	}
 }
