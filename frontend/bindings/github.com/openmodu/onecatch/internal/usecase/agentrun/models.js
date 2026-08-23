@@ -478,6 +478,129 @@ export const EventKind = {
 };
 
 /**
+ * HarnessConfiguration is what a harness reports about itself when asked.
+ */
+export class HarnessConfiguration {
+    /**
+     * Creates a new HarnessConfiguration instance.
+     * @param {Partial<HarnessConfiguration>} [$$source = {}] - The source object to create the HarnessConfiguration.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * Model is the harness's own current selection, when it reports one.
+             * @member
+             * @type {string | undefined}
+             */
+            this["model"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {HarnessModel[] | undefined}
+             */
+            this["models"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Efforts applies when a harness has one vocabulary for every model. A
+             * model's own Efforts take precedence over this.
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["efforts"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new HarnessConfiguration instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {HarnessConfiguration}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType12;
+        const $$createField2_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("models" in $$parsedSource) {
+            $$parsedSource["models"] = $$createField1_0($$parsedSource["models"]);
+        }
+        if ("efforts" in $$parsedSource) {
+            $$parsedSource["efforts"] = $$createField2_0($$parsedSource["efforts"]);
+        }
+        return new HarnessConfiguration(/** @type {Partial<HarnessConfiguration>} */($$parsedSource));
+    }
+}
+
+/**
+ * HarnessModel is one model a harness advertises.
+ */
+export class HarnessModel {
+    /**
+     * Creates a new HarnessModel instance.
+     * @param {Partial<HarnessModel>} [$$source = {}] - The source object to create the HarnessModel.
+     */
+    constructor($$source = {}) {
+        if (!("model" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["model"] = "";
+        }
+        if (!("displayName" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["displayName"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["description"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Efforts is this model's own reasoning-effort vocabulary. Harnesses vary
+             * it per model — Grok offers xhigh on 4.6 but not on 4.5 — so a single
+             * harness-wide list would offer a level the model rejects.
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["efforts"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * DefaultEffort is the level this model uses when none is chosen.
+             * @member
+             * @type {string | undefined}
+             */
+            this["defaultEffort"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new HarnessModel instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {HarnessModel}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("efforts" in $$parsedSource) {
+            $$parsedSource["efforts"] = $$createField3_0($$parsedSource["efforts"]);
+        }
+        return new HarnessModel(/** @type {Partial<HarnessModel>} */($$parsedSource));
+    }
+}
+
+/**
  * PermissionRequest is the runtime-neutral payload shown by the desktop
  * approval card. ID identifies the blocking control request, while ToolUseID
  * identifies the eventual tool call in the provider transcript.
@@ -575,8 +698,8 @@ export class PermissionRequest {
      * @returns {PermissionRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType11;
-        const $$createField4_0 = $$createType13;
+        const $$createField3_0 = $$createType13;
+        const $$createField4_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("input" in $$parsedSource) {
             $$parsedSource["input"] = $$createField3_0($$parsedSource["input"]);
@@ -790,11 +913,13 @@ const $$createType7 = Usage.createFrom;
 const $$createType8 = $Create.Nullable($$createType7);
 const $$createType9 = PermissionRequest.createFrom;
 const $$createType10 = $Create.Nullable($$createType9);
-const $$createType11 = $Create.Map($Create.Any, $Create.Any);
-var $$createType12 = /** @type {(...args: any[]) => any} */(function $$initCreateType12(...args) {
-    if ($$createType12 === $$initCreateType12) {
-        $$createType12 = $$createType11;
+const $$createType11 = HarnessModel.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = $Create.Map($Create.Any, $Create.Any);
+var $$createType14 = /** @type {(...args: any[]) => any} */(function $$initCreateType14(...args) {
+    if ($$createType14 === $$initCreateType14) {
+        $$createType14 = $$createType13;
     }
-    return $$createType12(...args);
+    return $$createType14(...args);
 });
-const $$createType13 = $Create.Array($$createType12);
+const $$createType15 = $Create.Array($$createType14);

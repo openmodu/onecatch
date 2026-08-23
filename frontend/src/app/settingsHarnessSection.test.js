@@ -51,3 +51,15 @@ test("harness settings derive every per-harness fact from the backend catalog", 
   assert.match(harness, /harness\.integrations \|\| \["cli"\]/);
   assert.match(harness, /item\.environmentHint/);
 });
+
+// Reasoning levels can belong to the model rather than to the harness: Grok
+// offers xhigh on 4.6 but not on 4.5. Offering the harness-wide superset would
+// let a user save a level the selected model rejects at run time.
+test("reasoning levels narrow to the model the harness reported", () => {
+  const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
+  assert.match(harness, /selectedReportedModel\?\.efforts\?\.length \? selectedReportedModel\.efforts/);
+  // Changing the model must drop a level the new one does not offer.
+  assert.match(harness, /!supported\.includes\(current\) \? "" : current/);
+  // One inspection path serves every harness that reports the shared shape.
+  assert.match(source, /SettingsBinding\.InspectHarnessConfiguration\(id, draft\.runtimes\[id\]\)/);
+});

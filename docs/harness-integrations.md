@@ -95,6 +95,24 @@ projection of the same updates and is deliberately not used. The `initialize`
 result also carries Grok's model catalog and reasoning-effort levels, so
 `InspectConfiguration` reads them from a handshake that needs no credentials.
 
+Resume is `session/load`, not the TUI's `grok --resume`. Its result carries no
+session id of its own, so the requested one stands; sessions resolve relative to
+`cwd`, which is why a resumed run has to reopen the same workspace.
+
+### Reporting models
+
+A harness that can list its models implements `agentrun.ConfigurationInspector`
+and returns `HarnessConfiguration`. One `Engine.InspectConfiguration` entry
+point, one service method, and one binding serve all of them, so a new adapter
+needs none of its own. Codex and Claude Code predate this shape and keep their
+bespoke pair; they work and are left alone.
+
+Effort levels can belong to the model rather than to the harness — Grok offers
+xhigh on 4.6 but not on 4.5 — so `HarnessModel` carries its own `Efforts`, and
+the settings page narrows the choice to the selected model and drops a level the
+new model does not offer. The catalog's `Efforts` remains the harness-wide
+superset that settings validation checks without running anything.
+
 ### Tool approvals
 
 A harness that can pause on a tool call and wait for a host decision implements

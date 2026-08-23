@@ -129,6 +129,61 @@ func (e *Engine) SupportsInteractivePermissions(rt Runtime, sandbox Sandbox) boo
 	return ok && runner.SupportsInteractivePermissions(sandbox)
 }
 
+// HarnessModel is one model a harness advertises.
+type HarnessModel struct {
+	Model       string `json:"model"`
+	DisplayName string `json:"displayName"`
+	Description string `json:"description,omitempty"`
+	// Efforts is this model's own reasoning-effort vocabulary. Harnesses vary
+	// it per model — Grok offers xhigh on 4.6 but not on 4.5 — so a single
+	// harness-wide list would offer a level the model rejects.
+	Efforts []string `json:"efforts,omitempty"`
+	// DefaultEffort is the level this model uses when none is chosen.
+	DefaultEffort string `json:"defaultEffort,omitempty"`
+}
+
+// HarnessConfiguration is what a harness reports about itself when asked.
+type HarnessConfiguration struct {
+	// Model is the harness's own current selection, when it reports one.
+	Model  string         `json:"model,omitempty"`
+	Models []HarnessModel `json:"models,omitempty"`
+	// Efforts applies when a harness has one vocabulary for every model. A
+	// model's own Efforts take precedence over this.
+	Efforts []string `json:"efforts,omitempty"`
+}
+
+// ConfigurationInspector is implemented by runners that can report their models
+// without starting a session or spending model quota.
+type ConfigurationInspector interface {
+	InspectConfiguration(ctx context.Context, cwd string, environment []string) (HarnessConfiguration, error)
+}
+
+// ErrInspectionUnsupported is returned for a runtime that cannot report its
+// configuration, so callers can fall back to free-text entry.
+type ErrInspectionUnsupported struct{ Runtime Runtime }
+
+func (e ErrInspectionUnsupported) Error() string {
+	return fmt.Sprintf("agentrun: runtime %q cannot report its configuration", e.Runtime)
+}
+
+// InspectConfiguration asks a runtime what models and reasoning levels it
+// offers. One entry point rather than one method per harness, so the desktop
+// and its bindings do not grow a copy for every new adapter.
+func (e *Engine) InspectConfiguration(ctx context.Context, rt Runtime, cwd string, environment []string) (HarnessConfiguration, error) {
+	runner := e.runners[rt]
+	if runner == nil {
+		return HarnessConfiguration{}, ErrUnknownRuntime{Runtime: rt}
+	}
+	if !runner.Available() {
+		return HarnessConfiguration{}, ErrRuntimeUnavailable{Runtime: rt}
+	}
+	inspector, ok := runner.(ConfigurationInspector)
+	if !ok {
+		return HarnessConfiguration{}, ErrInspectionUnsupported{Runtime: rt}
+	}
+	return inspector.InspectConfiguration(ctx, cwd, environment)
+}
+
 // Run validates the request, selects the runner, and executes it. It returns
 // ErrUnknownRuntime or ErrRuntimeUnavailable before spawning anything so
 // callers can fail fast with a clear reason.

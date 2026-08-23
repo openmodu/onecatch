@@ -103,32 +103,19 @@ func grokSandbox(sandbox Sandbox) (string, error) {
 	}
 }
 
-// GrokModelInfo is one model the installed Grok Build advertises.
-type GrokModelInfo struct {
-	Model       string `json:"model"`
-	DisplayName string `json:"displayName"`
-	Description string `json:"description,omitempty"`
-}
-
-// GrokConfiguration is the model catalog discovered from a Grok installation.
-type GrokConfiguration struct {
-	Models  []GrokModelInfo `json:"models"`
-	Efforts []string        `json:"efforts"`
-}
-
 // InspectConfiguration discovers the models and reasoning-effort levels the
 // installed Grok Build offers.
 //
 // Grok reports its catalog in the ACP initialize result, so this performs the
 // protocol handshake and stops there: no session is opened, no prompt is sent,
 // and no model quota or credentials are consumed.
-func (r *GrokRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (GrokConfiguration, error) {
+func (r *GrokRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (HarnessConfiguration, error) {
 	// Built through grokCommand so the probe and a real run cannot drift into
 	// two different invocations; a handshake runs no tools, so the sandbox it
 	// carries only has to be a profile Grok will accept.
 	command, err := grokCommand(Request{Sandbox: SandboxReadOnly})
 	if err != nil {
-		return GrokConfiguration{}, err
+		return HarnessConfiguration{}, err
 	}
 	cmd := exec.CommandContext(ctx, r.binary, command.args...)
 	if cwd != "" {
@@ -144,16 +131,16 @@ func (r *GrokRunner) InspectConfiguration(ctx context.Context, cwd string, envir
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return GrokConfiguration{}, fmt.Errorf("Grok Build stdin: %w", err)
+		return HarnessConfiguration{}, fmt.Errorf("Grok Build stdin: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return GrokConfiguration{}, fmt.Errorf("Grok Build stdout: %w", err)
+		return HarnessConfiguration{}, fmt.Errorf("Grok Build stdout: %w", err)
 	}
 	var stderr lineCapture
 	cmd.Stderr = &stderr
 	if err := cmd.Start(); err != nil {
-		return GrokConfiguration{}, fmt.Errorf("start Grok Build: %w", err)
+		return HarnessConfiguration{}, fmt.Errorf("start Grok Build: %w", err)
 	}
 	defer stopACPServer(cmd, stdin)
 
@@ -165,7 +152,7 @@ func (r *GrokRunner) InspectConfiguration(ctx context.Context, cwd string, envir
 			"clientCapabilities": map[string]any{"fs": map[string]bool{"readTextFile": false, "writeTextFile": false}, "terminal": false},
 		},
 	}); err != nil {
-		return GrokConfiguration{}, fmt.Errorf("initialize Grok Build: %w", err)
+		return HarnessConfiguration{}, fmt.Errorf("initialize Grok Build: %w", err)
 	}
 
 	scanner := newJSONLineScanner(stdout)
@@ -178,28 +165,34 @@ func (r *GrokRunner) InspectConfiguration(ctx context.Context, cwd string, envir
 			continue
 		}
 		if len(envelope.Error) > 0 {
-			return GrokConfiguration{}, fmt.Errorf("initialize Grok Build: %s", acpErrorText(envelope.Error))
+			return HarnessConfiguration{}, fmt.Errorf("initialize Grok Build: %s", acpErrorText(envelope.Error))
 		}
 		configuration := parseGrokConfiguration(envelope.Result)
 		if len(configuration.Models) == 0 {
-			return GrokConfiguration{}, fmt.Errorf("Grok Build did not advertise any models")
+			return HarnessConfiguration{}, fmt.Errorf("Grok Build did not advertise any models")
 		}
 		return configuration, nil
 	}
-	return GrokConfiguration{}, fmt.Errorf("Grok Build did not answer the initialize handshake%s", stderr.tail())
+	return HarnessConfiguration{}, fmt.Errorf("Grok Build did not answer the initialize handshake%s", stderr.tail())
 }
 
-func parseGrokConfiguration(raw json.RawMessage) GrokConfiguration {
+// parseGrokConfiguration reads Grok's model catalog out of its handshake.
+// Effort levels are declared per model — 4.6 offers xhigh where 4.5 does not —
+// so they are kept on each model rather than flattened into one list that would
+// offer a level the selected model rejects.
+func parseGrokConfiguration(raw json.RawMessage) HarnessConfiguration {
 	var response struct {
 		Meta struct {
 			ModelState struct {
+				CurrentModelID  string `json:"currentModelId"`
 				AvailableModels []struct {
 					ModelID     string `json:"modelId"`
 					Name        string `json:"name"`
 					Description string `json:"description"`
 					Meta        struct {
 						ReasoningEfforts []struct {
-							Value string `json:"value"`
+							Value   string `json:"value"`
+							Default bool   `json:"default"`
 						} `json:"reasoningEfforts"`
 					} `json:"_meta"`
 				} `json:"availableModels"`
@@ -207,31 +200,28 @@ func parseGrokConfiguration(raw json.RawMessage) GrokConfiguration {
 		} `json:"_meta"`
 	}
 	if err := json.Unmarshal(raw, &response); err != nil {
-		return GrokConfiguration{}
+		return HarnessConfiguration{}
 	}
-	configuration := GrokConfiguration{Models: make([]GrokModelInfo, 0, len(response.Meta.ModelState.AvailableModels))}
-	seenEffort := make(map[string]struct{})
-	for _, model := range response.Meta.ModelState.AvailableModels {
+	state := response.Meta.ModelState
+	configuration := HarnessConfiguration{Model: state.CurrentModelID, Models: make([]HarnessModel, 0, len(state.AvailableModels))}
+	for _, model := range state.AvailableModels {
 		if strings.TrimSpace(model.ModelID) == "" {
 			continue
 		}
-		displayName := model.Name
-		if displayName == "" {
-			displayName = model.ModelID
+		entry := HarnessModel{Model: model.ModelID, DisplayName: model.Name, Description: model.Description}
+		if entry.DisplayName == "" {
+			entry.DisplayName = model.ModelID
 		}
-		configuration.Models = append(configuration.Models, GrokModelInfo{Model: model.ModelID, DisplayName: displayName, Description: model.Description})
-		// Effort levels are declared per model; the settings UI offers one
-		// list, so collect the union in first-seen order.
 		for _, effort := range model.Meta.ReasoningEfforts {
 			if effort.Value == "" {
 				continue
 			}
-			if _, ok := seenEffort[effort.Value]; ok {
-				continue
+			entry.Efforts = append(entry.Efforts, effort.Value)
+			if effort.Default {
+				entry.DefaultEffort = effort.Value
 			}
-			seenEffort[effort.Value] = struct{}{}
-			configuration.Efforts = append(configuration.Efforts, effort.Value)
 		}
+		configuration.Models = append(configuration.Models, entry)
 	}
 	return configuration
 }

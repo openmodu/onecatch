@@ -173,6 +173,14 @@ func (r *RuntimeRegistry) Runtimes() []agentrun.Runtime {
 	return r.engine.Runtimes()
 }
 
+// InspectConfiguration asks a harness to report its models and reasoning levels.
+func (r *RuntimeRegistry) InspectConfiguration(ctx context.Context, runtime agentrun.Runtime, cwd string, environment []string) (agentrun.HarnessConfiguration, error) {
+	r.mu.RLock()
+	engine := r.engine
+	r.mu.RUnlock()
+	return engine.InspectConfiguration(ctx, runtime, cwd, environment)
+}
+
 func (r *RuntimeRegistry) Available(runtime agentrun.Runtime) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
