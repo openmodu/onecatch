@@ -46,6 +46,12 @@ func (b *SettingsBinding) InspectCodexConfiguration(input domainsettings.Runtime
 func (b *SettingsBinding) InspectClaudeConfiguration(input domainsettings.RuntimeSettings) (agentrun.ClaudeConfiguration, error) {
 	return b.service.InspectClaudeConfiguration(context.Background(), input)
 }
+
+// InspectHarnessConfiguration serves every harness that reports through the
+// shared configuration shape, so a new adapter needs no binding of its own.
+func (b *SettingsBinding) InspectHarnessConfiguration(runtime string, input domainsettings.RuntimeSettings) (agentrun.HarnessConfiguration, error) {
+	return b.service.InspectHarnessConfiguration(context.Background(), runtime, input)
+}
 func (b *SettingsBinding) GetStorageUsage() (desktopservice.StorageUsage, error) {
 	return b.service.GetStorageUsage()
 }

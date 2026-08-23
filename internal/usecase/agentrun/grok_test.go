@@ -256,11 +256,20 @@ func TestParseGrokConfiguration(t *testing.T) {
 	if configuration.Models[0].Model != "grok-4.6" || configuration.Models[0].DisplayName != "Grok 4.6" {
 		t.Fatalf("first model = %+v", configuration.Models[0])
 	}
-	// Efforts are declared per model; the settings UI shows one list, so the
-	// union is collected in first-seen order without duplicates.
-	want := []string{"xhigh", "high", "medium", "low"}
-	if strings.Join(configuration.Efforts, ",") != strings.Join(want, ",") {
-		t.Fatalf("efforts = %v, want %v", configuration.Efforts, want)
+	if configuration.Model != "grok-4.6" {
+		t.Fatalf("current model = %q", configuration.Model)
+	}
+	// Effort levels belong to the model, not to the harness: 4.6 offers xhigh
+	// and 4.5 does not, so one flattened list would offer 4.5 a level it
+	// rejects.
+	if strings.Join(configuration.Models[0].Efforts, ",") != "xhigh,high,medium,low" {
+		t.Fatalf("grok-4.6 efforts = %v", configuration.Models[0].Efforts)
+	}
+	if strings.Join(configuration.Models[1].Efforts, ",") != "high,low" {
+		t.Fatalf("grok-4.5 efforts = %v", configuration.Models[1].Efforts)
+	}
+	if configuration.Models[0].DefaultEffort != "high" || configuration.Models[1].DefaultEffort != "high" {
+		t.Fatalf("default efforts = %q / %q", configuration.Models[0].DefaultEffort, configuration.Models[1].DefaultEffort)
 	}
 }
 

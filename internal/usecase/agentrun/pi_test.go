@@ -205,7 +205,7 @@ func TestParsePiModelList(t *testing.T) {
 	}
 	// The --model flag wants provider/id, which is what disambiguates a model
 	// name that more than one provider serves.
-	if models[0].Model != "anthropic/claude-opus-4-5" || models[0].DisplayName != "claude-opus-4-5" || models[0].Provider != "anthropic" {
+	if models[0].Model != "anthropic/claude-opus-4-5" || models[0].DisplayName != "claude-opus-4-5" || models[0].Description != "anthropic" {
 		t.Fatalf("first model = %+v", models[0])
 	}
 	if models[2].Model != "openai/gpt-5.2" {

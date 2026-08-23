@@ -85,12 +85,25 @@ export function InspectCodexConfiguration(input) {
 }
 
 /**
+ * InspectHarnessConfiguration serves every harness that reports through the
+ * shared configuration shape, so a new adapter needs no binding of its own.
+ * @param {string} runtime
+ * @param {settings$0.RuntimeSettings} input
+ * @returns {$CancellablePromise<agentrun$0.HarnessConfiguration>}
+ */
+export function InspectHarnessConfiguration(runtime, input) {
+    return $Call.ByID(3784350792, runtime, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType7($result);
+    }));
+}
+
+/**
  * @param {desktop$0.CleanupPreviewInput} input
  * @returns {$CancellablePromise<desktop$0.CleanupPreview>}
  */
 export function PreviewCleanup(input) {
     return $Call.ByID(3009078482, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType8($result);
     }));
 }
 
@@ -186,4 +199,5 @@ const $$createType3 = settings$0.Settings.createFrom;
 const $$createType4 = desktop$0.StorageUsage.createFrom;
 const $$createType5 = agentrun$0.ClaudeConfiguration.createFrom;
 const $$createType6 = agentrun$0.CodexConfiguration.createFrom;
-const $$createType7 = desktop$0.CleanupPreview.createFrom;
+const $$createType7 = agentrun$0.HarnessConfiguration.createFrom;
+const $$createType8 = desktop$0.CleanupPreview.createFrom;

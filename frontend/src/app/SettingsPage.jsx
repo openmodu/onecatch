@@ -48,6 +48,10 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
   const [saving, setSaving] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState({});
   const [codexConfiguration, setCodexConfiguration] = useState({ loading: false, data: null, error: "" });
+  // Codex and Claude Code predate the shared configuration shape and keep their
+  // own slots; every other harness reports through this one, so a new adapter
+  // needs no state of its own here.
+  const [harnessConfigurations, setHarnessConfigurations] = useState({});
   const [claudeConfiguration, setClaudeConfiguration] = useState({ loading: false, data: null, error: "" });
   const [usage, setUsage] = useState(null);
   const [usageLoading, setUsageLoading] = useState(false);
@@ -146,6 +150,17 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       } catch (error) {
         setClaudeConfiguration((current) => ({ ...current, loading: false, error: message(error, t) }));
       }
+      return;
+    }
+    if (mode === "demo") return;
+    setHarnessConfigurations((current) => ({ ...current, [id]: { loading: true, data: null, error: "" } }));
+    try {
+      const data = await SettingsBinding.InspectHarnessConfiguration(id, draft.runtimes[id]);
+      setHarnessConfigurations((current) => ({ ...current, [id]: { loading: false, data, error: "" } }));
+    } catch (error) {
+      // A harness that cannot report its models is not broken; the fields fall
+      // back to free-text entry.
+      setHarnessConfigurations((current) => ({ ...current, [id]: { loading: false, data: null, error: message(error, t) } }));
     }
   };
   const refreshUsage = async () => {
@@ -214,7 +229,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
         {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><SettingsButton tone="muted" onClick={reload}>{t("settings.reload")}</SettingsButton></div>}
         {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
         {section === "runtime" && <InterfaceSettings i18n={i18n} />}
-        {section === "harness" && <HarnessSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} />}
+        {section === "harness" && <HarnessSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} harnessConfigurations={harnessConfigurations} />}
         {section === "terminal" && <TerminalSettings value={draft.terminal || demoSettings.terminal} setValue={(next) => setSectionValue("terminal", next)} errors={errorsByField} />}
         {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
         {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
@@ -272,7 +287,7 @@ function TerminalSettings({ value, setValue, errors }) {
 // show — comes from the backend's runtime list, which serves the same catalog
 // the domain validates against. Keeping a second copy here is what let the UI
 // offer a harness the backend then rejected.
-function HarnessSettings({ value, setValue, status, runtimes, check, errors, codexConfiguration, claudeConfiguration }) {
+function HarnessSettings({ value, setValue, status, runtimes, check, errors, codexConfiguration, claudeConfiguration, harnessConfigurations = {} }) {
   const catalog = runtimes.length ? runtimes : Object.keys(value).map((id) => ({ id, name: id, integrations: ["cli"] }));
   const { t, i18n } = useTranslation();
   // Only the first harness starts open; the rest are collapsed.
@@ -300,12 +315,25 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
       const statusText = current.checking ? t("settings.checkingCommand") : current.available ? `${current.version || t("common.available")}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN")}` : ""}` : current.error || t("settings.notDetected");
       const codexData = codexConfiguration.data;
       const claudeData = claudeConfiguration.data;
+      const reported = harnessConfigurations[id] || {};
+      const reportedData = reported.data;
+      const selectedReportedModel = (reportedData?.models || []).find((model) => model.model === value[id]?.defaultModel);
+      // Effort levels can belong to the model rather than to the harness — Grok
+      // offers xhigh on 4.6 but not on 4.5 — so narrow to the selected model
+      // and fall back to the catalog only while nothing has been reported.
+      const reportedEfforts = selectedReportedModel?.efforts?.length ? selectedReportedModel.efforts
+        : reportedData?.efforts?.length ? reportedData.efforts
+        : harness.efforts || [];
       const codexModel = id === "codex" ? selectedCodexModel(codexData, value.codex?.defaultModel) : null;
       const effortValues = id === "codex" ? codexEffortValues(codexData, value.codex?.defaultModel, value.codex?.reasoningEffort) : [];
       const claudeEffortValues = id === "claude" ? [...new Set([...(claudeData?.efforts?.length ? claudeData.efforts : ["low", "medium", "high", "xhigh", "max"]), value.claude?.reasoningEffort].filter(Boolean))] : [];
       const serviceTierValues = id === "codex" ? codexServiceTierValues(codexData, value.codex?.defaultModel, value.codex?.serviceTier) : [];
-      const modelOptions = id === "codex" ? [{ value: "", label: t("settings.useCodexConfig"), meta: codexData?.model || t("settings.runtimeDefault") }, ...(codexData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.model }))] : id === "claude" ? [{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...(claudeData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.alias ? t("settings.claudeModelAlias") : model.model }))] : [];
-      if ((id === "codex" || id === "claude") && value[id]?.defaultModel && !modelOptions.some((option) => option.value === value[id].defaultModel)) modelOptions.push({ value: value[id].defaultModel, label: value[id].defaultModel, meta: t("settings.savedCustomValue") });
+      let modelOptions = id === "codex" ? [{ value: "", label: t("settings.useCodexConfig"), meta: codexData?.model || t("settings.runtimeDefault") }, ...(codexData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.model }))] : id === "claude" ? [{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...(claudeData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.alias ? t("settings.claudeModelAlias") : model.model }))] : [];
+      if (!modelOptions.length && (reportedData?.models || []).length) {
+        modelOptions = [{ value: "", label: t("settings.runtimeDefault"), meta: reportedData.model || t("settings.runtimeDefault") },
+          ...reportedData.models.map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.description || model.model }))];
+      }
+      if (value[id]?.defaultModel && !modelOptions.some((option) => option.value === value[id].defaultModel)) modelOptions.push({ value: value[id].defaultModel, label: value[id].defaultModel, meta: t("settings.savedCustomValue") });
       const detectedEffort = codexData?.reasoningEffort || codexModel?.defaultReasoningEffort || t("settings.runtimeDefault");
       const detectedTier = codexData?.serviceTier || t("settings.speed.standard");
       const tierDetails = new Map((codexModel?.serviceTiers || []).map((tier) => [tier.id, tier]));
@@ -314,11 +342,19 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
         const supportedEfforts = nextModel?.reasoningEfforts || [];
         const supportedTiers = ["standard", ...(nextModel?.serviceTiers || []).map((tier) => tier.id)];
         setValue({ ...value, codex: { ...value.codex, defaultModel, reasoningEffort: value.codex?.reasoningEffort && supportedEfforts.length && !supportedEfforts.includes(value.codex.reasoningEffort) ? "" : value.codex?.reasoningEffort || "", serviceTier: value.codex?.serviceTier && supportedTiers.length > 1 && !supportedTiers.includes(value.codex.serviceTier) ? "" : value.codex?.serviceTier || "" } });
-      } : (defaultModel) => update(id, "defaultModel", defaultModel);
-      const configurationLoading = id === "codex" ? codexConfiguration.loading : id === "claude" ? claudeConfiguration.loading : false;
-      const configurationError = id === "codex" ? codexConfiguration.error : id === "claude" ? claudeConfiguration.error : "";
+      } : (defaultModel) => {
+        const nextModel = (reportedData?.models || []).find((model) => model.model === defaultModel);
+        const supported = nextModel?.efforts || [];
+        const current = value[id]?.reasoningEffort || "";
+        // Carrying a level the newly selected model does not offer would save a
+        // setting the run then rejects.
+        const reasoningEffort = current && supported.length && !supported.includes(current) ? "" : current;
+        setValue({ ...value, [id]: { ...value[id], defaultModel, reasoningEffort } });
+      };
+      const configurationLoading = id === "codex" ? codexConfiguration.loading : id === "claude" ? claudeConfiguration.loading : Boolean(reported.loading);
+      const configurationError = id === "codex" ? codexConfiguration.error : id === "claude" ? claudeConfiguration.error : reported.error || "";
       const modelHint = id === "codex" && codexData ? t("settings.codexDetectedValue", { value: codexData.model || t("settings.runtimeDefault") }) : id === "claude" && claudeData ? t("settings.claudeModelsDetected", { count: claudeData.models?.length || 0 }) : t("settings.runtimeDecides");
-      const configurationMessage = id === "codex" ? codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || (codexData && t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })) : id === "claude" ? claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || (claudeData && t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })) : "";
+      const configurationMessage = id === "codex" ? codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || (codexData && t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })) : id === "claude" ? claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || (claudeData && t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })) : reported.loading ? t("settings.readingHarnessModels") : reported.error || (reportedData && t("settings.harnessModelsReady", { count: reportedData.models?.length || 0 })) || "";
       const description = id === "modu" ? t(nativeModu ? "settings.moduSDKDescription" : "settings.moduDescription")
         : t(`settings.${id}Description`, { defaultValue: t("settings.harnessAgentDescription", { harness: meta[id].name }) });
       const isExpanded = expanded[id];
@@ -342,7 +378,7 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
           <SettingsField className={id === "claude" || id === "modu" ? "col-span-2" : ""} label={t("settings.defaultModel")} hint={modelHint} error={errors[`${id}.defaultModel`]}>{modelOptions.length > 1 ? <SettingsSelect ariaLabel={t("settings.defaultModel")} value={value[id]?.defaultModel || ""} onChange={updateModel} options={modelOptions} /> : <Input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} />}</SettingsField>
           {id === "codex" && <SettingsField label={t("settings.reasoningEffort")} hint={t("settings.codexDetectedValue", { value: detectedEffort })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.codex?.reasoningEffort || ""} onChange={(reasoningEffort) => update("codex", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedEffort }, ...(codexData && effortValues.length ? effortValues : ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]).map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
           {id === "claude" && <SettingsField className="col-span-2" label={t("settings.reasoningEffort")} hint={t("settings.claudeEffortsDetected", { count: claudeEffortValues.length })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.claude?.reasoningEffort || ""} onChange={(reasoningEffort) => update("claude", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...claudeEffortValues.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
-          {id !== "codex" && id !== "claude" && (harness.efforts || []).length > 0 && <SettingsField className="col-span-2" label={t("settings.reasoningEffort")} hint={t("settings.runtimeDecides")} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value[id]?.reasoningEffort || ""} onChange={(reasoningEffort) => update(id, "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.runtimeDefault") }, ...harness.efforts.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`, { defaultValue: effort }), meta: effort }))]} /></SettingsField>}
+          {id !== "codex" && id !== "claude" && reportedEfforts.length > 0 && <SettingsField className="col-span-2" label={t("settings.reasoningEffort")} hint={selectedReportedModel ? t("settings.effortsForModel", { model: selectedReportedModel.displayName || selectedReportedModel.model }) : t("settings.runtimeDecides")} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value[id]?.reasoningEffort || ""} onChange={(reasoningEffort) => update(id, "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.runtimeDefault"), meta: selectedReportedModel?.defaultEffort || "" }, ...reportedEfforts.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`, { defaultValue: effort }), meta: effort }))]} /></SettingsField>}
           {id === "codex" && <SettingsField className="col-span-2" label={t("settings.speed")} hint={t("settings.codexDetectedValue", { value: detectedTier })} error={errors[`${id}.serviceTier`]}><SettingsSelect ariaLabel={t("settings.speed")} value={value.codex?.serviceTier || ""} onChange={(serviceTier) => update("codex", "serviceTier", serviceTier)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedTier }, ...(codexData ? serviceTierValues : ["standard", "fast", "priority", "flex"]).map((tier) => ({ value: tier, label: t(`settings.speed.${tier}`, { defaultValue: tierDetails.get(tier)?.name || tier }), meta: tierDetails.get(tier)?.description || tier }))]} /></SettingsField>}
           {(harness.providers || []).length > 0 && <SettingsField className="col-span-2" label={t("common.provider")} hint={t(`settings.providerHint.${id}`, { defaultValue: t("settings.providerHint") })} error={errors[`${id}.provider`]}><SettingsSelect ariaLabel={t("common.provider")} value={value[id]?.provider || harness.providers[0]} onChange={(provider) => update(id, "provider", provider)} options={harness.providers.map((provider) => ({ value: provider, label: t(`settings.provider.${provider}`, { defaultValue: provider }) }))} /></SettingsField>}
           </div>

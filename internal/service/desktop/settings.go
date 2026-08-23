@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
@@ -159,6 +160,41 @@ func (a *Service) InspectClaudeConfiguration(ctx context.Context, input domainse
 	inspectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	return agentrun.NewClaudeRunner(input.Binary).InspectConfiguration(inspectCtx, home, allowedEnvironment(input.EnvironmentAllowlist))
+}
+
+// InspectHarnessConfiguration asks one harness what models and reasoning
+// levels it offers.
+//
+// One method for every harness, rather than the per-harness pair Codex and
+// Claude Code still use: those predate the shared shape and keep working, but a
+// new adapter reports through agentrun.HarnessConfiguration and needs no
+// service method, binding, or UI branch of its own.
+func (a *Service) InspectHarnessConfiguration(ctx context.Context, runtime string, input domainsettings.RuntimeSettings) (agentrun.HarnessConfiguration, error) {
+	if !domainharnesses.IsKnown(runtime) {
+		return agentrun.HarnessConfiguration{}, coded("runtime_unknown", "unknown runtime")
+	}
+	settings := domainsettings.Defaults()
+	settings.Runtimes[runtime] = input
+	normalized, err := domainsettings.Normalize(settings)
+	if err != nil {
+		return agentrun.HarnessConfiguration{}, coded("settings_invalid", err.Error())
+	}
+	if err := domainsettings.Validate(normalized); err != nil {
+		return agentrun.HarnessConfiguration{}, coded("settings_invalid", err.Error())
+	}
+	input = normalized.Runtimes[runtime]
+	status, err := a.runtimes.CheckDraft(runtime, input)
+	if err != nil || !status.Available {
+		return agentrun.HarnessConfiguration{}, coded("runtime_draft_unavailable", "the harness binary is not executable")
+	}
+	home, _ := os.UserHomeDir()
+	inspectCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	configuration, err := a.runtimes.InspectConfiguration(inspectCtx, agentrun.Runtime(runtime), home, allowedEnvironment(input.EnvironmentAllowlist))
+	if err != nil {
+		return agentrun.HarnessConfiguration{}, coded("runtime_inspection_failed", err.Error())
+	}
+	return configuration, nil
 }
 
 func (a *Service) updateSettings(ctx context.Context, expected int64, mutate func(*domainsettings.Settings)) (domainsettings.Settings, error) {

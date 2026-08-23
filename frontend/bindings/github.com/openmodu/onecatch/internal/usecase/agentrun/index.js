@@ -10,6 +10,8 @@ export {
     CodexServiceTier,
     Event,
     EventKind,
+    HarnessConfiguration,
+    HarnessModel,
     PermissionRequest,
     Result,
     Runtime,

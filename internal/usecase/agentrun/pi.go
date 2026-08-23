@@ -296,19 +296,6 @@ func piToolPath(name string, args json.RawMessage) string {
 	return toolInputPath(input)
 }
 
-// PiModelInfo is one model the installed Pi advertises.
-type PiModelInfo struct {
-	Model       string `json:"model"`
-	DisplayName string `json:"displayName"`
-	Provider    string `json:"provider,omitempty"`
-}
-
-// PiConfiguration is the model catalog discovered from a Pi installation.
-type PiConfiguration struct {
-	Models  []PiModelInfo `json:"models"`
-	Efforts []string      `json:"efforts"`
-}
-
 // piThinkingLevels are the values pi accepts for --thinking. They are fixed by
 // the CLI rather than by the selected model, so they need no discovery.
 var piThinkingLevels = []string{"off", "minimal", "low", "medium", "high", "xhigh"}
@@ -319,7 +306,7 @@ var piThinkingLevels = []string{"off", "minimal", "low", "medium", "high", "xhig
 // table without starting a session or spending model quota. A Pi with no
 // provider credentials prints guidance instead of rows, which surfaces here as
 // "no models" rather than as a hard failure of the probe.
-func (r *PiRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (PiConfiguration, error) {
+func (r *PiRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (HarnessConfiguration, error) {
 	cmd := exec.CommandContext(ctx, r.binary, "--list-models")
 	if cwd != "" {
 		cmd.Dir = cwd
@@ -331,13 +318,15 @@ func (r *PiRunner) InspectConfiguration(ctx context.Context, cwd string, environ
 	// stderr, and folding them in would look like table rows.
 	output, err := cmd.Output()
 	if err != nil {
-		return PiConfiguration{}, fmt.Errorf("read Pi models: %w%s", err, stderr.tail())
+		return HarnessConfiguration{}, fmt.Errorf("read Pi models: %w%s", err, stderr.tail())
 	}
 	models := parsePiModelList(string(output))
 	if len(models) == 0 {
-		return PiConfiguration{}, fmt.Errorf("Pi did not advertise any models; sign in to a provider first")
+		return HarnessConfiguration{}, fmt.Errorf("Pi did not advertise any models; sign in to a provider first")
 	}
-	return PiConfiguration{Models: models, Efforts: piThinkingLevels}, nil
+	// Pi's thinking levels come from the CLI, not from the model, so they are
+	// reported once for the whole harness rather than per model.
+	return HarnessConfiguration{Models: models, Efforts: piThinkingLevels}, nil
 }
 
 // piColumnGap splits the padded table: every column is padded to width and
@@ -348,8 +337,8 @@ var piColumnGap = regexp.MustCompile(`\s{2,}`)
 // parsePiModelList reads the `provider model context max-out thinking images`
 // table. Model ids are reported as `provider/id`, the form pi's --model flag
 // accepts unambiguously when two providers serve the same model name.
-func parsePiModelList(output string) []PiModelInfo {
-	models := make([]PiModelInfo, 0)
+func parsePiModelList(output string) []HarnessModel {
+	models := make([]HarnessModel, 0)
 	seen := make(map[string]struct{})
 	for _, line := range strings.Split(output, "\n") {
 		fields := piColumnGap.Split(strings.TrimSpace(stripANSI(line)), -1)
@@ -366,7 +355,7 @@ func parsePiModelList(output string) []PiModelInfo {
 			continue
 		}
 		seen[model] = struct{}{}
-		models = append(models, PiModelInfo{Model: model, DisplayName: id, Provider: provider})
+		models = append(models, HarnessModel{Model: model, DisplayName: id, Description: provider})
 	}
 	return models
 }

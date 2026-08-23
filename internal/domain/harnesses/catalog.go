@@ -36,9 +36,16 @@ type Harness struct {
 	// Command is the default executable, resolved from PATH when the user has
 	// not configured a path.
 	Command string `json:"command"`
-	// Efforts is the reasoning-effort vocabulary this harness accepts. Empty
-	// means it exposes no reasoning control, and configuring one is an error
-	// rather than a silently ignored setting.
+	// Efforts is every reasoning-effort level this harness accepts. Empty means
+	// it exposes no reasoning control, and configuring one is an error rather
+	// than a silently ignored setting.
+	//
+	// This is the harness-wide superset, which is what settings validation can
+	// check without running anything. A harness may narrow it per model — Grok
+	// offers xhigh on 4.6 but not on 4.5 — and the settings page narrows the
+	// choice to the selected model from what the harness itself reported. A
+	// level valid here but not for the chosen model is caught by the harness at
+	// run time rather than at save time.
 	Efforts []string `json:"efforts,omitempty"`
 	// Providers is the provider vocabulary. Empty means the harness has a fixed
 	// provider and does not offer a choice.
@@ -124,7 +131,8 @@ var catalog = []Harness{
 	},
 	{
 		ID: "grok", Name: "Grok Build", Command: "grok",
-		// Read from Grok's own model catalog during the ACP handshake.
+		// The union across Grok's models; the handshake reports which of these
+		// each model actually offers.
 		Efforts:         []string{"low", "medium", "high", "xhigh"},
 		Integrations:    []string{IntegrationCLI},
 		EnvironmentHint: "XAI_API_KEY, HTTPS_PROXY",
