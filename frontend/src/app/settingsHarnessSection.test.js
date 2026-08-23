@@ -12,7 +12,7 @@ test("keeps appearance separate and moves all runtime controls into Harness", ()
   assert.match(source, /section === "runtime" && <InterfaceSettings/);
   assert.match(source, /section === "harness" && <HarnessSettings/);
   assert.doesNotMatch(source, /function RuntimeEnvironmentSettings/);
-  assert.match(source, /const harnessFields = \["integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "provider"\]/);
+  assert.match(source, /const harnessFields = \["enabled", "remoteFsEnabled", "integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "provider"\]/);
 });
 
 test("shows every harness agent without nested tabs", () => {
@@ -26,6 +26,9 @@ test("shows every harness agent without nested tabs", () => {
   assert.match(harness, /settings\.moduConfigSource/);
   assert.match(harness, /settings\.binaryPath/);
   assert.match(harness, /settings\.defaultModel/);
+  assert.match(harness, /onCheckedChange=\{\(checked\) => update\(id, "enabled", checked\)\}/);
+  assert.match(harness, /disabled=\{!supportsRemoteFS \|\| !enabled\}/);
+  assert.match(harness, /update\(id, "remoteFsEnabled", checked\)/);
 });
 
 test("uses a frameless collapsible list for harness configuration", () => {
@@ -35,6 +38,17 @@ test("uses a frameless collapsible list for harness configuration", () => {
   assert.match(harness, /aria-expanded=\{isExpanded\}/);
   assert.match(harness, /aria-controls=\{panelID\}/);
   assert.match(harness, /divide-y divide-border\/70 border-y/);
+  assert.match(harness, /const \[expanded, setExpanded\] = useState\(\{\}\)/, "every harness must start collapsed");
+});
+
+test("keeps the compact harness row focused on identity and availability", () => {
+  const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
+  const row = harness.slice(harness.indexOf("<div className=\"group flex"), harness.indexOf("{isExpanded &&"));
+  const panel = harness.slice(harness.indexOf("{isExpanded &&"));
+  assert.match(row, /meta\[id\]\.name[\s\S]*?<Badge[\s\S]*?statusText/, "version status belongs immediately after the harness name");
+  assert.doesNotMatch(row, /remoteFsEnabled/, "Remote FS does not belong in the collapsed row");
+  assert.match(panel, /<SettingsSwitchRow checked=\{remoteFSEnabled\}[\s\S]*?update\(id, "remoteFsEnabled", checked\)/, "Remote FS belongs inside expanded configuration");
+  assert.doesNotMatch(harness, /current\.checkedAt/, "the compact version badge should not include the probe timestamp");
 });
 
 // The UI must not keep its own copy of which harnesses exist or what they can
@@ -50,6 +64,7 @@ test("harness settings derive every per-harness fact from the backend catalog", 
   assert.match(harness, /harness\.providers/);
   assert.match(harness, /harness\.integrations \|\| \["cli"\]/);
   assert.match(harness, /item\.environmentHint/);
+  assert.match(harness, /harness\.supportsRemoteFs/);
 });
 
 // Reasoning levels can belong to the model rather than to the harness: Grok

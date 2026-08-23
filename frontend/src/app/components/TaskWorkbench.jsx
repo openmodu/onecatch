@@ -286,6 +286,8 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
         onSubmit={onCreateTask}
         runtimeConfiguration={taskRuntimeConfiguration}
         runtimeSettings={runtimeSettings}
+        runtimeSettingsByHarness={runtimeSettingsByHarness}
+        remoteFS={Boolean(workspace?.remoteFs)}
         allowFullSandbox={allowFullSandbox}
       /> : selectedTask ? <>
         <div className="conversation-scroll min-h-0 min-w-0 flex-1 select-text overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>

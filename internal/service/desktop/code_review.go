@@ -70,6 +70,13 @@ func (a *Service) ReviewChanges(ctx context.Context, input CodeReviewInput) (Cod
 	if !runtime.Valid() {
 		return CodeReviewResult{}, coded("runtime_invalid", "select a valid Agent for review")
 	}
+	settings, err := a.settings.Get(ctx)
+	if err != nil {
+		return CodeReviewResult{}, mapSettingsError(err)
+	}
+	if !settings.HarnessEnabled(string(runtime)) {
+		return CodeReviewResult{}, coded("runtime_disabled", fmt.Sprintf("Agent %q is disabled in Settings", runtime))
+	}
 	if !a.runtimes.Available(runtime) {
 		return CodeReviewResult{}, coded("runtime_unavailable", fmt.Sprintf("Agent %q is not available", runtime))
 	}

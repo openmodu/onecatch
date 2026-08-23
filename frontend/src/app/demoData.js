@@ -7,9 +7,9 @@ export const demoWorkspaces = [
 ];
 
 export const demoRuntimes = [
-  { id: "codex", name: "Codex", available: true, version: "codex 0.98.0" },
-  { id: "claude", name: "Claude Code", available: true, version: "2.1.4" },
-  { id: "modu", name: "Modu Code", available: true, version: "Print · NDJSON" },
+  { id: "codex", name: "Codex", available: true, enabled: true, supportsRemoteFs: true, remoteFsEnabled: true, version: "codex 0.98.0" },
+  { id: "claude", name: "Claude Code", available: true, enabled: true, supportsRemoteFs: true, remoteFsEnabled: true, version: "2.1.4" },
+  { id: "modu", name: "Modu Code", available: true, enabled: true, supportsRemoteFs: true, remoteFsEnabled: true, version: "Print · NDJSON" },
 ];
 
 export const demoWorkflows = [

@@ -661,6 +661,62 @@ func TestGetWorkspaceStatusProbesRemoteFSRoot(t *testing.T) {
 	}
 }
 
+func TestHarnessSwitchesBlockNewTasksAndRemoteWorkspaces(t *testing.T) {
+	ctx := context.Background()
+	app, store := newLocalTestApp(t, completingEngine{})
+	settings, err := app.GetSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pi := settings.Runtimes["pi"]
+	pi.Enabled = false
+	settings.Runtimes["pi"] = pi
+	for _, id := range []string{"codex", "claude", "modu"} {
+		runtime := settings.Runtimes[id]
+		runtime.RemoteFSEnabled = false
+		settings.Runtimes[id] = runtime
+	}
+	if _, err := app.UpdateRuntimeSettings(ctx, settings.Runtimes, settings.Revision); err != nil {
+		t.Fatal(err)
+	}
+	local, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: local.ID, WorkflowID: directAgentWorkflowID, Harness: "pi", Prompt: "work"}); errorCode(err) != "runtime_disabled" {
+		t.Fatalf("disabled runtime error = %v", err)
+	}
+	probeCalls := 0
+	app.remoteFSProbe = func(context.Context, domainworkspaces.RemoteFS) (string, error) {
+		probeCalls++
+		return "/srv/project", nil
+	}
+	if _, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: "/srv/project", RemoteFS: &domainworkspaces.RemoteFS{Host: "devbox", Root: "/srv/project"}}); errorCode(err) != "remote_fs_no_harness" {
+		t.Fatalf("remote workspace error = %v", err)
+	}
+	if probeCalls != 0 {
+		t.Fatalf("remote workspace was probed despite having no eligible harness")
+	}
+
+	remote := domainworkspaces.Workspace{ID: "remote-disabled-runtime", Name: "Remote", Path: "/srv/project", RemoteFS: &domainworkspaces.RemoteFS{Host: "devbox", Root: "/srv/project"}}
+	if err := store.Repos.Tasks.SaveWorkspace(ctx, remote); err != nil {
+		t.Fatal(err)
+	}
+	settings, err = app.GetSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pi = settings.Runtimes["pi"]
+	pi.Enabled = true
+	settings.Runtimes["pi"] = pi
+	if _, err := app.UpdateRuntimeSettings(ctx, settings.Runtimes, settings.Revision); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: remote.ID, WorkflowID: directAgentWorkflowID, Harness: "pi", Prompt: "work"}); errorCode(err) != "runtime_remote_fs_disabled" {
+		t.Fatalf("unsupported remote runtime error = %v", err)
+	}
+}
+
 func TestRemoteWorkspaceNeverStoresOrDeletesAttachmentsAtRemotePathLocally(t *testing.T) {
 	ctx := context.Background()
 	app, store := newLocalTestApp(t, completingEngine{})

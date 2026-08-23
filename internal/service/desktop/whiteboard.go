@@ -75,6 +75,13 @@ func (a *Service) ProposeWhiteboardChangesWithSink(input WhiteboardProposalInput
 	if !runtime.Valid() {
 		return WhiteboardProposal{}, coded("whiteboard_runtime_invalid", "Agent runtime is invalid")
 	}
+	settings, err := a.settings.Get(a.rootCtx)
+	if err != nil {
+		return WhiteboardProposal{}, mapSettingsError(err)
+	}
+	if !settings.HarnessEnabled(string(runtime)) {
+		return WhiteboardProposal{}, coded("runtime_disabled", fmt.Sprintf("Agent %q is disabled in Settings", runtime))
+	}
 	if !a.runtimes.Available(runtime) {
 		return WhiteboardProposal{}, coded("whiteboard_runtime_unavailable", fmt.Sprintf("runtime %q is unavailable", runtime))
 	}

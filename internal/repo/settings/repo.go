@@ -104,8 +104,12 @@ func (r *settingsImpl) migrateLegacyLocked() (domainsettings.Settings, error) {
 		return domainsettings.Settings{}, fmt.Errorf("settings migration failed: %w", err)
 	}
 	value := domainsettings.Defaults()
-	value.Runtimes["codex"] = domainsettings.RuntimeSettings{Binary: legacy.CodexBinary}
-	value.Runtimes["claude"] = domainsettings.RuntimeSettings{Binary: legacy.ClaudeBinary}
+	codex := value.Runtimes["codex"]
+	codex.Binary = legacy.CodexBinary
+	value.Runtimes["codex"] = codex
+	claude := value.Runtimes["claude"]
+	claude.Binary = legacy.ClaudeBinary
+	value.Runtimes["claude"] = claude
 	value.UpdatedAt = r.now().UTC()
 	value, err := domainsettings.Normalize(value)
 	if err != nil {

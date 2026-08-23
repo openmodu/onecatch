@@ -1,4 +1,4 @@
-import { hydrateRuntimeHarnesses, supportsRuntimeProfile } from "./runtimeHarnesses.js";
+import { hasRemoteFSHarness, hydrateRuntimeHarnesses, supportsRuntimeProfile } from "./runtimeHarnesses.js";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lock, Minus, PanelRightOpen, PictureInPicture2, Square, SquareTerminal, X } from "lucide-react";
@@ -222,6 +222,7 @@ function App() {
   remoteWorkspacesRef.current = workspaces.filter((workspace) => workspace.remoteFs);
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID);
+  const remoteFSHarnessAvailable = hasRemoteFSHarness(runtimes, settings.runtimes);
   const remoteWorkspaceSignature = useMemo(() => workspaces
     .filter((workspace) => workspace.remoteFs)
     .map((workspace) => `${workspace.id}\0${workspace.remoteFs.host}\0${workspace.remoteFs.username || ""}\0${workspace.remoteFs.root}`)
@@ -850,6 +851,7 @@ function App() {
     if (!remote && !workspaceForm.path.trim()) { notify("error", t("app.workspacePathRequired")); return; }
     if (remote && (!workspaceForm.remoteHost.trim() || !workspaceForm.remoteRoot.trim())) { notify("error", t("app.remoteFSFieldsRequired")); return; }
     if (remote && workspaceForm.remotePassword && !workspaceForm.remoteUsername.trim()) { notify("error", t("app.remoteFSCredentialsRequired")); return; }
+    if (remote && !remoteFSHarnessAvailable) { notify("error", t("app.remoteFSHarnessRequired")); return; }
     if (workspaceForm.defaultSandbox === "full" && !await requestConfirm({ title: t("app.fullWorkspaceTitle"), description: t("app.fullWorkspaceDescription"), detail: t("app.fullWorkspaceDetail"), confirmLabel: t("app.confirmFullAccess"), dangerous: true })) return;
     setBusy("workspace");
     try {
@@ -1448,7 +1450,7 @@ function App() {
       <form className="grid gap-4 px-5 pt-4 pb-5" aria-busy={busy === "workspace"} onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "workspace") void addWorkspace(); }}>
         <div className="grid gap-1.5">
           <Label id="workspace-create-source-label">{t("workspace.source")}</Label>
-          <TUISelect ariaLabel={t("workspace.source")} value={workspaceForm.source} onChange={(source) => setWorkspaceForm((form) => ({ ...form, source, defaultSandbox: source === "remote" && (form.defaultSandbox === "" || form.defaultSandbox === "full") ? "workspace-write" : form.defaultSandbox }))} options={[{ value: "local", label: t("workspace.localDirectory") }, { value: "remote", label: t("workspace.remoteFS") }]} />
+          <TUISelect ariaLabel={t("workspace.source")} value={workspaceForm.source} onChange={(source) => setWorkspaceForm((form) => ({ ...form, source, defaultSandbox: source === "remote" && (form.defaultSandbox === "" || form.defaultSandbox === "full") ? "workspace-write" : form.defaultSandbox }))} options={[{ value: "local", label: t("workspace.localDirectory") }, { value: "remote", label: t("workspace.remoteFS"), meta: remoteFSHarnessAvailable ? "" : t("workspace.remoteFSNoHarness"), disabled: !remoteFSHarnessAvailable }]} />
         </div>
         {workspaceForm.source === "local" ? <div className="grid gap-1.5">
           <Label htmlFor="workspace-create-path">{t("workspace.path")}</Label>

@@ -19,8 +19,50 @@ func TestDefaultsAreSafeAndValid(t *testing.T) {
 	if got.Experimental.RemoteWorkersEnabled {
 		t.Fatal("remote workers must default to disabled")
 	}
+	for _, id := range []string{"codex", "claude", "modu", "pi", "grok", "dsh"} {
+		if !got.HarnessEnabled(id) {
+			t.Fatalf("runtime %q must default to enabled", id)
+		}
+	}
+	for _, id := range []string{"codex", "claude", "modu"} {
+		if !got.HarnessRemoteFSEnabled(id) {
+			t.Fatalf("runtime %q must default to remote FS enabled", id)
+		}
+	}
+	for _, id := range []string{"pi", "grok", "dsh"} {
+		if got.HarnessRemoteFSEnabled(id) {
+			t.Fatalf("runtime %q must not support remote FS", id)
+		}
+	}
 	if got.Terminal.Theme != "system" || got.Terminal.Shell != "" {
 		t.Fatalf("terminal defaults = %+v", got.Terminal)
+	}
+}
+
+func TestNormalizeMigratesHarnessSwitchesFromSchemaV1(t *testing.T) {
+	input := Defaults()
+	input.SchemaVersion = 1
+	for id, runtime := range input.Runtimes {
+		runtime.Enabled = false
+		runtime.RemoteFSEnabled = false
+		input.Runtimes[id] = runtime
+	}
+	got, err := Normalize(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.SchemaVersion != CurrentSchemaVersion || !got.HarnessEnabled("pi") || !got.HarnessRemoteFSEnabled("codex") || got.HarnessRemoteFSEnabled("pi") {
+		t.Fatalf("migrated switches = %+v", got.Runtimes)
+	}
+}
+
+func TestValidateRejectsRemoteFSForUnsupportedHarness(t *testing.T) {
+	input := Defaults()
+	pi := input.Runtimes["pi"]
+	pi.RemoteFSEnabled = true
+	input.Runtimes["pi"] = pi
+	if err := Validate(input); err == nil {
+		t.Fatal("Pi remote FS setting was accepted")
 	}
 }
 

@@ -15,7 +15,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { shouldSubmitComposer } from "../composerKeyboard.js";
 import { fileName } from "../format.js";
-import { supportsRuntimeProfile } from "../runtimeHarnesses.js";
+import { runtimeHarnessEnabled, supportsRuntimeProfile, workflowHarnessesEnabled } from "../runtimeHarnesses.js";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
 import TaskExecutorSelector from "./TaskExecutorSelector.jsx";
 import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
@@ -31,6 +31,8 @@ export default function NewTaskView({
   runtimes,
   runtimeConfiguration,
   runtimeSettings,
+  runtimeSettingsByHarness,
+  remoteFS = false,
   allowFullSandbox,
 }) {
   const { t } = useTranslation();
@@ -38,7 +40,10 @@ export default function NewTaskView({
   const promptRef = useRef(null);
   const directAgent = form.workflowId === "single_agent";
   const showRuntimeProfile = directAgent && supportsRuntimeProfile(form.harness);
-  const ready = Boolean(workspaceID && form.prompt.trim() && form.workflowId && form.sandbox && (!directAgent || form.harness));
+  const targetEnabled = directAgent
+    ? runtimeHarnessEnabled(form.harness, runtimes, runtimeSettingsByHarness, remoteFS)
+    : workflowHarnessesEnabled(workflows.find((workflow) => workflow.id === form.workflowId), runtimes, runtimeSettingsByHarness, remoteFS);
+  const ready = Boolean(workspaceID && form.prompt.trim() && form.workflowId && form.sandbox && (!directAgent || form.harness) && targetEnabled);
   const executionMode = form.executionMode === "queued" ? "queued" : "immediate";
   const executionLabel = executionMode === "queued" ? t("task.joinQueue") : t("task.runNow");
   const submitLabel = busy === "run"
@@ -101,7 +106,7 @@ export default function NewTaskView({
               </DropdownMenuRadioGroup>
             </DropdownMenuContent>
           </DropdownMenu>
-          <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} onChange={onChange} />
+          <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} runtimeSettings={runtimeSettingsByHarness} remoteFS={remoteFS} onChange={onChange} />
           <TaskPermissionSelector value={form.sandbox} allowFull={allowFullSandbox} onChange={onChange} />
           {showRuntimeProfile && <RuntimeProfileMenu
             className="new-task-runtime"

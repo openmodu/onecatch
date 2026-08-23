@@ -43,11 +43,17 @@ type RuntimeConfigInput struct {
 // control, which offer a provider, and what each one's command is called — and
 // that copy drifts from the backend's the moment a harness is added.
 type RuntimeInfo struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Available bool      `json:"available"`
-	Version   string    `json:"version,omitempty"`
-	CheckedAt time.Time `json:"checkedAt"`
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Available bool   `json:"available"`
+	Enabled   bool   `json:"enabled"`
+	// RemoteFSEnabled is the user's switch; SupportsRemoteFS is the immutable
+	// adapter capability. Both must be true before a remote workspace can offer
+	// this harness.
+	RemoteFSEnabled  bool      `json:"remoteFsEnabled"`
+	SupportsRemoteFS bool      `json:"supportsRemoteFs"`
+	Version          string    `json:"version,omitempty"`
+	CheckedAt        time.Time `json:"checkedAt"`
 
 	// Command is the harness's default executable, shown as the binary-path
 	// placeholder.
@@ -136,6 +142,15 @@ func (r *RuntimeRegistry) notifyRuntimesChanged(items []RuntimeInfo) {
 	r.changedMu.RUnlock()
 	if notify != nil {
 		notify(items)
+	}
+}
+
+func (r *RuntimeRegistry) NotifyRuntimePreferencesChanged() {
+	r.changedMu.RLock()
+	hasListener := r.changed != nil
+	r.changedMu.RUnlock()
+	if hasListener {
+		r.notifyRuntimesChanged(r.List())
 	}
 }
 
@@ -381,7 +396,29 @@ func (r *RuntimeRegistry) List() []RuntimeInfo {
 	if refresh {
 		go r.refreshStatus()
 	}
-	return items
+	return r.withRuntimePreferences(items)
+}
+
+func (r *RuntimeRegistry) withRuntimePreferences(items []RuntimeInfo) []RuntimeInfo {
+	r.mu.RLock()
+	settings := make(map[string]domainsettings.RuntimeSettings, len(r.settings))
+	for id, runtime := range r.settings {
+		settings[id] = runtime
+	}
+	r.mu.RUnlock()
+	decorated := append([]RuntimeInfo(nil), items...)
+	for index := range decorated {
+		harness, _ := domainharnesses.Find(decorated[index].ID)
+		decorated[index].SupportsRemoteFS = harness.SupportsRemoteFS
+		if runtime, ok := settings[decorated[index].ID]; ok {
+			decorated[index].Enabled = runtime.Enabled
+			decorated[index].RemoteFSEnabled = runtime.RemoteFSEnabled && harness.SupportsRemoteFS
+		} else {
+			decorated[index].Enabled = true
+			decorated[index].RemoteFSEnabled = harness.SupportsRemoteFS
+		}
+	}
+	return decorated
 }
 
 // refreshStatus re-probes every runtime off the caller's path and announces the
@@ -412,7 +449,7 @@ func (r *RuntimeRegistry) refreshStatus() {
 		// CheckedAt moves on every probe; only a real status change is worth a
 		// re-render in every open window.
 		if previous[index].Available != items[index].Available || previous[index].Version != items[index].Version {
-			r.notifyRuntimesChanged(items)
+			r.notifyRuntimesChanged(r.withRuntimePreferences(items))
 			return
 		}
 	}
@@ -543,7 +580,10 @@ func (r *RuntimeRegistry) CheckDraft(runtime string, input domainsettings.Runtim
 	if runtime == string(agentrun.RuntimeDsh) {
 		config.DshSessionRoot = r.dshSessionRoot()
 	}
-	return runtimeInfo(agentrun.NewEngine(config), agentrun.Runtime(runtime), harness.Name, input.Binary), nil
+	info := runtimeInfo(agentrun.NewEngine(config), agentrun.Runtime(runtime), harness.Name, input.Binary)
+	info.Enabled = input.Enabled
+	info.RemoteFSEnabled = input.RemoteFSEnabled
+	return info, nil
 }
 
 func (r *RuntimeRegistry) replace(config RuntimeConfig) {
@@ -638,6 +678,7 @@ func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, config
 		Command: harness.Command, Efforts: harness.Efforts, Providers: harness.Providers,
 		ServiceTiers: harness.ServiceTiers, Integrations: harness.Integrations,
 		EnvironmentHint: harness.EnvironmentHint, CanResume: harness.CanResume,
+		SupportsRemoteFS: harness.SupportsRemoteFS,
 	}
 	if !available {
 		return info

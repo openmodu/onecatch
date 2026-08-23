@@ -3,7 +3,9 @@ package desktop
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -53,7 +55,7 @@ func (a *Service) GetSettings(ctx context.Context) (domainsettings.Settings, err
 
 func (a *Service) UpdateRuntimeSettings(ctx context.Context, value map[string]domainsettings.RuntimeSettings, expected int64) (domainsettings.Settings, error) {
 	for id, item := range value {
-		if strings.TrimSpace(item.Binary) == "" {
+		if !item.Enabled || strings.TrimSpace(item.Binary) == "" {
 			continue
 		}
 		status, err := a.runtimes.CheckDraft(id, item)
@@ -103,7 +105,7 @@ func (a *Service) ResetSettingsSection(ctx context.Context, section string, expe
 }
 
 func (a *Service) CheckRuntimeDraft(input RuntimeDraftInput) (RuntimeInfo, error) {
-	normalized, err := domainsettings.Normalize(domainsettings.Settings{SchemaVersion: 1, Revision: 1, Runtimes: map[string]domainsettings.RuntimeSettings{input.Runtime: input.Settings}})
+	normalized, err := domainsettings.Normalize(domainsettings.Settings{SchemaVersion: domainsettings.CurrentSchemaVersion, Revision: 1, Runtimes: map[string]domainsettings.RuntimeSettings{input.Runtime: input.Settings}})
 	if err != nil {
 		return RuntimeInfo{}, coded("settings_invalid", err.Error())
 	}
@@ -205,7 +207,9 @@ func (a *Service) updateSettings(ctx context.Context, expected int64, mutate fun
 	if current.Revision != expected {
 		return current, coded("settings_state_conflict", "settings were changed by another window")
 	}
+	previousRuntimes := current.Runtimes
 	mutate(&current)
+	runtimesChanged := !reflect.DeepEqual(previousRuntimes, current.Runtimes)
 	current, err = domainsettings.Normalize(current)
 	if err != nil {
 		return current, coded("settings_invalid", err.Error())
@@ -219,6 +223,11 @@ func (a *Service) updateSettings(ctx context.Context, expected int64, mutate fun
 	}
 	if err := a.applySettings(saved); err != nil {
 		return saved, coded("settings_reload_failed", err.Error())
+	}
+	if runtimesChanged {
+		// Enabled/Remote FS switches do not invalidate a binary probe, but every
+		// open picker must receive the new preferences immediately after a save.
+		a.runtimes.NotifyRuntimePreferencesChanged()
 	}
 	return saved, nil
 }
@@ -296,12 +305,27 @@ func (a *Service) validateTaskSecurity(ctx context.Context, taskID, confirmation
 }
 
 func validateDefinitionSettings(definition domainworkflows.Definition, settings domainsettings.Settings) error {
+	if err := validateHarnessSettings(definition, settings, false); err != nil {
+		return err
+	}
 	for _, step := range definition.Steps {
 		if step.Sandbox == "full" && !settings.Security.AllowFullSandbox {
 			return coded("security_full_sandbox_disabled", "Full access sandbox is disabled in Settings")
 		}
 		if step.WorkerID != "" && step.WorkerID != "local" && !settings.Experimental.RemoteWorkersEnabled {
 			return coded("experimental_remote_workers_disabled", "remote workers are disabled in Settings")
+		}
+	}
+	return nil
+}
+
+func validateHarnessSettings(definition domainworkflows.Definition, settings domainsettings.Settings, remoteFS bool) error {
+	for _, step := range definition.Steps {
+		if !settings.HarnessEnabled(step.Runtime) {
+			return coded("runtime_disabled", fmt.Sprintf("Agent %q is disabled in Settings", step.Runtime))
+		}
+		if remoteFS && !settings.HarnessRemoteFSEnabled(step.Runtime) {
+			return coded("runtime_remote_fs_disabled", fmt.Sprintf("Agent %q is not enabled for remote FS", step.Runtime))
 		}
 	}
 	return nil
@@ -355,6 +379,9 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 		if !directAgent && task.Sandbox != "" {
 			step.Sandbox = capSandbox(step.Sandbox, task.Sandbox)
 		}
+	}
+	if err := validateHarnessSettings(definition, settings, workspace.RemoteFS != nil); err != nil {
+		return domainworkflows.Definition{}, workflowuc.RunResolution{}, err
 	}
 	runtimeSettings := make(map[string]domainworkflows.ResolvedRuntimeSettings, len(settings.Runtimes))
 	for id, item := range settings.Runtimes {

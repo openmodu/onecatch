@@ -12,7 +12,7 @@ import (
 	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 )
 
-const CurrentSchemaVersion = 1
+const CurrentSchemaVersion = 2
 
 const (
 	SectionRuntime      = "runtime"
@@ -36,6 +36,8 @@ type Settings struct {
 }
 
 type RuntimeSettings struct {
+	Enabled              bool     `json:"enabled"`
+	RemoteFSEnabled      bool     `json:"remoteFsEnabled"`
 	Integration          string   `json:"integration,omitempty"`
 	ConfigSource         string   `json:"configSource,omitempty"`
 	ConfigPath           string   `json:"configPath,omitempty"`
@@ -86,7 +88,11 @@ type ExperimentalSettings struct {
 func defaultRuntimes() map[string]RuntimeSettings {
 	runtimes := make(map[string]RuntimeSettings)
 	for _, harness := range domainharnesses.Catalog() {
-		settings := RuntimeSettings{Integration: harness.DefaultIntegration()}
+		settings := RuntimeSettings{
+			Enabled:         true,
+			RemoteFSEnabled: harness.SupportsRemoteFS,
+			Integration:     harness.DefaultIntegration(),
+		}
 		// A harness with a choice of integration also has a configuration
 		// source; sharing the harness's own is the safe starting point.
 		if len(harness.Integrations) > 1 {
@@ -125,9 +131,11 @@ func Normalize(input Settings) (Settings, error) {
 		return Settings{}, fmt.Errorf("unsupported settings schema version %d", input.SchemaVersion)
 	}
 	defaults := Defaults()
+	sourceVersion := input.SchemaVersion
 	if input.SchemaVersion == 0 {
-		input.SchemaVersion = CurrentSchemaVersion
+		sourceVersion = 1
 	}
+	input.SchemaVersion = CurrentSchemaVersion
 	if input.Revision < 1 {
 		input.Revision = 1
 	}
@@ -137,6 +145,17 @@ func Normalize(input Settings) (Settings, error) {
 	for _, id := range knownRuntimes {
 		if _, ok := input.Runtimes[id]; !ok {
 			input.Runtimes[id] = defaults.Runtimes[id]
+		}
+	}
+	// Schema v1 had no per-harness switches. Preserve its behaviour during the
+	// upgrade: every existing harness stays enabled, and only adapters that
+	// actually support Remote FS receive that permission.
+	if sourceVersion < 2 {
+		for _, harness := range domainharnesses.Catalog() {
+			runtime := input.Runtimes[harness.ID]
+			runtime.Enabled = true
+			runtime.RemoteFSEnabled = harness.SupportsRemoteFS
+			input.Runtimes[harness.ID] = runtime
 		}
 	}
 	if input.Execution.MaxTransitions == 0 {
@@ -214,7 +233,7 @@ var knownRuntimes = domainharnesses.IDs()
 
 func Validate(input Settings) error {
 	if input.SchemaVersion != CurrentSchemaVersion {
-		return errors.New("schemaVersion must be 1")
+		return fmt.Errorf("schemaVersion must be %d", CurrentSchemaVersion)
 	}
 	if input.Revision < 1 {
 		return errors.New("revision must be positive")
@@ -227,6 +246,9 @@ func Validate(input Settings) error {
 			return fmt.Errorf("runtime %s contains control characters", id)
 		}
 		harness, _ := domainharnesses.Find(id)
+		if runtime.RemoteFSEnabled && !harness.SupportsRemoteFS {
+			return fmt.Errorf("runtime %s does not support remote FS", id)
+		}
 		if runtime.Integration != "" && !harness.SupportsIntegration(runtime.Integration) {
 			return fmt.Errorf("runtime %s does not support the %s integration", id, runtime.Integration)
 		}
@@ -311,6 +333,34 @@ func Validate(input Settings) error {
 		return errors.New("logMaxAgeDays must be between 1 and 365")
 	}
 	return nil
+}
+
+// HarnessEnabled is the durable user choice for whether a harness may be used
+// by new tasks, reviews, or workflow runs.
+func (s Settings) HarnessEnabled(id string) bool {
+	runtime, ok := s.Runtimes[id]
+	return ok && runtime.Enabled
+}
+
+// HarnessRemoteFSEnabled additionally requires an adapter capability. Keeping
+// the capability check here prevents a malformed settings file from granting a
+// feature that the runner cannot enforce.
+func (s Settings) HarnessRemoteFSEnabled(id string) bool {
+	harness, ok := domainharnesses.Find(id)
+	if !ok || !harness.SupportsRemoteFS {
+		return false
+	}
+	runtime, ok := s.Runtimes[id]
+	return ok && runtime.Enabled && runtime.RemoteFSEnabled
+}
+
+func (s Settings) HasRemoteFSHarness() bool {
+	for _, harness := range domainharnesses.Catalog() {
+		if s.HarnessRemoteFSEnabled(harness.ID) {
+			return true
+		}
+	}
+	return false
 }
 
 func DefaultSection(section string) (any, error) {

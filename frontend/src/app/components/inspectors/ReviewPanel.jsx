@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CircleCheckBig, FileDiff, FilePlus2, Folder, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { Events } from "@wailsio/runtime";
 import { GitBinding, RuntimeBinding, WorkspaceBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Button } from "@/components/ui/button";
 import { buildGitReview } from "../../gitReview.js";
+import { runtimesChangedEvent } from "../../auxiliaryWindowEvents.js";
 import { errorMessage } from "../../format.js";
 import { runtimeHarnesses } from "../../runtimeHarnesses.js";
 import HarnessSelector from "../HarnessSelector.jsx";
@@ -98,6 +100,21 @@ export default function ReviewPanel({ mode, workspaceID, preferredHarness = "cod
       .catch(() => { if (!cancelled) setRuntimes([]); });
     return () => { cancelled = true; };
   }, [mode]);
+
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    return Events.On(runtimesChangedEvent, (event) => {
+      if (Array.isArray(event?.data)) setRuntimes(event.data);
+    });
+  }, [mode]);
+
+  useEffect(() => {
+    if (!runtimes.length || runtimes.some((runtime) => runtime.id === reviewProfile.harness && runtime.enabled !== false)) return;
+    const next = runtimes.find((runtime) => runtime.enabled !== false && runtime.available !== false)
+      || runtimes.find((runtime) => runtime.enabled !== false);
+    setReviewProfile((current) => ({ ...current, harness: next?.id || "" }));
+    setAgentReview(null);
+  }, [reviewProfile.harness, runtimes]);
 
   const load = useCallback(async () => {
     if (!workspaceID || !active) return;
@@ -212,7 +229,7 @@ export default function ReviewPanel({ mode, workspaceID, preferredHarness = "cod
   };
 
   const runtimeStatus = runtimes.find((runtime) => runtime.id === reviewProfile.harness);
-  const reviewDisabled = reviewing || loading || isRepository === false || !review.files.length || runtimeStatus?.available === false;
+  const reviewDisabled = reviewing || loading || isRepository === false || !review.files.length || !runtimeStatus || runtimeStatus.enabled === false || runtimeStatus.available === false;
   const changeReviewProfile = (update) => {
     setReviewProfile((current) => typeof update === "function" ? update(current) : update);
     setAgentReview(null);

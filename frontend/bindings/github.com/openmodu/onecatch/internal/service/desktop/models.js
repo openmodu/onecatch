@@ -1344,6 +1344,30 @@ export class RuntimeInfo {
              */
             this["available"] = false;
         }
+        if (!("enabled" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["enabled"] = false;
+        }
+        if (!("remoteFsEnabled" in $$source)) {
+            /**
+             * RemoteFSEnabled is the user's switch; SupportsRemoteFS is the immutable
+             * adapter capability. Both must be true before a remote workspace can offer
+             * this harness.
+             * @member
+             * @type {boolean}
+             */
+            this["remoteFsEnabled"] = false;
+        }
+        if (!("supportsRemoteFs" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["supportsRemoteFs"] = false;
+        }
         if (/** @type {any} */(false)) {
             /**
              * @member
@@ -1426,18 +1450,18 @@ export class RuntimeInfo {
      * @returns {RuntimeInfo}
      */
     static createFrom($$source = {}) {
-        const $$createField6_0 = $$createType2;
-        const $$createField7_0 = $$createType2;
         const $$createField9_0 = $$createType2;
+        const $$createField10_0 = $$createType2;
+        const $$createField12_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("efforts" in $$parsedSource) {
-            $$parsedSource["efforts"] = $$createField6_0($$parsedSource["efforts"]);
+            $$parsedSource["efforts"] = $$createField9_0($$parsedSource["efforts"]);
         }
         if ("providers" in $$parsedSource) {
-            $$parsedSource["providers"] = $$createField7_0($$parsedSource["providers"]);
+            $$parsedSource["providers"] = $$createField10_0($$parsedSource["providers"]);
         }
         if ("integrations" in $$parsedSource) {
-            $$parsedSource["integrations"] = $$createField9_0($$parsedSource["integrations"]);
+            $$parsedSource["integrations"] = $$createField12_0($$parsedSource["integrations"]);
         }
         return new RuntimeInfo(/** @type {Partial<RuntimeInfo>} */($$parsedSource));
     }

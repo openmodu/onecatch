@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   runtimeHarness,
+  runtimeHarnessEnabled,
   runtimeHarnessOptions,
+  hasRemoteFSHarness,
   selectRuntimeHarness,
   selectTaskExecutionTarget,
   supportsRuntimeProfile,
   taskExecutionTarget,
+  workflowHarnessesEnabled,
 } from "./runtimeHarnesses.js";
 
 test("runtime harness metadata exposes the supported task runtimes", () => {
@@ -29,6 +32,28 @@ test("runtime harness metadata exposes the supported task runtimes", () => {
   // Codex remains the only harness with a speed/processing tier.
   assert.equal(runtimeHarness("pi").supportsSpeed, false);
   assert.equal(runtimeHarness("grok").supportsSpeed, false);
+  assert.equal(runtimeHarness("codex").supportsRemoteFs, true);
+  assert.equal(runtimeHarness("pi").supportsRemoteFs, false);
+});
+
+test("harness preferences filter local and remote choices", () => {
+  const runtimes = [
+    { id: "codex", available: true, supportsRemoteFs: true, enabled: true, remoteFsEnabled: true },
+    { id: "claude", available: true, supportsRemoteFs: true, enabled: false, remoteFsEnabled: true },
+    { id: "pi", available: true, supportsRemoteFs: false, enabled: true, remoteFsEnabled: false },
+  ];
+  const settings = {
+    codex: { enabled: true, remoteFsEnabled: true },
+    claude: { enabled: false, remoteFsEnabled: true },
+    pi: { enabled: true, remoteFsEnabled: false },
+  };
+  assert.equal(runtimeHarnessEnabled("pi", runtimes, settings), true);
+  assert.equal(runtimeHarnessEnabled("pi", runtimes, settings, true), false);
+  assert.equal(hasRemoteFSHarness(runtimes, settings), true);
+  assert.deepEqual(runtimeHarnessOptions(runtimes, "missing", settings).map((item) => item.value), ["codex", "modu", "pi", "grok", "dsh"]);
+  assert.deepEqual(runtimeHarnessOptions(runtimes, "missing", settings, true).map((item) => item.value), ["codex", "modu"]);
+  assert.equal(workflowHarnessesEnabled({ steps: [{ runtime: "pi" }] }, runtimes, settings, true), false);
+  assert.equal(workflowHarnessesEnabled({ steps: [{ runtime: "codex" }] }, runtimes, settings, true), true);
 });
 
 test("runtime harness options preserve choices and flag unavailable binaries", () => {
