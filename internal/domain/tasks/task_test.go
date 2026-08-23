@@ -1,6 +1,10 @@
 package tasks
 
-import "testing"
+import (
+	"testing"
+
+	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
+)
 
 func validTask() Task {
 	return Task{ID: "task-1", WorkspaceID: "workspace-1", Title: "Harness picker", Prompt: "Run the task", WorkflowID: "single_agent", Status: StatusReady}
@@ -50,5 +54,18 @@ func TestValidateRejectsUnknownTaskSandbox(t *testing.T) {
 	task.Sandbox = "host-unrestricted"
 	if err := Validate(task); err != ErrInvalid {
 		t.Fatalf("Validate() error = %v, want %v", err, ErrInvalid)
+	}
+}
+
+// A harness the engine can drive must not be rejected at task creation: that
+// combination shows the runtime in the picker and then fails with
+// "task is invalid" the moment it is used.
+func TestValidateAcceptsEveryKnownHarness(t *testing.T) {
+	for _, harness := range domainagents.KnownRuntimes {
+		task := validTask()
+		task.Harness = harness
+		if err := Validate(task); err != nil {
+			t.Fatalf("harness %q was rejected: %v", harness, err)
+		}
 	}
 }

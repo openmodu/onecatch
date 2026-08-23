@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
 )
 
 const CurrentSchemaVersion = 1
@@ -197,9 +199,9 @@ var (
 	serviceTierKey = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 )
 
-// knownRuntimes is every harness the settings model accepts, in the order the
-// desktop lists them.
-var knownRuntimes = []string{"codex", "claude", "modu", "pi", "grok", "dsh"}
+// knownRuntimes is every harness the settings model accepts. It is the shared
+// domain list rather than a second spelling of it.
+var knownRuntimes = domainagents.KnownRuntimes
 
 // reasoningEfforts are the levels each harness advertises for its own
 // reasoning control. An empty value always means "leave the harness default".

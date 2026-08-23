@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
 )
 
 func TestRuntimeValidityCoversEveryHarness(t *testing.T) {
@@ -102,5 +104,26 @@ func TestInteractivePermissionCapability(t *testing.T) {
 	// An unregistered runtime must answer no rather than panic.
 	if engine.SupportsInteractivePermissions(Runtime("gemini"), SandboxReadOnly) {
 		t.Fatal("an unregistered runtime must not claim interactive permissions")
+	}
+}
+
+// The domain layer cannot import agentrun, so it keeps its own list of harness
+// identifiers for task and settings validation. A runtime added to the engine
+// but missed there is accepted everywhere except the moment a user runs it —
+// which is exactly how `grok` shipped able to be selected but not started.
+func TestDomainRuntimesMatchEngine(t *testing.T) {
+	engine := NewEngine(Config{})
+	for _, id := range domainagents.KnownRuntimes {
+		if !Runtime(id).Valid() {
+			t.Fatalf("domain lists runtime %q, which the engine does not recognize", id)
+		}
+		if engine.Runner(Runtime(id)) == nil {
+			t.Fatalf("domain lists runtime %q, which has no registered runner", id)
+		}
+	}
+	for _, runtime := range []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeDsh} {
+		if !domainagents.IsKnownRuntime(string(runtime)) {
+			t.Fatalf("engine drives runtime %q, which the domain would reject as an invalid task", runtime)
+		}
 	}
 }
