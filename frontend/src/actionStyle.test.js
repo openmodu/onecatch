@@ -88,7 +88,6 @@ test("application chrome cannot be selected while transcript content remains cop
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
   const workbench = await readFile(path.join(sourceRoot, "app", "components", "TaskWorkbench.jsx"), "utf8");
   assert.match(sidebar, /className=\{`sidebar[^`]*\bselect-none\b/, "navigation labels must not behave like document text");
-  assert.match(workbench, /className="workbench-welcome[^"]*\bselect-none\b/, "the welcome empty state is application chrome");
   assert.match(workbench, /className="workbench-empty[^"]*\bselect-none\b/, "empty transcript guidance is application chrome");
   assert.match(workbench, /className="conversation-scroll[^"]*\bselect-text\b/, "conversation content must remain explicitly selectable");
 });
@@ -295,7 +294,8 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
   assert.doesNotMatch(app, /task-create-dialog|<Modal[^>]*task\.createTitle/, "task creation must not open a blocking modal");
   assert.match(app, /const \[taskModal, setTaskModal\] = useState\(true\)/, "a cold start must open the actionable composer instead of the legacy welcome card");
-  assert.match(app, /newTaskOpen=\{taskModal\}/);
+  assert.match(app, /newTaskOpen=\{taskCreateVisible\}/);
+  assert.match(app, /const taskCreateVisible = view === "tasks" && !editor && \(taskModal \|\| !selectedTask\)/, "the composer stays open for the empty workspace and when a task is being created");
   assert.match(workbench, /newTaskOpen \? <NewTaskView/);
   assert.match(newTask, /className="new-task-composer"/);
   assert.match(newTask, /className=\{`new-task-toolbar \$\{directAgent \? "agent-mode" : "workflow-mode"\} \$\{showRuntimeProfile \? "has-runtime-profile" : "no-runtime-profile"\}`\}/);

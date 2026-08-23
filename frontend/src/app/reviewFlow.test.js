@@ -17,10 +17,23 @@ test("file-change cards open the inspector review flow", () => {
 });
 
 test("review combines repository state, diffs and untracked file content", () => {
-  assert.match(review, /GitBinding\.Status\(workspaceID\)/);
+  const statusCall = review.indexOf("const snapshot = await GitBinding.Status(workspaceID)");
+  const diffCalls = review.indexOf("const [stagedDiff, worktreeDiff] = await Promise.all");
+  assert.ok(statusCall >= 0);
+  assert.ok(diffCalls > statusCall, "repository status must be checked before requesting diffs");
+  assert.match(review, /if \(!snapshot\?\.isRepo\)/);
   assert.match(review, /GitBinding\.Diff\(workspaceID, true\)/);
   assert.match(review, /GitBinding\.Diff\(workspaceID, false\)/);
   assert.match(review, /WorkspaceBinding\.ReadWorkspaceFile\(workspaceID, file\.path\)/);
+});
+
+test("selected Agent produces prioritized line-specific findings", () => {
+  assert.match(review, /<HarnessSelector value=\{reviewProfile\}/);
+  assert.match(review, /GitBinding\.ReviewChanges\(\{ workspaceId: workspaceID, runtime: reviewProfile\.harness/);
+  assert.match(review, /review-finding priority-\$\{finding\.priority\}/);
+  assert.match(review, /finding\.file\}:\$\{finding\.startLine\}/);
+  assert.match(css, /\.review-finding\.priority-0/);
+  assert.match(css, /\.review-diff-line\.review-finding-line/);
 });
 
 test("review action is optically centered with the file-change disclosure", () => {

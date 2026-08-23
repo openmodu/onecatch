@@ -20,9 +20,9 @@ function fileState(file, t) {
   return { label: t("inspector.fileModified"), tone: "modified" };
 }
 
-// Branch operations are available for the local workspace only. The remote
-// source is an operational view of that clone, so its branches remain read-only.
-function GitInspector({ mode, workspaceID, runWorkerID = "", notify }) {
+// Branch operations are available for the primary workspace, including a
+// Remote FS workspace. Worker clones are operational views and remain read-only.
+function GitInspector({ mode, workspaceID, remoteFS = null, runWorkerID = "", notify }) {
   const { t } = useTranslation();
   const [snapshot, setSnapshot] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -34,11 +34,14 @@ function GitInspector({ mode, workspaceID, runWorkerID = "", notify }) {
   const [source, setSource] = useState("local");
 
   useEffect(() => {
-    if (mode !== "wails") return;
+    if (mode !== "wails" || remoteFS) {
+      setWorkers([]);
+      return;
+    }
     WorkerBinding.ListWorkers()
       .then((list) => setWorkers((list || []).filter((entry) => entry.enabled)))
       .catch(() => setWorkers([]));
-  }, [mode]);
+  }, [mode, remoteFS]);
 
   // Follow the run: default to the worker its latest step ran on, but only when
   // that worker is registered here (so we never query one we cannot reach) and

@@ -1,7 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
-import { Boxes, Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
+import { Boxes, Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, RefreshCw, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +26,7 @@ import {
   sidebarWidthBounds,
   writeSidebarWidth,
 } from "../sidebarLayout.js";
-import { SIDEBAR_TASK_PREVIEW_LIMIT, buildSidebarTaskEntries, visibleSidebarTaskEntries } from "../sidebarNavigation.js";
+import { buildSidebarTaskEntries, visibleSidebarTaskEntries } from "../sidebarNavigation.js";
 import { desktopPlatform, primaryShortcutLabel } from "../platform.js";
 import { collapsePanelAtCompact } from "../responsiveLayout.js";
 import { directAgentWorkflowID } from "../runtimeHarnesses.js";
@@ -83,6 +83,7 @@ function Sidebar({
   searchLoading,
   workspaceExpanded,
   workspaceSearchOpen,
+  workspaceHealth,
   tasks,
   pinnedTasks,
   runs,
@@ -99,6 +100,7 @@ function Sidebar({
   onClearSearch,
   onSearchQueryChange,
   onSelectWorkspace,
+  onCheckWorkspaceHealth,
   onToggleTaskPinned,
   onDeleteTask,
   onRenameTask,
@@ -119,9 +121,10 @@ function Sidebar({
   const [appearance, setAppearance] = useState(readAppearance);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => collapsePanelAtCompact(initialSidebarCollapsed(), compactViewport));
   const [sidebarPeeked, setSidebarPeeked] = useState(false);
-  const [expandedWorkspaceID, setExpandedWorkspaceID] = useState(workspaceID);
-  const [taskListExpanded, setTaskListExpanded] = useState(false);
+  const [expandedWorkspaceIDs, setExpandedWorkspaceIDs] = useState(() => new Set(workspaceID ? [workspaceID] : []));
+  const [expandedTaskListWorkspaceIDs, setExpandedTaskListWorkspaceIDs] = useState(() => new Set());
   const [pendingSearchTask, setPendingSearchTask] = useState(null);
+  const workspaceTaskCache = useRef(new Map());
   const drag = useRef(null);
   const sidebarToggleRef = useRef(null);
   const searchTrigger = useRef(null);
@@ -132,11 +135,6 @@ function Sidebar({
   const sidebarDisplayWidth = sidebarCollapsed ? Math.min(width, SIDEBAR_PEEK_WIDTH) : width;
 
   const taskEntries = useMemo(() => buildSidebarTaskEntries(tasks, runs, { query: taskSearch, status: taskStatus }).filter((entry) => !(entry.kind === "run" ? entry.item.task : entry.item)?.pinned), [runs, taskSearch, taskStatus, tasks]);
-  const visibleTaskEntries = visibleSidebarTaskEntries(taskEntries, taskListExpanded);
-  const compactTaskEntryCount = visibleSidebarTaskEntries(taskEntries).length;
-  const hiddenTaskCount = Math.max(0, taskEntries.length - compactTaskEntryCount);
-  const queuedEntryCount = taskEntries.filter((entry) => entry.kind === "queued").length;
-  const taskTotal = Math.max(taskEntries.length, queuedEntryCount + (taskStatus === "queued" ? 0 : runTotal));
   const regularProjectCount = workspaces.length;
   const closeSearch = useCallback(({ restoreFocus = true } = {}) => {
     onClearSearch();
@@ -186,11 +184,21 @@ function Sidebar({
   }, [sidebarCollapsed, sidebarDisplayWidth, sidebarVisible]);
 
   useEffect(() => {
-    setExpandedWorkspaceID(workspaceID);
-    setTaskListExpanded(false);
+    if (!workspaceID) return;
+    setExpandedWorkspaceIDs((current) => {
+      if (current.has(workspaceID)) return current;
+      const next = new Set(current);
+      next.add(workspaceID);
+      return next;
+    });
   }, [workspaceID]);
 
-  useEffect(() => setTaskListExpanded(false), [taskSearch, taskStatus]);
+  useEffect(() => {
+    if (!workspaceID) return;
+    workspaceTaskCache.current.set(workspaceID, { tasks, runs, runTotal, runHasMore });
+  }, [runHasMore, runTotal, runs, tasks, workspaceID]);
+
+  useEffect(() => setExpandedTaskListWorkspaceIDs(new Set()), [taskSearch, taskStatus]);
 
   useEffect(() => {
     onCollapsedChange?.(sidebarCollapsed);
@@ -204,8 +212,13 @@ function Sidebar({
 
   useEffect(() => {
     if (!pendingSearchTask || pendingSearchTask.workspace.id !== workspaceID) return;
-    setExpandedWorkspaceID(workspaceID);
-    setTaskListExpanded(false);
+    setExpandedWorkspaceIDs((current) => new Set(current).add(workspaceID));
+    setExpandedTaskListWorkspaceIDs((current) => {
+      if (!current.has(workspaceID)) return current;
+      const next = new Set(current);
+      next.delete(workspaceID);
+      return next;
+    });
     if (pendingSearchTask.latestRun) onSelectRun(pendingSearchTask.latestRun);
     else onSelectQueued(pendingSearchTask.task);
     setPendingSearchTask(null);
@@ -265,10 +278,25 @@ function Sidebar({
     scheduleSidebarHide();
   };
   const goToSecondaryView = (nextView) => onGoView(nextView);
+  const ensureWorkspaceAvailable = (workspace) => {
+    if (!workspace.remoteFs || workspaceHealth?.[workspace.id]?.healthy) return true;
+    if (!workspaceHealth?.[workspace.id]?.checking) onCheckWorkspaceHealth(workspace);
+    return false;
+  };
   const toggleProject = (workspace) => {
-    const opening = expandedWorkspaceID !== workspace.id;
-    setExpandedWorkspaceID(opening ? workspace.id : "");
-    setTaskListExpanded(false);
+    if (!ensureWorkspaceAvailable(workspace)) return;
+    const opening = !expandedWorkspaceIDs.has(workspace.id);
+    setExpandedWorkspaceIDs((current) => {
+      const next = new Set(current);
+      if (opening) next.add(workspace.id); else next.delete(workspace.id);
+      return next;
+    });
+    setExpandedTaskListWorkspaceIDs((current) => {
+      if (!current.has(workspace.id)) return current;
+      const next = new Set(current);
+      next.delete(workspace.id);
+      return next;
+    });
     if (opening) {
       // The sidebar is the only nav now, so opening a project must also return
       // to the tasks view from wherever the menu last took us (workflows/settings).
@@ -276,16 +304,13 @@ function Sidebar({
       if (workspace.id !== workspaceID) onSelectWorkspace(workspace.id);
     }
   };
-  const openRun = (run) => {
-    onGoView("tasks");
-    onSelectRun(run);
-  };
   const openQueuedTask = (task) => {
     onGoView("tasks");
     onSelectQueued(task);
   };
   const openPinnedTask = (task) => {
     const workspace = workspaces.find((item) => item.id === task.workspaceId);
+    if (workspace && !ensureWorkspaceAvailable(workspace)) return;
     if (workspace && workspace.id !== workspaceID) {
       setPendingSearchTask({ workspace, task, latestRun: null });
       onSelectWorkspace(workspace.id);
@@ -294,15 +319,27 @@ function Sidebar({
     openQueuedTask(task);
   };
   const openWorkspaceFromSearch = (workspace) => {
-    setExpandedWorkspaceID(workspace.id);
-    setTaskListExpanded(false);
+    if (!ensureWorkspaceAvailable(workspace)) return;
+    setExpandedWorkspaceIDs((current) => new Set(current).add(workspace.id));
+    setExpandedTaskListWorkspaceIDs((current) => {
+      if (!current.has(workspace.id)) return current;
+      const next = new Set(current);
+      next.delete(workspace.id);
+      return next;
+    });
     onGoView("tasks");
     if (workspace.id !== workspaceID) onSelectWorkspace(workspace.id);
   };
   const openTaskFromSearch = (item) => {
+    if (!ensureWorkspaceAvailable(item.workspace)) return;
     onGoView("tasks");
-    setExpandedWorkspaceID(item.workspace.id);
-    setTaskListExpanded(false);
+    setExpandedWorkspaceIDs((current) => new Set(current).add(item.workspace.id));
+    setExpandedTaskListWorkspaceIDs((current) => {
+      if (!current.has(item.workspace.id)) return current;
+      const next = new Set(current);
+      next.delete(item.workspace.id);
+      return next;
+    });
     if (item.workspace.id !== workspaceID) {
       setPendingSearchTask(item);
       onSelectWorkspace(item.workspace.id);
@@ -312,6 +349,7 @@ function Sidebar({
     else onSelectQueued(item.task);
   };
   const createTaskForWorkspace = (workspace) => {
+    if (!ensureWorkspaceAvailable(workspace)) return;
     onGoView("tasks");
     if (workspace.id !== workspaceID) onSelectWorkspace(workspace.id);
     onNewTask();
@@ -357,26 +395,69 @@ function Sidebar({
     commitWidth(next);
   };
 
-  const renderTaskActions = (task) => <div className="task-row-actions absolute top-1 right-1 flex h-6 items-center gap-0.5">
-    <Action size="compact" tone="muted" className={`size-6 border-0 bg-transparent p-0 shadow-none hover:bg-background/70 ${task.pinned ? "text-foreground opacity-70" : "pointer-events-none opacity-0 group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100"}`} aria-label={t(task.pinned ? "common.unpin" : "common.pin")} title={t(task.pinned ? "common.unpin" : "common.pin")} onClick={() => onToggleTaskPinned(task)}><Pin size={13} className={task.pinned ? "fill-current" : ""} aria-hidden="true" /></Action>
-    <Action size="compact" tone="muted" className="pointer-events-none size-6 border-0 bg-transparent p-0 text-muted-foreground opacity-0 shadow-none hover:bg-background/70 hover:text-foreground group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100" aria-label={t("task.rename")} title={t("task.rename")} onClick={() => onRenameTask(task)}><Pencil size={13} strokeWidth={2} aria-hidden="true" /></Action>
-    <Action size="compact" tone="muted" className="pointer-events-none size-6 border-0 bg-transparent p-0 text-muted-foreground opacity-0 shadow-none hover:bg-destructive/10 hover:text-destructive group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100" aria-label={t("app.deleteTask")} title={t("app.deleteTask")} onClick={() => onDeleteTask(task)}><Trash2 size={13} aria-hidden="true" /></Action>
+  const renderTaskActions = (task) => <div className="task-row-actions pointer-events-none absolute top-1 right-1 z-20 flex h-6 items-center gap-0.5 bg-gradient-to-l from-sidebar/95 via-sidebar/80 to-transparent pl-3 opacity-0 transition-opacity group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100">
+    <Action size="compact" tone="muted" className={`size-6 border-0 bg-transparent p-0 shadow-none hover:bg-background/70 ${task.pinned ? "text-foreground" : "text-muted-foreground"}`} aria-label={t(task.pinned ? "common.unpin" : "common.pin")} title={t(task.pinned ? "common.unpin" : "common.pin")} onClick={() => onToggleTaskPinned(task)}><Pin size={13} className={task.pinned ? "fill-current" : ""} aria-hidden="true" /></Action>
+    <Action size="compact" tone="muted" className="size-6 border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-background/70 hover:text-foreground" aria-label={t("task.rename")} title={t("task.rename")} onClick={() => onRenameTask(task)}><Pencil size={13} strokeWidth={2} aria-hidden="true" /></Action>
+    <Action size="compact" tone="muted" className="size-6 border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-destructive/10 hover:text-destructive" aria-label={t("app.deleteTask")} title={t("app.deleteTask")} onClick={() => onDeleteTask(task)}><Trash2 size={13} aria-hidden="true" /></Action>
   </div>;
 
   const renderPinnedTask = (task) => {
     const selectedRun = runs.find((run) => run.id === selectedRunID);
     const selected = selectedQueuedTaskID === task.id || selectedRun?.task?.id === task.id;
-    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><TaskExecutionIcon task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
+    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><TaskExecutionIcon task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
   };
 
   const renderWorkspace = (workspace) => {
     const active = workspace.id === workspaceID;
-    const expanded = expandedWorkspaceID === workspace.id;
+    const expanded = expandedWorkspaceIDs.has(workspace.id);
+    const remoteHealth = workspace.remoteFs ? workspaceHealth?.[workspace.id] : null;
+    const workspaceAvailable = !workspace.remoteFs || remoteHealth?.healthy === true;
+    const remoteHealthPending = Boolean(workspace.remoteFs && !workspaceAvailable && remoteHealth?.checking);
+    const displayExpanded = expanded && workspaceAvailable;
+    const cached = workspaceTaskCache.current.get(workspace.id);
+    const workspaceTasks = active ? tasks : cached?.tasks || [];
+    const workspaceRuns = active ? runs : cached?.runs || [];
+    const workspaceEntries = active
+      ? taskEntries
+      : buildSidebarTaskEntries(workspaceTasks, workspaceRuns, { query: taskSearch, status: taskStatus }).filter((entry) => !(entry.kind === "run" ? entry.item.task : entry.item)?.pinned);
+    const workspaceTaskListExpanded = expandedTaskListWorkspaceIDs.has(workspace.id);
+    const workspaceVisibleEntries = visibleSidebarTaskEntries(workspaceEntries, workspaceTaskListExpanded);
+    const compactTaskEntryCount = visibleSidebarTaskEntries(workspaceEntries).length;
+    const hiddenTaskCount = Math.max(0, workspaceEntries.length - compactTaskEntryCount);
+    const queuedEntryCount = workspaceEntries.filter((entry) => entry.kind === "queued").length;
+    const workspaceRunTotal = active ? runTotal : cached?.runTotal || 0;
+    const workspaceRunHasMore = active ? runHasMore : Boolean(cached?.runHasMore);
+    const taskTotal = Math.max(workspaceEntries.length, queuedEntryCount + (taskStatus === "queued" ? 0 : workspaceRunTotal));
+    const setTaskListExpanded = (nextExpanded) => setExpandedTaskListWorkspaceIDs((current) => {
+      const next = new Set(current);
+      if (nextExpanded) next.add(workspace.id); else next.delete(workspace.id);
+      return next;
+    });
+    const openEntry = (entry) => {
+      const latestRun = entry.kind === "run" ? entry.item : null;
+      const task = latestRun?.task || entry.item;
+      onGoView("tasks");
+      if (!active) {
+        setPendingSearchTask({ workspace, task, latestRun });
+        onSelectWorkspace(workspace.id);
+        return;
+      }
+      if (latestRun) onSelectRun(latestRun); else onSelectQueued(task);
+    };
     const taskPanelID = `workspace-tasks-${encodeURIComponent(workspace.id)}`;
-    return <div className={`workspace-row group relative block w-full min-w-0 max-w-full overflow-hidden ${active ? "active" : ""} ${expanded ? "expanded" : ""}`} key={workspace.id}>
-      <button className={`workspace-item grid h-8 w-full min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-2 rounded-lg py-0 pr-14 pl-2 text-left transition-colors hover:bg-accent/70 hover:text-foreground ${active ? "text-foreground" : "text-muted-foreground"}`} title={workspaceLocation(workspace)} aria-expanded={expanded} aria-controls={taskPanelID} onClick={() => toggleProject(workspace)}>
-        {expanded ? <FolderOpen size={16} strokeWidth={2} aria-hidden="true" className="text-muted-foreground" /> : <Folder size={16} strokeWidth={2} aria-hidden="true" className="text-muted-foreground" />}
-        <span className="min-w-0"><strong className="block truncate text-[13px] font-medium leading-none">{workspace.name}</strong></span>
+    const workspaceTitle = !workspaceAvailable && workspace.remoteFs
+      ? `${workspaceLocation(workspace)}\n${remoteHealth?.error ? `${remoteHealth.error}\n` : ""}${t(remoteHealthPending ? "workspace.remoteChecking" : "workspace.remoteRetry")}`
+      : workspaceLocation(workspace);
+    return <div className={`workspace-row group relative block w-full min-w-0 max-w-full overflow-hidden ${active ? "active" : ""} ${displayExpanded ? "expanded" : ""}`} key={workspace.id}>
+      <button className={`workspace-item grid h-8 w-full min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-2 rounded-lg py-0 pr-2 pl-2 text-left transition-colors hover:bg-accent/70 hover:text-foreground ${active ? "text-foreground" : "text-muted-foreground"}`} title={workspaceTitle} aria-expanded={displayExpanded} aria-controls={taskPanelID} aria-busy={remoteHealth?.checking || undefined} onClick={() => toggleProject(workspace)}>
+        {displayExpanded ? <FolderOpen size={16} strokeWidth={2} aria-hidden="true" className="text-muted-foreground" /> : <Folder size={16} strokeWidth={2} aria-hidden="true" className="text-muted-foreground" />}
+        <span className="inline-flex w-fit min-w-0 max-w-full items-center gap-1.5">
+          <strong className="min-w-0 truncate text-[13px] font-medium leading-none">{workspace.name}</strong>
+          {workspace.remoteFs && <span className={`inline-flex h-4 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[9px] font-medium leading-none ${workspaceAvailable ? "border-success/25 bg-success/10 text-success" : remoteHealthPending ? "border-border bg-background/30 text-muted-foreground" : "border-destructive/25 bg-destructive/10 text-destructive"}`}>
+            {workspaceAvailable ? <i className="size-1 rounded-full bg-current" aria-hidden="true" /> : <RefreshCw size={9} className={remoteHealthPending ? "animate-spin" : ""} aria-hidden="true" />}
+            {t(workspaceAvailable ? "workspace.remote" : remoteHealthPending ? "workspace.remoteChecking" : "workspace.remoteUnavailable")}
+          </span>}
+        </span>
       </button>
       {/* Hidden by opacity rather than `display: none`, for two reasons:
           display:none drops the buttons out of the tab order, so they were
@@ -384,7 +465,7 @@ function Sidebar({
           it un-focuses the trigger the moment the menu closes, leaving Radix
           nowhere to restore focus to. has-[[data-state=open]] keeps the row
           revealed while the menu is up — Radix stamps that on the trigger. */}
-      <div className="workspace-row-actions pointer-events-none absolute top-1 right-1 z-20 flex h-6 items-center gap-0.5 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100">
+      <div className="workspace-row-actions pointer-events-none absolute top-1 right-1 z-20 flex h-6 items-center gap-0.5 bg-gradient-to-l from-sidebar/95 via-sidebar/80 to-transparent pl-3 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Action size="compact" tone="muted" className="workspace-menu-trigger size-6 border-0 bg-transparent p-0 shadow-none hover:bg-accent" aria-label={t("sidebar.projectMenu", { name: workspace.name })} title={t("sidebar.projectMenu", { name: workspace.name })}><Ellipsis size={14} aria-hidden="true" /></Action>
@@ -395,28 +476,28 @@ function Sidebar({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <Action size="compact" tone="muted" className="workspace-new-task size-6 border-0 bg-transparent p-0 shadow-none hover:bg-accent" aria-label={t("sidebar.newTaskInProject", { name: workspace.name })} title={t("sidebar.newTaskInProject", { name: workspace.name })} onClick={() => createTaskForWorkspace(workspace)}><Plus size={14} strokeWidth={2} aria-hidden="true" /></Action>
+        {workspaceAvailable && <Action size="compact" tone="muted" className="workspace-new-task size-6 border-0 bg-transparent p-0 shadow-none hover:bg-accent" aria-label={t("sidebar.newTaskInProject", { name: workspace.name })} title={t("sidebar.newTaskInProject", { name: workspace.name })} onClick={() => createTaskForWorkspace(workspace)}><Plus size={14} strokeWidth={2} aria-hidden="true" /></Action>}
       </div>
-      {expanded && active && <div className="project-task-panel mb-1" id={taskPanelID}>
+      {displayExpanded && <div className="project-task-panel mb-1" id={taskPanelID}>
         <div className="project-task-list grid gap-px">
-          {visibleTaskEntries.map((entry) => {
+          {workspaceVisibleEntries.map((entry) => {
             if (entry.kind === "queued" || entry.kind === "pinned") {
               const task = entry.item;
-              const selected = selectedQueuedTaskID === task.id;
-              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openQueuedTask(task)}><TaskExecutionIcon task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
+              const selected = active && selectedQueuedTaskID === task.id;
+              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}><TaskExecutionIcon task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{active && renderTaskActions(task)}</div>;
             }
             const run = entry.item;
             const task = run.task;
             const title = run.task?.title || run.id;
-            const selected = selectedRunID === run.id;
-            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-20 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openRun(run)}>{task && <TaskExecutionIcon task={task} workflowID={run.workflowId} />}<span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{title}</span></button>{task && renderTaskActions(task)}</div>;
+            const selected = active && selectedRunID === run.id;
+            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}>{task && <TaskExecutionIcon task={task} workflowID={run.workflowId} />}<span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{title}</span></button>{active && task && renderTaskActions(task)}</div>;
           })}
-          {!taskEntries.length && !runLoading && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
-          {runLoading && !taskEntries.length && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{t("task.loading")}</div>}
+          {!workspaceEntries.length && !(active && runLoading) && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
+          {active && runLoading && !workspaceEntries.length && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{t("task.loading")}</div>}
         </div>
-        {!taskListExpanded && hiddenTaskCount > 0 && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={() => setTaskListExpanded(true)}>{t("sidebar.showTasks", { count: hiddenTaskCount })}</Action>}
-        {taskListExpanded && hiddenTaskCount > 0 && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={() => setTaskListExpanded(false)}>{t("sidebar.hideTasks")}</Action>}
-        {(taskListExpanded || hiddenTaskCount === 0) && (runLoading || runHasMore) && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" disabled={runLoading} onClick={onLoadMoreRuns}>{runLoading ? t("task.loading") : t("task.loadMore", { visible: taskEntries.length, total: taskTotal })}</Action>}
+        {!workspaceTaskListExpanded && hiddenTaskCount > 0 && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={() => setTaskListExpanded(true)}>{t("sidebar.showTasks", { count: hiddenTaskCount })}</Action>}
+        {workspaceTaskListExpanded && hiddenTaskCount > 0 && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={() => setTaskListExpanded(false)}>{t("sidebar.hideTasks")}</Action>}
+        {active && (workspaceTaskListExpanded || hiddenTaskCount === 0) && (runLoading || workspaceRunHasMore) && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" disabled={runLoading} onClick={onLoadMoreRuns}>{runLoading ? t("task.loading") : t("task.loadMore", { visible: workspaceEntries.length, total: taskTotal })}</Action>}
       </div>}
     </div>;
   };

@@ -35,6 +35,10 @@ func (b *GitBinding) CreateBranch(workspaceID, name string) (domainworkspaces.Gi
 	return b.service.GitCreateBranch(context.Background(), workspaceID, name)
 }
 
+func (b *GitBinding) ReviewChanges(input desktopservice.CodeReviewInput) (desktopservice.CodeReviewResult, error) {
+	return b.service.ReviewChanges(context.Background(), input)
+}
+
 func (b *GitBinding) GenerateCommitMessage(workspaceID, runtime string) (string, error) {
 	return b.service.GenerateCommitMessage(context.Background(), workspaceID, runtime)
 }

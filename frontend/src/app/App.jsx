@@ -52,6 +52,7 @@ import { buildInspectorContext, inspectorContextSignature, INSPECTOR_ACTION_EVEN
 import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeOptions.js";
 import { collapsePanelAtCompact, COMPACT_LAYOUT_QUERY } from "./responsiveLayout.js";
 import { scheduleIdle } from "./scheduleIdle.js";
+import { REMOTE_FS_HEALTH_INTERVAL_MS, shouldAutoCheckRemoteFS } from "./remoteFSHealth.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
@@ -176,6 +177,7 @@ function App() {
   const [permissionBusy, setPermissionBusy] = useState("");
   const [workers, setWorkers] = useState([]);
   const [workerHealth, setWorkerHealth] = useState({});
+  const [remoteWorkspaceHealth, setRemoteWorkspaceHealth] = useState({});
   const [workerModal, setWorkerModal] = useState(false);
   const [workerForm, setWorkerForm] = useState({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
   const [settings, setSettings] = useState(demoSettings);
@@ -212,8 +214,17 @@ function App() {
   composerAttachmentsRef.current = composerAttachments;
   const runNextCursorRef = useRef("");
   runNextCursorRef.current = runNextCursor;
+  const remoteWorkspaceHealthRef = useRef({});
+  remoteWorkspaceHealthRef.current = remoteWorkspaceHealth;
+  const remoteWorkspaceHealthVersions = useRef(new Map());
+  const remoteWorkspacesRef = useRef([]);
+  remoteWorkspacesRef.current = workspaces.filter((workspace) => workspace.remoteFs);
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID);
+  const remoteWorkspaceSignature = useMemo(() => workspaces
+    .filter((workspace) => workspace.remoteFs)
+    .map((workspace) => `${workspace.id}\0${workspace.remoteFs.host}\0${workspace.remoteFs.username || ""}\0${workspace.remoteFs.root}`)
+    .join("\n"), [workspaces]);
   // A detached inspector leaves no dock behind, so the workbench sees the same
   // "no panel here" layout it uses for a deliberate collapse.
   const inspectorCollapsed = inspectorDetached || resolveInspectorCollapsed(inspectorPreference);
@@ -261,6 +272,30 @@ function App() {
     setNotice({ type, text });
     window.setTimeout(() => setNotice(null), 4200);
   }, []);
+
+  const checkRemoteWorkspaceHealth = useCallback(async (workspace) => {
+    if (!workspace?.remoteFs || mode === "loading") return;
+    const version = (remoteWorkspaceHealthVersions.current.get(workspace.id) || 0) + 1;
+    remoteWorkspaceHealthVersions.current.set(workspace.id, version);
+    setRemoteWorkspaceHealth((current) => ({
+      ...current,
+      [workspace.id]: { ...current[workspace.id], checking: true, error: "" },
+    }));
+    try {
+      if (mode === "wails") await WorkspaceBinding.GetWorkspaceStatus(workspace.id);
+      if (remoteWorkspaceHealthVersions.current.get(workspace.id) !== version) return;
+      setRemoteWorkspaceHealth((current) => ({
+        ...current,
+        [workspace.id]: { healthy: true, checking: false, error: "", checkedAt: new Date().toISOString() },
+      }));
+    } catch (error) {
+      if (remoteWorkspaceHealthVersions.current.get(workspace.id) !== version) return;
+      setRemoteWorkspaceHealth((current) => ({
+        ...current,
+        [workspace.id]: { healthy: false, checking: false, error: errorMessage(error), checkedAt: new Date().toISOString() },
+      }));
+    }
+  }, [mode]);
 
   const requestConfirm = useCallback((options) => new Promise((resolve) => {
     appDialogResolve.current?.(false);
@@ -349,6 +384,20 @@ function App() {
   }, []);
 
   useEffect(() => { boot(); }, [boot]);
+
+  useEffect(() => {
+    if (mode === "loading") return undefined;
+    const checkEligibleTargets = () => {
+      for (const workspace of remoteWorkspacesRef.current) {
+        if (shouldAutoCheckRemoteFS(remoteWorkspaceHealthRef.current[workspace.id])) {
+          void checkRemoteWorkspaceHealth(workspace);
+        }
+      }
+    };
+    checkEligibleTargets();
+    const interval = window.setInterval(checkEligibleTargets, REMOTE_FS_HEALTH_INTERVAL_MS);
+    return () => window.clearInterval(interval);
+  }, [checkRemoteWorkspaceHealth, mode, remoteWorkspaceSignature]);
 
   // The rest of the workbench's reference data. None of it is needed to draw
   // the shell, so it loads once the window is idle rather than in front of it.
@@ -1187,7 +1236,7 @@ function App() {
   const commandText = location.path ? `${location.label} · ${location.path}` : location.label;
   const selectedTask = runDetail?.task || tasks.find((task) => task.id === selectedQueuedTaskID);
   const selectedTaskStatus = runDetail?.run?.status || selectedTask?.status;
-  const taskCreateVisible = view === "tasks" && !editor && taskModal;
+  const taskCreateVisible = view === "tasks" && !editor && (taskModal || !selectedTask);
   const taskTitleVisible = view === "tasks" && !editor && !taskModal && selectedTask;
   const whiteboardOpen = view === "whiteboard" && !editor;
 
@@ -1284,6 +1333,7 @@ function App() {
         searchLoading={globalTaskSearchLoading}
         workspaceExpanded={workspaceExpanded}
         workspaceSearchOpen={workspaceSearchOpen}
+        workspaceHealth={remoteWorkspaceHealth}
         tasks={tasks}
         pinnedTasks={pinnedTasks}
         runs={runItems}
@@ -1300,6 +1350,7 @@ function App() {
         onClearSearch={clearSidebarSearch}
         onSearchQueryChange={setGlobalSearchQuery}
         onSelectWorkspace={selectWorkspace}
+        onCheckWorkspaceHealth={checkRemoteWorkspaceHealth}
         onToggleTaskPinned={toggleTaskPinned}
         onDeleteTask={deleteTask}
         onRenameTask={openRenameTask}
@@ -1336,7 +1387,7 @@ function App() {
           </button>
           {(view !== "tasks" || inspectorCollapsed) && <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-            {mode === "wails" ? t("common.local") : t("common.preview")}
+            {mode === "wails" ? t(view === "tasks" && selectedWorkspace?.remoteFs ? "workspace.remoteFS" : "common.local") : t("common.preview")}
           </StatusBadge>}
           {view === "tasks" && !editor && inspectorCollapsed && <button type="button" className={`no-drag grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${terminalVisible ? "bg-accent text-foreground" : "text-muted-foreground"}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => setTerminalToggleVersion((value) => value + 1)}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
           {view === "tasks" && (inspectorDetached
@@ -1362,7 +1413,7 @@ function App() {
           inspectorCollapsed={inspectorCollapsed}
           onToggleInspector={toggleInspector}
           onDetachInspector={mode === "wails" ? detachInspector : null}
-          newTaskOpen={taskModal}
+          newTaskOpen={taskCreateVisible}
           taskForm={taskForm}
           workflows={workflows}
           runtimes={runtimes}
@@ -1373,8 +1424,7 @@ function App() {
           onInspectRuntimeConfiguration={inspectRuntimeConfiguration}
           onTaskFormChange={setTaskForm}
           onChooseTaskAttachments={selectedWorkspace?.remoteFs ? null : chooseTaskAttachments}
-          onCreateTask={taskModal ? createTaskAndRun : null}
-          onNewTask={openTaskModal}
+          onCreateTask={createTaskAndRun}
           onChooseAttachments={selectedWorkspace?.remoteFs ? null : chooseComposerAttachments}
           onRemoveAttachment={removeComposerAttachment}
           onSubmit={submitWorkbenchComposer}

@@ -620,6 +620,40 @@ func TestAddRemoteFSWorkspaceDeletesStagedPasswordWhenProbeFails(t *testing.T) {
 	}
 }
 
+func TestGetWorkspaceStatusProbesRemoteFSRoot(t *testing.T) {
+	ctx := context.Background()
+	app, store := newLocalTestApp(t, completingEngine{})
+	workspace := domainworkspaces.Workspace{
+		ID: "remote-health", Name: "Remote health", Path: "/srv/project",
+		RemoteFS: &domainworkspaces.RemoteFS{Host: "devbox", Root: "/srv/project", Username: "deploy"},
+	}
+	if err := store.Repos.Tasks.SaveWorkspace(ctx, workspace); err != nil {
+		t.Fatal(err)
+	}
+	probeCalls := 0
+	app.remoteFSProbe = func(probeCtx context.Context, remote domainworkspaces.RemoteFS) (string, error) {
+		probeCalls++
+		if _, ok := probeCtx.Deadline(); !ok {
+			t.Fatal("remote health probe has no deadline")
+		}
+		if remote.Host != "devbox" || remote.Root != "/srv/project" || remote.Username != "deploy" {
+			t.Fatalf("probe target = %+v", remote)
+		}
+		return "", fmt.Errorf("device is offline")
+	}
+	if _, err := app.GetWorkspaceStatus(ctx, workspace.ID); errorCode(err) != "remote_fs_unavailable" {
+		t.Fatalf("unhealthy status error = %v", err)
+	}
+	app.remoteFSProbe = func(context.Context, domainworkspaces.RemoteFS) (string, error) {
+		probeCalls++
+		return "/srv/project", nil
+	}
+	status, err := app.GetWorkspaceStatus(ctx, workspace.ID)
+	if err != nil || status.Workspace.ID != workspace.ID || probeCalls != 2 {
+		t.Fatalf("healthy status = %+v, calls = %d, error = %v", status, probeCalls, err)
+	}
+}
+
 func TestRemoteWorkspaceNeverStoresOrDeletesAttachmentsAtRemotePathLocally(t *testing.T) {
 	ctx := context.Background()
 	app, store := newLocalTestApp(t, completingEngine{})

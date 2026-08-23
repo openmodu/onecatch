@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/openmodu/onecatch/internal/sshendpoint"
 )
 
 const (
@@ -70,10 +73,22 @@ func (s *Service) Create(input CreateInput) (Session, error) {
 			return Session{}, errors.New("terminal argument contains control characters")
 		}
 	}
-	workspace := filepath.Clean(input.Workspace)
-	info, err := os.Stat(workspace)
-	if err != nil || !info.IsDir() {
-		return Session{}, fmt.Errorf("terminal workspace is not an accessible directory: %s", input.Workspace)
+	workspace := ""
+	if input.RemoteFS != nil {
+		workspace = path.Clean(strings.TrimSpace(input.RemoteFS.Root))
+		if !path.IsAbs(workspace) {
+			return Session{}, fmt.Errorf("remote terminal workspace is not an absolute path: %s", input.RemoteFS.Root)
+		}
+		if _, err := sshendpoint.Parse(input.RemoteFS.Host); err != nil {
+			return Session{}, fmt.Errorf("remote terminal SSH target is invalid: %w", err)
+		}
+		input.RemoteFS.Root = workspace
+	} else {
+		workspace = filepath.Clean(input.Workspace)
+		info, err := os.Stat(workspace)
+		if err != nil || !info.IsDir() {
+			return Session{}, fmt.Errorf("terminal workspace is not an accessible directory: %s", input.Workspace)
+		}
 	}
 	input.Workspace = workspace
 	if input.Rows == 0 {

@@ -1,14 +1,19 @@
 package desktop
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	gitrepo "github.com/openmodu/onecatch/internal/repo/git"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
 type GitCommitInput struct {
@@ -23,11 +28,83 @@ type GitCommitResult struct {
 	Pushed     bool   `json:"pushed"`
 }
 
-func requireLocalGitWorkspace(workspace domainworkspaces.Workspace) error {
-	if workspace.RemoteFS != nil {
-		return coded("remote_fs_git_unavailable", "Git controls are not available for remote FS workspaces")
+type remoteGitCommandRunner struct {
+	executor seam.Executor
+}
+
+type remoteGitExitError struct {
+	args       []string
+	exitCode   int
+	diagnostic string
+}
+
+func (e *remoteGitExitError) Error() string {
+	message := fmt.Sprintf("remote git %s exited with status %d", strings.Join(e.args, " "), e.exitCode)
+	if e.diagnostic != "" {
+		message += ": " + e.diagnostic
 	}
-	return nil
+	return message
+}
+
+func (e *remoteGitExitError) ExitCode() int { return e.exitCode }
+
+func (r *remoteGitCommandRunner) Run(ctx context.Context, workspace string, args ...string) (string, error) {
+	var command strings.Builder
+	command.WriteString("git")
+	for _, arg := range args {
+		command.WriteByte(' ')
+		command.WriteString(posixShellWord(arg))
+	}
+	var stdout, stderr bytes.Buffer
+	outcome, err := r.executor.Run(ctx, seam.Command{
+		Command: command.String(),
+		Dir:     workspace,
+		Env: map[string]string{
+			"GIT_TERMINAL_PROMPT": "0",
+			"GCM_INTERACTIVE":     "Never",
+		},
+		Stdout: &stdout,
+		Stderr: &stderr,
+	})
+	if err != nil {
+		return "", coded("remote_fs_git_unavailable", err.Error())
+	}
+	if outcome.ExitCode != 0 {
+		diagnostic := strings.TrimSpace(strings.Join([]string{stderr.String(), stdout.String()}, "\n"))
+		if outcome.ExitCode == 126 || outcome.ExitCode == 127 {
+			if diagnostic == "" {
+				diagnostic = "git is not installed on the remote host"
+			}
+			return "", coded("remote_fs_git_unavailable", diagnostic)
+		}
+		return "", &remoteGitExitError{args: append([]string{}, args...), exitCode: outcome.ExitCode, diagnostic: diagnostic}
+	}
+	return stdout.String(), nil
+}
+
+func posixShellWord(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
+}
+
+func newRemoteGitExecutor(target domainworkspaces.RemoteFS) seam.Executor {
+	return seam.NewExecutor(seam.Target{
+		Host:         target.Host,
+		Root:         target.Root,
+		Username:     target.Username,
+		CredentialID: target.CredentialID,
+		SSHOptions:   append([]string{}, target.SSHOptions...),
+	})
+}
+
+func (a *Service) gitForWorkspace(workspace domainworkspaces.Workspace) *gitrepo.Inspector {
+	if workspace.RemoteFS == nil {
+		return a.git
+	}
+	factory := a.remoteGitExecutor
+	if factory == nil {
+		factory = newRemoteGitExecutor
+	}
+	return gitrepo.NewWithRunner(&remoteGitCommandRunner{executor: factory(*workspace.RemoteFS)})
 }
 
 func (a *Service) GitStatus(ctx context.Context, workspaceID string) (domainworkspaces.GitSnapshot, error) {
@@ -35,10 +112,7 @@ func (a *Service) GitStatus(ctx context.Context, workspaceID string) (domainwork
 	if err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
-	if err := requireLocalGitWorkspace(workspace); err != nil {
-		return domainworkspaces.GitSnapshot{}, err
-	}
-	return a.git.Inspect(ctx, workspace.Path)
+	return a.gitForWorkspace(workspace).Inspect(ctx, workspace.Path)
 }
 
 func (a *Service) GitDiff(ctx context.Context, workspaceID string, staged bool) (string, error) {
@@ -46,10 +120,7 @@ func (a *Service) GitDiff(ctx context.Context, workspaceID string, staged bool) 
 	if err != nil {
 		return "", err
 	}
-	if err := requireLocalGitWorkspace(workspace); err != nil {
-		return "", err
-	}
-	return a.git.Diff(ctx, workspace.Path, staged)
+	return a.gitForWorkspace(workspace).Diff(ctx, workspace.Path, staged)
 }
 
 func (a *Service) GitStageAll(ctx context.Context, workspaceID string) error {
@@ -57,10 +128,7 @@ func (a *Service) GitStageAll(ctx context.Context, workspaceID string) error {
 	if err != nil {
 		return err
 	}
-	if err := requireLocalGitWorkspace(workspace); err != nil {
-		return err
-	}
-	return a.git.StageAll(ctx, workspace.Path)
+	return a.gitForWorkspace(workspace).StageAll(ctx, workspace.Path)
 }
 
 func (a *Service) GitListBranches(ctx context.Context, workspaceID string) ([]domainworkspaces.GitBranch, error) {
@@ -68,10 +136,7 @@ func (a *Service) GitListBranches(ctx context.Context, workspaceID string) ([]do
 	if err != nil {
 		return nil, err
 	}
-	if err := requireLocalGitWorkspace(workspace); err != nil {
-		return nil, err
-	}
-	return a.git.ListBranches(ctx, workspace.Path)
+	return a.gitForWorkspace(workspace).ListBranches(ctx, workspace.Path)
 }
 
 func (a *Service) GitSwitchBranch(ctx context.Context, workspaceID, name string) (domainworkspaces.GitSnapshot, error) {
@@ -79,13 +144,11 @@ func (a *Service) GitSwitchBranch(ctx context.Context, workspaceID, name string)
 	if err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
-	if err := requireLocalGitWorkspace(workspace); err != nil {
+	git := a.gitForWorkspace(workspace)
+	if err := git.SwitchBranch(ctx, workspace.Path, name); err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
-	if err := a.git.SwitchBranch(ctx, workspace.Path, name); err != nil {
-		return domainworkspaces.GitSnapshot{}, err
-	}
-	return a.git.Inspect(ctx, workspace.Path)
+	return git.Inspect(ctx, workspace.Path)
 }
 
 func (a *Service) GitCreateBranch(ctx context.Context, workspaceID, name string) (domainworkspaces.GitSnapshot, error) {
@@ -93,13 +156,11 @@ func (a *Service) GitCreateBranch(ctx context.Context, workspaceID, name string)
 	if err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
-	if err := requireLocalGitWorkspace(workspace); err != nil {
+	git := a.gitForWorkspace(workspace)
+	if err := git.CreateBranch(ctx, workspace.Path, name); err != nil {
 		return domainworkspaces.GitSnapshot{}, err
 	}
-	if err := a.git.CreateBranch(ctx, workspace.Path, name); err != nil {
-		return domainworkspaces.GitSnapshot{}, err
-	}
-	return a.git.Inspect(ctx, workspace.Path)
+	return git.Inspect(ctx, workspace.Path)
 }
 
 func (a *Service) GenerateCommitMessage(ctx context.Context, workspaceID, requestedRuntime string) (string, error) {
@@ -107,14 +168,12 @@ func (a *Service) GenerateCommitMessage(ctx context.Context, workspaceID, reques
 	if err != nil {
 		return "", err
 	}
-	if err := requireLocalGitWorkspace(workspace); err != nil {
-		return "", err
-	}
-	diff, err := a.git.Diff(ctx, workspace.Path, false)
+	git := a.gitForWorkspace(workspace)
+	diff, err := git.Diff(ctx, workspace.Path, false)
 	if err != nil {
 		return "", err
 	}
-	staged, err := a.git.Diff(ctx, workspace.Path, true)
+	staged, err := git.Diff(ctx, workspace.Path, true)
 	if err != nil {
 		return "", err
 	}
@@ -138,9 +197,22 @@ func (a *Service) GenerateCommitMessage(ctx context.Context, workspaceID, reques
 		return "", coded("runtime_unavailable", "no local Agent is available to generate a commit message")
 	}
 	prompt := "Write one concise Conventional Commit subject for the following diff. Return only the subject line, without quotes, Markdown, body, or explanation.\n\n" + combined
+	runWorkspace := workspace.Path
+	if workspace.RemoteFS != nil {
+		// The complete diff is already in the prompt. Run the message-only Agent
+		// in an empty local directory so it neither needs nor gains workspace
+		// access, and so Claude can generate a message even though its remote
+		// read-only mode intentionally has no Bash access.
+		temporary, tempErr := os.MkdirTemp("", "onecatch-commit-message-")
+		if tempErr != nil {
+			return "", fmt.Errorf("create commit-message workspace: %w", tempErr)
+		}
+		defer os.RemoveAll(temporary)
+		runWorkspace = temporary
+	}
 	runCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	result, err := a.runtimes.Run(runCtx, agentrun.Request{Runtime: runtime, Workspace: workspace.Path, Prompt: prompt, Sandbox: agentrun.SandboxReadOnly}, nil)
+	result, err := a.runtimes.Run(runCtx, agentrun.Request{Runtime: runtime, Workspace: runWorkspace, Prompt: prompt, Sandbox: agentrun.SandboxReadOnly}, nil)
 	if err != nil {
 		return "", err
 	}
@@ -155,19 +227,17 @@ func (a *Service) GitCommitAndPush(ctx context.Context, input GitCommitInput) (G
 	if err != nil {
 		return GitCommitResult{}, err
 	}
-	if err := requireLocalGitWorkspace(workspace); err != nil {
+	git := a.gitForWorkspace(workspace)
+	if err := git.StageAll(ctx, workspace.Path); err != nil {
 		return GitCommitResult{}, err
 	}
-	if err := a.git.StageAll(ctx, workspace.Path); err != nil {
-		return GitCommitResult{}, err
-	}
-	hash, err := a.git.Commit(ctx, workspace.Path, input.Message)
+	hash, err := git.Commit(ctx, workspace.Path, input.Message)
 	if err != nil {
 		return GitCommitResult{}, err
 	}
 	result := GitCommitResult{CommitHash: hash}
 	if input.Push {
-		if err := a.git.Push(ctx, workspace.Path, input.Remote); err != nil {
+		if err := git.Push(ctx, workspace.Path, input.Remote); err != nil {
 			return result, err
 		}
 		result.Pushed = true

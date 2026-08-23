@@ -12,6 +12,15 @@ import (
 
 type Inspector struct {
 	binary string
+	runner CommandRunner
+}
+
+// CommandRunner executes Git on the machine that owns workspace. The desktop
+// service supplies an SSH-backed runner for remote FS workspaces; keeping the
+// Git parsing and validation here makes local and remote controls behave the
+// same way.
+type CommandRunner interface {
+	Run(ctx context.Context, workspace string, args ...string) (string, error)
 }
 
 func New(binary string) *Inspector {
@@ -21,14 +30,17 @@ func New(binary string) *Inspector {
 	return &Inspector{binary: binary}
 }
 
+func NewWithRunner(runner CommandRunner) *Inspector {
+	return &Inspector{binary: "git", runner: runner}
+}
+
 func (i *Inspector) Inspect(ctx context.Context, workspace string) (domainworkspaces.GitSnapshot, error) {
 	if _, err := exec.LookPath(i.binary); err != nil {
 		return domainworkspaces.GitSnapshot{}, fmt.Errorf("git is unavailable: %w", err)
 	}
 	inside, err := i.run(ctx, workspace, "rev-parse", "--is-inside-work-tree")
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
+		if commandExited(err) {
 			return domainworkspaces.GitSnapshot{IsRepo: false}, nil
 		}
 		return domainworkspaces.GitSnapshot{}, err
@@ -53,8 +65,7 @@ func (i *Inspector) Inspect(ctx context.Context, workspace string) (domainworksp
 	ahead, behind := i.aheadBehind(ctx, workspace)
 	head, err := i.run(ctx, workspace, "rev-parse", "--verify", "HEAD")
 	if err != nil {
-		var exitErr *exec.ExitError
-		if !errors.As(err, &exitErr) {
+		if !commandExited(err) {
 			return domainworkspaces.GitSnapshot{}, err
 		}
 		head = "" // valid repository with no commit yet
@@ -223,10 +234,22 @@ func statusText(files []domainworkspaces.GitFile) string {
 }
 
 func (i *Inspector) run(ctx context.Context, workspace string, args ...string) (string, error) {
+	if i.runner != nil {
+		return i.runner.Run(ctx, workspace, args...)
+	}
 	commandArgs := append([]string{"-C", workspace}, args...)
 	output, err := exec.CommandContext(ctx, i.binary, commandArgs...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
 	}
 	return string(output), nil
+}
+
+type exitCoder interface {
+	ExitCode() int
+}
+
+func commandExited(err error) bool {
+	var exitErr exitCoder
+	return errors.As(err, &exitErr)
 }

@@ -11,7 +11,7 @@ import {
 import { runtimeHarness, runtimeHarnessOptions, selectRuntimeHarness } from "../runtimeHarnesses.js";
 import RuntimeHarnessIcon from "./RuntimeHarnessIcon.jsx";
 
-export default function HarnessSelector({ value, onChange, runtimes = [], readOnly = false, agentLabel = false, className = "" }) {
+export default function HarnessSelector({ value, onChange, runtimes = [], readOnly = false, agentLabel = false, className = "", menuSide = "top" }) {
   const { t } = useTranslation();
   const harness = runtimeHarness(value?.harness);
   const label = harness.label;
@@ -29,7 +29,7 @@ export default function HarnessSelector({ value, onChange, runtimes = [], readOn
         {agentLabel && <RuntimeHarnessIcon harness={harness.id} size={14} aria-hidden="true" />}<span>{label}</span><ChevronDown size={14} aria-hidden="true" />
       </Button>
     </DropdownMenuTrigger>
-    <DropdownMenuContent className="harness-select-menu" side="top" align="start" sideOffset={8}>
+    <DropdownMenuContent className="harness-select-menu" side={menuSide} align="start" sideOffset={8}>
       <DropdownMenuRadioGroup value={harness.id} onValueChange={(nextHarness) => onChange?.((current) => selectRuntimeHarness(current, nextHarness))}>
         {options.map((option) => <DropdownMenuRadioItem className="harness-select-option" value={option.value} disabled={option.disabled} key={option.value}>
           <RuntimeHarnessIcon harness={option.value} size={14} aria-hidden="true" />

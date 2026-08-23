@@ -1,15 +1,41 @@
 package wailstransport
 
-import terminalservice "github.com/openmodu/onecatch/internal/service/terminal"
+import (
+	"context"
+	"strings"
 
-type TerminalBinding struct{ service *terminalservice.Service }
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
+	terminalservice "github.com/openmodu/onecatch/internal/service/terminal"
+)
 
-func NewTerminalBinding(service *terminalservice.Service) *TerminalBinding {
-	return &TerminalBinding{service: service}
+type TerminalCreateInput struct {
+	WorkspaceID string   `json:"workspaceId"`
+	Shell       string   `json:"shell,omitempty"`
+	Arguments   []string `json:"arguments,omitempty"`
+	Rows        uint16   `json:"rows,omitempty"`
+	Cols        uint16   `json:"cols,omitempty"`
 }
 
-func (b *TerminalBinding) CreateTerminal(input terminalservice.CreateInput) (terminalservice.Session, error) {
-	return b.service.Create(input)
+type TerminalBinding struct {
+	service *terminalservice.Service
+	desktop *desktopservice.Service
+}
+
+func NewTerminalBinding(service *terminalservice.Service, desktop *desktopservice.Service) *TerminalBinding {
+	return &TerminalBinding{service: service, desktop: desktop}
+}
+
+func (b *TerminalBinding) CreateTerminal(input TerminalCreateInput) (terminalservice.Session, error) {
+	workspace, err := b.desktop.GetWorkspace(context.Background(), strings.TrimSpace(input.WorkspaceID))
+	if err != nil {
+		return terminalservice.Session{}, err
+	}
+	return b.service.Create(terminalservice.CreateInput{
+		Workspace: workspace.Path,
+		Shell:     input.Shell, Arguments: input.Arguments,
+		RemoteFS: workspace.RemoteFS,
+		Rows:     input.Rows, Cols: input.Cols,
+	})
 }
 
 func (b *TerminalBinding) WriteTerminal(sessionID, data string) error {

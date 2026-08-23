@@ -88,7 +88,12 @@ const TerminalDock = forwardRef(function TerminalDock({ mode, workspace, prefere
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     try {
       const runtime = runtimeRef.current.get(id);
-      const session = await TerminalBinding.CreateTerminal({ workspace: workspace.path, shell: config.shell, arguments: config.arguments, rows: runtime?.terminal.rows || 24, cols: runtime?.terminal.cols || 80 });
+      const session = await TerminalBinding.CreateTerminal({
+        workspaceId: workspace.id,
+        ...(!workspace.remoteFs ? { shell: config.shell, arguments: config.arguments } : {}),
+        rows: runtime?.terminal.rows || 24,
+        cols: runtime?.terminal.cols || 80,
+      });
       if (cancelledTabsRef.current.has(id)) {
         await TerminalBinding.CloseTerminal(session.id).catch(() => {});
         return null;
@@ -104,7 +109,7 @@ const TerminalDock = forwardRef(function TerminalDock({ mode, workspace, prefere
       }
       return null;
     }
-  }, [config.arguments, config.shell, mode, notify, t, updateTab, workspace?.path]);
+  }, [config.arguments, config.shell, mode, notify, t, updateTab, workspace?.id, workspace?.path, workspace?.remoteFs]);
 
   const toggleDock = useCallback(() => {
     if (open) {

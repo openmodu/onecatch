@@ -28,3 +28,7 @@ export {
     WorkflowBinding,
     WorkspaceBinding
 };
+
+export {
+    TerminalCreateInput
+} from "./models.js";

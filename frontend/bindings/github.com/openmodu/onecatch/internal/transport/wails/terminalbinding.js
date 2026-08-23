@@ -10,6 +10,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as terminal$0 from "../../service/terminal/models.js";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
+
 /**
  * @param {string} sessionID
  * @returns {$CancellablePromise<void>}
@@ -19,7 +23,7 @@ export function CloseTerminal(sessionID) {
 }
 
 /**
- * @param {terminal$0.CreateInput} input
+ * @param {$models.TerminalCreateInput} input
  * @returns {$CancellablePromise<terminal$0.Session>}
  */
 export function CreateTerminal(input) {

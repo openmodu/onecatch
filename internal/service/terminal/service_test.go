@@ -8,6 +8,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 )
 
 type fakeProcess struct {
@@ -109,6 +111,26 @@ func TestServiceRejectsMissingWorkspace(t *testing.T) {
 	})
 	if _, err := service.Create(CreateInput{Workspace: t.TempDir() + "/missing"}); err == nil {
 		t.Fatal("expected missing workspace error")
+	}
+}
+
+func TestServiceAcceptsRemoteWorkspaceWithoutLocalDirectory(t *testing.T) {
+	service := newService(func(input CreateInput) (terminalProcess, string, error) {
+		if input.Workspace != "/srv/project" || input.RemoteFS == nil || input.RemoteFS.Root != "/srv/project" {
+			t.Fatalf("input = %+v", input)
+		}
+		return newFakeProcess(), "deploy@devbox", nil
+	})
+	session, err := service.Create(CreateInput{
+		Workspace: "/srv/project",
+		RemoteFS:  &domainworkspaces.RemoteFS{Host: "devbox", Root: "/srv/project", Username: "deploy"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	if session.Workspace != "/srv/project" || session.Shell != "deploy@devbox" {
+		t.Fatalf("session = %+v", session)
 	}
 }
 

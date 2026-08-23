@@ -6,66 +6,6 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
-export class CreateInput {
-    /**
-     * Creates a new CreateInput instance.
-     * @param {Partial<CreateInput>} [$$source = {}] - The source object to create the CreateInput.
-     */
-    constructor($$source = {}) {
-        if (!("workspace" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["workspace"] = "";
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {string | undefined}
-             */
-            this["shell"] = undefined;
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {string[] | undefined}
-             */
-            this["arguments"] = undefined;
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {number | undefined}
-             */
-            this["rows"] = undefined;
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {number | undefined}
-             */
-            this["cols"] = undefined;
-        }
-
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new CreateInput instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {CreateInput}
-     */
-    static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType0;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("arguments" in $$parsedSource) {
-            $$parsedSource["arguments"] = $$createField2_0($$parsedSource["arguments"]);
-        }
-        return new CreateInput(/** @type {Partial<CreateInput>} */($$parsedSource));
-    }
-}
-
 export class Session {
     /**
      * Creates a new Session instance.
@@ -135,6 +75,3 @@ export class Session {
         return new Session(/** @type {Partial<Session>} */($$parsedSource));
     }
 }
-
-// Private type creation functions
-const $$createType0 = $Create.Array($Create.Any);

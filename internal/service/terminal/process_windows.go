@@ -17,6 +17,25 @@ import (
 type windowsProcess struct{ pty *conpty.ConPty }
 
 func startProcess(input CreateInput) (terminalProcess, string, error) {
+	if input.RemoteFS != nil {
+		binary, arguments, environment, label, err := remoteSSHInvocation(input, append(os.Environ(), "TERM=xterm-256color", "COLORTERM=truecolor"))
+		if err != nil {
+			return nil, "", err
+		}
+		command := syscall.EscapeArg(binary)
+		for _, argument := range arguments {
+			command += " " + syscall.EscapeArg(argument)
+		}
+		process, err := conpty.Start(command,
+			conpty.ConPtyDimensions(int(input.Cols), int(input.Rows)),
+			conpty.ConPtyWorkDir(os.TempDir()),
+			conpty.ConPtyEnv(environment),
+		)
+		if err != nil {
+			return nil, "", fmt.Errorf("start remote SSH terminal: %w", err)
+		}
+		return &windowsProcess{pty: process}, label, nil
+	}
 	shell := strings.TrimSpace(input.Shell)
 	if shell == "" {
 		shell = windowsShell()

@@ -35,6 +35,7 @@ import (
 	"github.com/openmodu/onecatch/internal/sshcredentials"
 	"github.com/openmodu/onecatch/internal/sshendpoint"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	agentrunseam "github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
 	"github.com/openmodu/onecatch/pkg/localfile"
 )
@@ -202,6 +203,7 @@ type Service struct {
 	whiteboardRuns    map[string]context.CancelFunc
 	remoteFSProbe     func(context.Context, domainworkspaces.RemoteFS) (string, error)
 	remoteCredentials sshcredentials.Store
+	remoteGitExecutor func(domainworkspaces.RemoteFS) agentrunseam.Executor
 }
 
 func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitrepo.Inspector) *Service {
@@ -216,6 +218,7 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 		whiteboardRuns:    make(map[string]context.CancelFunc),
 		remoteFSProbe:     canonicalRemoteFSRoot,
 		remoteCredentials: sshcredentials.KeyringStore{},
+		remoteGitExecutor: newRemoteGitExecutor,
 	}
 	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
 	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, preparations: newRemotePreparationRegistry()})
@@ -509,6 +512,15 @@ func (a *Service) GetWorkspaceStatus(ctx context.Context, id string) (WorkspaceS
 		return WorkspaceStatus{}, err
 	}
 	if workspace.RemoteFS != nil {
+		probe := a.remoteFSProbe
+		if probe == nil {
+			probe = canonicalRemoteFSRoot
+		}
+		probeCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+		defer cancel()
+		if _, err := probe(probeCtx, *workspace.RemoteFS); err != nil {
+			return WorkspaceStatus{}, coded("remote_fs_unavailable", err.Error())
+		}
 		return WorkspaceStatus{Workspace: workspace}, nil
 	}
 	snapshot, err := a.git.Inspect(ctx, workspace.Path)

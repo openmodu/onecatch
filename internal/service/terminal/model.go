@@ -1,6 +1,10 @@
 package terminal
 
-import "time"
+import (
+	"time"
+
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+)
 
 const (
 	OutputEvent = "onecatch:terminal-output"
@@ -8,11 +12,12 @@ const (
 )
 
 type CreateInput struct {
-	Workspace string   `json:"workspace"`
-	Shell     string   `json:"shell,omitempty"`
-	Arguments []string `json:"arguments,omitempty"`
-	Rows      uint16   `json:"rows,omitempty"`
-	Cols      uint16   `json:"cols,omitempty"`
+	Workspace string                     `json:"workspace"`
+	Shell     string                     `json:"shell,omitempty"`
+	Arguments []string                   `json:"arguments,omitempty"`
+	RemoteFS  *domainworkspaces.RemoteFS `json:"remoteFs,omitempty"`
+	Rows      uint16                     `json:"rows,omitempty"`
+	Cols      uint16                     `json:"cols,omitempty"`
 }
 
 type Session struct {

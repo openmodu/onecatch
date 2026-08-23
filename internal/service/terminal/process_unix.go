@@ -24,6 +24,19 @@ type unixProcess struct {
 }
 
 func startProcess(input CreateInput) (terminalProcess, string, error) {
+	if input.RemoteFS != nil {
+		binary, arguments, environment, label, err := remoteSSHInvocation(input, terminalEnvironment(os.Environ()))
+		if err != nil {
+			return nil, "", err
+		}
+		command := exec.Command(binary, arguments...)
+		command.Env = environment
+		ptmx, err := pty.StartWithSize(command, &pty.Winsize{Rows: input.Rows, Cols: input.Cols})
+		if err != nil {
+			return nil, "", fmt.Errorf("start remote SSH terminal: %w", err)
+		}
+		return &unixProcess{pty: ptmx, command: command}, label, nil
+	}
 	shell := strings.TrimSpace(input.Shell)
 	if shell == "" {
 		shell = strings.TrimSpace(os.Getenv("SHELL"))
