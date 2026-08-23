@@ -2,6 +2,11 @@ export const runtimeHarnesses = [
   { id: "codex", label: "Codex", supportsReasoning: true, supportsSpeed: true },
   { id: "claude", label: "Claude Code", supportsReasoning: true, supportsSpeed: false },
   { id: "modu", label: "modu_code", supportsReasoning: false, supportsSpeed: false },
+  // Pi spells reasoning effort --thinking; Grok exposes --reasoning-effort. The
+  // DeepSeek Harness headless profile offers neither.
+  { id: "pi", label: "Pi", supportsReasoning: true, supportsSpeed: false },
+  { id: "grok", label: "Grok Build", supportsReasoning: true, supportsSpeed: false },
+  { id: "dsh", label: "DeepSeek Harness", supportsReasoning: false, supportsSpeed: false },
 ];
 
 export const directAgentWorkflowID = "single_agent";

@@ -23,6 +23,9 @@ type mobileTestEngine struct {
 func (*mobileTestEngine) Available(runtime agentrun.Runtime) bool {
 	return runtime == agentrun.RuntimeCodex
 }
+func (*mobileTestEngine) SupportsInteractivePermissions(agentrun.Runtime, agentrun.Sandbox) bool {
+	return true
+}
 
 func (e *mobileTestEngine) Run(_ context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	e.mu.Lock()

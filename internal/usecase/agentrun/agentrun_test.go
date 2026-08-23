@@ -38,7 +38,13 @@ func stubBinary(t *testing.T, stdout, stderr string, code int) string {
 	return path
 }
 
-func shellQuote(s string) string { return "'" + s + "'" }
+// shellQuote renders a POSIX single-quoted word. A single quote cannot appear
+// inside such a word, so each one is closed, escaped, and reopened — without
+// this, fixture text as ordinary as "SpaceXAI's" ends the quote early and
+// leaves the stub script unparsable.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
 
 func itoa(i int) string {
 	if i == 0 {

@@ -168,3 +168,89 @@ func TestValidateRejectsDangerousEnvironmentKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultsIncludeEveryHarness(t *testing.T) {
+	got := Defaults()
+	for _, id := range []string{"codex", "claude", "modu", "pi", "grok", "dsh"} {
+		if _, ok := got.Runtimes[id]; !ok {
+			t.Fatalf("runtime %q missing from defaults", id)
+		}
+	}
+	if err := Validate(got); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestNormalizeAddsNewHarnessesToExistingSettings(t *testing.T) {
+	// Settings saved before these harnesses existed must gain them rather than
+	// failing validation on the way in.
+	input := Defaults()
+	for _, id := range []string{"pi", "grok", "dsh"} {
+		delete(input.Runtimes, id)
+	}
+	got, err := Normalize(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"pi", "grok", "dsh"} {
+		if got.Runtimes[id].Integration != "cli" {
+			t.Fatalf("runtime %q = %+v, want cli integration", id, got.Runtimes[id])
+		}
+	}
+	if err := Validate(got); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestValidateReasoningEffortPerHarness(t *testing.T) {
+	for _, testCase := range []struct {
+		runtime string
+		effort  string
+		valid   bool
+	}{
+		// Grok's own catalog tops out at xhigh; pi adds "off" to disable
+		// thinking outright and has no "max".
+		{"grok", "xhigh", true},
+		{"grok", "max", false},
+		{"pi", "off", true},
+		{"pi", "max", false},
+		// DeepSeek Harness exposes no reasoning control to its CLI.
+		{"dsh", "", true},
+		{"dsh", "high", false},
+	} {
+		input := Defaults()
+		input.Runtimes[testCase.runtime] = RuntimeSettings{Integration: "cli", ReasoningEffort: testCase.effort}
+		err := Validate(input)
+		if testCase.valid && err != nil {
+			t.Fatalf("%s effort %q rejected: %v", testCase.runtime, testCase.effort, err)
+		}
+		if !testCase.valid && err == nil {
+			t.Fatalf("%s effort %q was accepted", testCase.runtime, testCase.effort)
+		}
+	}
+}
+
+func TestValidateProviderAndServiceTierPerHarness(t *testing.T) {
+	input := Defaults()
+	input.Runtimes["dsh"] = RuntimeSettings{Integration: "cli", Provider: "deepseek-official"}
+	if err := Validate(input); err != nil {
+		t.Fatalf("dsh provider rejected: %v", err)
+	}
+	input.Runtimes["dsh"] = RuntimeSettings{Integration: "cli", Provider: "openai"}
+	if err := Validate(input); err == nil {
+		t.Fatal("an unregistered dsh provider was accepted")
+	}
+
+	input = Defaults()
+	input.Runtimes["grok"] = RuntimeSettings{Integration: "cli", Provider: "xai"}
+	if err := Validate(input); err == nil {
+		t.Fatal("grok does not select a provider and must reject one")
+	}
+
+	// Codex remains the only harness with a speed/processing tier.
+	input = Defaults()
+	input.Runtimes["pi"] = RuntimeSettings{Integration: "cli", ServiceTier: "priority"}
+	if err := Validate(input); err == nil {
+		t.Fatal("pi does not support a service tier and must reject one")
+	}
+}

@@ -29,6 +29,9 @@ func (g *fakeGit) Inspect(_ context.Context, workspace string) (domainworkspaces
 type fakeEngine struct{}
 
 func (fakeEngine) Available(runtime agentrun.Runtime) bool { return runtime == agentrun.RuntimeCodex }
+func (fakeEngine) SupportsInteractivePermissions(agentrun.Runtime, agentrun.Sandbox) bool {
+	return true
+}
 func (fakeEngine) Run(_ context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: request.Workspace})
 	return agentrun.Result{Succeeded: true, SessionID: "remote-session", FinalMessage: `{"signal":"completed","content":"remote done"}`}, nil
@@ -38,6 +41,9 @@ type capturingEngine struct{ requests chan agentrun.Request }
 
 func (capturingEngine) Available(runtime agentrun.Runtime) bool {
 	return runtime == agentrun.RuntimeCodex
+}
+func (capturingEngine) SupportsInteractivePermissions(agentrun.Runtime, agentrun.Sandbox) bool {
+	return true
 }
 func (e capturingEngine) Run(_ context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	e.requests <- request
@@ -49,6 +55,9 @@ type writingEngine struct{}
 
 func (writingEngine) Available(runtime agentrun.Runtime) bool {
 	return runtime == agentrun.RuntimeCodex
+}
+func (writingEngine) SupportsInteractivePermissions(agentrun.Runtime, agentrun.Sandbox) bool {
+	return true
 }
 func (writingEngine) Run(_ context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	if err := os.WriteFile(filepath.Join(request.Workspace, "tracked.txt"), []byte("changed remotely\n"), 0o644); err != nil {
@@ -75,6 +84,9 @@ func newBlockingEngine(t *testing.T) blockingEngine {
 }
 
 func (blockingEngine) Available(agentrun.Runtime) bool { return true }
+func (blockingEngine) SupportsInteractivePermissions(agentrun.Runtime, agentrun.Sandbox) bool {
+	return true
+}
 func (e blockingEngine) Run(ctx context.Context, _ agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: "working"})
 	close(e.started)
@@ -221,6 +233,9 @@ type permissionEngine struct {
 
 func (permissionEngine) Available(runtime agentrun.Runtime) bool {
 	return runtime == agentrun.RuntimeClaude
+}
+func (permissionEngine) SupportsInteractivePermissions(agentrun.Runtime, agentrun.Sandbox) bool {
+	return true
 }
 func (e permissionEngine) Run(ctx context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	permission := agentrun.PermissionRequest{

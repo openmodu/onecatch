@@ -126,14 +126,17 @@ function PermissionTimelineItem({ entry, busy, onDecision, time }) {
   const { t } = useTranslation();
   const request = entry.request || {};
   const pending = !entry.decision;
-  const canAlwaysAllow = pending && !request.suppressAlwaysAllow && (request.suggestions || []).length > 0;
+  // Whether a decision can be remembered is the adapter's answer, folded into
+  // suppressAlwaysAllow: Claude needs provider-authored rules to persist, an
+  // ACP agent simply offers the option and keeps the memory itself.
+  const canAlwaysAllow = pending && !request.suppressAlwaysAllow;
   const input = Object.keys(request.input || {}).length ? JSON.stringify(request.input, null, 2) : "";
   const status = pending ? t("timeline.permissionWaiting") : entry.decision === "allow" ? t("timeline.permissionAllowed") : t("timeline.permissionDenied");
   return <section className={`conversation-permission ${pending ? "pending" : entry.decision}`}>
-    <div className="conversation-permission-head"><div><span>{request.displayName || request.toolName || t("timeline.permissionRequest")}</span><strong>{request.title || t("timeline.permissionTitle", { tool: request.toolName || "Claude" })}</strong></div><div><b>{status}</b><time>{time ?? formatTime(entry.at)}</time></div></div>
+    <div className="conversation-permission-head"><div><span>{request.displayName || request.toolName || t("timeline.permissionRequest")}</span><strong>{request.title || t("timeline.permissionTitle", { tool: request.toolName })}</strong></div><div><b>{status}</b><time>{time ?? formatTime(entry.at)}</time></div></div>
     {(request.description || request.decisionReason) && <p>{request.description || request.decisionReason}</p>}
     {input && <details><summary>{t("timeline.permissionDetails")}</summary><pre>{input}</pre></details>}
-    {pending && !request.requiresUserInteraction && <div className="conversation-permission-actions"><Action size="compact" tone="danger" disabled={busy} onClick={() => onDecision?.(request.id, "deny")}>{t("timeline.permissionDeny")}</Action><Action size="compact" disabled={busy} onClick={() => onDecision?.(request.id, "allow_once")}>{t("timeline.permissionAllowOnce")}</Action>{canAlwaysAllow && <Action size="compact" tone="primary" disabled={busy} onClick={() => onDecision?.(request.id, "allow_always")}>{t("timeline.permissionAllowAlways")}</Action>}</div>}
+    {pending && !request.requiresUserInteraction && <div className="conversation-permission-actions"><Action size="compact" tone="danger" disabled={busy} onClick={() => onDecision?.(request.id, "deny")}>{t("timeline.permissionDeny")}</Action><Action size="compact" disabled={busy} onClick={() => onDecision?.(request.id, "allow_once")}>{t("timeline.permissionAllowOnce")}</Action>{canAlwaysAllow && <Action size="compact" tone="primary" disabled={busy} title={t("timeline.permissionAllowAlwaysHint")} onClick={() => onDecision?.(request.id, "allow_always")}>{t("timeline.permissionAllowAlways")}</Action>}</div>}
     {pending && request.requiresUserInteraction && <p className="conversation-permission-note">{t("timeline.permissionOpenClaude")}</p>}
   </section>;
 }

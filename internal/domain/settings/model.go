@@ -87,6 +87,9 @@ func Defaults() Settings {
 			"codex":  {Integration: "cli"},
 			"claude": {Integration: "cli"},
 			"modu":   {Integration: "sdk", ConfigSource: "shared"},
+			"pi":     {Integration: "cli"},
+			"grok":   {Integration: "cli"},
+			"dsh":    {Integration: "cli"},
 		},
 		Terminal: TerminalSettings{Theme: "system"},
 		Execution: ExecutionSettings{
@@ -117,7 +120,7 @@ func Normalize(input Settings) (Settings, error) {
 	if input.Runtimes == nil {
 		input.Runtimes = defaults.Runtimes
 	}
-	for _, id := range []string{"codex", "claude", "modu"} {
+	for _, id := range knownRuntimes {
 		if _, ok := input.Runtimes[id]; !ok {
 			input.Runtimes[id] = defaults.Runtimes[id]
 		}
@@ -194,6 +197,21 @@ var (
 	serviceTierKey = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 )
 
+// knownRuntimes is every harness the settings model accepts, in the order the
+// desktop lists them.
+var knownRuntimes = []string{"codex", "claude", "modu", "pi", "grok", "dsh"}
+
+// reasoningEfforts are the levels each harness advertises for its own
+// reasoning control. An empty value always means "leave the harness default".
+var reasoningEfforts = map[string][]string{
+	"codex":  {"", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"},
+	"claude": {"", "low", "medium", "high", "xhigh", "max"},
+	// Grok's --reasoning-effort, as reported by its own model catalog.
+	"grok": {"", "low", "medium", "high", "xhigh"},
+	// Pi spells this --thinking and accepts "off" to disable it outright.
+	"pi": {"", "off", "minimal", "low", "medium", "high", "xhigh"},
+}
+
 func Validate(input Settings) error {
 	if input.SchemaVersion != CurrentSchemaVersion {
 		return errors.New("schemaVersion must be 1")
@@ -202,7 +220,7 @@ func Validate(input Settings) error {
 		return errors.New("revision must be positive")
 	}
 	for id, runtime := range input.Runtimes {
-		if id != "codex" && id != "claude" && id != "modu" {
+		if !contains(knownRuntimes, id) {
 			return fmt.Errorf("unknown runtime %q", id)
 		}
 		if strings.ContainsAny(runtime.Integration+runtime.ConfigSource+runtime.ConfigPath+runtime.Binary+runtime.DefaultModel+runtime.ReasoningEffort+runtime.ServiceTier+runtime.Provider, "\r\n\x00") {
@@ -220,29 +238,37 @@ func Validate(input Settings) error {
 		} else if runtime.ConfigSource != "" || runtime.ConfigPath != "" {
 			return fmt.Errorf("runtime %s does not support config source settings", id)
 		}
-		if id == "codex" {
-			if !contains([]string{"", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"}, runtime.ReasoningEffort) {
-				return errors.New("codex reasoning effort is invalid")
+		if efforts, ok := reasoningEfforts[id]; ok {
+			if !contains(efforts, runtime.ReasoningEffort) {
+				return fmt.Errorf("runtime %s reasoning effort is invalid", id)
 			}
+		} else if runtime.ReasoningEffort != "" {
+			return fmt.Errorf("runtime %s does not support reasoning settings", id)
+		}
+		// Codex is the only harness with a speed/processing tier.
+		if id == "codex" {
 			if runtime.ServiceTier != "" && !serviceTierKey.MatchString(runtime.ServiceTier) {
 				return errors.New("codex service tier is invalid")
 			}
-		} else if id == "claude" {
-			if !contains([]string{"", "low", "medium", "high", "xhigh", "max"}, runtime.ReasoningEffort) {
-				return errors.New("Claude Code reasoning effort is invalid")
-			}
-			if runtime.ServiceTier != "" {
-				return errors.New("Claude Code does not support service tier settings")
-			}
-		} else if runtime.ReasoningEffort != "" || runtime.ServiceTier != "" {
-			return fmt.Errorf("runtime %s does not support reasoning or service tier settings", id)
+		} else if runtime.ServiceTier != "" {
+			return fmt.Errorf("runtime %s does not support service tier settings", id)
 		}
-		if id == "modu" {
+		switch id {
+		case "modu":
 			if !contains([]string{"", "auto", "openai", "anthropic", "gemini"}, runtime.Provider) {
 				return errors.New("modu provider must be auto, openai, anthropic, or gemini")
 			}
-		} else if runtime.Provider != "" {
-			return fmt.Errorf("runtime %s does not support provider selection", id)
+		case "dsh":
+			// DeepSeek Harness routes through named provider entries in its own
+			// composition; "deepseek-official" is the one its default profile
+			// registers, and pi-ai supplies the multi-provider twin.
+			if !contains([]string{"", "deepseek-official", "pi-ai"}, runtime.Provider) {
+				return errors.New("dsh provider must be deepseek-official or pi-ai")
+			}
+		default:
+			if runtime.Provider != "" {
+				return fmt.Errorf("runtime %s does not support provider selection", id)
+			}
 		}
 		for _, key := range runtime.EnvironmentAllowlist {
 			if !environmentKey.MatchString(key) || forbiddenEnvironmentKey(key) {

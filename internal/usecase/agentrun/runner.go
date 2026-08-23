@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"sync"
 	"time"
 
@@ -109,6 +110,20 @@ type Runner interface {
 	Run(ctx context.Context, req Request, sink Sink) (Result, error)
 }
 
+// InteractivePermissionRunner is implemented by runners that can pause on a
+// tool call and block until the host approves or denies it.
+//
+// Whether a harness can do this is a property of the harness and the sandbox it
+// was asked for, not of the caller: Claude Code only opens its control channel
+// for a read-only run, while an ACP harness carries permission requests in
+// every mode. Hosts ask the engine rather than testing the runtime id, so a new
+// harness does not need the question answered again in each caller.
+type InteractivePermissionRunner interface {
+	// SupportsInteractivePermissions reports whether a run with this sandbox
+	// will route its tool approvals to Request.PermissionHandler.
+	SupportsInteractivePermissions(sandbox Sandbox) bool
+}
+
 // lineParser turns one stdout JSONL line into zero or more normalized events
 // and accumulates terminal state. Each runtime adapter provides one.
 type lineParser interface {
@@ -146,10 +161,7 @@ func streamProcess(ctx context.Context, cmd *exec.Cmd, parser lineParser, now no
 		return Result{}, fmt.Errorf("start %s: %w", cmd.Path, err)
 	}
 
-	scanner := bufio.NewScanner(stdout)
-	// Agent lines (especially Claude's init event) can be large; lift the
-	// default 64KiB token cap so we never silently drop a line.
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	scanner := newJSONLineScanner(stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
@@ -187,6 +199,29 @@ func streamProcess(ctx context.Context, cmd *exec.Cmd, parser lineParser, now no
 		return res, fmt.Errorf("read %s stdout: %w", cmd.Path, scanErr)
 	}
 	return res, nil
+}
+
+// toolInputPath reads the file a tool call targets. Harnesses declare `path`
+// on their filesystem tools but also accept `file_path` from models that reach
+// for the other spelling, so both are checked.
+func toolInputPath(input map[string]any) string {
+	for _, key := range []string{"path", "file_path"} {
+		if value, ok := input[key].(string); ok && strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+// newJSONLineScanner returns a scanner sized for agent JSONL.
+//
+// Harness lines are routinely far larger than bufio's default 64KiB token —
+// Claude's init event and Grok's initialize result both carry whole catalogs —
+// and a line silently dropped for being too long would lose a protocol frame.
+func newJSONLineScanner(r io.Reader) *bufio.Scanner {
+	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	return scanner
 }
 
 // lineCapture is an io.Writer that retains the tail of a stream so process

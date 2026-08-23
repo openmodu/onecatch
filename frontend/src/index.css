@@ -857,10 +857,17 @@
     opacity: .8;
   }
 
-  :root[data-theme="dark"] .runtime-harness-icon-modu { filter: invert(1); }
+  /* Single-colour marks render black inside an <img>, which has its own
+     document context and cannot inherit the page's text colour. DeepSeek's
+     mark is full colour and must be left alone. */
+  :root[data-theme="dark"] .runtime-harness-icon-modu,
+  :root[data-theme="dark"] .runtime-harness-icon-pi,
+  :root[data-theme="dark"] .runtime-harness-icon-grok { filter: invert(1); }
 
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) .runtime-harness-icon-modu { filter: invert(1); }
+    :root:not([data-theme="light"]) .runtime-harness-icon-modu,
+    :root:not([data-theme="light"]) .runtime-harness-icon-pi,
+    :root:not([data-theme="light"]) .runtime-harness-icon-grok { filter: invert(1); }
   }
 
   .new-task-select.is-read-only {

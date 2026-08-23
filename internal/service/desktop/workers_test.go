@@ -20,6 +20,9 @@ type remoteWritingEngine struct{}
 func (remoteWritingEngine) Available(runtime agentrun.Runtime) bool {
 	return runtime == agentrun.RuntimeCodex
 }
+func (remoteWritingEngine) SupportsInteractivePermissions(agentrun.Runtime, agentrun.Sandbox) bool {
+	return true
+}
 
 type remoteApprovalEngine struct {
 	decision chan agentrun.PermissionDecision
@@ -27,6 +30,9 @@ type remoteApprovalEngine struct {
 
 func (remoteApprovalEngine) Available(runtime agentrun.Runtime) bool {
 	return runtime == agentrun.RuntimeClaude
+}
+func (remoteApprovalEngine) SupportsInteractivePermissions(agentrun.Runtime, agentrun.Sandbox) bool {
+	return true
 }
 
 func (engine remoteApprovalEngine) Run(ctx context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {

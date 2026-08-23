@@ -126,6 +126,15 @@ func claudeHelpOptionSection(help, option string) string {
 	return section.String()
 }
 
+// SupportsInteractivePermissions is true only for a read-only run. Claude Code
+// reaches its can_use_tool control channel through `--input-format stream-json`,
+// which changes the whole invocation; a write-capable run instead passes
+// `--dangerously-skip-permissions` because its prompts would hang a headless
+// process. Widening this means reworking how the write path is launched.
+func (r *ClaudeRunner) SupportsInteractivePermissions(sandbox Sandbox) bool {
+	return sandbox == SandboxReadOnly
+}
+
 func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
 	interactivePermissions := req.Sandbox == SandboxReadOnly && req.PermissionHandler != nil
 	args := []string{
@@ -329,7 +338,11 @@ func (r *ClaudeRunner) handlePermissionControl(ctx context.Context, encoder *jso
 		ID: control.RequestID, ToolUseID: control.Request.ToolUseID, ToolName: control.Request.ToolName,
 		Input: control.Request.Input, Suggestions: control.Request.PermissionSuggestions,
 		Title: control.Request.Title, DisplayName: control.Request.DisplayName, Description: control.Request.Description,
-		DecisionReason: control.Request.DecisionReason, SuppressAlwaysAllow: control.Request.SuppressAlwaysAllowRule,
+		DecisionReason: control.Request.DecisionReason,
+		// "Always allow" persists the provider-authored rules in Suggestions.
+		// With none to persist there is nothing for the decision to mean, so
+		// the option is suppressed rather than silently degrading to one-shot.
+		SuppressAlwaysAllow:     control.Request.SuppressAlwaysAllowRule || len(control.Request.PermissionSuggestions) == 0,
 		RequiresUserInteraction: control.Request.RequiresUserInteraction,
 	}
 	text := request.Title

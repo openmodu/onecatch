@@ -49,6 +49,9 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .runtime-badge.codex { color: var(--acp-accent-soft); }
 .runtime-badge.claude { color: var(--acp-warn); }
 .runtime-badge.modu { color: var(--acp-cyan); }
+.runtime-badge.pi { color: var(--acp-violet); }
+.runtime-badge.grok { color: var(--acp-muted); }
+.runtime-badge.dsh { color: var(--acp-blue); }
 .flow-step.current .flow-node { background: transparent; color: var(--acp-accent); }
 .run-summary-step.current > b, .run-summary-step.current > span strong, .run-summary-step em { color: var(--acp-accent-soft); }
 .conversation-section { padding: 0; background: var(--acp-canvas); }

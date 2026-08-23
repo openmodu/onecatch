@@ -35,6 +35,13 @@ type Config struct {
 	ModuIntegration string
 	ModuConfigPath  string
 	ModuAgentDir    string
+	PiBinary        string
+	GrokBinary      string
+	DshBinary       string
+	// DshSessionRoot is where OneCatch keeps DeepSeek Harness session logs. The
+	// adapter reads the harness's own log to recover its event stream, so it
+	// needs a directory it controls rather than the harness's shared default.
+	DshSessionRoot string
 }
 
 // NewEngine builds an engine with all standard local runtime runners.
@@ -43,6 +50,9 @@ func NewEngine(cfg Config) *Engine {
 		NewCodexRunner(cfg.CodexBinary),
 		NewClaudeRunner(cfg.ClaudeBinary),
 		newModuRuntimeRunner(cfg),
+		NewPiRunner(cfg.PiBinary),
+		NewGrokRunner(cfg.GrokBinary),
+		NewDshRunner(cfg.DshBinary, cfg.DshSessionRoot),
 	)
 }
 
@@ -71,7 +81,7 @@ func (e *Engine) Available(rt Runtime) bool {
 // can show users which local agents they can actually run.
 func (e *Engine) AvailableRuntimes() []Runtime {
 	// Stable order so the UI does not reshuffle between calls.
-	order := []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu}
+	order := []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeDsh}
 	var out []Runtime
 	for _, rt := range order {
 		if e.Available(rt) {
@@ -79,6 +89,15 @@ func (e *Engine) AvailableRuntimes() []Runtime {
 		}
 	}
 	return out
+}
+
+// SupportsInteractivePermissions reports whether a run of this runtime and
+// sandbox will ask the host to approve tool calls. Hosts use it to decide
+// whether to install a PermissionHandler; a runtime that cannot ask would
+// otherwise be given a handler that is never called.
+func (e *Engine) SupportsInteractivePermissions(rt Runtime, sandbox Sandbox) bool {
+	runner, ok := e.runners[rt].(InteractivePermissionRunner)
+	return ok && runner.SupportsInteractivePermissions(sandbox)
 }
 
 // Run validates the request, selects the runner, and executes it. It returns

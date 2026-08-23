@@ -681,6 +681,21 @@ export const Runtime = {
      * RuntimeModu drives Modu Code via its native SDK or print mode.
      */
     RuntimeModu: "modu",
+
+    /**
+     * RuntimePi drives the Pi coding agent via `pi -p --mode json`.
+     */
+    RuntimePi: "pi",
+
+    /**
+     * RuntimeGrok drives xAI's Grok Build via its ACP server (`grok agent stdio`).
+     */
+    RuntimeGrok: "grok",
+
+    /**
+     * RuntimeDsh drives DeepSeek Harness via its one-shot headless profile.
+     */
+    RuntimeDsh: "dsh",
 };
 
 /**
