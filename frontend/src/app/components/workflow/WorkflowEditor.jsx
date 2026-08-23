@@ -4,18 +4,21 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Action, TUISelect } from "../../../ui/primitives.jsx";
 import { nextWorkflowItemID } from "../../workflowIds.js";
 import { assignWorkflowWorker, isRemoteWorker } from "../../workflowWorker.js";
+import { enabledRuntimeInfos } from "../../runtimeHarnesses.js";
 import DAGWorkflowEditor from "./DAGWorkflowEditor.jsx";
 import WorkflowIdentityFields from "./WorkflowIdentityFields.jsx";
 
 export default function WorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, updateStep, updateTransition, removeTransition, runtimes, workers, defaultSandbox, allowFullSandbox, onClose, showBack = false }) {
   const { t } = useTranslation();
   const [previewOpen, setPreviewOpen] = useState(false);
+  const runtimeOptions = enabledRuntimeInfos(runtimes, {}, editor.steps.map((step) => step.runtime));
+  const defaultRuntime = runtimeOptions.find((runtime) => !runtime.disabled)?.id || "";
   if (editor.mode === "dag") return <DAGWorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} runtimes={runtimes} workers={workers} defaultSandbox={defaultSandbox} allowFullSandbox={allowFullSandbox} onClose={onClose} embedded={!showBack} />;
   const workerOptions = [{ value: "local", label: t("common.local") }, ...workers.filter((worker) => worker.enabled).map((worker) => ({ value: worker.id, label: worker.name }))];
   const updateWorker = (stepIndex, workerId) => setEditor((current) => ({ ...current, steps: current.steps.map((step, index) => index === stepIndex ? assignWorkflowWorker(step, workerId) : step) }));
   const addStep = () => setEditor((current) => {
     const id = nextWorkflowItemID("step", current.steps);
-    return { ...current, steps: [...current.steps, { id, name: t("workflow.newStep"), runtime: "codex", model: "", workerId: "local", sandbox: defaultSandbox, rolePrompt: t("workflow.defaultRole"), instruction: t("workflow.defaultInstruction"), transitions: { completed: "$done" } }] };
+    return { ...current, steps: [...current.steps, { id, name: t("workflow.newStep"), runtime: defaultRuntime, model: "", workerId: "local", sandbox: defaultSandbox, rolePrompt: t("workflow.defaultRole"), instruction: t("workflow.defaultInstruction"), transitions: { completed: "$done" } }] };
   });
   const removeStep = (index) => setEditor((current) => ({ ...current, steps: current.steps.filter((_, itemIndex) => itemIndex !== index) }));
   return <section className="workflow-editor-surface">
@@ -44,7 +47,7 @@ export default function WorkflowEditor({ editor, setEditor, validation, validate
       </div>
       <div className="step-editor-fields">
         <label className="step-field"><span>{t("workflow.stepName")}</span><input value={step.name} onChange={(event) => updateStep(stepIndex, "name", event.target.value)} /></label>
-        <label className="step-field"><span>{t("common.runtime")}</span><TUISelect ariaLabel={t("common.runtime")} value={step.runtime} onChange={(runtime) => updateStep(stepIndex, "runtime", runtime)} options={runtimes.map((runtime) => ({ value: runtime.id, label: runtime.id, meta: runtime.available ? "" : t("common.missing") }))} /></label>
+        <label className="step-field"><span>{t("common.runtime")}</span><TUISelect ariaLabel={t("common.runtime")} value={step.runtime} onChange={(runtime) => updateStep(stepIndex, "runtime", runtime)} options={runtimeOptions.map((runtime) => ({ value: runtime.id, label: runtime.id, meta: runtime.available ? "" : t("common.missing"), disabled: runtime.disabled }))} /></label>
         <label className="step-field"><span>{t("common.worker")}</span><TUISelect ariaLabel={t("common.worker")} value={step.workerId || "local"} onChange={(workerId) => updateWorker(stepIndex, workerId)} options={workerOptions} /></label>
         <label className="step-field"><span>{t("common.sandbox")}</span><TUISelect ariaLabel={t("common.sandbox")} value={step.sandbox || "workspace-write"} onChange={(sandbox) => updateStep(stepIndex, "sandbox", sandbox)} options={[{ value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, { value: "full", label: t("workspace.fullDanger"), disabled: isRemoteWorker(step.workerId) || (!allowFullSandbox && step.sandbox !== "full") }]} /></label>
         <label className="step-field step-field--multiline"><span>{t("workflow.rolePrompt")}</span><textarea value={step.rolePrompt} onChange={(event) => updateStep(stepIndex, "rolePrompt", event.target.value)} /></label>

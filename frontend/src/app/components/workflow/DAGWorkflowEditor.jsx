@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Action, TUISelect } from "../../../ui/primitives.jsx";
 import { nextWorkflowItemID } from "../../workflowIds.js";
 import { assignWorkflowWorker, isRemoteWorker } from "../../workflowWorker.js";
+import { enabledRuntimeInfos } from "../../runtimeHarnesses.js";
 import Modal from "../Modal.jsx";
 import WorkflowIdentityFields from "./WorkflowIdentityFields.jsx";
 
@@ -16,6 +17,8 @@ export default function DAGWorkflowEditor({ editor, setEditor, validation, valid
   const selected = editor.steps[selectedIndex];
   const positions = editor.layout?.nodes || {};
   const workerOptions = [{ id: "local", name: t("common.local") }, ...workers.filter((worker) => worker.enabled)];
+  const runtimeOptions = enabledRuntimeInfos(runtimes, {}, editor.steps.map((step) => step.runtime));
+  const defaultRuntime = runtimeOptions.find((runtime) => !runtime.disabled)?.id || "";
 
   const setStep = (field, value) => setEditor((current) => ({ ...current, steps: current.steps.map((step) => step.id === selectedID ? { ...step, [field]: value } : step) }));
   const setWorker = (workerId) => setEditor((current) => ({ ...current, steps: current.steps.map((step) => step.id === selectedID ? assignWorkflowWorker(step, workerId) : step) }));
@@ -27,7 +30,7 @@ export default function DAGWorkflowEditor({ editor, setEditor, validation, valid
   });
   const addNode = () => {
     const id = nextWorkflowItemID("node", editor.steps);
-    setEditor((current) => ({ ...current, steps: [...current.steps, { id, name: t("workflow.newNode"), runtime: "codex", workerId: "local", sandbox: defaultSandbox, dependsOn: [], rolePrompt: t("workflow.defaultDagRole"), instruction: t("workflow.defaultNodeInstruction"), transitions: { completed: "$done", need_human: "$pause" } }], layout: { nodes: { ...(current.layout?.nodes || {}), [id]: { x: 120 + current.steps.length * 34, y: 110 + current.steps.length * 34 } } } }));
+    setEditor((current) => ({ ...current, steps: [...current.steps, { id, name: t("workflow.newNode"), runtime: defaultRuntime, workerId: "local", sandbox: defaultSandbox, dependsOn: [], rolePrompt: t("workflow.defaultDagRole"), instruction: t("workflow.defaultNodeInstruction"), transitions: { completed: "$done", need_human: "$pause" } }], layout: { nodes: { ...(current.layout?.nodes || {}), [id]: { x: 120 + current.steps.length * 34, y: 110 + current.steps.length * 34 } } } }));
     setSelectedID(id);
   };
   const deleteNode = () => {
@@ -93,7 +96,7 @@ export default function DAGWorkflowEditor({ editor, setEditor, validation, valid
           <div className="dag-inspector-title"><div><span className="kicker">{t("workflow.nodeInspector")}</span><h3>{selected.name}</h3></div><Action className="dag-delete-node" tone="danger" disabled={editor.steps.length <= 1} onClick={deleteNode}>{t("workflow.deleteNode")}</Action></div>
           <label>{t("common.nodeID")}<input value={selected.id} onChange={(event) => { const next = event.target.value; renameStep(next); setSelectedID(next); }} /></label>
           <label>{t("worker.name")}<input value={selected.name} onChange={(event) => setStep("name", event.target.value)} /></label>
-          <label>{t("common.runtime")}<TUISelect ariaLabel={t("common.runtime")} value={selected.runtime} onChange={(runtime) => setStep("runtime", runtime)} options={runtimes.map((runtime) => ({ value: runtime.id, label: runtime.name }))} /></label>
+          <label>{t("common.runtime")}<TUISelect ariaLabel={t("common.runtime")} value={selected.runtime} onChange={(runtime) => setStep("runtime", runtime)} options={runtimeOptions.map((runtime) => ({ value: runtime.id, label: runtime.name, disabled: runtime.disabled }))} /></label>
           <label>{t("common.worker")}<TUISelect ariaLabel={t("common.worker")} value={selected.workerId || "local"} onChange={setWorker} options={workerOptions.map((worker) => ({ value: worker.id, label: worker.name }))} /></label>
           <label>{t("common.sandbox")}<TUISelect ariaLabel={t("common.sandbox")} value={selected.sandbox || "read-only"} onChange={(sandbox) => setStep("sandbox", sandbox)} options={[{ value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, { value: "full", label: t("workspace.fullDanger"), disabled: isRemoteWorker(selected.workerId) }]} /></label>
           <label>{t("workflow.rolePrompt")}<textarea value={selected.rolePrompt} onChange={(event) => setStep("rolePrompt", event.target.value)} /></label><label>{t("workflow.nodeInstruction")}<textarea value={selected.instruction} onChange={(event) => setStep("instruction", event.target.value)} /></label>

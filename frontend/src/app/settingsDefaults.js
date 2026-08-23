@@ -6,8 +6,15 @@
 // default value — the workbench, which merely holds settings in state — do not
 // drag the whole settings screen and its controls into their first load.
 export const demoSettings = {
-  schemaVersion: 1, revision: 1,
-  runtimes: { codex: { integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", serviceTier: "", environmentAllowlist: [] }, claude: { integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] }, modu: { integration: "sdk", configSource: "shared", configPath: "", binary: "", defaultModel: "", provider: "auto", environmentAllowlist: [] }, pi: { integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] }, grok: { integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] }, dsh: { integration: "cli", binary: "", defaultModel: "", provider: "deepseek-official", environmentAllowlist: [] } },
+  schemaVersion: 2, revision: 1,
+  runtimes: {
+    codex: { enabled: true, remoteFsEnabled: true, integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", serviceTier: "", environmentAllowlist: [] },
+    claude: { enabled: true, remoteFsEnabled: true, integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] },
+    modu: { enabled: true, remoteFsEnabled: true, integration: "sdk", configSource: "shared", configPath: "", binary: "", defaultModel: "", provider: "auto", environmentAllowlist: [] },
+    pi: { enabled: true, remoteFsEnabled: false, integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] },
+    grok: { enabled: true, remoteFsEnabled: false, integration: "cli", binary: "", defaultModel: "", reasoningEffort: "", environmentAllowlist: [] },
+    dsh: { enabled: true, remoteFsEnabled: false, integration: "cli", binary: "", defaultModel: "", provider: "deepseek-official", environmentAllowlist: [] },
+  },
   terminal: { shell: "", arguments: [], theme: "system" },
   execution: { maxTransitions: 20, maxConsecutiveFailures: 3, stepTimeoutSeconds: 1800, maxLocalDAGConcurrency: 4, interruptGraceSeconds: 10, defaultSandbox: "workspace-write" },
   security: { allowFullSandbox: false, confirmFullSandboxEveryRun: true, diagnosticsIncludePrompt: false, diagnosticsIncludeRawEvents: false },

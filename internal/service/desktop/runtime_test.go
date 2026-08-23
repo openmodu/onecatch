@@ -35,6 +35,25 @@ func TestRuntimeRegistryResolvesIsolatedModuPaths(t *testing.T) {
 	}
 }
 
+func TestRuntimePreferencesDecorateCatalogStatus(t *testing.T) {
+	registry, err := NewRuntimeRegistry("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := domainsettings.Defaults().Runtimes
+	pi := settings["pi"]
+	pi.Enabled = false
+	settings["pi"] = pi
+	registry.ApplySettings(settings, 10)
+	items := registry.withRuntimePreferences([]RuntimeInfo{{ID: "codex"}, {ID: "pi"}})
+	if !items[0].Enabled || !items[0].SupportsRemoteFS || !items[0].RemoteFSEnabled {
+		t.Fatalf("codex preferences = %+v", items[0])
+	}
+	if items[1].Enabled || items[1].SupportsRemoteFS || items[1].RemoteFSEnabled {
+		t.Fatalf("pi preferences = %+v", items[1])
+	}
+}
+
 func TestRuntimeRegistryCopiesSharedModuConfigOnFirstIsolation(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

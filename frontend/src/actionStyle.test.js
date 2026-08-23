@@ -303,7 +303,7 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.doesNotMatch(newTask, /className="new-task-select execution"/, "execution mode belongs with the final submit action");
   assert.match(newTask, /className=\{`new-task-submit-group \$\{executionMode\}`\}/);
   assert.match(newTask, /className="new-task-add"/, "the plus button keeps attachment and execution-mode actions compact");
-  assert.match(newTask, /<TaskExecutorSelector form=\{form\} workflows=\{workflows\} runtimes=\{runtimes\} onChange=\{onChange\} \/>/, "Agent and workflow selection remains visible in the composer");
+  assert.match(newTask, /<TaskExecutorSelector form=\{form\} workflows=\{workflows\} runtimes=\{runtimes\} runtimeSettings=\{runtimeSettingsByHarness\} remoteFS=\{remoteFS\} onChange=\{onChange\} \/>/, "Agent and workflow selection remains visible in the composer and filters by enabled harnesses");
   assert.match(newTask, /DropdownMenuRadioGroup value=\{executionMode\}/);
   assert.match(newTask, /value="immediate"[^>]*><ArrowUp/);
   assert.match(newTask, /value="queued"[^>]*><ListPlus/);
@@ -366,7 +366,7 @@ test("every new task chooses either an Agent or a workflow plus an explicit perm
   assert.match(workflowLibrary, /workflows\.filter\(\(workflow\) => workflow\.id !== directAgentWorkflowID\)/, "the internal direct-Agent definition must not be editable or deletable in the workflow library");
   assert.match(executor, /value=\{`agent:\$\{option\.value\}`\}/);
   assert.match(executor, /value=\{`workflow:\$\{workflow\.id\}`\}/);
-  assert.match(executor, /directAgent\s*\? selectedHarness\.label/, "a directly selected Agent shows only its runtime name");
+  assert.match(executor, /directAgent\s*\? selectedHarnessEnabled \? selectedHarness\.label : t\("task\.noHarnessEnabled"\)/, "a directly selected Agent shows its runtime name, or a notice when no harness is enabled");
   assert.doesNotMatch(executor, /t\("task\.agentLabel"/, "the execution target must not spend width on a redundant Agent prefix");
   assert.doesNotMatch(executor, /t\("task\.workflowTargetLabel"/, "the execution target must not spend width on a redundant workflow prefix");
   assert.match(permission, /value: "read-only"/);

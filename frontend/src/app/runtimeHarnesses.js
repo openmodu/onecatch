@@ -6,12 +6,12 @@
 // seed below only covers the window before that first load, and the cases where
 // no harness list is available at all (demo mode, tests).
 const seedHarnesses = [
-  { id: "codex", label: "Codex", supportsReasoning: true, supportsSpeed: true },
-  { id: "claude", label: "Claude Code", supportsReasoning: true, supportsSpeed: false },
-  { id: "modu", label: "modu_code", supportsReasoning: false, supportsSpeed: false },
-  { id: "pi", label: "Pi", supportsReasoning: true, supportsSpeed: false },
-  { id: "grok", label: "Grok Build", supportsReasoning: true, supportsSpeed: false },
-  { id: "dsh", label: "DeepSeek Harness", supportsReasoning: false, supportsSpeed: false },
+  { id: "codex", label: "Codex", supportsReasoning: true, supportsSpeed: true, supportsRemoteFs: true },
+  { id: "claude", label: "Claude Code", supportsReasoning: true, supportsSpeed: false, supportsRemoteFs: true },
+  { id: "modu", label: "modu_code", supportsReasoning: false, supportsSpeed: false, supportsRemoteFs: true },
+  { id: "pi", label: "Pi", supportsReasoning: true, supportsSpeed: false, supportsRemoteFs: false },
+  { id: "grok", label: "Grok Build", supportsReasoning: true, supportsSpeed: false, supportsRemoteFs: false },
+  { id: "dsh", label: "DeepSeek Harness", supportsReasoning: false, supportsSpeed: false, supportsRemoteFs: false },
 ];
 
 export let runtimeHarnesses = seedHarnesses;
@@ -27,6 +27,7 @@ export function hydrateRuntimeHarnesses(runtimes = []) {
       label: runtime.name || runtime.id,
       supportsReasoning: (runtime.efforts || []).length > 0,
       supportsSpeed: Boolean(runtime.serviceTiers),
+      supportsRemoteFs: Boolean(runtime.supportsRemoteFs),
     }));
   }
   return runtimes;
@@ -43,16 +44,44 @@ export function supportsRuntimeProfile(id = "codex") {
   return capability.supportsReasoning || capability.supportsSpeed;
 }
 
-export function runtimeHarnessOptions(runtimes = [], unavailableLabel = "Unavailable") {
+export function runtimeHarnessEnabled(id, runtimes = [], runtimeSettings = {}, remoteFS = false) {
+  const capability = runtimeHarness(id);
+  const status = runtimes.find((item) => item.id === id);
+  const preference = runtimeSettings?.[id] || {};
+  const enabled = preference.enabled ?? status?.enabled ?? true;
+  if (!enabled) return false;
+  if (!remoteFS) return true;
+  const supportsRemoteFs = status?.supportsRemoteFs ?? capability.supportsRemoteFs ?? false;
+  const remoteFsEnabled = preference.remoteFsEnabled ?? status?.remoteFsEnabled ?? supportsRemoteFs;
+  return supportsRemoteFs && remoteFsEnabled;
+}
+
+export function hasRemoteFSHarness(runtimes = [], runtimeSettings = {}) {
+  return runtimeHarnesses.some((item) => runtimeHarnessEnabled(item.id, runtimes, runtimeSettings, true));
+}
+
+export function workflowHarnessesEnabled(workflow, runtimes = [], runtimeSettings = {}, remoteFS = false) {
+  return (workflow?.steps || []).every((step) => runtimeHarnessEnabled(step.runtime, runtimes, runtimeSettings, remoteFS));
+}
+
+export function enabledRuntimeInfos(runtimes = [], runtimeSettings = {}, preserveIDs = []) {
+  const preserve = new Set(preserveIDs);
+  return runtimes
+    .filter((item) => runtimeHarnessEnabled(item.id, runtimes, runtimeSettings) || preserve.has(item.id))
+    .map((item) => runtimeHarnessEnabled(item.id, runtimes, runtimeSettings) ? item : { ...item, disabled: true });
+}
+
+export function runtimeHarnessOptions(runtimes = [], unavailableLabel = "Unavailable", runtimeSettings = {}, remoteFS = false) {
   const statusByID = new Map(runtimes.map((item) => [item.id, item]));
-  return runtimeHarnesses.map((item) => {
+  return runtimeHarnesses.flatMap((item) => {
+    if (!runtimeHarnessEnabled(item.id, runtimes, runtimeSettings, remoteFS)) return [];
     const status = statusByID.get(item.id);
-    return {
+    return [{
       value: item.id,
       label: item.label,
       disabled: status?.available === false,
       meta: status?.available === false ? unavailableLabel : "",
-    };
+    }];
   });
 }
 

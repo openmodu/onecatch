@@ -64,6 +64,9 @@ type Harness struct {
 	// session. A harness that cannot must reject a resume rather than silently
 	// starting a fresh conversation.
 	CanResume bool `json:"canResume"`
+	// SupportsRemoteFS reports whether the adapter can keep the harness process
+	// local while redirecting its workspace operations to an SSH/SFTP target.
+	SupportsRemoteFS bool `json:"supportsRemoteFs"`
 }
 
 // DefaultIntegration is the integration used for a harness the user has not
@@ -101,15 +104,17 @@ var catalog = []Harness{
 		ServiceTiers: true,
 		Integrations: []string{IntegrationCLI},
 		// Codex is the only harness with a speed/processing tier.
-		EnvironmentHint: "OPENAI_API_KEY, HTTPS_PROXY",
-		CanResume:       true,
+		EnvironmentHint:  "OPENAI_API_KEY, HTTPS_PROXY",
+		CanResume:        true,
+		SupportsRemoteFS: true,
 	},
 	{
 		ID: "claude", Name: "Claude Code", Command: "claude",
-		Efforts:         []string{"low", "medium", "high", "xhigh", "max"},
-		Integrations:    []string{IntegrationCLI},
-		EnvironmentHint: "ANTHROPIC_API_KEY, HTTPS_PROXY",
-		CanResume:       true,
+		Efforts:          []string{"low", "medium", "high", "xhigh", "max"},
+		Integrations:     []string{IntegrationCLI},
+		EnvironmentHint:  "ANTHROPIC_API_KEY, HTTPS_PROXY",
+		CanResume:        true,
+		SupportsRemoteFS: true,
 	},
 	{
 		ID: "modu", Name: "Modu Code", Command: "modu_code",
@@ -118,7 +123,8 @@ var catalog = []Harness{
 		Integrations: []string{IntegrationSDK, IntegrationCLI},
 		// Credentials come from the harness's own TOML rather than the
 		// environment, so there is no useful variable to suggest.
-		CanResume: true,
+		CanResume:        true,
+		SupportsRemoteFS: true,
 	},
 	{
 		ID: "pi", Name: "Pi", Command: "pi",

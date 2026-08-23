@@ -76,6 +76,21 @@ func TestResumeClaimsAreExplicit(t *testing.T) {
 	}
 }
 
+func TestRemoteFSCapabilitiesAreExplicit(t *testing.T) {
+	for _, id := range []string{"codex", "claude", "modu"} {
+		harness, _ := Find(id)
+		if !harness.SupportsRemoteFS {
+			t.Fatalf("harness %q must support remote FS", id)
+		}
+	}
+	for _, id := range []string{"pi", "grok", "dsh"} {
+		harness, _ := Find(id)
+		if harness.SupportsRemoteFS {
+			t.Fatalf("harness %q must not advertise remote FS", id)
+		}
+	}
+}
+
 func TestFindAndIsKnown(t *testing.T) {
 	if _, ok := Find("gemini"); ok {
 		t.Fatal("an uncatalogued harness must not be found")

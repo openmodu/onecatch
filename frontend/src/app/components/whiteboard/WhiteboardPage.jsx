@@ -231,7 +231,7 @@ export default function WhiteboardPage({ workspace, mode = "demo", runtimes = []
   const objectByID = useMemo(() => new Map(board.objects.map((object) => [object.id, object])), [board.objects]);
   const proposalByID = useMemo(() => new Map(proposal.changes.map((change) => [change.id, change])), [proposal.changes]);
   const focusedChange = proposalByID.get(focusedID);
-  const availableRuntimes = useMemo(() => runtimes.filter((item) => item.available !== false), [runtimes]);
+  const availableRuntimes = useMemo(() => runtimes.filter((item) => item.available !== false && item.enabled !== false), [runtimes]);
 
   useEffect(() => {
     const next = availableRuntimes.find((item) => item.id === runtime) || availableRuntimes[0];
@@ -377,7 +377,7 @@ export default function WhiteboardPage({ workspace, mode = "demo", runtimes = []
     event.preventDefault();
     const prompt = instruction.trim();
     const agentBusy = ["reading", "working", "applying"].includes(agentState);
-    if (!prompt || agentBusy) return;
+    if (!prompt || agentBusy || !availableRuntimes.length) return;
     const currentRequestID = requestID();
     activeRequestRef.current = currentRequestID;
     streamedChangeIDsRef.current = new Set();
@@ -477,8 +477,8 @@ export default function WhiteboardPage({ workspace, mode = "demo", runtimes = []
         <form className="agent-composer" onSubmit={submitAgent}>
           <textarea aria-label="给 Agent 的白板指令" value={instruction} placeholder="让 Agent 基于这个框架继续…" onChange={(event) => setInstruction(event.target.value)} onCompositionStart={() => { composingRef.current = true; }} onCompositionEnd={() => { window.setTimeout(() => { composingRef.current = false; }, 100); }} onKeyDown={(event) => { if (shouldSubmitComposer(event, composingRef.current)) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
           <div className="agent-composer-meta"><span>@ 框架</span><span># {selectedObjectID ? "1 个选中项" : "选中项"}</span><button type="button"><Paperclip size={14} aria-hidden="true" />附件</button><small>Enter 提交</small></div>
-          <select aria-label="Agent 运行时" value={runtime} onChange={(event) => { setRuntime(event.target.value); setAgentSessionID(""); }}>{(availableRuntimes.length ? availableRuntimes : [{ id: "codex", name: "Codex" }]).map((item) => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}</select>
-          <button className="agent-composer-submit" type={agentBusy ? "button" : "submit"} aria-label={agentBusy ? "停止 Agent 白板操作" : "提交给 Agent"} disabled={!agentBusy && !instruction.trim()} onClick={agentBusy ? stopAgent : undefined}>{agentBusy ? <X size={18} aria-hidden="true" /> : <Send size={18} aria-hidden="true" />}</button>
+          <select aria-label="Agent 运行时" value={availableRuntimes.length ? runtime : ""} disabled={!availableRuntimes.length} onChange={(event) => { setRuntime(event.target.value); setAgentSessionID(""); }}>{availableRuntimes.length ? availableRuntimes.map((item) => <option key={item.id} value={item.id}>{item.name || item.id}</option>) : <option value="">无已开启 Agent</option>}</select>
+          <button className="agent-composer-submit" type={agentBusy ? "button" : "submit"} aria-label={agentBusy ? "停止 Agent 白板操作" : "提交给 Agent"} disabled={!agentBusy && (!instruction.trim() || !availableRuntimes.length)} onClick={agentBusy ? stopAgent : undefined}>{agentBusy ? <X size={18} aria-hidden="true" /> : <Send size={18} aria-hidden="true" />}</button>
           {agentBusy && <p className="agent-running"><Sparkles size={13} aria-hidden="true" />{liveOperation}</p>}
           {agentError && <p className="agent-error">{agentError}</p>}
         </form>

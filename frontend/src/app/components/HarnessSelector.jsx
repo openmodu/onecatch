@@ -11,22 +11,23 @@ import {
 import { runtimeHarness, runtimeHarnessOptions, selectRuntimeHarness } from "../runtimeHarnesses.js";
 import RuntimeHarnessIcon from "./RuntimeHarnessIcon.jsx";
 
-export default function HarnessSelector({ value, onChange, runtimes = [], readOnly = false, agentLabel = false, className = "", menuSide = "top" }) {
+export default function HarnessSelector({ value, onChange, runtimes = [], runtimeSettings = {}, remoteFS = false, readOnly = false, agentLabel = false, className = "", menuSide = "top" }) {
   const { t } = useTranslation();
   const harness = runtimeHarness(value?.harness);
-  const label = harness.label;
   const controlLabel = agentLabel ? t("task.executionTarget") : t("task.harness");
   const controlClass = agentLabel ? "new-task-select executor" : "new-task-select harness";
 
   if (readOnly) {
-    return <span className={`${controlClass} is-read-only harness-profile-read-only ${className}`.trim()} aria-label={`${controlLabel}: ${harness.label}`} title={`${controlLabel}: ${harness.label}`}>{agentLabel && <RuntimeHarnessIcon harness={harness.id} size={14} aria-hidden="true" />}<span>{label}</span></span>;
+    return <span className={`${controlClass} is-read-only harness-profile-read-only ${className}`.trim()} aria-label={`${controlLabel}: ${harness.label}`} title={`${controlLabel}: ${harness.label}`}>{agentLabel && <RuntimeHarnessIcon harness={harness.id} size={14} aria-hidden="true" />}<span>{harness.label}</span></span>;
   }
 
-  const options = runtimeHarnessOptions(runtimes, t("task.harnessUnavailable"));
+  const options = runtimeHarnessOptions(runtimes, t("task.harnessUnavailable"), runtimeSettings, remoteFS);
+  const hasSelection = options.some((option) => option.value === harness.id);
+  const label = hasSelection ? harness.label : t("task.noHarnessEnabled");
   return <DropdownMenu>
     <DropdownMenuTrigger asChild>
-      <Button type="button" variant="ghost" className={`${controlClass} ${className}`.trim()} aria-label={controlLabel} title={controlLabel}>
-        {agentLabel && <RuntimeHarnessIcon harness={harness.id} size={14} aria-hidden="true" />}<span>{label}</span><ChevronDown size={14} aria-hidden="true" />
+      <Button type="button" variant="ghost" className={`${controlClass} ${className}`.trim()} aria-label={controlLabel} title={controlLabel} disabled={!options.length}>
+        {agentLabel && hasSelection && <RuntimeHarnessIcon harness={harness.id} size={14} aria-hidden="true" />}<span>{label}</span><ChevronDown size={14} aria-hidden="true" />
       </Button>
     </DropdownMenuTrigger>
     <DropdownMenuContent className="harness-select-menu" side={menuSide} align="start" sideOffset={8}>

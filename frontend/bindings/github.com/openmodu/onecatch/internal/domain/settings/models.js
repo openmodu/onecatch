@@ -103,6 +103,20 @@ export class RuntimeSettings {
      * @param {Partial<RuntimeSettings>} [$$source = {}] - The source object to create the RuntimeSettings.
      */
     constructor($$source = {}) {
+        if (!("enabled" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["enabled"] = false;
+        }
+        if (!("remoteFsEnabled" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["remoteFsEnabled"] = false;
+        }
         if (/** @type {any} */(false)) {
             /**
              * @member
@@ -176,10 +190,10 @@ export class RuntimeSettings {
      * @returns {RuntimeSettings}
      */
     static createFrom($$source = {}) {
-        const $$createField8_0 = $$createType0;
+        const $$createField10_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("environmentAllowlist" in $$parsedSource) {
-            $$parsedSource["environmentAllowlist"] = $$createField8_0($$parsedSource["environmentAllowlist"]);
+            $$parsedSource["environmentAllowlist"] = $$createField10_0($$parsedSource["environmentAllowlist"]);
         }
         return new RuntimeSettings(/** @type {Partial<RuntimeSettings>} */($$parsedSource));
     }

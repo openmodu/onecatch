@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Switch } from "@/components/ui/switch";
 import {
   SettingsButton,
   SettingsField,
@@ -33,7 +34,7 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const message = (error, t) => String(error?.message || error || t("common.unknownError")).replace(/^Error:\s*/, "");
 const bytes = (value = 0) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : value < 1073741824 ? `${(value / 1048576).toFixed(1)} MB` : `${(value / 1073741824).toFixed(1)} GB`;
 const sectionKey = (section) => section === "harness" ? "runtimes" : section;
-const harnessFields = ["integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "provider"];
+const harnessFields = ["enabled", "remoteFsEnabled", "integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "provider"];
 
 const resetRuntimeFields = (current, defaults, fields) => Object.fromEntries(Object.keys(defaults).map((id) => {
   const next = { ...current[id] };
@@ -289,9 +290,8 @@ function TerminalSettings({ value, setValue, errors }) {
 // offer a harness the backend then rejected.
 function HarnessSettings({ value, setValue, status, runtimes, check, errors, codexConfiguration, claudeConfiguration, harnessConfigurations = {} }) {
   const catalog = runtimes.length ? runtimes : Object.keys(value).map((id) => ({ id, name: id, integrations: ["cli"] }));
-  const { t, i18n } = useTranslation();
-  // Only the first harness starts open; the rest are collapsed.
-  const [expanded, setExpanded] = useState({ [catalog[0]?.id]: true });
+  const { t } = useTranslation();
+  const [expanded, setExpanded] = useState({});
   const update = (id, field, next) => setValue({ ...value, [id]: { ...value[id], [field]: next } });
   const harnessByID = new Map(catalog.map((item) => [item.id, item]));
   // A harness whose credentials live in its own configuration advertises no
@@ -312,7 +312,7 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
       const nativeModu = integration === "sdk";
       const moduConfigSource = value.modu?.configSource || "shared";
       const current = status[id] || runtimes.find((item) => item.id === id) || {};
-      const statusText = current.checking ? t("settings.checkingCommand") : current.available ? `${current.version || t("common.available")}${current.checkedAt ? ` · ${new Date(current.checkedAt).toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN")}` : ""}` : current.error || t("settings.notDetected");
+      const statusText = current.checking ? t("settings.checkingCommand") : current.available ? current.version || t("common.available") : current.error || t("settings.notDetected");
       const codexData = codexConfiguration.data;
       const claudeData = claudeConfiguration.data;
       const reported = harnessConfigurations[id] || {};
@@ -357,15 +357,29 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
       const configurationMessage = id === "codex" ? codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || (codexData && t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })) : id === "claude" ? claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || (claudeData && t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })) : reported.loading ? t("settings.readingHarnessModels") : reported.error || (reportedData && t("settings.harnessModelsReady", { count: reportedData.models?.length || 0 })) || "";
       const description = id === "modu" ? t(nativeModu ? "settings.moduSDKDescription" : "settings.moduDescription")
         : t(`settings.${id}Description`, { defaultValue: t("settings.harnessAgentDescription", { harness: meta[id].name }) });
+      const enabled = value[id]?.enabled !== false;
+      const supportsRemoteFS = Boolean(harness.supportsRemoteFs);
+      const remoteFSEnabled = supportsRemoteFS && (value[id]?.remoteFsEnabled ?? true);
       const isExpanded = expanded[id];
       const panelID = `harness-${id}-settings`;
       return <section key={id}>
-        <button type="button" className="group flex w-full items-center gap-4 rounded-lg px-1 py-4 text-left transition-colors hover:bg-muted/35 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50" aria-expanded={isExpanded} aria-controls={panelID} onClick={() => setExpanded((current) => ({ ...current, [id]: !current[id] }))}>
-          <span className="min-w-0 flex-1"><strong className="block text-sm font-semibold text-foreground">{meta[id].name}</strong><span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{description}</span></span>
-          <Badge variant="outline" className={`shrink-0 ${current.available ? "border-success/25 bg-success/8 text-success" : current.error ? "border-destructive/25 bg-destructive/8 text-destructive" : "text-muted-foreground"}`}><i className="size-1.5 rounded-full bg-current" />{statusText}</Badge>
-          <ChevronDown size={16} className={`shrink-0 text-muted-foreground transition-transform ${isExpanded ? "rotate-180" : ""}`} aria-hidden="true" />
-        </button>
+        <div className="group flex w-full items-center gap-3 rounded-lg px-1 py-4 transition-colors hover:bg-muted/35">
+          <button type="button" className="min-w-0 flex-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50" aria-expanded={isExpanded} aria-controls={panelID} onClick={() => setExpanded((current) => ({ ...current, [id]: !current[id] }))}>
+          <span className="min-w-0 flex-1">
+            <span className="flex min-w-0 items-center gap-2"><strong className="shrink-0 text-sm font-semibold text-foreground">{meta[id].name}</strong><Badge variant="outline" title={statusText} className={`min-w-0 max-w-64 shrink truncate ${current.available ? "border-success/25 bg-success/8 text-success" : current.error ? "border-destructive/25 bg-destructive/8 text-destructive" : "text-muted-foreground"}`}><i className="size-1.5 shrink-0 rounded-full bg-current" /><span className="truncate">{statusText}</span></Badge></span>
+            <span className="mt-1 block text-xs leading-relaxed text-muted-foreground">{description}</span>
+          </span>
+          </button>
+          <div className="flex shrink-0 items-center border-l border-border/60 pl-3">
+            <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-muted-foreground" htmlFor={`${panelID}-enabled`}>
+              <span>{t(enabled ? "settings.harnessOn" : "settings.harnessOff")}</span>
+              <Switch id={`${panelID}-enabled`} checked={enabled} aria-label={t("settings.harnessEnabledAria", { harness: meta[id].name })} onCheckedChange={(checked) => update(id, "enabled", checked)} />
+            </label>
+          </div>
+          <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50" aria-label={t(isExpanded ? "settings.collapseHarness" : "settings.expandHarness", { harness: meta[id].name })} aria-expanded={isExpanded} aria-controls={panelID} onClick={() => setExpanded((current) => ({ ...current, [id]: !current[id] }))}><ChevronDown size={16} className={`transition-transform ${isExpanded ? "rotate-180" : ""}`} aria-hidden="true" /></button>
+        </div>
         {isExpanded && <div id={panelID} className="px-1 pb-6">
+          <div className="mb-4"><SettingsSwitchRow checked={remoteFSEnabled} disabled={!supportsRemoteFS || !enabled} label="Remote FS" description={t(supportsRemoteFS ? "settings.remoteFSSupported" : "settings.remoteFSUnsupported")} onChange={(checked) => update(id, "remoteFsEnabled", checked)} /></div>
           {configurationMessage && <div className={`mb-4 rounded-lg px-3 py-2 text-xs leading-relaxed ${configurationError ? "select-text bg-destructive/8 text-destructive" : "bg-primary/6 text-muted-foreground"}`} role={configurationError ? "alert" : "status"}>{configurationMessage}</div>}
           <div className="grid grid-cols-2 gap-4">
           {integrations.length > 1 && <SettingsField className="col-span-2" label={t("settings.integrationMode")} hint={t("settings.integrationModeHint")}><SettingsSelect ariaLabel={t("settings.integrationMode")} value={integration} onChange={(next) => update(id, "integration", next)} options={[{ value: "sdk", label: t("settings.integration.sdk"), meta: t("settings.integration.sdkMeta") }, { value: "cli", label: t("settings.integration.cli"), meta: t("settings.integration.cliMeta") }]} /></SettingsField>}

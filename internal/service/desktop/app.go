@@ -327,6 +327,13 @@ func (a *Service) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (do
 		}
 	}()
 	if input.RemoteFS != nil {
+		settings, settingsErr := a.settings.Get(ctx)
+		if settingsErr != nil {
+			return domainworkspaces.Workspace{}, mapSettingsError(settingsErr)
+		}
+		if !settings.HasRemoteFSHarness() {
+			return domainworkspaces.Workspace{}, coded("remote_fs_no_harness", "enable at least one remote FS capable Agent in Settings")
+		}
 		remote := domainworkspaces.RemoteFS{
 			Host:     strings.TrimSpace(input.RemoteFS.Host),
 			Root:     pathpkg.Clean(strings.TrimSpace(input.RemoteFS.Root)),
@@ -749,6 +756,18 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 	if err != nil {
 		return domaintasks.Task{}, err
 	}
+	settings, err := a.settings.Get(ctx)
+	if err != nil {
+		return domaintasks.Task{}, mapSettingsError(err)
+	}
+	validationDefinition := definition
+	validationDefinition.Steps = append([]domainworkflows.Step(nil), definition.Steps...)
+	if strings.TrimSpace(input.Harness) != "" && validationDefinition.ID == directAgentWorkflowID && len(validationDefinition.Steps) == 1 {
+		validationDefinition.Steps[0].Runtime = strings.TrimSpace(input.Harness)
+	}
+	if err := validateHarnessSettings(validationDefinition, settings, workspace.RemoteFS != nil); err != nil {
+		return domaintasks.Task{}, err
+	}
 	title := strings.TrimSpace(input.Title)
 	refineTitle := title == ""
 	if refineTitle {
@@ -896,6 +915,13 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 		return run, mapSettingsError(err)
 	}
 	if err := validateDefinitionSettings(definition, settings); err != nil {
+		return run, err
+	}
+	workspace, err := a.store.Repos.Tasks.GetWorkspace(ctx, task.WorkspaceID)
+	if err != nil {
+		return run, coded("workspace_not_found", "workspace was not found")
+	}
+	if err := validateHarnessSettings(definition, settings, workspace.RemoteFS != nil); err != nil {
 		return run, err
 	}
 	profile := workflowuc.ResumeProfile{}
