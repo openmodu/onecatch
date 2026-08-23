@@ -8,9 +8,19 @@ export function summarizeTokenUsage(stepRuns = []) {
   };
 
   for (const step of stepRuns) {
-    summary.inputTokens += Number(step.inputTokens) || 0;
-    summary.cachedInputTokens += Number(step.cachedInputTokens) || 0;
-    summary.cacheCreationInputTokens += Number(step.cacheCreationInputTokens) || 0;
+    const inputTokens = Number(step.inputTokens) || 0;
+    const cachedInputTokens = Number(step.cachedInputTokens) || 0;
+    const cacheCreationInputTokens = Number(step.cacheCreationInputTokens) || 0;
+    const detailedCacheTokens = cachedInputTokens + cacheCreationInputTokens;
+
+    // InputTokens normally includes both cache subsets. Older Modu runs saved
+    // only fresh input, which is recognizable when the subsets exceed the
+    // alleged total. Repair those records while leaving normalized runs alone.
+    summary.inputTokens += detailedCacheTokens > inputTokens
+      ? inputTokens + detailedCacheTokens
+      : inputTokens;
+    summary.cachedInputTokens += cachedInputTokens;
+    summary.cacheCreationInputTokens += cacheCreationInputTokens;
     summary.outputTokens += Number(step.outputTokens) || 0;
     summary.reasoningOutputTokens += Number(step.reasoningOutputTokens) || 0;
   }

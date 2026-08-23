@@ -503,11 +503,11 @@ const moduStream = `{"type":"session_start","sessionId":"modu-sess-1","model":"c
 {"type":"message_update","streamEvent":{"Type":"thinking_delta","Delta":"checking"},"message":"checking"}
 {"type":"message_update","streamEvent":{"Type":"text_delta","ContentIndex":1,"Delta":"I will "},"message":"I will "}
 {"type":"message_update","streamEvent":{"Type":"text_delta","ContentIndex":1,"Delta":"update it."},"message":"update it."}
-{"type":"message_end","message":{"role":"assistant","content":[{"type":"thinking","thinking":"checking"},{"type":"text","text":"I will update it."}],"usage":{"input":12,"output":4}}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"thinking","thinking":"checking"},{"type":"text","text":"I will update it."}],"usage":{"input":12,"output":4,"cacheRead":30,"cacheWrite":2}}}
 {"type":"tool_execution_start","toolName":"bash","toolCallId":"tool-1","args":{"command":"go test ./..."}}
 {"type":"tool_execution_end","toolName":"bash","toolCallId":"tool-1","result":{"content":[{"type":"text","text":"ok"}]},"isError":false}
 {"type":"message_end","message":{"role":"toolResult","content":[{"type":"text","text":"ok"}]}}
-{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"usage":{"input":20,"output":6}}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"usage":{"input":20,"output":6,"cacheRead":50}}}
 {"type":"turn_end"}
 {"type":"agent_end"}
 {"type":"session_end"}`
@@ -533,7 +533,7 @@ func TestModuRunnerUsesPrintModeAndParsesStream(t *testing.T) {
 	if result.SessionID != "modu-sess-1" {
 		t.Fatalf("SessionID = %q", result.SessionID)
 	}
-	if result.Usage.InputTokens != 32 || result.Usage.OutputTokens != 10 {
+	if result.Usage.InputTokens != 114 || result.Usage.CachedInputTokens != 80 || result.Usage.CacheCreationInputTokens != 2 || result.Usage.OutputTokens != 10 {
 		t.Fatalf("Usage = %+v", result.Usage)
 	}
 	if countKind(events, KindStarted) != 1 || countKind(events, KindMessage) != 5 || countKind(events, KindToolUse) != 1 || countKind(events, KindToolResult) != 1 || countKind(events, KindResult) != 1 {

@@ -130,8 +130,10 @@ type moduContent struct {
 }
 
 type moduUsage struct {
-	Input  int `json:"input"`
-	Output int `json:"output"`
+	Input      int `json:"input"`
+	Output     int `json:"output"`
+	CacheRead  int `json:"cacheRead"`
+	CacheWrite int `json:"cacheWrite"`
 }
 
 func (p *moduParser) parse(line string, at time.Time, sink Sink) {
@@ -238,7 +240,11 @@ func (p *moduParser) handleMessage(raw json.RawMessage, line string, at time.Tim
 	}
 	p.ensureMessage()
 
-	p.usage.InputTokens += message.Usage.Input
+	// Modu keeps fresh input separate from cache usage. Normalize it to the
+	// same total-input contract used by every OneCatch runtime adapter.
+	p.usage.InputTokens += message.Usage.Input + message.Usage.CacheRead + message.Usage.CacheWrite
+	p.usage.CachedInputTokens += message.Usage.CacheRead
+	p.usage.CacheCreationInputTokens += message.Usage.CacheWrite
 	p.usage.OutputTokens += message.Usage.Output
 	var text, thinking strings.Builder
 	for _, content := range message.Content {

@@ -307,7 +307,10 @@ func (a *moduSDKEventAdapter) handle(event types.Event) {
 			a.final = text
 			a.emit(KindMessage, a.messageStreamID, StreamEnd, text, raw, false)
 		}
-		a.usage.InputTokens += message.Usage.Input
+		// Modu reports Input as fresh input only. OneCatch's normalized usage
+		// contract includes cache reads and writes in InputTokens, with the
+		// detailed cache fields retained as subsets of that total.
+		a.usage.InputTokens += message.Usage.Input + message.Usage.CacheRead + message.Usage.CacheWrite
 		a.usage.CachedInputTokens += message.Usage.CacheRead
 		a.usage.CacheCreationInputTokens += message.Usage.CacheWrite
 		a.usage.OutputTokens += message.Usage.Output

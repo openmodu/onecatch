@@ -35,13 +35,14 @@ func TestModuSDKEventAdapterNormalizesStreamsAndUsage(t *testing.T) {
 	message.Usage.Input = 11
 	message.Usage.Output = 7
 	message.Usage.CacheRead = 3
+	message.Usage.CacheWrite = 2
 	adapter.handle(types.Event{Type: types.EventTypeMessageEnd, Message: message})
 
 	result := adapter.result("session-1", true)
 	if !result.Succeeded || result.FinalMessage != "done" || result.SessionID != "session-1" {
 		t.Fatalf("result = %+v", result)
 	}
-	if result.Usage.InputTokens != 11 || result.Usage.OutputTokens != 7 || result.Usage.CachedInputTokens != 3 {
+	if result.Usage.InputTokens != 16 || result.Usage.OutputTokens != 7 || result.Usage.CachedInputTokens != 3 || result.Usage.CacheCreationInputTokens != 2 {
 		t.Fatalf("usage = %+v", result.Usage)
 	}
 	if len(events) != 4 || events[0].Phase != StreamStart || events[1].Phase != StreamDelta || events[2].Kind != KindReasoning || events[3].Phase != StreamEnd {

@@ -38,3 +38,15 @@ test("keeps older step data compatible when detailed fields are absent", () => {
     cacheHitRate: 0,
   });
 });
+
+test("normalizes legacy Modu usage that stored only fresh input", () => {
+  const summary = summarizeTokenUsage([{
+    inputTokens: 36827,
+    cachedInputTokens: 128512,
+    outputTokens: 1163,
+  }]);
+
+  assert.equal(summary.inputTokens, 165339);
+  assert.equal(summary.cachedInputTokens, 128512);
+  assert.equal(summary.cacheHitRate, (128512 / 165339) * 100);
+});
