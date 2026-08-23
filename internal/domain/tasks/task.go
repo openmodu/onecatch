@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"time"
+
+	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
 )
 
 var (
@@ -87,7 +89,7 @@ func Validate(task Task) error {
 	if task.Sandbox != "" && task.Sandbox != "read-only" && task.Sandbox != "workspace-write" && task.Sandbox != "full" {
 		return ErrInvalid
 	}
-	if task.Harness != "" && task.Harness != "codex" && task.Harness != "claude" && task.Harness != "modu" {
+	if task.Harness != "" && !domainagents.IsKnownRuntime(task.Harness) {
 		return ErrInvalid
 	}
 	if task.Harness == "" && (strings.TrimSpace(task.Model) != "" || strings.TrimSpace(task.ReasoningEffort) != "" || strings.TrimSpace(task.ServiceTier) != "") {
