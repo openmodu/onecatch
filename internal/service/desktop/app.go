@@ -1152,8 +1152,42 @@ func usageFromRuntimeRaw(raw string) (agentrun.Usage, bool) {
 			OutputTokens:             envelope.Usage.OutputTokens,
 		}, true
 	default:
+		return grokUsageFromRuntimeRaw(raw)
+	}
+}
+
+// grokUsageFromRuntimeRaw recovers runs written before the ACP adapter read
+// usage from session/prompt responses. Those records have no structured usage
+// event, but the original response is still preserved on the result event.
+func grokUsageFromRuntimeRaw(raw string) (agentrun.Usage, bool) {
+	var envelope struct {
+		Result struct {
+			Meta struct {
+				Usage struct {
+					InputTokens              int `json:"inputTokens"`
+					OutputTokens             int `json:"outputTokens"`
+					CachedReadTokens         int `json:"cachedReadTokens"`
+					CachedInputTokens        int `json:"cachedInputTokens"`
+					CacheCreationTokens      int `json:"cacheCreationTokens"`
+					CacheCreationInputTokens int `json:"cacheCreationInputTokens"`
+					ReasoningTokens          int `json:"reasoningTokens"`
+					ReasoningOutputTokens    int `json:"reasoningOutputTokens"`
+				} `json:"usage"`
+			} `json:"_meta"`
+		} `json:"result"`
+	}
+	if json.Unmarshal([]byte(raw), &envelope) != nil {
 		return agentrun.Usage{}, false
 	}
+	fields := envelope.Result.Meta.Usage
+	usage := agentrun.Usage{
+		InputTokens:              fields.InputTokens,
+		CachedInputTokens:        max(fields.CachedReadTokens, fields.CachedInputTokens),
+		CacheCreationInputTokens: max(fields.CacheCreationTokens, fields.CacheCreationInputTokens),
+		OutputTokens:             fields.OutputTokens,
+		ReasoningOutputTokens:    max(fields.ReasoningTokens, fields.ReasoningOutputTokens),
+	}
+	return usage, usage != (agentrun.Usage{})
 }
 
 // foldRuntimeEventViews collapses a step's stored events into the transcript

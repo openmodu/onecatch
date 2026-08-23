@@ -11,6 +11,7 @@ import NewTaskView from "./NewTaskView.jsx";
 import { activeWorkerID, sortQueuedTasks } from "../inspectorContext.js";
 import { errorMessage } from "../format.js";
 import { preferredReviewInspectorWidth } from "../reviewLayout.js";
+import { supportsRuntimeProfile } from "../runtimeHarnesses.js";
 
 const TerminalDock = lazy(() => import("./TerminalDock.jsx"));
 
@@ -118,12 +119,12 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
 
   useEffect(() => {
     const harness = continuationRuntimeProfile?.harness;
-    if (!harness || !onInspectRuntimeConfiguration) {
+    if (!harness || !supportsRuntimeProfile(harness) || !onInspectRuntimeConfiguration) {
       setContinuationRuntimeConfiguration({ loading: false, data: null, error: "" });
       return undefined;
     }
     let cancelled = false;
-    setContinuationRuntimeConfiguration({ loading: harness === "codex" || harness === "claude", data: null, error: "" });
+    setContinuationRuntimeConfiguration({ loading: true, data: null, error: "" });
     onInspectRuntimeConfiguration(harness)
       .then((data) => { if (!cancelled) setContinuationRuntimeConfiguration({ loading: false, data, error: "" }); })
       .catch((error) => { if (!cancelled) setContinuationRuntimeConfiguration({ loading: false, data: null, error: errorMessage(error) }); });

@@ -6,6 +6,8 @@ import {
   codexServiceTierValues,
   defaultClaudeModel,
   groupedClaudeModels,
+  runtimeDefaultEffort,
+  runtimeEffortValues,
   selectedCodexModel,
 } from "./codexRuntimeOptions.js";
 
@@ -29,6 +31,32 @@ test("Codex runtime options follow an explicit model and preserve saved custom v
   assert.equal(selectedCodexModel(configuration, "gpt-luna")?.model, "gpt-luna");
   assert.deepEqual(codexEffortValues(configuration, "gpt-luna", "xhigh"), ["low", "medium", "xhigh"]);
   assert.deepEqual(codexServiceTierValues(configuration, "gpt-luna", "fast"), ["standard", "fast"]);
+});
+
+test("Pi runtime options use harness-wide thinking levels", () => {
+  const pi = {
+    efforts: ["off", "minimal", "low", "medium", "high", "xhigh"],
+    models: [
+      { model: "deepseek/deepseek-v4-flash", displayName: "deepseek-v4-flash" },
+      { model: "deepseek/deepseek-v4-pro", displayName: "deepseek-v4-pro" },
+    ],
+  };
+  assert.deepEqual(runtimeEffortValues(pi, "deepseek/deepseek-v4-flash"), pi.efforts);
+  assert.deepEqual(runtimeEffortValues(pi, "deepseek/deepseek-v4-pro", "high"), pi.efforts);
+  assert.equal(runtimeDefaultEffort(pi, "deepseek/deepseek-v4-flash"), "");
+});
+
+test("generic harness models override harness-wide reasoning levels", () => {
+  const grok = {
+    efforts: ["low", "medium", "high", "xhigh"],
+    models: [
+      { model: "grok-4.5", efforts: ["low", "medium", "high"], defaultEffort: "medium" },
+      { model: "grok-4.6", efforts: ["low", "medium", "high", "xhigh"], defaultEffort: "high" },
+    ],
+  };
+  assert.deepEqual(runtimeEffortValues(grok, "grok-4.5"), ["low", "medium", "high"]);
+  assert.deepEqual(runtimeEffortValues(grok, "grok-4.6"), ["low", "medium", "high", "xhigh"]);
+  assert.equal(runtimeDefaultEffort(grok, "grok-4.5"), "medium");
 });
 
 test("Claude models follow the reference hierarchy without inventing unavailable models", () => {

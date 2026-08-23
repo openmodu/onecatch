@@ -6,6 +6,8 @@ export function runtimeResumeCommand(runtime, sessionID) {
   if (runtime === "codex") return `codex resume ${sessionID}`;
   if (runtime === "claude") return `claude --resume ${sessionID}`;
   if (runtime === "modu") return `modu_code --resume ${sessionID}`;
+  if (runtime === "pi") return `pi --session ${sessionID}`;
+  if (runtime === "grok") return `grok --resume ${sessionID}`;
   return "";
 }
 

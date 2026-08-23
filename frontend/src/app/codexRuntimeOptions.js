@@ -80,13 +80,34 @@ export function selectedCodexModel(configuration, selected = "") {
     || null;
 }
 
-export function codexEffortValues(configuration, selected = "", current = "") {
+// HarnessConfiguration uses `efforts`/`defaultEffort` for generic adapters
+// such as Pi and Grok, while Codex's richer app-server response uses
+// `reasoningEfforts`/`defaultReasoningEffort`. Keep that wire-format
+// difference out of the menu so every direct Agent gets the controls its
+// adapter advertised.
+export function runtimeEffortValues(configuration, selected = "", current = "") {
   const model = selectedCodexModel(configuration, selected);
+  const modelEfforts = model?.reasoningEfforts?.length
+    ? model.reasoningEfforts
+    : model?.efforts || [];
+  const supported = modelEfforts.length ? modelEfforts : configuration?.efforts || [];
   return unique([
-    ...(model?.reasoningEfforts || []),
+    ...supported,
     !selected ? configuration?.reasoningEffort : "",
     current,
   ]);
+}
+
+export function runtimeDefaultEffort(configuration, selected = "") {
+  const model = selectedCodexModel(configuration, selected);
+  return configuration?.reasoningEffort
+    || model?.defaultReasoningEffort
+    || model?.defaultEffort
+    || "";
+}
+
+export function codexEffortValues(configuration, selected = "", current = "") {
+  return runtimeEffortValues(configuration, selected, current);
 }
 
 export function codexServiceTierValues(configuration, selected = "", current = "") {
