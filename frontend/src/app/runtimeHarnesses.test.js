@@ -15,9 +15,20 @@ test("runtime harness metadata exposes the supported task runtimes", () => {
   assert.equal(runtimeHarness("claude").label, "Claude Code");
   assert.equal(runtimeHarness("claude").supportsSpeed, false);
   assert.equal(runtimeHarness("modu").label, "modu_code");
+  assert.equal(runtimeHarness("pi").label, "Pi");
+  assert.equal(runtimeHarness("grok").label, "Grok Build");
+  assert.equal(runtimeHarness("dsh").label, "DeepSeek Harness");
   assert.equal(supportsRuntimeProfile("codex"), true);
   assert.equal(supportsRuntimeProfile("claude"), true);
   assert.equal(supportsRuntimeProfile("modu"), false);
+  // Pi spells reasoning effort --thinking and Grok exposes --reasoning-effort;
+  // the DeepSeek Harness headless profile offers no reasoning control at all.
+  assert.equal(supportsRuntimeProfile("pi"), true);
+  assert.equal(supportsRuntimeProfile("grok"), true);
+  assert.equal(supportsRuntimeProfile("dsh"), false);
+  // Codex remains the only harness with a speed/processing tier.
+  assert.equal(runtimeHarness("pi").supportsSpeed, false);
+  assert.equal(runtimeHarness("grok").supportsSpeed, false);
 });
 
 test("runtime harness options preserve choices and flag unavailable binaries", () => {
@@ -29,6 +40,9 @@ test("runtime harness options preserve choices and flag unavailable binaries", (
     { value: "codex", label: "Codex" },
     { value: "claude", label: "Claude Code" },
     { value: "modu", label: "modu_code" },
+    { value: "pi", label: "Pi" },
+    { value: "grok", label: "Grok Build" },
+    { value: "dsh", label: "DeepSeek Harness" },
   ]);
   assert.equal(options[1].disabled, true);
   assert.equal(options[1].meta, "不可用");

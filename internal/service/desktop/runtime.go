@@ -21,6 +21,10 @@ type RuntimeConfig struct {
 	ModuIntegration string `json:"moduIntegration,omitempty"`
 	ModuConfigPath  string `json:"moduConfigPath,omitempty"`
 	ModuAgentDir    string `json:"moduAgentDir,omitempty"`
+	PiBinary        string `json:"piBinary,omitempty"`
+	GrokBinary      string `json:"grokBinary,omitempty"`
+	DshBinary       string `json:"dshBinary,omitempty"`
+	DshSessionRoot  string `json:"dshSessionRoot,omitempty"`
 }
 
 type RuntimeConfigInput struct {
@@ -175,7 +179,7 @@ func (r *RuntimeRegistry) Run(ctx context.Context, request agentrun.Request, sin
 	if request.InterruptGrace <= 0 {
 		request.InterruptGrace = interruptGrace
 	}
-	if request.Runtime == agentrun.RuntimeClaude && request.RunID != "" && request.PermissionHandler == nil {
+	if engine.SupportsInteractivePermissions(request.Runtime, request.Sandbox) && request.RunID != "" && request.PermissionHandler == nil {
 		runID, stepRunID := request.RunID, request.StepRunID
 		request.PermissionHandler = func(ctx context.Context, permission agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {
 			return r.awaitPermission(ctx, runID, stepRunID, permission)
@@ -204,7 +208,7 @@ func (r *RuntimeRegistry) awaitPermission(ctx context.Context, runID, stepRunID 
 	}
 }
 
-// ResolvePermission delivers a desktop decision to the Claude process that is
+// ResolvePermission delivers a desktop decision to the harness process that is
 // blocked on requestID. The run check prevents one task card from answering a
 // request belonging to another concurrently running workflow.
 func (r *RuntimeRegistry) ResolvePermission(runID, requestID, decision string) error {
@@ -219,7 +223,11 @@ func (r *RuntimeRegistry) ResolvePermission(runID, requestID, decision string) e
 	case "allow_once":
 		response = agentrun.PermissionDecision{Behavior: "allow", DecisionClassification: "user_temporary"}
 	case "allow_always":
-		if pending.request.SuppressAlwaysAllow || len(pending.request.Suggestions) == 0 {
+		// Whether a harness can remember a decision is the adapter's call:
+		// Claude needs provider-authored rules to persist, while an ACP agent
+		// simply offers the option and keeps the memory itself. Both express
+		// the answer through SuppressAlwaysAllow.
+		if pending.request.SuppressAlwaysAllow {
 			r.permissionMu.Unlock()
 			return coded("permission_persistent_unavailable", "this request cannot be permanently allowed")
 		}
@@ -252,6 +260,9 @@ func runtimeSpecs(config RuntimeConfig) []runtimeSpec {
 		{agentrun.RuntimeCodex, "Codex", config.CodexBinary, config.CodexBinary},
 		{agentrun.RuntimeClaude, "Claude Code", config.ClaudeBinary, config.ClaudeBinary},
 		{agentrun.RuntimeModu, "Modu Code", config.ModuBinary, strings.Join([]string{config.ModuIntegration, config.ModuBinary, config.ModuConfigPath, config.ModuAgentDir}, "\x00")},
+		{agentrun.RuntimePi, "Pi", config.PiBinary, config.PiBinary},
+		{agentrun.RuntimeGrok, "Grok Build", config.GrokBinary, config.GrokBinary},
+		{agentrun.RuntimeDsh, "DeepSeek Harness", config.DshBinary, config.DshBinary},
 	}
 }
 
@@ -385,6 +396,12 @@ func (r *RuntimeRegistry) Update(input RuntimeConfigInput) (RuntimeInfo, error) 
 		config.ClaudeBinary = input.Binary
 	case string(agentrun.RuntimeModu):
 		config.ModuBinary = input.Binary
+	case string(agentrun.RuntimePi):
+		config.PiBinary = input.Binary
+	case string(agentrun.RuntimeGrok):
+		config.GrokBinary = input.Binary
+	case string(agentrun.RuntimeDsh):
+		config.DshBinary = input.Binary
 	default:
 		r.mu.Unlock()
 		return RuntimeInfo{}, coded("runtime_unknown", "unknown runtime")
@@ -410,7 +427,12 @@ func (r *RuntimeRegistry) ApplySettings(runtimes map[string]domainsettings.Runti
 	}
 	r.settings = copySettings
 	r.interruptGrace = time.Duration(interruptGraceSeconds) * time.Second
-	config := RuntimeConfig{CodexBinary: runtimes["codex"].Binary, ClaudeBinary: runtimes["claude"].Binary, ModuBinary: runtimes["modu"].Binary, ModuIntegration: runtimes["modu"].Integration}
+	config := RuntimeConfig{
+		CodexBinary: runtimes["codex"].Binary, ClaudeBinary: runtimes["claude"].Binary,
+		ModuBinary: runtimes["modu"].Binary, ModuIntegration: runtimes["modu"].Integration,
+		PiBinary: runtimes["pi"].Binary, GrokBinary: runtimes["grok"].Binary,
+		DshBinary: runtimes["dsh"].Binary, DshSessionRoot: r.dshSessionRoot(),
+	}
 	config.ModuConfigPath, config.ModuAgentDir = r.moduSDKPaths(runtimes["modu"])
 	r.replace(config)
 	r.mu.Unlock()
@@ -462,32 +484,43 @@ func (r *RuntimeRegistry) invalidateRuntimeStatus(id string) {
 }
 
 func (r *RuntimeRegistry) CheckDraft(runtime string, input domainsettings.RuntimeSettings) (RuntimeInfo, error) {
-	name := map[string]string{"codex": "Codex", "claude": "Claude Code", "modu": "Modu Code"}[runtime]
+	name := runtimeDisplayName(agentrun.Runtime(runtime))
 	if name == "" {
 		return RuntimeInfo{}, coded("runtime_unknown", "unknown runtime")
 	}
-	engine := agentrun.NewEngine(agentrun.Config{CodexBinary: func() string {
-		if runtime == "codex" {
-			return input.Binary
-		}
-		return ""
-	}(), ClaudeBinary: func() string {
-		if runtime == "claude" {
-			return input.Binary
-		}
-		return ""
-	}(), ModuBinary: func() string {
-		if runtime == "modu" {
-			return input.Binary
-		}
-		return ""
-	}(), ModuIntegration: input.Integration})
-	if runtime == "modu" {
-		engineConfig := agentrun.Config{ModuBinary: input.Binary, ModuIntegration: input.Integration}
-		engineConfig.ModuConfigPath, engineConfig.ModuAgentDir = r.moduSDKPaths(input)
-		engine = agentrun.NewEngine(engineConfig)
+	// Probe only the runtime being edited: every other binary is left empty so
+	// the draft engine cannot report a neighbour's installed state as this
+	// one's.
+	config := agentrun.Config{}
+	switch agentrun.Runtime(runtime) {
+	case agentrun.RuntimeCodex:
+		config.CodexBinary = input.Binary
+	case agentrun.RuntimeClaude:
+		config.ClaudeBinary = input.Binary
+	case agentrun.RuntimeModu:
+		config.ModuBinary = input.Binary
+		config.ModuIntegration = input.Integration
+		config.ModuConfigPath, config.ModuAgentDir = r.moduSDKPaths(input)
+	case agentrun.RuntimePi:
+		config.PiBinary = input.Binary
+	case agentrun.RuntimeGrok:
+		config.GrokBinary = input.Binary
+	case agentrun.RuntimeDsh:
+		config.DshBinary = input.Binary
+		config.DshSessionRoot = r.dshSessionRoot()
 	}
-	return runtimeInfo(engine, agentrun.Runtime(runtime), name, input.Binary), nil
+	return runtimeInfo(agentrun.NewEngine(config), agentrun.Runtime(runtime), name, input.Binary), nil
+}
+
+// runtimeDisplayName is the single source of each harness's human name, shared
+// by the probe list and the settings draft check so the two cannot drift.
+func runtimeDisplayName(runtime agentrun.Runtime) string {
+	for _, spec := range runtimeSpecs(RuntimeConfig{}) {
+		if spec.runtime == runtime {
+			return spec.name
+		}
+	}
+	return ""
 }
 
 func (r *RuntimeRegistry) replace(config RuntimeConfig) {
@@ -496,7 +529,24 @@ func (r *RuntimeRegistry) replace(config RuntimeConfig) {
 }
 
 func newRuntimeEngine(config RuntimeConfig) *agentrun.Engine {
-	return agentrun.NewEngine(agentrun.Config{CodexBinary: config.CodexBinary, ClaudeBinary: config.ClaudeBinary, ModuBinary: config.ModuBinary, ModuIntegration: config.ModuIntegration, ModuConfigPath: config.ModuConfigPath, ModuAgentDir: config.ModuAgentDir})
+	return agentrun.NewEngine(agentrun.Config{
+		CodexBinary: config.CodexBinary, ClaudeBinary: config.ClaudeBinary,
+		ModuBinary: config.ModuBinary, ModuIntegration: config.ModuIntegration,
+		ModuConfigPath: config.ModuConfigPath, ModuAgentDir: config.ModuAgentDir,
+		PiBinary: config.PiBinary, GrokBinary: config.GrokBinary,
+		DshBinary: config.DshBinary, DshSessionRoot: config.DshSessionRoot,
+	})
+}
+
+// dshSessionRoot keeps DeepSeek Harness session logs inside OneCatch's own data
+// directory. The adapter recovers its event stream by reading that log, so the
+// harness must write somewhere OneCatch controls rather than into its shared
+// default, where another dsh client's sessions would be mixed in.
+func (r *RuntimeRegistry) dshSessionRoot() string {
+	if r.dataRoot == "" {
+		return ""
+	}
+	return filepath.Join(r.dataRoot, "harnesses", "dsh", "sessions")
 }
 
 func (r *RuntimeRegistry) moduSDKPaths(settings domainsettings.RuntimeSettings) (string, string) {

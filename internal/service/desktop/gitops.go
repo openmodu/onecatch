@@ -186,7 +186,7 @@ func (a *Service) GenerateCommitMessage(ctx context.Context, workspaceID, reques
 	}
 	runtime := agentrun.Runtime(strings.TrimSpace(requestedRuntime))
 	if runtime == "" || !runtime.Valid() || !a.runtimes.Available(runtime) {
-		for _, candidate := range []agentrun.Runtime{agentrun.RuntimeCodex, agentrun.RuntimeClaude, agentrun.RuntimeModu} {
+		for _, candidate := range []agentrun.Runtime{agentrun.RuntimeCodex, agentrun.RuntimeClaude, agentrun.RuntimeModu, agentrun.RuntimePi, agentrun.RuntimeGrok, agentrun.RuntimeDsh} {
 			if a.runtimes.Available(candidate) {
 				runtime = candidate
 				break

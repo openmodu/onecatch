@@ -83,21 +83,32 @@ func TestRuntimeRegistryCachesVersionChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings := domainsettings.Defaults().Runtimes
-	settings["codex"] = domainsettings.RuntimeSettings{Binary: binary}
-	settings["claude"] = domainsettings.RuntimeSettings{Binary: binary}
+	// Point every process-backed harness at the counting stub. Leaving any of
+	// them on its real name would probe whatever the developer happens to have
+	// installed and make the spawn count depend on the machine.
+	spawning := []string{"codex", "claude", "pi", "grok", "dsh"}
+	for _, id := range spawning {
+		settings[id] = domainsettings.RuntimeSettings{Binary: binary}
+	}
+	// Modu stays on its native SDK default, which reports without spawning.
 	registry.ApplySettings(settings, 10)
 
 	first := registry.List()
 	second := registry.List()
-	if len(first) != 3 || len(second) != 3 || first[0].Version != "runtime 1.0" || first[1].Version != "runtime 1.0" {
+	if len(first) != len(settings) || len(second) != len(settings) {
+		t.Fatalf("runtime list = %d entries, want %d: %+v", len(first), len(settings), first)
+	}
+	if first[0].Version != "runtime 1.0" || first[1].Version != "runtime 1.0" {
 		t.Fatalf("unexpected runtime results: first=%+v second=%+v", first, second)
 	}
 	data, err := os.ReadFile(counter)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if checks := strings.Count(string(data), "checked"); checks != 2 {
-		t.Fatalf("version checks = %d, want 2", checks)
+	// One spawn per process-backed runtime on the first List; the second is
+	// served from cache.
+	if checks := strings.Count(string(data), "checked"); checks != len(spawning) {
+		t.Fatalf("version checks = %d, want %d", checks, len(spawning))
 	}
 }
 

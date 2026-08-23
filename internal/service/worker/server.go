@@ -21,6 +21,10 @@ import (
 
 type Engine interface {
 	Available(agentrun.Runtime) bool
+	// SupportsInteractivePermissions decides whether this run gets a
+	// PermissionHandler, so the worker never installs one for a harness that
+	// will not ask.
+	SupportsInteractivePermissions(agentrun.Runtime, agentrun.Sandbox) bool
 	Run(ctx context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error)
 }
 
@@ -459,7 +463,7 @@ func (s *Server) health(writer http.ResponseWriter, _ *http.Request) {
 func (s *Server) healthValue() Health {
 	return Health{
 		WorkerID: s.id, Name: s.name, ProtocolVersion: 3,
-		Runtimes:     map[string]bool{"codex": s.engine.Available(agentrun.RuntimeCodex), "claude": s.engine.Available(agentrun.RuntimeClaude), "modu": s.engine.Available(agentrun.RuntimeModu)},
+		Runtimes:     workerRuntimeAvailability(s.engine),
 		Capabilities: map[string]bool{"interactivePermissions": true, "workspaceSync": true, "workspaceManagement": s.workspaceRegistry != nil, "pairing": s.pairing != nil},
 	}
 }
@@ -586,7 +590,7 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 		InterruptGrace:          time.Duration(input.InterruptGraceSeconds) * time.Second,
 		RuntimeDefaultsResolved: true,
 	}
-	if input.Runtime == agentrun.RuntimeClaude {
+	if s.engine.SupportsInteractivePermissions(input.Runtime, input.Sandbox) {
 		runRequest.PermissionHandler = func(ctx context.Context, permission agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {
 			return s.awaitPermission(ctx, state, permission)
 		}
@@ -823,4 +827,18 @@ func writeJSON(writer http.ResponseWriter, status int, value any) {
 	writer.Header().Set("Content-Type", "application/json")
 	writer.WriteHeader(status)
 	_ = json.NewEncoder(writer).Encode(value)
+}
+
+// workerRuntimeAvailability reports which harnesses this worker can actually
+// run, so the host never dispatches a step to a worker that lacks the CLI.
+func workerRuntimeAvailability(engine Engine) map[string]bool {
+	runtimes := []agentrun.Runtime{
+		agentrun.RuntimeCodex, agentrun.RuntimeClaude, agentrun.RuntimeModu,
+		agentrun.RuntimePi, agentrun.RuntimeGrok, agentrun.RuntimeDsh,
+	}
+	available := make(map[string]bool, len(runtimes))
+	for _, runtime := range runtimes {
+		available[string(runtime)] = engine.Available(runtime)
+	}
+	return available
 }

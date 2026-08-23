@@ -56,6 +56,9 @@ select { height: 36px; padding: 0 10px; font-size: var(--ui-font-meta); }
 .runtime-badge.codex { color: #65e49c; }
 .runtime-badge.claude { color: #ffac78; }
 .runtime-badge.modu { color: #67d6dc; }
+.runtime-badge.pi { color: #b79cff; }
+.runtime-badge.grok { color: #d5dbe4; }
+.runtime-badge.dsh { color: #7aa5ff; }
 .flow-step.current .flow-node { background: var(--green); border-color: var(--green); color: #12311e; }
 .timeline-dot.succeeded { background: var(--green); }
 .timeline-dot.failed, .timeline-dot.interrupted { background: var(--red); }
@@ -63,6 +66,9 @@ select { height: 36px; padding: 0 10px; font-size: var(--ui-font-meta); }
 .runtime-name.codex { color: #347449; }
 .runtime-name.claude { color: #a36622; }
 .runtime-name.modu { color: #268ca1; }
+.runtime-name.pi { color: #6b4fd6; }
+.runtime-name.grok { color: #4a5563; }
+.runtime-name.dsh { color: #3a6fd8; }
 .opened { display: none; }
 details[open] > summary .closed { display: none; }
 details[open] > summary .opened { display: block; }

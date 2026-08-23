@@ -11,9 +11,16 @@
 //     result{success|error}.
 //   - Modu Code can use its in-process Go SDK or the legacy print-mode NDJSON
 //     adapter (`modu_code -p ... -json`).
+//   - Pi (`pi -p --mode json`) emits JSONL: a session header followed by the
+//     agent's own event union (agent_start, message_update, tool_execution_*).
+//   - Grok Build speaks the Agent Client Protocol over stdio
+//     (`grok agent stdio`), so it is driven by the shared ACP client rather
+//     than by a bespoke parser.
+//   - DeepSeek Harness has no machine-readable stdout, so its adapter pins the
+//     harness's own JSONL session log to a per-run directory and reads that.
 //
-// Adapters translate all three into the [Event] stream below so callers never have
-// to branch on the underlying runtime.
+// Adapters translate all of them into the [Event] stream below so callers never
+// have to branch on the underlying runtime.
 package agentrun
 
 import "time"
@@ -28,12 +35,18 @@ const (
 	RuntimeClaude Runtime = "claude"
 	// RuntimeModu drives Modu Code via its native SDK or print mode.
 	RuntimeModu Runtime = "modu"
+	// RuntimePi drives the Pi coding agent via `pi -p --mode json`.
+	RuntimePi Runtime = "pi"
+	// RuntimeGrok drives xAI's Grok Build via its ACP server (`grok agent stdio`).
+	RuntimeGrok Runtime = "grok"
+	// RuntimeDsh drives DeepSeek Harness via its one-shot headless profile.
+	RuntimeDsh Runtime = "dsh"
 )
 
 // Valid reports whether r is a runtime the engine can drive.
 func (r Runtime) Valid() bool {
 	switch r {
-	case RuntimeCodex, RuntimeClaude, RuntimeModu:
+	case RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeDsh:
 		return true
 	default:
 		return false

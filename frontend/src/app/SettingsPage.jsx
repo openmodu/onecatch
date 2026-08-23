@@ -33,7 +33,15 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const message = (error, t) => String(error?.message || error || t("common.unknownError")).replace(/^Error:\s*/, "");
 const bytes = (value = 0) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : value < 1073741824 ? `${(value / 1048576).toFixed(1)} MB` : `${(value / 1073741824).toFixed(1)} GB`;
 const sectionKey = (section) => section === "harness" ? "runtimes" : section;
-const runtimeIds = ["codex", "claude", "modu"];
+const runtimeIds = ["codex", "claude", "modu", "pi", "grok", "dsh"];
+
+// Effort levels these harnesses accept, mirroring the settings validator. Pi
+// spells this --thinking and can turn it off outright; Grok's own model catalog
+// tops out at xhigh.
+const harnessEffortValues = {
+  pi: ["off", "minimal", "low", "medium", "high", "xhigh"],
+  grok: ["low", "medium", "high", "xhigh"],
+};
 const harnessFields = ["integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "provider"];
 
 const resetRuntimeFields = (current, defaults, fields) => Object.fromEntries(runtimeIds.map((id) => {
@@ -271,12 +279,15 @@ function TerminalSettings({ value, setValue, errors }) {
 
 function HarnessSettings({ value, setValue, status, runtimes, check, errors, codexConfiguration, claudeConfiguration }) {
   const { t, i18n } = useTranslation();
-  const [expanded, setExpanded] = useState({ codex: true, claude: false, modu: false });
+  const [expanded, setExpanded] = useState({ codex: true, claude: false, modu: false, pi: false, grok: false, dsh: false });
   const update = (id, field, next) => setValue({ ...value, [id]: { ...value[id], [field]: next } });
   const meta = {
     codex: { name: "Codex", command: "codex", env: "OPENAI_API_KEY, HTTPS_PROXY" },
     claude: { name: "Claude Code", command: "claude", env: "ANTHROPIC_API_KEY, HTTPS_PROXY" },
     modu: { name: "Modu Code", command: "modu_code", env: t("settings.optionalEnv") },
+    pi: { name: "Pi", command: "pi", env: "ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY" },
+    grok: { name: "Grok Build", command: "grok", env: "XAI_API_KEY, HTTPS_PROXY" },
+    dsh: { name: "DeepSeek Harness", command: "dsh", env: "DEEPSEEK_API_KEY, HTTPS_PROXY" },
   };
   return <section aria-labelledby="harness-list-title">
     <h2 id="harness-list-title" className="mb-3 text-[15px] font-semibold text-foreground">{t("settings.harnessList")}</h2>
@@ -308,7 +319,9 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
       const configurationError = id === "codex" ? codexConfiguration.error : id === "claude" ? claudeConfiguration.error : "";
       const modelHint = id === "codex" && codexData ? t("settings.codexDetectedValue", { value: codexData.model || t("settings.runtimeDefault") }) : id === "claude" && claudeData ? t("settings.claudeModelsDetected", { count: claudeData.models?.length || 0 }) : t("settings.runtimeDecides");
       const configurationMessage = id === "codex" ? codexConfiguration.loading ? t("settings.readingCodexConfig") : codexConfiguration.error || (codexData && t("settings.codexConfigDetected", { model: codexData.model || t("settings.runtimeDefault"), effort: codexData.reasoningEffort || t("settings.runtimeDefault"), speed: codexData.serviceTier || t("settings.speed.standard") })) : id === "claude" ? claudeConfiguration.loading ? t("settings.readingClaudeModels") : claudeConfiguration.error || (claudeData && t("settings.claudeModelsReady", { count: claudeData.models?.length || 0, effortCount: claudeData.efforts?.length || 0 })) : "";
-      const description = id === "modu" ? t(nativeModu ? "settings.moduSDKDescription" : "settings.moduDescription") : t("settings.harnessAgentDescription", { harness: meta[id].name });
+      const description = id === "modu" ? t(nativeModu ? "settings.moduSDKDescription" : "settings.moduDescription")
+        : id === "pi" || id === "grok" || id === "dsh" ? t(`settings.${id}Description`)
+        : t("settings.harnessAgentDescription", { harness: meta[id].name });
       const isExpanded = expanded[id];
       const panelID = `harness-${id}-settings`;
       return <section key={id}>
@@ -330,6 +343,8 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
           <SettingsField className={id === "claude" || id === "modu" ? "col-span-2" : ""} label={t("settings.defaultModel")} hint={modelHint} error={errors[`${id}.defaultModel`]}>{modelOptions.length > 1 ? <SettingsSelect ariaLabel={t("settings.defaultModel")} value={value[id]?.defaultModel || ""} onChange={updateModel} options={modelOptions} /> : <Input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} />}</SettingsField>
           {id === "codex" && <SettingsField label={t("settings.reasoningEffort")} hint={t("settings.codexDetectedValue", { value: detectedEffort })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.codex?.reasoningEffort || ""} onChange={(reasoningEffort) => update("codex", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedEffort }, ...(codexData && effortValues.length ? effortValues : ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]).map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
           {id === "claude" && <SettingsField className="col-span-2" label={t("settings.reasoningEffort")} hint={t("settings.claudeEffortsDetected", { count: claudeEffortValues.length })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.claude?.reasoningEffort || ""} onChange={(reasoningEffort) => update("claude", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...claudeEffortValues.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
+          {(id === "pi" || id === "grok") && <SettingsField className="col-span-2" label={t("settings.reasoningEffort")} hint={t("settings.runtimeDecides")} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value[id]?.reasoningEffort || ""} onChange={(reasoningEffort) => update(id, "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.runtimeDefault") }, ...harnessEffortValues[id].map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`, { defaultValue: effort }), meta: effort }))]} /></SettingsField>}
+          {id === "dsh" && <SettingsField className="col-span-2" label={t("common.provider")} hint={t("settings.dshProviderHint")} error={errors[`${id}.provider`]}><SettingsSelect ariaLabel={t("common.provider")} value={value[id]?.provider || "deepseek-official"} onChange={(provider) => update(id, "provider", provider)} options={[{ value: "deepseek-official", label: "DeepSeek" }, { value: "pi-ai", label: t("settings.dshProviderPiAi") }]} /></SettingsField>}
           {id === "codex" && <SettingsField className="col-span-2" label={t("settings.speed")} hint={t("settings.codexDetectedValue", { value: detectedTier })} error={errors[`${id}.serviceTier`]}><SettingsSelect ariaLabel={t("settings.speed")} value={value.codex?.serviceTier || ""} onChange={(serviceTier) => update("codex", "serviceTier", serviceTier)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedTier }, ...(codexData ? serviceTierValues : ["standard", "fast", "priority", "flex"]).map((tier) => ({ value: tier, label: t(`settings.speed.${tier}`, { defaultValue: tierDetails.get(tier)?.name || tier }), meta: tierDetails.get(tier)?.description || tier }))]} /></SettingsField>}
           {id === "modu" && <SettingsField className="col-span-2" label={t("common.provider")} hint={t("settings.providerHint")} error={errors[`${id}.provider`]}><SettingsSelect ariaLabel={t("common.provider")} value={value[id]?.provider || "auto"} onChange={(provider) => update(id, "provider", provider)} options={[{ value: "auto", label: t("settings.autoDetect") }, { value: "openai", label: "OpenAI / Compatible" }, { value: "anthropic", label: "Anthropic" }, { value: "gemini", label: "Gemini" }]} /></SettingsField>}
           </div>

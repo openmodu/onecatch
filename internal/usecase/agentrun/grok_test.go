@@ -1,0 +1,414 @@
+package agentrun
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+
+	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
+)
+
+// grokInitializeResult is excerpted verbatim from a live `grok agent stdio`
+// handshake. The handshake needs no credentials, so this is exactly what the
+// model probe reads.
+const grokInitializeResult = `{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"sessionCapabilities":{"list":{},"resume":{},"close":{}}},"authMethods":[{"id":"grok.com","name":"Grok"}],"_meta":{"agentVersion":"1.0.5","modelState":{"currentModelId":"grok-4.6","availableModels":[{"modelId":"grok-4.6","name":"Grok 4.6","description":"SpaceXAI's latest frontier model","_meta":{"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"xhigh","value":"xhigh","label":"Extra High Effort","default":false},{"id":"high","value":"high","label":"High Effort","default":true},{"id":"medium","value":"medium","label":"Medium Effort","default":false},{"id":"low","value":"low","label":"Low Effort","default":false}]}},{"modelId":"grok-4.5","name":"Grok 4.5","_meta":{"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"high","value":"high","label":"High Effort","default":true},{"id":"low","value":"low","label":"Low Effort","default":false}]}}]}}}}`
+
+// acpStub builds a stdio agent that answers the three handshake requests in
+// order and streams promptLines while answering the prompt. It is the protocol
+// half of a harness, so the client can be exercised without one installed.
+func acpStub(t *testing.T, initializeResult, sessionResult, promptResult string, promptLines []string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("stub agent uses a POSIX shell script")
+	}
+	var streamed strings.Builder
+	for _, line := range promptLines {
+		streamed.WriteString("        printf '%s\\n' " + shellQuote(line) + "\n")
+	}
+	script := `#!/bin/sh
+n=0
+while IFS= read -r line; do
+  n=$((n+1))
+  case $n in
+    1) printf '%s\n' ` + shellQuote(initializeResult) + ` ;;
+    2) printf '%s\n' ` + shellQuote(sessionResult) + ` ;;
+    3)
+` + streamed.String() + `        printf '%s\n' ` + shellQuote(promptResult) + `
+       ;;
+  esac
+done
+`
+	path := filepath.Join(t.TempDir(), "acp-stub.sh")
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+	return path
+}
+
+// grokUpdates is one successful turn's notification stream: thinking, prose, a
+// tool call that touches a file, and its completion. Field names follow the
+// session/update frames captured from grok agent stdio.
+var grokUpdates = []string{
+	`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"Planning."}}}}`,
+	`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Adding "}}}}`,
+	`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"the file."}}}}`,
+	`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"tool_call","toolCallId":"t-1","title":"Write SUMMARY.md","kind":"edit","status":"pending","rawInput":{"path":"SUMMARY.md"},"locations":[{"path":"SUMMARY.md"}]}}}`,
+	`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"tool_call_update","toolCallId":"t-1","status":"in_progress"}}}`,
+	`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"tool_call_update","toolCallId":"t-1","status":"completed"},"_meta":{"eventId":"s-1-6","usage":{"inputTokens":900,"outputTokens":120,"cachedInputTokens":400}}}}`,
+	// A vendor extension notification: ignored, never surfaced as an event.
+	`{"jsonrpc":"2.0","method":"_x.ai/queue/changed","params":{"sessionId":"s-1","entries":[]}}`,
+}
+
+func runGrokStub(t *testing.T, req Request, promptResult string, updates []string) ([]Event, Result, error) {
+	t.Helper()
+	runner := NewGrokRunner(acpStub(t, grokInitializeResult,
+		`{"jsonrpc":"2.0","id":2,"result":{"sessionId":"s-1"}}`, promptResult, updates))
+	runner.now = fixedNow()
+	if req.Workspace == "" {
+		req.Workspace = t.TempDir()
+	}
+	var events []Event
+	result, err := runner.Run(context.Background(), req, func(event Event) { events = append(events, event) })
+	return events, result, err
+}
+
+func TestGrokRunnerNormalizesACPUpdates(t *testing.T) {
+	events, result, err := runGrokStub(t, Request{Prompt: "write a summary"},
+		`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}`, grokUpdates)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !result.Succeeded {
+		t.Fatal("end_turn must report success")
+	}
+	if result.SessionID != "s-1" {
+		t.Fatalf("session id = %q", result.SessionID)
+	}
+	if result.FinalMessage != "Adding the file." {
+		t.Fatalf("final message = %q", result.FinalMessage)
+	}
+	want := Usage{InputTokens: 900, OutputTokens: 120, CachedInputTokens: 400}
+	if result.Usage != want {
+		t.Fatalf("usage = %+v, want %+v", result.Usage, want)
+	}
+
+	kinds := map[EventKind]int{}
+	var reasoning, fileChange string
+	for _, event := range events {
+		kinds[event.Kind]++
+		switch event.Kind {
+		case KindReasoning:
+			reasoning += event.Text
+		case KindFileChange:
+			fileChange = event.Text
+		}
+	}
+	if kinds[KindStarted] != 1 || kinds[KindResult] != 1 {
+		t.Fatalf("expected one started and one result event, got %v", kinds)
+	}
+	if kinds[KindToolUse] != 1 {
+		t.Fatalf("tool uses = %d, want 1", kinds[KindToolUse])
+	}
+	// Only the settled update is a result; the in_progress one would otherwise
+	// duplicate the entry.
+	if kinds[KindToolResult] != 1 {
+		t.Fatalf("tool results = %d, want 1", kinds[KindToolResult])
+	}
+	if reasoning != "Planning." {
+		t.Fatalf("reasoning = %q", reasoning)
+	}
+	if fileChange != "SUMMARY.md" {
+		t.Fatalf("file change = %q", fileChange)
+	}
+}
+
+func TestGrokRunnerFailsOnNonTerminalStopReason(t *testing.T) {
+	events, result, err := runGrokStub(t, Request{Prompt: "write a summary"},
+		`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"refusal"}}`, nil)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if result.Succeeded {
+		t.Fatal("a refused turn must not report success")
+	}
+	var sawError bool
+	for _, event := range events {
+		if event.Kind == KindError {
+			sawError = true
+		}
+	}
+	if !sawError {
+		t.Fatal("a non-terminal stop reason must surface an error event")
+	}
+}
+
+func TestGrokRunnerSurfacesPromptError(t *testing.T) {
+	_, result, err := runGrokStub(t, Request{Prompt: "write a summary"},
+		`{"jsonrpc":"2.0","id":3,"error":{"code":-32603,"message":"Internal error","data":{"message":"API error (status 400): Incorrect API key provided.","http_status":400}}}`, nil)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if result.Succeeded {
+		t.Fatal("a JSON-RPC error response must not report success")
+	}
+}
+
+// TestGrokRunnerDeniesToolsWithoutAHandler pins the read-only contract: with no
+// host to ask, an approval request must be refused rather than waved through.
+func TestGrokRunnerDeniesToolsWithoutAHandler(t *testing.T) {
+	permission := `{"jsonrpc":"2.0","id":7,"method":"session/request_permission","params":{"sessionId":"s-1","toolCall":{"toolCallId":"t-1","title":"Delete everything","kind":"execute"},"options":[{"optionId":"yes","name":"Allow","kind":"allow_once"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}`
+
+	for _, testCase := range []struct {
+		name    string
+		sandbox Sandbox
+		want    string
+	}{
+		{"read-only denies", SandboxReadOnly, "no"},
+		{"workspace-write auto-approves", SandboxWorkspaceWrite, "yes"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			// The stub echoes what the client wrote back to it, so the chosen
+			// option id can be observed in the transcript.
+			dir := t.TempDir()
+			transcript := filepath.Join(dir, "client.jsonl")
+			path := filepath.Join(dir, "acp-stub.sh")
+			script := `#!/bin/sh
+n=0
+while IFS= read -r line; do
+  n=$((n+1))
+  printf '%s\n' "$line" >> ` + shellQuote(transcript) + `
+  case $n in
+    1) printf '%s\n' ` + shellQuote(grokInitializeResult) + ` ;;
+    2) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":2,"result":{"sessionId":"s-1"}}`) + ` ;;
+    3) printf '%s\n' ` + shellQuote(permission) + ` ;;
+    4) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}`) + ` ;;
+  esac
+done
+`
+			if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+				t.Fatalf("write stub: %v", err)
+			}
+			runner := NewGrokRunner(path)
+			runner.now = fixedNow()
+			if _, err := runner.Run(context.Background(), Request{
+				Prompt: "clean up", Workspace: t.TempDir(), Sandbox: testCase.sandbox,
+			}, nil); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+			written, err := os.ReadFile(transcript)
+			if err != nil {
+				t.Fatalf("read transcript: %v", err)
+			}
+			if !strings.Contains(string(written), `"optionId":"`+testCase.want+`"`) {
+				t.Fatalf("expected optionId %q in client transcript:\n%s", testCase.want, written)
+			}
+		})
+	}
+}
+
+func TestGrokSessionArgs(t *testing.T) {
+	args, err := grokSessionArgs(Request{Sandbox: SandboxReadOnly, Model: "grok-4.6", ReasoningEffort: "xhigh"})
+	if err != nil {
+		t.Fatalf("session args: %v", err)
+	}
+	if argValue(args, "--sandbox") != "read-only" {
+		t.Fatalf("sandbox = %q", argValue(args, "--sandbox"))
+	}
+	if argValue(args, "--model") != "grok-4.6" || argValue(args, "--reasoning-effort") != "xhigh" {
+		t.Fatalf("model/effort not passed: %v", args)
+	}
+
+	write, err := grokSessionArgs(Request{Sandbox: SandboxWorkspaceWrite})
+	if err != nil {
+		t.Fatalf("session args: %v", err)
+	}
+	if argValue(write, "--sandbox") != "workspace" {
+		t.Fatalf("workspace sandbox = %q", argValue(write, "--sandbox"))
+	}
+	// An unmapped sandbox must fail the run rather than silently start Grok
+	// with whatever profile happened to be default.
+	if _, err := grokSessionArgs(Request{Sandbox: Sandbox("invented")}); err == nil {
+		t.Fatal("an unknown sandbox must be rejected")
+	}
+}
+
+func TestGrokRunnerRejectsRemote(t *testing.T) {
+	runner := NewGrokRunner(acpStub(t, grokInitializeResult, "", "", nil))
+	_, err := runner.Run(context.Background(), Request{Prompt: "hi", Workspace: t.TempDir(), Remote: &seam.Target{Host: "devbox", Root: "/srv/project"}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "remote") {
+		t.Fatalf("expected a remote rejection, got %v", err)
+	}
+}
+
+func TestParseGrokConfiguration(t *testing.T) {
+	var envelope acpEnvelope
+	if err := json.Unmarshal([]byte(grokInitializeResult), &envelope); err != nil {
+		t.Fatalf("decode handshake: %v", err)
+	}
+	configuration := parseGrokConfiguration(envelope.Result)
+	if len(configuration.Models) != 2 {
+		t.Fatalf("models = %+v", configuration.Models)
+	}
+	if configuration.Models[0].Model != "grok-4.6" || configuration.Models[0].DisplayName != "Grok 4.6" {
+		t.Fatalf("first model = %+v", configuration.Models[0])
+	}
+	// Efforts are declared per model; the settings UI shows one list, so the
+	// union is collected in first-seen order without duplicates.
+	want := []string{"xhigh", "high", "medium", "low"}
+	if strings.Join(configuration.Efforts, ",") != strings.Join(want, ",") {
+		t.Fatalf("efforts = %v, want %v", configuration.Efforts, want)
+	}
+}
+
+func TestACPUsageIgnoresMetaWithoutTokens(t *testing.T) {
+	if _, ok := acpUsage(nil); ok {
+		t.Fatal("absent _meta must report no usage")
+	}
+	if _, ok := acpUsage([]byte(`{"eventId":"abc"}`)); ok {
+		t.Fatal("_meta without a usage object must report no usage")
+	}
+	if _, ok := acpUsage([]byte(`{"usage":{"inputTokens":0,"outputTokens":0}}`)); ok {
+		t.Fatal("an all-zero usage object must not overwrite real accounting")
+	}
+	usage, ok := acpUsage([]byte(`{"usage":{"promptTokens":10,"completionTokens":4}}`))
+	if !ok || usage.InputTokens != 10 || usage.OutputTokens != 4 {
+		t.Fatalf("alternate field spellings not read: %+v (ok=%v)", usage, ok)
+	}
+}
+
+// TestGrokRunnerRoutesPermissionToTheHost covers the path the desktop approval
+// card uses: the request surfaces as an event, the host's decision picks the
+// matching ACP option, and the resolution is recorded.
+func TestGrokRunnerRoutesPermissionToTheHost(t *testing.T) {
+	permission := `{"jsonrpc":"2.0","id":7,"method":"session/request_permission","params":{"sessionId":"s-1","toolCall":{"toolCallId":"t-1","title":"Run tests","kind":"execute","rawInput":{"command":"go test ./..."}},"options":[{"optionId":"once","name":"Allow once","kind":"allow_once"},{"optionId":"always","name":"Always allow","kind":"allow_always"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}`
+
+	for _, testCase := range []struct {
+		name     string
+		decision PermissionDecision
+		wantID   string
+	}{
+		{"allow once", PermissionDecision{Behavior: "allow", DecisionClassification: "user_temporary"}, "once"},
+		{"allow always", PermissionDecision{Behavior: "allow", DecisionClassification: "user_permanent"}, "always"},
+		{"deny", PermissionDecision{Behavior: "deny"}, "no"},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			dir := t.TempDir()
+			transcript := filepath.Join(dir, "client.jsonl")
+			path := filepath.Join(dir, "acp-stub.sh")
+			script := `#!/bin/sh
+n=0
+while IFS= read -r line; do
+  n=$((n+1))
+  printf '%s\n' "$line" >> ` + shellQuote(transcript) + `
+  case $n in
+    1) printf '%s\n' ` + shellQuote(grokInitializeResult) + ` ;;
+    2) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":2,"result":{"sessionId":"s-1"}}`) + ` ;;
+    3) printf '%s\n' ` + shellQuote(permission) + ` ;;
+    4) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}`) + ` ;;
+  esac
+done
+`
+			if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+				t.Fatalf("write stub: %v", err)
+			}
+			runner := NewGrokRunner(path)
+			runner.now = fixedNow()
+
+			var asked PermissionRequest
+			var events []Event
+			if _, err := runner.Run(context.Background(), Request{
+				Prompt: "run the tests", Workspace: t.TempDir(), Sandbox: SandboxWorkspaceWrite,
+				PermissionHandler: func(_ context.Context, request PermissionRequest) (PermissionDecision, error) {
+					asked = request
+					return testCase.decision, nil
+				},
+			}, func(event Event) { events = append(events, event) }); err != nil {
+				t.Fatalf("run: %v", err)
+			}
+
+			if asked.ToolName != "Run tests" || asked.ToolUseID != "t-1" {
+				t.Fatalf("permission request = %+v", asked)
+			}
+			// The card renders the tool's input, so rawInput has to survive.
+			if asked.Input["command"] != "go test ./..." {
+				t.Fatalf("tool input not carried through: %+v", asked.Input)
+			}
+			// This flag is Claude's "answer it in Claude's own UI" escape hatch;
+			// the card hides its buttons when it is set, and an ACP request is
+			// answerable right here.
+			if asked.RequiresUserInteraction {
+				t.Fatal("an ACP permission request must be answerable from the card")
+			}
+			// The agent offered allow_always, so the card may show it.
+			if asked.SuppressAlwaysAllow {
+				t.Fatal("always-allow was offered by the agent but suppressed")
+			}
+
+			written, err := os.ReadFile(transcript)
+			if err != nil {
+				t.Fatalf("read transcript: %v", err)
+			}
+			if !strings.Contains(string(written), `"optionId":"`+testCase.wantID+`"`) {
+				t.Fatalf("expected optionId %q in client transcript:\n%s", testCase.wantID, written)
+			}
+
+			var requested, resolved int
+			for _, event := range events {
+				switch event.Kind {
+				case KindPermissionRequest:
+					requested++
+				case KindPermissionResolved:
+					resolved++
+					if event.PermissionDecision != testCase.decision.Behavior {
+						t.Fatalf("resolved decision = %q, want %q", event.PermissionDecision, testCase.decision.Behavior)
+					}
+				}
+			}
+			if requested != 1 || resolved != 1 {
+				t.Fatalf("permission events: requested=%d resolved=%d, want 1 and 1", requested, resolved)
+			}
+		})
+	}
+}
+
+// An agent that offers no always-allow option must not have one shown, since
+// ACP carries no rule payload OneCatch could persist on its behalf.
+func TestGrokSuppressesAlwaysAllowWhenNotOffered(t *testing.T) {
+	permission := `{"jsonrpc":"2.0","id":7,"method":"session/request_permission","params":{"sessionId":"s-1","toolCall":{"toolCallId":"t-1","title":"Run tests","kind":"execute"},"options":[{"optionId":"once","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "acp-stub.sh")
+	script := `#!/bin/sh
+n=0
+while IFS= read -r line; do
+  n=$((n+1))
+  case $n in
+    1) printf '%s\n' ` + shellQuote(grokInitializeResult) + ` ;;
+    2) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":2,"result":{"sessionId":"s-1"}}`) + ` ;;
+    3) printf '%s\n' ` + shellQuote(permission) + ` ;;
+    4) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}`) + ` ;;
+  esac
+done
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+	runner := NewGrokRunner(path)
+	runner.now = fixedNow()
+	var asked PermissionRequest
+	if _, err := runner.Run(context.Background(), Request{
+		Prompt: "run the tests", Workspace: t.TempDir(), Sandbox: SandboxWorkspaceWrite,
+		PermissionHandler: func(_ context.Context, request PermissionRequest) (PermissionDecision, error) {
+			asked = request
+			return PermissionDecision{Behavior: "allow"}, nil
+		},
+	}, nil); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if !asked.SuppressAlwaysAllow {
+		t.Fatal("always-allow must be suppressed when the agent did not offer it")
+	}
+}
