@@ -1,13 +1,36 @@
-export const runtimeHarnesses = [
+// The harness catalog the UI renders from.
+//
+// Capabilities are the backend's answer, not a second copy kept here: the
+// desktop's runtime list carries the same catalog the domain validates against,
+// and `hydrateRuntimeHarnesses` installs it once the app has loaded it. The
+// seed below only covers the window before that first load, and the cases where
+// no harness list is available at all (demo mode, tests).
+const seedHarnesses = [
   { id: "codex", label: "Codex", supportsReasoning: true, supportsSpeed: true },
   { id: "claude", label: "Claude Code", supportsReasoning: true, supportsSpeed: false },
   { id: "modu", label: "modu_code", supportsReasoning: false, supportsSpeed: false },
-  // Pi spells reasoning effort --thinking; Grok exposes --reasoning-effort. The
-  // DeepSeek Harness headless profile offers neither.
   { id: "pi", label: "Pi", supportsReasoning: true, supportsSpeed: false },
   { id: "grok", label: "Grok Build", supportsReasoning: true, supportsSpeed: false },
   { id: "dsh", label: "DeepSeek Harness", supportsReasoning: false, supportsSpeed: false },
 ];
+
+export let runtimeHarnesses = seedHarnesses;
+
+// hydrateRuntimeHarnesses replaces the seed with the backend's catalog and
+// returns the runtime list unchanged, so callers can wrap it around whatever
+// they were already storing. An empty list leaves the seed in place, so a
+// failed probe does not empty the harness picker.
+export function hydrateRuntimeHarnesses(runtimes = []) {
+  if (runtimes.length) {
+    runtimeHarnesses = runtimes.map((runtime) => ({
+      id: runtime.id,
+      label: runtime.name || runtime.id,
+      supportsReasoning: (runtime.efforts || []).length > 0,
+      supportsSpeed: Boolean(runtime.serviceTiers),
+    }));
+  }
+  return runtimes;
+}
 
 export const directAgentWorkflowID = "single_agent";
 

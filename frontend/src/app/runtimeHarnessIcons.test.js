@@ -12,11 +12,11 @@ const deepseekIcon = readFileSync(new URL("../../public/assets/runtime/deepseek.
 const piIcon = readFileSync(new URL("../../public/assets/runtime/pi.svg", import.meta.url), "utf8");
 
 test("runtime harnesses have distinct icons", () => {
-  assert.match(iconSource, /codex:\s*"\/assets\/runtime\/codex\.svg"/);
+  // Marks resolve by harness id; only the differently-named files need an
+  // entry, so adding a harness means dropping in one asset.
+  assert.match(iconSource, /`\/assets\/runtime\/\$\{harness\}\.svg`/);
   assert.match(iconSource, /claude:\s*"\/assets\/runtime\/claude-code\.svg"/);
   assert.match(iconSource, /modu:\s*"\/assets\/runtime\/modu-code\.png"/);
-  assert.match(iconSource, /pi:\s*"\/assets\/runtime\/pi\.svg"/);
-  assert.match(iconSource, /grok:\s*"\/assets\/runtime\/grok\.svg"/);
   assert.match(iconSource, /dsh:\s*"\/assets\/runtime\/deepseek\.svg"/);
   assert.match(codexIcon, /<title>Codex<\/title>/);
   assert.match(claudeCodeIcon, /<title>Claude Code<\/title>/);

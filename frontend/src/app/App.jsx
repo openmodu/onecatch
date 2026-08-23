@@ -1,3 +1,4 @@
+import { hydrateRuntimeHarnesses } from "./runtimeHarnesses.js";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lock, Minus, PanelRightOpen, PictureInPicture2, Square, SquareTerminal, X } from "lucide-react";
@@ -356,7 +357,7 @@ function App() {
       setWorkspaceID((current) => current || firstWorkspaceID);
     } catch {
       demo = await import("./demoData.js");
-      setRuntimes(demo.demoRuntimes);
+      setRuntimes(hydrateRuntimeHarnesses(demo.demoRuntimes));
       setWorkspaces(sortWorkspaces(demo.demoWorkspaces));
       setWorkflows(demo.demoWorkflows);
       setWorkers(demo.demoWorkers);
@@ -408,7 +409,7 @@ function App() {
       Promise.allSettled([RuntimeBinding.ListRuntimes(), WorkflowBinding.ListDefinitions(), WorkerBinding.ListWorkers()])
         .then(([runtimeResult, workflowResult, workerResult]) => {
           if (!active) return;
-          if (runtimeResult.status === "fulfilled") setRuntimes(runtimeResult.value || []);
+          if (runtimeResult.status === "fulfilled") setRuntimes(hydrateRuntimeHarnesses(runtimeResult.value || []));
           if (workerResult.status === "fulfilled") setWorkers(workerResult.value || []);
           if (workflowResult.status !== "fulfilled") return;
           const workflowItems = workflowResult.value || [];
@@ -424,7 +425,7 @@ function App() {
   useEffect(() => {
     if (mode !== "wails") return undefined;
     return Events.On(runtimesChangedEvent, (event) => {
-      if (Array.isArray(event?.data)) setRuntimes(event.data);
+      if (Array.isArray(event?.data)) setRuntimes(hydrateRuntimeHarnesses(event.data));
     });
   }, [mode]);
 

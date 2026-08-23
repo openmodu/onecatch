@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
+	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 )
 
 const CurrentSchemaVersion = 1
@@ -81,19 +81,31 @@ type ExperimentalSettings struct {
 	RemoteWorkersEnabled bool `json:"remoteWorkersEnabled"`
 }
 
+// defaultRuntimes seeds one entry per catalogued harness with its own default
+// integration, so a new harness needs no edit here.
+func defaultRuntimes() map[string]RuntimeSettings {
+	runtimes := make(map[string]RuntimeSettings)
+	for _, harness := range domainharnesses.Catalog() {
+		settings := RuntimeSettings{Integration: harness.DefaultIntegration()}
+		// A harness with a choice of integration also has a configuration
+		// source; sharing the harness's own is the safe starting point.
+		if len(harness.Integrations) > 1 {
+			settings.ConfigSource = "shared"
+		}
+		if len(harness.Providers) > 0 {
+			settings.Provider = harness.Providers[0]
+		}
+		runtimes[harness.ID] = settings
+	}
+	return runtimes
+}
+
 func Defaults() Settings {
 	return Settings{
 		SchemaVersion: CurrentSchemaVersion,
 		Revision:      1,
-		Runtimes: map[string]RuntimeSettings{
-			"codex":  {Integration: "cli"},
-			"claude": {Integration: "cli"},
-			"modu":   {Integration: "sdk", ConfigSource: "shared"},
-			"pi":     {Integration: "cli"},
-			"grok":   {Integration: "cli"},
-			"dsh":    {Integration: "cli"},
-		},
-		Terminal: TerminalSettings{Theme: "system"},
+		Runtimes:      defaultRuntimes(),
+		Terminal:      TerminalSettings{Theme: "system"},
 		Execution: ExecutionSettings{
 			MaxTransitions: 20, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 1800,
 			MaxLocalDAGConcurrency: 4, InterruptGraceSeconds: 10, DefaultSandbox: "workspace-write",
@@ -170,16 +182,13 @@ func Normalize(input Settings) (Settings, error) {
 		input.Storage.LogMaxAgeDays = defaults.Storage.LogMaxAgeDays
 	}
 	for id, runtime := range input.Runtimes {
+		harness, _ := domainharnesses.Find(id)
 		runtime.Integration = strings.ToLower(strings.TrimSpace(runtime.Integration))
 		if runtime.Integration == "" {
-			if id == "modu" {
-				runtime.Integration = "sdk"
-			} else {
-				runtime.Integration = "cli"
-			}
+			runtime.Integration = harness.DefaultIntegration()
 		}
 		runtime.ConfigSource = strings.ToLower(strings.TrimSpace(runtime.ConfigSource))
-		if id == "modu" && runtime.ConfigSource == "" {
+		if runtime.ConfigSource == "" && len(harness.Integrations) > 1 {
 			runtime.ConfigSource = "shared"
 		}
 		runtime.ConfigPath = strings.TrimSpace(runtime.ConfigPath)
@@ -199,20 +208,9 @@ var (
 	serviceTierKey = regexp.MustCompile(`^[a-z0-9][a-z0-9_-]{0,63}$`)
 )
 
-// knownRuntimes is every harness the settings model accepts. It is the shared
-// domain list rather than a second spelling of it.
-var knownRuntimes = domainagents.KnownRuntimes
-
-// reasoningEfforts are the levels each harness advertises for its own
-// reasoning control. An empty value always means "leave the harness default".
-var reasoningEfforts = map[string][]string{
-	"codex":  {"", "minimal", "low", "medium", "high", "xhigh", "max", "ultra"},
-	"claude": {"", "low", "medium", "high", "xhigh", "max"},
-	// Grok's --reasoning-effort, as reported by its own model catalog.
-	"grok": {"", "low", "medium", "high", "xhigh"},
-	// Pi spells this --thinking and accepts "off" to disable it outright.
-	"pi": {"", "off", "minimal", "low", "medium", "high", "xhigh"},
-}
+// knownRuntimes is every harness the settings model accepts, taken from the
+// catalog rather than restated here.
+var knownRuntimes = domainharnesses.IDs()
 
 func Validate(input Settings) error {
 	if input.SchemaVersion != CurrentSchemaVersion {
@@ -228,49 +226,38 @@ func Validate(input Settings) error {
 		if strings.ContainsAny(runtime.Integration+runtime.ConfigSource+runtime.ConfigPath+runtime.Binary+runtime.DefaultModel+runtime.ReasoningEffort+runtime.ServiceTier+runtime.Provider, "\r\n\x00") {
 			return fmt.Errorf("runtime %s contains control characters", id)
 		}
-		if id == "modu" {
-			if !contains([]string{"", "sdk", "cli"}, runtime.Integration) {
-				return errors.New("modu integration must be sdk or cli")
-			}
+		harness, _ := domainharnesses.Find(id)
+		if runtime.Integration != "" && !harness.SupportsIntegration(runtime.Integration) {
+			return fmt.Errorf("runtime %s does not support the %s integration", id, runtime.Integration)
+		}
+		// Only a harness with more than one integration has a configuration
+		// source to choose between; for the rest the setting is meaningless.
+		if len(harness.Integrations) > 1 {
 			if !contains([]string{"", "shared", "onecatch"}, runtime.ConfigSource) {
-				return errors.New("modu config source must be shared or onecatch")
+				return fmt.Errorf("runtime %s config source must be shared or onecatch", id)
 			}
-		} else if runtime.Integration != "" && runtime.Integration != "cli" {
-			return fmt.Errorf("runtime %s only supports cli integration", id)
 		} else if runtime.ConfigSource != "" || runtime.ConfigPath != "" {
 			return fmt.Errorf("runtime %s does not support config source settings", id)
 		}
-		if efforts, ok := reasoningEfforts[id]; ok {
-			if !contains(efforts, runtime.ReasoningEffort) {
-				return fmt.Errorf("runtime %s reasoning effort is invalid", id)
+		if !harness.SupportsEffort(runtime.ReasoningEffort) {
+			if len(harness.Efforts) == 0 {
+				return fmt.Errorf("runtime %s does not support reasoning settings", id)
 			}
-		} else if runtime.ReasoningEffort != "" {
-			return fmt.Errorf("runtime %s does not support reasoning settings", id)
+			return fmt.Errorf("runtime %s reasoning effort is invalid", id)
 		}
-		// Codex is the only harness with a speed/processing tier.
-		if id == "codex" {
-			if runtime.ServiceTier != "" && !serviceTierKey.MatchString(runtime.ServiceTier) {
-				return errors.New("codex service tier is invalid")
+		if runtime.ServiceTier != "" {
+			if !harness.ServiceTiers {
+				return fmt.Errorf("runtime %s does not support service tier settings", id)
 			}
-		} else if runtime.ServiceTier != "" {
-			return fmt.Errorf("runtime %s does not support service tier settings", id)
+			if !serviceTierKey.MatchString(runtime.ServiceTier) {
+				return fmt.Errorf("runtime %s service tier is invalid", id)
+			}
 		}
-		switch id {
-		case "modu":
-			if !contains([]string{"", "auto", "openai", "anthropic", "gemini"}, runtime.Provider) {
-				return errors.New("modu provider must be auto, openai, anthropic, or gemini")
-			}
-		case "dsh":
-			// DeepSeek Harness routes through named provider entries in its own
-			// composition; "deepseek-official" is the one its default profile
-			// registers, and pi-ai supplies the multi-provider twin.
-			if !contains([]string{"", "deepseek-official", "pi-ai"}, runtime.Provider) {
-				return errors.New("dsh provider must be deepseek-official or pi-ai")
-			}
-		default:
-			if runtime.Provider != "" {
+		if !harness.SupportsProvider(runtime.Provider) {
+			if len(harness.Providers) == 0 {
 				return fmt.Errorf("runtime %s does not support provider selection", id)
 			}
+			return fmt.Errorf("runtime %s provider is invalid", id)
 		}
 		for _, key := range runtime.EnvironmentAllowlist {
 			if !environmentKey.MatchString(key) || forbiddenEnvironmentKey(key) {

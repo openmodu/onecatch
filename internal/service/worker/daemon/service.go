@@ -6,10 +6,12 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -20,17 +22,17 @@ const (
 )
 
 type Config struct {
-	Binary            string
-	Listen            string
-	ID                string
-	Name              string
-	DataDir           string
-	TLSCert           string
-	TLSKey            string
-	ClientCA          string
-	CodexBinary       string
-	ClaudeBinary      string
-	ModuBinary        string
+	Binary   string
+	Listen   string
+	ID       string
+	Name     string
+	DataDir  string
+	TLSCert  string
+	TLSKey   string
+	ClientCA string
+	// Binaries holds each harness's executable override by runtime id, and is
+	// forwarded as one --<id>-binary flag per entry.
+	Binaries          map[string]string
 	MaxConcurrency    int
 	AllowInsecureHTTP bool
 	PathEnvironment   string
@@ -150,9 +152,11 @@ func arguments(config Config) []string {
 	appendPair("--tls-cert", config.TLSCert)
 	appendPair("--tls-key", config.TLSKey)
 	appendPair("--client-ca", config.ClientCA)
-	appendPair("--codex-binary", config.CodexBinary)
-	appendPair("--claude-binary", config.ClaudeBinary)
-	appendPair("--modu-binary", config.ModuBinary)
+	// Sorted so an installed service file is byte-identical between installs
+	// with the same configuration.
+	for _, id := range slices.Sorted(maps.Keys(config.Binaries)) {
+		appendPair("--"+id+"-binary", config.Binaries[id])
+	}
 	if config.AllowInsecureHTTP {
 		arguments = append(arguments, "--allow-insecure-http")
 	}

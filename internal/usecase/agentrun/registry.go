@@ -26,34 +26,55 @@ type Engine struct {
 	runners map[Runtime]Runner
 }
 
-// Config configures the engine's adapters and optional binary overrides. Empty
-// CLI paths fall back to the command name resolved from PATH.
+// Config configures the engine's adapters. An empty binary falls back to the
+// harness's catalogued command, resolved from PATH.
 type Config struct {
-	CodexBinary     string
-	ClaudeBinary    string
-	ModuBinary      string
+	// Binaries overrides a harness's executable, keyed by runtime id. A map
+	// rather than one named field per harness, so adding a harness does not
+	// mean editing this struct and every site that populates it.
+	Binaries map[string]string
+	// Modu chooses between a native SDK and its CLI, and the SDK needs to be
+	// told where its configuration lives.
 	ModuIntegration string
 	ModuConfigPath  string
 	ModuAgentDir    string
-	PiBinary        string
-	GrokBinary      string
-	DshBinary       string
 	// DshSessionRoot is where OneCatch keeps DeepSeek Harness session logs. The
 	// adapter reads the harness's own log to recover its event stream, so it
 	// needs a directory it controls rather than the harness's shared default.
 	DshSessionRoot string
 }
 
-// NewEngine builds an engine with all standard local runtime runners.
+// Binary returns the configured executable for a runtime, or empty to let the
+// adapter fall back to the catalogued command.
+func (c Config) Binary(runtime Runtime) string { return c.Binaries[string(runtime)] }
+
+// descriptor binds a catalogued harness to the code that drives it.
+//
+// The catalog in domain/harnesses says which harnesses exist and what is true
+// about them; this says how to build one. Registering here is the single edit
+// that makes a new adapter reachable — the engine, the desktop probe list, and
+// the worker's availability report all iterate this rather than naming runtimes.
+type descriptor struct {
+	runtime Runtime
+	build   func(Config) Runner
+}
+
+var descriptors = []descriptor{
+	{RuntimeCodex, func(c Config) Runner { return NewCodexRunner(c.Binary(RuntimeCodex)) }},
+	{RuntimeClaude, func(c Config) Runner { return NewClaudeRunner(c.Binary(RuntimeClaude)) }},
+	{RuntimeModu, newModuRuntimeRunner},
+	{RuntimePi, func(c Config) Runner { return NewPiRunner(c.Binary(RuntimePi)) }},
+	{RuntimeGrok, func(c Config) Runner { return NewGrokRunner(c.Binary(RuntimeGrok)) }},
+	{RuntimeDsh, func(c Config) Runner { return NewDshRunner(c.Binary(RuntimeDsh), c.DshSessionRoot) }},
+}
+
+// NewEngine builds an engine with every registered runtime runner.
 func NewEngine(cfg Config) *Engine {
-	return NewEngineWithRunners(
-		NewCodexRunner(cfg.CodexBinary),
-		NewClaudeRunner(cfg.ClaudeBinary),
-		newModuRuntimeRunner(cfg),
-		NewPiRunner(cfg.PiBinary),
-		NewGrokRunner(cfg.GrokBinary),
-		NewDshRunner(cfg.DshBinary, cfg.DshSessionRoot),
-	)
+	runners := make([]Runner, 0, len(descriptors))
+	for _, item := range descriptors {
+		runners = append(runners, item.build(cfg))
+	}
+	return NewEngineWithRunners(runners...)
 }
 
 // NewEngineWithRunners builds an engine from an explicit set of runners. Tests
@@ -78,15 +99,23 @@ func (e *Engine) Available(rt Runtime) bool {
 }
 
 // AvailableRuntimes lists every runtime whose CLI is installed, so the product
-// can show users which local agents they can actually run.
+// can show users which local agents they can actually run. Registration order
+// is stable, so the UI does not reshuffle between calls.
 func (e *Engine) AvailableRuntimes() []Runtime {
-	// Stable order so the UI does not reshuffle between calls.
-	order := []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeDsh}
 	var out []Runtime
-	for _, rt := range order {
-		if e.Available(rt) {
-			out = append(out, rt)
+	for _, item := range descriptors {
+		if e.Available(item.runtime) {
+			out = append(out, item.runtime)
 		}
+	}
+	return out
+}
+
+// Runtimes lists every registered runtime, installed or not.
+func (e *Engine) Runtimes() []Runtime {
+	out := make([]Runtime, 0, len(descriptors))
+	for _, item := range descriptors {
+		out = append(out, item.runtime)
 	}
 	return out
 }

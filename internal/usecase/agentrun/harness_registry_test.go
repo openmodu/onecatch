@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
+	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 )
 
 func TestRuntimeValidityCoversEveryHarness(t *testing.T) {
@@ -31,11 +31,9 @@ func TestEngineRegistersEveryHarness(t *testing.T) {
 func TestEngineRejectsUninstalledHarness(t *testing.T) {
 	// Point every new harness at a binary that cannot resolve, so the engine
 	// must fail fast rather than spawn anything.
-	engine := NewEngine(Config{
-		PiBinary:   "onecatch-absent-pi",
-		GrokBinary: "onecatch-absent-grok",
-		DshBinary:  "onecatch-absent-dsh",
-	})
+	engine := NewEngine(Config{Binaries: map[string]string{
+		"pi": "onecatch-absent-pi", "grok": "onecatch-absent-grok", "dsh": "onecatch-absent-dsh",
+	}})
 	for _, runtime := range []Runtime{RuntimePi, RuntimeGrok, RuntimeDsh} {
 		if engine.Available(runtime) {
 			t.Fatalf("runtime %q reported available with a missing binary", runtime)
@@ -107,23 +105,45 @@ func TestInteractivePermissionCapability(t *testing.T) {
 	}
 }
 
-// The domain layer cannot import agentrun, so it keeps its own list of harness
-// identifiers for task and settings validation. A runtime added to the engine
-// but missed there is accepted everywhere except the moment a user runs it —
-// which is exactly how `grok` shipped able to be selected but not started.
-func TestDomainRuntimesMatchEngine(t *testing.T) {
+// Every catalogued harness must have a runner, and every runner must be
+// catalogued. A harness in one but not the other is exactly how `grok` shipped
+// selectable but unable to start: the engine could drive it while task
+// validation rejected it.
+func TestCatalogAndEngineAgree(t *testing.T) {
 	engine := NewEngine(Config{})
-	for _, id := range domainagents.KnownRuntimes {
-		if !Runtime(id).Valid() {
-			t.Fatalf("domain lists runtime %q, which the engine does not recognize", id)
+	for _, harness := range domainharnesses.Catalog() {
+		if engine.Runner(Runtime(harness.ID)) == nil {
+			t.Fatalf("catalogued harness %q has no registered runner", harness.ID)
 		}
-		if engine.Runner(Runtime(id)) == nil {
-			t.Fatalf("domain lists runtime %q, which has no registered runner", id)
+		if !Runtime(harness.ID).Valid() {
+			t.Fatalf("catalogued harness %q is not a valid runtime", harness.ID)
 		}
 	}
-	for _, runtime := range []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeDsh} {
-		if !domainagents.IsKnownRuntime(string(runtime)) {
+	for _, runtime := range engine.Runtimes() {
+		if !domainharnesses.IsKnown(string(runtime)) {
 			t.Fatalf("engine drives runtime %q, which the domain would reject as an invalid task", runtime)
+		}
+	}
+	if len(engine.Runtimes()) != len(domainharnesses.Catalog()) {
+		t.Fatalf("engine registers %d runtimes for %d catalogued harnesses", len(engine.Runtimes()), len(domainharnesses.Catalog()))
+	}
+}
+
+// The catalog claims what each harness can do; the adapters have to agree, or a
+// user is offered a control the run will reject.
+func TestCatalogResumeClaimsMatchAdapters(t *testing.T) {
+	stub := stubBinary(t, "", "", 0)
+	engine := NewEngine(Config{Binaries: map[string]string{"dsh": stub}, DshSessionRoot: t.TempDir()})
+	for _, harness := range domainharnesses.Catalog() {
+		if harness.CanResume {
+			continue
+		}
+		runner := engine.Runner(Runtime(harness.ID))
+		_, err := runner.Run(context.Background(), Request{
+			Prompt: "carry on", Workspace: t.TempDir(), ResumeSessionID: "session-1",
+		}, nil)
+		if err == nil {
+			t.Fatalf("harness %q is catalogued as unable to resume but accepted one", harness.ID)
 		}
 	}
 }

@@ -9,35 +9,62 @@ import (
 	"sync"
 	"time"
 
+	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
 type RuntimeConfig struct {
-	CodexBinary     string `json:"codexBinary,omitempty"`
-	ClaudeBinary    string `json:"claudeBinary,omitempty"`
-	ModuBinary      string `json:"moduBinary,omitempty"`
-	ModuIntegration string `json:"moduIntegration,omitempty"`
-	ModuConfigPath  string `json:"moduConfigPath,omitempty"`
-	ModuAgentDir    string `json:"moduAgentDir,omitempty"`
-	PiBinary        string `json:"piBinary,omitempty"`
-	GrokBinary      string `json:"grokBinary,omitempty"`
-	DshBinary       string `json:"dshBinary,omitempty"`
-	DshSessionRoot  string `json:"dshSessionRoot,omitempty"`
+	// Binaries holds each harness's configured executable by runtime id. A map
+	// rather than one field per harness, so a new harness needs no edit here or
+	// at the sites that read it.
+	Binaries        map[string]string `json:"binaries,omitempty"`
+	ModuIntegration string            `json:"moduIntegration,omitempty"`
+	ModuConfigPath  string            `json:"moduConfigPath,omitempty"`
+	ModuAgentDir    string            `json:"moduAgentDir,omitempty"`
+	DshSessionRoot  string            `json:"dshSessionRoot,omitempty"`
 }
+
+// Binary returns the configured executable for a runtime, or empty to let the
+// adapter fall back to the harness's catalogued command.
+func (c RuntimeConfig) Binary(id string) string { return c.Binaries[id] }
 
 type RuntimeConfigInput struct {
 	Runtime string `json:"runtime"`
 	Binary  string `json:"binary"`
 }
 
+// RuntimeInfo is one harness as the UI sees it: the catalog's facts about what
+// the harness is and can do, plus this machine's probe result.
+//
+// The capability fields exist so the desktop does not keep a second copy of the
+// catalog. Without them the UI has to hardcode which harnesses have a reasoning
+// control, which offer a provider, and what each one's command is called — and
+// that copy drifts from the backend's the moment a harness is added.
 type RuntimeInfo struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
 	Available bool      `json:"available"`
 	Version   string    `json:"version,omitempty"`
 	CheckedAt time.Time `json:"checkedAt"`
+
+	// Command is the harness's default executable, shown as the binary-path
+	// placeholder.
+	Command string `json:"command"`
+	// Efforts is the reasoning-effort vocabulary; empty hides the control.
+	Efforts []string `json:"efforts,omitempty"`
+	// Providers is the provider vocabulary; empty hides the control.
+	Providers []string `json:"providers,omitempty"`
+	// ServiceTiers reports whether to offer the speed control.
+	ServiceTiers bool `json:"serviceTiers,omitempty"`
+	// Integrations lists the selectable integrations; one entry means the
+	// choice is not worth showing.
+	Integrations []string `json:"integrations,omitempty"`
+	// EnvironmentHint is the placeholder for the environment allowlist.
+	EnvironmentHint string `json:"environmentHint,omitempty"`
+	// CanResume reports whether a finished run of this harness can continue.
+	CanResume bool `json:"canResume"`
 }
 
 // RuntimeRegistry is a hot-swappable Engine. The orchestrator keeps this
@@ -137,6 +164,13 @@ func (r *RuntimeRegistry) persistStatusCacheLocked() {
 	}
 	// A failed write only costs the next launch one probe round.
 	_ = localfile.WriteJSONAtomic(r.statusPath, runtimeStatusSnapshot{Version: 1, Entries: entries})
+}
+
+// Runtimes lists every harness the engine can drive, installed or not.
+func (r *RuntimeRegistry) Runtimes() []agentrun.Runtime {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.engine.Runtimes()
 }
 
 func (r *RuntimeRegistry) Available(runtime agentrun.Runtime) bool {
@@ -255,15 +289,21 @@ type runtimeSpec struct {
 	cacheKey   string
 }
 
+// runtimeSpecs derives one probe target per catalogued harness. cacheKey is
+// everything whose change invalidates a cached probe result.
 func runtimeSpecs(config RuntimeConfig) []runtimeSpec {
-	return []runtimeSpec{
-		{agentrun.RuntimeCodex, "Codex", config.CodexBinary, config.CodexBinary},
-		{agentrun.RuntimeClaude, "Claude Code", config.ClaudeBinary, config.ClaudeBinary},
-		{agentrun.RuntimeModu, "Modu Code", config.ModuBinary, strings.Join([]string{config.ModuIntegration, config.ModuBinary, config.ModuConfigPath, config.ModuAgentDir}, "\x00")},
-		{agentrun.RuntimePi, "Pi", config.PiBinary, config.PiBinary},
-		{agentrun.RuntimeGrok, "Grok Build", config.GrokBinary, config.GrokBinary},
-		{agentrun.RuntimeDsh, "DeepSeek Harness", config.DshBinary, config.DshBinary},
+	specs := make([]runtimeSpec, 0, len(domainharnesses.Catalog()))
+	for _, harness := range domainharnesses.Catalog() {
+		binary := config.Binary(harness.ID)
+		cacheKey := binary
+		// Modu's probe answer also depends on which integration it runs and
+		// where that integration reads its configuration from.
+		if len(harness.Integrations) > 1 {
+			cacheKey = strings.Join([]string{config.ModuIntegration, binary, config.ModuConfigPath, config.ModuAgentDir}, "\x00")
+		}
+		specs = append(specs, runtimeSpec{agentrun.Runtime(harness.ID), harness.Name, binary, cacheKey})
 	}
+	return specs
 }
 
 // probeRuntimes runs the given probes concurrently and writes each result into
@@ -387,25 +427,17 @@ func (r *RuntimeRegistry) Update(input RuntimeConfigInput) (RuntimeInfo, error) 
 			return RuntimeInfo{}, coded("runtime_unavailable", "binary is not executable")
 		}
 	}
-	r.mu.Lock()
-	config := r.config
-	switch input.Runtime {
-	case string(agentrun.RuntimeCodex):
-		config.CodexBinary = input.Binary
-	case string(agentrun.RuntimeClaude):
-		config.ClaudeBinary = input.Binary
-	case string(agentrun.RuntimeModu):
-		config.ModuBinary = input.Binary
-	case string(agentrun.RuntimePi):
-		config.PiBinary = input.Binary
-	case string(agentrun.RuntimeGrok):
-		config.GrokBinary = input.Binary
-	case string(agentrun.RuntimeDsh):
-		config.DshBinary = input.Binary
-	default:
-		r.mu.Unlock()
+	if !domainharnesses.IsKnown(input.Runtime) {
 		return RuntimeInfo{}, coded("runtime_unknown", "unknown runtime")
 	}
+	r.mu.Lock()
+	config := r.config
+	binaries := make(map[string]string, len(config.Binaries)+1)
+	for id, binary := range config.Binaries {
+		binaries[id] = binary
+	}
+	binaries[input.Runtime] = input.Binary
+	config.Binaries = binaries
 	r.config = config
 	r.engine = newRuntimeEngine(config)
 	r.mu.Unlock()
@@ -427,11 +459,15 @@ func (r *RuntimeRegistry) ApplySettings(runtimes map[string]domainsettings.Runti
 	}
 	r.settings = copySettings
 	r.interruptGrace = time.Duration(interruptGraceSeconds) * time.Second
+	binaries := make(map[string]string, len(runtimes))
+	for _, harness := range domainharnesses.Catalog() {
+		if binary := strings.TrimSpace(runtimes[harness.ID].Binary); binary != "" {
+			binaries[harness.ID] = binary
+		}
+	}
 	config := RuntimeConfig{
-		CodexBinary: runtimes["codex"].Binary, ClaudeBinary: runtimes["claude"].Binary,
-		ModuBinary: runtimes["modu"].Binary, ModuIntegration: runtimes["modu"].Integration,
-		PiBinary: runtimes["pi"].Binary, GrokBinary: runtimes["grok"].Binary,
-		DshBinary: runtimes["dsh"].Binary, DshSessionRoot: r.dshSessionRoot(),
+		Binaries: binaries, ModuIntegration: runtimes["modu"].Integration,
+		DshSessionRoot: r.dshSessionRoot(),
 	}
 	config.ModuConfigPath, config.ModuAgentDir = r.moduSDKPaths(runtimes["modu"])
 	r.replace(config)
@@ -484,43 +520,22 @@ func (r *RuntimeRegistry) invalidateRuntimeStatus(id string) {
 }
 
 func (r *RuntimeRegistry) CheckDraft(runtime string, input domainsettings.RuntimeSettings) (RuntimeInfo, error) {
-	name := runtimeDisplayName(agentrun.Runtime(runtime))
-	if name == "" {
+	harness, ok := domainharnesses.Find(runtime)
+	if !ok {
 		return RuntimeInfo{}, coded("runtime_unknown", "unknown runtime")
 	}
-	// Probe only the runtime being edited: every other binary is left empty so
+	// Probe only the harness being edited: every other binary is left unset so
 	// the draft engine cannot report a neighbour's installed state as this
 	// one's.
-	config := agentrun.Config{}
-	switch agentrun.Runtime(runtime) {
-	case agentrun.RuntimeCodex:
-		config.CodexBinary = input.Binary
-	case agentrun.RuntimeClaude:
-		config.ClaudeBinary = input.Binary
-	case agentrun.RuntimeModu:
-		config.ModuBinary = input.Binary
+	config := agentrun.Config{Binaries: map[string]string{runtime: input.Binary}}
+	if len(harness.Integrations) > 1 {
 		config.ModuIntegration = input.Integration
 		config.ModuConfigPath, config.ModuAgentDir = r.moduSDKPaths(input)
-	case agentrun.RuntimePi:
-		config.PiBinary = input.Binary
-	case agentrun.RuntimeGrok:
-		config.GrokBinary = input.Binary
-	case agentrun.RuntimeDsh:
-		config.DshBinary = input.Binary
+	}
+	if runtime == string(agentrun.RuntimeDsh) {
 		config.DshSessionRoot = r.dshSessionRoot()
 	}
-	return runtimeInfo(agentrun.NewEngine(config), agentrun.Runtime(runtime), name, input.Binary), nil
-}
-
-// runtimeDisplayName is the single source of each harness's human name, shared
-// by the probe list and the settings draft check so the two cannot drift.
-func runtimeDisplayName(runtime agentrun.Runtime) string {
-	for _, spec := range runtimeSpecs(RuntimeConfig{}) {
-		if spec.runtime == runtime {
-			return spec.name
-		}
-	}
-	return ""
+	return runtimeInfo(agentrun.NewEngine(config), agentrun.Runtime(runtime), harness.Name, input.Binary), nil
 }
 
 func (r *RuntimeRegistry) replace(config RuntimeConfig) {
@@ -530,11 +545,9 @@ func (r *RuntimeRegistry) replace(config RuntimeConfig) {
 
 func newRuntimeEngine(config RuntimeConfig) *agentrun.Engine {
 	return agentrun.NewEngine(agentrun.Config{
-		CodexBinary: config.CodexBinary, ClaudeBinary: config.ClaudeBinary,
-		ModuBinary: config.ModuBinary, ModuIntegration: config.ModuIntegration,
+		Binaries: config.Binaries, ModuIntegration: config.ModuIntegration,
 		ModuConfigPath: config.ModuConfigPath, ModuAgentDir: config.ModuAgentDir,
-		PiBinary: config.PiBinary, GrokBinary: config.GrokBinary,
-		DshBinary: config.DshBinary, DshSessionRoot: config.DshSessionRoot,
+		DshSessionRoot: config.DshSessionRoot,
 	})
 }
 
@@ -603,36 +616,42 @@ func configureModuProvider(environment []string, provider string) []string {
 	return filtered
 }
 
+// runtimeInfo probes one harness and returns it as the UI sees it: the
+// catalog's facts plus this machine's result.
 func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, configured string) RuntimeInfo {
+	harness, _ := domainharnesses.Find(string(runtime))
 	available := engine.Available(runtime)
 	binary := configured
 	if binary == "" {
-		binary = string(runtime)
-		if runtime == agentrun.RuntimeClaude {
-			binary = "claude"
-		} else if runtime == agentrun.RuntimeModu {
-			binary = "modu_code"
-		}
+		binary = harness.Command
 	}
-	version := ""
-	if available {
-		if runtime == agentrun.RuntimeModu {
-			integration, _ := engine.Runner(runtime).(interface{ ModuIntegration() string })
-			if integration != nil && integration.ModuIntegration() == "sdk" {
-				version = "Native Go SDK"
-			} else {
-				version = "Print · NDJSON"
-			}
-			return RuntimeInfo{ID: string(runtime), Name: name, Available: true, Version: version, CheckedAt: time.Now().UTC()}
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		if output, err := exec.CommandContext(ctx, binary, "--version").CombinedOutput(); err == nil {
-			version = strings.TrimSpace(string(output))
-			if index := strings.IndexByte(version, '\n'); index >= 0 {
-				version = version[:index]
-			}
-		}
+	info := RuntimeInfo{
+		ID: string(runtime), Name: name, Available: available, CheckedAt: time.Now().UTC(),
+		Command: harness.Command, Efforts: harness.Efforts, Providers: harness.Providers,
+		ServiceTiers: harness.ServiceTiers, Integrations: harness.Integrations,
+		EnvironmentHint: harness.EnvironmentHint, CanResume: harness.CanResume,
 	}
-	return RuntimeInfo{ID: string(runtime), Name: name, Available: available, Version: version, CheckedAt: time.Now().UTC()}
+	if !available {
+		return info
+	}
+	// A harness that can run in-process has no executable to interrogate, so
+	// its integration is what there is to report.
+	if integration, ok := engine.Runner(runtime).(interface{ ModuIntegration() string }); ok {
+		if integration.ModuIntegration() == "sdk" {
+			info.Version = "Native Go SDK"
+		} else {
+			info.Version = "Print · NDJSON"
+		}
+		return info
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if output, err := exec.CommandContext(ctx, binary, "--version").CombinedOutput(); err == nil {
+		version := strings.TrimSpace(string(output))
+		if index := strings.IndexByte(version, '\n'); index >= 0 {
+			version = version[:index]
+		}
+		info.Version = version
+	}
+	return info
 }

@@ -1308,6 +1308,15 @@ export class RuntimeEventView {
     }
 }
 
+/**
+ * RuntimeInfo is one harness as the UI sees it: the catalog's facts about what
+ * the harness is and can do, plus this machine's probe result.
+ * 
+ * The capability fields exist so the desktop does not keep a second copy of the
+ * catalog. Without them the UI has to hardcode which harnesses have a reasoning
+ * control, which offer a provider, and what each one's command is called — and
+ * that copy drifts from the backend's the moment a harness is added.
+ */
 export class RuntimeInfo {
     /**
      * Creates a new RuntimeInfo instance.
@@ -1349,6 +1358,64 @@ export class RuntimeInfo {
              */
             this["checkedAt"] = "0001-01-01T00:00:00.000Z";
         }
+        if (!("command" in $$source)) {
+            /**
+             * Command is the harness's default executable, shown as the binary-path
+             * placeholder.
+             * @member
+             * @type {string}
+             */
+            this["command"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Efforts is the reasoning-effort vocabulary; empty hides the control.
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["efforts"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Providers is the provider vocabulary; empty hides the control.
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["providers"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * ServiceTiers reports whether to offer the speed control.
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["serviceTiers"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Integrations lists the selectable integrations; one entry means the
+             * choice is not worth showing.
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["integrations"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * EnvironmentHint is the placeholder for the environment allowlist.
+             * @member
+             * @type {string | undefined}
+             */
+            this["environmentHint"] = undefined;
+        }
+        if (!("canResume" in $$source)) {
+            /**
+             * CanResume reports whether a finished run of this harness can continue.
+             * @member
+             * @type {boolean}
+             */
+            this["canResume"] = false;
+        }
 
         Object.assign(this, $$source);
     }
@@ -1359,7 +1426,19 @@ export class RuntimeInfo {
      * @returns {RuntimeInfo}
      */
     static createFrom($$source = {}) {
+        const $$createField6_0 = $$createType2;
+        const $$createField7_0 = $$createType2;
+        const $$createField9_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("efforts" in $$parsedSource) {
+            $$parsedSource["efforts"] = $$createField6_0($$parsedSource["efforts"]);
+        }
+        if ("providers" in $$parsedSource) {
+            $$parsedSource["providers"] = $$createField7_0($$parsedSource["providers"]);
+        }
+        if ("integrations" in $$parsedSource) {
+            $$parsedSource["integrations"] = $$createField9_0($$parsedSource["integrations"]);
+        }
         return new RuntimeInfo(/** @type {Partial<RuntimeInfo>} */($$parsedSource));
     }
 }

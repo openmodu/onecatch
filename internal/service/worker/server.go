@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
@@ -830,15 +831,14 @@ func writeJSON(writer http.ResponseWriter, status int, value any) {
 }
 
 // workerRuntimeAvailability reports which harnesses this worker can actually
-// run, so the host never dispatches a step to a worker that lacks the CLI.
+// run, so the host never dispatches a step to a worker that lacks the CLI. It
+// covers the whole catalog, so a harness added to the product is reported here
+// without an edit.
 func workerRuntimeAvailability(engine Engine) map[string]bool {
-	runtimes := []agentrun.Runtime{
-		agentrun.RuntimeCodex, agentrun.RuntimeClaude, agentrun.RuntimeModu,
-		agentrun.RuntimePi, agentrun.RuntimeGrok, agentrun.RuntimeDsh,
-	}
-	available := make(map[string]bool, len(runtimes))
-	for _, runtime := range runtimes {
-		available[string(runtime)] = engine.Available(runtime)
+	catalog := domainharnesses.Catalog()
+	available := make(map[string]bool, len(catalog))
+	for _, harness := range catalog {
+		available[harness.ID] = engine.Available(agentrun.Runtime(harness.ID))
 	}
 	return available
 }
