@@ -62,6 +62,7 @@ tasks:
     desc: Start the Wails desktop app and Vite dev server
     env:
       ONECATCH_SSH_ASKPASS: '{{.ROOT_DIR}}/{{.BIN_DIR}}/onecatch-askpass{{.EXE_EXT}}'
+      ONECATCH_SHELL_BINARY: '{{.ROOT_DIR}}/{{.BIN_DIR}}/onecatchsh'
     cmds:
       - task: build:shell
       - task: build:askpass

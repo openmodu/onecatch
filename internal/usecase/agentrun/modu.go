@@ -3,6 +3,7 @@ package agentrun
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"strconv"
@@ -19,8 +20,9 @@ const (
 // (`modu_code -p ... -json`). The NDJSON stream includes a persisted session id
 // that later runs can continue with `--resume ID -p ...`.
 type ModuRunner struct {
-	binary string
-	now    nowFunc
+	binary       string
+	now          nowFunc
+	remoteRunner Runner
 }
 
 func NewModuRunner(binary string) *ModuRunner {
@@ -47,6 +49,12 @@ func (r *ModuRunner) Available() bool {
 }
 
 func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
+	if req.Remote != nil {
+		if r.remoteRunner == nil {
+			return Result{}, fmt.Errorf("remote FS runs require the Modu native SDK adapter")
+		}
+		return r.remoteRunner.Run(ctx, req, sink)
+	}
 	cmd := exec.CommandContext(ctx, r.binary, moduCommandArgs(req)...)
 	cmd.Dir = req.Workspace
 	cmd.Env = moduEnvironment(req.Environment, req.Model, req.Provider)

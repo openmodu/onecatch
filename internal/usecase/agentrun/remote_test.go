@@ -85,6 +85,24 @@ func TestMergeEnvironmentReplacesKeys(t *testing.T) {
 	}
 }
 
+func TestShellBinaryCandidatesFindDevelopmentBuild(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	executable := filepath.Join(root, "bin", "OneCatch.dev.app", "Contents", "MacOS", "onecatch")
+	want := filepath.Join(root, "bin", "onecatchsh")
+	candidates := shellBinaryCandidates(executable)
+	if candidates[len(candidates)-1] != want {
+		t.Fatalf("development shell candidate = %q, want %q", candidates[len(candidates)-1], want)
+	}
+
+	production := filepath.Join(root, "Applications", "OneCatch.app", "Contents", "MacOS", "onecatch")
+	for _, candidate := range shellBinaryCandidates(production) {
+		if candidate == filepath.Join(root, "Applications", "onecatchsh") {
+			t.Fatalf("production bundle searched an unrelated parent directory: %v", candidate)
+		}
+	}
+}
+
 func TestPrepareRemoteRequestUsesIsolatedLocalWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv(seam.DirEnv, filepath.Join(dir, "seams"))

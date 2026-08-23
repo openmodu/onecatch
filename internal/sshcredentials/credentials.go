@@ -137,16 +137,29 @@ func AskPassPath() (string, error) {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
-	candidates := []string{
-		filepath.Join(filepath.Dir(self), name),
-		filepath.Clean(filepath.Join(filepath.Dir(self), "..", "Resources", "bin", name)),
-	}
+	candidates := askPassCandidates(self, name)
 	for _, candidate := range candidates {
 		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("onecatch-askpass was not found beside %s; build it with `task build:askpass`, or set %s", self, AskPassBinaryEnv)
+	return "", fmt.Errorf("onecatch-askpass was not found for %s; build it with `go tool wails3 task build:askpass`, or set %s", self, AskPassBinaryEnv)
+}
+
+func askPassCandidates(executable, name string) []string {
+	dir := filepath.Dir(executable)
+	candidates := []string{
+		filepath.Join(dir, name),
+		filepath.Clean(filepath.Join(dir, "..", "Resources", "bin", name)),
+	}
+	// Wails places the development executable under
+	// bin/OneCatch.dev.app/Contents/MacOS while task build:askpass writes the
+	// helper directly to bin. Restrict this fallback to .dev.app bundles so a
+	// production app never searches an unrelated parent directory.
+	if strings.HasSuffix(filepath.ToSlash(dir), ".dev.app/Contents/MacOS") {
+		candidates = append(candidates, filepath.Clean(filepath.Join(dir, "..", "..", "..", name)))
+	}
+	return candidates
 }
 
 func mergeEnvironment(base, overrides []string) []string {

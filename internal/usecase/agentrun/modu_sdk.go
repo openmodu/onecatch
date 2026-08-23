@@ -61,6 +61,21 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 	if req.Sandbox == SandboxReadOnly {
 		toolSet = codingtools.ToolSetReadOnly
 	}
+	var toolProvider types.ToolManager = newModuSDKToolProvider(toolSet)
+	prompt := req.Prompt
+	if req.Remote != nil {
+		req, err = prepareRemoteRequest(req)
+		if err != nil {
+			return Result{}, err
+		}
+		remoteProvider, providerErr := newRemoteModuToolProvider(ctx, *req.Remote, req.Sandbox == SandboxReadOnly)
+		if providerErr != nil {
+			return Result{}, providerErr
+		}
+		defer remoteProvider.ShutdownTools()
+		toolProvider = remoteProvider
+		prompt = remoteModuGuidance + "\n\n" + req.Prompt
+	}
 	session, err := codingagent.NewCodingSession(codingagent.CodingSessionOptions{
 		Cwd:             req.Workspace,
 		AgentDir:        r.agentDir,
@@ -70,7 +85,7 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 		ScopedModels:    scopedModels,
 		ModelConfigPath: r.modelConfigPath(),
 		ResumeSessionID: strings.TrimSpace(req.ResumeSessionID),
-		ToolProvider:    newModuSDKToolProvider(toolSet),
+		ToolProvider:    toolProvider,
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("create modu coding session: %w", err)
@@ -89,7 +104,7 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 	// receive a read-only tool catalog above, so an approval callback is not
 	// needed in either mode.
 	sink(Event{Kind: KindStarted, Text: session.GetSessionID(), At: adapter.timestamp()})
-	if err := session.Prompt(ctx, req.Prompt); err != nil {
+	if err := session.Prompt(ctx, prompt); err != nil {
 		if ctx.Err() != nil {
 			session.Abort()
 			return adapter.result(session.GetSessionID(), false), ctx.Err()

@@ -297,17 +297,29 @@ func shellBinaryPath() (string, error) {
 	if resolved, err := filepath.EvalSymlinks(self); err == nil {
 		self = resolved
 	}
-	candidate := filepath.Join(filepath.Dir(self), "onecatchsh")
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate, nil
+	for _, candidate := range shellBinaryCandidates(self) {
+		if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+			return candidate, nil
+		}
 	}
-	// Packaged macOS builds keep helper executables under Resources/bin.
-	packaged := filepath.Clean(filepath.Join(filepath.Dir(self), "..", "Resources", "bin", "onecatchsh"))
-	if _, err := os.Stat(packaged); err == nil {
-		return packaged, nil
+	return "", fmt.Errorf("onecatchsh was not found for %s; build it with "+
+		"`go tool wails3 task build:shell`, or set %s", self, ShellBinaryEnv)
+}
+
+func shellBinaryCandidates(executable string) []string {
+	dir := filepath.Dir(executable)
+	candidates := []string{
+		filepath.Join(dir, "onecatchsh"),
+		// Packaged macOS builds keep helper executables under Resources/bin.
+		filepath.Clean(filepath.Join(dir, "..", "Resources", "bin", "onecatchsh")),
 	}
-	return "", fmt.Errorf("onecatchsh was not found beside %s; build it with "+
-		"`task build:shell`, or set %s", self, ShellBinaryEnv)
+	// Wails places development executables under
+	// bin/OneCatch.dev.app/Contents/MacOS while task build:shell writes the
+	// helper directly to bin. Keep this package-external fallback dev-only.
+	if strings.HasSuffix(filepath.ToSlash(dir), ".dev.app/Contents/MacOS") {
+		candidates = append(candidates, filepath.Clean(filepath.Join(dir, "..", "..", "..", "onecatchsh")))
+	}
+	return candidates
 }
 
 // writeDenySettings emits the settings document that removes the local file

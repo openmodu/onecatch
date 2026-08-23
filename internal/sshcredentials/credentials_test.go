@@ -46,3 +46,21 @@ func TestConfigureCommandExposesOnlyCredentialIdentifier(t *testing.T) {
 		t.Fatalf("DISPLAY was not replaced: %v", command.Env)
 	}
 }
+
+func TestAskPassCandidatesFindDevelopmentBuild(t *testing.T) {
+	t.Parallel()
+	root := t.TempDir()
+	executable := filepath.Join(root, "bin", "OneCatch.dev.app", "Contents", "MacOS", "onecatch")
+	want := filepath.Join(root, "bin", "onecatch-askpass")
+	candidates := askPassCandidates(executable, "onecatch-askpass")
+	if candidates[len(candidates)-1] != want {
+		t.Fatalf("development helper candidate = %q, want %q", candidates[len(candidates)-1], want)
+	}
+
+	production := filepath.Join(root, "Applications", "OneCatch.app", "Contents", "MacOS", "onecatch")
+	for _, candidate := range askPassCandidates(production, "onecatch-askpass") {
+		if candidate == filepath.Join(root, "Applications", "onecatch-askpass") {
+			t.Fatalf("production bundle searched an unrelated parent directory: %v", candidate)
+		}
+	}
+}

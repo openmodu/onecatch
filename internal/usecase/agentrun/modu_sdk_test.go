@@ -53,8 +53,12 @@ func TestEngineSelectsConfiguredModuAdapter(t *testing.T) {
 	if _, ok := NewEngine(Config{}).Runner(RuntimeModu).(*ModuSDKRunner); !ok {
 		t.Fatal("default Modu adapter is not the native SDK")
 	}
-	if _, ok := NewEngine(Config{ModuIntegration: "cli"}).Runner(RuntimeModu).(*ModuRunner); !ok {
+	cli, ok := NewEngine(Config{ModuIntegration: "cli"}).Runner(RuntimeModu).(*ModuRunner)
+	if !ok {
 		t.Fatal("CLI Modu adapter was not selected")
+	}
+	if cli.remoteRunner == nil {
+		t.Fatal("CLI Modu adapter has no native SDK fallback for Remote FS")
 	}
 }
 
