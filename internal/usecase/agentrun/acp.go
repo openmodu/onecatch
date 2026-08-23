@@ -63,6 +63,7 @@ type acpClient struct {
 	launch  acpLaunch
 	now     nowFunc
 	encoder *json.Encoder
+	remote  *acpRemoteBridge
 	// writeMu guards stdin: notifications are answered from the read loop, but
 	// a permission response may be written while a prompt request is in flight.
 	writeMu sync.Mutex
@@ -126,12 +127,22 @@ func runACPSession(ctx context.Context, launch acpLaunch, req Request, sink Sink
 	if sink == nil {
 		sink = func(Event) {}
 	}
-	if req.Remote != nil {
-		return Result{}, fmt.Errorf("%s does not support remote FS runs", launch.displayName)
-	}
 	command, err := launch.command(req)
 	if err != nil {
 		return Result{}, err
+	}
+
+	var remote *acpRemoteBridge
+	if req.Remote != nil {
+		req, err = prepareRemoteRequest(req)
+		if err != nil {
+			return Result{}, err
+		}
+		remote, err = newACPRemoteBridge(ctx, *req.Remote, req.Sandbox)
+		if err != nil {
+			return Result{}, fmt.Errorf("open %s remote workspace: %w", launch.displayName, err)
+		}
+		defer remote.Close()
 	}
 
 	cmd := exec.CommandContext(ctx, launch.binary, command.args...)
@@ -167,21 +178,26 @@ func runACPSession(ctx context.Context, launch acpLaunch, req Request, sink Sink
 		launch:     launch,
 		now:        now,
 		encoder:    json.NewEncoder(stdin),
+		remote:     remote,
 		toolTitles: make(map[string]string),
+	}
+	capabilities := map[string]any{
+		"fs":       map[string]bool{"readTextFile": false, "writeTextFile": false},
+		"terminal": false,
+	}
+	if remote != nil {
+		capabilities = remote.capabilities()
 	}
 	if err := client.send(map[string]any{
 		"jsonrpc": "2.0", "id": acpIDInitialize, "method": "initialize",
 		"params": map[string]any{
 			"protocolVersion": acpProtocolVersion,
 			"clientInfo":      map[string]string{"name": "onecatch", "title": "OneCatch", "version": "0.1.0"},
-			// OneCatch never serves the agent's file or terminal requests: the
-			// harness already runs in the workspace with its own tools, and
-			// answering them here would put a second, unsandboxed I/O path
-			// beside the one the sandbox flags govern.
-			"clientCapabilities": map[string]any{
-				"fs":       map[string]bool{"readTextFile": false, "writeTextFile": false},
-				"terminal": false,
-			},
+			// A local harness already runs inside its requested sandbox and must
+			// not get a second, unsandboxed I/O path. For a remote run the bridge
+			// is that sandbox boundary: its advertised operations are redirected
+			// to the selected target and never touch the local harness workspace.
+			"clientCapabilities": capabilities,
 		},
 	}); err != nil {
 		return Result{}, fmt.Errorf("initialize %s: %w", launch.displayName, err)
@@ -215,7 +231,11 @@ func runACPSession(ctx context.Context, launch acpLaunch, req Request, sink Sink
 			if len(envelope.Error) > 0 {
 				return Result{}, fmt.Errorf("initialize %s: %s", launch.displayName, envelope.Error)
 			}
-			method, params := "session/new", map[string]any{"cwd": req.Workspace, "mcpServers": []any{}}
+			cwd := req.Workspace
+			if remote != nil {
+				cwd = remote.root
+			}
+			method, params := "session/new", map[string]any{"cwd": cwd, "mcpServers": []any{}}
 			if req.ResumeSessionID != "" {
 				method = "session/load"
 				params["sessionId"] = req.ResumeSessionID
@@ -244,11 +264,15 @@ func runACPSession(ctx context.Context, launch acpLaunch, req Request, sink Sink
 			sessionOpened = true
 			client.sessionID = response.SessionID
 			sink(Event{Kind: KindStarted, Text: response.SessionID, Raw: line, At: now()})
+			prompt := req.Prompt
+			if remote != nil {
+				prompt = remote.prompt(prompt)
+			}
 			if err := client.send(map[string]any{
 				"jsonrpc": "2.0", "id": acpIDPrompt, "method": "session/prompt",
 				"params": map[string]any{
 					"sessionId": response.SessionID,
-					"prompt":    []map[string]string{{"type": "text", "text": req.Prompt}},
+					"prompt":    []map[string]string{{"type": "text", "text": prompt}},
 				},
 			}); err != nil {
 				return Result{}, err
@@ -261,9 +285,15 @@ func runACPSession(ctx context.Context, launch acpLaunch, req Request, sink Sink
 				return client.result(), nil
 			}
 			var response struct {
-				StopReason string `json:"stopReason"`
+				StopReason string          `json:"stopReason"`
+				Meta       json.RawMessage `json:"_meta,omitempty"`
 			}
 			_ = json.Unmarshal(envelope.Result, &response)
+			// Grok publishes the authoritative turn usage on the prompt
+			// response, not on a standard session/update notification. Record it
+			// before the result so both the terminal event and returned Result
+			// carry the same totals.
+			client.recordUsage(response.Meta, line, sink)
 			client.finishTurn(response.StopReason, "", line, sink)
 			return client.result(), nil
 		}
@@ -360,11 +390,17 @@ func (c *acpClient) handleNotification(envelope acpEnvelope, line string, sink S
 			sink(Event{Kind: KindError, Text: update.Message, Raw: line, At: at})
 		}
 	}
-	if usage, ok := acpUsage(params.Meta); ok {
-		c.usage = usage
-		c.usageSeen = true
-		sink(Event{Kind: KindUsage, Usage: &usage, Raw: line, At: at})
+	c.recordUsage(params.Meta, line, sink)
+}
+
+func (c *acpClient) recordUsage(raw json.RawMessage, line string, sink Sink) {
+	usage, ok := acpUsage(raw)
+	if !ok {
+		return
 	}
+	c.usage = usage
+	c.usageSeen = true
+	sink(Event{Kind: KindUsage, Usage: &usage, Raw: line, At: c.now()})
 }
 
 // handleRequest answers a request the agent sent us. Every request must get a
@@ -375,10 +411,31 @@ func (c *acpClient) handleRequest(ctx context.Context, envelope acpEnvelope, req
 		c.handlePermission(ctx, envelope, req, line, sink)
 		return
 	}
+	if c.remote != nil && c.remote.supports(envelope.Method) {
+		// terminal/wait_for_exit is intentionally blocking. Dispatch remote
+		// client requests away from the read loop so the agent can continue to
+		// send notifications and independent requests while a command runs.
+		go c.handleRemoteRequest(ctx, envelope)
+		return
+	}
 	_ = c.send(map[string]any{
 		"jsonrpc": "2.0", "id": json.RawMessage(envelope.ID),
 		"error": map[string]any{"code": -32601, "message": "method not supported by OneCatch"},
 	})
+}
+
+func (c *acpClient) handleRemoteRequest(ctx context.Context, envelope acpEnvelope) {
+	result, rpcErr := c.remote.handle(ctx, envelope.Method, envelope.Params)
+	payload := map[string]any{
+		"jsonrpc": "2.0",
+		"id":      json.RawMessage(envelope.ID),
+	}
+	if rpcErr != nil {
+		payload["error"] = rpcErr
+	} else {
+		payload["result"] = result
+	}
+	_ = c.send(payload)
 }
 
 // handlePermission bridges the agent's blocking approval request to the host's
@@ -573,35 +630,49 @@ func acpErrorText(raw json.RawMessage) string {
 	return strings.TrimSpace(string(raw))
 }
 
-// acpUsage reads token accounting out of a notification's `_meta`. ACP itself
-// does not standardize usage, so this accepts the field spellings harnesses
-// actually use and reports nothing when none are present — Result documents
-// usage as best-effort.
+// acpUsage reads token accounting out of an ACP `_meta` object. ACP itself does
+// not standardize usage, so this accepts the field spellings harnesses actually
+// use. Grok nests its final counters under `usage`; accepting direct counters as
+// a fallback keeps the parser compatible with harness notifications too.
 func acpUsage(raw json.RawMessage) (Usage, bool) {
 	if len(raw) == 0 {
 		return Usage{}, false
 	}
-	var meta struct {
-		Usage *struct {
-			InputTokens         int `json:"inputTokens"`
-			PromptTokens        int `json:"promptTokens"`
-			OutputTokens        int `json:"outputTokens"`
-			CompletionTokens    int `json:"completionTokens"`
-			CachedInputTokens   int `json:"cachedInputTokens"`
-			CacheReadTokens     int `json:"cacheReadInputTokens"`
-			CacheCreationTokens int `json:"cacheCreationInputTokens"`
-			ReasoningTokens     int `json:"reasoningTokens"`
-		} `json:"usage"`
+	var container struct {
+		Usage json.RawMessage `json:"usage"`
 	}
-	if err := json.Unmarshal(raw, &meta); err != nil || meta.Usage == nil {
+	if err := json.Unmarshal(raw, &container); err != nil {
+		return Usage{}, false
+	}
+	counters := raw
+	if len(container.Usage) > 0 && string(container.Usage) != "null" {
+		counters = container.Usage
+	}
+	var fields struct {
+		InputTokens              int `json:"inputTokens"`
+		PromptTokens             int `json:"promptTokens"`
+		OutputTokens             int `json:"outputTokens"`
+		CompletionTokens         int `json:"completionTokens"`
+		CachedInputTokens        int `json:"cachedInputTokens"`
+		CachedReadTokens         int `json:"cachedReadTokens"`
+		CacheReadTokens          int `json:"cacheReadTokens"`
+		CacheReadInputTokens     int `json:"cacheReadInputTokens"`
+		CacheCreationTokens      int `json:"cacheCreationTokens"`
+		CacheCreationInputTokens int `json:"cacheCreationInputTokens"`
+		ReasoningTokens          int `json:"reasoningTokens"`
+		ReasoningOutputTokens    int `json:"reasoningOutputTokens"`
+	}
+	if err := json.Unmarshal(counters, &fields); err != nil {
 		return Usage{}, false
 	}
 	usage := Usage{
-		InputTokens:              firstNonZero(meta.Usage.InputTokens, meta.Usage.PromptTokens),
-		OutputTokens:             firstNonZero(meta.Usage.OutputTokens, meta.Usage.CompletionTokens),
-		CachedInputTokens:        firstNonZero(meta.Usage.CachedInputTokens, meta.Usage.CacheReadTokens),
-		CacheCreationInputTokens: meta.Usage.CacheCreationTokens,
-		ReasoningOutputTokens:    meta.Usage.ReasoningTokens,
+		InputTokens:       firstNonZero(fields.InputTokens, fields.PromptTokens),
+		OutputTokens:      firstNonZero(fields.OutputTokens, fields.CompletionTokens),
+		CachedInputTokens: firstNonZero(fields.CachedInputTokens, fields.CachedReadTokens, fields.CacheReadTokens, fields.CacheReadInputTokens),
+		CacheCreationInputTokens: firstNonZero(
+			fields.CacheCreationTokens, fields.CacheCreationInputTokens,
+		),
+		ReasoningOutputTokens: firstNonZero(fields.ReasoningTokens, fields.ReasoningOutputTokens),
 	}
 	if usage == (Usage{}) {
 		return Usage{}, false

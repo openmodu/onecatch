@@ -48,9 +48,9 @@ type Request struct {
 	// Claude reaches the target through a transparently remote shell and has
 	// its unredirectable native file tools denied. Codex uses its remote-
 	// environment protocol, so both shell commands and native fs tools are
-	// redirected. Modu's native SDK replaces its workspace tools with SSH/SFTP
-	// implementations. No adapter falls back to local execution if its seam
-	// cannot be established.
+	// redirected. Grok's ACP client operations and Modu's native SDK workspace
+	// tools are backed by SSH/SFTP implementations. No adapter falls back to
+	// local execution if its seam cannot be established.
 	Remote *seam.Target
 	// Prompt is the task description handed to the agent.
 	Prompt string

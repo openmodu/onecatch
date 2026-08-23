@@ -1,4 +1,4 @@
-import { hydrateRuntimeHarnesses } from "./runtimeHarnesses.js";
+import { hydrateRuntimeHarnesses, supportsRuntimeProfile } from "./runtimeHarnesses.js";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Lock, Minus, PanelRightOpen, PictureInPicture2, Square, SquareTerminal, X } from "lucide-react";
@@ -430,10 +430,16 @@ function App() {
   }, [mode]);
 
   const inspectRuntimeConfiguration = useCallback(async (harness) => {
-    if (harness !== "codex" && harness !== "claude") return null;
-    if (mode === "demo") return harness === "codex" ? demoCodexConfiguration : demoClaudeConfiguration;
-    const inspect = harness === "codex" ? SettingsBinding.InspectCodexConfiguration : SettingsBinding.InspectClaudeConfiguration;
-    return inspect(settings.runtimes?.[harness] || {});
+    if (!supportsRuntimeProfile(harness)) return null;
+    if (mode === "demo") {
+      if (harness === "codex") return demoCodexConfiguration;
+      if (harness === "claude") return demoClaudeConfiguration;
+      return null;
+    }
+    const runtimeSettings = settings.runtimes?.[harness] || {};
+    if (harness === "codex") return SettingsBinding.InspectCodexConfiguration(runtimeSettings);
+    if (harness === "claude") return SettingsBinding.InspectClaudeConfiguration(runtimeSettings);
+    return SettingsBinding.InspectHarnessConfiguration(harness, runtimeSettings);
   }, [mode, settings.runtimes]);
 
   useEffect(() => {
@@ -443,7 +449,7 @@ function App() {
       return undefined;
     }
     const harness = taskForm.harness || "codex";
-    if (harness !== "codex" && harness !== "claude") {
+    if (!supportsRuntimeProfile(harness)) {
       setTaskRuntimeConfiguration({ loading: false, data: null, error: "" });
       return undefined;
     }

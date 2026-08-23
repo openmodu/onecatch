@@ -350,6 +350,8 @@ test("every new task chooses either an Agent or a workflow plus an explicit perm
   assert.match(newTask, /<TaskPermissionSelector value=\{form\.sandbox\}/);
   assert.doesNotMatch(newTask, /<HarnessSelector/, "the Agent is selected by the mutually exclusive execution-target control");
   assert.match(newTask, /showRuntimeProfile && <RuntimeProfileMenu/, "model controls only apply to a directly selected Agent with configurable runtime options");
+  assert.match(app, /SettingsBinding\.InspectHarnessConfiguration\(harness, runtimeSettings\)/, "Pi and Grok task profiles use the generic harness configuration probe");
+  assert.match(app, /if \(!supportsRuntimeProfile\(harness\)\)/, "task profile probing follows catalog capabilities instead of a Codex/Claude allowlist");
   assert.match(runtimeMenu, /runtime-profile-submenu-heading/, "runtime submenus should identify the active setting");
   assert.match(runtimeMenu, /runtime-profile-submenu-option/, "runtime submenu choices use full-row selection styling");
   assert.match(runtimeMenu, /runtime-profile-submenu-check/, "runtime submenu choices place the selected check at the trailing edge");

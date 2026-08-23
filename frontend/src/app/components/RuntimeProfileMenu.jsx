@@ -16,10 +16,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   claudeModelDisplayLabel,
-  codexEffortValues,
   codexServiceTierValues,
   defaultClaudeModel,
   groupedClaudeModels,
+  runtimeDefaultEffort,
+  runtimeEffortValues,
   selectedCodexModel,
 } from "../codexRuntimeOptions.js";
 import { runtimeHarness } from "../runtimeHarnesses.js";
@@ -105,7 +106,7 @@ export function resolvedRuntimeProfile(value = {}, configuration, runtimeSetting
     modelLabel: harness === "claude"
       ? claudeModelDisplayLabel(selectedModel || { model: resolvedModel, displayName: resolvedModel }) || capability.label
       : selectedModel?.displayName || selectedModel?.model || configuredModel || capability.label,
-    reasoningEffort: capability.supportsReasoning ? value.reasoningEffort || runtimeSettings.reasoningEffort || configuration?.reasoningEffort || selectedModel?.defaultReasoningEffort || "" : "",
+    reasoningEffort: capability.supportsReasoning ? value.reasoningEffort || runtimeSettings.reasoningEffort || runtimeDefaultEffort(configuration, configuredModel) : "",
     serviceTier: capability.supportsSpeed ? value.serviceTier || runtimeSettings.serviceTier || configuration?.serviceTier || "standard" : "",
   };
 }
@@ -126,8 +127,8 @@ export default function RuntimeProfileMenu({
   const models = configuration?.models || [];
   const selectedModel = selectedCodexModel(configuration, value?.model || runtimeSettings?.defaultModel);
   const claudeModels = groupedClaudeModels(models);
-  const efforts = profile.harness === "codex"
-    ? codexEffortValues(configuration, value?.model || runtimeSettings?.defaultModel, value?.reasoningEffort || runtimeSettings?.reasoningEffort)
+  const efforts = capability.supportsReasoning
+    ? runtimeEffortValues(configuration, value?.model || runtimeSettings?.defaultModel, value?.reasoningEffort || runtimeSettings?.reasoningEffort)
     : [];
   const tiers = capability.supportsSpeed ? codexServiceTierValues(configuration, value?.model || runtimeSettings?.defaultModel, value?.serviceTier || runtimeSettings?.serviceTier) : [];
   const displayModelLabel = profile.harness === "codex" ? compactRuntimeModelLabel(profile.modelLabel) : profile.modelLabel;
@@ -138,8 +139,12 @@ export default function RuntimeProfileMenu({
     capability.supportsReasoning ? effortLabel(t, profile.reasoningEffort) : "",
   ].filter(Boolean).join(" ");
   const inheritedModelLabel = profile.harness === "codex" ? t("settings.useCodexConfig") : t("settings.runtimeDefault");
-  const loadingLabel = profile.harness === "claude" ? t("settings.readingClaudeModels") : t("settings.readingCodexConfig");
-  const inheritedReasoningEffort = runtimeSettings?.reasoningEffort || configuration?.reasoningEffort || selectedModel?.defaultReasoningEffort || "";
+  const loadingLabel = profile.harness === "claude"
+    ? t("settings.readingClaudeModels")
+    : profile.harness === "codex"
+      ? t("settings.readingCodexConfig")
+      : t("settings.readingHarnessConfig", { harness: capability.label });
+  const inheritedReasoningEffort = runtimeSettings?.reasoningEffort || runtimeDefaultEffort(configuration, value?.model || runtimeSettings?.defaultModel);
   const inheritedServiceTier = runtimeSettings?.serviceTier || configuration?.serviceTier || "standard";
   const inheritedClaudeModel = defaultClaudeModel(models, runtimeSettings?.defaultModel || configuration?.model || "");
   const claudeModelValue = profile.model || inheritedClaudeModel;
@@ -150,11 +155,11 @@ export default function RuntimeProfileMenu({
   const selectModel = (nextValue) => {
     const model = storedValue(nextValue);
     const nextModel = selectedCodexModel(configuration, model || runtimeSettings?.defaultModel);
-    const supportedEfforts = nextModel?.reasoningEfforts || [];
+    const supportedEfforts = runtimeEffortValues(configuration, model || runtimeSettings?.defaultModel);
     const supportedTiers = capability.supportsSpeed ? ["standard", ...(nextModel?.serviceTiers || []).map((tier) => tier.id)] : [];
     update({
       model,
-      reasoningEffort: capability.supportsReasoning && (!value?.reasoningEffort || supportedEfforts.includes(value.reasoningEffort)) ? value?.reasoningEffort || "" : capability.supportsReasoning ? nextModel?.defaultReasoningEffort || "" : "",
+      reasoningEffort: capability.supportsReasoning && (!value?.reasoningEffort || supportedEfforts.includes(value.reasoningEffort)) ? value?.reasoningEffort || "" : capability.supportsReasoning ? nextModel?.defaultReasoningEffort || nextModel?.defaultEffort || "" : "",
       serviceTier: capability.supportsSpeed && (!value?.serviceTier || supportedTiers.includes(value.serviceTier)) ? value?.serviceTier || "" : capability.supportsSpeed ? "standard" : "",
     });
   };

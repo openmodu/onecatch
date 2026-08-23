@@ -158,6 +158,39 @@ func TestGrokRunnerSurfacesPromptError(t *testing.T) {
 	}
 }
 
+func TestGrokRunnerReadsUsageFromPromptResponse(t *testing.T) {
+	events, result, err := runGrokStub(t, Request{Prompt: "hello"},
+		`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn","_meta":{"sessionId":"s-1","totalTokens":18017,"inputTokens":17965,"outputTokens":51,"cachedReadTokens":5888,"reasoningTokens":38,"usage":{"inputTokens":17965,"outputTokens":51,"totalTokens":18016,"cachedReadTokens":5888,"cacheCreationTokens":128,"reasoningTokens":38,"modelCalls":1}}}}`, nil)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	want := Usage{
+		InputTokens: 17965, CachedInputTokens: 5888, CacheCreationInputTokens: 128,
+		OutputTokens: 51, ReasoningOutputTokens: 38,
+	}
+	if result.Usage != want {
+		t.Fatalf("usage = %+v, want %+v", result.Usage, want)
+	}
+	var usageIndex, resultIndex = -1, -1
+	for index, event := range events {
+		switch event.Kind {
+		case KindUsage:
+			usageIndex = index
+			if event.Usage == nil || *event.Usage != want {
+				t.Fatalf("usage event = %+v, want %+v", event.Usage, want)
+			}
+		case KindResult:
+			resultIndex = index
+			if event.Usage == nil || *event.Usage != want {
+				t.Fatalf("result event usage = %+v, want %+v", event.Usage, want)
+			}
+		}
+	}
+	if usageIndex < 0 || resultIndex < 0 || usageIndex >= resultIndex {
+		t.Fatalf("usage/result event order = %d/%d", usageIndex, resultIndex)
+	}
+}
+
 // TestGrokRunnerDeniesToolsWithoutAHandler pins the read-only contract: with no
 // host to ask, an approval request must be refused rather than waved through.
 func TestGrokRunnerDeniesToolsWithoutAHandler(t *testing.T) {
@@ -236,11 +269,101 @@ func TestGrokSandboxMapping(t *testing.T) {
 	}
 }
 
-func TestGrokRunnerRejectsRemote(t *testing.T) {
+func TestGrokRunnerRoutesACPClientOperationsToRemote(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub agent uses a POSIX shell script")
+	}
+	dir := t.TempDir()
+	target := filepath.Join(dir, "target")
+	workspace := filepath.Join(dir, "workspace")
+	for _, directory := range []string{target, workspace} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv(seam.DirEnv, filepath.Join(dir, "sessions"))
+
+	transcript := filepath.Join(dir, "client.jsonl")
+	stub := filepath.Join(dir, "acp-remote-stub.sh")
+	targetJSON, _ := json.Marshal(target)
+	writePathJSON, _ := json.Marshal(filepath.Join(target, "nested", "written.txt"))
+	script := `#!/bin/sh
+n=0
+while IFS= read -r line; do
+  n=$((n+1))
+  printf '%s\n' "$line" >> ` + shellQuote(transcript) + `
+  case $n in
+    1) printf '%s\n' ` + shellQuote(grokInitializeResult) + ` ;;
+    2) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":2,"result":{"sessionId":"s-remote"}}`) + ` ;;
+    3) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":10,"method":"fs/write_text_file","params":{"sessionId":"s-remote","path":`+string(writePathJSON)+`,"content":"remote-data"}}`) + ` ;;
+    4) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":11,"method":"fs/read_text_file","params":{"sessionId":"s-remote","path":`+string(writePathJSON)+`}}`) + ` ;;
+    5) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":12,"method":"terminal/create","params":{"sessionId":"s-remote","command":"sh","args":["-c","printf terminal-ok > terminal.txt"],"cwd":`+string(targetJSON)+`}}`) + ` ;;
+    6) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":13,"method":"terminal/wait_for_exit","params":{"sessionId":"s-remote","terminalId":"onecatch-terminal-1"}}`) + ` ;;
+    7) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":14,"method":"terminal/release","params":{"sessionId":"s-remote","terminalId":"onecatch-terminal-1"}}`) + ` ;;
+    8) printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}`) + ` ;;
+  esac
+done
+`
+	if err := os.WriteFile(stub, []byte(script), 0o755); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+
+	runner := NewGrokRunner(stub)
+	_, err := runner.Run(context.Background(), Request{
+		Prompt: "inspect and edit", Workspace: workspace, Sandbox: SandboxWorkspaceWrite,
+		Remote: &seam.Target{Root: target},
+	}, nil)
+	if err != nil {
+		t.Fatalf("run remote Grok: %v", err)
+	}
+	for name, want := range map[string]string{
+		filepath.Join(target, "nested", "written.txt"): "remote-data",
+		filepath.Join(target, "terminal.txt"):          "terminal-ok",
+	} {
+		got, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatalf("read remote result %s: %v", name, err)
+		}
+		if string(got) != want {
+			t.Fatalf("remote result %s = %q, want %q", name, got, want)
+		}
+	}
+	written, err := os.ReadFile(transcript)
+	if err != nil {
+		t.Fatalf("read transcript: %v", err)
+	}
+	conversation := string(written)
+	for _, want := range []string{
+		`"readTextFile":true`, `"writeTextFile":true`, `"terminal":true`,
+		`"cwd":` + string(targetJSON), `"content":"remote-data"`,
+		`Remote workspace: ` + target,
+	} {
+		if !strings.Contains(conversation, want) {
+			t.Fatalf("remote ACP transcript does not contain %q:\n%s", want, conversation)
+		}
+	}
+}
+
+func TestGrokRunnerRejectsReadOnlyRemote(t *testing.T) {
 	runner := NewGrokRunner(acpStub(t, grokInitializeResult, "", "", nil))
-	_, err := runner.Run(context.Background(), Request{Prompt: "hi", Workspace: t.TempDir(), Remote: &seam.Target{Host: "devbox", Root: "/srv/project"}}, nil)
-	if err == nil || !strings.Contains(err.Error(), "remote") {
-		t.Fatalf("expected a remote rejection, got %v", err)
+	_, err := runner.Run(context.Background(), Request{
+		Prompt: "hi", Workspace: t.TempDir(), Sandbox: SandboxReadOnly,
+		Remote: &seam.Target{Root: "/srv/project"},
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "workspace-write") {
+		t.Fatalf("expected a read-only remote rejection, got %v", err)
+	}
+}
+
+func TestACPRemotePathStaysInsideWorkspace(t *testing.T) {
+	for _, outside := range []string{"../secret", "/srv/application/secret", "/etc/passwd"} {
+		if _, err := acpRemotePath("/srv/app", outside); err == nil {
+			t.Fatalf("outside path %q was accepted", outside)
+		}
+	}
+	relative, err := acpRemotePath("/srv/app", "/srv/app/nested/file.go")
+	if err != nil || relative != "nested/file.go" {
+		t.Fatalf("workspace path mapped to %q, %v", relative, err)
 	}
 }
 
@@ -286,6 +409,11 @@ func TestACPUsageIgnoresMetaWithoutTokens(t *testing.T) {
 	usage, ok := acpUsage([]byte(`{"usage":{"promptTokens":10,"completionTokens":4}}`))
 	if !ok || usage.InputTokens != 10 || usage.OutputTokens != 4 {
 		t.Fatalf("alternate field spellings not read: %+v (ok=%v)", usage, ok)
+	}
+	grok, ok := acpUsage([]byte(`{"usage":{"inputTokens":17965,"outputTokens":51,"cachedReadTokens":5888,"cacheCreationTokens":128,"reasoningTokens":38}}`))
+	want := Usage{InputTokens: 17965, CachedInputTokens: 5888, CacheCreationInputTokens: 128, OutputTokens: 51, ReasoningOutputTokens: 38}
+	if !ok || grok != want {
+		t.Fatalf("Grok usage = %+v, want %+v (ok=%v)", grok, want, ok)
 	}
 }
 

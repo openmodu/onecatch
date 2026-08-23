@@ -95,6 +95,13 @@ func TestEnrichStepRunUsageRecoversHistoricalProviderDetails(t *testing.T) {
 			want: agentrun.Usage{InputTokens: 100, CachedInputTokens: 80, CacheCreationInputTokens: 13, OutputTokens: 9},
 			kind: agentrun.KindResult,
 		},
+		{
+			name: "Grok ACP prompt response",
+			step: domainworkflows.StepRun{},
+			raw:  `{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn","_meta":{"usage":{"inputTokens":17965,"outputTokens":51,"cachedReadTokens":5888,"cacheCreationTokens":128,"reasoningTokens":38}}}}`,
+			want: agentrun.Usage{InputTokens: 17965, CachedInputTokens: 5888, CacheCreationInputTokens: 128, OutputTokens: 51, ReasoningOutputTokens: 38},
+			kind: agentrun.KindResult,
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
