@@ -148,12 +148,31 @@ Sandbox mode rides `DSH_PERMISSION_MODE`, whose vocabulary
 
 ## Adding another harness
 
-Add one adapter implementing `agentrun.Runner` — or an `acpLaunch` if it speaks
-ACP — register its runtime ID in `event.go` and the engine, then add its
-`RuntimeSettings` validation, `runtimeSpecs` entry, and collapsible Harness
-section with an icon and `runtimeHarnesses` metadata. Process, protocol, and SDK
-details stay inside the adapter; orchestration, persistence, remote execution,
-and the UI consume only normalized events.
+Four edits, because everything else derives:
+
+1. **`internal/domain/harnesses`** — one catalog entry: the harness's name,
+   default command, effort and provider vocabularies, integrations, and whether
+   it can resume. Task validation, settings validation, the engine's notion of a
+   valid runtime, the desktop probe list, the worker's availability report and
+   its `--<id>-binary` flag, and the whole settings UI all read this.
+2. **`internal/usecase/agentrun/<name>.go`** — the adapter, implementing
+   `agentrun.Runner`, or an `acpLaunch` if the harness speaks ACP. Register it
+   in the `descriptors` table in `registry.go`.
+3. **`frontend/public/assets/runtime/<id>.svg`** — the mark. It resolves by id,
+   so no map needs editing; record provenance in `SOURCES.md`.
+4. **`settings.<id>Description`** in `frontend/src/i18n.js`, both languages.
+
+This shape exists because the earlier one failed. The same facts used to be
+restated in task validation, settings validation, the engine registry, the
+desktop probe list, and again in the frontend, and `grok` shipped registered in
+the engine but missing from task validation — selectable in the picker, then
+rejected with "task is invalid" the moment anyone used it.
+`TestCatalogAndEngineAgree` now fails if a harness exists in one and not the
+other, and the settings-page test fails if the UI special-cases a harness id
+instead of reading its capabilities.
+
+Process, protocol, and SDK details stay inside the adapter; orchestration,
+persistence, remote execution, and the UI consume only normalized events.
 
 Adapter tests replay captured harness output through the parser rather than
 asserting against hand-written shapes. `ONECATCH_LIVE=1` runs the live smoke

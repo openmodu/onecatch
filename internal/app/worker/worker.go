@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 	"github.com/openmodu/onecatch/internal/repo/git"
 	"github.com/openmodu/onecatch/internal/service/worker"
 	"github.com/openmodu/onecatch/internal/service/worker/daemon"
@@ -29,9 +30,12 @@ func Run() {
 	listen := flag.String("listen", "127.0.0.1:9231", "listen address")
 	id := flag.String("id", "worker", "stable worker ID")
 	name := flag.String("name", "OneCatch Worker", "worker display name")
-	codex := flag.String("codex-binary", "", "Codex binary override")
-	claude := flag.String("claude-binary", "", "Claude binary override")
-	modu := flag.String("modu-binary", "", "Modu Code binary override")
+	// One --<id>-binary flag per catalogued harness, so a new harness is
+	// reachable on a worker without editing this list.
+	binaryFlags := make(map[string]*string, len(domainharnesses.Catalog()))
+	for _, harness := range domainharnesses.Catalog() {
+		binaryFlags[harness.ID] = flag.String(harness.ID+"-binary", "", harness.Name+" binary override")
+	}
 	maxConcurrency := flag.Int("max-concurrency", 4, "maximum simultaneous runs (<=0 uses the default)")
 	dataDir := flag.String("data-dir", "~/.onecatch-worker", "persistent worker state directory")
 	pair := flag.Bool("pair", false, "print a one-time desktop pairing code valid for 10 minutes")
@@ -74,7 +78,7 @@ func Run() {
 		result, err := workerdaemon.Install(context.Background(), workerdaemon.Config{
 			Binary: binary, Listen: *listen, ID: *id, Name: *name, DataDir: stateRoot,
 			TLSCert: *tlsCert, TLSKey: *tlsKey, ClientCA: *clientCA,
-			CodexBinary: *codex, ClaudeBinary: *claude, ModuBinary: *modu,
+			Binaries:       configuredBinaries(binaryFlags),
 			MaxConcurrency: *maxConcurrency, AllowInsecureHTTP: *allowInsecureHTTP,
 			PathEnvironment: os.Getenv("PATH"),
 		})
@@ -93,7 +97,12 @@ func Run() {
 	if err != nil {
 		log.Fatalf("load service pairing request: %v", err)
 	}
-	engine := agentrun.NewEngine(agentrun.Config{CodexBinary: *codex, ClaudeBinary: *claude, ModuBinary: *modu})
+	engine := agentrun.NewEngine(agentrun.Config{
+		Binaries: configuredBinaries(binaryFlags),
+		// DeepSeek Harness recovers its event stream by reading its own session
+		// log, so it needs a directory this worker owns.
+		DshSessionRoot: filepath.Join(stateRoot, "harnesses", "dsh", "sessions"),
+	})
 	service := worker.NewServer(*id, *name, secret, nil, engine, *maxConcurrency)
 	if err := service.SetWorkspaceRegistry(context.Background(), worker.NewWorkspaceRegistry(filepath.Join(stateRoot, "workspaces.json"))); err != nil {
 		log.Fatalf("load worker workspace mappings: %v", err)
@@ -305,4 +314,16 @@ func certificateFingerprint(certFile, keyFile string) (string, error) {
 	}
 	sum := sha256.Sum256(pair.Certificate[0])
 	return fmt.Sprintf("%x", sum[:]), nil
+}
+
+// configuredBinaries collects the harness executable overrides the operator
+// actually set, dropping the empty defaults.
+func configuredBinaries(flags map[string]*string) map[string]string {
+	binaries := make(map[string]string, len(flags))
+	for id, value := range flags {
+		if strings.TrimSpace(*value) != "" {
+			binaries[id] = *value
+		}
+	}
+	return binaries
 }

@@ -3,7 +3,7 @@ package tasks
 import (
 	"testing"
 
-	domainagents "github.com/openmodu/onecatch/internal/domain/agents"
+	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 )
 
 func validTask() Task {
@@ -61,7 +61,7 @@ func TestValidateRejectsUnknownTaskSandbox(t *testing.T) {
 // combination shows the runtime in the picker and then fails with
 // "task is invalid" the moment it is used.
 func TestValidateAcceptsEveryKnownHarness(t *testing.T) {
-	for _, harness := range domainagents.KnownRuntimes {
+	for _, harness := range domainharnesses.IDs() {
 		task := validTask()
 		task.Harness = harness
 		if err := Validate(task); err != nil {

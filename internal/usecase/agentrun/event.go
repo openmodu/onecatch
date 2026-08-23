@@ -23,7 +23,11 @@
 // have to branch on the underlying runtime.
 package agentrun
 
-import "time"
+import (
+	"time"
+
+	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
+)
 
 // Runtime identifies a local agent CLI the engine knows how to drive.
 type Runtime string
@@ -43,14 +47,11 @@ const (
 	RuntimeDsh Runtime = "dsh"
 )
 
-// Valid reports whether r is a runtime the engine can drive.
+// Valid reports whether r names a harness in the catalog. The constants above
+// are spelling aids for call sites; the catalog decides what exists, so a
+// harness cannot be half-added by declaring a constant and nothing else.
 func (r Runtime) Valid() bool {
-	switch r {
-	case RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeDsh:
-		return true
-	default:
-		return false
-	}
+	return domainharnesses.IsKnown(string(r))
 }
 
 // EventKind is the normalized category of a streamed run event. It is the

@@ -4,7 +4,7 @@ package agentrun
 
 func newModuRuntimeRunner(cfg Config) Runner {
 	if cfg.ModuIntegration == "cli" {
-		runner := NewModuRunner(cfg.ModuBinary)
+		runner := NewModuRunner(cfg.Binary(RuntimeModu))
 		// The standalone CLI cannot accept a caller-provided tool manager. For
 		// Remote FS runs, route through the equivalent in-process SDK adapter so
 		// workspace tools can be replaced safely while credentials remain local.

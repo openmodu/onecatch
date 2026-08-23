@@ -33,37 +33,13 @@ type Agent struct {
 	SystemPrompt string `json:"-"`
 }
 
-// Runtime identifiers understood by the execution engine. Kept as plain strings
-// here to avoid a domain dependency on the agentrun package.
+// Runtime identifiers used by the seeded catalog. They name entries in
+// domain/harnesses, which is the single source of which harnesses exist; these
+// constants exist only so the seed data below reads clearly.
 const (
 	RuntimeCodex  = "codex"
 	RuntimeClaude = "claude"
-	RuntimeModu   = "modu"
-	RuntimePi     = "pi"
-	RuntimeGrok   = "grok"
-	RuntimeDsh    = "dsh"
 )
-
-// KnownRuntimes is the canonical set of harness identifiers, in the order the
-// desktop lists them.
-//
-// It exists so that adding a harness is one edit rather than several: this list
-// had been spelled out separately in task validation and in settings, and a
-// runtime added to the engine but missed in one of them was accepted everywhere
-// except the moment a user tried to run it. TestDomainRuntimesMatchEngine in the
-// agentrun package asserts this stays in step with the runners the engine
-// actually registers.
-var KnownRuntimes = []string{RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeDsh}
-
-// IsKnownRuntime reports whether id names a harness the product can run.
-func IsKnownRuntime(id string) bool {
-	for _, runtime := range KnownRuntimes {
-		if runtime == id {
-			return true
-		}
-	}
-	return false
-}
 
 func SeedCatalog() []Agent {
 	return []Agent{
