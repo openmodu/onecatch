@@ -30,19 +30,32 @@ const (
 )
 
 // acpLaunch is everything the shared client needs to drive one harness. The
-// adapter owns flag spelling; the client owns the protocol.
+// adapter owns the command line; the client owns the protocol.
 type acpLaunch struct {
 	// runtime and displayName identify the harness in events and errors.
 	runtime     Runtime
 	displayName string
-	// binary and args build the server command, e.g. `grok agent stdio`.
+	// binary is the executable to run.
 	binary string
-	args   []string
-	// sessionArgs contributes per-request flags (model, effort, sandbox). It
-	// returns an error when the request asks for something the harness cannot
-	// express, so a run fails before it starts rather than silently ignoring
-	// the constraint.
-	sessionArgs func(req Request) ([]string, error)
+	// command builds the whole invocation for one request.
+	//
+	// It returns the complete argument vector rather than a suffix appended to
+	// a fixed prefix: a harness whose subcommand takes no options needs its
+	// model and effort flags placed before that subcommand, which a suffix
+	// cannot express. It returns an error when the request asks for something
+	// the harness cannot express, so a run fails before it starts rather than
+	// silently dropping the constraint.
+	command func(req Request) (acpCommand, error)
+}
+
+// acpCommand is one harness invocation.
+type acpCommand struct {
+	// args is the complete argument vector, subcommands included.
+	args []string
+	// environment is applied over the request's environment. Some harnesses
+	// only expose a setting — a sandbox profile, for instance — as a variable
+	// rather than as a flag on the subcommand being launched.
+	environment []string
 }
 
 // acpClient holds the state of one ACP conversation.
@@ -116,14 +129,21 @@ func runACPSession(ctx context.Context, launch acpLaunch, req Request, sink Sink
 	if req.Remote != nil {
 		return Result{}, fmt.Errorf("%s does not support remote FS runs", launch.displayName)
 	}
-	extra, err := launch.sessionArgs(req)
+	command, err := launch.command(req)
 	if err != nil {
 		return Result{}, err
 	}
 
-	cmd := exec.CommandContext(ctx, launch.binary, append(append([]string{}, launch.args...), extra...)...)
+	cmd := exec.CommandContext(ctx, launch.binary, command.args...)
 	cmd.Dir = req.Workspace
 	cmd.Env = req.Environment
+	for _, entry := range command.environment {
+		key, value, found := strings.Cut(entry, "=")
+		if !found {
+			continue
+		}
+		cmd.Env = setEnvironmentValue(cmd.Env, key, value)
+	}
 	if req.InterruptGrace > 0 {
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = req.InterruptGrace

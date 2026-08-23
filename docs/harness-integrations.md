@@ -12,7 +12,7 @@ an `agentrun.Result`, so workflows do not depend on the transport.
 | `claude` | `claude -p --output-format stream-json` | `--resume` | tool deny list |
 | `modu` | native Go SDK, or `modu_code -p … -json` | `--resume` | n/a |
 | `pi` | `pi -p --mode json` | `--session <id>` | `--tools` allowlist |
-| `grok` | ACP over stdio (`grok agent stdio`) | `session/load` | `--sandbox` profile |
+| `grok` | ACP over stdio (`grok agent … stdio`) | `session/load` | `GROK_SANDBOX` profile |
 | `dsh` | headless profile + its own JSONL session log | none | `DSH_PERMISSION_MODE` |
 
 ## Modu native SDK
@@ -76,6 +76,16 @@ the desktop executable and its packaged worker.
 notifications into the normalized event stream. An adapter supplies only an
 `acpLaunch` — the command to run and how that harness spells model, effort, and
 sandbox — so the protocol lives in one place.
+
+An `acpLaunch` supplies the whole argument vector rather than a suffix, because
+flag placement is harness-specific: `grok agent stdio` takes only debug and
+socket options, so model and reasoning effort belong to the parent `agent`
+command and must precede the subcommand. The sandbox has no flag on that path at
+all and travels in `GROK_SANDBOX`, which Grok documents as the `--sandbox`
+equivalent and which still refuses to start on a missing profile. Getting this
+wrong is invisible to stub tests — a shell stub accepts any argv — so
+`harness_launch_test.go` checks each adapter's argument vector against the real
+CLI using something it can answer locally, with no credentials or quota.
 
 Grok Build is the first harness on it. `grok agent stdio` is the surface xAI's
 own SDKs target, and the only one carrying blocking `session/request_permission`

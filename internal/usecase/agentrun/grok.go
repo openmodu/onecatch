@@ -56,25 +56,34 @@ func (r *GrokRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 		runtime:     RuntimeGrok,
 		displayName: "Grok Build",
 		binary:      r.binary,
-		args:        []string{"agent", "stdio"},
-		sessionArgs: grokSessionArgs,
+		command:     grokCommand,
 	}, req, sink, r.now)
 }
 
-// grokSessionArgs turns a request into Grok's own flags.
-func grokSessionArgs(req Request) ([]string, error) {
+// grokCommand builds the `grok agent … stdio` invocation.
+//
+// Model and effort belong to the `agent` command, not to its `stdio`
+// subcommand, so they are placed before `stdio`; passing them after is rejected
+// as an unexpected argument. The sandbox is not on this path at all — it is a
+// flag on the root command only — so it travels in GROK_SANDBOX, which Grok
+// documents as its equivalent and which still refuses to start when the profile
+// is missing.
+func grokCommand(req Request) (acpCommand, error) {
 	sandbox, err := grokSandbox(req.Sandbox)
 	if err != nil {
-		return nil, err
+		return acpCommand{}, err
 	}
-	args := []string{"--sandbox", sandbox}
+	args := []string{"agent"}
 	if req.Model != "" {
 		args = append(args, "--model", req.Model)
 	}
 	if req.ReasoningEffort != "" {
 		args = append(args, "--reasoning-effort", req.ReasoningEffort)
 	}
-	return args, nil
+	return acpCommand{
+		args:        append(args, "stdio"),
+		environment: []string{"GROK_SANDBOX=" + sandbox},
+	}, nil
 }
 
 // grokSandbox maps OneCatch's permission levels onto Grok's sandbox profiles.
@@ -114,11 +123,25 @@ type GrokConfiguration struct {
 // protocol handshake and stops there: no session is opened, no prompt is sent,
 // and no model quota or credentials are consumed.
 func (r *GrokRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (GrokConfiguration, error) {
-	cmd := exec.CommandContext(ctx, r.binary, "agent", "stdio")
+	// Built through grokCommand so the probe and a real run cannot drift into
+	// two different invocations; a handshake runs no tools, so the sandbox it
+	// carries only has to be a profile Grok will accept.
+	command, err := grokCommand(Request{Sandbox: SandboxReadOnly})
+	if err != nil {
+		return GrokConfiguration{}, err
+	}
+	cmd := exec.CommandContext(ctx, r.binary, command.args...)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
 	cmd.Env = environment
+	for _, entry := range command.environment {
+		key, value, found := strings.Cut(entry, "=")
+		if !found {
+			continue
+		}
+		cmd.Env = setEnvironmentValue(cmd.Env, key, value)
+	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return GrokConfiguration{}, fmt.Errorf("Grok Build stdin: %w", err)
