@@ -188,7 +188,11 @@ export function TUISelect({ value, onChange, options = [], ariaLabel, disabled =
       <SelectTrigger aria-label={ariaLabel} className={cn("w-full", className)}>
         <SelectValue placeholder="—" />
       </SelectTrigger>
-      <SelectContent>
+      {/* Pinned to the trigger's width. The default item-aligned popper sizes
+          itself to its content, so a long option — a branch name beside its
+          `origin/…` upstream — grew the dropdown far past the panel it belongs
+          to. Items already truncate; they just never got the chance. */}
+      <SelectContent position="popper" className="w-(--radix-select-trigger-width)">
         {normalized.map((option, index) => (
           <SelectItem key={`${option.value}-${index}`} value={option.value} disabled={option.disabled} className="[&>span:last-child]:w-full [&>span:last-child]:min-w-0">
             <span className="min-w-0 flex-1 truncate" title={option.label}>{option.label}</span>
