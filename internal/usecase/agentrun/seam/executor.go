@@ -254,7 +254,7 @@ func (s *sshExecutor) Describe() string { return s.target.String() }
 
 func (s *sshExecutor) Run(ctx context.Context, cmd Command) (Outcome, error) {
 	status, cwdMark := newMarker("rc"), newMarker("cwd")
-	program := wrapped(cmd, status, cwdMark)
+	program := remotePOSIXShellProgram(wrapped(cmd, status, cwdMark))
 	endpoint, err := sshendpoint.Parse(s.target.Host)
 	if err != nil {
 		return Outcome{}, fmt.Errorf("%w (ssh %s): %v", ErrTransport, s.target.Host, err)
@@ -281,6 +281,15 @@ func (s *sshExecutor) Run(ctx context.Context, cmd Command) (Outcome, error) {
 		process.Env = authenticationEnvironment
 		return process
 	}, status, cwdMark, "ssh "+s.target.Host)
+}
+
+// remotePOSIXShellProgram makes the command independent of the account's
+// login shell. OpenSSH passes its remote command through that shell first, and
+// shells such as fish reject the POSIX assignments used by wrapped. Keep the
+// outer command deliberately simple, then let /bin/sh parse the actual seam
+// program.
+func remotePOSIXShellProgram(program string) string {
+	return "exec /bin/sh -c " + shellQuote(program)
 }
 
 func (s *sshExecutor) sshArgs(port int) []string {
@@ -391,6 +400,38 @@ func CloseSSHControlMaster(ctx context.Context, t Target) error {
 // never have started. It is never a statement about the command itself.
 var ErrTransport = errors.New("seam: could not run the command on the target")
 
+const transportDiagnosticLimit = 16 * 1024
+
+// diagnosticTailWriter retains enough stderr to explain an SSH or login-shell
+// failure without allowing a broken command to buffer unbounded output.
+type diagnosticTailWriter struct {
+	data      []byte
+	truncated bool
+}
+
+func (w *diagnosticTailWriter) Write(p []byte) (int, error) {
+	if len(p) >= transportDiagnosticLimit {
+		w.data = append(w.data[:0], p[len(p)-transportDiagnosticLimit:]...)
+		w.truncated = true
+		return len(p), nil
+	}
+	if overflow := len(w.data) + len(p) - transportDiagnosticLimit; overflow > 0 {
+		copy(w.data, w.data[overflow:])
+		w.data = w.data[:len(w.data)-overflow]
+		w.truncated = true
+	}
+	w.data = append(w.data, p...)
+	return len(p), nil
+}
+
+func (w *diagnosticTailWriter) String() string {
+	result := string(w.data)
+	if w.truncated {
+		return "...\n" + result
+	}
+	return result
+}
+
 // runShell runs the wrapped program and recovers the two markers from it.
 //
 // The process is built from a callback rather than passed in so that the
@@ -405,7 +446,12 @@ func runShell(ctx context.Context, cmd Command, build func(context.Context) *exe
 	}
 	proc := build(ctx)
 	stdout := newMarkerWriter(cmd.Stdout, "\n"+statusMarker)
-	stderr := newMarkerWriter(cmd.Stderr, "\n"+cwdMarker)
+	var diagnostic diagnosticTailWriter
+	stderrDestination := io.Writer(&diagnostic)
+	if cmd.Stderr != nil {
+		stderrDestination = io.MultiWriter(cmd.Stderr, &diagnostic)
+	}
+	stderr := newMarkerWriter(stderrDestination, "\n"+cwdMarker)
 	proc.Stdout = stdout
 	proc.Stderr = stderr
 	// A command must never be left waiting on input that will not arrive.
@@ -446,9 +492,16 @@ func runShell(ctx context.Context, cmd Command, build func(context.Context) *exe
 	if !sawStatus {
 		// The wrapper never completed. Whatever went wrong, it was not the
 		// command reporting a status, so this must not reach the agent as one.
-		detail := strings.TrimSpace(statusText)
+		detail := strings.TrimSpace(diagnostic.String())
 		if runErr != nil {
-			detail = runErr.Error()
+			if detail == "" {
+				detail = runErr.Error()
+			} else {
+				detail = runErr.Error() + ": " + detail
+			}
+		}
+		if detail == "" {
+			detail = "remote shell exited without a status marker"
 		}
 		return Outcome{}, fmt.Errorf("%w (%s): %s", ErrTransport, describe, detail)
 	}

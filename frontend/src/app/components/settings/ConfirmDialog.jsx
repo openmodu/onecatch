@@ -11,16 +11,16 @@ export function ConfirmDialog({ dialog, busy = false, onCancel, onConfirm }) {
   return <Dialog open onOpenChange={(open) => !open && !busy && onCancel()}>
     <DialogContent
       showCloseButton={false}
-      className="sm:max-w-md"
+      className="min-w-0 sm:max-w-md"
       onEscapeKeyDown={(event) => busy && event.preventDefault()}
       onPointerDownOutside={(event) => busy && event.preventDefault()}
     >
-      <DialogHeader>
+      <DialogHeader className="min-w-0">
         <SettingsKicker>{dialog.eyebrow || t(dialog.dangerous ? "modal.dangerous" : "modal.confirmChange")}</SettingsKicker>
         <DialogTitle>{dialog.title}</DialogTitle>
-        <DialogDescription>{dialog.description}</DialogDescription>
+        <DialogDescription className="[overflow-wrap:anywhere] leading-relaxed">{dialog.description}</DialogDescription>
       </DialogHeader>
-      {dialog.detail && <div className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">{dialog.detail}</div>}
+      {dialog.detail && <div className="min-w-0 [overflow-wrap:anywhere] rounded-md bg-muted px-3 py-2 font-mono text-sm leading-relaxed text-muted-foreground">{dialog.detail}</div>}
       <DialogFooter>
         <SettingsButton tone="muted" disabled={busy} onClick={onCancel}>{dialog.cancelLabel || t("common.cancel")}</SettingsButton>
         <SettingsButton autoFocus tone={dialog.dangerous ? "danger" : "primary"} disabled={busy} onClick={onConfirm}>{busy ? t("common.processing") : dialog.confirmLabel || t("common.confirm")}</SettingsButton>

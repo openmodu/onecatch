@@ -182,6 +182,12 @@ test("settings renders directly through shadcn instead of the TUI compatibility 
   assert.match(settings, /components\/ui\/scroll-area/);
 });
 
+test("confirmation dialogs contain long workspace paths", async () => {
+  const confirmDialog = await readFile(path.join(sourceRoot, "app", "components", "settings", "ConfirmDialog.jsx"), "utf8");
+  assert.match(confirmDialog, /className="min-w-0 sm:max-w-md"/, "confirmation content must allow long details to shrink inside the dialog");
+  assert.match(confirmDialog, /\[overflow-wrap:anywhere\]/, "long workspace paths must wrap instead of widening the confirmation dialog");
+});
+
 test("sidebar menus delegate dismissal to Radix instead of hand-rolled effects", async () => {
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
   // Both menus used to carry their own outside-click, Escape and focus-restore
