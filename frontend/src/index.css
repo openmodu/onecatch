@@ -1825,12 +1825,15 @@
 
   .review-toolbar > div:first-child {
     min-width: 0;
+    /* Takes the free space so the trailing icons stay right-aligned even at the
+       widths where the diff totals, which carry the auto margin, are hidden. */
+    flex: 1 1 auto;
     display: flex;
     align-items: baseline;
     gap: 8px;
   }
 
-  .review-toolbar strong { color: var(--foreground); font-size: 13px; font-weight: 650; }
+  .review-toolbar strong { color: var(--foreground); font-size: 13px; font-weight: 650; white-space: nowrap; }
   .review-toolbar > div:first-child span { color: var(--muted-foreground); font-size: 11px; white-space: nowrap; }
   .review-toolbar button { flex: 0 0 auto; }
 
@@ -1865,6 +1868,30 @@
   .review-stats em,
   .review-file-stats em,
   .review-file-tree button em { color: var(--destructive); font-style: normal; font-weight: 600; }
+
+  /* The panel's grid reserves exactly one 46px row for this toolbar, so it can
+     never wrap: a title that broke over two lines overflowed the row instead of
+     growing it, which is how "审阅" ended up stacked vertically beside the agent
+     controls. Nothing in the row shrinks below its own text, so a narrow panel
+     drops the least load-bearing controls in order instead of colliding.
+     `.workbench-inspector-body` is the query container. */
+  @container (max-width: 470px) {
+    /* The changed-file count is already the file list's own heading. */
+    .review-toolbar > div:first-child span { display: none; }
+  }
+
+  @container (max-width: 400px) {
+    /* Icon only: the button keeps its accessible name from aria-label, and its
+       tooltip still spells it out. */
+    .review-agent-run { padding-inline: 8px; }
+    .review-agent-run .review-agent-run-label { display: none; }
+    .review-agent-selector { min-width: 0 !important; max-width: 110px !important; }
+  }
+
+  @container (max-width: 330px) {
+    /* Both totals are repeated per file in the diff below. */
+    .review-stats { display: none; }
+  }
 
   .review-layout {
     min-height: 0;
