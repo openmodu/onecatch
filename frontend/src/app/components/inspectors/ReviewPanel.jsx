@@ -242,8 +242,11 @@ export default function ReviewPanel({ mode, workspaceID, preferredHarness = "cod
         <span>{t("review.filesChanged", { count: review.files.length })}</span>
       </div>
       <HarnessSelector value={reviewProfile} onChange={changeReviewProfile} runtimes={runtimes} readOnly={reviewing} agentLabel className="review-agent-selector" menuSide="bottom" />
-      <Button type="button" size="sm" className="review-agent-run" disabled={reviewDisabled} onClick={runAgentReview}>
-        {reviewing ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Sparkles aria-hidden="true" />}{reviewing ? t("review.reviewing") : t("review.runAgent")}
+      <Button type="button" size="sm" className="review-agent-run" disabled={reviewDisabled} onClick={runAgentReview} aria-label={t("review.runAgent")} title={t("review.runAgent")}>
+        {reviewing ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
+        {/* Hidden below the panel's narrow breakpoint, where the icon and the
+            button's accessible name carry it on their own. */}
+        <span className="review-agent-run-label">{reviewing ? t("review.reviewing") : t("review.runAgent")}</span>
       </Button>
       <div className="review-stats" aria-label={t("review.summary")}><b>+{review.additions}</b><em>−{review.deletions}</em></div>
       <Button type="button" variant="ghost" size="icon-sm" aria-label={t("common.refresh")} title={t("common.refresh")} disabled={loading} onClick={load}>{loading ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <RefreshCw aria-hidden="true" />}</Button>
