@@ -65,12 +65,25 @@ function applyUsageFrame(stepRuns, frame) {
 function preserveLiveUsage(currentSteps, incomingSteps) {
   const currentByID = new Map(currentSteps.map((step) => [step.id, step]));
   const fields = ["inputTokens", "cachedInputTokens", "cacheCreationInputTokens", "outputTokens", "reasoningOutputTokens"];
+  // Context occupancy is only written to the step run when the step finishes,
+  // so every run-state push during a run carries zeroes for it. Those must not
+  // erase the live reading, and the take-the-larger rule above cannot be
+  // reused: occupancy legitimately falls when the harness compacts, so
+  // "larger wins" would pin the gauge at its high-water mark. The rule here is
+  // narrower — an absent value never overwrites a present one.
+  const liveOnly = ["contextWindow", "contextTokens"];
   return incomingSteps.map((step) => {
     const current = currentByID.get(step.id);
     if (!current) return step;
     let next = step;
     for (const field of fields) {
       if ((Number(current[field]) || 0) > (Number(next[field]) || 0)) {
+        if (next === step) next = { ...step };
+        next[field] = current[field];
+      }
+    }
+    for (const field of liveOnly) {
+      if (!(Number(next[field]) || 0) && (Number(current[field]) || 0)) {
         if (next === step) next = { ...step };
         next[field] = current[field];
       }

@@ -183,3 +183,36 @@ test("a usage frame without context leaves the last reading standing", () => {
   assert.equal(next.stepRuns[0].contextWindow, 200000);
   assert.equal(next.stepRuns[0].contextTokens, 90000);
 });
+
+test("a run-state push does not blank the live context gauge", () => {
+  // Occupancy is written to the step run only when the step finishes, so every
+  // push mid-run carries zeroes. Letting those through made the gauge vanish
+  // and reappear on each usage frame.
+  const live = {
+    run: { id: "r1", revision: 5 },
+    stepRuns: [{ id: "s1", status: "running", inputTokens: 120, contextWindow: 258400, contextTokens: 90000 }],
+  };
+  const next = applyRunState(live, {
+    runId: "r1",
+    run: { id: "r1", revision: 6 },
+    stepRuns: [{ id: "s1", status: "running", inputTokens: 0, contextWindow: 0, contextTokens: 0 }],
+  });
+  assert.equal(next.stepRuns[0].contextWindow, 258400);
+  assert.equal(next.stepRuns[0].contextTokens, 90000);
+});
+
+test("a run-state push that carries context still wins", () => {
+  // The durable record is authoritative once it has the numbers; preserving
+  // must only cover the absent case, or a finished step could never correct a
+  // stale live reading.
+  const live = {
+    run: { id: "r1", revision: 5 },
+    stepRuns: [{ id: "s1", status: "running", contextWindow: 258400, contextTokens: 90000 }],
+  };
+  const next = applyRunState(live, {
+    runId: "r1",
+    run: { id: "r1", revision: 6 },
+    stepRuns: [{ id: "s1", status: "completed", contextWindow: 258400, contextTokens: 32000 }],
+  });
+  assert.equal(next.stepRuns[0].contextTokens, 32000);
+});
