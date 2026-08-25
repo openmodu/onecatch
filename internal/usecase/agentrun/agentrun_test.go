@@ -248,7 +248,7 @@ while IFS= read -r line; do
       printf '%s\n' '{"method":"item/started","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"command-1","type":"commandExecution","command":"go test ./...","status":"inProgress"}}}'
       printf '%s\n' '{"method":"item/commandExecution/outputDelta","params":{"threadId":"thread-live","turnId":"turn-live","itemId":"command-1","delta":"ok\n"}}'
       printf '%s\n' '{"method":"item/completed","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"command-1","type":"commandExecution","command":"go test ./...","status":"completed","aggregatedOutput":"ok\n","exitCode":0}}}'
-      printf '%s\n' '{"method":"thread/tokenUsage/updated","params":{"threadId":"thread-live","turnId":"turn-live","tokenUsage":{"last":{"inputTokens":3,"cachedInputTokens":2,"outputTokens":1,"reasoningOutputTokens":0},"total":{"inputTokens":17,"cachedInputTokens":11,"outputTokens":5,"reasoningOutputTokens":2}}}}'
+      printf '%s\n' '{"method":"thread/tokenUsage/updated","params":{"threadId":"thread-live","turnId":"turn-live","tokenUsage":{"modelContextWindow":272000,"last":{"inputTokens":3,"cachedInputTokens":2,"outputTokens":1,"reasoningOutputTokens":0},"total":{"inputTokens":17,"cachedInputTokens":11,"outputTokens":5,"reasoningOutputTokens":2}}}}'
       printf '%s\n' '{"method":"turn/completed","params":{"threadId":"thread-live","turn":{"id":"turn-live","status":"completed"}}}'
       ;;
   esac
@@ -432,6 +432,74 @@ func TestClaudeRunnerEmitsTextDeltasWithAuthoritativeEnd(t *testing.T) {
 	}
 	if len(streamed) != 4 || streamed[0].Phase != StreamStart || streamed[1].Text != "Created " || streamed[2].Text != "out.txt." || streamed[3].Phase != StreamEnd || streamed[3].Text != "Created out.txt." {
 		t.Fatalf("streamed = %+v", streamed)
+	}
+}
+
+// Occupancy and cost come from different halves of the same notification:
+// `total` is every call in the turn, `last` is the one prompt the window held.
+// Reading `total` into the gauge would show 17 of a window that held 3.
+func TestCodexRunnerSeparatesContextOccupancyFromCumulativeUsage(t *testing.T) {
+	runner := NewCodexRunner(stubCodexAppServerBinary(t))
+	runner.now = fixedClock()
+	var events []Event
+
+	result, err := runner.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "go", Sandbox: SandboxWorkspaceWrite}, collectSink(&events))
+	if err != nil {
+		t.Fatalf("Run error: %v", err)
+	}
+	if result.Usage.InputTokens != 17 {
+		t.Fatalf("cumulative usage must stay the turn total: %+v", result.Usage)
+	}
+	if result.Context.Window != 272000 || result.Context.Tokens != 3 {
+		t.Fatalf("context = %+v", result.Context)
+	}
+	if !result.Context.Known() {
+		t.Fatal("context should be reportable")
+	}
+	for _, event := range events {
+		if event.Kind != KindUsage {
+			continue
+		}
+		if event.Context == nil || event.Context.Window != 272000 || event.Context.Tokens != 3 {
+			t.Fatalf("live context event = %+v", event.Context)
+		}
+	}
+}
+
+// `claude -p` reports the window only on the terminal result event, while
+// occupancy has to be read from each assistant message — the run would
+// otherwise finish before the desktop learned either number.
+func TestClaudeRunnerReportsContextWindowAndLiveOccupancy(t *testing.T) {
+	stream := `{"type":"system","subtype":"init","session_id":"s-ctx"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":2,"cache_creation_input_tokens":26217,"cache_read_input_tokens":0,"output_tokens":4}}}
+{"type":"result","subtype":"success","is_error":false,"result":"done","session_id":"s-ctx","usage":{"input_tokens":2,"cache_creation_input_tokens":26217,"cache_read_input_tokens":0,"output_tokens":4},"modelUsage":{"claude-opus-5":{"contextWindow":1000000,"maxOutputTokens":64000}}}`
+	runner := NewClaudeRunner(stubBinary(t, stream, "", 0))
+	runner.now = fixedClock()
+	var events []Event
+
+	result, err := runner.Run(context.Background(), Request{Workspace: t.TempDir(), Prompt: "go"}, collectSink(&events))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Context.Window != 1000000 {
+		t.Fatalf("context window = %d", result.Context.Window)
+	}
+	// A cache read still occupies the window, so occupancy is the whole prompt
+	// (2+26217), not the 2 tokens that were freshly billed as input.
+	if result.Context.Tokens != 26219 {
+		t.Fatalf("context tokens = %d", result.Context.Tokens)
+	}
+	var live []Event
+	for _, event := range events {
+		if event.Kind == KindUsage {
+			live = append(live, event)
+		}
+	}
+	if len(live) != 1 {
+		t.Fatalf("expected one live usage event, got %d", len(live))
+	}
+	if live[0].Context == nil || live[0].Context.Tokens != 26219 {
+		t.Fatalf("live occupancy = %+v", live[0].Context)
 	}
 }
 

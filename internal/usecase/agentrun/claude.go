@@ -376,6 +376,7 @@ type claudeParser struct {
 	final             string
 	sessionID         string
 	usage             Usage
+	context           ContextUsage
 	succeeded         bool
 	done              bool
 	messageSeq        int
@@ -393,6 +394,12 @@ type claudeEnvelope struct {
 	IsError   bool              `json:"is_error"`
 	Usage     claudeUsage       `json:"usage"`
 	Event     claudeStreamEvent `json:"event"`
+	// ModelUsage is keyed by model id and is the only place `claude -p`
+	// reports the context window — and only on the terminal result event, so
+	// the window is unknown for the whole run that needed it.
+	ModelUsage map[string]struct {
+		ContextWindow int `json:"contextWindow"`
+	} `json:"modelUsage"`
 }
 
 type claudeStreamEvent struct {
@@ -429,6 +436,14 @@ type claudeUsage struct {
 	OutputTokens             int `json:"output_tokens"`
 }
 
+// contextTokens is everything the model read for this call. The cache-read
+// portion is billed differently but still occupies the window, so leaving it
+// out reports a nearly empty context for a long cached session: a real probe
+// showed input_tokens=2 against 26,219 tokens actually resident.
+func (u claudeUsage) contextTokens() int {
+	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
+}
+
 func (u claudeUsage) usage() Usage {
 	return Usage{
 		InputTokens:              u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens,
@@ -454,6 +469,7 @@ func (p *claudeParser) parse(line string, at time.Time, sink Sink) {
 		// Other system events (hooks, thinking-token meters) are progress noise.
 	case "assistant":
 		p.handleAssistant(env.Message, line, at, sink)
+		p.observeAssistantUsage(env.Message.Usage, line, at, sink)
 	case "stream_event":
 		p.handleStreamEvent(env.Event, line, at, sink)
 	case "user":
@@ -463,6 +479,27 @@ func (p *claudeParser) parse(line string, at time.Time, sink Sink) {
 	default:
 		// rate_limit_event and friends: keep raw, no user-facing text.
 	}
+}
+
+// observeAssistantUsage publishes the per-message accounting Claude attaches to
+// every assistant event. Without it the desktop learns nothing until the run
+// ends, which is exactly when a live occupancy gauge stops being useful.
+func (p *claudeParser) observeAssistantUsage(u claudeUsage, line string, at time.Time, sink Sink) {
+	tokens := u.contextTokens()
+	if tokens == 0 && u.OutputTokens == 0 {
+		return
+	}
+	// Each assistant message reports its own call, so the step total is a sum,
+	// while occupancy is the newest prompt and simply replaces the last one.
+	turn := u.usage()
+	p.usage.InputTokens += turn.InputTokens
+	p.usage.CachedInputTokens += turn.CachedInputTokens
+	p.usage.CacheCreationInputTokens += turn.CacheCreationInputTokens
+	p.usage.OutputTokens += turn.OutputTokens
+	p.context.Tokens = tokens
+	usage := p.usage
+	context := p.context
+	sink(Event{Kind: KindUsage, Usage: &usage, Context: &context, Raw: line, At: at})
 }
 
 func (p *claudeParser) beginMessage() {
@@ -554,7 +591,17 @@ func (p *claudeParser) handleToolResults(msg claudeMessage, line string, at time
 
 func (p *claudeParser) handleResult(env claudeEnvelope, line string, at time.Time, sink Sink) {
 	p.done = true
+	// The result event carries the authoritative step total, so it supersedes
+	// what was accumulated from the assistant messages.
 	p.usage = env.Usage.usage()
+	for _, model := range env.ModelUsage {
+		if model.ContextWindow > p.context.Window {
+			p.context.Window = model.ContextWindow
+		}
+	}
+	if tokens := env.Usage.contextTokens(); tokens > 0 && p.context.Tokens == 0 {
+		p.context.Tokens = tokens
+	}
 	if env.Result != "" {
 		p.final = env.Result
 	}
@@ -592,6 +639,7 @@ func (p *claudeParser) result() Result {
 	return Result{
 		FinalMessage: p.final,
 		Usage:        p.usage,
+		Context:      p.context,
 		SessionID:    p.sessionID,
 		Succeeded:    p.succeeded && p.done,
 	}

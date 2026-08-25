@@ -190,8 +190,14 @@ type StepRun struct {
 	CacheCreationInputTokens int           `json:"cacheCreationInputTokens,omitempty"`
 	OutputTokens             int           `json:"outputTokens,omitempty"`
 	ReasoningOutputTokens    int           `json:"reasoningOutputTokens,omitempty"`
-	DurationMS               int64         `json:"durationMs,omitempty"`
-	Error                    string        `json:"error,omitempty"`
+	// ContextWindow and ContextTokens describe how full the model's context
+	// was, which the token counters above cannot express: those accumulate
+	// across every model call in the step, while the window only ever held one
+	// prompt. ContextTokens may fall between attempts when the harness compacts.
+	ContextWindow int    `json:"contextWindow,omitempty"`
+	ContextTokens int    `json:"contextTokens,omitempty"`
+	DurationMS    int64  `json:"durationMs,omitempty"`
+	Error         string `json:"error,omitempty"`
 }
 
 type InstructionStatus string

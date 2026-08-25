@@ -3,6 +3,7 @@ import { Maximize2, Minimize2, PanelRightClose, SquareArrowOutUpRight, SquareTer
 import { useTranslation } from "react-i18next";
 import { StatusBadge } from "../../ui/primitives.jsx";
 import { buildRunConversation } from "../runConversation.js";
+import { summarizeContextWindow } from "../tokenUsage.js";
 import QueuedTaskView from "./QueuedTaskView.jsx";
 import ConversationTimeline from "./ConversationTimeline.jsx";
 import Composer from "./Composer.jsx";
@@ -294,6 +295,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} hiddenCount={hiddenTranscriptCount} onLoadEarlier={() => onLoadEarlierTranscript?.(runDetail?.run?.id)} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={openReview} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
         {runDetail && <Composer
+          contextWindow={summarizeContextWindow(runDetail.stepRuns)}
           runStatus={runStatus}
           active={runDetail.active}
           busy={busy}

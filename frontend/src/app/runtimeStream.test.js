@@ -145,3 +145,41 @@ test("applyRunState never moves the run revision backwards", () => {
   const stale = applyRunState(current, { runId: "run-1", run: { id: "run-1", status: "running", revision: 4 }, active: true });
   assert.strictEqual(stale, current, "a stale push is dropped");
 });
+
+test("context occupancy follows the newest frame down, unlike the counters", () => {
+  const detail = {
+    run: { id: "run-1" },
+    stepRuns: [{ id: "step-1", status: "running", inputTokens: 0, contextWindow: 0, contextTokens: 0 }],
+  };
+  const filled = applyRuntimeFrame(detail, {
+    runId: "run-1", stepRunId: "step-1", seq: 1, kind: "usage",
+    usage: { inputTokens: 180000, outputTokens: 400 },
+    context: { window: 200000, tokens: 180000 },
+  });
+  assert.equal(filled.stepRuns[0].contextWindow, 200000);
+  assert.equal(filled.stepRuns[0].contextTokens, 180000);
+
+  // The harness compacted: the window really did empty out. The cumulative
+  // counters keep their high-water mark, but occupancy must drop with it or
+  // the gauge stays pinned near full for the rest of the run.
+  const compacted = applyRuntimeFrame(filled, {
+    runId: "run-1", stepRunId: "step-1", seq: 2, kind: "usage",
+    usage: { inputTokens: 180000, outputTokens: 400 },
+    context: { window: 200000, tokens: 32000 },
+  });
+  assert.equal(compacted.stepRuns[0].contextTokens, 32000);
+  assert.equal(compacted.stepRuns[0].inputTokens, 180000);
+});
+
+test("a usage frame without context leaves the last reading standing", () => {
+  const detail = {
+    run: { id: "run-1" },
+    stepRuns: [{ id: "step-1", status: "running", contextWindow: 200000, contextTokens: 90000 }],
+  };
+  const next = applyRuntimeFrame(detail, {
+    runId: "run-1", stepRunId: "step-1", seq: 3, kind: "usage",
+    usage: { inputTokens: 5, outputTokens: 1 },
+  });
+  assert.equal(next.stepRuns[0].contextWindow, 200000);
+  assert.equal(next.stepRuns[0].contextTokens, 90000);
+});

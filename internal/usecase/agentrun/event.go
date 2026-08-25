@@ -155,6 +155,10 @@ type Event struct {
 	// returned an error, not a run that ended badly. A step can fail while most
 	// of its tool calls succeeded, so callers must not infer one from the other.
 	Failed bool `json:"failed,omitempty"`
+	// Context is the context-window occupancy observed at this step, attached
+	// to KindUsage beside Usage. It is a separate field precisely because it
+	// is not a subset of Usage — see [ContextUsage].
+	Context *ContextUsage `json:"context,omitempty"`
 	// Permission is populated for permission_request and permission_resolved
 	// events. PermissionDecision is "allow" or "deny" on the resolved event.
 	Permission         *PermissionRequest `json:"permission,omitempty"`
@@ -162,6 +166,27 @@ type Event struct {
 	// At is when the engine observed the event.
 	At time.Time `json:"at"`
 }
+
+// ContextUsage reports how full the model's context window is. It is a
+// different quantity from [Usage] and the two must not be substituted for one
+// another: Usage accumulates every model call in a step, so it only ever grows
+// and routinely exceeds the window a tool-heavy step never came close to
+// filling. Occupancy is the size of a single prompt, and it *falls* whenever
+// the harness compacts. Charting the cumulative total against the window shows
+// a step at 300% of a context it never overflowed.
+type ContextUsage struct {
+	// Window is the model's context window in tokens. Zero means the runtime
+	// did not report one — render that as unknown rather than as a full bar.
+	Window int `json:"window,omitempty"`
+	// Tokens is the prompt size of the most recent model call: everything the
+	// model read this turn, cached prefix included, because a cache hit still
+	// occupies the window. May decrease after a compaction.
+	Tokens int `json:"tokens,omitempty"`
+}
+
+// Known reports whether the runtime supplied enough to draw an occupancy
+// figure. A window with no sample, or a sample with no window, is not a ratio.
+func (c ContextUsage) Known() bool { return c.Window > 0 && c.Tokens > 0 }
 
 // Usage captures cumulative token accounting for one workflow step. InputTokens
 // includes cache reads and cache creation when a provider reports them
@@ -181,6 +206,8 @@ type Result struct {
 	FinalMessage string `json:"finalMessage"`
 	// Usage is best-effort token accounting; zero when the runtime omits it.
 	Usage Usage `json:"usage"`
+	// Context is the final context-window occupancy; zero when unreported.
+	Context ContextUsage `json:"context"`
 	// SessionID is the runtime's own session/thread id, for resuming.
 	SessionID string `json:"sessionId,omitempty"`
 	// Succeeded is true when the runtime reported a clean terminal state.

@@ -41,6 +41,21 @@ function applyUsageFrame(stepRuns, frame) {
       changed = true;
     }
   }
+  // Occupancy deliberately skips the take-the-larger rule the counters above
+  // use for out-of-order frames. Those only grow, so a smaller value is stale;
+  // the context window empties on compaction, so a smaller value is the news.
+  if (frame.context) {
+    const window = Number(frame.context.window) || 0;
+    const tokens = Number(frame.context.tokens) || 0;
+    if (window > 0 && window !== current.contextWindow) {
+      next.contextWindow = window;
+      changed = true;
+    }
+    if (tokens > 0 && tokens !== current.contextTokens) {
+      next.contextTokens = tokens;
+      changed = true;
+    }
+  }
   if (!changed) return stepRuns;
   const result = [...stepRuns];
   result[index] = next;
