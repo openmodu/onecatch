@@ -70,6 +70,27 @@ func (r *ClaudeRunner) InspectConfiguration(ctx context.Context, cwd string, env
 	return ClaudeConfiguration{Models: models, Efforts: parseClaudeEffortOptions(string(output))}, nil
 }
 
+// claudeCatalogModels compensates for `claude --help`, which documents --model
+// with a couple of examples rather than a catalog: probing 2.1.241 yields only
+// 'fable', 'opus', 'sonnet' and 'claude-fable-5', so every pinned version was
+// unreachable from the picker. Claude Code has no equivalent of Codex's
+// model/list, so the pinned names have to be carried here.
+//
+// This list therefore goes stale on its own schedule. It is additive and
+// deduplicated against whatever --help advertises, so a name the installed CLI
+// no longer accepts costs a failed run rather than a broken picker, and a
+// newly shipped model still shows up through the alias parsed from --help.
+// Verified present in the 2.1.241 binary's model table.
+var claudeCatalogModels = []string{
+	"claude-opus-5",
+	"claude-sonnet-5",
+	"claude-opus-4-8",
+	"claude-opus-4-7",
+	"claude-opus-4-6",
+	"claude-sonnet-4-6",
+	"claude-haiku-4-5",
+}
+
 var claudeQuotedModel = regexp.MustCompile(`'([A-Za-z0-9][A-Za-z0-9._:-]*)'`)
 
 func parseClaudeModelOptions(help string) []ClaudeModelInfo {
@@ -87,6 +108,16 @@ func parseClaudeModelOptions(help string) []ClaudeModelInfo {
 			displayName = strings.ToUpper(model[:1]) + model[1:]
 		}
 		models = append(models, ClaudeModelInfo{Model: model, DisplayName: displayName, Alias: alias})
+	}
+	// The aliases parsed above stay first: they are what the installed CLI
+	// actually advertises, and they track the newest model without an update
+	// here. The pinned names follow as the "more models" tail.
+	for _, model := range claudeCatalogModels {
+		if _, ok := seen[model]; ok {
+			continue
+		}
+		seen[model] = struct{}{}
+		models = append(models, ClaudeModelInfo{Model: model, DisplayName: model})
 	}
 	return models
 }

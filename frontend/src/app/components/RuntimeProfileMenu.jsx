@@ -200,6 +200,29 @@ export default function RuntimeProfileMenu({
               </DropdownMenuSub>
             </>}
           </DropdownMenuRadioGroup>}
+        {/* The Claude branch rendered models only, so --effort was reachable
+            from Settings but not per run — even though the adapter has always
+            passed it and the CLI advertises every level. */}
+        {capability.supportsReasoning && <>
+          <DropdownMenuSeparator />
+          {readOnly
+            ? <ReadOnlyRow label={t("settings.reasoningEffort")} value={effortLabel(t, profile.reasoningEffort)} />
+            : <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="runtime-profile-row" disabled={loading || !efforts.length}><RuntimeRow label={t("settings.reasoningEffort")} value={effortLabel(t, profile.reasoningEffort)} /></DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="runtime-profile-submenu compact" sideOffset={6}>
+                <DropdownMenuLabel className="runtime-profile-submenu-heading">{t("settings.reasoningEffort")}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={reasoningMenuValue} onValueChange={selectReasoningEffort}>
+                  {efforts.map((effort) => <RuntimeSubmenuOption
+                    value={effort}
+                    label={effortLabel(t, effort)}
+                    description={reasoningDescription(t, effort)}
+                    selected={effort === reasoningMenuValue}
+                    key={effort}
+                  />)}
+                </DropdownMenuRadioGroup>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>}
+        </>}
         {(loading || error) && <><DropdownMenuSeparator /><div className={`runtime-profile-message ${error ? "error" : ""}`} role={error ? "alert" : "status"}>{loading ? loadingLabel : error}</div></>}
       </> : <>
         {readOnly ? <>
