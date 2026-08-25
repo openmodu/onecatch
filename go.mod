@@ -7,7 +7,6 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/wire v0.7.0
-	github.com/hanwen/go-fuse/v2 v2.11.0
 	github.com/openmodu/modu v0.0.9-0.20260821095951-93fa58bfeeb7
 	github.com/pkg/sftp v1.13.11
 	github.com/wailsapp/wails/v3 v3.0.0-beta.10

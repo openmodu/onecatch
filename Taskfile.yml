@@ -127,13 +127,6 @@ tasks:
         platforms: [windows]
       - go build -tags onecatch_worker -o '{{.BIN_DIR}}/onecatch-worker{{.EXE_EXT}}' ./cmd/worker
 
-  build:onecatchfs:
-    desc: Build the macOS remote filesystem helper
-    platforms: [darwin]
-    cmds:
-      - mkdir -p '{{.BIN_DIR}}'
-      - go build -o '{{.BIN_DIR}}/onecatchfs' ./cmd/onecatchfs
-
   build:shell:
     desc: Build the agent shell used by remote runs
     platforms: [darwin, linux]

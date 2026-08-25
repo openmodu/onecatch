@@ -25,7 +25,7 @@
 - Codex：`CodexRunner.Run`（`Request.Remote` 非空）→ 私有 `CODEX_HOME` 的
   `environments.toml` → `onecatchsh exec-server` → SSH 命令与 SFTP `fs/*`。
 
-这里没有挂载点，也不启动 `onecatchfs`。Agent 看到的是 harness 自己的远端
+这里没有挂载点，也不挂载远端文件系统。Agent 看到的是 harness 自己的远端
 environment；Codex 的原生文件工具通过 JSON-RPC/SFTP 操作目标机，Claude 因原生
 文件工具没有可重定向接缝而禁用它们，改走远端 shell。
 
