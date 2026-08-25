@@ -67,3 +67,34 @@ test("the review toolbar survives a narrow inspector without wrapping", () => {
   assert.match(review, /className="review-agent-run"[^>]*aria-label=\{t\("review\.runAgent"\)\}/);
   assert.match(review, /<span className="review-agent-run-label">/);
 });
+
+// A toolbar button and an agent name beside it say nothing about what pressing
+// them does. Both controls now explain themselves, and the findings slot
+// explains itself while it is still empty.
+test("the agent review controls say what they do", () => {
+  // The shared selector defaults to claiming it picks a task's execution
+  // target, which is the wrong sentence here — it picks the reviewer.
+  assert.match(review, /labelOverride=\{t\("review\.agentSelect"\)\}/);
+  const selector = readFileSync(new URL("./components/HarnessSelector.jsx", import.meta.url), "utf8");
+  assert.match(selector, /const controlLabel = labelOverride \|\|/);
+
+  // The tooltip has to add something the visible label does not already say.
+  assert.match(review, /title=\{t\("review\.runAgentHint"\)\}/);
+  assert.doesNotMatch(review, /title=\{t\("review\.runAgent"\)\}/);
+
+  // Shown only before a review exists, so real findings replace it rather than
+  // compete with it for the panel's height.
+  assert.match(review, /!agentReview && !reviewing && review\.files\.length > 0 && <p className="review-agent-intro">/);
+  assert.match(review, /t\("review\.agentIntro", \{ agent: runtimeHarness\(reviewProfile\.harness\)\.label \}\)/);
+
+  const strings = readFileSync(new URL("../i18n.js", import.meta.url), "utf8");
+  for (const key of ["review.runAgentHint", "review.agentSelect", "review.agentIntro"]) {
+    // Both languages carry it.
+    const count = strings.split(`"${key}":`).length - 1;
+    assert.equal(count, 2, `${key} must be translated in both languages`);
+  }
+  // The two facts a reader cannot infer from the button: it is read-only, and
+  // it spends quota.
+  assert.match(strings, /"review\.runAgentHint": "[^"]*只读[^"]*额度/);
+  assert.match(strings, /"review\.runAgentHint": "[^"]*never edits files[^"]*quota/);
+});

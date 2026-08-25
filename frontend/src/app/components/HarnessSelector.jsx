@@ -11,10 +11,13 @@ import {
 import { runtimeHarness, runtimeHarnessOptions, selectRuntimeHarness } from "../runtimeHarnesses.js";
 import RuntimeHarnessIcon from "./RuntimeHarnessIcon.jsx";
 
-export default function HarnessSelector({ value, onChange, runtimes = [], runtimeSettings = {}, remoteFS = false, readOnly = false, agentLabel = false, className = "", menuSide = "top" }) {
+export default function HarnessSelector({ value, onChange, runtimes = [], runtimeSettings = {}, remoteFS = false, readOnly = false, agentLabel = false, labelOverride = "", className = "", menuSide = "top" }) {
   const { t } = useTranslation();
   const harness = runtimeHarness(value?.harness);
-  const controlLabel = agentLabel ? t("task.executionTarget") : t("task.harness");
+  // Callers outside the task composer say what the choice is for. Without it
+  // the control claims to pick a task's execution target, which is wrong
+  // wherever the agent is chosen for something else.
+  const controlLabel = labelOverride || (agentLabel ? t("task.executionTarget") : t("task.harness"));
   const controlClass = agentLabel ? "new-task-select executor" : "new-task-select harness";
 
   if (readOnly) {

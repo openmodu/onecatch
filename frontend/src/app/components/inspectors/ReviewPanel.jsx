@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { buildGitReview } from "../../gitReview.js";
 import { runtimesChangedEvent } from "../../auxiliaryWindowEvents.js";
 import { errorMessage } from "../../format.js";
-import { runtimeHarnesses } from "../../runtimeHarnesses.js";
+import { runtimeHarness, runtimeHarnesses } from "../../runtimeHarnesses.js";
 import HarnessSelector from "../HarnessSelector.jsx";
 
 const DEMO_DIFF = `diff --git a/frontend/src/app/components/Composer.jsx b/frontend/src/app/components/Composer.jsx
@@ -241,8 +241,8 @@ export default function ReviewPanel({ mode, workspaceID, preferredHarness = "cod
         <strong>{t("review.title")}</strong>
         <span>{t("review.filesChanged", { count: review.files.length })}</span>
       </div>
-      <HarnessSelector value={reviewProfile} onChange={changeReviewProfile} runtimes={runtimes} readOnly={reviewing} agentLabel className="review-agent-selector" menuSide="bottom" />
-      <Button type="button" size="sm" className="review-agent-run" disabled={reviewDisabled} onClick={runAgentReview} aria-label={t("review.runAgent")} title={t("review.runAgent")}>
+      <HarnessSelector value={reviewProfile} onChange={changeReviewProfile} runtimes={runtimes} readOnly={reviewing} agentLabel labelOverride={t("review.agentSelect")} className="review-agent-selector" menuSide="bottom" />
+      <Button type="button" size="sm" className="review-agent-run" disabled={reviewDisabled} onClick={runAgentReview} aria-label={t("review.runAgent")} title={t("review.runAgentHint")}>
         {reviewing ? <LoaderCircle className="animate-spin" aria-hidden="true" /> : <Sparkles aria-hidden="true" />}
         {/* Hidden below the panel's narrow breakpoint, where the icon and the
             button's accessible name carry it on their own. */}
@@ -268,6 +268,13 @@ export default function ReviewPanel({ mode, workspaceID, preferredHarness = "cod
           </article>) : <div className="review-empty"><FileDiff aria-hidden="true" />{t(isRepository === false ? "review.notGit" : "review.noChanges")}</div>}
       </div>
       <aside className={`review-files${agentReview || reviewing ? " has-agent-review" : ""}`} aria-label={t("review.changedFiles")}>
+        {/* The findings slot explains itself while it is empty. A toolbar button
+            and an agent name next to it say nothing about what pressing them
+            does, and this is the spot the reader is already looking at for the
+            answer, because it is where the results land. */}
+        {!agentReview && !reviewing && review.files.length > 0 && <p className="review-agent-intro">
+          {t("review.agentIntro", { agent: runtimeHarness(reviewProfile.harness).label })}
+        </p>}
         {(agentReview || reviewing) && <section className="review-findings" aria-label={t("review.agentFindings")}>
           <div className="review-findings-heading"><span>{t("review.agentFindings")}</span><strong>{agentReview?.findings?.length || 0}</strong></div>
           {reviewing ? <div className="review-findings-empty"><LoaderCircle className="animate-spin" aria-hidden="true" />{t("review.reviewing")}</div>

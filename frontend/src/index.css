@@ -1994,6 +1994,17 @@
 
   .review-files.has-agent-review { grid-template-rows: minmax(130px, 46%) 36px minmax(0, 1fr); }
 
+  /* Sits in the findings slot while it is empty, so it costs no toolbar space
+     and disappears the moment real findings replace it. */
+  .review-agent-intro {
+    margin: 0;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--muted-foreground);
+    font-size: 11px;
+    line-height: 1.6;
+  }
+
   .review-findings {
     min-height: 0;
     display: grid;
