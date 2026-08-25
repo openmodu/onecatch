@@ -48,7 +48,7 @@ import LockScreen from "./components/LockScreen.jsx";
 import { buildLockSignal, completionEdge, LOCK_PHASE } from "./lockSignal.js";
 import { notifyStandby } from "./standbyNotify.js";
 import { runtimesChangedEvent, settingsChangedEvent, workflowsChangedEvent } from "./auxiliaryWindowEvents.js";
-import { readInspectorDetached, readInspectorPreference, resolveInspectorCollapsed, writeInspectorDetached, writeInspectorPreference } from "./inspectorLayout.js";
+import { readInspectorDetached, resolveInspectorCollapsed, writeInspectorDetached } from "./inspectorLayout.js";
 import { buildInspectorContext, inspectorContextSignature, INSPECTOR_ACTION_EVENT, INSPECTOR_CONTEXT_EVENT, INSPECTOR_REQUEST_EVENT, INSPECTOR_WINDOW_EVENT } from "./inspectorContext.js";
 import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeOptions.js";
 import { collapsePanelAtCompact, COMPACT_LAYOUT_QUERY } from "./responsiveLayout.js";
@@ -99,14 +99,6 @@ function WindowsTitleBar() {
       <button type="button" className="windows-caption-button close" aria-label="关闭" onClick={() => void Window.Close()}><X size={15} aria-hidden="true" /></button>
     </div>
   </div>;
-}
-
-function initialInspectorPreference() {
-  try {
-    return typeof window === "undefined" ? null : readInspectorPreference(window.localStorage);
-  } catch {
-    return null;
-  }
 }
 
 function initialCompactViewport() {
@@ -183,7 +175,11 @@ function App() {
   const [workerForm, setWorkerForm] = useState({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
   const [settings, setSettings] = useState(demoSettings);
   const [appDialog, setAppDialog] = useState(null);
-  const [inspectorPreference, setInspectorPreference] = useState(() => collapsePanelAtCompact(initialInspectorPreference(), initialCompactViewport()));
+  // The inspector opens on request and closes with the window. Its expanded
+  // state is deliberately not carried across launches: it is a panel you open
+  // to answer a question, and starting every session with whatever was on
+  // screen when the last one ended is not the same thing as wanting it there.
+  const [inspectorPreference, setInspectorPreference] = useState(true);
   const [inspectorDetached, setInspectorDetached] = useState(initialInspectorDetached);
   const [compactViewport, setCompactViewport] = useState(initialCompactViewport);
   const [terminalCommand, setTerminalCommand] = useState({ version: 0, command: "" });
@@ -248,12 +244,7 @@ function App() {
   }, []);
 
   const toggleInspector = useCallback(() => {
-    setInspectorPreference((current) => {
-      const collapsed = resolveInspectorCollapsed(current);
-      const next = !collapsed;
-      writeInspectorPreference(window.localStorage, next);
-      return next;
-    });
+    setInspectorPreference((current) => !resolveInspectorCollapsed(current));
   }, []);
 
   // Both toggles move optimistically so the layout responds immediately; the
