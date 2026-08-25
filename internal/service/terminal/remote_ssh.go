@@ -54,7 +54,7 @@ func remoteSSHInvocation(input CreateInput, environment []string) (string, []str
 	if username := strings.TrimSpace(target.Username); username != "" {
 		args = append(args, "-l", username)
 	}
-	args = append(args, endpoint.Host, "cd "+quoteRemoteShellWord(target.Root)+` && exec "${SHELL:-/bin/sh}" -l`)
+	args = append(args, endpoint.Host, remotePOSIXShellProgram("cd "+quoteRemoteShellWord(target.Root)+` && exec "${SHELL:-/bin/sh}" -l`))
 
 	binary := "ssh"
 	configured := exec.Command(binary)
@@ -67,6 +67,16 @@ func remoteSSHInvocation(input CreateInput, environment []string) (string, []str
 		label = username + "@" + label
 	}
 	return binary, args, configured.Env, label, nil
+}
+
+// remotePOSIXShellProgram makes the command independent of the account's login
+// shell, mirroring the seam executor. OpenSSH passes its remote command through
+// that shell first, and shells such as fish reject `${SHELL:-/bin/sh}` outright
+// ("${ is not a valid variable in fish"), so the login shell never starts. Keep
+// the outer command to a plain exec that every shell parses the same way, and
+// let /bin/sh handle the parameter expansion.
+func remotePOSIXShellProgram(program string) string {
+	return "exec /bin/sh -c " + quoteRemoteShellWord(program)
 }
 
 func quoteRemoteShellWord(value string) string {
