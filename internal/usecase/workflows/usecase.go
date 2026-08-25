@@ -577,6 +577,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			Model:                   step.Model,
 			ReasoningEffort:         resolvedReasoningEffort(run, step.Runtime),
 			ServiceTier:             resolvedServiceTier(run, step.Runtime),
+			MaxContextWindow:        resolvedMaxContextWindow(run, step.Runtime),
 			Sandbox:                 allowedSandbox(step.Sandbox, workspace.DefaultSandbox),
 			ResumeSessionID:         run.Sessions[step.ID],
 			EnvironmentAllowlist:    resolvedEnvironmentAllowlist(run, step.Runtime),
@@ -775,6 +776,13 @@ func resolvedServiceTier(run domainworkflows.Run, runtime string) string {
 		return ""
 	}
 	return run.RuntimeSettings[runtime].ServiceTier
+}
+
+func resolvedMaxContextWindow(run domainworkflows.Run, runtime string) bool {
+	if run.RuntimeSettings == nil {
+		return false
+	}
+	return run.RuntimeSettings[runtime].MaxContextWindow
 }
 
 func (s *Usecase) loadTaskContext(ctx context.Context, taskID string) (domaintasks.Task, domainworkspaces.Workspace, domainworkflows.Definition, error) {

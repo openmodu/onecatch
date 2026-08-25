@@ -61,6 +61,11 @@ type Request struct {
 	// ServiceTier optionally selects Codex speed/processing tier. "standard"
 	// explicitly resets app-server runs to the model's standard tier.
 	ServiceTier string
+	// MaxContextWindow asks the harness to run the model at the largest window
+	// it accepts rather than the harness's default. Off unless the user turns
+	// it on: a bigger window is not free — a full context makes every turn's
+	// input larger — and only some models have headroom at all.
+	MaxContextWindow bool
 	// Provider optionally selects a runtime provider. It is currently consumed
 	// by Modu Code and ignored by runtimes with a fixed provider.
 	Provider string

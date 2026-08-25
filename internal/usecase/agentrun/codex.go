@@ -280,6 +280,41 @@ func newCodexAppState() *codexAppState {
 	return &codexAppState{messageOpen: make(map[string]bool), reasoningOpen: make(map[string]bool), toolOpen: make(map[string]bool)}
 }
 
+// codexModelContextMax is the largest window each model accepts, mirroring the
+// per-model table inside the Codex binary. Codex defaults every model to
+// 272000 even where the model itself allows more, and app-server's model/list
+// reports neither figure — its Model objects carry reasoning efforts and
+// service tiers but nothing about context — so raising the window means
+// carrying the ceiling here.
+//
+// A model absent from this table is left at Codex's default rather than
+// guessed at: the failure mode of guessing high is every request erroring
+// against the real limit, while the failure mode of not knowing is only that
+// the window stays where Codex put it. Models whose ceiling already equals the
+// default (gpt-5.5, gpt-5.4-mini, gpt-5.2) are deliberately absent — there is
+// nothing to raise, and listing them would imply otherwise.
+//
+// Read out of codex-cli 0.149.0.
+var codexModelContextMax = map[string]int{
+	"gpt-5.6-sol":   872000,
+	"gpt-5.6-terra": 872000,
+	"gpt-5.6-luna":  872000,
+	"gpt-5.4":       1000000,
+}
+
+// codexMaxContextWindowOverride returns the `-c` override that opts a model
+// into its full window, or false when the model is unknown, unnamed, or has no
+// headroom. An unnamed model cannot be resolved without asking app-server what
+// its configured default is, and that answer arrives too late to appear on the
+// launch command.
+func codexMaxContextWindowOverride(model string) (string, bool) {
+	maximum, known := codexModelContextMax[strings.TrimSpace(model)]
+	if !known {
+		return "", false
+	}
+	return fmt.Sprintf("model_context_window=%d", maximum), true
+}
+
 func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) (Result, error) {
 	if sink == nil {
 		sink = func(Event) {}
@@ -287,6 +322,11 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 	commandArgs := []string{"app-server", "--listen", "stdio://"}
 	if req.ServiceTier == "fast" {
 		commandArgs = append(commandArgs, "-c", "features.fast_mode=true")
+	}
+	if req.MaxContextWindow {
+		if override, ok := codexMaxContextWindowOverride(req.Model); ok {
+			commandArgs = append(commandArgs, "-c", override)
+		}
 	}
 	environment := req.Environment
 	if req.Remote != nil {

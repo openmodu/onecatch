@@ -447,6 +447,13 @@ export class ResolvedRuntimeSettings {
              */
             this["serviceTier"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["maxContextWindow"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
