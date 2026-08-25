@@ -11,7 +11,6 @@ OneCatch 是一个 local-first 的桌面 Agent 调度编排工具。用户可以
 ```text
 cmd/
 ├── app/                Wails 桌面与移动端统一入口
-├── onecatchfs/          macOS 远端文件系统挂载工具
 └── worker/             远端执行服务入口
 frontend/               React/Vite 前端、测试和生成的 Wails bindings
 internal/
@@ -48,7 +47,6 @@ go tool wails3 task build:desktop     # 构建桌面开发版本
 go tool wails3 task build:ios         # 构建 iOS 模拟器版本
 go tool wails3 task build:android     # 构建 Android 版本，需要 Android NDK
 go tool wails3 task build:worker      # 输出 bin/onecatch-worker
-go tool wails3 task build:onecatchfs   # 输出 bin/onecatchfs，仅支持 macOS
 go tool wails3 task test              # 运行 Go 和前端测试
 ```
 
@@ -61,25 +59,6 @@ go tool wails3 task test              # 运行 Go 和前端测试
 ```bash
 go tool wails3 dev -config ./build/desktop/config.yml
 ```
-
-## 把 Linux 目录挂载到 macOS
-
-`onecatchfs` 通过一条持久 SSH/SFTP 连接，把 Linux 上的项目显示为 macOS 本地目录。Codex、编辑器和普通文件工具可以直接读写挂载点；Linux 只需运行 `sshd`，不需要安装 Codex 或 OneCatch。文件内容不会复制到 Mac，本地只缓存文件属性和目录列表，默认缓存 1 秒。
-
-安装 macFUSE，确认 `ssh <host>` 可以使用密钥或 ssh-agent 无交互登录，然后执行：
-
-```bash
-wails3 task build:onecatchfs
-mkdir -p "$HOME/Volumes/linux-project"
-./bin/onecatchfs \
-  --host dev-linux \
-  --root /home/dev/project \
-  --mount "$HOME/Volumes/linux-project"
-```
-
-`--host` 可以直接使用 `~/.ssh/config` 中的别名、`ProxyJump` 和密钥设置。保持进程运行，在 Codex 中打开挂载目录；按 `Ctrl-C` 会卸载文件系统。完整参数、边界和测试方法见 [`docs/remote-filesystem.md`](docs/remote-filesystem.md)。
-
-挂载只改变文件访问路径，不会把 Mac 上启动的进程转移到 Linux。`go test`、`npm test` 等依赖 Linux 环境的命令仍需通过 SSH 在远端执行。
 
 ## 远端 Worker
 

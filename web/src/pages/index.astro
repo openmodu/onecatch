@@ -56,8 +56,8 @@ const description =
         </div>
 
         <div class="feature">
-          <h2>把 Linux 目录当本地目录用</h2>
-          <p><code>onecatchfs</code> 用一条常驻的 SSH/SFTP 连接，把 Linux 上的项目挂成 macOS 本地目录。文件内容不落到 Mac 上，只缓存属性和目录列表，默认 1 秒。Linux 那头只要跑着 sshd——不用装 Codex，也不用装 OneCatch。</p>
+          <h2>把工作区指到另一台机器上</h2>
+          <p>Remote FS 工作区用一条常驻的 SSH/SFTP 连接，把命令和文件操作作用到远端目录上。Agent 和模型凭据留在本机，文件不落到本地，也不在本地挂载任何东西。Linux 那头只要跑着 sshd——不用装 Codex，也不用装 OneCatch。</p>
         </div>
       </div>
     </Section>
@@ -75,7 +75,7 @@ const description =
     <span class="prompt">$</span> cd onecatch
     <span class="prompt">$</span> go tool wails3 task deps            <span class="note"># 按 lockfile 装 Go 和 JS 依赖</span>
     <span class="prompt">$</span> go tool wails3 task build:desktop    <span class="note"># 输出桌面开发版本</span></pre>
-    <p class="note-line">需要 Go 和 Node，版本以仓库里的 <code>go.mod</code> 和 <code>frontend/package.json</code> 为准。想把 Linux 目录挂进来的话，另外装 macFUSE，再跑 <code>go tool wails3 task build:onecatchfs</code>（只支持 macOS）。开发环境是 <code>go tool wails3 task dev:desktop</code>。</p>
+    <p class="note-line">需要 Go 和 Node，版本以仓库里的 <code>go.mod</code> 和 <code>frontend/package.json</code> 为准。开发环境是 <code>go tool wails3 task dev:desktop</code>。</p>
     </section>
 
     <section class="section" id="nongoals">
@@ -104,11 +104,11 @@ const description =
         </details>
         <details>
           <summary>支持 Windows 和 Linux 吗？</summary>
-          <p>macOS 和 Windows 各有自己的窗口与菜单实现，也各有打包脚本——Windows 走无边框标题栏和原生菜单栏，macOS 走 inset 标题栏。Linux 没有打包目标，Wails 本身支持，但仓库里没验证过。<code>onecatchfs</code> 只有 macOS（依赖 macFUSE）；远端 worker 有 macOS 和 Linux 两个构建目标。</p>
+          <p>macOS 和 Windows 各有自己的窗口与菜单实现，也各有打包脚本——Windows 走无边框标题栏和原生菜单栏，macOS 走 inset 标题栏。Linux 没有打包目标，Wails 本身支持，但仓库里没验证过。远端 worker 有 macOS 和 Linux 两个构建目标。</p>
         </details>
         <details>
           <summary>可以让它在另一台机器上跑吗？</summary>
-          <p>两条路。一是远端 worker：把 step 指到某个 worker 上执行，但 <code>full</code> 权限的 step 不允许这么跑。二是 <code>onecatchfs</code>：把 Linux 目录挂成 macOS 本地目录，Agent 还是在本机跑，只是文件在远端。</p>
+          <p>两条路。一是远端 worker：把 step 指到某个 worker 上执行，但 <code>full</code> 权限的 step 不允许这么跑。二是 Remote FS 工作区：Agent 还是在本机跑，命令和文件操作通过 SSH/SFTP 落到远端目录上。</p>
         </details>
         <details>
           <summary>我的数据会被传到哪里去吗？</summary>
