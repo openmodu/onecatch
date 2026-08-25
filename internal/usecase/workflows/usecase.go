@@ -974,6 +974,14 @@ func finishStepRun(stepRun *domainworkflows.StepRun, result agentrun.Result, fin
 	stepRun.CacheCreationInputTokens = result.Usage.CacheCreationInputTokens
 	stepRun.OutputTokens = result.Usage.OutputTokens
 	stepRun.ReasoningOutputTokens = result.Usage.ReasoningOutputTokens
+	// A runtime that never reported a window leaves the previous attempt's
+	// figure in place rather than blanking a gauge the user was reading.
+	if result.Context.Window > 0 {
+		stepRun.ContextWindow = result.Context.Window
+	}
+	if result.Context.Tokens > 0 {
+		stepRun.ContextTokens = result.Context.Tokens
+	}
 	if !stepRun.StartedAt.IsZero() && finishedAt.After(stepRun.StartedAt) {
 		stepRun.DurationMS = finishedAt.Sub(stepRun.StartedAt).Milliseconds()
 	}

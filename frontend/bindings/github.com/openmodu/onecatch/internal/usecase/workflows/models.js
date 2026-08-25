@@ -114,6 +114,16 @@ export class RuntimeEventFrame {
         }
         if (/** @type {any} */(false)) {
             /**
+             * Context is the context-window occupancy observed at this step, attached
+             * to KindUsage beside Usage. It is a separate field precisely because it
+             * is not a subset of Usage — see [ContextUsage].
+             * @member
+             * @type {agentrun$0.ContextUsage | null | undefined}
+             */
+            this["context"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * Permission is populated for permission_request and permission_resolved
              * events. PermissionDecision is "allow" or "deny" on the resolved event.
              * @member
@@ -148,12 +158,16 @@ export class RuntimeEventFrame {
     static createFrom($$source = {}) {
         const $$createField4_0 = $$createType1;
         const $$createField11_0 = $$createType3;
+        const $$createField12_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField4_0($$parsedSource["usage"]);
         }
+        if ("context" in $$parsedSource) {
+            $$parsedSource["context"] = $$createField11_0($$parsedSource["context"]);
+        }
         if ("permission" in $$parsedSource) {
-            $$parsedSource["permission"] = $$createField11_0($$parsedSource["permission"]);
+            $$parsedSource["permission"] = $$createField12_0($$parsedSource["permission"]);
         }
         return new RuntimeEventFrame(/** @type {Partial<RuntimeEventFrame>} */($$parsedSource));
     }
@@ -162,5 +176,7 @@ export class RuntimeEventFrame {
 // Private type creation functions
 const $$createType0 = agentrun$0.Usage.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = agentrun$0.PermissionRequest.createFrom;
+const $$createType2 = agentrun$0.ContextUsage.createFrom;
 const $$createType3 = $Create.Nullable($$createType2);
+const $$createType4 = agentrun$0.PermissionRequest.createFrom;
+const $$createType5 = $Create.Nullable($$createType4);

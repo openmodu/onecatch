@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { summarizeTokenUsage } from "./tokenUsage.js";
+import { summarizeContextWindow, summarizeTokenUsage } from "./tokenUsage.js";
 
 test("summarizes total and detailed token usage across steps", () => {
   assert.deepEqual(summarizeTokenUsage([
@@ -49,4 +49,38 @@ test("normalizes legacy Modu usage that stored only fresh input", () => {
   assert.equal(summary.inputTokens, 165339);
   assert.equal(summary.cachedInputTokens, 128512);
   assert.equal(summary.cacheHitRate, (128512 / 165339) * 100);
+});
+
+test("context occupancy takes the latest reading, never the sum of the steps", () => {
+  // Three steps each ran against the same 200k window. Adding them would claim
+  // 330k of occupancy in a context that never held more than 150k.
+  const summary = summarizeContextWindow([
+    { contextWindow: 200000, contextTokens: 60000 },
+    { contextWindow: 200000, contextTokens: 120000 },
+    { contextWindow: 200000, contextTokens: 150000 },
+  ]);
+  assert.equal(summary.window, 200000);
+  assert.equal(summary.tokens, 150000);
+  assert.equal(summary.known, true);
+  assert.equal(Math.round(summary.ratio * 100), 75);
+});
+
+test("a window without a sample is not a ratio", () => {
+  const summary = summarizeContextWindow([{ contextWindow: 200000, contextTokens: 0 }]);
+  assert.equal(summary.known, false);
+  assert.equal(summary.ratio, 0);
+});
+
+test("a prompt reported over its own window clamps instead of overdrawing", () => {
+  const summary = summarizeContextWindow([{ contextWindow: 200000, contextTokens: 214000 }]);
+  assert.equal(summary.ratio, 1);
+});
+
+test("steps that report no context leave the previous reading standing", () => {
+  const summary = summarizeContextWindow([
+    { contextWindow: 200000, contextTokens: 90000 },
+    { inputTokens: 10 },
+  ]);
+  assert.equal(summary.window, 200000);
+  assert.equal(summary.tokens, 90000);
 });

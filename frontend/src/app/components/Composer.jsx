@@ -9,6 +9,7 @@ import { shouldSubmitComposer } from "../composerKeyboard.js";
 import { fileName } from "../format.js";
 import { directAgentWorkflowID, supportsRuntimeProfile } from "../runtimeHarnesses.js";
 import HarnessSelector from "./HarnessSelector.jsx";
+import ContextGauge from "./ContextGauge.jsx";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
 import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
 
@@ -35,6 +36,7 @@ export default function Composer({
   workflowId,
   workflowName,
   permission,
+  contextWindow,
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -67,6 +69,10 @@ export default function Composer({
           {runtimeProfile && <div className="workbench-runtime-controls">
             {directAgent ? <HarnessSelector value={runtimeProfile} runtimes={runtimes} readOnly agentLabel /> : <span className="new-task-select executor is-read-only" aria-label={t("task.workflowTargetLabel", { name: workflowLabel })}><Workflow size={14} aria-hidden="true" /><span>{workflowLabel}</span></span>}
             <TaskPermissionSelector value={permission} readOnly />
+            {/* Context pressure belongs where the context is about to be
+                spent, not in the inspector: the moment it changes what you do
+                is the moment you are deciding what to type next. */}
+            {contextWindow?.known && <ContextGauge {...contextWindow} variant="compact" />}
           </div>}
           {showRuntimeProfile && <RuntimeProfileMenu className="workbench-runtime-profile" value={runtimeProfile} onChange={onRuntimeProfileChange} configuration={runtimeConfiguration?.data} runtimeSettings={runtimeSettings} loading={runtimeConfiguration?.loading} error={runtimeConfiguration?.error} readOnly={runStatus === "running"} />}
           <div className="workbench-composer-submit">{directAgent ? <>

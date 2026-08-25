@@ -215,6 +215,10 @@ type codexAppParams struct {
 	TokenUsage struct {
 		Last  codexTokenUsageBreakdown `json:"last"`
 		Total codexTokenUsageBreakdown `json:"total"`
+		// ModelContextWindow is null for models whose window Codex does not
+		// know, so it must stay a pointer: 0 and "unreported" are different
+		// answers and only one of them may be drawn as a full gauge.
+		ModelContextWindow *int `json:"modelContextWindow"`
 	} `json:"tokenUsage"`
 }
 
@@ -263,6 +267,7 @@ type codexAppState struct {
 	final         string
 	sessionID     string
 	usage         Usage
+	context       ContextUsage
 	usageEmitted  bool
 	completed     bool
 	failed        bool
@@ -519,9 +524,20 @@ func (s *codexAppState) handleNotification(method string, raw json.RawMessage, l
 			breakdown = params.TokenUsage.Last
 		}
 		s.usage = breakdown.usage()
+		// Occupancy is a different question from cost and takes a different
+		// number. `total` is every call in the turn added up; the window only
+		// ever held the newest prompt, so `last.InputTokens` — which already
+		// includes the cached prefix — is what actually sits in the window.
+		if params.TokenUsage.ModelContextWindow != nil {
+			s.context.Window = *params.TokenUsage.ModelContextWindow
+		}
+		if !params.TokenUsage.Last.empty() {
+			s.context.Tokens = params.TokenUsage.Last.InputTokens
+		}
 		usage := s.usage
+		context := s.context
 		s.usageEmitted = true
-		sink(Event{Kind: KindUsage, Usage: &usage, Raw: line, At: at})
+		sink(Event{Kind: KindUsage, Usage: &usage, Context: &context, Raw: line, At: at})
 	case "turn/completed":
 		s.completed = params.Turn.Status == "completed"
 		s.failed = params.Turn.Status == "failed" || params.Turn.Status == "interrupted"
@@ -640,7 +656,7 @@ func codexRawText(raw json.RawMessage) string {
 }
 
 func (s *codexAppState) result() Result {
-	return Result{FinalMessage: s.final, Usage: s.usage, SessionID: s.sessionID, Succeeded: s.completed && !s.failed}
+	return Result{FinalMessage: s.final, Usage: s.usage, Context: s.context, SessionID: s.sessionID, Succeeded: s.completed && !s.failed}
 }
 
 // codexSandbox maps the engine's sandbox vocabulary onto codex's flag values.

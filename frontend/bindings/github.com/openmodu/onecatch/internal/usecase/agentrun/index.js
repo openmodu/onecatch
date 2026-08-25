@@ -8,6 +8,7 @@ export {
     CodexConfiguration,
     CodexModelInfo,
     CodexServiceTier,
+    ContextUsage,
     Event,
     EventKind,
     HarnessConfiguration,

@@ -279,6 +279,55 @@ export class CodexServiceTier {
 }
 
 /**
+ * ContextUsage reports how full the model's context window is. It is a
+ * different quantity from [Usage] and the two must not be substituted for one
+ * another: Usage accumulates every model call in a step, so it only ever grows
+ * and routinely exceeds the window a tool-heavy step never came close to
+ * filling. Occupancy is the size of a single prompt, and it *falls* whenever
+ * the harness compacts. Charting the cumulative total against the window shows
+ * a step at 300% of a context it never overflowed.
+ */
+export class ContextUsage {
+    /**
+     * Creates a new ContextUsage instance.
+     * @param {Partial<ContextUsage>} [$$source = {}] - The source object to create the ContextUsage.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * Window is the model's context window in tokens. Zero means the runtime
+             * did not report one — render that as unknown rather than as a full bar.
+             * @member
+             * @type {number | undefined}
+             */
+            this["window"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Tokens is the prompt size of the most recent model call: everything the
+             * model read this turn, cached prefix included, because a cache hit still
+             * occupies the window. May decrease after a compaction.
+             * @member
+             * @type {number | undefined}
+             */
+            this["tokens"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ContextUsage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {ContextUsage}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ContextUsage(/** @type {Partial<ContextUsage>} */($$parsedSource));
+    }
+}
+
+/**
  * Event is a single normalized step emitted while an agent runs. Raw preserves
  * the original JSON line so nothing is lost, while Kind/Text give callers a
  * runtime-agnostic view suitable for display and persistence.
@@ -362,6 +411,16 @@ export class Event {
         }
         if (/** @type {any} */(false)) {
             /**
+             * Context is the context-window occupancy observed at this step, attached
+             * to KindUsage beside Usage. It is a separate field precisely because it
+             * is not a subset of Usage — see [ContextUsage].
+             * @member
+             * @type {ContextUsage | null | undefined}
+             */
+            this["context"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * Permission is populated for permission_request and permission_resolved
              * events. PermissionDecision is "allow" or "deny" on the resolved event.
              * @member
@@ -396,12 +455,16 @@ export class Event {
     static createFrom($$source = {}) {
         const $$createField1_0 = $$createType8;
         const $$createField8_0 = $$createType10;
+        const $$createField9_0 = $$createType12;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
         }
+        if ("context" in $$parsedSource) {
+            $$parsedSource["context"] = $$createField8_0($$parsedSource["context"]);
+        }
         if ("permission" in $$parsedSource) {
-            $$parsedSource["permission"] = $$createField8_0($$parsedSource["permission"]);
+            $$parsedSource["permission"] = $$createField9_0($$parsedSource["permission"]);
         }
         return new Event(/** @type {Partial<Event>} */($$parsedSource));
     }
@@ -520,7 +583,7 @@ export class HarnessConfiguration {
      * @returns {HarnessConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType12;
+        const $$createField1_0 = $$createType14;
         const $$createField2_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
@@ -698,8 +761,8 @@ export class PermissionRequest {
      * @returns {PermissionRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType13;
-        const $$createField4_0 = $$createType15;
+        const $$createField3_0 = $$createType15;
+        const $$createField4_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("input" in $$parsedSource) {
             $$parsedSource["input"] = $$createField3_0($$parsedSource["input"]);
@@ -744,6 +807,14 @@ export class Result {
              */
             this["usage"] = (new Usage());
         }
+        if (!("context" in $$source)) {
+            /**
+             * Context is the final context-window occupancy; zero when unreported.
+             * @member
+             * @type {ContextUsage}
+             */
+            this["context"] = (new ContextUsage());
+        }
         if (/** @type {any} */(false)) {
             /**
              * SessionID is the runtime's own session/thread id, for resuming.
@@ -771,9 +842,13 @@ export class Result {
      */
     static createFrom($$source = {}) {
         const $$createField1_0 = $$createType7;
+        const $$createField2_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
+        }
+        if ("context" in $$parsedSource) {
+            $$parsedSource["context"] = $$createField2_0($$parsedSource["context"]);
         }
         return new Result(/** @type {Partial<Result>} */($$parsedSource));
     }
@@ -911,15 +986,17 @@ const $$createType5 = CodexServiceTier.createFrom;
 const $$createType6 = $Create.Array($$createType5);
 const $$createType7 = Usage.createFrom;
 const $$createType8 = $Create.Nullable($$createType7);
-const $$createType9 = PermissionRequest.createFrom;
+const $$createType9 = ContextUsage.createFrom;
 const $$createType10 = $Create.Nullable($$createType9);
-const $$createType11 = HarnessModel.createFrom;
-const $$createType12 = $Create.Array($$createType11);
-const $$createType13 = $Create.Map($Create.Any, $Create.Any);
-var $$createType14 = /** @type {(...args: any[]) => any} */(function $$initCreateType14(...args) {
-    if ($$createType14 === $$initCreateType14) {
-        $$createType14 = $$createType13;
+const $$createType11 = PermissionRequest.createFrom;
+const $$createType12 = $Create.Nullable($$createType11);
+const $$createType13 = HarnessModel.createFrom;
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = $Create.Map($Create.Any, $Create.Any);
+var $$createType16 = /** @type {(...args: any[]) => any} */(function $$initCreateType16(...args) {
+    if ($$createType16 === $$initCreateType16) {
+        $$createType16 = $$createType15;
     }
-    return $$createType14(...args);
+    return $$createType16(...args);
 });
-const $$createType15 = $Create.Array($$createType14);
+const $$createType17 = $Create.Array($$createType16);

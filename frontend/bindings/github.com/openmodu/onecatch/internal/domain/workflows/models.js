@@ -885,6 +885,24 @@ export class StepRun {
         }
         if (/** @type {any} */(false)) {
             /**
+             * ContextWindow and ContextTokens describe how full the model's context
+             * was, which the token counters above cannot express: those accumulate
+             * across every model call in the step, while the window only ever held one
+             * prompt. ContextTokens may fall between attempts when the harness compacts.
+             * @member
+             * @type {number | undefined}
+             */
+            this["contextWindow"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["contextTokens"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * @member
              * @type {number | undefined}
              */
