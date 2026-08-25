@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -28,6 +29,49 @@ var piReadOnlyTools = []string{"read", "grep", "find", "ls"}
 type PiRunner struct {
 	binary string
 	now    nowFunc
+	// contextWindows caches the model catalog's window column. Pi names the
+	// model it used on every turn but never its size, so the size has to come
+	// from `pi --list-models` — a local registry read that costs no model
+	// quota. It is fetched on the first turn that names a model rather than at
+	// launch, so a run that never reports one never pays for the lookup.
+	contextOnce    sync.Once
+	contextWindows map[string]int
+}
+
+// contextWindow resolves a model reported on the wire to its window. Pi reports
+// a bare id ("deepseek-v4-flash") while the catalog is keyed by the
+// unambiguous "provider/id" form, so both spellings are accepted.
+func (r *PiRunner) contextWindow(provider, model string) int {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return 0
+	}
+	r.contextOnce.Do(func() {
+		r.contextWindows = make(map[string]int)
+		output, err := exec.Command(r.binary, "--list-models").CombinedOutput()
+		if err != nil {
+			return
+		}
+		for _, entry := range parsePiModelList(string(output)) {
+			if entry.ContextWindow <= 0 {
+				continue
+			}
+			r.contextWindows[strings.ToLower(entry.Model)] = entry.ContextWindow
+			// The bare id is ambiguous when two providers serve the same
+			// name, so it is only a fallback and never overwrites a
+			// qualified entry.
+			bare := strings.ToLower(entry.DisplayName)
+			if _, taken := r.contextWindows[bare]; !taken {
+				r.contextWindows[bare] = entry.ContextWindow
+			}
+		}
+	})
+	if provider != "" {
+		if window, ok := r.contextWindows[strings.ToLower(provider+"/"+model)]; ok {
+			return window
+		}
+	}
+	return r.contextWindows[strings.ToLower(model)]
 }
 
 // NewPiRunner builds a runner driving the given pi binary. An empty binary
@@ -58,7 +102,7 @@ func (r *PiRunner) Run(ctx context.Context, req Request, sink Sink) (Result, err
 		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 		cmd.WaitDelay = req.InterruptGrace
 	}
-	return streamProcess(ctx, cmd, &piParser{}, r.now, sink)
+	return streamProcess(ctx, cmd, &piParser{contextWindow: r.contextWindow}, r.now, sink)
 }
 
 // piCommandArgs builds the single-shot invocation. The prompt goes last: pi
@@ -119,14 +163,22 @@ type piMessage struct {
 	} `json:"usage"`
 	StopReason   string `json:"stopReason"`
 	ErrorMessage string `json:"errorMessage"`
+	// Model and Provider appear on the turn-ending message. Pi names what it
+	// ran but not how big that model's window is.
+	Model    string `json:"model"`
+	Provider string `json:"provider"`
 }
 
 type piParser struct {
-	sessionID    string
-	finalMessage string
-	usage        Usage
-	usageSeen    bool
-	succeeded    bool
+	// contextWindow resolves the model pi names on a turn to its size. Nil in
+	// tests that exercise parsing alone.
+	contextWindow func(provider, model string) int
+	context       ContextUsage
+	sessionID     string
+	finalMessage  string
+	usage         Usage
+	usageSeen     bool
+	succeeded     bool
 	// messageIndex distinguishes one assistant message's content blocks from
 	// the next turn's, since pi's contentIndex restarts at zero each message.
 	messageIndex int
@@ -221,13 +273,21 @@ func (p *piParser) handleAssistantMessage(raw json.RawMessage, line string, at t
 	}
 	p.usage = usage
 	p.usageSeen = true
-	sink(Event{Kind: KindUsage, Usage: &usage, Raw: line, At: at})
+	// Occupancy is the prompt pi just sent, which is exactly the input total
+	// above: a cached prefix still occupies the window.
+	p.context.Tokens = usage.InputTokens
+	if p.context.Window == 0 && p.contextWindow != nil {
+		p.context.Window = p.contextWindow(message.Provider, message.Model)
+	}
+	context := p.context
+	sink(Event{Kind: KindUsage, Usage: &usage, Context: &context, Raw: line, At: at})
 }
 
 func (p *piParser) result() Result {
 	return Result{
 		FinalMessage: strings.TrimSpace(p.finalMessage),
 		Usage:        p.usage,
+		Context:      p.context,
 		SessionID:    p.sessionID,
 		// A stream that never produced a session header never ran; treat that
 		// as failure regardless of what the last message claimed.
@@ -355,9 +415,36 @@ func parsePiModelList(output string) []HarnessModel {
 			continue
 		}
 		seen[model] = struct{}{}
-		models = append(models, HarnessModel{Model: model, DisplayName: id, Description: provider})
+		window := 0
+		if len(fields) > 2 {
+			window = parsePiContextWindow(fields[2])
+		}
+		models = append(models, HarnessModel{Model: model, DisplayName: id, Description: provider, ContextWindow: window})
 	}
 	return models
+}
+
+// parsePiContextWindow reads the table's `context` column, which pi prints for
+// people rather than for parsers: "1M", "200K", occasionally a bare count. An
+// unreadable cell yields zero, which reads downstream as "window unknown"
+// rather than as an empty context.
+func parsePiContextWindow(value string) int {
+	text := strings.ToUpper(strings.TrimSpace(stripANSI(value)))
+	if text == "" {
+		return 0
+	}
+	multiplier := 1
+	switch {
+	case strings.HasSuffix(text, "M"):
+		multiplier, text = 1_000_000, strings.TrimSuffix(text, "M")
+	case strings.HasSuffix(text, "K"):
+		multiplier, text = 1_000, strings.TrimSuffix(text, "K")
+	}
+	amount, err := strconv.ParseFloat(strings.TrimSpace(text), 64)
+	if err != nil || amount <= 0 {
+		return 0
+	}
+	return int(amount * float64(multiplier))
 }
 
 // ansiEscape matches the SGR sequences chalk emits when it believes it is

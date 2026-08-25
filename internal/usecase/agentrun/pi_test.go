@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 )
 
 // piErrorStream is a verbatim capture of `pi -p --mode json` against a rejected
@@ -210,6 +211,70 @@ func TestParsePiModelList(t *testing.T) {
 	}
 	if models[2].Model != "openai/gpt-5.2" {
 		t.Fatalf("third model = %+v", models[2])
+	}
+}
+
+// Pi names the model it ran on every turn but never its size, so the window
+// has to come from the catalog's `context` column — written for people
+// ("200K", "1M"), not for parsers.
+func TestParsePiModelListReadsTheContextColumn(t *testing.T) {
+	models := parsePiModelList(piModelTable)
+	windows := make(map[string]int, len(models))
+	for _, model := range models {
+		windows[model.Model] = model.ContextWindow
+	}
+	for model, want := range map[string]int{
+		"anthropic/claude-opus-4-5": 200_000,
+		"google/gemini-3-pro":       1_000_000,
+		"openai/gpt-5.2":            400_000,
+	} {
+		if windows[model] != want {
+			t.Fatalf("%s window = %d, want %d", model, windows[model], want)
+		}
+	}
+}
+
+func TestParsePiContextWindow(t *testing.T) {
+	for input, want := range map[string]int{
+		"200K": 200_000, "1M": 1_000_000, "1.5M": 1_500_000,
+		"128000": 128_000, "  400K  ": 400_000,
+		// An unreadable cell is "unknown", which the gauge renders as no
+		// reading at all — never as an empty context.
+		"": 0, "-": 0, "unknown": 0, "0": 0, "-5K": 0,
+	} {
+		if got := parsePiContextWindow(input); got != want {
+			t.Fatalf("parsePiContextWindow(%q) = %d, want %d", input, got, want)
+		}
+	}
+}
+
+func TestPiParserReportsOccupancyAgainstTheModelWindow(t *testing.T) {
+	var events []Event
+	parser := &piParser{contextWindow: func(provider, model string) int {
+		if provider != "deepseek" || model != "deepseek-v4-flash" {
+			t.Fatalf("lookup got provider=%q model=%q", provider, model)
+		}
+		return 1_000_000
+	}}
+	line := `{"type":"message_end","message":{"role":"assistant","provider":"deepseek","model":"deepseek-v4-flash","stopReason":"stop","content":[{"type":"text","text":"ok"}],"usage":{"input":2604,"output":13,"cacheRead":512,"cacheWrite":0}}}`
+	parser.parse(line, time.Unix(0, 0).UTC(), func(event Event) { events = append(events, event) })
+
+	var usage *Event
+	for i := range events {
+		if events[i].Kind == KindUsage {
+			usage = &events[i]
+		}
+	}
+	if usage == nil || usage.Context == nil {
+		t.Fatalf("no usage event with context: %+v", events)
+	}
+	// A cached prefix still occupies the window, so occupancy is the whole
+	// prompt: 2604 + 512.
+	if usage.Context.Tokens != 3116 || usage.Context.Window != 1_000_000 {
+		t.Fatalf("context = %+v", usage.Context)
+	}
+	if got := parser.result().Context; got.Tokens != 3116 || got.Window != 1_000_000 {
+		t.Fatalf("result context = %+v", got)
 	}
 }
 

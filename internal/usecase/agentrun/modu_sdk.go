@@ -97,6 +97,12 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 	}
 
 	adapter := newModuSDKEventAdapter(r.now, sink)
+	// The window belongs to whichever model selection settled on, not to the
+	// one the config resolved to, so it is read after the swap. The SDK
+	// already carries it on types.Model; nothing needed adding there.
+	if model := session.GetModel(); model != nil {
+		adapter.context.Window = model.ContextWindow
+	}
 	unsubscribe := session.Subscribe(adapter.handle)
 	defer unsubscribe()
 
@@ -118,7 +124,7 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 	if result.FinalMessage == "" {
 		result.FinalMessage = session.GetLastAssistantText()
 	}
-	sink(Event{Kind: KindUsage, Usage: &result.Usage, At: adapter.timestamp()})
+	sink(Event{Kind: KindUsage, Usage: &result.Usage, Context: &result.Context, At: adapter.timestamp()})
 	sink(Event{Kind: KindResult, Text: result.FinalMessage, At: adapter.timestamp()})
 	return result, nil
 }
@@ -252,6 +258,7 @@ type moduSDKEventAdapter struct {
 	now             nowFunc
 	sink            Sink
 	usage           Usage
+	context         ContextUsage
 	final           string
 	failed          bool
 	messageSequence int
@@ -314,6 +321,14 @@ func (a *moduSDKEventAdapter) handle(event types.Event) {
 		a.usage.CachedInputTokens += message.Usage.CacheRead
 		a.usage.CacheCreationInputTokens += message.Usage.CacheWrite
 		a.usage.OutputTokens += message.Usage.Output
+		// Cost accumulates across the step; occupancy does not. This one
+		// message's prompt is what the window holds right now, and it falls
+		// when the harness compacts, so it replaces rather than adds.
+		if prompt := message.Usage.Input + message.Usage.CacheRead + message.Usage.CacheWrite; prompt > 0 {
+			a.context.Tokens = prompt
+			usage, context := a.usage, a.context
+			a.sink(Event{Kind: KindUsage, Usage: &usage, Context: &context, At: a.timestamp()})
+		}
 		if strings.TrimSpace(message.ErrorMessage) != "" {
 			a.failed = true
 			a.emit(KindError, "", "", message.ErrorMessage, raw, true)
@@ -388,5 +403,5 @@ func (a *moduSDKEventAdapter) fail(err error) {
 }
 
 func (a *moduSDKEventAdapter) result(sessionID string, completed bool) Result {
-	return Result{FinalMessage: a.final, Usage: a.usage, SessionID: sessionID, Succeeded: completed && !a.failed}
+	return Result{FinalMessage: a.final, Usage: a.usage, Context: a.context, SessionID: sessionID, Succeeded: completed && !a.failed}
 }
