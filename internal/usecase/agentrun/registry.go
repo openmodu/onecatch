@@ -140,6 +140,10 @@ type HarnessModel struct {
 	Efforts []string `json:"efforts,omitempty"`
 	// DefaultEffort is the level this model uses when none is chosen.
 	DefaultEffort string `json:"defaultEffort,omitempty"`
+	// ContextWindow is the model's window in tokens, zero when the harness
+	// does not report one. It is a property of the model rather than of the
+	// run, which is why it rides the catalog instead of the event stream.
+	ContextWindow int `json:"contextWindow,omitempty"`
 }
 
 // HarnessConfiguration is what a harness reports about itself when asked.

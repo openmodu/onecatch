@@ -45,8 +45,15 @@ func TestModuSDKEventAdapterNormalizesStreamsAndUsage(t *testing.T) {
 	if result.Usage.InputTokens != 16 || result.Usage.OutputTokens != 7 || result.Usage.CachedInputTokens != 3 || result.Usage.CacheCreationInputTokens != 2 {
 		t.Fatalf("usage = %+v", result.Usage)
 	}
-	if len(events) != 4 || events[0].Phase != StreamStart || events[1].Phase != StreamDelta || events[2].Kind != KindReasoning || events[3].Phase != StreamEnd {
+	// The message-end now also publishes usage, so a long run shows occupancy
+	// while it is still running instead of only once it finishes.
+	if len(events) != 5 || events[0].Phase != StreamStart || events[1].Phase != StreamDelta || events[2].Kind != KindReasoning || events[3].Phase != StreamEnd || events[4].Kind != KindUsage {
 		t.Fatalf("events = %+v", events)
+	}
+	// Cost accumulates across the step; occupancy is this one prompt and is
+	// replaced, not added, so it can fall when the harness compacts.
+	if events[4].Context == nil || events[4].Context.Tokens != 16 {
+		t.Fatalf("live occupancy = %+v", events[4].Context)
 	}
 }
 
