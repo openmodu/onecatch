@@ -16,7 +16,7 @@ import (
 // grokInitializeResult is excerpted verbatim from a live `grok agent stdio`
 // handshake. The handshake needs no credentials, so this is exactly what the
 // model probe reads.
-const grokInitializeResult = `{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"sessionCapabilities":{"list":{},"resume":{},"close":{}}},"authMethods":[{"id":"grok.com","name":"Grok"}],"_meta":{"agentVersion":"1.0.5","modelState":{"currentModelId":"grok-4.6","availableModels":[{"modelId":"grok-4.6","name":"Grok 4.6","description":"SpaceXAI's latest frontier model","_meta":{"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"xhigh","value":"xhigh","label":"Extra High Effort","default":false},{"id":"high","value":"high","label":"High Effort","default":true},{"id":"medium","value":"medium","label":"Medium Effort","default":false},{"id":"low","value":"low","label":"Low Effort","default":false}]}},{"modelId":"grok-4.5","name":"Grok 4.5","_meta":{"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"high","value":"high","label":"High Effort","default":true},{"id":"low","value":"low","label":"Low Effort","default":false}]}}]}}}}`
+const grokInitializeResult = `{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"sessionCapabilities":{"list":{},"resume":{},"close":{}}},"authMethods":[{"id":"grok.com","name":"Grok"}],"_meta":{"agentVersion":"1.0.5","modelState":{"currentModelId":"grok-4.6","availableModels":[{"modelId":"grok-4.6","name":"Grok 4.6","description":"SpaceXAI's latest frontier model","_meta":{"totalContextTokens":500000,"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"xhigh","value":"xhigh","label":"Extra High Effort","default":false},{"id":"high","value":"high","label":"High Effort","default":true},{"id":"medium","value":"medium","label":"Medium Effort","default":false},{"id":"low","value":"low","label":"Low Effort","default":false}]}},{"modelId":"grok-4.5","name":"Grok 4.5","_meta":{"totalContextTokens":500000,"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"high","value":"high","label":"High Effort","default":true},{"id":"low","value":"low","label":"Low Effort","default":false}]}}]}}}}`
 
 // acpStub builds a stdio agent that answers the three handshake requests in
 // order and streams promptLines while answering the prompt. It is the protocol
@@ -604,5 +604,34 @@ func TestGrokCommandPlacesFlagsBeforeTheSubcommand(t *testing.T) {
 	}
 	if !containsArgs(plain.environment, "GROK_SANDBOX=workspace") {
 		t.Fatalf("sandbox = %v", plain.environment)
+	}
+}
+
+// Grok is the only harness that states the window in the handshake it already
+// sends, so reading it costs no extra round trip and no model quota.
+func TestGrokContextWindowComesFromTheHandshake(t *testing.T) {
+	var result struct {
+		Result json.RawMessage `json:"result"`
+	}
+	if err := json.Unmarshal([]byte(grokInitializeResult), &result); err != nil {
+		t.Fatal(err)
+	}
+	// An unnamed model means the run accepted Grok's current selection, which
+	// the handshake names in currentModelId.
+	if got := grokContextWindow(result.Result, ""); got != 500_000 {
+		t.Fatalf("default model window = %d", got)
+	}
+	if got := grokContextWindow(result.Result, "grok-4.5"); got != 500_000 {
+		t.Fatalf("explicit model window = %d", got)
+	}
+	// A model the handshake never listed has no window to report, and zero
+	// reads downstream as unknown rather than as an empty context.
+	if got := grokContextWindow(result.Result, "grok-9-imaginary"); got != 0 {
+		t.Fatalf("unknown model window = %d", got)
+	}
+	for _, model := range parseGrokConfiguration(result.Result).Models {
+		if model.ContextWindow != 500_000 {
+			t.Fatalf("catalog entry %+v lost its window", model)
+		}
 	}
 }

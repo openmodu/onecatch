@@ -37,6 +37,12 @@ type acpLaunch struct {
 	displayName string
 	// binary is the executable to run.
 	binary string
+	// contextWindow resolves the model's window from the initialize result.
+	// ACP does not standardize a window any more than it standardizes usage,
+	// so the harness that knows where its own handshake keeps it supplies the
+	// reader; the client stays protocol-generic. Nil means the harness does
+	// not report one, which reads downstream as "unknown".
+	contextWindow func(initializeResult json.RawMessage, model string) int
 	// command builds the whole invocation for one request.
 	//
 	// It returns the complete argument vector rather than a suffix appended to
@@ -71,6 +77,7 @@ type acpClient struct {
 	sessionID    string
 	finalMessage strings.Builder
 	usage        Usage
+	context      ContextUsage
 	usageSeen    bool
 	succeeded    bool
 	completed    bool
@@ -230,6 +237,9 @@ func runACPSession(ctx context.Context, launch acpLaunch, req Request, sink Sink
 		case acpIDInitialize:
 			if len(envelope.Error) > 0 {
 				return Result{}, fmt.Errorf("initialize %s: %s", launch.displayName, envelope.Error)
+			}
+			if launch.contextWindow != nil {
+				client.context.Window = launch.contextWindow(envelope.Result, req.Model)
 			}
 			cwd := req.Workspace
 			if remote != nil {
@@ -400,7 +410,11 @@ func (c *acpClient) recordUsage(raw json.RawMessage, line string, sink Sink) {
 	}
 	c.usage = usage
 	c.usageSeen = true
-	sink(Event{Kind: KindUsage, Usage: &usage, Raw: line, At: c.now()})
+	// Occupancy is the prompt behind this accounting — a cached prefix still
+	// occupies the window — and it replaces rather than accumulates.
+	c.context.Tokens = usage.InputTokens
+	context := c.context
+	sink(Event{Kind: KindUsage, Usage: &usage, Context: &context, Raw: line, At: c.now()})
 }
 
 // handleRequest answers a request the agent sent us. Every request must get a
@@ -552,6 +566,7 @@ func (c *acpClient) result() Result {
 	return Result{
 		FinalMessage: strings.TrimSpace(c.finalMessage.String()),
 		Usage:        c.usage,
+		Context:      c.context,
 		SessionID:    c.sessionID,
 		Succeeded:    c.succeeded,
 	}

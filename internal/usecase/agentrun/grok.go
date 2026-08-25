@@ -57,6 +57,9 @@ func (r *GrokRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 		displayName: "Grok Build",
 		binary:      r.binary,
 		command:     grokCommand,
+		// Grok states the window in the handshake it already sends, so this
+		// costs no extra round trip and no model quota.
+		contextWindow: grokContextWindow,
 	}, req, sink, r.now)
 }
 
@@ -176,6 +179,22 @@ func (r *GrokRunner) InspectConfiguration(ctx context.Context, cwd string, envir
 	return HarnessConfiguration{}, fmt.Errorf("Grok Build did not answer the initialize handshake%s", stderr.tail())
 }
 
+// grokContextWindow resolves the window for the model a run will use out of the
+// same handshake the catalog comes from. An empty model means the run accepted
+// Grok's current selection, which the handshake names.
+func grokContextWindow(initializeResult json.RawMessage, model string) int {
+	configuration := parseGrokConfiguration(initializeResult)
+	if strings.TrimSpace(model) == "" {
+		model = configuration.Model
+	}
+	for _, entry := range configuration.Models {
+		if strings.EqualFold(entry.Model, model) {
+			return entry.ContextWindow
+		}
+	}
+	return 0
+}
+
 // parseGrokConfiguration reads Grok's model catalog out of its handshake.
 // Effort levels are declared per model — 4.6 offers xhigh where 4.5 does not —
 // so they are kept on each model rather than flattened into one list that would
@@ -194,6 +213,9 @@ func parseGrokConfiguration(raw json.RawMessage) HarnessConfiguration {
 							Value   string `json:"value"`
 							Default bool   `json:"default"`
 						} `json:"reasoningEfforts"`
+						// Grok is the only harness that states the window in
+						// its handshake, so no catalog probe is needed at all.
+						TotalContextTokens int `json:"totalContextTokens"`
 					} `json:"_meta"`
 				} `json:"availableModels"`
 			} `json:"modelState"`
@@ -208,7 +230,7 @@ func parseGrokConfiguration(raw json.RawMessage) HarnessConfiguration {
 		if strings.TrimSpace(model.ModelID) == "" {
 			continue
 		}
-		entry := HarnessModel{Model: model.ModelID, DisplayName: model.Name, Description: model.Description}
+		entry := HarnessModel{Model: model.ModelID, DisplayName: model.Name, Description: model.Description, ContextWindow: model.Meta.TotalContextTokens}
 		if entry.DisplayName == "" {
 			entry.DisplayName = model.ModelID
 		}
