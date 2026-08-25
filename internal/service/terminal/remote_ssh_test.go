@@ -27,7 +27,13 @@ func TestRemoteSSHInvocationUsesConfiguredTargetAndWorkspace(t *testing.T) {
 		}
 	}
 	command := arguments[len(arguments)-1]
-	if !strings.Contains(command, `cd '/srv/project with space'`) || !strings.Contains(command, `exec "${SHELL:-/bin/sh}" -l`) {
+	// The remote command reaches the account's login shell before anything
+	// else runs, so the POSIX program has to be handed to /bin/sh rather than
+	// parsed by that shell. A fish login shell rejects ${SHELL:-/bin/sh}.
+	if !strings.HasPrefix(command, "exec /bin/sh -c '") {
+		t.Fatalf("remote command is not wrapped for a non-POSIX login shell: %q", command)
+	}
+	if !strings.Contains(command, `cd '"'"'/srv/project with space'"'"'`) || !strings.Contains(command, `exec "${SHELL:-/bin/sh}" -l`) {
 		t.Fatalf("remote command = %q", command)
 	}
 	if !slices.Contains(environment, "PATH=/usr/bin") {
