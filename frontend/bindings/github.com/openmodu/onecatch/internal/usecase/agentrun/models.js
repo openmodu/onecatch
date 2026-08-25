@@ -644,6 +644,16 @@ export class HarnessModel {
              */
             this["defaultEffort"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * ContextWindow is the model's window in tokens, zero when the harness
+             * does not report one. It is a property of the model rather than of the
+             * run, which is why it rides the catalog instead of the event stream.
+             * @member
+             * @type {number | undefined}
+             */
+            this["contextWindow"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
