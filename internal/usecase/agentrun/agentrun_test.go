@@ -293,7 +293,10 @@ ONECATCH_EOF
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(configuration.Models) != 4 {
+	// The four the help text advertises, plus the pinned catalog that --help
+	// declines to enumerate. Counting rather than listing keeps this failing if
+	// a pinned name ever duplicates one the help already offered.
+	if len(configuration.Models) != 4+len(claudeCatalogModels) {
 		t.Fatalf("models = %+v", configuration.Models)
 	}
 	if got := configuration.Models[0]; got.Model != "fable" || got.DisplayName != "Fable" || !got.Alias {
@@ -500,6 +503,52 @@ func TestClaudeRunnerReportsContextWindowAndLiveOccupancy(t *testing.T) {
 	}
 	if live[0].Context == nil || live[0].Context.Tokens != 26219 {
 		t.Fatalf("live occupancy = %+v", live[0].Context)
+	}
+}
+
+// `claude --help` documents --model with examples, not a catalog, so parsing
+// it alone left every pinned version unreachable from the picker.
+func TestClaudeConfigurationOffersPinnedModelsBesideTheAdvertisedAliases(t *testing.T) {
+	models := parseClaudeModelOptions(`
+Options:
+  --model <model>                       Model for the current session. Provide
+                                        an alias for the latest model (e.g.
+                                        'fable', 'opus', or 'sonnet') or a
+                                        model's full name (e.g.
+                                        'claude-fable-5').
+  --effort <level>                      Effort level for the current session
+                                        (low, medium, high, xhigh, max)
+`)
+	byName := make(map[string]ClaudeModelInfo, len(models))
+	for _, model := range models {
+		byName[model.Model] = model
+	}
+	// The advertised aliases lead and stay marked as aliases: they track the
+	// newest model without anyone editing the pinned list.
+	for _, alias := range []string{"fable", "opus", "sonnet"} {
+		if info, ok := byName[alias]; !ok || !info.Alias {
+			t.Fatalf("alias %q missing or not marked: %+v", alias, info)
+		}
+	}
+	for _, pinned := range []string{"claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6", "claude-sonnet-5", "claude-sonnet-4-6", "claude-haiku-4-5"} {
+		info, ok := byName[pinned]
+		if !ok {
+			t.Fatalf("pinned model %q missing from %+v", pinned, models)
+		}
+		if info.Alias {
+			t.Fatalf("pinned model %q must not be marked an alias", pinned)
+		}
+	}
+	// claude-fable-5 appears in both the help text and the pinned list; it must
+	// not be offered twice.
+	count := 0
+	for _, model := range models {
+		if model.Model == "claude-fable-5" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Fatalf("claude-fable-5 appears %d times", count)
 	}
 }
 
