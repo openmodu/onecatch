@@ -168,6 +168,17 @@ export class RuntimeSettings {
         }
         if (/** @type {any} */(false)) {
             /**
+             * MaxContextWindow runs the model at the largest window it accepts instead
+             * of the harness default. Off by default: a larger window raises the input
+             * size of every turn once the context fills, and only some models have any
+             * headroom over the default.
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["maxContextWindow"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * @member
              * @type {string | undefined}
              */
@@ -190,10 +201,10 @@ export class RuntimeSettings {
      * @returns {RuntimeSettings}
      */
     static createFrom($$source = {}) {
-        const $$createField10_0 = $$createType0;
+        const $$createField11_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("environmentAllowlist" in $$parsedSource) {
-            $$parsedSource["environmentAllowlist"] = $$createField10_0($$parsedSource["environmentAllowlist"]);
+            $$parsedSource["environmentAllowlist"] = $$createField11_0($$parsedSource["environmentAllowlist"]);
         }
         return new RuntimeSettings(/** @type {Partial<RuntimeSettings>} */($$parsedSource));
     }

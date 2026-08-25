@@ -36,15 +36,20 @@ type Settings struct {
 }
 
 type RuntimeSettings struct {
-	Enabled              bool     `json:"enabled"`
-	RemoteFSEnabled      bool     `json:"remoteFsEnabled"`
-	Integration          string   `json:"integration,omitempty"`
-	ConfigSource         string   `json:"configSource,omitempty"`
-	ConfigPath           string   `json:"configPath,omitempty"`
-	Binary               string   `json:"binary,omitempty"`
-	DefaultModel         string   `json:"defaultModel,omitempty"`
-	ReasoningEffort      string   `json:"reasoningEffort,omitempty"`
-	ServiceTier          string   `json:"serviceTier,omitempty"`
+	Enabled         bool   `json:"enabled"`
+	RemoteFSEnabled bool   `json:"remoteFsEnabled"`
+	Integration     string `json:"integration,omitempty"`
+	ConfigSource    string `json:"configSource,omitempty"`
+	ConfigPath      string `json:"configPath,omitempty"`
+	Binary          string `json:"binary,omitempty"`
+	DefaultModel    string `json:"defaultModel,omitempty"`
+	ReasoningEffort string `json:"reasoningEffort,omitempty"`
+	ServiceTier     string `json:"serviceTier,omitempty"`
+	// MaxContextWindow runs the model at the largest window it accepts instead
+	// of the harness default. Off by default: a larger window raises the input
+	// size of every turn once the context fills, and only some models have any
+	// headroom over the default.
+	MaxContextWindow     bool     `json:"maxContextWindow,omitempty"`
 	Provider             string   `json:"provider,omitempty"`
 	EnvironmentAllowlist []string `json:"environmentAllowlist,omitempty"`
 }

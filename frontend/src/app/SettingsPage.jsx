@@ -34,7 +34,7 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const message = (error, t) => String(error?.message || error || t("common.unknownError")).replace(/^Error:\s*/, "");
 const bytes = (value = 0) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : value < 1073741824 ? `${(value / 1048576).toFixed(1)} MB` : `${(value / 1073741824).toFixed(1)} GB`;
 const sectionKey = (section) => section === "harness" ? "runtimes" : section;
-const harnessFields = ["enabled", "remoteFsEnabled", "integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "provider"];
+const harnessFields = ["enabled", "remoteFsEnabled", "integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "maxContextWindow", "provider"];
 
 const resetRuntimeFields = (current, defaults, fields) => Object.fromEntries(Object.keys(defaults).map((id) => {
   const next = { ...current[id] };
@@ -380,6 +380,11 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
         </div>
         {isExpanded && <div id={panelID} className="px-1 pb-6">
           <div className="mb-4"><SettingsSwitchRow checked={remoteFSEnabled} disabled={!supportsRemoteFS || !enabled} label="Remote FS" description={t(supportsRemoteFS ? "settings.remoteFSSupported" : "settings.remoteFSUnsupported")} onChange={(checked) => update(id, "remoteFsEnabled", checked)} /></div>
+          {/* Codex only: it is the one harness that defaults a model below the
+              window the model accepts, and the one with a config override to
+              raise it. Claude reports the largest window its auth can reach
+              already, so there is nothing here to turn on. */}
+          {id === "codex" && <div className="mb-4"><SettingsSwitchRow checked={value.codex?.maxContextWindow ?? false} disabled={!enabled} label={t("settings.maxContextWindow")} description={t("settings.maxContextWindowDescription")} onChange={(checked) => update(id, "maxContextWindow", checked)} /></div>}
           {configurationMessage && <div className={`mb-4 rounded-lg px-3 py-2 text-xs leading-relaxed ${configurationError ? "select-text bg-destructive/8 text-destructive" : "bg-primary/6 text-muted-foreground"}`} role={configurationError ? "alert" : "status"}>{configurationMessage}</div>}
           <div className="grid grid-cols-2 gap-4">
           {integrations.length > 1 && <SettingsField className="col-span-2" label={t("settings.integrationMode")} hint={t("settings.integrationModeHint")}><SettingsSelect ariaLabel={t("settings.integrationMode")} value={integration} onChange={(next) => update(id, "integration", next)} options={[{ value: "sdk", label: t("settings.integration.sdk"), meta: t("settings.integration.sdkMeta") }, { value: "cli", label: t("settings.integration.cli"), meta: t("settings.integration.cliMeta") }]} /></SettingsField>}

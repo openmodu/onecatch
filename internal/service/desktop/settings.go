@@ -410,6 +410,7 @@ func resolvedRuntimeSetting(id string, item domainsettings.RuntimeSettings) doma
 		Provider:             provider,
 		ReasoningEffort:      item.ReasoningEffort,
 		ServiceTier:          item.ServiceTier,
+		MaxContextWindow:     item.MaxContextWindow,
 	}
 }
 

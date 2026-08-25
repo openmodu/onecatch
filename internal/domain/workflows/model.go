@@ -125,6 +125,7 @@ type ResolvedRuntimeSettings struct {
 	Provider             string   `json:"provider,omitempty"`
 	ReasoningEffort      string   `json:"reasoningEffort,omitempty"`
 	ServiceTier          string   `json:"serviceTier,omitempty"`
+	MaxContextWindow     bool     `json:"maxContextWindow,omitempty"`
 }
 
 type NodeStatus string

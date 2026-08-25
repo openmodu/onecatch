@@ -12,7 +12,7 @@ test("keeps appearance separate and moves all runtime controls into Harness", ()
   assert.match(source, /section === "runtime" && <InterfaceSettings/);
   assert.match(source, /section === "harness" && <HarnessSettings/);
   assert.doesNotMatch(source, /function RuntimeEnvironmentSettings/);
-  assert.match(source, /const harnessFields = \["enabled", "remoteFsEnabled", "integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "provider"\]/);
+  assert.match(source, /const harnessFields = \["enabled", "remoteFsEnabled", "integration", "configSource", "configPath", "binary", "environmentAllowlist", "defaultModel", "reasoningEffort", "serviceTier", "maxContextWindow", "provider"\]/);
 });
 
 test("shows every harness agent without nested tabs", () => {

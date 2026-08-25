@@ -230,6 +230,7 @@ func stubCodexAppServerBinary(t *testing.T) string {
 	path := filepath.Join(t.TempDir(), "codex")
 	script := `#!/bin/sh
 [ "$1" = "app-server" ] || { echo "expected app-server" >&2; exit 9; }
+[ -n "$ONECATCH_CODEX_ARGV" ] && printf '%s\n' "$*" > "$ONECATCH_CODEX_ARGV"
 while IFS= read -r line; do
   [ -n "$ONECATCH_CODEX_CAPTURE" ] && printf '%s\n' "$line" >> "$ONECATCH_CODEX_CAPTURE"
   case "$line" in
@@ -508,6 +509,62 @@ func TestClaudeRunnerReportsContextWindowAndLiveOccupancy(t *testing.T) {
 
 // `claude --help` documents --model with examples, not a catalog, so parsing
 // it alone left every pinned version unreachable from the picker.
+func TestCodexMaxContextWindowOverrideOnlyForModelsWithHeadroom(t *testing.T) {
+	// Codex defaults every model to 272000; only some accept more, and
+	// app-server never reports either figure.
+	if override, ok := codexMaxContextWindowOverride("gpt-5.6-sol"); !ok || override != "model_context_window=872000" {
+		t.Fatalf("sol = %q %v", override, ok)
+	}
+	if override, ok := codexMaxContextWindowOverride("gpt-5.4"); !ok || override != "model_context_window=1000000" {
+		t.Fatalf("5.4 = %q %v", override, ok)
+	}
+	// Raising these would exceed the model's real limit and error every
+	// request, so they must stay at Codex's default rather than be guessed at.
+	for _, model := range []string{"gpt-5.5", "gpt-5.4-mini", "gpt-5.2", "some-future-model", ""} {
+		if override, ok := codexMaxContextWindowOverride(model); ok {
+			t.Fatalf("model %q must not be overridden, got %q", model, override)
+		}
+	}
+}
+
+func TestCodexRunnerRaisesTheContextWindowOnlyWhenAsked(t *testing.T) {
+	launched := func(t *testing.T, req Request) string {
+		t.Helper()
+		bin := stubCodexAppServerBinary(t)
+		argv := filepath.Join(t.TempDir(), "argv.txt")
+		req.Workspace = t.TempDir()
+		req.Environment = append(os.Environ(), "ONECATCH_CODEX_ARGV="+argv)
+		runner := NewCodexRunner(bin)
+		runner.now = fixedClock()
+		if _, err := runner.Run(context.Background(), req, nil); err != nil {
+			t.Fatal(err)
+		}
+		recorded, err := os.ReadFile(argv)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(recorded)
+	}
+	base := Request{Prompt: "go", Model: "gpt-5.6-sol", Sandbox: SandboxWorkspaceWrite}
+
+	if off := launched(t, base); strings.Contains(off, "model_context_window") {
+		t.Fatalf("window must stay at the harness default unless asked: %s", off)
+	}
+	on := base
+	on.MaxContextWindow = true
+	if got := launched(t, on); !strings.Contains(got, "-c model_context_window=872000") {
+		t.Fatalf("window override missing: %s", got)
+	}
+	// A model with no headroom is left alone even when the setting is on:
+	// raising it would exceed the real limit and error every request.
+	capped := base
+	capped.MaxContextWindow = true
+	capped.Model = "gpt-5.5"
+	if got := launched(t, capped); strings.Contains(got, "model_context_window") {
+		t.Fatalf("capped model must not be overridden: %s", got)
+	}
+}
+
 func TestClaudeConfigurationOffersPinnedModelsBesideTheAdvertisedAliases(t *testing.T) {
 	models := parseClaudeModelOptions(`
 Options:
