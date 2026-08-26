@@ -442,9 +442,12 @@ test("completed conversations remain available for a follow-up turn", async () =
   assert.match(composer, /<span>\{workflowLabel\}<\/span>/, "the follow-up workflow selector shows only the workflow name");
 });
 
-test("message hover timestamps include seconds", async () => {
+test("message hover timestamps include seconds, and the transcript reads them from one place", async () => {
+  const format = await readFile(path.join(sourceRoot, "app", "format.js"), "utf8");
   const timeline = await readFile(path.join(sourceRoot, "app", "components", "ConversationTimeline.jsx"), "utf8");
-  assert.match(timeline, /toLocaleTimeString\([^)]*\{ hour: "2-digit", minute: "2-digit", second: "2-digit" \}/);
+  assert.match(format, /toLocaleTimeString\([^;]*\{ hour: "2-digit", minute: "2-digit", second: "2-digit" \}/);
+  assert.doesNotMatch(timeline, /toLocaleTimeString/, "the transcript must not keep a second copy of the clock format");
+  assert.match(timeline, /<time dateTime=\{at \|\| undefined\} title=\{formatDateTime\(at\)\}>\{formatTime\(at\)\}<\/time>/);
 });
 
 test("long user messages collapse behind a measured disclosure", async () => {
