@@ -34,14 +34,13 @@ import StatusPill from "./components/StatusPill.jsx";
 import Modal from "./components/Modal.jsx";
 
 // Everything below is reachable from the workbench but never on screen when it
-// first paints. Importing them eagerly put the settings screen, the workflow
-// editor and the whiteboard into the first load the user waits through.
+// first paints. Importing them eagerly put the settings screen and the
+// workflow editor into the first load the user waits through.
 const SettingsPage = lazy(() => import("./SettingsPage.jsx"));
 const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary.jsx"));
 const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
 const WorkerPage = lazy(() => import("./components/WorkerPage.jsx"));
 const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
-const WhiteboardPage = lazy(() => import("./components/whiteboard/WhiteboardPage.jsx"));
 import { applyRunState, applyRuntimeFrames } from "./runtimeStream.js";
 import { nextWorkflowDefinitionID } from "./workflowIds.js";
 import LockScreen from "./components/LockScreen.jsx";
@@ -1238,7 +1237,6 @@ function App() {
   const selectedTaskStatus = runDetail?.run?.status || selectedTask?.status;
   const taskCreateVisible = view === "tasks" && !editor && (taskModal || !selectedTask);
   const taskTitleVisible = view === "tasks" && !editor && !taskModal && selectedTask;
-  const whiteboardOpen = view === "whiteboard" && !editor;
 
   const toggleWorkspaceSearch = useCallback(() => setWorkspaceSearchOpen((open) => !open), []);
   const clearSidebarSearch = useCallback(() => { setGlobalSearchQuery(""); setGlobalTaskItems([]); }, []);
@@ -1366,7 +1364,7 @@ function App() {
         compactViewport={compactViewport}
       />
 
-      {whiteboardOpen ? <Suspense fallback={<ViewLoading />}><WhiteboardPage key={workspaceID || "demo"} workspace={selectedWorkspace} mode={mode} runtimes={runtimes} onClose={() => goView("tasks")} /></Suspense> : <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
+      <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
         <div className="app-titlebar drag-region flex h-[52px] shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
           {taskCreateVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={`${location.label} / ${t("task.createTitle")}`}>
             <span className="max-w-40 shrink truncate text-xs text-muted-foreground">{location.label}</span>
@@ -1435,7 +1433,7 @@ function App() {
           onPermissionDecision={respondPermission}
           notify={notify}
         /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} /></Suspense>}
-      </main>}
+      </main>
     </div>
     {workspaceModal && <Modal className="workspace-create-dialog max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[480px]" title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => { if (busy !== "workspace") { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceModal(false); } }}>
       <form className="grid gap-4 px-5 pt-4 pb-5" aria-busy={busy === "workspace"} onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "workspace") void addWorkspace(); }}>
