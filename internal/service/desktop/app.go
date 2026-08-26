@@ -199,8 +199,6 @@ type Service struct {
 	queueMu           sync.Mutex
 	runStreams        *runstream.Hub
 	runStates         *runstate.Hub
-	whiteboardMu      sync.Mutex
-	whiteboardRuns    map[string]context.CancelFunc
 	remoteFSProbe     func(context.Context, domainworkspaces.RemoteFS) (string, error)
 	remoteCredentials sshcredentials.Store
 	remoteGitExecutor func(domainworkspaces.RemoteFS) agentrunseam.Executor
@@ -215,7 +213,6 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 		settings:          settingsrepo.NewSettingsRepo(store.Data.Paths.Root),
 		cleanupPlans:      make(map[string]cleanupPlan),
 		confirmations:     make(map[string]runConfirmation),
-		whiteboardRuns:    make(map[string]context.CancelFunc),
 		remoteFSProbe:     canonicalRemoteFSRoot,
 		remoteCredentials: sshcredentials.KeyringStore{},
 		remoteGitExecutor: newRemoteGitExecutor,
