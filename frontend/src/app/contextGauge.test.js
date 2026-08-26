@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { gaugeDash, gaugeGeometry, gaugeTone } from "./contextGauge.js";
+
+const sourceRoot = path.dirname(fileURLToPath(import.meta.url));
 
 const FULL = gaugeGeometry("full");
 const COMPACT = gaugeGeometry("compact");
@@ -61,4 +66,21 @@ test("the compact ring stays small enough for a toolbar row", () => {
 test("occupancy is proportional in the compact ring too", () => {
   const [half] = gaugeDash(0.5, true, COMPACT.circumference).split(" ").map(Number);
   assert.ok(Math.abs(half - COMPACT.circumference / 2) < 1e-9);
+});
+
+test("the compact reading survives a running turn rewriting its label", async () => {
+  // A native `title` is cancelled by the browser when it changes under the
+  // cursor, which is precisely what a live token count does — the tooltip has
+  // to be rendered by the app to stay readable while the run is spending.
+  const gauge = await readFile(path.join(sourceRoot, "components", "ContextGauge.jsx"), "utf8");
+  const compact = gauge.slice(gauge.indexOf('if (variant === "compact")'), gauge.lastIndexOf("return <div"));
+  assert.match(compact, /<TooltipTrigger asChild>/);
+  assert.match(compact, /<TooltipContent[^>]*>\{title\}<\/TooltipContent>/);
+  assert.doesNotMatch(compact, /title=\{title\}/, "the compact gauge must not fall back to a native tooltip");
+  assert.match(compact, /aria-label=\{title\}/, "the sentence stays available to a screen reader");
+});
+
+test("a tooltip brings its own provider, so one hover target can adopt it alone", async () => {
+  const tooltip = await readFile(path.join(sourceRoot, "..", "components", "ui", "tooltip.jsx"), "utf8");
+  assert.match(tooltip, /<TooltipProvider[^>]*>\s*<TooltipPrimitive\.Root/s);
 });

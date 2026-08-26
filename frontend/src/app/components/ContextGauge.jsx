@@ -1,4 +1,5 @@
 import { useTranslation } from "react-i18next";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatTokens } from "../format.js";
 import { gaugeDash, gaugeGeometry, gaugeTone } from "../contextGauge.js";
 
@@ -40,12 +41,23 @@ export default function ContextGauge({ window: contextWindow = 0, tokens = 0, kn
      row: the token counts are the detail you go looking for, the percentage is
      the part you want without asking. The ring is aria-hidden and the whole
      control carries one label, so a screen reader reads the sentence once
-     instead of announcing a decorative graphic beside it. */
+     instead of announcing a decorative graphic beside it.
+
+     A rendered tooltip rather than a native `title`, because this label is
+     rewritten on every usage frame of a running turn: browsers cancel a native
+     tooltip whose title changes under the cursor and will not show it again
+     until the pointer leaves and returns, which made the reading unavailable
+     exactly while the run was spending the context it reports. */
   if (variant === "compact") {
-    return <span className="context-gauge-compact inline-flex items-center gap-1.5 text-xs tabular-nums" title={title} role="img" aria-label={title}>
-      <Ring variant={variant} arc={arc} dash={dash} geometry={geometry} />
-      <span className={known ? label : "text-muted-foreground"}>{known ? `${percent}%` : "—"}</span>
-    </span>;
+    return <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="context-gauge-compact inline-flex items-center gap-1.5 text-xs tabular-nums" role="img" aria-label={title}>
+          <Ring variant={variant} arc={arc} dash={dash} geometry={geometry} />
+          <span className={known ? label : "text-muted-foreground"}>{known ? `${percent}%` : "—"}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={6}>{title}</TooltipContent>
+    </Tooltip>;
   }
 
   return <div className="flex items-center gap-3 px-1.5 py-3" title={title} role="img" aria-label={title}>
