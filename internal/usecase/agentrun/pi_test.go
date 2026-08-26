@@ -2,6 +2,8 @@ package agentrun
 
 import (
 	"context"
+	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -286,5 +288,46 @@ func TestParsePiModelListIgnoresGuidance(t *testing.T) {
 		"  /usr/local/lib/node_modules/@mariozechner/pi-coding-agent/docs/models.md\n"
 	if models := parsePiModelList(guidance); len(models) != 0 {
 		t.Fatalf("guidance parsed as models: %+v", models)
+	}
+}
+
+// Pi 0.73 writes the model table to stderr, not stdout. Reading only stdout
+// found no rows and told a signed-in user to sign in.
+func TestPiRunnerInspectsConfigurationFromStderr(t *testing.T) {
+	path := stubBinary(t, "", piModelTable, 0)
+	configuration, err := NewPiRunner(path).InspectConfiguration(context.Background(), t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configuration.Models) != 3 || configuration.Models[0].Model != "anthropic/claude-opus-4-5" {
+		t.Fatalf("models = %+v", configuration.Models)
+	}
+	if !slices.Equal(configuration.Efforts, piThinkingLevels) {
+		t.Fatalf("efforts = %v", configuration.Efforts)
+	}
+}
+
+// A build that prints the table on stdout still parses from there, and its
+// stderr warnings never reach the parser.
+func TestPiRunnerInspectsConfigurationFromStdout(t *testing.T) {
+	path := stubBinary(t, piModelTable, "warning:  failed to load models.json\n", 0)
+	configuration, err := NewPiRunner(path).InspectConfiguration(context.Background(), t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(configuration.Models) != 3 {
+		t.Fatalf("models = %+v", configuration.Models)
+	}
+}
+
+// Signed out, pi prints prose instead of rows — on stderr, the same stream the
+// table arrives on — so the fallback must not read that prose as a catalog.
+func TestPiRunnerInspectConfigurationReportsNoModels(t *testing.T) {
+	signedOut := "No models available. Use /login to log into a provider via OAuth or API key. See:\n" +
+		"  /usr/lib/node_modules/@mariozechner/pi-coding-agent/docs/providers.md\n"
+	path := stubBinary(t, "", signedOut, 0)
+	_, err := NewPiRunner(path).InspectConfiguration(context.Background(), t.TempDir(), os.Environ())
+	if err == nil || !strings.Contains(err.Error(), "sign in to a provider") {
+		t.Fatalf("err = %v", err)
 	}
 }
