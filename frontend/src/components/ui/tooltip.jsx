@@ -10,10 +10,18 @@ function TooltipProvider({
   return (<TooltipPrimitive.Provider data-slot="tooltip-provider" delayDuration={delayDuration} {...props} />);
 }
 
+// Each tooltip carries its own provider so a single hover target can adopt one
+// without the whole tree having to opt in first; nesting providers is harmless,
+// so an app-wide one can still be added later.
 function Tooltip({
+  delayDuration = 0,
   ...props
 }) {
-  return <TooltipPrimitive.Root data-slot="tooltip" {...props} />;
+  return (
+    <TooltipProvider delayDuration={delayDuration}>
+      <TooltipPrimitive.Root data-slot="tooltip" {...props} />
+    </TooltipProvider>
+  );
 }
 
 function TooltipTrigger({

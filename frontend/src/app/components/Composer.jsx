@@ -72,7 +72,7 @@ export default function Composer({
             {/* Context pressure belongs where the context is about to be
                 spent, not in the inspector: the moment it changes what you do
                 is the moment you are deciding what to type next. */}
-            {contextWindow?.known && <ContextGauge {...contextWindow} variant="compact" />}
+            {contextWindow?.known && <ContextGauge {...contextWindow} />}
           </div>}
           {showRuntimeProfile && <RuntimeProfileMenu className="workbench-runtime-profile" value={runtimeProfile} onChange={onRuntimeProfileChange} configuration={runtimeConfiguration?.data} runtimeSettings={runtimeSettings} loading={runtimeConfiguration?.loading} error={runtimeConfiguration?.error} readOnly={runStatus === "running"} />}
           <div className="workbench-composer-submit">{directAgent ? <>

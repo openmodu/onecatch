@@ -2,26 +2,20 @@
    they can be tested as plain functions rather than asserted against rendered
    markup. */
 
-/* Two sizes for two reading distances. "compact" rides the composer action row
-   beside the harness and permission chips, where it is glanceable while you
-   type and must not out-weigh the send button. "full" is the standalone
-   readout for anywhere with room for the token counts spelled out. */
-const VARIANTS = {
-  compact: { radius: 7, stroke: 2.5 },
-  full: { radius: 26, stroke: 6 },
-};
+/* One size, because there is one place to read this: the composer action row
+   beside the harness and permission chips, where the ring is glanceable while
+   you type and must not out-weigh the send button. */
+const RADIUS = 7;
+const STROKE = 2.5;
 
-export function gaugeGeometry(variant = "full") {
-  const { radius, stroke } = VARIANTS[variant] || VARIANTS.full;
-  return {
-    radius,
-    stroke,
-    // The stroke straddles the radius, so the box has to clear half of it on
-    // each side or the ring is shaved flat at the four compass points.
-    size: (radius + stroke) * 2,
-    circumference: 2 * Math.PI * radius,
-  };
-}
+export const gaugeGeometry = {
+  radius: RADIUS,
+  stroke: STROKE,
+  // The stroke straddles the radius, so the box has to clear half of it on
+  // each side or the ring is shaved flat at the four compass points.
+  size: (RADIUS + STROKE) * 2,
+  circumference: 2 * Math.PI * RADIUS,
+};
 
 /* Fill colour is a state, not an identity, so it uses the reserved status
    tokens rather than a series colour, and it changes only at thresholds a user

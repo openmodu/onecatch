@@ -4,10 +4,39 @@ export function copy(value) { return JSON.parse(JSON.stringify(value)); }
 
 export function shortID(value = "") { return value.length > 18 ? `${value.slice(0, 8)}…${value.slice(-5)}` : value; }
 
+function locale() { return i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN"; }
+
+function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+
+function clockOf(date) { return date.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
+
+function dayOf(date, now) {
+  const options = date.getFullYear() === now.getFullYear()
+    ? { month: "numeric", day: "numeric" }
+    : { year: "numeric", month: "numeric", day: "numeric" };
+  return date.toLocaleDateString(locale(), options);
+}
+
+/* A transcript outlives the day it was recorded, so a bare clock reading stops
+   being an answer: "14:02" on a run you opened a week later says nothing about
+   which day it ran. The date joins the reading as soon as it is no longer
+   today's, and the year as soon as it is no longer this year — today's rows,
+   which are the ones you read while the run is still going, stay short. */
 export function formatTime(value) {
   if (!value) return "—";
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleTimeString(i18n.resolvedLanguage === "en" ? "en-US" : "zh-CN", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  if (Number.isNaN(date.getTime())) return "—";
+  const now = new Date();
+  return sameDay(date, now) ? clockOf(date) : `${dayOf(date, now)} ${clockOf(date)}`;
+}
+
+// The unabbreviated stamp, for the places that hold the full answer rather
+// than the glanceable one — a title on a timestamp, an exported record.
+export function formatDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return `${date.toLocaleDateString(locale(), { year: "numeric", month: "numeric", day: "numeric" })} ${clockOf(date)}`;
 }
 
 export function errorMessage(error) {

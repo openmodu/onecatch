@@ -1,28 +1,34 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { gaugeDash, gaugeGeometry, gaugeTone } from "./contextGauge.js";
 
-const FULL = gaugeGeometry("full");
-const COMPACT = gaugeGeometry("compact");
+const sourceRoot = path.dirname(fileURLToPath(import.meta.url));
+
+const { circumference } = gaugeGeometry;
 
 test("the swept arc is proportional to occupancy", () => {
-  const [quarter] = gaugeDash(0.25, true, FULL.circumference).split(" ").map(Number);
-  assert.ok(Math.abs(quarter - FULL.circumference / 4) < 1e-9);
-  const [full] = gaugeDash(1, true, FULL.circumference).split(" ").map(Number);
-  assert.ok(Math.abs(full - FULL.circumference) < 1e-9);
+  const [quarter] = gaugeDash(0.25, true, circumference).split(" ").map(Number);
+  assert.ok(Math.abs(quarter - circumference / 4) < 1e-9);
+  const [half] = gaugeDash(0.5, true, circumference).split(" ").map(Number);
+  assert.ok(Math.abs(half - circumference / 2) < 1e-9);
+  const [full] = gaugeDash(1, true, circumference).split(" ").map(Number);
+  assert.ok(Math.abs(full - circumference) < 1e-9);
 });
 
 test("an unreported window draws an empty track, not a zeroed reading", () => {
   // Both render no arc, but only one of them is a claim about the context.
   // The distinction matters to the label beside the ring, which reads "—"
   // rather than "0%" when the runtime never told us the size.
-  assert.equal(gaugeDash(0.8, false, FULL.circumference).split(" ")[0], "0");
+  assert.equal(gaugeDash(0.8, false, circumference).split(" ")[0], "0");
 });
 
 test("a ratio outside 0..1 cannot overdraw or reverse the arc", () => {
-  const [over] = gaugeDash(1.4, true, FULL.circumference).split(" ").map(Number);
-  assert.ok(Math.abs(over - FULL.circumference) < 1e-9);
-  const [under] = gaugeDash(-0.2, true, FULL.circumference).split(" ").map(Number);
+  const [over] = gaugeDash(1.4, true, circumference).split(" ").map(Number);
+  assert.ok(Math.abs(over - circumference) < 1e-9);
+  const [under] = gaugeDash(-0.2, true, circumference).split(" ").map(Number);
   assert.equal(under, 0);
 });
 
@@ -42,23 +48,31 @@ test("the resting tone leaves the number in ordinary ink", () => {
   assert.equal(gaugeTone(0.95).label, "text-destructive");
 });
 
-test("both variants clear their own stroke so the ring is never shaved flat", () => {
-  for (const geometry of [FULL, COMPACT]) {
-    const { radius, stroke, size } = geometry;
-    const outer = radius + stroke / 2;
-    assert.ok(size / 2 - outer >= 0, `variant overflows its box: ${JSON.stringify(geometry)}`);
-    assert.ok(size / 2 + outer <= size, `variant overflows its box: ${JSON.stringify(geometry)}`);
-  }
+test("the ring clears its own stroke so it is never shaved flat", () => {
+  const { radius, stroke, size } = gaugeGeometry;
+  const outer = radius + stroke / 2;
+  assert.ok(size / 2 - outer >= 0, `ring overflows its box: ${JSON.stringify(gaugeGeometry)}`);
+  assert.ok(size / 2 + outer <= size, `ring overflows its box: ${JSON.stringify(gaugeGeometry)}`);
 });
 
-test("the compact ring stays small enough for a toolbar row", () => {
+test("the ring stays small enough for a toolbar row", () => {
   // The composer action row is sized by its buttons; a ring taller than them
   // would push the row and out-weigh the send button beside it.
-  assert.ok(COMPACT.size <= 20, `compact gauge is ${COMPACT.size}px`);
-  assert.ok(COMPACT.size < FULL.size);
+  assert.ok(gaugeGeometry.size <= 20, `gauge is ${gaugeGeometry.size}px`);
 });
 
-test("occupancy is proportional in the compact ring too", () => {
-  const [half] = gaugeDash(0.5, true, COMPACT.circumference).split(" ").map(Number);
-  assert.ok(Math.abs(half - COMPACT.circumference / 2) < 1e-9);
+test("the reading survives a running turn rewriting its label", async () => {
+  // A native `title` is cancelled by the browser when it changes under the
+  // cursor, which is precisely what a live token count does — the tooltip has
+  // to be rendered by the app to stay readable while the run is spending.
+  const gauge = await readFile(path.join(sourceRoot, "components", "ContextGauge.jsx"), "utf8");
+  assert.match(gauge, /<TooltipTrigger asChild>/);
+  assert.match(gauge, /<TooltipContent[^>]*>\{title\}<\/TooltipContent>/);
+  assert.doesNotMatch(gauge, /title=\{title\}/, "the gauge must not fall back to a native tooltip");
+  assert.match(gauge, /aria-label=\{title\}/, "the sentence stays available to a screen reader");
+});
+
+test("a tooltip brings its own provider, so one hover target can adopt it alone", async () => {
+  const tooltip = await readFile(path.join(sourceRoot, "..", "components", "ui", "tooltip.jsx"), "utf8");
+  assert.match(tooltip, /<TooltipProvider[^>]*>\s*<TooltipPrimitive\.Root/s);
 });
