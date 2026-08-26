@@ -1,6 +1,7 @@
 package agentrun
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -372,15 +373,21 @@ func (r *PiRunner) InspectConfiguration(ctx context.Context, cwd string, environ
 		cmd.Dir = cwd
 	}
 	cmd.Env = environment
-	var stderr lineCapture
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	// Only stdout carries the table; pi writes models.json load warnings to
-	// stderr, and folding them in would look like table rows.
-	output, err := cmd.Output()
-	if err != nil {
-		return HarnessConfiguration{}, fmt.Errorf("read Pi models: %w%s", err, stderr.tail())
+	if err := cmd.Run(); err != nil {
+		return HarnessConfiguration{}, fmt.Errorf("read Pi models: %w%s", err, streamTail(stderr.Bytes()))
 	}
-	models := parsePiModelList(string(output))
+	// Pi 0.73 prints the whole table on stderr, so a stdout-only read finds no
+	// rows and reports a signed-in Pi as signed out. stdout is still read
+	// first — a build that prints the table there keeps its models.json
+	// warnings out of the parse — and stderr is consulted only when stdout
+	// yielded nothing.
+	models := parsePiModelList(stdout.String())
+	if len(models) == 0 {
+		models = parsePiModelList(stderr.String())
+	}
 	if len(models) == 0 {
 		return HarnessConfiguration{}, fmt.Errorf("Pi did not advertise any models; sign in to a provider first")
 	}

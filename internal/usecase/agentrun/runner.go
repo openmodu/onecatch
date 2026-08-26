@@ -251,8 +251,18 @@ func (c *lineCapture) Write(p []byte) (int, error) {
 func (c *lineCapture) tail() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if len(c.buf) == 0 {
+	return streamTail(c.buf)
+}
+
+// streamTail renders the tail of a captured stream for an error message. It is
+// the same framing lineCapture applies, for callers that buffer a stream in
+// full because they also have to parse it.
+func streamTail(buf []byte) string {
+	if len(buf) > stderrTailMax {
+		buf = buf[len(buf)-stderrTailMax:]
+	}
+	if len(buf) == 0 {
 		return ""
 	}
-	return ": " + string(c.buf)
+	return ": " + string(buf)
 }
