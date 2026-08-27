@@ -153,6 +153,7 @@ function App() {
   const [editorSourceID, setEditorSourceID] = useState("");
   const [validation, setValidation] = useState([]);
   const [workspaceModal, setWorkspaceModal] = useState(false);
+  const [workspaceEditingID, setWorkspaceEditingID] = useState("");
   // A task-less cold start is still an actionable chat surface. Starting in
   // compose mode avoids flashing the legacy welcome card while the first
   // workspace's task history is loaded; selecting any history row closes it.
@@ -824,9 +825,26 @@ function App() {
   }, [loadRun, mode, notify, selectedQueuedTaskID, tasks]);
 
   const chooseWorkspace = useCallback(async () => {
+    setWorkspaceEditingID("");
     setWorkspaceForm(mode === "demo" ? { ...emptyWorkspaceForm(), path: "/Users/demo/Code/my-project", name: "my-project" } : emptyWorkspaceForm());
     setWorkspaceModal(true);
   }, [mode]);
+
+  const editWorkspace = useCallback(() => {
+    if (!selectedWorkspace) return;
+    setWorkspaceEditingID(selectedWorkspace.id);
+    setWorkspaceForm({
+      source: selectedWorkspace.remoteFs ? "remote" : "local",
+      path: selectedWorkspace.remoteFs ? "" : selectedWorkspace.path,
+      remoteHost: selectedWorkspace.remoteFs?.host || "",
+      remoteRoot: selectedWorkspace.remoteFs?.root || "",
+      remoteUsername: selectedWorkspace.remoteFs?.username || "",
+      remotePassword: "",
+      name: selectedWorkspace.name || "",
+      defaultSandbox: selectedWorkspace.defaultSandbox || "workspace-write",
+    });
+    setWorkspaceModal(true);
+  }, [selectedWorkspace]);
 
   const browseWorkspace = useCallback(async () => {
     if (mode === "demo") { setWorkspaceForm((form) => ({ ...form, source: "local", path: "/Users/demo/Code/my-project" })); return; }
@@ -836,7 +854,7 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); }
   }, [mode, notify]);
 
-  const addWorkspace = async () => {
+  const saveWorkspace = async () => {
     const remote = workspaceForm.source === "remote";
     if (!remote && !workspaceForm.path.trim()) { notify("error", t("app.workspacePathRequired")); return; }
     if (remote && (!workspaceForm.remoteHost.trim() || !workspaceForm.remoteRoot.trim())) { notify("error", t("app.remoteFSFieldsRequired")); return; }
@@ -850,13 +868,13 @@ function App() {
         : { path: workspaceForm.path.trim(), name: workspaceForm.name, defaultSandbox: workspaceForm.defaultSandbox };
       if (mode === "demo") {
         const { password: _password, ...safePayload } = payload;
-        const item = { ...safePayload, id: `workspace-${Date.now()}`, name: payload.name || payload.path.split("/").pop(), lastOpenedAt: new Date().toISOString() };
-        setWorkspaces((items) => [item, ...items]); selectWorkspace(item.id);
+        const item = { ...safePayload, id: workspaceEditingID || `workspace-${Date.now()}`, name: payload.name || payload.path.split("/").pop(), lastOpenedAt: new Date().toISOString() };
+        setWorkspaces((items) => workspaceEditingID ? items.map((current) => current.id === workspaceEditingID ? { ...current, ...item } : current) : [item, ...items]); selectWorkspace(item.id);
       } else {
-        const item = await WorkspaceBinding.AddWorkspace(payload);
+        const item = workspaceEditingID ? await WorkspaceBinding.UpdateWorkspace({ id: workspaceEditingID, ...payload }) : await WorkspaceBinding.AddWorkspace(payload);
         setWorkspaces(await WorkspaceBinding.ListWorkspaces()); selectWorkspace(item.id);
       }
-      setWorkspaceModal(false); notify("success", t("app.workspaceAdded"));
+      setWorkspaceModal(false); setWorkspaceEditingID(""); notify("success", t(workspaceEditingID ? "app.workspaceUpdated" : "app.workspaceAdded"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setBusy(""); }
   };
 
@@ -1366,16 +1384,12 @@ function App() {
 
       <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
         <div className="app-titlebar drag-region flex h-[52px] shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
-          {taskCreateVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={`${location.label} / ${t("task.createTitle")}`}>
-            <span className="max-w-40 shrink truncate text-xs text-muted-foreground">{location.label}</span>
-            <span className="shrink-0 text-muted-foreground/60" aria-hidden="true">/</span>
+          {taskCreateVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={t("task.createTitle")}>
             <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{t("task.createTitle")}</strong>
-          </span> : taskTitleVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={`${location.label} / ${selectedTask.title}`}>
-            <span className="max-w-40 shrink truncate text-xs text-muted-foreground">{location.label}</span>
-            <span className="shrink-0 text-muted-foreground/60" aria-hidden="true">/</span>
+          </span> : taskTitleVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={selectedTask.title}>
             <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{selectedTask.title}</strong>
             {selectedTask.workflowId && selectedTask.workflowId !== directAgentWorkflowID && <StatusPill status={selectedTaskStatus} active={runDetail?.active} />}
-          </span> : <span className="flex min-w-0 items-baseline gap-2" title={commandText}>
+          </span> : view === "tasks" ? <span className="min-w-0 flex-1" /> : <span className="flex min-w-0 items-baseline gap-2" title={commandText}>
             <strong className="shrink-0 text-[13px] font-semibold text-foreground">{location.label}</strong>
             {location.path && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{location.path}</span>}
           </span>}
@@ -1383,11 +1397,11 @@ function App() {
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
           </button>
-          {(view !== "tasks" || inspectorCollapsed) && <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
+          {view !== "tasks" && <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {mode === "wails" ? t(view === "tasks" && selectedWorkspace?.remoteFs ? "workspace.remoteFS" : "common.local") : t("common.preview")}
           </StatusBadge>}
-          {view === "tasks" && !editor && inspectorCollapsed && <button type="button" className={`no-drag grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${terminalVisible ? "bg-accent text-foreground" : "text-muted-foreground"}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => setTerminalToggleVersion((value) => value + 1)}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
+          {view === "tasks" && !editor && inspectorCollapsed && <button type="button" className={`no-drag ml-auto grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${terminalVisible ? "bg-accent text-foreground" : "text-muted-foreground"}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => setTerminalToggleVersion((value) => value + 1)}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
           {view === "tasks" && (inspectorDetached
             ? <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.dock")} title={t("inspector.dockHint")} onClick={dockInspector}><PictureInPicture2 size={16} strokeWidth={2} aria-hidden="true" /></button>
             : inspectorCollapsed && <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /></button>)}
@@ -1411,6 +1425,7 @@ function App() {
           inspectorCollapsed={inspectorCollapsed}
           onToggleInspector={toggleInspector}
           onDetachInspector={mode === "wails" ? detachInspector : null}
+          onEditWorkspace={editWorkspace}
           newTaskOpen={taskCreateVisible}
           taskForm={taskForm}
           workflows={workflows}
@@ -1435,8 +1450,8 @@ function App() {
         /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} /></Suspense>}
       </main>
     </div>
-    {workspaceModal && <Modal className="workspace-create-dialog max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[480px]" title={t("workspace.addTitle")} subtitle={t("workspace.addSubtitle")} onClose={() => { if (busy !== "workspace") { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceModal(false); } }}>
-      <form className="grid gap-4 px-5 pt-4 pb-5" aria-busy={busy === "workspace"} onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "workspace") void addWorkspace(); }}>
+    {workspaceModal && <Modal className="workspace-create-dialog max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[480px]" title={t(workspaceEditingID ? "workspace.editTitle" : "workspace.addTitle")} subtitle={t(workspaceEditingID ? "workspace.editSubtitle" : "workspace.addSubtitle")} onClose={() => { if (busy !== "workspace") { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceEditingID(""); setWorkspaceModal(false); } }}>
+      <form className="grid gap-4 px-5 pt-4 pb-5" aria-busy={busy === "workspace"} onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "workspace") void saveWorkspace(); }}>
         <div className="grid gap-1.5">
           <Label id="workspace-create-source-label">{t("workspace.source")}</Label>
           <TUISelect ariaLabel={t("workspace.source")} value={workspaceForm.source} onChange={(source) => setWorkspaceForm((form) => ({ ...form, source, defaultSandbox: source === "remote" && (form.defaultSandbox === "" || form.defaultSandbox === "full") ? "workspace-write" : form.defaultSandbox }))} options={[{ value: "local", label: t("workspace.localDirectory") }, { value: "remote", label: t("workspace.remoteFS"), meta: remoteFSHarnessAvailable ? "" : t("workspace.remoteFSNoHarness"), disabled: !remoteFSHarnessAvailable }]} />
@@ -1476,8 +1491,8 @@ function App() {
           <TUISelect ariaLabel={t("workspace.defaultSandbox")} value={workspaceForm.defaultSandbox} onChange={(defaultSandbox) => setWorkspaceForm((form) => ({ ...form, defaultSandbox }))} options={workspaceForm.source === "remote" ? [{ value: "workspace-write", label: t("workspace.write") }, { value: "read-only", label: t("workspace.readOnly") }] : [{ value: "", label: t("workspace.globalDefault") }, { value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, ...(settings.security?.allowFullSandbox ? [{ value: "full", label: t("workspace.fullDanger") }] : [])]} />
         </div>
         <DialogFooter className="mt-1">
-          <Button type="button" variant="ghost" disabled={busy === "workspace"} onClick={() => { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceModal(false); }}>{t("common.cancel")}</Button>
-          <Button type="submit" disabled={busy === "workspace" || (workspaceForm.source === "remote" ? !workspaceForm.remoteHost.trim() || !workspaceForm.remoteRoot.trim() || (Boolean(workspaceForm.remotePassword) && !workspaceForm.remoteUsername.trim()) : !workspaceForm.path.trim())}>{busy === "workspace" ? t("common.processing") : t("workspace.add")}</Button>
+          <Button type="button" variant="ghost" disabled={busy === "workspace"} onClick={() => { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceEditingID(""); setWorkspaceModal(false); }}>{t("common.cancel")}</Button>
+          <Button type="submit" disabled={busy === "workspace" || (workspaceForm.source === "remote" ? !workspaceForm.remoteHost.trim() || !workspaceForm.remoteRoot.trim() || (Boolean(workspaceForm.remotePassword) && !workspaceForm.remoteUsername.trim()) : !workspaceForm.path.trim())}>{busy === "workspace" ? t("common.processing") : t(workspaceEditingID ? "common.save" : "workspace.add")}</Button>
         </DialogFooter>
       </form>
     </Modal>}

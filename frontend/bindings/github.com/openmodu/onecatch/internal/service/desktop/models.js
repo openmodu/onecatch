@@ -1690,6 +1690,73 @@ export class TaskSearchPage {
     }
 }
 
+export class UpdateWorkspaceInput {
+    /**
+     * Creates a new UpdateWorkspaceInput instance.
+     * @param {Partial<UpdateWorkspaceInput>} [$$source = {}] - The source object to create the UpdateWorkspaceInput.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["name"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["defaultSandbox"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {workspaces$0.RemoteFS | null | undefined}
+             */
+            this["remoteFs"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["password"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UpdateWorkspaceInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UpdateWorkspaceInput}
+     */
+    static createFrom($$source = {}) {
+        const $$createField4_0 = $$createType1;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("remoteFs" in $$parsedSource) {
+            $$parsedSource["remoteFs"] = $$createField4_0($$parsedSource["remoteFs"]);
+        }
+        return new UpdateWorkspaceInput(/** @type {Partial<UpdateWorkspaceInput>} */($$parsedSource));
+    }
+}
+
 export class WorkerStatus {
     /**
      * Creates a new WorkerStatus instance.

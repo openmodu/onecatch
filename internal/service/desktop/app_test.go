@@ -271,6 +271,36 @@ func TestSearchTasksReturnsMatchesAcrossVisibleWorkspaces(t *testing.T) {
 	}
 }
 
+func TestUpdateWorkspaceKeepsIdentityAndHistory(t *testing.T) {
+	app, _ := newLocalTestApp(t, completingEngine{})
+	ctx := context.Background()
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir(), Name: "Before", DefaultSandbox: "read-only"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: directAgentWorkflowID, Prompt: "keep this task"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nextPath := t.TempDir()
+	canonicalPath, err := filepath.EvalSymlinks(nextPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated, err := app.UpdateWorkspace(ctx, UpdateWorkspaceInput{ID: workspace.ID, Path: nextPath, Name: "After", DefaultSandbox: "workspace-write"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.ID != workspace.ID || updated.Name != "After" || updated.Path != canonicalPath || updated.DefaultSandbox != "workspace-write" {
+		t.Fatalf("updated workspace = %+v", updated)
+	}
+	tasks, err := app.ListTasks(ctx, workspace.ID)
+	if err != nil || len(tasks) != 1 || tasks[0].ID != task.ID {
+		t.Fatalf("workspace history after update = %+v, %v", tasks, err)
+	}
+}
+
 func TestDesktopApplicationServiceCreatesAndExecutesRun(t *testing.T) {
 	root := t.TempDir()
 	store, err := localdata.OpenStore(root)

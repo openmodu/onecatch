@@ -59,6 +59,15 @@ type AddWorkspaceInput struct {
 	Password       string                     `json:"password,omitempty"`
 }
 
+type UpdateWorkspaceInput struct {
+	ID             string                     `json:"id"`
+	Path           string                     `json:"path"`
+	Name           string                     `json:"name,omitempty"`
+	DefaultSandbox string                     `json:"defaultSandbox,omitempty"`
+	RemoteFS       *domainworkspaces.RemoteFS `json:"remoteFs,omitempty"`
+	Password       string                     `json:"password,omitempty"`
+}
+
 type WorkspaceStatus struct {
 	Workspace domainworkspaces.Workspace   `json:"workspace"`
 	Git       domainworkspaces.GitSnapshot `json:"git"`
@@ -309,6 +318,29 @@ func (a *Service) UpdateRuntimeConfig(input RuntimeConfigInput) (RuntimeInfo, er
 }
 
 func (a *Service) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (domainworkspaces.Workspace, error) {
+	return a.saveWorkspace(ctx, input, "")
+}
+
+func (a *Service) UpdateWorkspace(ctx context.Context, input UpdateWorkspaceInput) (domainworkspaces.Workspace, error) {
+	id := strings.TrimSpace(input.ID)
+	if id == "" {
+		return domainworkspaces.Workspace{}, coded("workspace_invalid", "workspace id is required")
+	}
+	return a.saveWorkspace(ctx, AddWorkspaceInput{
+		Path: input.Path, Name: input.Name, DefaultSandbox: input.DefaultSandbox,
+		RemoteFS: input.RemoteFS, Password: input.Password,
+	}, id)
+}
+
+func (a *Service) saveWorkspace(ctx context.Context, input AddWorkspaceInput, updateID string) (domainworkspaces.Workspace, error) {
+	var updating *domainworkspaces.Workspace
+	if updateID != "" {
+		current, err := a.GetWorkspace(ctx, updateID)
+		if err != nil {
+			return domainworkspaces.Workspace{}, err
+		}
+		updating = &current
+	}
 	workspacePath := strings.TrimSpace(input.Path)
 	identity := workspacePath
 	var remoteFS *domainworkspaces.RemoteFS
@@ -335,6 +367,9 @@ func (a *Service) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (do
 			Host:     strings.TrimSpace(input.RemoteFS.Host),
 			Root:     pathpkg.Clean(strings.TrimSpace(input.RemoteFS.Root)),
 			Username: strings.TrimSpace(input.RemoteFS.Username),
+		}
+		if input.Password == "" && updating != nil && updating.RemoteFS != nil && strings.TrimSpace(updating.RemoteFS.Username) == remote.Username {
+			remote.CredentialID = updating.RemoteFS.CredentialID
 		}
 		for _, option := range input.RemoteFS.SSHOptions {
 			if option = strings.TrimSpace(option); option != "" {
@@ -431,10 +466,15 @@ func (a *Service) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (do
 		}
 	}
 	now := time.Now().UTC()
-	workspace := domainworkspaces.Workspace{ID: workspaceID(identity), Name: name, Path: workspacePath, RemoteFS: remoteFS, DefaultSandbox: sandbox, CreatedAt: now, LastOpenedAt: now}
+	id := workspaceID(identity)
+	if updateID != "" {
+		id = updateID
+	}
+	workspace := domainworkspaces.Workspace{ID: id, Name: name, Path: workspacePath, RemoteFS: remoteFS, DefaultSandbox: sandbox, CreatedAt: now, LastOpenedAt: now}
 	oldCredentialID := ""
 	if current, getErr := a.store.Repos.Tasks.GetWorkspace(ctx, workspace.ID); getErr == nil {
 		workspace.CreatedAt = current.CreatedAt
+		workspace.LastOpenedAt = current.LastOpenedAt
 		workspace.Pinned = current.Pinned
 		if current.RemoteFS != nil {
 			oldCredentialID = current.RemoteFS.CredentialID
@@ -444,7 +484,11 @@ func (a *Service) AddWorkspace(ctx context.Context, input AddWorkspaceInput) (do
 		return domainworkspaces.Workspace{}, err
 	}
 	credentialCommitted = true
-	if oldCredentialID != "" && oldCredentialID != stagedCredentialID {
+	newCredentialID := ""
+	if remoteFS != nil {
+		newCredentialID = remoteFS.CredentialID
+	}
+	if oldCredentialID != "" && oldCredentialID != newCredentialID {
 		_ = credentials.Delete(oldCredentialID)
 	}
 	return workspace, nil

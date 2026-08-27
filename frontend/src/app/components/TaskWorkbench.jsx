@@ -1,7 +1,6 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Maximize2, Minimize2, PanelRightClose, SquareArrowOutUpRight, SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { StatusBadge } from "../../ui/primitives.jsx";
 import { buildRunConversation } from "../runConversation.js";
 import { summarizeContextWindow } from "../tokenUsage.js";
 import QueuedTaskView from "./QueuedTaskView.jsx";
@@ -47,7 +46,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, onDetachInspector, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onLoadEarlierTranscript, onPermissionDecision, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onLoadEarlierTranscript, onPermissionDecision, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
@@ -268,10 +267,6 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   };
   return <div ref={workbenchRef} className={`task-workbench grid min-h-0 min-w-0 flex-1 overflow-visible ${inspectorCollapsed ? "inspector-collapsed" : "inspector-open"} ${inspectorResizing ? "inspector-resizing" : ""} ${inspectorMaximized ? "inspector-maximized" : ""} ${newTaskOpen ? "new-task-active" : ""}`} style={{ "--workbench-inspector-width": `${inspectorWidth}px`, "--conversation-min-width": `${MIN_CONVERSATION_WIDTH}px` }}>
     {!inspectorCollapsed && !inspectorMaximized && <div className="workbench-inspector-dock no-drag">
-      <StatusBadge status={mode === "wails" ? "good" : "warn"} className="shrink-0">
-        <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
-        {mode === "wails" ? t(workspace?.remoteFs ? "workspace.remoteFS" : "common.local") : t("common.preview")}
-      </StatusBadge>
       <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>
       <button type="button" className="workbench-inspector-dock-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><PanelRightClose size={16} strokeWidth={2} aria-hidden="true" /></button>
     </div>}
@@ -290,6 +285,9 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
         runtimeSettingsByHarness={runtimeSettingsByHarness}
         remoteFS={Boolean(workspace?.remoteFs)}
         allowFullSandbox={allowFullSandbox}
+        mode={mode}
+        workspace={workspace}
+        onEditWorkspace={onEditWorkspace}
       /> : selectedTask ? <>
         <div className="conversation-scroll min-h-0 min-w-0 flex-1 select-text overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>
           {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} hiddenCount={hiddenTranscriptCount} onLoadEarlier={() => onLoadEarlierTranscript?.(runDetail?.run?.id)} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={openReview} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
@@ -315,6 +313,9 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           workflowId={selectedTask?.workflowId || runDetail?.run?.workflowId}
           workflowName={runDetail?.workflow?.name}
           permission={selectedTask?.sandbox || activeStep?.sandbox || "workspace-write"}
+          mode={mode}
+          workspace={workspace}
+          onEditWorkspace={onEditWorkspace}
         />}
       </> : null}
       {terminalMounted && <Suspense fallback={null}><TerminalDock ref={setTerminalDock} mode={mode} workspace={workspace} preferences={terminalPreferences} notify={notify} onVisibilityChange={onTerminalVisibilityChange} /></Suspense>}

@@ -44,6 +44,9 @@ func (b *WorkspaceBinding) ChooseAttachments() ([]string, error) {
 func (b *WorkspaceBinding) AddWorkspace(input desktopservice.AddWorkspaceInput) (domainworkspaces.Workspace, error) {
 	return b.service.AddWorkspace(context.Background(), input)
 }
+func (b *WorkspaceBinding) UpdateWorkspace(input desktopservice.UpdateWorkspaceInput) (domainworkspaces.Workspace, error) {
+	return b.service.UpdateWorkspace(context.Background(), input)
+}
 func (b *WorkspaceBinding) ListWorkspaces() ([]domainworkspaces.Workspace, error) {
 	return b.service.ListWorkspaces(context.Background())
 }

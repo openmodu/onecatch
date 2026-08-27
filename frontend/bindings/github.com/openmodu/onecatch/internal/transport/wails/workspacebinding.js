@@ -120,6 +120,16 @@ export function SetWorkspacePinned(id, pinned) {
 }
 
 /**
+ * @param {desktop$0.UpdateWorkspaceInput} input
+ * @returns {$CancellablePromise<workspaces$0.Workspace>}
+ */
+export function UpdateWorkspace(input) {
+    return $Call.ByID(1645047680, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
  * @param {desktop$0.WriteWorkspaceFileInput} input
  * @returns {$CancellablePromise<desktop$0.WorkspaceFileDocument>}
  */

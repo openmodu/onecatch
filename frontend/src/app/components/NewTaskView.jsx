@@ -19,6 +19,7 @@ import { runtimeHarnessEnabled, supportsRuntimeProfile, workflowHarnessesEnabled
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
 import TaskExecutorSelector from "./TaskExecutorSelector.jsx";
 import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
+import WorkspaceComposerMeta from "./WorkspaceComposerMeta.jsx";
 
 export default function NewTaskView({
   workspaceID,
@@ -34,6 +35,9 @@ export default function NewTaskView({
   runtimeSettingsByHarness,
   remoteFS = false,
   allowFullSandbox,
+  mode,
+  workspace,
+  onEditWorkspace,
 }) {
   const { t } = useTranslation();
   const composing = useRef(false);
@@ -70,60 +74,63 @@ export default function NewTaskView({
         <p>{t("task.promptDescription")}</p>
       </header>
 
-      <div className="new-task-composer">
-        <Textarea
-          ref={promptRef}
-          id="task-create-goal"
-          className="new-task-prompt"
-          autoFocus
-          value={form.prompt}
-          aria-label={t("task.goal")}
-          placeholder={t("task.goalPlaceholder")}
-          onChange={(event) => onChange((current) => ({ ...current, prompt: event.target.value }))}
-          onCompositionStart={() => { composing.current = true; }}
-          onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }}
-          onKeyDown={submitFromComposer}
-        />
+      <div className="new-task-composer-stack">
+        <div className="new-task-composer">
+          <Textarea
+            ref={promptRef}
+            id="task-create-goal"
+            className="new-task-prompt"
+            autoFocus
+            value={form.prompt}
+            aria-label={t("task.goal")}
+            placeholder={t("task.goalPlaceholder")}
+            onChange={(event) => onChange((current) => ({ ...current, prompt: event.target.value }))}
+            onCompositionStart={() => { composing.current = true; }}
+            onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }}
+            onKeyDown={submitFromComposer}
+          />
 
-        {form.attachmentPaths?.length > 0 && <div className="new-task-attachments">
-          {form.attachmentPaths.map((path) => <span className="new-task-attachment" key={path} title={path}>
-            <span>{fileName(path)}</span>
-            <button type="button" aria-label={`${t("common.remove")} ${fileName(path)}`} title={t("common.remove")} onClick={() => onChange((current) => ({ ...current, attachmentPaths: current.attachmentPaths.filter((item) => item !== path) }))}><X size={12} aria-hidden="true" /></button>
-          </span>)}
-        </div>}
+          {form.attachmentPaths?.length > 0 && <div className="new-task-attachments">
+            {form.attachmentPaths.map((path) => <span className="new-task-attachment" key={path} title={path}>
+              <span>{fileName(path)}</span>
+              <button type="button" aria-label={`${t("common.remove")} ${fileName(path)}`} title={t("common.remove")} onClick={() => onChange((current) => ({ ...current, attachmentPaths: current.attachmentPaths.filter((item) => item !== path) }))}><X size={12} aria-hidden="true" /></button>
+            </span>)}
+          </div>}
 
-        <div className={`new-task-toolbar ${directAgent ? "agent-mode" : "workflow-mode"} ${showRuntimeProfile ? "has-runtime-profile" : "no-runtime-profile"}`}>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-sm" className="new-task-add" aria-label={t("task.addAndConfigure")} title={t("task.addAndConfigure")}><Plus size={18} aria-hidden="true" /></Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent className="task-executor-menu new-task-add-menu" side="top" align="start" sideOffset={8}>
-              {onChooseAttachments && <><DropdownMenuItem onSelect={() => onChooseAttachments()}><Paperclip size={14} aria-hidden="true" /><span>{t("task.chooseFiles")}</span></DropdownMenuItem><DropdownMenuSeparator /></>}
-              <DropdownMenuLabel className="task-executor-section">{t("task.executionMode")}</DropdownMenuLabel>
-              <DropdownMenuRadioGroup value={executionMode} onValueChange={(nextMode) => onChange((current) => ({ ...current, executionMode: nextMode }))}>
-                <DropdownMenuRadioItem className="task-executor-option agent" value="immediate"><ArrowUp size={14} aria-hidden="true" /><span><strong>{t("task.runNow")}</strong></span></DropdownMenuRadioItem>
-                <DropdownMenuRadioItem className="task-executor-option agent" value="queued"><ListPlus size={14} aria-hidden="true" /><span><strong>{t("task.joinQueue")}</strong></span></DropdownMenuRadioItem>
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} runtimeSettings={runtimeSettingsByHarness} remoteFS={remoteFS} onChange={onChange} />
-          <TaskPermissionSelector value={form.sandbox} allowFull={allowFullSandbox} onChange={onChange} />
-          {showRuntimeProfile && <RuntimeProfileMenu
-            className="new-task-runtime"
-            value={form}
-            onChange={onChange}
-            configuration={runtimeConfiguration?.data}
-            runtimeSettings={runtimeSettings}
-            loading={runtimeConfiguration?.loading}
-            error={runtimeConfiguration?.error}
-          />}
-          <Button type="button" variant="ghost" size="icon-sm" className="new-task-voice" aria-label={t("task.voiceInput")} title={t("task.voiceInput")} onClick={() => promptRef.current?.focus()}><Mic size={17} aria-hidden="true" /></Button>
-          <div className={`new-task-submit-group ${executionMode}`}>
-            <Button type="submit" size="icon-sm" className="new-task-submit-action" disabled={!ready || busy === "run"} aria-label={submitLabel} title={submitLabel}>
-              {executionMode === "queued" ? <ListPlus size={15} strokeWidth={2.2} aria-hidden="true" /> : <ArrowUp size={15} strokeWidth={2.4} aria-hidden="true" />}
-            </Button>
+          <div className={`new-task-toolbar ${directAgent ? "agent-mode" : "workflow-mode"} ${showRuntimeProfile ? "has-runtime-profile" : "no-runtime-profile"}`}>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button type="button" variant="ghost" size="icon-sm" className="new-task-add" aria-label={t("task.addAndConfigure")} title={t("task.addAndConfigure")}><Plus size={18} aria-hidden="true" /></Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent className="task-executor-menu new-task-add-menu" side="top" align="start" sideOffset={8}>
+                {onChooseAttachments && <><DropdownMenuItem onSelect={() => onChooseAttachments()}><Paperclip size={14} aria-hidden="true" /><span>{t("task.chooseFiles")}</span></DropdownMenuItem><DropdownMenuSeparator /></>}
+                <DropdownMenuLabel className="task-executor-section">{t("task.executionMode")}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={executionMode} onValueChange={(nextMode) => onChange((current) => ({ ...current, executionMode: nextMode }))}>
+                  <DropdownMenuRadioItem className="task-executor-option agent" value="immediate"><ArrowUp size={14} aria-hidden="true" /><span><strong>{t("task.runNow")}</strong></span></DropdownMenuRadioItem>
+                  <DropdownMenuRadioItem className="task-executor-option agent" value="queued"><ListPlus size={14} aria-hidden="true" /><span><strong>{t("task.joinQueue")}</strong></span></DropdownMenuRadioItem>
+                </DropdownMenuRadioGroup>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} runtimeSettings={runtimeSettingsByHarness} remoteFS={remoteFS} onChange={onChange} />
+            <TaskPermissionSelector value={form.sandbox} allowFull={allowFullSandbox} onChange={onChange} />
+            {showRuntimeProfile && <RuntimeProfileMenu
+              className="new-task-runtime"
+              value={form}
+              onChange={onChange}
+              configuration={runtimeConfiguration?.data}
+              runtimeSettings={runtimeSettings}
+              loading={runtimeConfiguration?.loading}
+              error={runtimeConfiguration?.error}
+            />}
+            <Button type="button" variant="ghost" size="icon-sm" className="new-task-voice" aria-label={t("task.voiceInput")} title={t("task.voiceInput")} onClick={() => promptRef.current?.focus()}><Mic size={17} aria-hidden="true" /></Button>
+            <div className={`new-task-submit-group ${executionMode}`}>
+              <Button type="submit" size="icon-sm" className="new-task-submit-action" disabled={!ready || busy === "run"} aria-label={submitLabel} title={submitLabel}>
+                {executionMode === "queued" ? <ListPlus size={15} strokeWidth={2.2} aria-hidden="true" /> : <ArrowUp size={15} strokeWidth={2.4} aria-hidden="true" />}
+              </Button>
+            </div>
           </div>
         </div>
+        <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} />
       </div>
     </form>
   </div>;

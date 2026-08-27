@@ -32,6 +32,7 @@ export {
     StorageUsage,
     TaskSearchItem,
     TaskSearchPage,
+    UpdateWorkspaceInput,
     WorkerStatus,
     WorkerWorkspaceSetup,
     WorkflowEventView,

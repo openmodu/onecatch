@@ -12,6 +12,7 @@ import HarnessSelector from "./HarnessSelector.jsx";
 import ContextGauge from "./ContextGauge.jsx";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
 import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
+import WorkspaceComposerMeta from "./WorkspaceComposerMeta.jsx";
 
 // Draft text is intentionally local state: keystrokes re-render only this
 // subtree instead of the whole workbench + polling tree, which is what made
@@ -37,6 +38,9 @@ export default function Composer({
   workflowName,
   permission,
   contextWindow,
+  mode,
+  workspace,
+  onEditWorkspace,
 }) {
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
@@ -95,6 +99,7 @@ export default function Composer({
           </>}</div>
         </div>
       </div>
+      <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} />
     </div>
   </div>;
 }

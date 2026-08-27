@@ -711,16 +711,23 @@
 
   .new-task-composer {
     container-type: inline-size;
-    width: min(100%, 760px);
+    width: 100%;
     display: grid;
     gap: 3px;
-    margin-inline: auto;
+    margin-inline: 0;
     padding: 11px 14px 6px;
     border: 1px solid var(--border);
     border-radius: 20px;
     background: var(--card);
     box-shadow: 0 8px 28px color-mix(in oklab, var(--foreground) 8%, transparent), 0 1px 2px color-mix(in oklab, var(--foreground) 5%, transparent);
     transition: border-color 140ms ease, box-shadow 140ms ease;
+  }
+
+  .new-task-composer-stack {
+    width: min(100%, 760px);
+    display: grid;
+    gap: 10px;
+    margin-inline: auto;
   }
 
   .new-task-composer:focus-within {
@@ -2179,6 +2186,8 @@
   .workbench-composer-inner {
     width: 100%;
     max-width: var(--conversation-content-width);
+    display: grid;
+    gap: 10px;
     margin: 0 auto;
   }
 
@@ -2259,6 +2268,45 @@
   .workbench-composer-actions:not(.profile-visible) .workbench-composer-submit { margin-left: auto; }
 
   .workbench-composer-actions button { border-radius: 999px; }
+
+  .composer-workspace-meta {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 25px;
+    padding: 0 12px;
+  }
+
+  .composer-workspace-button {
+    min-width: 0;
+    max-width: min(48%, 260px);
+    height: 25px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 7px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    font-size: 11px;
+  }
+
+  .composer-workspace-button span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-workspace-button:hover,
+  .composer-workspace-button:focus-visible {
+    background: var(--accent);
+    color: var(--foreground);
+  }
+
+  .composer-workspace-location { max-width: 180px; }
 
   .composer-running-trigger {
     min-width: 94px;
