@@ -735,8 +735,9 @@
   }
 
   .new-task-prompt {
-    min-height: 44px !important;
-    max-height: min(32vh, 260px);
+    min-height: 56px !important;
+    max-height: 168px;
+    overflow-y: hidden;
     resize: none;
     padding: 2px 10px 0 !important;
     border: 0 !important;
@@ -2208,7 +2209,7 @@
   .workbench-composer-shell.disabled { opacity: .62; }
 
   .workbench-composer-input {
-    min-height: 70px;
+    min-height: 80px;
     display: flex;
     padding: 3px 6px 0;
     border: 0;
@@ -2217,7 +2218,9 @@
 
   .workbench-composer-input textarea {
     width: 100%;
-    min-height: 66px;
+    min-height: 76px;
+    max-height: 228px;
+    overflow-y: hidden;
     resize: none;
     border: 0;
     background: transparent;

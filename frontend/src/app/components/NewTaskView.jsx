@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { ArrowUp, ListPlus, Mic, Paperclip, Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { shouldSubmitComposer } from "../composerKeyboard.js";
+import { autosizeComposerTextarea, NEW_TASK_TEXTAREA_MIN_HEIGHT } from "../composerTextarea.js";
 import { fileName } from "../format.js";
 import { runtimeHarnessEnabled, supportsRuntimeProfile, workflowHarnessesEnabled } from "../runtimeHarnesses.js";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
@@ -53,6 +54,10 @@ export default function NewTaskView({
   const submitLabel = busy === "run"
     ? t("task.creating")
     : executionLabel;
+
+  useLayoutEffect(() => {
+    autosizeComposerTextarea(promptRef.current, NEW_TASK_TEXTAREA_MIN_HEIGHT);
+  }, [form.prompt]);
 
   const submit = (event) => {
     event.preventDefault();

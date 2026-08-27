@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { ChevronDown, CircleStop, LoaderCircle, Paperclip, Pause, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import { Action } from "../../ui/primitives.jsx";
 import { preserveComposerFocus } from "../composerInteraction.js";
 import { shouldSubmitComposer } from "../composerKeyboard.js";
+import { autosizeComposerTextarea, WORKBENCH_TEXTAREA_MIN_HEIGHT } from "../composerTextarea.js";
 import { fileName } from "../format.js";
 import { directAgentWorkflowID, supportsRuntimeProfile } from "../runtimeHarnesses.js";
 import HarnessSelector from "./HarnessSelector.jsx";
@@ -45,11 +46,16 @@ export default function Composer({
   const { t } = useTranslation();
   const [draft, setDraft] = useState("");
   const composing = useRef(false);
+  const draftRef = useRef(null);
   const editable = ["running", "paused", "completed"].includes(runStatus);
   const canSend = Boolean(draft.trim() || attachments.length);
   const directAgent = !workflowId || workflowId === directAgentWorkflowID;
   const workflowLabel = workflowName || t("task.workflowMode");
   const showRuntimeProfile = Boolean(runtimeProfile && supportsRuntimeProfile(runtimeProfile.harness));
+
+  useLayoutEffect(() => {
+    autosizeComposerTextarea(draftRef.current, WORKBENCH_TEXTAREA_MIN_HEIGHT);
+  }, [draft]);
 
   const send = async (modeName) => {
     const accepted = await onSubmit(modeName, draft.trim(), runtimeProfile);
@@ -67,7 +73,7 @@ export default function Composer({
       <div className={`workbench-composer-shell ${editable ? "" : "disabled"}`.trim()}>
         {pendingInstructions.length > 0 && <div className="instruction-queue grid gap-1.5 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground"><span>{t("composer.nextInstructions", { count: pendingInstructions.length })}</span>{pendingInstructions.map((instruction, index) => <div className={`instruction-item flex items-center gap-2 rounded-sm px-1 py-0.5 ${instruction.priority ? "priority text-warning" : ""}`} key={instruction.id}><b>{instruction.priority ? t("composer.priority") : `#${index + 1}`}</b><span>{instruction.content || t("common.attachmentsCount", { count: instruction.attachments?.length || 0 })}</span><Action size="compact" tone="danger" onClick={() => onRemoveInstruction(instruction.id)}>{t("common.remove")}</Action></div>)}</div>}
         {attachments.length > 0 && <div className="composer-attachments flex flex-wrap gap-1.5">{attachments.map((path) => <span className="attachment-chip inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground" key={path} title={path}>{fileName(path)}<Action size="compact" tone="danger" onClick={() => onRemoveAttachment(path)}>{t("common.remove")}</Action></span>)}</div>}
-        <div className="workbench-composer-input"><textarea aria-label={t("composer.aria")} value={draft} disabled={!editable} onChange={(event) => setDraft(event.target.value)} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }} onKeyDown={submitFromComposer} placeholder={runStatus === "running" ? t(directAgent ? "composer.directAgentRunningPlaceholder" : "composer.runningPlaceholder") : runStatus === "paused" ? t("composer.pausedPlaceholder") : runStatus === "completed" ? t("composer.continuePlaceholder") : t("composer.finishedPlaceholder")} /></div>
+        <div className="workbench-composer-input"><textarea ref={draftRef} aria-label={t("composer.aria")} value={draft} disabled={!editable} onChange={(event) => setDraft(event.target.value)} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }} onKeyDown={submitFromComposer} placeholder={runStatus === "running" ? t(directAgent ? "composer.directAgentRunningPlaceholder" : "composer.runningPlaceholder") : runStatus === "paused" ? t("composer.pausedPlaceholder") : runStatus === "completed" ? t("composer.continuePlaceholder") : t("composer.finishedPlaceholder")} /></div>
         <div className={`workbench-composer-actions ${showRuntimeProfile ? "profile-visible" : ""}`.trim()}>
           {onChooseAttachments && <Button type="button" variant="ghost" size="icon-sm" className="attachment-action" disabled={!editable} aria-label={t("composer.attachment")} title={t("composer.attachment")} onClick={onChooseAttachments}><Paperclip size={16} aria-hidden="true" /></Button>}
           {runtimeProfile && <div className="workbench-runtime-controls">

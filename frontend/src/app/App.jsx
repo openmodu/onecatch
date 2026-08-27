@@ -1,12 +1,13 @@
 import { hasRemoteFSHarness, hydrateRuntimeHarnesses, supportsRuntimeProfile } from "./runtimeHarnesses.js";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Lock, Minus, PanelRightOpen, PictureInPicture2, Square, SquareTerminal, X } from "lucide-react";
+import { Folder, Lock, Minus, PanelRightOpen, PictureInPicture2, Square, SquareTerminal, X } from "lucide-react";
 import { Events, Window } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   RuntimeBinding,
   SettingsBinding,
@@ -1384,6 +1385,14 @@ function App() {
 
       <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">
         <div className="app-titlebar drag-region flex h-[52px] shrink-0 cursor-default items-center gap-3 bg-background/80 px-5">
+          {view === "tasks" && selectedWorkspace && <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground" aria-label={`${t("workspace.currentProject")}: ${selectedWorkspace.name}`}>
+                <Folder size={14} strokeWidth={2.1} aria-hidden="true" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={6}>{selectedWorkspace.name}</TooltipContent>
+          </Tooltip>}
           {taskCreateVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={t("task.createTitle")}>
             <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{t("task.createTitle")}</strong>
           </span> : taskTitleVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={selectedTask.title}>

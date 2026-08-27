@@ -29,3 +29,10 @@ test("workspace metadata keeps a visible gap below both composer cards", () => {
   assert.match(styles, /\.new-task-composer-stack\s*\{[^}]*gap:\s*10px;/s);
   assert.match(styles, /\.workbench-composer-inner\s*\{[^}]*display:\s*grid;[^}]*gap:\s*10px;/s);
 });
+
+test("the titlebar uses a passive folder indicator for the current project", () => {
+  assert.match(app, /aria-label=\{`\$\{t\("workspace\.currentProject"\)\}: \$\{selectedWorkspace\.name\}`\}/);
+  assert.match(app, /<Folder size=\{14\}[^>]+aria-hidden="true"/);
+  assert.match(app, /<TooltipContent side="bottom" sideOffset=\{6\}>\{selectedWorkspace\.name\}<\/TooltipContent>/);
+  assert.doesNotMatch(app, /workspace\.switchProject|<DropdownMenuRadioGroup value=\{workspaceID\}/);
+});
