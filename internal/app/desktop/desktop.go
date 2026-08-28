@@ -224,22 +224,30 @@ func Run() {
 		})
 		fileMenu.AddSeparator()
 		fileMenu.AddRole(application.Quit)
-	} else {
-		menu.AddRole(application.AppMenu)
 	}
-	menu.AddRole(application.EditMenu)
-	if runtime.GOOS == "windows" {
-		menu.AddRole(application.ViewMenu)
-		menu.AddRole(application.HelpMenu)
-	} else {
-		menu.AddRole(application.WindowMenu)
+	// Linux gets no native menu bar at all: Settings is already reachable from
+	// the sidebar dropdown and Ctrl+,, quitting is a window close away, and
+	// Edit/Window role items (cut/copy/paste, minimize/zoom) are either
+	// redundant with the webview's own handling or, like minimize, meaningless
+	// under a tiling WM. Skip straight to Set so darwin/windows keep theirs.
+	if runtime.GOOS != "linux" {
+		menu.AddRole(application.EditMenu)
+		if runtime.GOOS == "windows" {
+			menu.AddRole(application.ViewMenu)
+			menu.AddRole(application.HelpMenu)
+		} else {
+			menu.AddRole(application.WindowMenu)
+		}
 	}
 	wailsApp.Menu.Set(menu)
 
 	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:             "main",
-		Title:            Name,
-		Frameless:        runtime.GOOS == "windows",
+		Name:  "main",
+		Title: Name,
+		// Frameless on Linux too: unlike Windows/macOS, Wails cannot rely on the
+		// compositor to draw window chrome (many Wayland WMs, e.g. tiling ones,
+		// never do), so Linux gets the same JS-drawn caption bar as Windows.
+		Frameless:        runtime.GOOS == "windows" || runtime.GOOS == "linux",
 		Width:            1280,
 		Height:           800,
 		MinWidth:         860,

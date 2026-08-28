@@ -12,6 +12,7 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { dagTemplate, loopTemplate } from "../../templates.js";
 import { directAgentWorkflowID } from "../../runtimeHarnesses.js";
+import AuxWindowCloseButton from "../../AuxWindowCloseButton.jsx";
 
 function workflowPath(workflow) {
   if (workflow?.mode === "dag") {
@@ -119,6 +120,7 @@ export default function WorkflowLibrary({ workflows, selectedWorkflow, runtimes,
   const activeWorkflow = selectedWorkflow && selectedWorkflow.id !== directAgentWorkflowID ? selectedWorkflow : editableWorkflows[0] || null;
   return <div className="workflow-window relative grid h-full min-h-0 grid-cols-[240px_minmax(0,1fr)] overflow-hidden bg-transparent text-foreground">
     <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex h-[52px] select-none items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85" aria-hidden="true">{t("workflow.title")}</div>
+    <AuxWindowCloseButton />
 
     <aside className="sidebar workflow-sidebar relative z-30 flex min-h-0 select-none flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]" aria-label={t("workflow.title")}>
       <div className="drag-region flex h-[52px] shrink-0 cursor-default items-center justify-end px-4">

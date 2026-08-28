@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
 import { ChevronDown } from "lucide-react";
 import { SettingsBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
+import AuxWindowCloseButton from "./AuxWindowCloseButton.jsx";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -212,6 +213,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       <span className="pointer-events-none bg-background" />
       <strong className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85">{t("sidebar.settings")}</strong>
     </div>
+    <AuxWindowCloseButton />
     <ScrollArea className="sidebar settings-sidebar relative z-30 min-h-0 select-none text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]">
       <aside className="flex min-h-full flex-col gap-1 px-3 pt-[52px] pb-4" aria-label={t("settings.sectionsAria")}>
         <SettingsKicker className="mb-2 px-2 text-[13px] tracking-[0.04em]">{t("settings.preferences")}</SettingsKicker>

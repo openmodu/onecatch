@@ -297,7 +297,7 @@
     transition: grid-template-columns 200ms cubic-bezier(.2, .8, .2, 1);
   }
 
-  :root:not([data-platform="windows"]) .sidebar-shell.is-collapsed + main > .app-titlebar {
+  :root:not([data-platform="windows"]):not([data-platform="linux"]) .sidebar-shell.is-collapsed + main > .app-titlebar {
     padding-left: 136px !important;
   }
 
@@ -343,7 +343,7 @@
     margin-left: 8px;
   }
 
-  :root:not([data-platform="windows"]) .sidebar-shell.is-collapsed + main .task-workbench.inspector-maximized .workbench-inspector-toolbar {
+  :root:not([data-platform="windows"]):not([data-platform="linux"]) .sidebar-shell.is-collapsed + main .task-workbench.inspector-maximized .workbench-inspector-toolbar {
     padding-left: 136px;
   }
 
@@ -2675,48 +2675,49 @@
   -webkit-app-region: no-drag;
 }
 
-/* macOS draws its traffic lights inside the web content. Windows already has
-   a native caption above it, so the Codex-style rail starts at the content edge
-   instead of leaving a second, empty titlebar row. */
-:root[data-platform="windows"] .sidebar > .drag-region:first-child {
+/* macOS draws its traffic lights inside the web content. Windows and Linux
+   already have a native (or JS-drawn, see .windows-titlebar) caption above
+   them, so the Codex-style rail starts at the content edge instead of
+   leaving a second, empty titlebar row. */
+:root:is([data-platform="windows"], [data-platform="linux"]) .sidebar > .drag-region:first-child {
   display: none;
 }
 
-:root[data-platform="windows"] .sidebar {
+:root:is([data-platform="windows"], [data-platform="linux"]) .sidebar {
   clip-path: none !important;
   background: var(--sidebar);
 }
 
-:root[data-platform="windows"] .sidebar-visibility-toggle {
+:root:is([data-platform="windows"], [data-platform="linux"]) .sidebar-visibility-toggle {
   top: 4px !important;
   left: 104px !important;
 }
 
-:root[data-platform="windows"] .sidebar-shell.is-collapsed + main > .app-titlebar {
+:root:is([data-platform="windows"], [data-platform="linux"]) .sidebar-shell.is-collapsed + main > .app-titlebar {
   padding-left: 20px !important;
 }
 
-/* Force the collapsed rail out of the Windows grid as well as out of view.
-   The inline width alone is not enough while the peek sidebar keeps its own
+/* Force the collapsed rail out of the grid as well as out of view. The
+   inline width alone is not enough while the peek sidebar keeps its own
    display width. */
-:root[data-platform="windows"] .app-shell.sidebar-is-collapsed {
+:root:is([data-platform="windows"], [data-platform="linux"]) .app-shell.sidebar-is-collapsed {
   grid-template-columns: 0 minmax(0, 1fr) !important;
 }
 
-:root[data-platform="windows"] .sidebar-shell.is-collapsed {
+:root:is([data-platform="windows"], [data-platform="linux"]) .sidebar-shell.is-collapsed {
   width: 0 !important;
   min-width: 0 !important;
 }
 
-:root[data-platform="windows"] .app-shell.sidebar-is-collapsed main > .app-titlebar {
+:root:is([data-platform="windows"], [data-platform="linux"]) .app-shell.sidebar-is-collapsed main > .app-titlebar {
   padding-left: 20px !important;
 }
 
-:root[data-platform="windows"] .app-window-root {
+:root:is([data-platform="windows"], [data-platform="linux"]) .app-window-root {
   grid-template-rows: 36px minmax(0, 1fr) !important;
 }
 
-:root[data-platform="windows"] .windows-titlebar {
+:root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar {
   display: flex;
 }
 
@@ -2745,7 +2746,9 @@
 }
 
 /* Auxiliary windows use the native Windows caption as their titlebar. Remove
-   the duplicate macOS inset title and reclaim that vertical space. */
+   the duplicate macOS inset title and reclaim that vertical space. Linux
+   auxiliary windows keep their own inset strip (see .aux-window-close below)
+   since there is no native caption to fall back on there. */
 :root[data-platform="windows"] .settings-titlebar,
 :root[data-platform="windows"] .workflow-window > .pointer-events-none {
   display: none;
@@ -2772,6 +2775,14 @@
 
 :root[data-platform="windows"] .inspector-window-panel {
   margin-top: 8px;
+}
+
+/* Linux auxiliary windows (Settings, Workflows) stay decorated like macOS,
+   but many Wayland compositors never draw that decoration, leaving no way to
+   close them. Add a real close control to the existing inset drag strip as a
+   fallback that works whether or not the compositor cooperates. */
+:root[data-platform="linux"] .aux-window-close {
+  display: grid;
 }
 
 @layer app {

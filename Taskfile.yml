@@ -67,7 +67,7 @@ tasks:
       - task: build:shell
       - task: build:askpass
       - cmd: ./build/desktop/dev-session.sh go tool wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
-        platforms: [darwin]
+        platforms: [darwin, linux]
       - cmd: go tool wails3 dev -config ./build/desktop/config.windows.yml -port {{.VITE_PORT}}
         platforms: [windows]
 

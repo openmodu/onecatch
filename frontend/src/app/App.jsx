@@ -91,11 +91,16 @@ function selectedTaskExecution(form) {
 }
 
 function WindowsTitleBar() {
-  return <div className="windows-titlebar drag-region hidden h-9 items-center border-b bg-background pl-3 text-xs text-foreground" onDoubleClick={() => void Window.ToggleMaximise()}>
+  // Hyprland (and most Wayland tiling WMs) has no minimize concept and no
+  // separate maximized size for a tiled window, so those two buttons would
+  // just be dead weight there — same reasoning as GTK apps like Files, which
+  // drop them under a tiling WM rather than ship controls that do nothing.
+  const isLinux = typeof document !== "undefined" && document.documentElement.dataset.platform === "linux";
+  return <div className="windows-titlebar drag-region hidden h-9 items-center border-b bg-background pl-3 text-xs text-foreground" onDoubleClick={isLinux ? undefined : () => void Window.ToggleMaximise()}>
     <span className="windows-titlebar-brand flex items-center gap-2 font-medium"><img className="size-4 rounded-[4px]" src="/appicon.png" alt="" aria-hidden="true" />OneCatch</span>
     <div className="no-drag ml-auto flex h-full" onDoubleClick={(event) => event.stopPropagation()}>
-      <button type="button" className="windows-caption-button" aria-label="最小化" onClick={() => void Window.Minimise()}><Minus size={14} aria-hidden="true" /></button>
-      <button type="button" className="windows-caption-button" aria-label="最大化或还原" onClick={() => void Window.ToggleMaximise()}><Square size={11} aria-hidden="true" /></button>
+      {!isLinux && <button type="button" className="windows-caption-button" aria-label="最小化" onClick={() => void Window.Minimise()}><Minus size={14} aria-hidden="true" /></button>}
+      {!isLinux && <button type="button" className="windows-caption-button" aria-label="最大化或还原" onClick={() => void Window.ToggleMaximise()}><Square size={11} aria-hidden="true" /></button>}
       <button type="button" className="windows-caption-button close" aria-label="关闭" onClick={() => void Window.Close()}><X size={15} aria-hidden="true" /></button>
     </div>
   </div>;
