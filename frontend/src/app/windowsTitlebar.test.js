@@ -18,6 +18,8 @@ test("Windows and Linux integrate the conversation controls into one desktop cap
   assert.match(app, /const desktopChrome = .*\["windows", "linux"\]\.includes/);
   assert.match(app, /windows-titlebar-brand[^>]*><img[^>]*\/><\/span>/, "the product name is absent from both desktop captions");
   assert.match(app, /\{title && <span className="windows-titlebar-task[^"]*px-3/, "the caption title keeps breathing room on both sides of the sidebar divider");
+  assert.match(app, /\{workspaceName && <Tooltip>[\s\S]*?<Folder size=\{14\}[\s\S]*?<TooltipContent side="bottom" sideOffset=\{6\}>\{workspaceName\}<\/TooltipContent>/, "the project folder in the caption reveals its workspace name on hover");
+  assert.match(app, /workspaceName=\{view === "tasks" \? selectedWorkspace\?\.name \|\| "" : ""\}/, "only task views place the current project beside the caption title");
   assert.match(app, /className="windows-titlebar-control relative" aria-label=\{t\("lock\.enter"\)\}/, "standby lock belongs in the desktop caption");
   assert.match(app, /className=\{`windows-titlebar-control \$\{terminalVisible/);
   assert.match(app, /aria-label=\{inspectorCollapsed \? t\("inspector\.expand"\) : t\("inspector\.collapse"\)\}/);

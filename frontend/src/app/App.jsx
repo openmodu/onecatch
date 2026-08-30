@@ -93,7 +93,7 @@ function selectedTaskExecution(form) {
   };
 }
 
-function DesktopTitleBar({ title = "", taskStatus = "", taskActive = false, showTaskStatus = false, showWorkbenchControls = false, terminalVisible = false, inspectorCollapsed = true, inspectorDetached = false, lockActive = 0, sidebarWidth = SIDEBAR_DEFAULT_WIDTH, onLock, onToggleTerminal, onToggleInspector, onDockInspector }) {
+function DesktopTitleBar({ title = "", workspaceName = "", taskStatus = "", taskActive = false, showTaskStatus = false, showWorkbenchControls = false, terminalVisible = false, inspectorCollapsed = true, inspectorDetached = false, lockActive = 0, sidebarWidth = SIDEBAR_DEFAULT_WIDTH, onLock, onToggleTerminal, onToggleInspector, onDockInspector }) {
   const { t } = useTranslation();
   // Hyprland (and most Wayland tiling WMs) has no minimize concept and no
   // separate maximized size for a tiled window, so those two buttons would
@@ -104,8 +104,16 @@ function DesktopTitleBar({ title = "", taskStatus = "", taskActive = false, show
   const titlebarSidebarWidth = Math.max(sidebarWidth, 136);
   return <div className="windows-titlebar drag-region hidden h-9 items-center bg-background pl-3 text-xs text-foreground" style={{ "--windows-titlebar-sidebar-width": `${titlebarSidebarWidth}px` }} onDoubleClick={isLinux ? undefined : () => void Window.ToggleMaximise()}>
     <span className="windows-titlebar-brand flex items-center gap-2 font-medium"><img className="size-4 rounded-[4px]" src="/appicon.png" alt="" aria-hidden="true" /></span>
-    {title && <span className="windows-titlebar-task pointer-events-none flex min-w-0 flex-1 items-center gap-2 px-3" title={title}>
-      <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{title}</strong>
+    {title && <span className="windows-titlebar-task pointer-events-none flex min-w-0 flex-1 items-center gap-2 px-3">
+      {workspaceName && <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="no-drag pointer-events-auto grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground" aria-label={`${t("workspace.currentProject")}: ${workspaceName}`} onDoubleClick={(event) => event.stopPropagation()}>
+            <Folder size={14} strokeWidth={2.1} aria-hidden="true" />
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={6}>{workspaceName}</TooltipContent>
+      </Tooltip>}
+      <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={title}>{title}</strong>
       {showTaskStatus && <StatusPill status={taskStatus} active={taskActive} />}
     </span>}
     <div className="windows-titlebar-workbench-actions no-drag flex h-full shrink-0 items-center gap-1 px-2" onDoubleClick={(event) => event.stopPropagation()}>
@@ -1442,6 +1450,7 @@ function App() {
   return <div className="app-window-root relative grid h-full grid-rows-[minmax(0,1fr)] bg-transparent text-foreground">
     <DesktopTitleBar
       title={taskCreateVisible ? t("task.createTitle") : taskTitleVisible ? selectedTask.title : commandText}
+      workspaceName={view === "tasks" ? selectedWorkspace?.name || "" : ""}
       taskStatus={selectedTaskStatus}
       taskActive={runDetail?.active}
       showTaskStatus={Boolean(taskTitleVisible && selectedTask.workflowId && selectedTask.workflowId !== directAgentWorkflowID)}
