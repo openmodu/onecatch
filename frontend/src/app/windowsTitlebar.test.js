@@ -28,6 +28,9 @@ test("Windows and Linux integrate the conversation controls into one desktop cap
   assert.match(workbench, /if \(inspectorCollapsed\) onToggleInspector\(\); else closeInspector\(\);/, "caption requests must retain the workbench's dirty-buffer close guard");
   assert.match(sidebar, /onWidthChange\?\.\(width\)/, "the caption title should stay aligned when the resizable sidebar changes width");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.sidebar-visibility-toggle\s*\{[^}]*left:\s*36px/s, "the sidebar toggle sits immediately after the app icon");
+  assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.sidebar\s*\{[^}]*border-right:\s*1px solid var\(--border\)/s, "the sidebar divider reaches the bottom of the content rail");
+  assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.windows-titlebar::after\s*\{[^}]*left:\s*var\(--windows-titlebar-sidebar-width[^}]*height:\s*1px/s, "the caption rule starts at the main content instead of crossing the sidebar");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.windows-titlebar-brand\s*\{[^}]*--windows-titlebar-sidebar-width/s);
+  assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.windows-titlebar-brand\s*\{[^}]*border-right:\s*1px solid var\(--border\)/s, "the sidebar divider continues through the caption");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.workbench-inspector\.open\s*\{[^}]*top:\s*8px[^}]*height:\s*calc\(100% - 16px\)/s, "the inspector no longer overlaps the removed second toolbar");
 });

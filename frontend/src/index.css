@@ -2694,6 +2694,7 @@
 
 :root:is([data-platform="windows"], [data-platform="linux"]) .sidebar {
   clip-path: none !important;
+  border-right: 1px solid var(--border);
   background: var(--sidebar);
 }
 
@@ -2727,13 +2728,29 @@
 }
 
 :root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar {
+  position: relative;
   display: flex;
   padding-left: 0;
 }
 
+/* Continue the sidebar divider through the caption, while keeping the
+   caption's bottom rule out of the sidebar itself. */
+:root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: var(--windows-titlebar-sidebar-width, 216px);
+  height: 1px;
+  background: var(--border);
+  content: "";
+  pointer-events: none;
+}
+
 :root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar-brand {
   width: var(--windows-titlebar-sidebar-width, 216px);
+  height: 100%;
   flex: 0 0 var(--windows-titlebar-sidebar-width, 216px);
+  border-right: 1px solid var(--border);
   padding-right: 0;
   padding-left: 12px;
 }
