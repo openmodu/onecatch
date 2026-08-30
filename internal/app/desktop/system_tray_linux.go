@@ -37,6 +37,10 @@ func installDesktopSystemTray(
 
 	tray := app.SystemTray.New()
 	tray.SetIcon(desktopassets.AppIcon)
+	// Wails beta.10 does not implement SetTooltip on Linux. StatusNotifier
+	// hosts use the label-backed DBus Title for hover text instead; without an
+	// explicit label Wails falls back to "Wails".
+	tray.SetLabel(Name)
 	tray.SetTooltip(Name)
 	// StatusNotifier hosts deliver the primary activation separately from the
 	// menu. Make that common action restore the main workbench too.
