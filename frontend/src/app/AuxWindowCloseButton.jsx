@@ -1,18 +1,12 @@
 import { Window } from "@wailsio/runtime";
-import { X } from "lucide-react";
+import { Minus, Square, X } from "lucide-react";
 
-// Settings/Workflows keep the macOS-style inset drag strip on every
-// platform. On Linux, unlike macOS/Windows, there is no guarantee the
-// compositor draws its own titlebar (many Wayland WMs never do), so this is
-// the only way to close these windows there. Hidden by default; shown only
-// for data-platform="linux" in index.css.
+// Windows and Linux auxiliary windows share the app-drawn title strip so the
+// sidebar divider can continue through it. macOS keeps its native controls.
 export default function AuxWindowCloseButton() {
-  return <button
-    type="button"
-    className="aux-window-close no-drag absolute right-3 top-3 z-50 hidden size-7 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
-    aria-label="关闭"
-    onClick={() => void Window.Close()}
-  >
-    <X size={15} aria-hidden="true" />
-  </button>;
+  return <div className="aux-window-controls no-drag absolute top-0 right-0 z-50 hidden h-10" onDoubleClick={(event) => event.stopPropagation()}>
+    <button type="button" className="aux-window-caption-button windows-only" aria-label="最小化" onClick={() => void Window.Minimise()}><Minus size={14} aria-hidden="true" /></button>
+    <button type="button" className="aux-window-caption-button windows-only" aria-label="最大化或还原" onClick={() => void Window.ToggleMaximise()}><Square size={11} aria-hidden="true" /></button>
+    <button type="button" className="aux-window-caption-button close" aria-label="关闭" onClick={() => void Window.Close()}><X size={15} aria-hidden="true" /></button>
+  </div>;
 }

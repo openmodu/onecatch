@@ -211,12 +211,11 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     <div className="settings-titlebar drag-region absolute inset-x-0 top-0 z-40 grid h-[52px] cursor-default grid-cols-[216px_minmax(0,1fr)] select-none" aria-hidden="true">
       <span className="settings-titlebar-sidebar pointer-events-none" />
       <span className="pointer-events-none bg-background" />
-      <strong className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85">{t("sidebar.settings")}</strong>
+      <strong className="auxiliary-sidebar-title pointer-events-none absolute inset-y-0 left-0 flex w-[216px] items-center justify-start px-4 text-sm font-semibold tracking-[-0.01em] text-foreground/85">{t("sidebar.settings")}</strong>
     </div>
     <AuxWindowCloseButton />
     <ScrollArea className="sidebar settings-sidebar relative z-30 min-h-0 select-none text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]">
-      <aside className="flex min-h-full flex-col gap-1 px-3 pt-[52px] pb-4" aria-label={t("settings.sectionsAria")}>
-        <SettingsKicker className="mb-2 px-2 text-[13px] tracking-[0.04em]">{t("settings.preferences")}</SettingsKicker>
+      <aside className="flex min-h-full flex-col gap-1 px-3 pt-[60px] pb-4" aria-label={t("settings.sectionsAria")}>
         {sections.map((item) => <Button key={item.id} variant="ghost" className={`h-auto w-full justify-start rounded-lg px-3 py-2.5 text-left ${section === item.id ? "bg-accent text-accent-foreground hover:bg-accent" : "text-muted-foreground hover:bg-background/45"}`} aria-current={section === item.id ? "page" : undefined} onClick={() => switchSection(item.id)}>
           <span className="min-w-0"><strong className="flex items-center gap-2 text-[13px] font-medium text-foreground">{item.label}{section === item.id && dirty && <i className="size-1.5 rounded-full bg-primary" aria-label={t("settings.unsaved")} />}</strong><small className="mt-0.5 block whitespace-normal text-[11px] font-normal leading-snug text-muted-foreground">{item.description}</small></span>
         </Button>)}

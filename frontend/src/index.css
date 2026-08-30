@@ -669,10 +669,15 @@
 
   .settings-titlebar-sidebar {
     background-color: var(--sidebar);
+    border-right: 1px solid var(--border);
   }
 
   :root[data-native-sidebar-material] .settings-titlebar-sidebar {
     background-color: color-mix(in oklab, var(--sidebar) 94%, transparent);
+  }
+
+  :root:not([data-platform="windows"]):not([data-platform="linux"]) .auxiliary-sidebar-title {
+    padding-left: 72px;
   }
 
   .conversation-workspace {
@@ -2699,7 +2704,7 @@
 }
 
 :root:is([data-platform="windows"], [data-platform="linux"]) .sidebar-visibility-toggle {
-  top: 4px !important;
+  top: 6px !important;
   left: 36px !important;
 }
 
@@ -2724,12 +2729,13 @@
 }
 
 :root:is([data-platform="windows"], [data-platform="linux"]) .app-window-root {
-  grid-template-rows: 36px minmax(0, 1fr) !important;
+  grid-template-rows: 40px minmax(0, 1fr) !important;
 }
 
 :root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar {
   position: relative;
   display: flex;
+  height: 40px;
   padding-left: 0;
 }
 
@@ -2812,25 +2818,24 @@
   color: white;
 }
 
-/* Auxiliary windows use the native Windows caption as their titlebar. Remove
-   the duplicate macOS inset title and reclaim that vertical space. Linux
-   auxiliary windows keep their own inset strip (see .aux-window-close below)
-   since there is no native caption to fall back on there. */
-:root[data-platform="windows"] .settings-titlebar,
-:root[data-platform="windows"] .workflow-window > .pointer-events-none {
-  display: none;
-}
-
-:root[data-platform="windows"] .settings-sidebar aside {
-  padding-top: 0;
-}
-
-:root[data-platform="windows"] .settings-content > [data-slot="scroll-area-viewport"] > section {
-  padding-top: 24px !important;
-}
-
-:root[data-platform="windows"] .workflow-sidebar > .drag-region {
+/* Windows and Linux auxiliary windows use the same compact, app-drawn title
+   strip as the main window. Keeping it inside the web canvas lets the sidebar
+   divider run through the caption instead of stopping below native chrome. */
+:root:is([data-platform="windows"], [data-platform="linux"]) .settings-titlebar,
+:root:is([data-platform="windows"], [data-platform="linux"]) .workflow-titlebar {
   height: 40px;
+}
+
+:root:is([data-platform="windows"], [data-platform="linux"]) .settings-sidebar aside {
+  padding-top: 48px;
+}
+
+:root:is([data-platform="windows"], [data-platform="linux"]) .settings-content > [data-slot="scroll-area-viewport"] > section {
+  padding-top: 52px !important;
+}
+
+:root:is([data-platform="windows"], [data-platform="linux"]) .workflow-sidebar-title-spacer {
+  height: 48px;
 }
 
 /* The detached inspector gets its title from the native Windows caption, so the
@@ -2844,12 +2849,31 @@
   margin-top: 8px;
 }
 
-/* Linux auxiliary windows (Settings, Workflows) stay decorated like macOS,
-   but many Wayland compositors never draw that decoration, leaving no way to
-   close them. Add a real close control to the existing inset drag strip as a
-   fallback that works whether or not the compositor cooperates. */
-:root[data-platform="linux"] .aux-window-close {
+:root:is([data-platform="windows"], [data-platform="linux"]) .aux-window-controls {
+  display: flex;
+}
+
+.aux-window-caption-button {
   display: grid;
+  width: 46px;
+  height: 40px;
+  place-items: center;
+  border: 0;
+  background: transparent;
+  color: var(--foreground);
+}
+
+.aux-window-caption-button:hover {
+  background: var(--accent);
+}
+
+.aux-window-caption-button.close:hover {
+  background: #c42b1c;
+  color: white;
+}
+
+:root[data-platform="linux"] .aux-window-caption-button.windows-only {
+  display: none;
 }
 
 @layer app {

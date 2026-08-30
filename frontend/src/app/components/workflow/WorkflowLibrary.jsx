@@ -119,18 +119,21 @@ export default function WorkflowLibrary({ workflows, selectedWorkflow, runtimes,
   const editableWorkflows = workflows.filter((workflow) => workflow.id !== directAgentWorkflowID);
   const activeWorkflow = selectedWorkflow && selectedWorkflow.id !== directAgentWorkflowID ? selectedWorkflow : editableWorkflows[0] || null;
   return <div className="workflow-window relative grid h-full min-h-0 grid-cols-[240px_minmax(0,1fr)] overflow-hidden bg-transparent text-foreground">
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex h-[52px] select-none items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85" aria-hidden="true">{t("workflow.title")}</div>
+    <div className="workflow-titlebar drag-region absolute inset-x-0 top-0 z-40 grid h-[52px] cursor-default grid-cols-[240px_minmax(0,1fr)] select-none">
+      <div className="auxiliary-sidebar-title flex min-w-0 items-center justify-start gap-2 border-r border-border bg-sidebar px-4 text-sm font-bold tracking-[-0.01em] text-foreground/85">
+        <span className="pointer-events-none truncate">{t("workflow.title")}</span>
+        {(onGoBack || onGoForward) && <div className="no-drag flex items-center gap-0.5">
+          <Button variant="ghost" size="icon-sm" disabled={!canGoBack} aria-label={t("common.goBack")} title={t("common.goBack")} onClick={onGoBack}><ChevronLeft strokeWidth={2.5} aria-hidden="true" /></Button>
+          <Button variant="ghost" size="icon-sm" disabled={!canGoForward} aria-label={t("common.goForward")} title={t("common.goForward")} onClick={onGoForward}><ChevronRight strokeWidth={2.5} aria-hidden="true" /></Button>
+        </div>}
+      </div>
+      <div className="bg-background/80" />
+    </div>
     <AuxWindowCloseButton />
 
     <aside className="sidebar workflow-sidebar relative z-30 flex min-h-0 select-none flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]" aria-label={t("workflow.title")}>
-      <div className="drag-region flex h-[52px] shrink-0 cursor-default items-center justify-end px-4">
-        {(onGoBack || onGoForward) && <div className="no-drag flex items-center gap-0.5">
-          <Button variant="ghost" size="icon-xs" disabled={!canGoBack} aria-label={t("common.goBack")} title={t("common.goBack")} onClick={onGoBack}><ChevronLeft aria-hidden="true" /></Button>
-          <Button variant="ghost" size="icon-xs" disabled={!canGoForward} aria-label={t("common.goForward")} title={t("common.goForward")} onClick={onGoForward}><ChevronRight aria-hidden="true" /></Button>
-        </div>}
-      </div>
-      <div className="flex items-center justify-between gap-3 px-4 pt-2 pb-3 pl-5">
-        <div className="min-w-0"><strong className="block text-sm font-semibold text-foreground">{t("workflow.title")}</strong><small className="mt-0.5 block truncate text-[11px] text-muted-foreground">{editableWorkflows.length}</small></div>
+      <div className="workflow-sidebar-title-spacer h-[60px] shrink-0" aria-hidden="true" />
+      <div className="flex shrink-0 items-center justify-end px-4 pb-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild><Button variant="outline" size="icon-sm" aria-label={t("workflow.title")}><Plus aria-hidden="true" /></Button></DropdownMenuTrigger>
           <DropdownMenuContent align="end" collisionPadding={12}>

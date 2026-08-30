@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"runtime"
 	"sync"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -173,6 +174,22 @@ type auxiliaryWindowOptions struct {
 	announce string
 }
 
+func auxiliaryWindowsTheme() application.ThemeSettings {
+	windowTheme := func(background, foreground, border [3]uint8) *application.WindowTheme {
+		return &application.WindowTheme{
+			TitleBarColour:  application.NewRGBPtr(background[0], background[1], background[2]),
+			TitleTextColour: application.NewRGBPtr(foreground[0], foreground[1], foreground[2]),
+			BorderColour:    application.NewRGBPtr(border[0], border[1], border[2]),
+		}
+	}
+	return application.ThemeSettings{
+		LightModeActive:   windowTheme([3]uint8{245, 245, 240}, [3]uint8{26, 26, 26}, [3]uint8{213, 210, 198}),
+		LightModeInactive: windowTheme([3]uint8{245, 245, 240}, [3]uint8{96, 96, 94}, [3]uint8{213, 210, 198}),
+		DarkModeActive:    windowTheme([3]uint8{28, 28, 28}, [3]uint8{239, 239, 239}, [3]uint8{58, 58, 58}),
+		DarkModeInactive:  windowTheme([3]uint8{28, 28, 28}, [3]uint8{171, 171, 171}, [3]uint8{58, 58, 58}),
+	}
+}
+
 func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions, show bool) {
 	if c == nil || c.app == nil {
 		return
@@ -229,11 +246,15 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions, show bo
 		MinWidth:         options.minWidth,
 		MinHeight:        options.minHeight,
 		DisableResize:    options.disableResize,
+		Frameless:        runtime.GOOS == "windows" || runtime.GOOS == "linux",
 		InitialPosition:  application.WindowCentered,
 		BackgroundColour: application.NewRGB(245, 245, 240),
 		Hidden:           true,
 		URL:              options.url,
 		Mac:              macOptions,
+		Windows: application.WindowsWindow{
+			CustomTheme: auxiliaryWindowsTheme(),
+		},
 	})
 	c.loading[options.name] = true
 	c.wantShow[options.name] = show

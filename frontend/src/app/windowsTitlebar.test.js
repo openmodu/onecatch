@@ -5,13 +5,15 @@ import test from "node:test";
 const appSource = new URL("./App.jsx", import.meta.url);
 const sidebarSource = new URL("./components/Sidebar.jsx", import.meta.url);
 const workbenchSource = new URL("./components/TaskWorkbench.jsx", import.meta.url);
+const workflowSource = new URL("./components/workflow/WorkflowLibrary.jsx", import.meta.url);
 const cssSource = new URL("../index.css", import.meta.url);
 
 test("Windows and Linux integrate the conversation controls into one desktop caption", async () => {
-  const [app, sidebar, workbench, css] = await Promise.all([
+  const [app, sidebar, workbench, workflow, css] = await Promise.all([
     readFile(appSource, "utf8"),
     readFile(sidebarSource, "utf8"),
     readFile(workbenchSource, "utf8"),
+    readFile(workflowSource, "utf8"),
     readFile(cssSource, "utf8"),
   ]);
 
@@ -33,8 +35,15 @@ test("Windows and Linux integrate the conversation controls into one desktop cap
 
   assert.match(workbench, /!integratedDesktopTitlebar && !inspectorCollapsed && !inspectorMaximized/, "desktop captions must not duplicate terminal and status controls above the inspector");
   assert.match(workbench, /if \(inspectorCollapsed\) onToggleInspector\(\); else closeInspector\(\);/, "caption requests must retain the workbench's dirty-buffer close guard");
+  assert.match(workflow, /workflow-titlebar drag-region absolute inset-x-0/, "the workflow caption exposes a full-width drag surface");
+  assert.match(workflow, /auxiliary-sidebar-title[^\"]*justify-start gap-2[^\"]*border-r[^\"]*bg-sidebar/, "workflow history controls stay close to the sidebar title");
+  assert.match(workflow, /<span[^>]*>\{t\("workflow\.title"\)\}<\/span>\s*\{\(onGoBack \|\| onGoForward\)/, "workflow history controls sit immediately after the sidebar title");
+  assert.match(workflow, /size="icon-sm"[^>]*onClick=\{onGoBack\}[\s\S]*?<ChevronLeft strokeWidth=\{2\.5\}/, "workflow history controls use a clear native-scale weight");
+  assert.match(workflow, /workflow-sidebar-title-spacer[\s\S]*?justify-end px-4 pb-3[\s\S]*?<Plus/, "the new-workflow action sits below the sidebar title");
+  assert.doesNotMatch(workflow, /<strong[^>]*>\{t\("workflow\.title"\)\}<\/strong>/, "the workflow rail does not repeat the window title");
   assert.match(sidebar, /onWidthChange\?\.\(width\)/, "the caption title should stay aligned when the resizable sidebar changes width");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.sidebar-visibility-toggle\s*\{[^}]*left:\s*36px/s, "the sidebar toggle sits immediately after the app icon");
+  assert.match(css, /\.app-window-root\s*\{[^}]*grid-template-rows:\s*40px/s, "desktop app chrome uses the unified native-scale titlebar height");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.sidebar\s*\{[^}]*border-right:\s*1px solid var\(--border\)/s, "the sidebar divider reaches the bottom of the content rail");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.windows-titlebar::after\s*\{[^}]*left:\s*var\(--windows-titlebar-sidebar-width[^}]*height:\s*1px/s, "the caption rule starts at the main content instead of crossing the sidebar");
   assert.match(css, /\.windows-titlebar\.sidebar-is-collapsed::after\s*\{[^}]*left:\s*0/s, "the caption rule reaches the left window edge when the sidebar is collapsed");
