@@ -804,13 +804,11 @@
   }
 
   .new-task-add,
-  .new-task-voice,
   .new-task-select {
     border-radius: 999px !important;
   }
 
-  .new-task-add,
-  .new-task-voice {
+  .new-task-add {
     width: 32px !important;
     height: 32px !important;
     flex: 0 0 auto;
@@ -1033,7 +1031,7 @@
     font-size: 14px !important;
   }
 
-  .new-task-toolbar.no-runtime-profile .new-task-voice { margin-left: auto; }
+  .new-task-toolbar.no-runtime-profile .new-task-submit-group { margin-left: auto; }
 
   @container (max-width: 700px) {
     .new-task-toolbar { gap: 5px; }
@@ -2312,22 +2310,8 @@
 
   .composer-workspace-location { max-width: 180px; }
 
-  .composer-running-trigger {
-    min-width: 94px;
-    justify-content: center;
-    border-color: color-mix(in oklab, var(--primary) 24%, var(--border));
-    background: color-mix(in oklab, var(--primary) 8%, var(--secondary));
-    color: var(--foreground);
-  }
-
-  .composer-running-icon {
-    color: var(--primary);
-    animation: spin 1.4s linear infinite;
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .conversation-tool-state-icon.spinning { animation: none; }
-    .composer-running-icon { animation: none; }
     .conversation-message-actions,
     .conversation-user-disclosure svg { transition: none; }
   }

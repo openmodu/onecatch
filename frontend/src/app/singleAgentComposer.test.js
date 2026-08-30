@@ -12,10 +12,13 @@ test("single-Agent tasks omit the redundant titlebar status", () => {
 
 test("single-Agent composer has one state-aware primary control", () => {
   assert.match(composer, /directAgent \? <>/);
-  assert.match(composer, /composer\.runningActions/);
-  assert.match(composer, /onSelect=\{onInterrupt\}/);
-  assert.match(composer, /onSelect=\{onCancel\}/);
+  assert.match(composer, /className="composer-pause-action"[^>]*onClick=\{onInterrupt\}[^>]*><Pause/);
+  assert.match(composer, /className="composer-send-action"/);
+  assert.match(composer, /aria-label=\{t\("composer\.sendMessage"\)\}/);
+  assert.match(composer, /composer-send-action[\s\S]{0,500}<ArrowUp/);
   assert.match(composer, /composer\.sendMessage/);
+  assert.doesNotMatch(composer, /CircleStop|onCancel|composer\.(?:runningActions|stop|terminate)/);
+  assert.doesNotMatch(app, /TaskRunBinding\.CancelRun|onCancel=\{cancelRun\}/);
 });
 
 test("session runtime profile uses the same intrinsic width as new task", () => {

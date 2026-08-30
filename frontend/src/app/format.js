@@ -10,6 +10,8 @@ function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMont
 
 function clockOf(date) { return date.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
 
+function twoDigits(value) { return String(value).padStart(2, "0"); }
+
 function dayOf(date, now) {
   const options = date.getFullYear() === now.getFullYear()
     ? { month: "numeric", day: "numeric" }
@@ -37,6 +39,18 @@ export function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "—";
   return `${date.toLocaleDateString(locale(), { year: "numeric", month: "numeric", day: "numeric" })} ${clockOf(date)}`;
+}
+
+// A message's hover metadata must still identify the day when the transcript
+// is read today; a clock alone cannot distinguish adjacent conversation days.
+export function formatMessageDateTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  const now = new Date();
+  const day = `${twoDigits(date.getMonth() + 1)}/${twoDigits(date.getDate())}`;
+  const datedDay = date.getFullYear() === now.getFullYear() ? day : `${date.getFullYear()}/${day}`;
+  return `${datedDay} ${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`;
 }
 
 export function errorMessage(error) {

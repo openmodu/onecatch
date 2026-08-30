@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Clipboard } from "@wailsio/runtime";
 import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Copy, FilePenLine, LoaderCircle, Search, Terminal, TriangleAlert, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fileName, formatDateTime, formatDuration, formatTime } from "../format.js";
+import { fileName, formatDateTime, formatDuration, formatMessageDateTime, formatTime } from "../format.js";
 import { groupRoundItems } from "../runConversation.js";
 import { Action } from "../../ui/primitives.jsx";
 
@@ -47,7 +47,7 @@ function MessageActions({ at, content, align = "start" }) {
   };
   const copyLabel = copied ? t("timeline.messageCopied") : t("timeline.copyMessage");
   return <div className={`conversation-message-actions ${align}`}>
-    <time dateTime={at || undefined} title={formatDateTime(at)}>{formatTime(at)}</time>
+    <time dateTime={at || undefined} title={formatDateTime(at)}>{formatMessageDateTime(at)}</time>
     <Button type="button" variant="ghost" size="icon-xs" className="conversation-message-copy" aria-label={copyLabel} title={copyLabel} onClick={copyMessage}>{copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}</Button>
   </div>;
 }

@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { ArrowUp, ListPlus, Mic, Paperclip, Plus, X } from "lucide-react";
+import { ArrowUp, ListPlus, Paperclip, Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -127,7 +127,6 @@ export default function NewTaskView({
               loading={runtimeConfiguration?.loading}
               error={runtimeConfiguration?.error}
             />}
-            <Button type="button" variant="ghost" size="icon-sm" className="new-task-voice" aria-label={t("task.voiceInput")} title={t("task.voiceInput")} onClick={() => promptRef.current?.focus()}><Mic size={17} aria-hidden="true" /></Button>
             <div className={`new-task-submit-group ${executionMode}`}>
               <Button type="submit" size="icon-sm" className="new-task-submit-action" disabled={!ready || busy === "run"} aria-label={submitLabel} title={submitLabel}>
                 {executionMode === "queued" ? <ListPlus size={15} strokeWidth={2.2} aria-hidden="true" /> : <ArrowUp size={15} strokeWidth={2.4} aria-hidden="true" />}

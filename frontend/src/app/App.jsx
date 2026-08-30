@@ -1180,19 +1180,17 @@ function App() {
     catch (error) { notify("error", errorMessage(error)); }
   }, [loadRunList, loadTasks, mode, notify, requestConfirm, t]);
 
-  const runAction = useCallback(async (action) => {
+  const interruptRun = useCallback(async () => {
     const runID = selectedRunIDRef.current;
     if (!runID || runActionPending.current) return;
-    runActionPending.current = action;
-    setBusy(action);
+    runActionPending.current = "interrupt";
+    setBusy("interrupt");
     try {
       if (mode === "demo") {
-        const nextStatus = action === "interrupt" ? "paused" : "cancelled";
-        setRunDetail((detail) => ({ ...detail, active: false, run: { ...detail.run, status: nextStatus, pauseReason: action === "interrupt" ? "interrupted" : "" } }));
-        setRunItems((items) => items.map((item) => item.id === runID ? { ...item, status: nextStatus } : item));
+        setRunDetail((detail) => ({ ...detail, active: false, run: { ...detail.run, status: "paused", pauseReason: "interrupted" } }));
+        setRunItems((items) => items.map((item) => item.id === runID ? { ...item, status: "paused" } : item));
       } else {
-        if (action === "interrupt") await TaskRunBinding.InterruptRun(runID);
-        if (action === "cancel") await TaskRunBinding.CancelRun(runID);
+        await TaskRunBinding.InterruptRun(runID);
         window.setTimeout(() => {
           if (selectedRunIDRef.current === runID) loadRun(runID, true);
         }, 250);
@@ -1379,8 +1377,6 @@ function App() {
   const chooseTaskAttachments = useCallback(() => chooseAttachments("task"), [chooseAttachments]);
   const chooseComposerAttachments = useCallback(() => chooseAttachments("composer"), [chooseAttachments]);
   const removeComposerAttachment = useCallback((path) => setComposerAttachments((items) => items.filter((item) => item !== path)), []);
-  const interruptRun = useCallback(() => runAction("interrupt"), [runAction]);
-  const cancelRun = useCallback(() => runAction("cancel"), [runAction]);
 
   // Standby lock: one glanceable aggregate over the whole workspace, derived
   // from state that already updates live (tasks poll + run-state push).
@@ -1580,7 +1576,6 @@ function App() {
           onRemoveAttachment={removeComposerAttachment}
           onSubmit={submitWorkbenchComposer}
           onInterrupt={interruptRun}
-          onCancel={cancelRun}
           onRemoveInstruction={removeQueuedInstruction}
           onLoadEarlierTranscript={loadEarlierTranscript}
           onPermissionDecision={respondPermission}

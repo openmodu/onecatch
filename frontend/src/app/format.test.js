@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { errorMessage, formatDateTime, formatTime, taskTitleFromPrompt } from "./format.js";
+import { errorMessage, formatDateTime, formatMessageDateTime, formatTime, taskTitleFromPrompt } from "./format.js";
 
 test("worker protocol errors become actionable UI copy", () => {
   const message = errorMessage("worker_workspace_revision_missing: requested revision is unavailable");
@@ -49,9 +49,18 @@ test("the unabbreviated stamp always answers with a full date", () => {
   assert.ok(full.endsWith(formatTime(atClock(0))));
 });
 
+test("message hover timestamps always carry a compact calendar date", () => {
+  const today = atClock(0);
+  const lastYear = atClock(3, 1);
+  const day = (date) => `${String(date.getMonth() + 1).padStart(2, "0")}/${String(date.getDate()).padStart(2, "0")}`;
+  assert.equal(formatMessageDateTime(today), `${day(today)} 14:02`);
+  assert.equal(formatMessageDateTime(lastYear), `${lastYear.getFullYear()}/${day(lastYear)} 14:02`);
+});
+
 test("a missing or unparseable timestamp reads as absent, not as the epoch", () => {
   assert.equal(formatTime(""), "—");
   assert.equal(formatTime("not a date"), "—");
   assert.equal(formatDateTime(null), "—");
   assert.equal(formatDateTime("not a date"), "—");
+  assert.equal(formatMessageDateTime("not a date"), "—");
 });

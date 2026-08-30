@@ -1,8 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { ChevronDown, CircleStop, LoaderCircle, Paperclip, Pause, Workflow } from "lucide-react";
+import { ArrowUp, Paperclip, Pause, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Action } from "../../ui/primitives.jsx";
 import { preserveComposerFocus } from "../composerInteraction.js";
 import { shouldSubmitComposer } from "../composerKeyboard.js";
@@ -28,7 +27,6 @@ export default function Composer({
   onRemoveAttachment,
   onRemoveInstruction,
   onInterrupt,
-  onCancel,
   onSubmit,
   runtimeProfile,
   onRuntimeProfileChange,
@@ -86,22 +84,11 @@ export default function Composer({
           </div>}
           {showRuntimeProfile && <RuntimeProfileMenu className="workbench-runtime-profile" value={runtimeProfile} onChange={onRuntimeProfileChange} configuration={runtimeConfiguration?.data} runtimeSettings={runtimeSettings} loading={runtimeConfiguration?.loading} error={runtimeConfiguration?.error} readOnly={runStatus === "running"} />}
           <div className="workbench-composer-submit">{directAgent ? <>
-            {runStatus === "running" ? <DropdownMenu>
-              <DropdownMenuTrigger asChild><Button type="button" variant="secondary" className="composer-running-trigger" disabled={busy === "interrupt" || busy === "cancel"} aria-label={t("composer.runningActions")}>
-                <LoaderCircle className="composer-running-icon" size={14} aria-hidden="true" />
-                {t("composer.running")}
-                <ChevronDown size={13} aria-hidden="true" />
-              </Button></DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="min-w-36">
-                <DropdownMenuItem onSelect={onInterrupt}><Pause size={14} aria-hidden="true" />{t("composer.pauseRun")}</DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem variant="destructive" onSelect={onCancel}><CircleStop size={14} aria-hidden="true" />{t("composer.stop")}</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu> : ["paused", "completed"].includes(runStatus) && <Action tone="primary" disabled={busy === "queue" || active || (!canSend && runStatus !== "paused")} onClick={() => send("queue")}>{t("composer.sendMessage")}</Action>}
+            {runStatus === "running" ? <Button type="button" variant="secondary" size="icon-sm" className="composer-pause-action" disabled={busy === "interrupt"} aria-label={t("composer.pauseRun")} title={t("composer.pauseRun")} onClick={onInterrupt}><Pause size={15} aria-hidden="true" /></Button> : ["paused", "completed"].includes(runStatus) && <Button type="button" size="icon-sm" className="composer-send-action" disabled={busy === "queue" || active || (!canSend && runStatus !== "paused")} aria-label={t("composer.sendMessage")} title={t("composer.sendMessage")} onClick={() => send("queue")}><ArrowUp size={15} strokeWidth={2.4} aria-hidden="true" /></Button>}
           </> : <>
             {runStatus === "running" && <><Action disabled={busy === "interrupt"} onClick={onInterrupt}>{t("composer.pause")}</Action><Action disabled={!canSend || busy === "queue"} onClick={() => send("queue")}>{t("composer.queueNext")}</Action><Action tone="primary" disabled={!canSend || busy === "insert"} onClick={() => send("insert")}>{t("composer.interruptInsert")}</Action></>}
-            {runStatus === "paused" && <><Action tone="danger" disabled={busy === "cancel" || active} onClick={onCancel}>{t("composer.terminate")}</Action><Action tone="primary" disabled={busy === "queue" || active} onClick={() => send("queue")}>{t("composer.resume")}</Action></>}
-            {runStatus === "completed" && <Action tone="primary" disabled={!canSend || busy === "queue" || active} onClick={() => send("queue")}>{t("composer.continue")}</Action>}
+            {runStatus === "paused" && <Button type="button" size="icon-sm" className="composer-send-action" disabled={busy === "queue" || active} aria-label={t("composer.resume")} title={t("composer.resume")} onClick={() => send("queue")}><ArrowUp size={15} strokeWidth={2.4} aria-hidden="true" /></Button>}
+            {runStatus === "completed" && <Button type="button" size="icon-sm" className="composer-send-action" disabled={!canSend || busy === "queue" || active} aria-label={t("composer.continue")} title={t("composer.continue")} onClick={() => send("queue")}><ArrowUp size={15} strokeWidth={2.4} aria-hidden="true" /></Button>}
           </>}</div>
         </div>
       </div>

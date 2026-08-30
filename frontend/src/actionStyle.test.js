@@ -333,7 +333,7 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.match(workbench, /newTaskOpen \? <NewTaskView/);
   assert.match(newTask, /className="new-task-composer"/);
   assert.match(newTask, /className=\{`new-task-toolbar \$\{directAgent \? "agent-mode" : "workflow-mode"\} \$\{showRuntimeProfile \? "has-runtime-profile" : "no-runtime-profile"\}`\}/);
-  assert.match(css, /\.new-task-toolbar\.no-runtime-profile \.new-task-voice\s*\{\s*margin-left:\s*auto;/, "Agents without model controls must keep the right-side actions aligned to the edge");
+  assert.match(css, /\.new-task-toolbar\.no-runtime-profile \.new-task-submit-group\s*\{\s*margin-left:\s*auto;/, "Agents without model controls must keep the submit action aligned to the edge");
   assert.doesNotMatch(newTask, /className="new-task-select execution"/, "execution mode belongs with the final submit action");
   assert.match(newTask, /className=\{`new-task-submit-group \$\{executionMode\}`\}/);
   assert.match(newTask, /className="new-task-add"/, "the plus button keeps attachment and execution-mode actions compact");
@@ -343,7 +343,7 @@ test("new tasks are composed inside the chat workspace instead of a modal", asyn
   assert.match(newTask, /value="queued"[^>]*><ListPlus/);
   assert.doesNotMatch(executor, /compact|new-task-add|executionMode/, "the Agent and workflow selector is not hidden inside the plus menu");
   assert.match(newTask, /executionMode === "queued" \? <ListPlus/);
-  assert.match(newTask, /className="new-task-voice"/, "the composer keeps voice input beside the runtime profile");
+  assert.doesNotMatch(newTask, /\bMic\b|new-task-voice|task\.voiceInput/, "voice input must stay hidden until it is implemented");
   assert.doesNotMatch(newTask, /new-task-submit-mode/, "the primary action is one circular button instead of a segmented control");
   assert.doesNotMatch(newTask, /task-create-title|t\("task\.name"\)|<Input\b/, "the first prompt must create the task title instead of asking for a separate name");
   assert.doesNotMatch(newTask, /onCancel|new-task-cancel/, "navigation back to history replaces a modal-style cancel action");
@@ -470,12 +470,12 @@ test("completed conversations remain available for a follow-up turn", async () =
   assert.match(composer, /<span>\{workflowLabel\}<\/span>/, "the follow-up workflow selector shows only the workflow name");
 });
 
-test("message hover timestamps include seconds, and the transcript reads them from one place", async () => {
+test("message hover timestamps include the date, and the transcript reads them from one place", async () => {
   const format = await readFile(path.join(sourceRoot, "app", "format.js"), "utf8");
   const timeline = await readFile(path.join(sourceRoot, "app", "components", "ConversationTimeline.jsx"), "utf8");
-  assert.match(format, /toLocaleTimeString\([^;]*\{ hour: "2-digit", minute: "2-digit", second: "2-digit" \}/);
+  assert.match(format, /export function formatMessageDateTime/);
   assert.doesNotMatch(timeline, /toLocaleTimeString/, "the transcript must not keep a second copy of the clock format");
-  assert.match(timeline, /<time dateTime=\{at \|\| undefined\} title=\{formatDateTime\(at\)\}>\{formatTime\(at\)\}<\/time>/);
+  assert.match(timeline, /<time dateTime=\{at \|\| undefined\} title=\{formatDateTime\(at\)\}>\{formatMessageDateTime\(at\)\}<\/time>/);
 });
 
 test("long user messages collapse behind a measured disclosure", async () => {
