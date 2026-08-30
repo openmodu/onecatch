@@ -75,11 +75,10 @@
 }
 
 /* brand-tokens:start — everything down to the matching marker is the shared
-   palette. web/scripts/sync-tokens.mjs copies this range verbatim into the
-   marketing site so the two surfaces cannot drift apart. This block is
-   deliberately unlayered and sits between `@theme inline` and `@layer base`;
-   moving it changes the cascade, so extend it in place rather than relocating
-   it, and keep the markers on their own lines. */
+   palette. This block is deliberately unlayered and sits between
+   `@theme inline` and `@layer base`; moving it changes the cascade, so
+   extend it in place rather than relocating it, and keep the markers on their
+   own lines. */
 :root {
   --radius: 0.5rem;
   --chat-font-size: 14px;
