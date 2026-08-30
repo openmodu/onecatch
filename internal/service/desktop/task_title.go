@@ -15,19 +15,58 @@ const maxTaskTitlePromptCharacters = 8000
 
 var taskTitlePrefix = regexp.MustCompile(`(?i)^(?:task\s+title|title|任务标题|标题)\s*[:：]\s*`)
 
-func (a *Service) refineTaskTitleAsync(taskID, provisionalTitle, workspace string, definition domainworkflows.Definition, input CreateTaskInput) {
+type pendingTaskTitle struct {
+	provisionalTitle string
+	workspace        string
+	definition       domainworkflows.Definition
+	input            CreateTaskInput
+}
+
+// queueTaskTitleRefinement remembers the AI title request without starting a
+// second Agent beside the user's first turn. On Linux, two simultaneous Codex
+// app-server cold starts were effectively serial and delayed the real message
+// by the entire title-generation turn.
+func (a *Service) queueTaskTitleRefinement(taskID, provisionalTitle, workspace string, definition domainworkflows.Definition, input CreateTaskInput) {
+	a.titleMu.Lock()
+	a.pendingTitles[taskID] = pendingTaskTitle{provisionalTitle: provisionalTitle, workspace: workspace, definition: definition, input: input}
+	a.titleMu.Unlock()
+}
+
+// refineTaskTitleAfterRun starts the queued title request only after the first
+// real run has left the active set. The provisional prompt title is visible in
+// the meantime, and this background work can no longer delay the first answer.
+func (a *Service) refineTaskTitleAfterRun(runID string) {
 	if a.rootCtx.Err() != nil {
+		return
+	}
+	run, err := a.store.Repos.Workflows.GetRun(a.rootCtx, runID)
+	if err != nil {
+		return
+	}
+	a.titleMu.Lock()
+	pending, ok := a.pendingTitles[run.TaskID]
+	if ok {
+		delete(a.pendingTitles, run.TaskID)
+	}
+	a.titleMu.Unlock()
+	if !ok {
 		return
 	}
 	a.wg.Add(1)
 	go func() {
 		defer a.wg.Done()
-		title := a.generateTaskTitle(a.rootCtx, workspace, definition, input)
-		if title == provisionalTitle || a.rootCtx.Err() != nil {
+		title := a.generateTaskTitle(a.rootCtx, pending.workspace, pending.definition, pending.input)
+		if title == pending.provisionalTitle || a.rootCtx.Err() != nil {
 			return
 		}
-		_, _ = a.store.Repos.Tasks.UpdateTaskTitle(a.rootCtx, taskID, provisionalTitle, title, time.Now().UTC())
+		_, _ = a.store.Repos.Tasks.UpdateTaskTitle(a.rootCtx, run.TaskID, pending.provisionalTitle, title, time.Now().UTC())
 	}()
+}
+
+func (a *Service) cancelTaskTitleRefinement(taskID string) {
+	a.titleMu.Lock()
+	delete(a.pendingTitles, taskID)
+	a.titleMu.Unlock()
 }
 
 func (a *Service) generateTaskTitle(ctx context.Context, workspace string, definition domainworkflows.Definition, input CreateTaskInput) string {

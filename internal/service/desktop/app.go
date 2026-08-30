@@ -206,6 +206,8 @@ type Service struct {
 	confirmations     map[string]runConfirmation
 	settingsReload    func(domainsettings.Settings) error
 	queueMu           sync.Mutex
+	titleMu           sync.Mutex
+	pendingTitles     map[string]pendingTaskTitle
 	runStreams        *runstream.Hub
 	runStates         *runstate.Hub
 	remoteFSProbe     func(context.Context, domainworkspaces.RemoteFS) (string, error)
@@ -222,6 +224,7 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 		settings:          settingsrepo.NewSettingsRepo(store.Data.Paths.Root),
 		cleanupPlans:      make(map[string]cleanupPlan),
 		confirmations:     make(map[string]runConfirmation),
+		pendingTitles:     make(map[string]pendingTaskTitle),
 		remoteFSProbe:     canonicalRemoteFSRoot,
 		remoteCredentials: sshcredentials.KeyringStore{},
 		remoteGitExecutor: newRemoteGitExecutor,
@@ -239,6 +242,7 @@ func (a *Service) Close() error {
 	}
 	a.mu.Unlock()
 	a.wg.Wait()
+	_ = a.runtimes.Close()
 	return a.store.Close()
 }
 
@@ -831,7 +835,7 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 			// local cwd for the harness process, so never hand it the remote path.
 			titleWorkspace = os.TempDir()
 		}
-		a.refineTaskTitleAsync(task.ID, title, titleWorkspace, definition, input)
+		a.queueTaskTitleRefinement(task.ID, title, titleWorkspace, definition, input)
 	}
 	return task, nil
 }
@@ -1349,6 +1353,7 @@ func (a *Service) dispatch(runID string, execute func(context.Context) (domainwo
 		// lands on a still-disabled button before this fires.
 		a.markRunStateDirty(runID)
 		a.reconcileQueueForRun(runID)
+		a.refineTaskTitleAfterRun(runID)
 	}()
 }
 

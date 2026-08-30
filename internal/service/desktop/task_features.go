@@ -36,6 +36,7 @@ func (a *Service) RenameTask(ctx context.Context, taskID, title string) (domaint
 	if err := a.store.Repos.Tasks.SaveTask(ctx, task); err != nil {
 		return task, err
 	}
+	a.cancelTaskTitleRefinement(task.ID)
 	return task, nil
 }
 
@@ -69,6 +70,7 @@ func (a *Service) DeleteTask(ctx context.Context, taskID string) error {
 	if err := a.store.Repos.Tasks.DeleteTask(ctx, task.ID); err != nil {
 		return err
 	}
+	a.cancelTaskTitleRefinement(task.ID)
 	if workspace.Path != "" && workspace.RemoteFS == nil {
 		_ = os.RemoveAll(filepath.Join(workspace.Path, ".onecatch", "attachments", task.ID))
 	}

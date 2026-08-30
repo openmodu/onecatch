@@ -122,6 +122,98 @@ func TestCodexRunnerStreamsAppServerMessagesAndCommandOutput(t *testing.T) {
 	}
 }
 
+func TestCodexRunnerReusesAppServerForConversationFollowUp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "codex")
+	processes := filepath.Join(dir, "processes.txt")
+	requests := filepath.Join(dir, "requests.jsonl")
+	script := `#!/bin/sh
+printf '%s\n' started >> "$ONECATCH_CODEX_PROCESSES"
+turn=0
+while IFS= read -r line; do
+  printf '%s\n' "$line" >> "$ONECATCH_CODEX_REQUESTS"
+  case "$line" in
+    *'"id":1'*) printf '%s\n' '{"id":1,"result":{}}' ;;
+    *'"id":2'*) printf '%s\n' '{"id":2,"result":{"thread":{"id":"thread-warm"}}}' ;;
+    *'"id":3'*)
+      turn=$((turn + 1))
+      printf '{"id":3,"result":{"turn":{"id":"turn-%s","status":"inProgress"}}}\n' "$turn"
+      printf '{"method":"item/started","params":{"threadId":"thread-warm","turnId":"turn-%s","item":{"id":"message-%s","type":"agentMessage","text":""}}}\n' "$turn" "$turn"
+      printf '{"method":"item/completed","params":{"threadId":"thread-warm","turnId":"turn-%s","item":{"id":"message-%s","type":"agentMessage","text":"Hello %s"}}}\n' "$turn" "$turn" "$turn"
+      printf '{"method":"turn/completed","params":{"threadId":"thread-warm","turn":{"id":"turn-%s","status":"completed"}}}\n' "$turn"
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	runner := NewCodexRunner(bin)
+	defer runner.Close()
+	environment := append(os.Environ(), "ONECATCH_CODEX_PROCESSES="+processes, "ONECATCH_CODEX_REQUESTS="+requests)
+	request := Request{RunID: "run-warm", Workspace: dir, Prompt: "first", Sandbox: SandboxWorkspaceWrite, Environment: environment}
+	first, err := runner.Run(context.Background(), request, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Prompt = "second"
+	request.ResumeSessionID = first.SessionID
+	second, err := runner.Run(context.Background(), request, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.FinalMessage != "Hello 1" || second.FinalMessage != "Hello 2" {
+		t.Fatalf("results = %+v / %+v", first, second)
+	}
+	started, err := os.ReadFile(processes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(started), "started\n"); got != 1 {
+		t.Fatalf("Codex app-server starts = %d, want 1", got)
+	}
+	payload, err := os.ReadFile(requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := string(payload)
+	if strings.Count(value, `"method":"initialize"`) != 1 || strings.Count(value, `"method":"thread/start"`) != 1 || strings.Count(value, `"method":"turn/start"`) != 2 {
+		t.Fatalf("unexpected app-server requests: %s", value)
+	}
+	if strings.Contains(value, `"method":"thread/resume"`) {
+		t.Fatalf("warm follow-up unnecessarily resumed the loaded thread: %s", value)
+	}
+
+	// A changed environment must never inherit the warm process. Resume the
+	// durable thread through a fresh app-server instead.
+	request.Prompt = "third"
+	request.Environment = append(slices.Clone(environment), "ONECATCH_ENVIRONMENT_REVISION=2")
+	third, err := runner.Run(context.Background(), request, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if third.FinalMessage != "Hello 1" {
+		t.Fatalf("fresh-process result = %+v", third)
+	}
+	started, err = os.ReadFile(processes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(started), "started\n"); got != 2 {
+		t.Fatalf("Codex app-server starts after environment change = %d, want 2", got)
+	}
+	payload, err = os.ReadFile(requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(payload), `"method":"thread/resume"`) {
+		t.Fatalf("fresh app-server did not resume the durable thread: %s", payload)
+	}
+}
+
 func TestCodexRunnerPassesModelSettingsToAppServer(t *testing.T) {
 	bin := stubCodexAppServerBinary(t)
 	capture := filepath.Join(t.TempDir(), "requests.jsonl")

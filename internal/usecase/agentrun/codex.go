@@ -3,6 +3,7 @@ package agentrun
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -20,8 +22,29 @@ const codexBinaryDefault = "codex"
 // command output deltas are available.
 type CodexRunner struct {
 	// binary is the codex executable; overridable for tests.
-	binary string
-	now    nowFunc
+	binary     string
+	now        nowFunc
+	sessionsMu sync.Mutex
+	sessions   map[string]*codexAppProcess
+}
+
+const codexAppServerIdleTimeout = 5 * time.Minute
+
+// codexAppProcess owns one warm app-server connection. It is deliberately
+// retained per Codex thread instead of shared globally: the child process has
+// a frozen environment, and sharing it across unrelated tasks would bypass
+// OneCatch's per-runtime environment allowlist.
+type codexAppProcess struct {
+	mu        sync.Mutex
+	cmd       *exec.Cmd
+	stdin     io.WriteCloser
+	encoder   *json.Encoder
+	scanner   *bufio.Scanner
+	stderr    *lineCapture
+	threadID  string
+	key       string
+	idleTimer *time.Timer
+	stopOnce  sync.Once
 }
 
 // NewCodexRunner builds a runner driving the given codex binary. An empty
@@ -30,7 +53,7 @@ func NewCodexRunner(binary string) *CodexRunner {
 	if binary == "" {
 		binary = codexBinaryDefault
 	}
-	return &CodexRunner{binary: binary, now: time.Now}
+	return &CodexRunner{binary: binary, now: time.Now, sessions: make(map[string]*codexAppProcess)}
 }
 
 func (r *CodexRunner) Runtime() Runtime { return RuntimeCodex }
@@ -343,43 +366,103 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 		commandArgs = append(commandArgs, remote.args...)
 		environment = mergeEnvironment(environment, remote.env)
 	}
-	cmd := exec.CommandContext(ctx, r.binary, commandArgs...)
+
+	// Workflow turns have a durable run ID and may be resumed later. Keep that
+	// thread's local app-server alive so the next message does not pay the CLI,
+	// plugin and skill cold-start cost again. Standalone helpers (for example
+	// title generation) and remote seams remain one-shot processes.
+	cacheable := req.RunID != "" && req.Remote == nil
+	processKey := codexAppProcessKey(req.Workspace, commandArgs, environment)
+	if cacheable && strings.TrimSpace(req.ResumeSessionID) != "" {
+		if process := r.takeSession(strings.TrimSpace(req.ResumeSessionID), processKey); process != nil {
+			result, err := r.runCodexTurn(ctx, process, req, sink, true)
+			if err == nil && result.Succeeded {
+				r.keepSession(result.SessionID, process)
+				return result, nil
+			}
+			r.discardProcess(process)
+			process.stop()
+			return result, err
+		}
+	}
+
+	process, err := r.startCodexAppProcess(req, commandArgs, environment)
+	if err != nil {
+		return Result{}, err
+	}
+	keepAlive := false
+	defer func() {
+		if !keepAlive {
+			process.stop()
+		}
+	}()
+	result, err := r.runCodexTurn(ctx, process, req, sink, false)
+	if err == nil && result.Succeeded && cacheable && result.SessionID != "" {
+		keepAlive = true
+		r.keepSession(result.SessionID, process)
+	}
+	return result, err
+}
+
+func (r *CodexRunner) startCodexAppProcess(req Request, commandArgs, environment []string) (*codexAppProcess, error) {
+	cmd := exec.Command(r.binary, commandArgs...)
 	cmd.Dir = req.Workspace
 	cmd.Env = environment
-	if req.InterruptGrace > 0 {
-		cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
-		cmd.WaitDelay = req.InterruptGrace
-	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
-		return Result{}, fmt.Errorf("Codex app-server stdin: %w", err)
+		return nil, fmt.Errorf("Codex app-server stdin: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return Result{}, fmt.Errorf("Codex app-server stdout: %w", err)
+		return nil, fmt.Errorf("Codex app-server stdout: %w", err)
 	}
-	var stderr lineCapture
-	cmd.Stderr = &stderr
+	stderr := &lineCapture{}
+	cmd.Stderr = stderr
 	if err := cmd.Start(); err != nil {
-		return Result{}, fmt.Errorf("start Codex app-server: %w", err)
+		return nil, fmt.Errorf("start Codex app-server: %w", err)
 	}
-	defer stopCodexAppServer(cmd, stdin)
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	return &codexAppProcess{
+		cmd: cmd, stdin: stdin, encoder: json.NewEncoder(stdin), scanner: scanner,
+		stderr: stderr, key: codexAppProcessKey(req.Workspace, commandArgs, environment),
+	}, nil
+}
 
-	encoder := json.NewEncoder(stdin)
-	if err := encoder.Encode(map[string]any{
+func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess, req Request, sink Sink, warm bool) (Result, error) {
+	process.mu.Lock()
+	defer process.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		select {
+		case <-ctx.Done():
+			process.stopWithGrace(req.InterruptGrace)
+		case <-done:
+		}
+	}()
+	defer close(done)
+
+	state := newCodexAppState()
+	initialized := warm
+	threadStarted := warm
+	turnStarted := false
+	activeTurnID := ""
+	if warm {
+		state.sessionID = process.threadID
+		sink(Event{Kind: KindStarted, Text: process.threadID, At: r.now()})
+		if err := sendCodexTurnStart(process.encoder, req, process.threadID); err != nil {
+			return Result{}, err
+		}
+	} else if err := process.encoder.Encode(map[string]any{
 		"id": 1, "method": "initialize",
 		"params": map[string]any{"clientInfo": map[string]string{"name": "onecatch", "title": "OneCatch", "version": "0.1.0"}},
 	}); err != nil {
 		return Result{}, fmt.Errorf("initialize Codex app-server: %w", err)
 	}
 
-	state := newCodexAppState()
-	initialized := false
-	threadStarted := false
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
-	for scanner.Scan() {
-		line := scanner.Text()
+	for process.scanner.Scan() {
+		line := process.scanner.Text()
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -389,7 +472,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 			continue
 		}
 		if envelope.Method != "" && len(envelope.ID) > 0 {
-			_ = respondUnsupportedCodexRequest(encoder, envelope)
+			_ = respondUnsupportedCodexRequest(process.encoder, envelope)
 			continue
 		}
 		if responseID(envelope.ID) == 1 {
@@ -397,7 +480,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 				return Result{}, fmt.Errorf("initialize Codex app-server: %s", envelope.Error)
 			}
 			initialized = true
-			if err := encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
+			if err := process.encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
 				return Result{}, err
 			}
 			method := "thread/start"
@@ -416,7 +499,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 					params["serviceTier"] = req.ServiceTier
 				}
 			}
-			if err := encoder.Encode(map[string]any{"id": 2, "method": method, "params": params}); err != nil {
+			if err := process.encoder.Encode(map[string]any{"id": 2, "method": method, "params": params}); err != nil {
 				return Result{}, err
 			}
 			continue
@@ -438,25 +521,9 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 			}
 			threadStarted = true
 			state.sessionID = response.Thread.ID
+			process.threadID = response.Thread.ID
 			sink(Event{Kind: KindStarted, Text: response.Thread.ID, Raw: line, At: r.now()})
-			turnParams := map[string]any{"threadId": response.Thread.ID, "input": []map[string]string{{"type": "text", "text": req.Prompt}}}
-			if req.Model != "" {
-				turnParams["model"] = req.Model
-			}
-			if req.ReasoningEffort != "" {
-				turnParams["effort"] = req.ReasoningEffort
-			}
-			if req.ServiceTier != "" {
-				if req.ServiceTier == "standard" {
-					turnParams["serviceTier"] = nil
-				} else {
-					turnParams["serviceTier"] = req.ServiceTier
-				}
-			}
-			if err := encoder.Encode(map[string]any{
-				"id": 3, "method": "turn/start",
-				"params": turnParams,
-			}); err != nil {
+			if err := sendCodexTurnStart(process.encoder, req, response.Thread.ID); err != nil {
 				return Result{}, err
 			}
 			continue
@@ -465,28 +532,187 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 			if len(envelope.Error) > 0 {
 				return state.result(), fmt.Errorf("start Codex turn: %s", envelope.Error)
 			}
+			var response struct {
+				Turn struct {
+					ID string `json:"id"`
+				} `json:"turn"`
+			}
+			_ = json.Unmarshal(envelope.Result, &response)
+			activeTurnID = response.Turn.ID
+			turnStarted = true
 			continue
 		}
 		if envelope.Method != "" {
+			if !turnStarted || !codexNotificationMatches(envelope.Params, state.sessionID, activeTurnID) {
+				continue
+			}
 			state.handleNotification(envelope.Method, envelope.Params, line, r.now(), sink)
 			if state.completed || state.failed {
 				break
 			}
 		}
 	}
-	if err := scanner.Err(); err != nil && ctx.Err() == nil {
+	if err := process.scanner.Err(); err != nil && ctx.Err() == nil {
 		return state.result(), fmt.Errorf("read Codex app-server: %w", err)
 	}
 	if ctx.Err() != nil {
 		return state.result(), ctx.Err()
 	}
 	if !initialized || !threadStarted {
-		return Result{}, fmt.Errorf("Codex app-server ended before thread started%s", stderr.tail())
+		return Result{}, fmt.Errorf("Codex app-server ended before thread started%s", process.stderr.tail())
 	}
 	if !state.completed && !state.failed {
-		return state.result(), fmt.Errorf("Codex app-server ended before turn completion%s", stderr.tail())
+		return state.result(), fmt.Errorf("Codex app-server ended before turn completion%s", process.stderr.tail())
 	}
 	return state.result(), nil
+}
+
+func sendCodexTurnStart(encoder *json.Encoder, req Request, threadID string) error {
+	turnParams := map[string]any{"threadId": threadID, "input": []map[string]string{{"type": "text", "text": req.Prompt}}}
+	if req.Model != "" {
+		turnParams["model"] = req.Model
+	}
+	if req.ReasoningEffort != "" {
+		turnParams["effort"] = req.ReasoningEffort
+	}
+	if req.ServiceTier != "" {
+		if req.ServiceTier == "standard" {
+			turnParams["serviceTier"] = nil
+		} else {
+			turnParams["serviceTier"] = req.ServiceTier
+		}
+	}
+	return encoder.Encode(map[string]any{"id": 3, "method": "turn/start", "params": turnParams})
+}
+
+func codexNotificationMatches(raw json.RawMessage, threadID, turnID string) bool {
+	var ids struct {
+		ThreadID string `json:"threadId"`
+		TurnID   string `json:"turnId"`
+	}
+	if json.Unmarshal(raw, &ids) != nil {
+		return true
+	}
+	if ids.ThreadID != "" && threadID != "" && ids.ThreadID != threadID {
+		return false
+	}
+	return ids.TurnID == "" || turnID == "" || ids.TurnID == turnID
+}
+
+func codexAppProcessKey(workspace string, args, environment []string) string {
+	hash := sha256.New()
+	for _, value := range append(append([]string{workspace}, args...), environment...) {
+		_, _ = io.WriteString(hash, value)
+		_, _ = hash.Write([]byte{0})
+	}
+	return fmt.Sprintf("%x", hash.Sum(nil))
+}
+
+func (r *CodexRunner) takeSession(sessionID, key string) *codexAppProcess {
+	r.sessionsMu.Lock()
+	defer r.sessionsMu.Unlock()
+	process := r.sessions[sessionID]
+	if process == nil || process.key != key {
+		return nil
+	}
+	if process.idleTimer != nil {
+		process.idleTimer.Stop()
+		process.idleTimer = nil
+	}
+	// While a turn is using the process it is not idle and must not remain
+	// reachable by the timer callback or a second resume call.
+	delete(r.sessions, sessionID)
+	return process
+}
+
+func (r *CodexRunner) keepSession(sessionID string, process *codexAppProcess) {
+	if sessionID == "" {
+		return
+	}
+	r.sessionsMu.Lock()
+	if previous := r.sessions[sessionID]; previous != nil && previous != process {
+		go previous.stop()
+	}
+	r.sessions[sessionID] = process
+	if process.idleTimer != nil {
+		process.idleTimer.Stop()
+	}
+	process.idleTimer = time.AfterFunc(codexAppServerIdleTimeout, func() {
+		r.sessionsMu.Lock()
+		shouldStop := false
+		if r.sessions[sessionID] == process {
+			delete(r.sessions, sessionID)
+			shouldStop = true
+		}
+		r.sessionsMu.Unlock()
+		if shouldStop {
+			process.stop()
+		}
+	})
+	r.sessionsMu.Unlock()
+}
+
+func (r *CodexRunner) discardProcess(process *codexAppProcess) {
+	r.sessionsMu.Lock()
+	for sessionID, candidate := range r.sessions {
+		if candidate == process {
+			delete(r.sessions, sessionID)
+		}
+	}
+	if process.idleTimer != nil {
+		process.idleTimer.Stop()
+		process.idleTimer = nil
+	}
+	r.sessionsMu.Unlock()
+}
+
+// Close stops warm app-server processes. CodexRunner also closes each process
+// after an idle timeout, so callers that do not own runner lifecycle remain
+// bounded.
+func (r *CodexRunner) Close() error {
+	r.sessionsMu.Lock()
+	processes := make([]*codexAppProcess, 0, len(r.sessions))
+	for _, process := range r.sessions {
+		if process.idleTimer != nil {
+			process.idleTimer.Stop()
+		}
+		processes = append(processes, process)
+	}
+	r.sessions = make(map[string]*codexAppProcess)
+	r.sessionsMu.Unlock()
+	for _, process := range processes {
+		process.stop()
+	}
+	return nil
+}
+
+func (p *codexAppProcess) stop() {
+	p.stopWithGrace(2 * time.Second)
+}
+
+func (p *codexAppProcess) stopWithGrace(grace time.Duration) {
+	p.stopOnce.Do(func() {
+		if grace <= 0 {
+			grace = 2 * time.Second
+		}
+		if p.cmd.Process != nil {
+			_ = p.cmd.Process.Signal(os.Interrupt)
+		}
+		_ = p.stdin.Close()
+		done := make(chan struct{})
+		go func() {
+			_ = p.cmd.Wait()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(grace):
+			if p.cmd.Process != nil {
+				_ = p.cmd.Process.Kill()
+			}
+			<-done
+		}
+	})
 }
 
 func stopCodexAppServer(cmd *exec.Cmd, stdin io.Closer) {

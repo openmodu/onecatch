@@ -17,6 +17,9 @@ type taskTitleRunner struct {
 func (r *taskTitleRunner) Runtime() agentrun.Runtime { return agentrun.RuntimeCodex }
 func (r *taskTitleRunner) Available() bool           { return true }
 func (r *taskTitleRunner) Run(ctx context.Context, request agentrun.Request, _ agentrun.Sink) (agentrun.Result, error) {
+	if !strings.HasPrefix(request.Prompt, "Generate a concise task title") {
+		return agentrun.Result{Succeeded: true, FinalMessage: "任务已完成"}, nil
+	}
 	r.requests <- request
 	select {
 	case <-ctx.Done():
@@ -88,6 +91,14 @@ func TestCreateTaskReturnsPromptTitleBeforeSelectedAgentRefinesIt(t *testing.T) 
 	if task.Title != "窗口最小时状态栏右侧按钮不见了，请修复。" {
 		t.Fatalf("provisional title = %q", task.Title)
 	}
+	select {
+	case request := <-runner.requests:
+		t.Fatalf("title refinement started before the first run: %+v", request)
+	case <-time.After(50 * time.Millisecond):
+	}
+	if _, err := app.StartRun(context.Background(), task.ID); err != nil {
+		t.Fatal(err)
+	}
 	var request agentrun.Request
 	select {
 	case request = <-runner.requests:
@@ -134,10 +145,13 @@ func TestAsyncTaskTitleDoesNotOverwriteManualRename(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := app.StartRun(context.Background(), task.ID); err != nil {
+		t.Fatal(err)
+	}
 	select {
 	case <-runner.requests:
 	case <-time.After(time.Second):
-		t.Fatal("title refinement did not start")
+		t.Fatal("title refinement did not start after the first run")
 	}
 	if _, err := app.RenameTask(context.Background(), task.ID, "我命名的标题"); err != nil {
 		t.Fatal(err)

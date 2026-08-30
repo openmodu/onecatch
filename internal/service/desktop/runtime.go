@@ -245,6 +245,13 @@ func (r *RuntimeRegistry) Run(ctx context.Context, request agentrun.Request, sin
 	return engine.Run(ctx, request, sink)
 }
 
+func (r *RuntimeRegistry) Close() error {
+	r.mu.RLock()
+	engine := r.engine
+	r.mu.RUnlock()
+	return engine.Close()
+}
+
 func (r *RuntimeRegistry) awaitPermission(ctx context.Context, runID, stepRunID string, request agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {
 	pending := &pendingPermission{runID: runID, stepRunID: stepRunID, request: request, response: make(chan agentrun.PermissionDecision, 1)}
 	r.permissionMu.Lock()

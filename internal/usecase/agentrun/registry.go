@@ -207,3 +207,18 @@ func (e *Engine) Run(ctx context.Context, req Request, sink Sink) (Result, error
 	}
 	return runner.Run(ctx, req, sink)
 }
+
+// Close releases resources retained by stateful runners. Most CLI adapters
+// are one-shot processes and have nothing to close; Codex keeps completed
+// conversation app-servers warm for fast follow-up turns.
+func (e *Engine) Close() error {
+	var firstErr error
+	for _, runner := range e.runners {
+		if closer, ok := runner.(interface{ Close() error }); ok {
+			if err := closer.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
+}
