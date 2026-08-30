@@ -50,12 +50,16 @@ tasks:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
           PRODUCTION: '{{if eq .DEV "true"}}false{{else}}true{{end}}'
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ./build/desktop/windows/resources.ps1
+        platforms: [windows]
       - go build {{.BUILD_FLAGS}} -o '{{.OUTPUT}}' ./cmd/app
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ./build/desktop/windows/resources.ps1 -Clean
+        platforms: [windows]
       - cmd: go build {{.BUILD_FLAGS}} -o '{{.BIN_DIR}}/onecatchsh' ./cmd/onecatchsh
         platforms: [darwin, linux]
       - go build {{.BUILD_FLAGS}} -o '{{.BIN_DIR}}/onecatch-askpass{{.EXE_EXT}}' ./cmd/onecatch-askpass
     vars:
-      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l" {{if eq OS "darwin"}}-ldflags="-extldflags=-mmacosx-version-min=12.0"{{end}}{{else}}-tags production -trimpath -buildvcs=false -ldflags="{{if eq OS "darwin"}}-extldflags=-mmacosx-version-min=12.0 {{end}}-w -s"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l" {{if eq OS "darwin"}}-ldflags="-extldflags=-mmacosx-version-min=12.0"{{end}}{{else}}-tags production -trimpath -buildvcs=false -ldflags="{{if eq OS "darwin"}}-extldflags=-mmacosx-version-min=12.0 {{end}}{{if eq OS "windows"}}-H=windowsgui {{end}}-w -s"{{end}}'
       OUTPUT: '{{.OUTPUT | default (printf "%s/%s%s" .BIN_DIR .APP_NAME .EXE_EXT)}}'
 
   dev:desktop:
@@ -77,7 +81,7 @@ tasks:
       - go tool wails3 build DEV=true
 
   package:desktop:
-    desc: Build and package the desktop app for the current platform
+    desc: Build a versioned macOS DMG or Windows setup executable
     cmds:
       - task: build
         vars:

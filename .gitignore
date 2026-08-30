@@ -10,6 +10,8 @@
 !/internal/app/desktop/assets/frontend/dist/.gitkeep
 /bin/
 /.task/
+/cmd/app/*.syso
+/build/desktop/windows/nsis/MicrosoftEdgeWebview2Setup.exe
 /build/ios/xcode/
 /build/android/overlay.json
 /build/android/gen/

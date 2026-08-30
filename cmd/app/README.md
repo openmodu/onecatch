@@ -35,31 +35,43 @@ go tool wails3 task run:android
 go tool wails3 task build:desktop
 ```
 
-生产构建并生成 macOS `.app` ZIP：
+生产构建并生成当前系统的安装包：
 
 ```bash
 go tool wails3 task package:desktop
 ```
 
-安装包输出到 `bin/OneCatch-<version>-<commit>-<arch>.zip`。应用内同时包含
-`Contents/Resources/bin/onecatch-worker`，可以复制到另一台同架构 Mac 上运行。
-默认使用 ad-hoc 签名，适合内部测试；没有 Apple 开发者证书时，首次启动仍需在
-Finder 中右键选择“打开”。
+版本从仓库根目录 `VERSION` 读取，只接受 `X.Y.Z` 三段数字。macOS 输出
+`bin/OneCatch-<version>-macOS-<arch>.dmg`，Windows 输出
+`bin/OneCatch-<version>-Windows-<arch>-Setup.exe`；两边同时生成 `.sha256`
+校验文件。Windows 打包前需要安装 NSIS：
+
+```powershell
+winget install NSIS.NSIS
+```
+
+macOS 应用内同时包含 `Contents/Resources/bin/onecatch-worker`，可以复制到另一台
+同架构 Mac 上运行。默认使用 ad-hoc 签名，适合内部测试；没有 Apple 开发者证书时，
+首次启动仍需在 Finder 中右键选择“打开”。
 
 使用 Developer ID 证书签名：
 
 ```bash
-SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" go tool wails3 task package:desktop
+SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" \
+  go tool wails3 task package:desktop
 ```
 
-可通过环境变量覆盖版本号和输出路径：
+已经用 `notarytool store-credentials` 保存公证凭据时，可以在打包后自动公证并装订票据：
 
 ```bash
-VERSION=0.1.0 OUTPUT_ZIP=bin/OneCatch-0.1.0-arm64.zip go tool wails3 task package:desktop
+SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" \
+NOTARY_PROFILE="onecatch-notary" \
+  go tool wails3 task package:desktop
 ```
 
-脚本只负责构建、组装、签名和压缩。公开分发前还需使用 Apple notary service
-完成公证；仅使用 Developer ID 签名不能替代公证。
+需要临时覆盖版本或输出路径时，macOS 使用 `VERSION`、`OUTPUT_DMG`，Windows 使用
+`VERSION`、`OUTPUT_INSTALLER`。正式发版仍应修改根目录 `VERSION`，并推送同版本标签，
+例如 `VERSION=0.2.0` 对应 `v0.2.0`；GitHub Actions 会构建两个平台并创建 GitHub Release。
 
 ## 代码位置
 

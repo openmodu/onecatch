@@ -3,49 +3,93 @@ $ErrorActionPreference = "Stop"
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptRoot "..\..\..")).Path
 $binRoot = Join-Path $repoRoot "bin"
+$versionFile = Join-Path $repoRoot "VERSION"
 $appBinary = Join-Path $binRoot "onecatch.exe"
 $workerBinary = Join-Path $binRoot "onecatch-worker.exe"
 $askPassBinary = Join-Path $binRoot "onecatch-askpass.exe"
+$nsisRoot = Join-Path $scriptRoot "nsis"
+$projectFile = Join-Path $nsisRoot "project.nsi"
 
-foreach ($inputPath in @($appBinary, $workerBinary, $askPassBinary)) {
+foreach ($inputPath in @($appBinary, $workerBinary, $askPassBinary, $versionFile, $projectFile)) {
     if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
         throw "Required build input not found: $inputPath"
     }
 }
 
-$version = if ($env:VERSION) { $env:VERSION } else { "0.1.0" }
-$buildID = if ($env:BUILD_ID) { $env:BUILD_ID } else {
-    $value = & git -C $repoRoot rev-parse --short HEAD 2>$null
-    if ($LASTEXITCODE -eq 0 -and $value) { $value.Trim() } else { "dev" }
-}
-$architecture = switch ($env:PROCESSOR_ARCHITECTURE) {
-    "AMD64" { "x64" }
-    "ARM64" { "arm64" }
-    default { $env:PROCESSOR_ARCHITECTURE.ToLowerInvariant() }
-}
-$outputZip = if ($env:OUTPUT_ZIP) {
-    [System.IO.Path]::GetFullPath($env:OUTPUT_ZIP, $repoRoot)
-} else {
-    Join-Path $binRoot "OneCatch-$version-$buildID-windows-$architecture.zip"
+$version = if ($env:VERSION) { $env:VERSION.Trim() } else { (Get-Content -LiteralPath $versionFile -Raw).Trim() }
+if ($version -notmatch '^\d+\.\d+\.\d+$') {
+    throw "VERSION must use X.Y.Z numeric format, got: $version"
 }
 
-$stagingRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("onecatch-package-" + [guid]::NewGuid().ToString("N"))
-$packageRoot = Join-Path $stagingRoot "OneCatch"
-try {
-    New-Item -ItemType Directory -Force -Path $packageRoot | Out-Null
-    Copy-Item -LiteralPath $appBinary -Destination (Join-Path $packageRoot "onecatch.exe")
-    Copy-Item -LiteralPath $workerBinary -Destination (Join-Path $packageRoot "onecatch-worker.exe")
-    Copy-Item -LiteralPath $askPassBinary -Destination (Join-Path $packageRoot "onecatch-askpass.exe")
-    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $outputZip) | Out-Null
-    Compress-Archive -LiteralPath $packageRoot -DestinationPath $outputZip -CompressionLevel Optimal -Force
-} finally {
-    if (Test-Path -LiteralPath $stagingRoot) {
-        Remove-Item -LiteralPath $stagingRoot -Recurse -Force
+$goArch = (& go env GOARCH).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to determine the Go target architecture"
+}
+$architecture = switch ($goArch) {
+    "amd64" { "x64" }
+    "arm64" { "arm64" }
+    default { $goArch }
+}
+
+$outputInstaller = if ($env:OUTPUT_INSTALLER) {
+    if ([System.IO.Path]::IsPathRooted($env:OUTPUT_INSTALLER)) {
+        [System.IO.Path]::GetFullPath($env:OUTPUT_INSTALLER)
+    } else {
+        [System.IO.Path]::GetFullPath((Join-Path $repoRoot $env:OUTPUT_INSTALLER))
+    }
+} else {
+    Join-Path $binRoot "OneCatch-$version-Windows-$architecture-Setup.exe"
+}
+New-Item -ItemType Directory -Force -Path (Split-Path -Parent $outputInstaller) | Out-Null
+
+$makeNsis = Get-Command "makensis.exe" -ErrorAction SilentlyContinue
+if (-not $makeNsis) {
+    $candidates = @(
+        (Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe"),
+        (Join-Path $env:ProgramFiles "NSIS\makensis.exe")
+    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
+    if ($candidates.Count -gt 0) {
+        $makeNsis = Get-Item -LiteralPath $candidates[0]
     }
 }
+if (-not $makeNsis) {
+    throw "NSIS is required. Install it with: winget install NSIS.NSIS"
+}
 
-$hash = Get-FileHash -LiteralPath $outputZip -Algorithm SHA256
-Write-Output "Package: $outputZip"
+# Wails downloads the official evergreen bootstrapper. The installer only runs
+# it when WebView2 is missing on the target machine.
+& go tool wails3 generate webview2bootstrapper -dir $nsisRoot
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to prepare the WebView2 bootstrapper"
+}
+
+$makeNsisPath = if ($makeNsis.Path) { $makeNsis.Path } else { $makeNsis.FullName }
+$nsisArguments = @(
+    "-DAPP_VERSION=$version",
+    "-DAPP_ARCH=$architecture",
+    "-DAPP_BINARY=$appBinary",
+    "-DWORKER_BINARY=$workerBinary",
+    "-DASKPASS_BINARY=$askPassBinary",
+    "-DOUTPUT_FILE=$outputInstaller",
+    (Split-Path -Leaf $projectFile)
+)
+Push-Location $nsisRoot
+try {
+    & $makeNsisPath @nsisArguments
+    if ($LASTEXITCODE -ne 0) {
+        throw "NSIS failed with exit code $LASTEXITCODE"
+    }
+} finally {
+    Pop-Location
+}
+
+$hash = (Get-FileHash -LiteralPath $outputInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
+$checksumFile = "$outputInstaller.sha256"
+$checksumLine = "$hash  $(Split-Path -Leaf $outputInstaller)"
+[System.IO.File]::WriteAllText($checksumFile, "$checksumLine`n", [System.Text.Encoding]::ASCII)
+
+Write-Output "Installer: $outputInstaller"
 Write-Output "Version: $version"
 Write-Output "Architecture: $architecture"
-Write-Output "SHA256: $($hash.Hash)"
+Write-Output "Checksum: $checksumFile"
+Write-Output "SHA256: $hash"
