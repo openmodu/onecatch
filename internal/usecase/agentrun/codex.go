@@ -53,6 +53,7 @@ func NewCodexRunner(binary string) *CodexRunner {
 	if binary == "" {
 		binary = codexBinaryDefault
 	}
+	binary = resolveNativeCodexBinary(binary)
 	return &CodexRunner{binary: binary, now: time.Now, sessions: make(map[string]*codexAppProcess)}
 }
 
@@ -92,6 +93,7 @@ type CodexConfiguration struct {
 // through app-server without starting a thread or consuming model quota.
 func (r *CodexRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (CodexConfiguration, error) {
 	cmd := exec.CommandContext(ctx, r.binary, "app-server", "--listen", "stdio://")
+	configureProcessWindow(cmd)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
@@ -406,6 +408,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 
 func (r *CodexRunner) startCodexAppProcess(req Request, commandArgs, environment []string) (*codexAppProcess, error) {
 	cmd := exec.Command(r.binary, commandArgs...)
+	configureProcessWindow(cmd)
 	cmd.Dir = req.Workspace
 	cmd.Env = environment
 	stdin, err := cmd.StdinPipe()

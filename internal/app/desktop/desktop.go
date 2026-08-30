@@ -100,6 +100,7 @@ func Run() {
 		log.Fatal("create builtin workflows", zap.Error(err))
 	}
 	var wailsApp *application.App
+	var mainWindow *application.WebviewWindow
 	workspaceBinding := wailstransport.NewWorkspaceBinding(service, func() *application.App { return wailsApp })
 	var auxiliaryWindows *auxiliaryWindowController
 	windowBinding := wailstransport.NewWindowBinding(wailstransport.WindowCallbacks{
@@ -154,6 +155,18 @@ func Run() {
 		Description: Description,
 		Icon:        desktopassets.AppIcon,
 		Services:    services,
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: "com.openmodu.onecatch",
+			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+				if mainWindow == nil {
+					return
+				}
+				mainWindow.UnMinimise()
+				mainWindow.Show()
+				mainWindow.Restore()
+				mainWindow.Focus()
+			},
+		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(desktopassets.Frontend),
 			Middleware: func(next http.Handler) http.Handler {
@@ -249,7 +262,7 @@ func Run() {
 	}
 	wailsApp.Menu.Set(menu)
 
-	mainWindow := wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
+	mainWindow = wailsApp.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:  "main",
 		Title: Name,
 		// Frameless on Linux too: unlike Windows/macOS, Wails cannot rely on the

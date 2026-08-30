@@ -700,14 +700,6 @@ func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, config
 		}
 		return info
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if output, err := exec.CommandContext(ctx, binary, "--version").CombinedOutput(); err == nil {
-		version := strings.TrimSpace(string(output))
-		if index := strings.IndexByte(version, '\n'); index >= 0 {
-			version = version[:index]
-		}
-		info.Version = version
-	}
+	info.Version = probeRuntimeVersion(binary)
 	return info
 }
