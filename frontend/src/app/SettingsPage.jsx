@@ -44,7 +44,7 @@ const resetRuntimeFields = (current, defaults, fields) => Object.fromEntries(Obj
   return [id, next];
 }));
 
-export default function SettingsPage({ mode, value, runtimes, onChange, notify, workersPanel }) {
+export default function SettingsPage({ mode, value, runtimes, onChange, notify }) {
   const { t, i18n } = useTranslation();
   const [section, setSection] = useState("runtime");
   const [draft, setDraft] = useState(() => clone(value || demoSettings));
@@ -230,7 +230,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       <section className="px-7 pt-[64px] pb-10">
         <header className="drag-region mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0"><SettingsKicker>{t("settings.localSettings")}</SettingsKicker><h1 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h1><p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p></div>
-          <div className="no-drag flex shrink-0 items-center gap-2.5"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span>{section !== "runtime" && <SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton>}</div>
+          <div className="no-drag flex shrink-0 items-center gap-2.5"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span>{!["runtime", "experimental"].includes(section) && <SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton>}</div>
         </header>
         {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><SettingsButton tone="muted" onClick={reload}>{t("settings.reload")}</SettingsButton></div>}
         {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
@@ -240,7 +240,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
         {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
         {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
         {section === "storage" && <StorageSettings value={draft.storage} setValue={(next) => setSectionValue("storage", next)} errors={errorsByField} security={draft.security} diagnosticOptions={diagnosticOptions} setDiagnosticOptions={setDiagnosticOptions} usage={usage} usageLoading={usageLoading} refreshUsage={refreshUsage} preview={preview} previewCleanup={previewCleanup} executeCleanup={executeCleanup} reveal={() => mode === "wails" && SettingsBinding.RevealDataRoot()} diagnosticPath={diagnosticPath} setDiagnosticPath={setDiagnosticPath} exportDiagnostics={exportDiagnostics} />}
-        {section === "experimental" && <ExperimentalSettings draft={draft.experimental} saved={value?.experimental || demoSettings.experimental} setValue={(next) => setSectionValue("experimental", next)} workersPanel={workersPanel} />}
+        {section === "experimental" && <ExperimentalSettings enabled={Boolean(draft.experimental?.remoteWorkersEnabled)} />}
         {dirty && <div className="sticky bottom-0 mt-6 flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3 shadow-lg" role="region" aria-label={t("settings.unsavedSettings")}><div className="min-w-0"><strong className="block text-sm font-semibold text-foreground">{t("settings.unsavedTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.unsavedDescription")}</span></div><div className="flex shrink-0 items-center gap-2"><SettingsButton tone="muted" disabled={saving} onClick={discard}>{t("settings.discard")}</SettingsButton><SettingsButton tone="primary" disabled={saving || validationErrors.length > 0} onClick={save}>{saving ? t("common.saving") : t("settings.save")}</SettingsButton></div></div>}
       </section>
     </ScrollArea>
@@ -475,17 +475,14 @@ function StorageSettings({ value, setValue, errors, security, diagnosticOptions,
   </>;
 }
 
-function ExperimentalSettings({ draft, saved, setValue, workersPanel }) {
+function ExperimentalSettings({ enabled }) {
   const { t } = useTranslation();
-  return <>
-    <div className="mb-7 rounded-lg border bg-card p-4 text-xs leading-relaxed text-muted-foreground" role="note"><SettingsKicker>{t("settings.experimentalBoundary")}</SettingsKicker><strong className="mt-1 block text-sm text-foreground">{t("settings.remoteTrustedOnly")}</strong><p className="mt-1 mb-0">{t("settings.remoteBoundaryDescription")}</p></div>
-    <SettingsSection title={t("settings.remoteScheduling")} description={t("settings.remoteSchedulingDescription")} contentClassName="p-4">
-      <SettingsSwitchRow checked={draft.remoteWorkersEnabled} onChange={(checked) => setValue({ ...draft, remoteWorkersEnabled: checked })} label={t("settings.enableRemoteWorker")} description={t("settings.enableRemoteDescription")} />
+  return <div className="pointer-events-none select-none opacity-50 grayscale" aria-disabled="true">
+    <div className="mb-7 rounded-lg border bg-muted/45 p-4 text-xs leading-relaxed text-muted-foreground" role="status"><SettingsKicker>{t("settings.comingSoon")}</SettingsKicker><strong className="mt-1 block text-sm text-muted-foreground">{t("settings.remoteComingSoonTitle")}</strong><p className="mt-1 mb-0">{t("settings.remoteComingSoonDescription")}</p></div>
+    <SettingsSection title={t("settings.remoteScheduling")} description={t("settings.remoteComingSoonDescription")} aside={<Badge variant="secondary">{t("settings.comingSoon")}</Badge>} contentClassName="p-4">
+      <SettingsSwitchRow checked={enabled} disabled label={t("settings.enableRemoteWorker")} description={t("settings.enableRemoteDescription")} />
     </SettingsSection>
-    {draft.remoteWorkersEnabled && saved.remoteWorkersEnabled && workersPanel}
-    {draft.remoteWorkersEnabled && !saved.remoteWorkersEnabled && <div className="rounded-lg border bg-card p-4"><strong className="block text-sm text-foreground">{t("settings.enableAfterSave")}</strong><span className="mt-1 block text-xs text-muted-foreground">{t("settings.enableAfterSaveDescription")}</span></div>}
-    {!draft.remoteWorkersEnabled && saved.remoteWorkersEnabled && <div className="rounded-lg border bg-card p-4"><strong className="block text-sm text-foreground">{t("settings.disableAfterSave")}</strong><span className="mt-1 block text-xs text-muted-foreground">{t("settings.disableAfterSaveDescription")}</span></div>}
-  </>;
+  </div>;
 }
 
 function validateSection(section, draft, t) {

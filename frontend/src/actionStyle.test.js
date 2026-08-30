@@ -187,6 +187,18 @@ test("settings renders directly through shadcn instead of the TUI compatibility 
   assert.match(settings, /components\/ui\/scroll-area/);
 });
 
+test("remote worker settings remain a disabled coming-soon preview", async () => {
+  const settings = await readFile(path.join(sourceRoot, "app", "SettingsPage.jsx"), "utf8");
+  const i18n = await readFile(path.join(sourceRoot, "i18n.js"), "utf8");
+  assert.match(settings, /function ExperimentalSettings\(\{ enabled \}\)/);
+  assert.match(settings, /pointer-events-none select-none opacity-50 grayscale/);
+  assert.match(settings, /<SettingsSwitchRow checked=\{enabled\} disabled/);
+  assert.doesNotMatch(settings, /function ExperimentalSettings[^]*workersPanel/);
+  assert.match(settings, /!\["runtime", "experimental"\]\.includes\(section\)/, "the preview section must not expose reset actions");
+  assert.match(i18n, /"settings\.comingSoon": "敬请期待"/);
+  assert.match(i18n, /"settings\.comingSoon": "Coming soon"/);
+});
+
 test("workflow windows use desktop selection rules and shadcn editors", async () => {
   const library = await readFile(path.join(sourceRoot, "app", "components", "workflow", "WorkflowLibrary.jsx"), "utf8");
   const loopEditor = await readFile(path.join(sourceRoot, "app", "components", "workflow", "WorkflowEditor.jsx"), "utf8");

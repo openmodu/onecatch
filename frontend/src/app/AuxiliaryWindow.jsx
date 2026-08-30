@@ -20,7 +20,6 @@ import { demoRuntimes, demoWorkers, demoWorkflows, demoWorkspaces } from "./demo
 
 const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary.jsx"));
 const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
-const WorkerPage = lazy(() => import("./components/WorkerPage.jsx"));
 const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
 
 const emptyWorkerForm = () => ({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
@@ -239,7 +238,7 @@ export function SettingsWindow() {
 
   if (mode === "loading") return <LoadingWindow />;
   return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-foreground">
-    <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={updateSettings} notify={notify} workersPanel={<Suspense fallback={<div className="p-4 text-sm text-muted-foreground">{t("task.opening")}</div>}><WorkerPage mode={mode} workspace={workspaces[0]} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={openWorker} /></Suspense>} />
+    <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={updateSettings} notify={notify} />
     {workerModal && <Suspense fallback={null}><WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} /></Suspense>}
     <ConfirmDialog dialog={dialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}

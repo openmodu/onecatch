@@ -40,7 +40,6 @@ import Modal from "./components/Modal.jsx";
 const SettingsPage = lazy(() => import("./SettingsPage.jsx"));
 const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary.jsx"));
 const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
-const WorkerPage = lazy(() => import("./components/WorkerPage.jsx"));
 const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
 import { applyRunState, applyRuntimeFrames } from "./runtimeStream.js";
 import { nextWorkflowDefinitionID } from "./workflowIds.js";
@@ -1580,7 +1579,7 @@ function App() {
           onLoadEarlierTranscript={loadEarlierTranscript}
           onPermissionDecision={respondPermission}
           notify={notify}
-        /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} workersPanel={<WorkerPage mode={mode} workspace={selectedWorkspace} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} notify={notify} openWorker={(worker) => { setWorkerForm(worker ? { id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled } : { id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true }); setWorkerModal(true); }} />} /></Suspense>}
+        /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
       </main>
     </div>
     {workspaceModal && <Modal className="workspace-create-dialog max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[480px]" title={t(workspaceEditingID ? "workspace.editTitle" : "workspace.addTitle")} subtitle={t(workspaceEditingID ? "workspace.editSubtitle" : "workspace.addSubtitle")} onClose={() => { if (busy !== "workspace") { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceEditingID(""); setWorkspaceModal(false); } }}>
