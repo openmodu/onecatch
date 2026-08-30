@@ -106,8 +106,8 @@ Section "Install"
     WriteRegStr HKCU "${PRODUCT_UNINST_KEY}" "DisplayIcon" "$INSTDIR\onecatch.exe"
     WriteRegStr HKCU "${PRODUCT_UNINST_KEY}" "Publisher" "${PRODUCT_PUBLISHER}"
     WriteRegStr HKCU "${PRODUCT_UNINST_KEY}" "URLInfoAbout" "${PRODUCT_WEB_SITE}"
-    WriteRegStr HKCU "${PRODUCT_UNINST_KEY}" "UninstallString" '$"$INSTDIR\uninstall.exe$"'
-    WriteRegStr HKCU "${PRODUCT_UNINST_KEY}" "QuietUninstallString" '$"$INSTDIR\uninstall.exe$" /S'
+    WriteRegStr HKCU "${PRODUCT_UNINST_KEY}" "UninstallString" '"$INSTDIR\uninstall.exe"'
+    WriteRegStr HKCU "${PRODUCT_UNINST_KEY}" "QuietUninstallString" '"$INSTDIR\uninstall.exe" /S'
     WriteRegDWORD HKCU "${PRODUCT_UNINST_KEY}" "NoModify" 1
     WriteRegDWORD HKCU "${PRODUCT_UNINST_KEY}" "NoRepair" 1
 SectionEnd

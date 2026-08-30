@@ -68,6 +68,7 @@ if ($LASTEXITCODE -ne 0) {
 
 $makeNsisPath = if ($makeNsis.Path) { $makeNsis.Path } else { $makeNsis.FullName }
 $nsisArguments = @(
+    "-WX",
     "-DAPP_VERSION=$version",
     "-DAPP_ARCH=$architecture",
     "-DAPP_BINARY=$appBinary",
@@ -86,7 +87,15 @@ try {
     Pop-Location
 }
 
-$hash = (Get-FileHash -LiteralPath $outputInstaller -Algorithm SHA256).Hash.ToLowerInvariant()
+$stream = [System.IO.File]::OpenRead($outputInstaller)
+$sha256 = [System.Security.Cryptography.SHA256]::Create()
+try {
+    $hashBytes = $sha256.ComputeHash($stream)
+} finally {
+    $sha256.Dispose()
+    $stream.Dispose()
+}
+$hash = [System.BitConverter]::ToString($hashBytes).Replace("-", "").ToLowerInvariant()
 $checksumFile = "$outputInstaller.sha256"
 $checksumLine = "$hash  $(Split-Path -Leaf $outputInstaller)"
 [System.IO.File]::WriteAllText($checksumFile, "$checksumLine`n", [System.Text.Encoding]::ASCII)

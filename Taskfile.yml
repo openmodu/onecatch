@@ -29,6 +29,12 @@ tasks:
       - git config core.hooksPath .githooks
       - git config --get core.hooksPath
 
+  validate:windows-installer:
+    desc: Compile the NSIS installer definition locally with warnings as errors
+    platforms: [darwin, linux]
+    cmds:
+      - ./build/desktop/windows/validate-installer.sh
+
   desktop:icons:
     desc: Regenerate the macOS application icon
     dir: build/desktop
