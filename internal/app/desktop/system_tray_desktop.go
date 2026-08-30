@@ -1,11 +1,10 @@
-//go:build linux
+//go:build windows || linux
 
 package desktop
 
 import (
 	"context"
 	"sort"
-	"strings"
 	"sync"
 
 	desktopassets "github.com/openmodu/onecatch/internal/app/desktop/assets"
@@ -16,8 +15,7 @@ import (
 )
 
 const (
-	trayNavigationEvent   = "onecatch:tray-navigate"
-	traySessionTitleRunes = 42
+	trayNavigationEvent = "onecatch:tray-navigate"
 )
 
 func installDesktopSystemTray(
@@ -53,7 +51,7 @@ func installDesktopSystemTray(
 
 		tasks, err := service.ListTasks(context.Background(), "")
 		if err != nil {
-			log.Error("refresh Linux tray sessions", zap.Error(err))
+			log.Error("refresh desktop tray sessions", zap.Error(err))
 			return
 		}
 		tasks = latestActiveTrayTasks(tasks, 3)
@@ -73,7 +71,7 @@ func installDesktopSystemTray(
 			runID := ""
 			runs, listErr := service.ListRunsByTask(context.Background(), task.ID)
 			if listErr != nil {
-				log.Warn("load Linux tray session run", zap.String("task_id", task.ID), zap.Error(listErr))
+				log.Warn("load desktop tray session run", zap.String("task_id", task.ID), zap.Error(listErr))
 			} else if len(runs) > 0 {
 				runID = runs[0].ID
 			}
@@ -131,14 +129,7 @@ func latestActiveTrayTasks(tasks []domaintasks.Task, limit int) []domaintasks.Ta
 }
 
 func traySessionLabel(task domaintasks.Task) string {
-	title := strings.TrimSpace(task.Title)
-	if title == "" {
-		title = "未命名会话"
-	}
-	runes := []rune(title)
-	if len(runes) > traySessionTitleRunes {
-		title = string(runes[:traySessionTitleRunes]) + "…"
-	}
+	title := trayConversationLabel(task.Title)
 	switch task.Status {
 	case domaintasks.StatusRunning:
 		return title + "  · 运行中"

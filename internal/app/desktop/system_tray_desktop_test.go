@@ -1,4 +1,4 @@
-//go:build linux
+//go:build windows || linux
 
 package desktop
 
@@ -46,10 +46,10 @@ func TestTraySessionLabelShowsActiveStatus(t *testing.T) {
 	}
 }
 
-func TestTraySessionLabelTruncatesByRune(t *testing.T) {
-	task := domaintasks.Task{Title: strings.Repeat("会", traySessionTitleRunes+3), Status: domaintasks.StatusRunning}
+func TestTraySessionLabelTruncatesByDisplayWidth(t *testing.T) {
+	task := domaintasks.Task{Title: strings.Repeat("会", 20), Status: domaintasks.StatusRunning}
 	got := traySessionLabel(task)
-	want := strings.Repeat("会", traySessionTitleRunes) + "…  · 运行中"
+	want := strings.Repeat("会", 14) + "…  · 运行中"
 	if got != want {
 		t.Fatalf("traySessionLabel() = %q, want %q", got, want)
 	}

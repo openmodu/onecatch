@@ -278,13 +278,13 @@ func Run() {
 	// On platforms that actually destroy the main window, the detached inspector
 	// must not outlive it — otherwise closing the workbench leaves a frozen panel
 	// behind that keeps the application alive. Retained windows the user cannot
-	// see go the same way, for the same reason. Linux returns early below because
-	// closing there only hides the still-live main window to the tray.
+	// see go the same way, for the same reason. Windows and Linux return early
+	// below because closing there only hides the still-live main window to the tray.
 	// A hook rather than a listener: listeners are dispatched concurrently with
 	// Wails' own teardown, and this has to finish deciding before the window is
 	// gone.
 	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
-		if runtime.GOOS == "linux" {
+		if runtime.GOOS == "windows" || runtime.GOOS == "linux" {
 			// Keep the desktop process, active runs, and terminal sessions alive.
 			// This must happen before touching any auxiliary window: destroying a
 			// prewarmed hidden GTK window re-entrantly from a native close callback
