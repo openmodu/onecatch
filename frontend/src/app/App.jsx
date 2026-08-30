@@ -93,7 +93,7 @@ function selectedTaskExecution(form) {
   };
 }
 
-function DesktopTitleBar({ title = "", workspaceName = "", taskStatus = "", taskActive = false, showTaskStatus = false, showWorkbenchControls = false, terminalVisible = false, inspectorCollapsed = true, inspectorDetached = false, lockActive = 0, sidebarWidth = SIDEBAR_DEFAULT_WIDTH, onLock, onToggleTerminal, onToggleInspector, onDockInspector }) {
+function DesktopTitleBar({ title = "", workspaceName = "", taskStatus = "", taskActive = false, showTaskStatus = false, showWorkbenchControls = false, terminalVisible = false, inspectorCollapsed = true, inspectorDetached = false, lockActive = 0, sidebarCollapsed = false, sidebarWidth = SIDEBAR_DEFAULT_WIDTH, onLock, onToggleTerminal, onToggleInspector, onDockInspector }) {
   const { t } = useTranslation();
   // Hyprland (and most Wayland tiling WMs) has no minimize concept and no
   // separate maximized size for a tiled window, so those two buttons would
@@ -101,10 +101,10 @@ function DesktopTitleBar({ title = "", workspaceName = "", taskStatus = "", task
   // drop them under a tiling WM rather than ship controls that do nothing.
   const platform = typeof document === "undefined" ? "" : document.documentElement.dataset.platform;
   const isLinux = platform === "linux";
-  const titlebarSidebarWidth = Math.max(sidebarWidth, 136);
-  return <div className="windows-titlebar drag-region hidden h-9 items-center bg-background pl-3 text-xs text-foreground" style={{ "--windows-titlebar-sidebar-width": `${titlebarSidebarWidth}px` }} onDoubleClick={isLinux ? undefined : () => void Window.ToggleMaximise()}>
+  const titlebarSidebarWidth = sidebarCollapsed ? 68 : Math.max(sidebarWidth, 136);
+  return <div className={`windows-titlebar drag-region hidden h-9 items-center bg-background pl-3 text-xs text-foreground ${sidebarCollapsed ? "sidebar-is-collapsed" : ""}`} style={{ "--windows-titlebar-sidebar-width": `${titlebarSidebarWidth}px` }} onDoubleClick={isLinux ? undefined : () => void Window.ToggleMaximise()}>
     <span className="windows-titlebar-brand flex items-center gap-2 font-medium"><img className="size-4 rounded-[4px]" src="/appicon.png" alt="" aria-hidden="true" /></span>
-    {title && <span className="windows-titlebar-task pointer-events-none flex min-w-0 flex-1 items-center gap-2 px-3">
+    {title && <span className="windows-titlebar-task pointer-events-none flex min-w-0 items-center gap-2 py-0 pr-1 pl-3">
       {workspaceName && <Tooltip>
         <TooltipTrigger asChild>
           <span className="no-drag pointer-events-auto grid size-6 shrink-0 place-items-center rounded-md text-muted-foreground" aria-label={`${t("workspace.currentProject")}: ${workspaceName}`} onDoubleClick={(event) => event.stopPropagation()}>
@@ -116,11 +116,11 @@ function DesktopTitleBar({ title = "", workspaceName = "", taskStatus = "", task
       <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={title}>{title}</strong>
       {showTaskStatus && <StatusPill status={taskStatus} active={taskActive} />}
     </span>}
-    <div className="windows-titlebar-workbench-actions no-drag flex h-full shrink-0 items-center gap-1 px-2" onDoubleClick={(event) => event.stopPropagation()}>
-      <button type="button" className="windows-titlebar-control relative" aria-label={t("lock.enter")} title={`${t("lock.enter")} · Ctrl+L`} onClick={onLock}>
-        <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
-        {lockActive > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockActive}</em>}
-      </button>
+    <button type="button" className="windows-titlebar-control no-drag relative shrink-0" aria-label={t("lock.enter")} title={`${t("lock.enter")} · Ctrl+L`} onClick={onLock}>
+      <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
+      {lockActive > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockActive}</em>}
+    </button>
+    <div className="windows-titlebar-workbench-actions no-drag ml-auto flex h-full shrink-0 items-center gap-1 pr-0 pl-2" onDoubleClick={(event) => event.stopPropagation()}>
       {showWorkbenchControls && <>
         <button type="button" className={`windows-titlebar-control ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={onToggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>
         {inspectorDetached
@@ -128,7 +128,7 @@ function DesktopTitleBar({ title = "", workspaceName = "", taskStatus = "", task
           : <button type="button" className={`windows-titlebar-control ${inspectorCollapsed ? "" : "active"}`} aria-label={inspectorCollapsed ? t("inspector.expand") : t("inspector.collapse")} aria-expanded={!inspectorCollapsed} aria-controls="workbench-inspector-content" title={inspectorCollapsed ? t("inspector.expand") : t("inspector.collapse")} onClick={onToggleInspector}>{inspectorCollapsed ? <PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /> : <PanelRightClose size={16} strokeWidth={2} aria-hidden="true" />}</button>}
       </>}
     </div>
-    <div className="no-drag ml-auto flex h-full" onDoubleClick={(event) => event.stopPropagation()}>
+    <div className="no-drag flex h-full" onDoubleClick={(event) => event.stopPropagation()}>
       {!isLinux && <button type="button" className="windows-caption-button" aria-label="最小化" onClick={() => void Window.Minimise()}><Minus size={14} aria-hidden="true" /></button>}
       {!isLinux && <button type="button" className="windows-caption-button" aria-label="最大化或还原" onClick={() => void Window.ToggleMaximise()}><Square size={11} aria-hidden="true" /></button>}
       <button type="button" className="windows-caption-button close" aria-label="关闭" onClick={() => void Window.Close()}><X size={15} aria-hidden="true" /></button>
@@ -1459,7 +1459,8 @@ function App() {
       inspectorCollapsed={inspectorCollapsed}
       inspectorDetached={inspectorDetached}
       lockActive={lockSignal.active}
-      sidebarWidth={sidebarCollapsed ? 136 : sidebarWidth}
+      sidebarCollapsed={sidebarCollapsed}
+      sidebarWidth={sidebarWidth}
       onLock={enterLock}
       onToggleTerminal={() => setTerminalToggleVersion((value) => value + 1)}
       onToggleInspector={() => setInspectorToggleVersion((value) => value + 1)}

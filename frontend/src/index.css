@@ -2746,6 +2746,10 @@
   pointer-events: none;
 }
 
+:root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar.sidebar-is-collapsed::after {
+  left: 0;
+}
+
 :root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar-brand {
   width: var(--windows-titlebar-sidebar-width, 216px);
   height: 100%;
@@ -2754,6 +2758,15 @@
   background: var(--sidebar);
   padding-right: 0;
   padding-left: 12px;
+}
+
+:root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar-task {
+  max-width: min(40vw, 420px);
+}
+
+:root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar.sidebar-is-collapsed .windows-titlebar-brand {
+  border-right: 0;
+  background: transparent;
 }
 
 .windows-titlebar-control {
