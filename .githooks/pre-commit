@@ -1,0 +1,39 @@
+#!/bin/sh
+
+set -eu
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+echo "pre-commit: checking staged whitespace"
+git diff --cached --check
+
+temp_root=$(mktemp -d "${TMPDIR:-/tmp}/onecatch-pre-commit.XXXXXX")
+trap 'rm -rf "$temp_root"' EXIT HUP INT TERM
+
+git diff --cached --name-only --diff-filter=ACMR -- '*.go' > "$temp_root/go-files"
+if [ -s "$temp_root/go-files" ]; then
+    if ! command -v gofmt >/dev/null 2>&1; then
+        echo "pre-commit: gofmt is required when committing Go files" >&2
+        exit 1
+    fi
+
+    echo "pre-commit: checking staged Go formatting"
+    formatting_failed=0
+    while IFS= read -r file; do
+        [ -n "$file" ] || continue
+        git show ":$file" > "$temp_root/staged.go"
+        gofmt "$temp_root/staged.go" > "$temp_root/formatted.go"
+        if ! cmp -s "$temp_root/staged.go" "$temp_root/formatted.go"; then
+            echo "pre-commit: Go file is not formatted: $file" >&2
+            formatting_failed=1
+        fi
+    done < "$temp_root/go-files"
+
+    if [ "$formatting_failed" -ne 0 ]; then
+        echo "pre-commit: run gofmt on the files above and stage them again" >&2
+        exit 1
+    fi
+fi
+
+echo "pre-commit: passed"

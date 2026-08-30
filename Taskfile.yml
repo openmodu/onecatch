@@ -23,6 +23,12 @@ tasks:
     cmds:
       - task: common:dependencies
 
+  hooks:install:
+    desc: Enable the repository-managed Git hooks
+    cmds:
+      - git config core.hooksPath .githooks
+      - git config --get core.hooksPath
+
   desktop:icons:
     desc: Regenerate the macOS application icon
     dir: build/desktop
