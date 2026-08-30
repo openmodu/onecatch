@@ -6,7 +6,7 @@ OneCatch 是一个 local-first 的桌面 Coding Agent 工作台。它在本机�
 
 OneCatch 不代管模型账号，也不要求把项目复制到它的服务器。本地工作区仍在原目录，OneCatch 的任务、工作流、运行事件和日志默认保存在 `~/.onecatch/`；模型请求是否联网、会向服务商发送哪些内容，取决于你选择的 Harness 及其配置。
 
-> **项目状态：** OneCatch 仍在快速迭代，发布版本以 [`VERSION`](VERSION) 为准。桌面安装包面向 macOS 12+ 和 Windows 10+；配置格式和交互可能在小版本中变化。远端 Worker 的服务端和调度代码已经进入仓库，但桌面端入口目前只作预览，尚不能启用或管理。
+> **项目状态：** OneCatch 仍在快速迭代，发布版本以 [`VERSION`](VERSION) 为准。桌面安装包面向 macOS 12+、Windows 10+，以及带 GTK4/WebKitGTK 6.0 的 Linux 系统；配置格式和交互可能在小版本中变化。远端 Worker 的服务端和调度代码已经进入仓库，但桌面端入口目前只作预览，尚不能启用或管理。
 
 ## 能做什么
 
@@ -27,6 +27,7 @@ OneCatch 不代管模型账号，也不要求把项目复制到它的服务器�
 
 - macOS：`OneCatch-<version>-macOS-<arch>.dmg`
 - Windows：`OneCatch-<version>-Windows-<arch>-Setup.exe`
+- Linux：`OneCatch-<version>-Linux-<arch>.deb` 或 `.AppImage`
 
 每个安装包旁边都有 `.sha256` 校验文件。当前 macOS 包使用 ad-hoc 签名、Windows 包未做 Authenticode 签名，系统可能在首次启动时显示安全提示。公开分发前仍需补齐正式签名和 macOS 公证。
 
@@ -135,6 +136,8 @@ Windows 打包前需要安装 [NSIS](https://nsis.sourceforge.io/)：
 winget install NSIS.NSIS
 ```
 
+Linux 使用 GTK4 和 WebKitGTK 6.0；`.deb` 与 AppImage 都包含桌面端调用的 worker、shell 和 SSH askpass。
+
 正式发布时，先修改并提交 `VERSION`，再推送同版本标签：
 
 ```bash
@@ -142,7 +145,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-标签必须等于 `v` 加 `VERSION` 的内容。GitHub Actions 会分别构建 macOS DMG 和 Windows Setup，校验后把安装包及 SHA-256 文件发布到对应的 GitHub Release。
+标签必须等于 `v` 加 `VERSION` 的内容。GitHub Actions 会构建 macOS DMG、Windows Setup、Linux `.deb` 和 AppImage，校验后把安装包及 SHA-256 文件发布到对应的 GitHub Release。
 
 macOS 使用 Developer ID 签名时设置 `SIGN_IDENTITY`；已经通过 `notarytool store-credentials` 保存公证凭据时，再设置 `NOTARY_PROFILE`：
 

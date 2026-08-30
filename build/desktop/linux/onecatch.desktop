@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=OneCatch
+GenericName=Local Agent Orchestrator
+Comment=Run local agent workflows
+Exec=onecatch
+Icon=onecatch
+Categories=Development;Utility;
+Keywords=AI;Agent;Workflow;
+Terminal=false
+StartupNotify=true
+Version=1.0

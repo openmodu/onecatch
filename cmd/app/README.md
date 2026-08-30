@@ -43,12 +43,15 @@ go tool wails3 task package:desktop
 
 版本从仓库根目录 `VERSION` 读取，只接受 `X.Y.Z` 三段数字。macOS 输出
 `bin/OneCatch-<version>-macOS-<arch>.dmg`，Windows 输出
-`bin/OneCatch-<version>-Windows-<arch>-Setup.exe`；两边同时生成 `.sha256`
-校验文件。Windows 打包前需要安装 NSIS：
+`bin/OneCatch-<version>-Windows-<arch>-Setup.exe`，Linux 输出同版本的 `.deb` 和
+AppImage；每个产物同时生成 `.sha256` 校验文件。Windows 打包前需要安装 NSIS：
 
 ```powershell
 winget install NSIS.NSIS
 ```
+
+Linux 打包机需要 `libgtk-4-dev` 和 `libwebkitgtk-6.0-dev`；打包脚本会把
+worker、shell 和 askpass 一起写入 `.deb` 和 AppImage。
 
 macOS 应用内同时包含 `Contents/Resources/bin/onecatch-worker`，可以复制到另一台
 同架构 Mac 上运行。默认使用 ad-hoc 签名，适合内部测试；没有 Apple 开发者证书时，
@@ -70,8 +73,9 @@ NOTARY_PROFILE="onecatch-notary" \
 ```
 
 需要临时覆盖版本或输出路径时，macOS 使用 `VERSION`、`OUTPUT_DMG`，Windows 使用
-`VERSION`、`OUTPUT_INSTALLER`。正式发版仍应修改根目录 `VERSION`，并推送同版本标签，
-例如 `VERSION=0.2.0` 对应 `v0.2.0`；GitHub Actions 会构建两个平台并创建 GitHub Release。
+`VERSION`、`OUTPUT_INSTALLER`，Linux 使用 `VERSION`、`OUTPUT_APPIMAGE`、`OUTPUT_DEB`。
+正式发版仍应修改根目录 `VERSION`，并推送同版本标签，例如 `VERSION=0.2.0` 对应
+`v0.2.0`；GitHub Actions 会构建三个平台并创建 GitHub Release。
 
 ## 代码位置
 

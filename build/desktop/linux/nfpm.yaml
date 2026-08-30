@@ -1,0 +1,32 @@
+name: onecatch
+arch: ${GOARCH}
+platform: linux
+version: ${VERSION}
+release: "1"
+section: devel
+priority: optional
+maintainer: OpenModu <openmodu@users.noreply.github.com>
+description: Local Agent workflow orchestrator
+vendor: OpenModu
+homepage: https://github.com/openmodu/onecatch
+license: MIT
+
+contents:
+  - src: ./bin/onecatch
+    dst: /usr/bin/onecatch
+  - src: ./bin/onecatch-worker
+    dst: /usr/bin/onecatch-worker
+  - src: ./bin/onecatchsh
+    dst: /usr/bin/onecatchsh
+  - src: ./bin/onecatch-askpass
+    dst: /usr/bin/onecatch-askpass
+  - src: ./internal/app/desktop/assets/appicon.png
+    dst: /usr/share/icons/hicolor/1024x1024/apps/onecatch.png
+  - src: ./build/desktop/linux/onecatch.desktop
+    dst: /usr/share/applications/onecatch.desktop
+  - src: ./LICENSE
+    dst: /usr/share/doc/onecatch/LICENSE
+
+depends:
+  - libgtk-4-1
+  - libwebkitgtk-6.0-4

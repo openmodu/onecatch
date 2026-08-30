@@ -6,7 +6,7 @@ OneCatch is a local-first desktop workbench for coding agents. It runs harnesses
 
 OneCatch does not broker model accounts or require uploading your repository to a OneCatch server. Your workspace stays in its original directory. OneCatch stores tasks, workflows, run events, and logs under `~/.onecatch/` by default. Whether a model request uses the network and what it sends to a provider depend on the harness and its configuration.
 
-> **Project status:** OneCatch is under active development; release versions come from [`VERSION`](VERSION). Desktop installers target macOS 12+ and Windows 10+. Configuration formats and interactions may change between minor releases. The repository contains the Remote Worker server and scheduler, but its desktop UI is preview-only and cannot yet be enabled or managed.
+> **Project status:** OneCatch is under active development; release versions come from [`VERSION`](VERSION). Desktop installers target macOS 12+, Windows 10+, and Linux systems with GTK4/WebKitGTK 6.0. Configuration formats and interactions may change between minor releases. The repository contains the Remote Worker server and scheduler, but its desktop UI is preview-only and cannot yet be enabled or managed.
 
 ## What OneCatch does
 
@@ -27,6 +27,7 @@ Download installers from [GitHub Releases](https://github.com/openmodu/onecatch/
 
 - macOS: `OneCatch-<version>-macOS-<arch>.dmg`
 - Windows: `OneCatch-<version>-Windows-<arch>-Setup.exe`
+- Linux: `OneCatch-<version>-Linux-<arch>.deb` or `.AppImage`
 
 Each installer has a matching `.sha256` checksum file. The current macOS package uses ad-hoc signing, and the Windows package is not Authenticode-signed, so the operating system may show a security warning on first launch. Public releases still need production signing and macOS notarization.
 
@@ -135,6 +136,8 @@ Windows packaging requires [NSIS](https://nsis.sourceforge.io/):
 winget install NSIS.NSIS
 ```
 
+Linux packaging uses GTK4 and WebKitGTK 6.0. The `.deb` and AppImage include the worker, shell, and SSH askpass helpers used by the desktop app.
+
 For a release, update and commit `VERSION`, then push the matching tag:
 
 ```bash
@@ -142,7 +145,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag must equal `v` followed by the contents of `VERSION`. GitHub Actions builds the macOS DMG and Windows Setup package, verifies the outputs, and publishes both installers and their SHA-256 files to the matching GitHub Release.
+The tag must equal `v` followed by the contents of `VERSION`. GitHub Actions builds the macOS DMG, Windows Setup package, Linux `.deb`, and Linux AppImage, then publishes the installers and their SHA-256 files to the matching GitHub Release.
 
 To sign the macOS package with a Developer ID, set `SIGN_IDENTITY`. If notarization credentials have already been saved with `notarytool store-credentials`, also set `NOTARY_PROFILE`:
 

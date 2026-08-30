@@ -75,8 +75,48 @@ jobs:
             bin/*-Setup.exe.sha256
           if-no-files-found: error
 
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Verify release version
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          test "v$version" = "$GITHUB_REF_NAME"
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            dpkg-dev \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            pkg-config
+      - name: Build Linux packages
+        run: go tool wails3 task package:desktop
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: |
+            bin/*.AppImage
+            bin/*.AppImage.sha256
+            bin/*.deb
+            bin/*.deb.sha256
+          if-no-files-found: error
+
   github-release:
-    needs: [macos, windows]
+    needs: [macos, windows, linux]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4

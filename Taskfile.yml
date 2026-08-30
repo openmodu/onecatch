@@ -87,7 +87,7 @@ tasks:
       - go tool wails3 build DEV=true
 
   package:desktop:
-    desc: Build a versioned macOS DMG or Windows setup executable
+    desc: Build versioned desktop installers for the current platform
     cmds:
       - task: build
         vars:
@@ -95,6 +95,8 @@ tasks:
       - task: build:worker:package
       - cmd: ./build/desktop/darwin/package.sh
         platforms: [darwin]
+      - cmd: ./build/desktop/linux/package.sh
+        platforms: [linux]
       - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ./build/desktop/windows/package.ps1
         platforms: [windows]
 
