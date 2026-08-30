@@ -46,7 +46,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, inspectorToggleVersion, integratedWindowsTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onLoadEarlierTranscript, onPermissionDecision, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, inspectorToggleVersion, integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onCancel, onRemoveInstruction, onLoadEarlierTranscript, onPermissionDecision, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
@@ -267,7 +267,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
     setInspectorMaximized(true);
   };
 
-  // Windows moves the status-panel control into the frameless window caption.
+  // Windows and Linux move the status-panel control into the frameless window caption.
   // Route its versioned request back through the workbench so closing still
   // honours dirty editor buffers and restores a maximized inspector cleanly.
   useEffect(() => {
@@ -277,7 +277,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   }, [inspectorCollapsed, inspectorToggleVersion, onToggleInspector]);
 
   return <div ref={workbenchRef} className={`task-workbench grid min-h-0 min-w-0 flex-1 overflow-visible ${inspectorCollapsed ? "inspector-collapsed" : "inspector-open"} ${inspectorResizing ? "inspector-resizing" : ""} ${inspectorMaximized ? "inspector-maximized" : ""} ${newTaskOpen ? "new-task-active" : ""}`} style={{ "--workbench-inspector-width": `${inspectorWidth}px`, "--conversation-min-width": `${MIN_CONVERSATION_WIDTH}px` }}>
-    {!integratedWindowsTitlebar && !inspectorCollapsed && !inspectorMaximized && <div className="workbench-inspector-dock no-drag">
+    {!integratedDesktopTitlebar && !inspectorCollapsed && !inspectorMaximized && <div className="workbench-inspector-dock no-drag">
       <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>
       <button type="button" className="workbench-inspector-dock-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><PanelRightClose size={16} strokeWidth={2} aria-hidden="true" /></button>
     </div>}
@@ -365,7 +365,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       onOpenTerminal={openTerminal}
       onDirtyChange={setFileInspectorDirty}
       actions={<>
-        {!integratedWindowsTitlebar && inspectorMaximized && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
+        {!integratedDesktopTitlebar && inspectorMaximized && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
         {onDetachInspector && <button type="button" className="workbench-inspector-detach" aria-label={t("inspector.detach")} title={t("inspector.detachHint")} onClick={detachInspector}><SquareArrowOutUpRight size={15} strokeWidth={2} aria-hidden="true" /></button>}
         <button type="button" className="workbench-inspector-maximize" aria-label={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} aria-pressed={inspectorMaximized} title={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} onClick={toggleInspectorMaximized}>{inspectorMaximized ? <Minimize2 size={15} strokeWidth={2} aria-hidden="true" /> : <Maximize2 size={15} strokeWidth={2} aria-hidden="true" />}</button>
         <button type="button" className="workbench-inspector-close" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><X size={16} strokeWidth={2} aria-hidden="true" /></button>

@@ -367,6 +367,11 @@
     animation: workbench-inspector-enter 200ms cubic-bezier(.2, .8, .2, 1);
   }
 
+  :root:is([data-platform="windows"], [data-platform="linux"]) .workbench-inspector.open {
+    top: 8px;
+    height: calc(100% - 16px);
+  }
+
   .workbench-inspector-dock {
     position: absolute;
     z-index: 21;
@@ -428,6 +433,10 @@
     cursor: col-resize;
     touch-action: none;
     user-select: none;
+  }
+
+  :root:is([data-platform="windows"], [data-platform="linux"]) .workbench-inspector-resize {
+    top: 8px;
   }
 
   .workbench-inspector-resize::after {
@@ -2690,7 +2699,7 @@
 
 :root:is([data-platform="windows"], [data-platform="linux"]) .sidebar-visibility-toggle {
   top: 4px !important;
-  left: 104px !important;
+  left: 36px !important;
 }
 
 :root:is([data-platform="windows"], [data-platform="linux"]) .sidebar-shell.is-collapsed + main > .app-titlebar {
@@ -2719,17 +2728,10 @@
 
 :root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar {
   display: flex;
-}
-
-.windows-titlebar-brand {
-  padding-right: 42px;
-}
-
-:root[data-platform="windows"] .windows-titlebar {
   padding-left: 0;
 }
 
-:root[data-platform="windows"] .windows-titlebar-brand {
+:root:is([data-platform="windows"], [data-platform="linux"]) .windows-titlebar-brand {
   width: var(--windows-titlebar-sidebar-width, 216px);
   flex: 0 0 var(--windows-titlebar-sidebar-width, 216px);
   padding-right: 0;
