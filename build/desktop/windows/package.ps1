@@ -47,9 +47,12 @@ if (-not $makeNsis) {
     $candidates = @(
         (Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe"),
         (Join-Path $env:ProgramFiles "NSIS\makensis.exe")
-    ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) }
-    if ($candidates.Count -gt 0) {
-        $makeNsis = Get-Item -LiteralPath $candidates[0]
+    )
+    $makeNsisPath = $candidates |
+        Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
+        Select-Object -First 1
+    if ($makeNsisPath) {
+        $makeNsis = Get-Item -LiteralPath $makeNsisPath
     }
 }
 if (-not $makeNsis) {
