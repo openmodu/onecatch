@@ -17,7 +17,7 @@ test("Windows and Linux integrate the conversation controls into one desktop cap
 
   assert.match(app, /const desktopChrome = .*\["windows", "linux"\]\.includes/);
   assert.match(app, /windows-titlebar-brand[^>]*><img[^>]*\/><\/span>/, "the product name is absent from both desktop captions");
-  assert.match(app, /\{title && <span className="windows-titlebar-task/);
+  assert.match(app, /\{title && <span className="windows-titlebar-task[^"]*px-3/, "the caption title keeps breathing room on both sides of the sidebar divider");
   assert.match(app, /className="windows-titlebar-control relative" aria-label=\{t\("lock\.enter"\)\}/, "standby lock belongs in the desktop caption");
   assert.match(app, /className=\{`windows-titlebar-control \$\{terminalVisible/);
   assert.match(app, /aria-label=\{inspectorCollapsed \? t\("inspector\.expand"\) : t\("inspector\.collapse"\)\}/);
@@ -31,6 +31,6 @@ test("Windows and Linux integrate the conversation controls into one desktop cap
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.sidebar\s*\{[^}]*border-right:\s*1px solid var\(--border\)/s, "the sidebar divider reaches the bottom of the content rail");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.windows-titlebar::after\s*\{[^}]*left:\s*var\(--windows-titlebar-sidebar-width[^}]*height:\s*1px/s, "the caption rule starts at the main content instead of crossing the sidebar");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.windows-titlebar-brand\s*\{[^}]*--windows-titlebar-sidebar-width/s);
-  assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.windows-titlebar-brand\s*\{[^}]*border-right:\s*1px solid var\(--border\)/s, "the sidebar divider continues through the caption");
+  assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.windows-titlebar-brand\s*\{[^}]*border-right:\s*1px solid var\(--border\)[^}]*background:\s*var\(--sidebar\)/s, "the sidebar colour and divider continue through the caption");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.workbench-inspector\.open\s*\{[^}]*top:\s*8px[^}]*height:\s*calc\(100% - 16px\)/s, "the inspector no longer overlaps the removed second toolbar");
 });

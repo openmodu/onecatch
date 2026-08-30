@@ -104,7 +104,7 @@ function DesktopTitleBar({ title = "", taskStatus = "", taskActive = false, show
   const titlebarSidebarWidth = Math.max(sidebarWidth, 136);
   return <div className="windows-titlebar drag-region hidden h-9 items-center bg-background pl-3 text-xs text-foreground" style={{ "--windows-titlebar-sidebar-width": `${titlebarSidebarWidth}px` }} onDoubleClick={isLinux ? undefined : () => void Window.ToggleMaximise()}>
     <span className="windows-titlebar-brand flex items-center gap-2 font-medium"><img className="size-4 rounded-[4px]" src="/appicon.png" alt="" aria-hidden="true" /></span>
-    {title && <span className="windows-titlebar-task pointer-events-none flex min-w-0 flex-1 items-center gap-2 pr-3" title={title}>
+    {title && <span className="windows-titlebar-task pointer-events-none flex min-w-0 flex-1 items-center gap-2 px-3" title={title}>
       <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{title}</strong>
       {showTaskStatus && <StatusPill status={taskStatus} active={taskActive} />}
     </span>}

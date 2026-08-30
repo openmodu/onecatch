@@ -2751,6 +2751,7 @@
   height: 100%;
   flex: 0 0 var(--windows-titlebar-sidebar-width, 216px);
   border-right: 1px solid var(--border);
+  background: var(--sidebar);
   padding-right: 0;
   padding-left: 12px;
 }
