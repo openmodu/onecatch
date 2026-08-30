@@ -67,7 +67,7 @@ function WorkflowDetail({ workflow, runtimes, onEdit }) {
         <div className="min-w-0">
           <div className="mb-2 flex items-center gap-2">
             <Badge variant="secondary">{t(isDag ? "workflow.modeDag" : "workflow.modeSerial")}</Badge>
-            <code className="select-text text-xs text-muted-foreground">{workflow.id}</code>
+            <code className="text-xs text-muted-foreground">{workflow.id}</code>
           </div>
           <h1 className="m-0 truncate text-2xl font-semibold tracking-tight text-foreground">{workflow.name || workflow.id}</h1>
           <p className="mt-2 mb-0 text-sm leading-relaxed text-muted-foreground">{workflowPath(workflow)}</p>
@@ -91,7 +91,7 @@ function WorkflowDetail({ workflow, runtimes, onEdit }) {
                     <Badge variant="outline" className="font-mono text-[10px]">{step.runtime || "—"}</Badge>
                   </div>
                   {isDag && <p className="mt-1.5 mb-0 text-xs text-muted-foreground">{(step.dependsOn || []).length ? t("workflow.waitDependencies", { count: step.dependsOn.length }) : t("workflow.rootParallel")}</p>}
-                  {!isDag && <div className="mt-2 flex flex-wrap gap-1.5">{Object.entries(step.transitions || {}).map(([signal, target]) => <code className="select-text rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground" key={signal}>{signal} → {target}</code>)}</div>}
+                  {!isDag && <div className="mt-2 flex flex-wrap gap-1.5">{Object.entries(step.transitions || {}).map(([signal, target]) => <code className="rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground" key={signal}>{signal} → {target}</code>)}</div>}
                   {step.instruction && <p className="mt-2 mb-0 line-clamp-3 text-xs leading-relaxed text-muted-foreground">{step.instruction}</p>}
                 </div>
               </div>
@@ -127,7 +127,7 @@ export default function WorkflowLibrary({ workflows, selectedWorkflow, runtimes,
       <DropdownMenuItem onSelect={() => openEditor(dagTemplate, true)}><GitBranch aria-hidden="true" />{t("workflow.parallelDag")}</DropdownMenuItem>
     </DropdownMenuContent>
   </DropdownMenu>;
-  return <div className="workflow-window relative grid h-full min-h-0 grid-cols-[240px_minmax(0,1fr)] overflow-hidden bg-transparent text-foreground">
+  return <div className="workflow-window relative grid h-full min-h-0 select-none grid-cols-[240px_minmax(0,1fr)] overflow-hidden bg-transparent text-foreground">
     {compactAuxiliaryChrome
       ? <div className="workflow-titlebar drag-region absolute inset-x-0 top-0 z-40 grid h-[52px] cursor-default grid-cols-[240px_minmax(0,1fr)] select-none">
         <div className="auxiliary-sidebar-title flex min-w-0 items-center justify-start gap-2 border-r border-border bg-sidebar px-4 text-sm font-bold tracking-[-0.01em] text-foreground/85">

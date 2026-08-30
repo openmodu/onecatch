@@ -1,10 +1,15 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Action, TUISelect } from "../../../ui/primitives.jsx";
+import { ArrowLeft, CheckCircle2, GitBranch, LayoutGrid, Plus, Save, Trash2 } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { nextWorkflowItemID } from "../../workflowIds.js";
 import { assignWorkflowWorker, isRemoteWorker } from "../../workflowWorker.js";
 import { enabledRuntimeInfos } from "../../runtimeHarnesses.js";
-import Modal from "../Modal.jsx";
+import { SettingsField, SettingsSelect } from "../settings/SettingsControls.jsx";
 import WorkflowIdentityFields from "./WorkflowIdentityFields.jsx";
 
 export default function DAGWorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, runtimes, workers, defaultSandbox, allowFullSandbox, onClose, embedded = false }) {
@@ -16,7 +21,7 @@ export default function DAGWorkflowEditor({ editor, setEditor, validation, valid
   const selectedIndex = editor.steps.findIndex((step) => step.id === selectedID);
   const selected = editor.steps[selectedIndex];
   const positions = editor.layout?.nodes || {};
-  const workerOptions = [{ id: "local", name: t("common.local") }, ...workers.filter((worker) => worker.enabled)];
+  const workerOptions = [{ value: "local", label: t("common.local") }, ...workers.filter((worker) => worker.enabled).map((worker) => ({ value: worker.id, label: worker.name }))];
   const runtimeOptions = enabledRuntimeInfos(runtimes, {}, editor.steps.map((step) => step.runtime));
   const defaultRuntime = runtimeOptions.find((runtime) => !runtime.disabled)?.id || "";
 
@@ -65,45 +70,82 @@ export default function DAGWorkflowEditor({ editor, setEditor, validation, valid
   };
   const updateSignal = (oldSignal, signal, target) => setStep("transitions", Object.fromEntries(Object.entries(selected.transitions || {}).filter(([key]) => key !== oldSignal).concat([[signal, target]])));
 
-  const actionButtons = <><Action onClick={autoLayout}>{t("workflow.autoLayout")}</Action><Action tone="primary" onClick={addNode}>{t("workflow.node")}</Action><Action tone="primary" disabled={busy === "workflow"} onClick={saveWorkflow}>{busy === "workflow" ? t("common.saving") : t("workflow.saveDag")}</Action></>;
-  const shell = <div className={`dag-editor-shell ${embedded ? "dag-editor-shell--embedded" : ""}`}>
-      {embedded ? <header className="dag-editor-header">
-        <div className="dag-actions">{actionButtons}</div>
-        <div className="serial-editor-basics dag-editor-basics"><WorkflowIdentityFields editor={editor} setEditor={setEditor} validation={validation} /></div>
-      </header> : <div className="dag-toolbar">
-        <WorkflowIdentityFields editor={editor} setEditor={setEditor} validation={validation} />
-        <div className="dag-actions"><span className="mode-chip dag">DAG · {t("workflow.allJoin")}</span>{actionButtons}</div>
-      </div>}
-      <div className="dag-workspace">
+  return <section className="workflow-editor-surface dag-editor-page select-none bg-background">
+    <div className="dag-editor-shell flex min-h-0 flex-1 flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-border/80 bg-background/95 px-5 py-4">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            {!embedded && <Button variant="ghost" size="sm" onClick={onClose}><ArrowLeft aria-hidden="true" />{t("common.back")}</Button>}
+            <Badge variant="secondary"><GitBranch aria-hidden="true" />DAG · {t("workflow.allJoin")}</Badge>
+          </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={autoLayout}><LayoutGrid aria-hidden="true" />{t("workflow.autoLayout")}</Button>
+            <Button variant="outline" size="sm" onClick={addNode}><Plus aria-hidden="true" />{t("workflow.node")}</Button>
+            <Button size="sm" disabled={busy === "workflow"} onClick={saveWorkflow}><Save aria-hidden="true" />{busy === "workflow" ? t("common.saving") : t("workflow.saveDag")}</Button>
+          </div>
+        </div>
+        <div className="rounded-xl border border-border/80 bg-card/72 p-4 shadow-xs">
+          <WorkflowIdentityFields editor={editor} setEditor={setEditor} validation={validation} />
+        </div>
+      </header>
+
+      <div className="dag-workspace grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(280px,320px)]">
         <div className="dag-canvas" ref={canvas} onPointerUp={() => { drag.current = null; }} onPointerLeave={() => { drag.current = null; }}>
           <svg className="dag-edges" aria-hidden="true">{editor.steps.flatMap((step) => (step.dependsOn || []).map((source) => {
             const from = positions[source] || { x: 30, y: 30 };
             const to = positions[step.id] || { x: 400, y: 200 };
-            const x1 = from.x + 190, y1 = from.y + 48, x2 = to.x, y2 = to.y + 48;
+            const x1 = from.x + 204, y1 = from.y + 47, x2 = to.x, y2 = to.y + 47;
             return <g key={`${source}-${step.id}`} className="dag-edge" onClick={() => deleteEdge(source, step.id)}><path d={`M ${x1} ${y1} C ${x1 + 70} ${y1}, ${x2 - 70} ${y2}, ${x2} ${y2}`} /><text x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 7}>×</text></g>;
           }))}</svg>
           {editor.steps.map((step) => {
             const point = positions[step.id] || { x: 50, y: 50 };
             return <div key={step.id} className={`dag-node-card ${selectedID === step.id ? "selected" : ""} ${connectFrom === step.id ? "connecting" : ""}`} style={{ left: point.x, top: point.y }} onClick={() => setSelectedID(step.id)} onPointerDown={(event) => { if (event.target.closest("button")) return; const rect = event.currentTarget.getBoundingClientRect(); drag.current = { id: step.id, offsetX: event.clientX - rect.left, offsetY: event.clientY - rect.top }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={(event) => moveNode(event, step.id)}>
               <button className="dag-port input" title={t("workflow.connectHere")} aria-label={t("workflow.connectTo", { name: step.name })} onClick={(event) => { event.stopPropagation(); connect(step.id); }} />
-              <div className="dag-node-head"><span className={`runtime-badge ${step.runtime}`}>{step.runtime}</span><small>{step.workerId || "local"}</small></div><strong>{step.name}</strong><p>{(step.dependsOn || []).length ? t("workflow.waitDependencies", { count: (step.dependsOn || []).length }) : t("workflow.rootParallel")}</p>
+              <div className="dag-node-head"><Badge variant="outline" className={`runtime-name ${step.runtime} max-w-[118px] truncate font-mono text-[10px]`}>{step.runtime}</Badge><small>{step.workerId || "local"}</small></div>
+              <strong>{step.name}</strong>
+              <p>{(step.dependsOn || []).length ? t("workflow.waitDependencies", { count: (step.dependsOn || []).length }) : t("workflow.rootParallel")}</p>
               <button className="dag-port output" title={t("workflow.connectFromHere")} aria-label={t("workflow.connectFrom", { name: step.name })} onClick={(event) => { event.stopPropagation(); connect(step.id); }} />
             </div>;
           })}
           <div className="canvas-hint">{connectFrom ? t("workflow.connectingFrom", { id: connectFrom }) : t("workflow.canvasHint")}</div>
         </div>
-        <aside className="dag-inspector">{selected ? <>
-          <div className="dag-inspector-title"><div><span className="kicker">{t("workflow.nodeInspector")}</span><h3>{selected.name}</h3></div><Action className="dag-delete-node" tone="danger" disabled={editor.steps.length <= 1} onClick={deleteNode}>{t("workflow.deleteNode")}</Action></div>
-          <label>{t("common.nodeID")}<input value={selected.id} onChange={(event) => { const next = event.target.value; renameStep(next); setSelectedID(next); }} /></label>
-          <label>{t("worker.name")}<input value={selected.name} onChange={(event) => setStep("name", event.target.value)} /></label>
-          <label>{t("common.runtime")}<TUISelect ariaLabel={t("common.runtime")} value={selected.runtime} onChange={(runtime) => setStep("runtime", runtime)} options={runtimeOptions.map((runtime) => ({ value: runtime.id, label: runtime.name, disabled: runtime.disabled }))} /></label>
-          <label>{t("common.worker")}<TUISelect ariaLabel={t("common.worker")} value={selected.workerId || "local"} onChange={setWorker} options={workerOptions.map((worker) => ({ value: worker.id, label: worker.name }))} /></label>
-          <label>{t("common.sandbox")}<TUISelect ariaLabel={t("common.sandbox")} value={selected.sandbox || "read-only"} onChange={(sandbox) => setStep("sandbox", sandbox)} options={[{ value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, { value: "full", label: t("workspace.fullDanger"), disabled: isRemoteWorker(selected.workerId) }]} /></label>
-          <label>{t("workflow.rolePrompt")}<textarea value={selected.rolePrompt} onChange={(event) => setStep("rolePrompt", event.target.value)} /></label><label>{t("workflow.nodeInstruction")}<textarea value={selected.instruction} onChange={(event) => setStep("instruction", event.target.value)} /></label>
-          <div className="transition-editor"><span>{t("workflow.terminalSignals")}</span>{Object.entries(selected.transitions || {}).map(([signal, target], index) => <section className="dag-transition-item" key={signal}><strong>{t("workflow.transitionNumber", { number: index + 1 })}</strong><label>{t("workflow.signal")}<input value={signal} onChange={(event) => updateSignal(signal, event.target.value, target)} /></label><label>{t("workflow.target")}<TUISelect ariaLabel={`${signal} target`} value={target} onChange={(nextTarget) => updateSignal(signal, signal, nextTarget)} options={[{ value: "$done", label: "$done" }, { value: "$pause", label: "$pause" }, { value: "$fail", label: "$fail" }]} /></label></section>)}</div>
-        </> : null}</aside>
+
+        <aside className="min-h-0 overflow-y-auto border-l border-border/80 bg-card/35">
+          {selected ? <>
+            <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-border/80 bg-background/95 px-4 py-3.5 backdrop-blur">
+              <div className="min-w-0"><span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">{t("workflow.nodeInspector")}</span><h3 className="mt-1 mb-0 truncate text-sm font-semibold text-foreground">{selected.name}</h3></div>
+              <Button variant="ghost" size="icon-sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" title={t("workflow.deleteNode")} aria-label={t("workflow.deleteNode")} disabled={editor.steps.length <= 1} onClick={deleteNode}><Trash2 aria-hidden="true" /></Button>
+            </div>
+            <div className="grid gap-4 p-4">
+              <SettingsField label={t("common.nodeID")}><Input className="font-mono" value={selected.id} onChange={(event) => { const next = event.target.value; renameStep(next); setSelectedID(next); }} /></SettingsField>
+              <SettingsField label={t("worker.name")}><Input value={selected.name} onChange={(event) => setStep("name", event.target.value)} /></SettingsField>
+              <SettingsField label={t("common.runtime")}><SettingsSelect ariaLabel={t("common.runtime")} value={selected.runtime} onChange={(runtime) => setStep("runtime", runtime)} options={runtimeOptions.map((runtime) => ({ value: runtime.id, label: runtime.name || runtime.id, meta: runtime.available ? "" : t("common.missing"), disabled: runtime.disabled }))} /></SettingsField>
+              <SettingsField label={t("common.worker")}><SettingsSelect ariaLabel={t("common.worker")} value={selected.workerId || "local"} onChange={setWorker} options={workerOptions} /></SettingsField>
+              <SettingsField label={t("common.sandbox")}><SettingsSelect ariaLabel={t("common.sandbox")} value={selected.sandbox || "read-only"} onChange={(sandbox) => setStep("sandbox", sandbox)} options={[{ value: "read-only", label: t("workspace.readOnly") }, { value: "workspace-write", label: t("workspace.write") }, { value: "full", label: t("workspace.fullDanger"), disabled: isRemoteWorker(selected.workerId) || (!allowFullSandbox && selected.sandbox !== "full") }]} /></SettingsField>
+              <SettingsField label={t("workflow.rolePrompt")}><Textarea className="min-h-20 select-text resize-y" value={selected.rolePrompt} onChange={(event) => setStep("rolePrompt", event.target.value)} /></SettingsField>
+              <SettingsField label={t("workflow.nodeInstruction")}><Textarea className="min-h-24 select-text resize-y" value={selected.instruction} onChange={(event) => setStep("instruction", event.target.value)} /></SettingsField>
+
+              <section className="rounded-xl border border-border/75 bg-muted/35 p-3.5">
+                <strong className="text-xs font-semibold text-foreground">{t("workflow.terminalSignals")}</strong>
+                <div className="mt-3 grid gap-2.5">
+                  {Object.entries(selected.transitions || {}).map(([signal, target], index) => <section className="rounded-lg border border-border/75 bg-background/80 p-3" key={signal}>
+                    <Badge variant="secondary" className="mb-3">{t("workflow.transitionNumber", { number: index + 1 })}</Badge>
+                    <div className="grid gap-3">
+                      <SettingsField label={t("workflow.signal")}><Input className="font-mono" value={signal} onChange={(event) => updateSignal(signal, event.target.value, target)} /></SettingsField>
+                      <SettingsField label={t("workflow.target")}><SettingsSelect ariaLabel={`${signal} target`} value={target} onChange={(nextTarget) => updateSignal(signal, signal, nextTarget)} options={[{ value: "$done", label: "$done" }, { value: "$pause", label: "$pause" }, { value: "$fail", label: "$fail" }]} /></SettingsField>
+                    </div>
+                  </section>)}
+                </div>
+              </section>
+            </div>
+          </> : null}
+        </aside>
       </div>
-      <div className={`dag-validation ${validation.length ? "has-errors" : ""}`}><Action size="compact" onClick={validateEditor}>{t("workflow.validateDag")}</Action>{validation.length ? validation.map((issue) => <span key={`${issue.path}-${issue.code}`}><code>{issue.path}</code>{issue.message}</span>) : <span>{t("workflow.dagValidationHint")}</span>}</div>
-    </div>;
-  return embedded ? <section className="workflow-editor-surface dag-editor-page">{shell}</section> : <Modal wide title={t("workflow.dagCanvas")} subtitle={t("workflow.dagCanvasSubtitle")} onClose={onClose}>{shell}</Modal>;
+
+      <footer className={`flex min-h-11 shrink-0 items-center gap-3 overflow-x-auto border-t border-border/80 px-4 py-2 text-xs ${validation.length ? "bg-destructive/5 text-destructive" : "bg-muted/30 text-muted-foreground"}`}>
+        <Button variant="outline" size="sm" onClick={validateEditor}><CheckCircle2 aria-hidden="true" />{t("workflow.validateDag")}</Button>
+        {validation.length ? validation.map((issue) => <span className="whitespace-nowrap" key={`${issue.path}-${issue.code}`}><code className="mr-1 font-mono">{issue.path}</code>{issue.message}</span>) : <span className="whitespace-nowrap">{t("workflow.dagValidationHint")}</span>}
+      </footer>
+    </div>
+  </section>;
 }

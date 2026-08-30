@@ -187,6 +187,29 @@ test("settings renders directly through shadcn instead of the TUI compatibility 
   assert.match(settings, /components\/ui\/scroll-area/);
 });
 
+test("workflow windows use desktop selection rules and shadcn editors", async () => {
+  const library = await readFile(path.join(sourceRoot, "app", "components", "workflow", "WorkflowLibrary.jsx"), "utf8");
+  const loopEditor = await readFile(path.join(sourceRoot, "app", "components", "workflow", "WorkflowEditor.jsx"), "utf8");
+  const dagEditor = await readFile(path.join(sourceRoot, "app", "components", "workflow", "DAGWorkflowEditor.jsx"), "utf8");
+  const identity = await readFile(path.join(sourceRoot, "app", "components", "workflow", "WorkflowIdentityFields.jsx"), "utf8");
+
+  assert.match(library, /workflow-window[^\"]*\bselect-none\b/, "workflow display pages should behave like desktop chrome");
+  assert.doesNotMatch(library, /className="[^"]*\bselect-text\b/, "workflow IDs and transition chips should not behave like web document text");
+
+  for (const [name, source] of [["loop editor", loopEditor], ["DAG editor", dagEditor], ["workflow identity", identity]]) {
+    assert.doesNotMatch(source, /ui\/primitives|\bTUISelect\b|<(?:input|select|textarea)\b/, `${name} still uses the TUI layer or raw form controls`);
+  }
+  for (const source of [loopEditor, dagEditor]) {
+    assert.match(source, /workflow-editor-surface[^\"]*\bselect-none\b/, "editor labels and cards must not be accidentally selectable");
+    assert.match(source, /components\/ui\/button/);
+    assert.match(source, /components\/ui\/input/);
+    assert.match(source, /components\/ui\/textarea/);
+    assert.match(source, /SettingsSelect/);
+    assert.match(source, /Textarea className="[^"]*\bselect-text\b/, "editable prompts must remain selectable inside the non-selectable editor shell");
+  }
+  assert.doesNotMatch(dagEditor, /<Modal\s+wide/, "the DAG editor should not be wrapped in the legacy wide toolbar");
+});
+
 test("confirmation dialogs contain long workspace paths", async () => {
   const confirmDialog = await readFile(path.join(sourceRoot, "app", "components", "settings", "ConfirmDialog.jsx"), "utf8");
   assert.match(confirmDialog, /className="min-w-0 sm:max-w-md"/, "confirmation content must allow long details to shrink inside the dialog");
