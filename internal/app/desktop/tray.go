@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	trayActionEvent      = "onecatch:tray-action"
+	trayActionEvent      = "onecatch:tray-navigate"
 	languageChangedEvent = "onecatch:language-changed"
 )
 

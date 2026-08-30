@@ -54,7 +54,7 @@ import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeO
 import { collapsePanelAtCompact, COMPACT_LAYOUT_QUERY } from "./responsiveLayout.js";
 import { scheduleIdle } from "./scheduleIdle.js";
 import { REMOTE_FS_HEALTH_INTERVAL_MS, shouldAutoCheckRemoteFS } from "./remoteFSHealth.js";
-import { newestTaskRun, TRAY_ACTION_EVENT } from "./trayNavigation.js";
+import { newestTaskRun, normalizeTrayNavigation, TRAY_ACTION_EVENT } from "./trayNavigation.js";
 import { LANGUAGE_CHANGED_EVENT } from "../i18n.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
@@ -1264,7 +1264,9 @@ function App() {
     if (!request?.taskId || request.started || mode !== "wails") return;
     request.started = true;
     try {
-      const run = newestTaskRun(await TaskRunBinding.ListRunsByTask(request.taskId));
+      const run = request.runId
+        ? { id: request.runId }
+        : newestTaskRun(await TaskRunBinding.ListRunsByTask(request.taskId));
       if (trayTaskRequestRef.current !== request) return;
       setEditor(null);
       setEditorSourceID("");
@@ -1297,7 +1299,8 @@ function App() {
   useEffect(() => {
     if (mode !== "wails") return undefined;
     return Events.On(TRAY_ACTION_EVENT, (event) => {
-      const action = event?.data;
+      const action = normalizeTrayNavigation(event?.data);
+      if (!action) return;
       if (action?.action === "new") {
         trayTaskRequestRef.current = null;
         setEditor(null);
@@ -1307,7 +1310,7 @@ function App() {
         return;
       }
       if (action?.action !== "open" || !action.taskId) return;
-      const request = { taskId: action.taskId, workspaceId: action.workspaceId || workspaceID };
+      const request = { taskId: action.taskId, workspaceId: action.workspaceId, runId: action.runId };
       trayTaskRequestRef.current = request;
       setTaskModal(false);
       if (request.workspaceId && request.workspaceId !== workspaceID) {
