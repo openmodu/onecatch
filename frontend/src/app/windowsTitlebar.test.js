@@ -35,12 +35,14 @@ test("Windows and Linux integrate the conversation controls into one desktop cap
 
   assert.match(workbench, /!integratedDesktopTitlebar && !inspectorCollapsed && !inspectorMaximized/, "desktop captions must not duplicate terminal and status controls above the inspector");
   assert.match(workbench, /if \(inspectorCollapsed\) onToggleInspector\(\); else closeInspector\(\);/, "caption requests must retain the workbench's dirty-buffer close guard");
+  assert.match(workflow, /const compactAuxiliaryChrome = usesCompactAuxiliaryChrome\(\)/, "workflow chrome follows the desktop platform");
   assert.match(workflow, /workflow-titlebar drag-region absolute inset-x-0/, "the workflow caption exposes a full-width drag surface");
   assert.match(workflow, /auxiliary-sidebar-title[^\"]*justify-start gap-2[^\"]*border-r[^\"]*bg-sidebar/, "workflow history controls stay close to the sidebar title");
   assert.match(workflow, /<span[^>]*>\{t\("workflow\.title"\)\}<\/span>\s*\{\(onGoBack \|\| onGoForward\)/, "workflow history controls sit immediately after the sidebar title");
   assert.match(workflow, /size="icon-sm"[^>]*onClick=\{onGoBack\}[\s\S]*?<ChevronLeft strokeWidth=\{2\.5\}/, "workflow history controls use a clear native-scale weight");
-  assert.match(workflow, /workflow-sidebar-title-spacer[\s\S]*?justify-end px-4 pb-3[\s\S]*?<Plus/, "the new-workflow action sits below the sidebar title");
-  assert.doesNotMatch(workflow, /<strong[^>]*>\{t\("workflow\.title"\)\}<\/strong>/, "the workflow rail does not repeat the window title");
+  assert.match(workflow, /workflow-sidebar-title-spacer[\s\S]*?justify-end px-4 pb-3">\{newWorkflowMenu\}/, "the new-workflow action sits below the Windows and Linux sidebar title");
+  assert.match(workflow, /: <div className="pointer-events-none absolute inset-x-0[^\"]*justify-center[^>]*aria-hidden="true">\{t\("workflow\.title"\)\}/, "macOS keeps the centred native-window title");
+  assert.match(workflow, /size="icon-xs"[^>]*onClick=\{onGoBack\}[\s\S]*?<strong[^>]*>\{t\("workflow\.title"\)\}<\/strong>/, "macOS keeps its inset history controls and workflow rail heading");
   assert.match(sidebar, /onWidthChange\?\.\(width\)/, "the caption title should stay aligned when the resizable sidebar changes width");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.sidebar-visibility-toggle\s*\{[^}]*left:\s*36px/s, "the sidebar toggle sits immediately after the app icon");
   assert.match(css, /\.app-window-root\s*\{[^}]*grid-template-rows:\s*40px/s, "desktop app chrome uses the unified native-scale titlebar height");
@@ -52,4 +54,6 @@ test("Windows and Linux integrate the conversation controls into one desktop cap
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.windows-titlebar-brand\s*\{[^}]*border-right:\s*1px solid var\(--border\)[^}]*background:\s*var\(--sidebar\)/s, "the sidebar colour and divider continue through the caption");
   assert.match(css, /\.windows-titlebar\.sidebar-is-collapsed \.windows-titlebar-brand\s*\{[^}]*border-right:\s*0[^}]*background:\s*transparent/s, "the collapsed caption removes the divider before the project and title");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.workbench-inspector\.open\s*\{[^}]*top:\s*8px[^}]*height:\s*calc\(100% - 16px\)/s, "the inspector no longer overlaps the removed second toolbar");
+  assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.settings-titlebar-sidebar\s*\{[^}]*background-color:\s*var\(--sidebar\)[^}]*border-right:\s*1px solid var\(--border\)/s, "the auxiliary sidebar tint and divider are limited to Windows and Linux");
+  assert.doesNotMatch(css, /:root:not\(\[data-platform="windows"\]\):not\(\[data-platform="linux"\]\) \.settings-titlebar \.auxiliary-sidebar-title/, "macOS no longer paints a rectangular sidebar title surface over the native rounded material");
 });

@@ -154,7 +154,9 @@ test("the settings window uses the main window's inset sidebar and draggable chr
   assert.match(settings, /<ScrollArea className="sidebar settings-sidebar[^\"]*\[clip-path:inset\(8px_4px_8px_8px_round_16px\)\]/);
   assert.match(settings, /<div className="settings-titlebar drag-region [^"]*h-\[52px\][^"]*grid-cols-\[216px_minmax\(0,1fr\)\]/);
   assert.match(settings, /settings-titlebar-sidebar/);
-  assert.match(settings, /auxiliary-sidebar-title[^"]*left-0[^"]*w-\[216px\][^"]*justify-start/, "the settings window identity lives in its sidebar title region");
+  assert.match(settings, /const compactAuxiliaryChrome = usesCompactAuxiliaryChrome\(\)/, "settings chrome follows the desktop platform");
+  assert.match(settings, /\? <strong className="auxiliary-sidebar-title[^"]*left-0[^"]*w-\[216px\][^"]*justify-start/, "Windows and Linux keep the settings identity in the sidebar title region");
+  assert.match(settings, /: <strong className="pointer-events-none absolute inset-0 flex items-center justify-center/, "macOS centres the settings identity in the full window title strip");
   assert.doesNotMatch(settings, /settings\.preferences/, "the settings rail starts with navigation instead of a redundant preferences title");
   assert.match(settings, /<header className="drag-region [^"]*"/);
   assert.match(settings, /<div className="no-drag flex shrink-0 items-center gap-2\.5">/);

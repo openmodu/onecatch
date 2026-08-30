@@ -29,6 +29,7 @@ import { codexEffortValues, codexServiceTierValues, demoClaudeConfiguration, dem
 import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
 import { ConfirmDialog } from "./components/settings/ConfirmDialog.jsx";
 import { demoSettings } from "./settingsDefaults.js";
+import { usesCompactAuxiliaryChrome } from "./platform.js";
 
 const sectionMeta = (t) => ["runtime", "harness", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -69,6 +70,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
   const errorsByField = useMemo(() => Object.fromEntries(validationErrors.map((error) => [error.field, error.message])), [validationErrors]);
   const sections = sectionMeta(t);
   const activeMeta = sections.find((item) => item.id === section);
+  const compactAuxiliaryChrome = usesCompactAuxiliaryChrome();
 
   useEffect(() => setDraft(clone(value || demoSettings)), [value]);
 
@@ -211,7 +213,9 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     <div className="settings-titlebar drag-region absolute inset-x-0 top-0 z-40 grid h-[52px] cursor-default grid-cols-[216px_minmax(0,1fr)] select-none" aria-hidden="true">
       <span className="settings-titlebar-sidebar pointer-events-none" />
       <span className="pointer-events-none bg-background" />
-      <strong className="auxiliary-sidebar-title pointer-events-none absolute inset-y-0 left-0 flex w-[216px] items-center justify-start px-4 text-sm font-semibold tracking-[-0.01em] text-foreground/85">{t("sidebar.settings")}</strong>
+      {compactAuxiliaryChrome
+        ? <strong className="auxiliary-sidebar-title pointer-events-none absolute inset-y-0 left-0 flex w-[216px] items-center justify-start px-4 text-sm font-semibold tracking-[-0.01em] text-foreground/85">{t("sidebar.settings")}</strong>
+        : <strong className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85">{t("sidebar.settings")}</strong>}
     </div>
     <AuxWindowCloseButton />
     <ScrollArea className="sidebar settings-sidebar relative z-30 min-h-0 select-none text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]">

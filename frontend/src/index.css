@@ -667,19 +667,6 @@
     background-color: color-mix(in oklab, var(--sidebar) 94%, transparent);
   }
 
-  .settings-titlebar-sidebar {
-    background-color: var(--sidebar);
-    border-right: 1px solid var(--border);
-  }
-
-  :root[data-native-sidebar-material] .settings-titlebar-sidebar {
-    background-color: color-mix(in oklab, var(--sidebar) 94%, transparent);
-  }
-
-  :root:not([data-platform="windows"]):not([data-platform="linux"]) .auxiliary-sidebar-title {
-    padding-left: 72px;
-  }
-
   .conversation-workspace {
     --conversation-content-width: 920px;
     --conversation-inline-gutter: clamp(12px, 2.5vw, 24px);
@@ -2824,6 +2811,11 @@
 :root:is([data-platform="windows"], [data-platform="linux"]) .settings-titlebar,
 :root:is([data-platform="windows"], [data-platform="linux"]) .workflow-titlebar {
   height: 40px;
+}
+
+:root:is([data-platform="windows"], [data-platform="linux"]) .settings-titlebar-sidebar {
+  background-color: var(--sidebar);
+  border-right: 1px solid var(--border);
 }
 
 :root:is([data-platform="windows"], [data-platform="linux"]) .settings-sidebar aside {

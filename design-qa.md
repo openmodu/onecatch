@@ -1,53 +1,45 @@
-# Design QA: Harness settings navigation
+# macOS auxiliary window design QA
 
-- Source visual truth: `/var/folders/b1/0fd1b6hs7lz0fm_mh346lybm0000gn/T/codex-clipboard-f12e759c-ed12-4f32-a3bb-16b2323c4cfe.png`
-- Browser: Codex in-app browser
-- URL: `http://localhost:4173/`
-- Viewport: 1280 × 720 CSS px
-- Source pixels: 1960 × 1656
-- Implementation pixels: 1280 × 720 for both captures
-- Device pixel ratio reported by the page: 2; browser captures were normalized to CSS-pixel dimensions
-- State: Chinese, light theme; Appearance page and Harness page showing all Agent cards
+- Source visual truth: Settings `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-a3627999-61a3-44ca-bf56-4e3cf395202f.png`; Workflows `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-7e9b5654-ae8f-4c70-9d23-ff27d2431932.png`
+- Implementation screenshots: Settings `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/settings-macos-centered-clean.jpg`; Workflows `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/workflow-macos-current.png`
+- Combined comparisons: Settings `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/settings-macos-centered-comparison.png`; Workflows `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/workflow-macos-comparison.png`
+- Viewports: Settings 959 × 799 CSS pixels; Workflows 1039 × 759 CSS pixels
+- Pixel dimensions and density: Settings source 1918 × 1598 at 2×, normalized to 959 × 799; implementation 959 × 799 at 1×. Workflows source 2078 × 1518 at 2×, normalized to 1039 × 759; implementation 1039 × 759 at 1×.
+- State: macOS light appearance; Settings Appearance section selected; Workflows detail view selected
+- Primary interactions tested: loaded Settings, switched from Appearance to Terminal, and returned to Appearance; loaded the Workflows detail window
+- Console errors: none
 
 ## Full-view comparison evidence
 
-The annotated source identifies the obsolete local runtime block and clarifies that process-level integration belongs to each Harness. The implementation removes that block from the first settings page, renames the page to Appearance, and moves executable, environment, SDK/CLI, model, reasoning, service-tier, and provider controls into the corresponding Harness cards.
+The normalized Settings comparison shows “设置” centred in the full-width top drag strip, matching the title treatment already used by Workflows. The macOS title strip no longer paints a 216 × 52 rectangular sidebar surface: the computed background is transparent and the native inset sidebar remains the only coloured panel under the traffic lights. The redundant “偏好设置” heading remains absent.
 
-## Focused region comparison evidence
+The Workflows comparison continues to show “工作流” centred at the top of the full window, while Windows and Linux keep their compact sidebar title branch.
 
-The sidebar and the Harness list were inspected at readable scale because they contain the marked source regions. Harness occupies the annotated sidebar slot and presents Codex, Claude Code, and Modu Code under the concise “Harness list” heading as a lightweight divided list without nested cards or tab navigation. Each row keeps identity and health visible while its configuration can be expanded independently.
+## Focused region evidence
 
-## Fidelity surfaces
-
-- Fonts and typography: Existing OneCatch font stacks, weights, sizes, and hierarchy are preserved. The new sidebar label and descriptions match adjacent navigation entries.
-- Spacing and layout rhythm: Tight title/status rows and more generous expanded content create clear rhythm. Dividers and whitespace replace the previous nested-card frames.
-- Colors and visual tokens: No new colors or gradients were introduced. Selected and neutral states use the existing theme tokens.
-- Image quality and assets: Not applicable; neither target region contains image assets.
-- Copy and content: Appearance describes only language, display, and theme. Harness describes integration, runtime environment, and Agent defaults together.
-
-## Interaction verification
-
-- Opened Settings from the application menu.
-- Confirmed Appearance contains no local runtime or executable controls.
-- Selected Harness from the new sidebar entry.
-- Confirmed Codex, Claude Code, and Modu Code cards are visible together with no tablist inside Harness.
-- Confirmed the initial state has one expanded Harness and two collapsed Harnesses.
-- Expanded Modu Code, verified its SDK controls, then collapsed Codex independently.
-- Confirmed the Modu Code card exposes Native Go SDK, shared/isolated configuration, model, provider, and configuration testing.
-- Edited the Modu default model and confirmed the unsaved-settings bar appeared.
-- Discarded the edit and confirmed the field returned to its saved value.
-- Checked browser console errors: none.
+The full-view comparison renders the title and traffic-light region at sufficient size, so an additional crop was not needed. Computed evidence for Settings confirms the title occupies the full 959px strip and centres at x = 479.5, the macOS sidebar-title overlay has a transparent background and no right border, the inset sidebar clip remains `inset(8px 4px 8px 8px round 16px)`, and no “偏好设置” element is rendered. Native traffic lights are not drawn by the browser preview, so their placement is taken from the source image.
 
 ## Findings
 
-No actionable P0, P1, or P2 differences remain. The source screenshot is an annotated placement reference, so viewport crop and content density differences outside the two marked regions are expected rather than design drift.
+- No actionable P0/P1/P2 differences remain for the requested macOS Settings title placement or protruding sidebar-title background.
+- Fonts and typography: the existing application font stack, 14px title size, semibold weight, and content hierarchy are preserved.
+- Spacing and layout rhythm: the title is centred against the full window rather than the 216px sidebar; the rounded sidebar inset and 216px content grid remain unchanged.
+- Colors and visual tokens: the macOS title overlay is transparent; the sidebar material retains the existing sidebar token. Windows/Linux still apply `var(--sidebar)` to their compact title segment.
+- Image quality and asset fidelity: no image, icon, or raster asset was added or replaced.
+- Copy and content: “设置” remains the window identity and “偏好设置” is absent.
 
 ## Comparison history
 
-The first rendered comparison led to the runtime-control relocation. The revised structure passed the focused browser check.
+1. Earlier macOS Settings implementation kept “设置” in the compact left sidebar title region and painted a rectangular 216 × 52 sidebar-coloured overlay above the inset rounded native panel. These were P2 visual mismatches called out in the annotated source.
+2. Fix: reused the existing desktop-platform helper. Windows/Linux retain the compact left title and coloured sidebar segment; macOS renders the title in a full-window centred layer and leaves the sidebar title segment transparent.
+3. Post-fix evidence: the revised 959 × 799 browser capture shows the centred title and clean rounded sidebar top. DOM inspection confirms title centre x = 479.5, transparent overlay background, 0px overlay border, and zero redundant preferences headings.
 
-## Follow-up polish
+## Implementation checklist
 
-No P3 follow-up is required for the requested structural change.
+- [x] Centre the Settings title on macOS, matching Workflows.
+- [x] Remove the macOS rectangular sidebar-title background that protruded over the rounded material.
+- [x] Preserve the inset rounded sidebar and existing Settings content layout.
+- [x] Keep Windows/Linux compact auxiliary chrome unchanged.
+- [x] Verify navigation, console output, targeted tests, and the production build.
 
 final result: passed

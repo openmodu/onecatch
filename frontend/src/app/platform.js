@@ -6,6 +6,10 @@ export function desktopPlatform(navigatorValue = globalThis.navigator) {
   return "other";
 }
 
+export function usesCompactAuxiliaryChrome(navigatorValue = globalThis.navigator) {
+  return ["windows", "linux"].includes(desktopPlatform(navigatorValue));
+}
+
 export function primaryShortcutLabel(key, navigatorValue = globalThis.navigator) {
   return `${desktopPlatform(navigatorValue) === "macos" ? "⌘" : "Ctrl+"}${key}`;
 }
