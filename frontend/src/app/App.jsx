@@ -1,7 +1,7 @@
 import { hasRemoteFSHarness, hydrateRuntimeHarnesses, supportsRuntimeProfile } from "./runtimeHarnesses.js";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Folder, Lock, Minus, PanelRightOpen, PictureInPicture2, Square, SquareTerminal, X } from "lucide-react";
+import { Folder, Lock, Minus, PanelRightClose, PanelRightOpen, PictureInPicture2, Square, SquareTerminal, X } from "lucide-react";
 import { Events, Window } from "@wailsio/runtime";
 import { Button } from "@/components/ui/button";
 import { DialogFooter } from "@/components/ui/dialog";
@@ -56,6 +56,7 @@ import { scheduleIdle } from "./scheduleIdle.js";
 import { REMOTE_FS_HEALTH_INTERVAL_MS, shouldAutoCheckRemoteFS } from "./remoteFSHealth.js";
 import { newestTaskRun, normalizeTrayNavigation, TRAY_ACTION_EVENT } from "./trayNavigation.js";
 import { LANGUAGE_CHANGED_EVENT } from "../i18n.js";
+import { SIDEBAR_DEFAULT_WIDTH } from "./sidebarLayout.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
@@ -92,14 +93,28 @@ function selectedTaskExecution(form) {
   };
 }
 
-function WindowsTitleBar() {
+function WindowsTitleBar({ title = "", taskStatus = "", taskActive = false, showTaskStatus = false, showWorkbenchControls = false, terminalVisible = false, inspectorCollapsed = true, inspectorDetached = false, sidebarWidth = SIDEBAR_DEFAULT_WIDTH, onToggleTerminal, onToggleInspector, onDockInspector }) {
+  const { t } = useTranslation();
   // Hyprland (and most Wayland tiling WMs) has no minimize concept and no
   // separate maximized size for a tiled window, so those two buttons would
   // just be dead weight there — same reasoning as GTK apps like Files, which
   // drop them under a tiling WM rather than ship controls that do nothing.
-  const isLinux = typeof document !== "undefined" && document.documentElement.dataset.platform === "linux";
-  return <div className="windows-titlebar drag-region hidden h-9 items-center border-b bg-background pl-3 text-xs text-foreground" onDoubleClick={isLinux ? undefined : () => void Window.ToggleMaximise()}>
-    <span className="windows-titlebar-brand flex items-center gap-2 font-medium"><img className="size-4 rounded-[4px]" src="/appicon.png" alt="" aria-hidden="true" />OneCatch</span>
+  const platform = typeof document === "undefined" ? "" : document.documentElement.dataset.platform;
+  const isLinux = platform === "linux";
+  const isWindows = platform === "windows";
+  const titlebarSidebarWidth = Math.max(sidebarWidth, 136);
+  return <div className="windows-titlebar drag-region hidden h-9 items-center border-b bg-background pl-3 text-xs text-foreground" style={isWindows ? { "--windows-titlebar-sidebar-width": `${titlebarSidebarWidth}px` } : undefined} onDoubleClick={isLinux ? undefined : () => void Window.ToggleMaximise()}>
+    <span className="windows-titlebar-brand flex items-center gap-2 font-medium"><img className="size-4 rounded-[4px]" src="/appicon.png" alt="" aria-hidden="true" />{!isWindows && <span>OneCatch</span>}</span>
+    {isWindows && title && <span className="windows-titlebar-task pointer-events-none flex min-w-0 flex-1 items-center gap-2 pr-3" title={title}>
+      <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{title}</strong>
+      {showTaskStatus && <StatusPill status={taskStatus} active={taskActive} />}
+    </span>}
+    {isWindows && showWorkbenchControls && <div className="windows-titlebar-workbench-actions no-drag flex h-full shrink-0 items-center gap-1 px-2" onDoubleClick={(event) => event.stopPropagation()}>
+      <button type="button" className={`windows-titlebar-control ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={onToggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>
+      {inspectorDetached
+        ? <button type="button" className="windows-titlebar-control" aria-label={t("inspector.dock")} title={t("inspector.dockHint")} onClick={onDockInspector}><PictureInPicture2 size={16} strokeWidth={2} aria-hidden="true" /></button>
+        : <button type="button" className={`windows-titlebar-control ${inspectorCollapsed ? "" : "active"}`} aria-label={inspectorCollapsed ? t("inspector.expand") : t("inspector.collapse")} aria-expanded={!inspectorCollapsed} aria-controls="workbench-inspector-content" title={inspectorCollapsed ? t("inspector.expand") : t("inspector.collapse")} onClick={onToggleInspector}>{inspectorCollapsed ? <PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /> : <PanelRightClose size={16} strokeWidth={2} aria-hidden="true" />}</button>}
+    </div>}
     <div className="no-drag ml-auto flex h-full" onDoubleClick={(event) => event.stopPropagation()}>
       {!isLinux && <button type="button" className="windows-caption-button" aria-label="最小化" onClick={() => void Window.Minimise()}><Minus size={14} aria-hidden="true" /></button>}
       {!isLinux && <button type="button" className="windows-caption-button" aria-label="最大化或还原" onClick={() => void Window.ToggleMaximise()}><Square size={11} aria-hidden="true" /></button>}
@@ -134,8 +149,10 @@ function App() {
   const [mode, setMode] = useState("loading");
   const [view, setView] = useState("tasks");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [terminalVisible, setTerminalVisible] = useState(false);
   const [terminalToggleVersion, setTerminalToggleVersion] = useState(0);
+  const [inspectorToggleVersion, setInspectorToggleVersion] = useState(0);
   const [runtimes, setRuntimes] = useState([]);
   const [workspaces, setWorkspaces] = useState([]);
   const [workspaceID, setWorkspaceID] = useState("");
@@ -235,6 +252,7 @@ function App() {
   // A detached inspector leaves no dock behind, so the workbench sees the same
   // "no panel here" layout it uses for a deliberate collapse.
   const inspectorCollapsed = inspectorDetached || resolveInspectorCollapsed(inspectorPreference);
+  const windowsChrome = typeof document !== "undefined" && document.documentElement.dataset.platform === "windows";
 
   useEffect(() => {
     if (typeof window === "undefined" || typeof window.matchMedia !== "function") return undefined;
@@ -1417,7 +1435,20 @@ function App() {
       MacTitleBarHiddenInsetUnified, so the lights are inset — the rail
       reserves that strip itself (see .traffic-light-gutter). */}
   return <div className="app-window-root relative grid h-full grid-rows-[minmax(0,1fr)] bg-transparent text-foreground">
-    <WindowsTitleBar />
+    <WindowsTitleBar
+      title={taskCreateVisible ? t("task.createTitle") : taskTitleVisible ? selectedTask.title : ""}
+      taskStatus={selectedTaskStatus}
+      taskActive={runDetail?.active}
+      showTaskStatus={Boolean(taskTitleVisible && selectedTask.workflowId && selectedTask.workflowId !== directAgentWorkflowID)}
+      showWorkbenchControls={view === "tasks" && !editor}
+      terminalVisible={terminalVisible}
+      inspectorCollapsed={inspectorCollapsed}
+      inspectorDetached={inspectorDetached}
+      sidebarWidth={sidebarCollapsed ? 136 : sidebarWidth}
+      onToggleTerminal={() => setTerminalToggleVersion((value) => value + 1)}
+      onToggleInspector={() => setInspectorToggleVersion((value) => value + 1)}
+      onDockInspector={dockInspector}
+    />
     <div className={`app-shell grid min-h-0 grid-cols-[auto_minmax(0,1fr)] ${sidebarCollapsed ? "sidebar-is-collapsed" : ""}`}>
       <Sidebar
         workspaces={workspaces}
@@ -1458,6 +1489,7 @@ function App() {
         onSelectQueued={selectQueued}
         onGoView={goView}
         onCollapsedChange={setSidebarCollapsed}
+        onWidthChange={setSidebarWidth}
         compactViewport={compactViewport}
       />
 
@@ -1471,7 +1503,7 @@ function App() {
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>{selectedWorkspace.name}</TooltipContent>
           </Tooltip>}
-          {taskCreateVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={t("task.createTitle")}>
+          {windowsChrome && view === "tasks" ? <span className="min-w-0 flex-1" /> : taskCreateVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={t("task.createTitle")}>
             <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{t("task.createTitle")}</strong>
           </span> : taskTitleVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={selectedTask.title}>
             <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{selectedTask.title}</strong>
@@ -1488,8 +1520,8 @@ function App() {
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {mode === "wails" ? t(view === "tasks" && selectedWorkspace?.remoteFs ? "workspace.remoteFS" : "common.local") : t("common.preview")}
           </StatusBadge>}
-          {view === "tasks" && !editor && inspectorCollapsed && <button type="button" className={`no-drag ml-auto grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${terminalVisible ? "bg-accent text-foreground" : "text-muted-foreground"}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => setTerminalToggleVersion((value) => value + 1)}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
-          {view === "tasks" && (inspectorDetached
+          {!windowsChrome && view === "tasks" && !editor && inspectorCollapsed && <button type="button" className={`no-drag ml-auto grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${terminalVisible ? "bg-accent text-foreground" : "text-muted-foreground"}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => setTerminalToggleVersion((value) => value + 1)}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
+          {!windowsChrome && view === "tasks" && (inspectorDetached
             ? <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.dock")} title={t("inspector.dockHint")} onClick={dockInspector}><PictureInPicture2 size={16} strokeWidth={2} aria-hidden="true" /></button>
             : inspectorCollapsed && <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /></button>)}
         </div>
@@ -1510,6 +1542,8 @@ function App() {
           permissionBusy={permissionBusy}
           attachments={composerAttachments}
           inspectorCollapsed={inspectorCollapsed}
+          inspectorToggleVersion={inspectorToggleVersion}
+          integratedWindowsTitlebar={windowsChrome}
           onToggleInspector={toggleInspector}
           onDetachInspector={mode === "wails" ? detachInspector : null}
           onEditWorkspace={editWorkspace}

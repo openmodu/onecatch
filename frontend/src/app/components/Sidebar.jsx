@@ -113,6 +113,7 @@ function Sidebar({
   onSelectQueued,
   onGoView,
   onCollapsedChange,
+  onWidthChange,
   compactViewport,
 }) {
   const { t, i18n } = useTranslation();
@@ -203,6 +204,10 @@ function Sidebar({
   useEffect(() => {
     onCollapsedChange?.(sidebarCollapsed);
   }, [onCollapsedChange, sidebarCollapsed]);
+
+  useEffect(() => {
+    onWidthChange?.(width);
+  }, [onWidthChange, width]);
 
   useEffect(() => {
     if (!compactViewport) return;

@@ -2725,6 +2725,40 @@
   padding-right: 42px;
 }
 
+:root[data-platform="windows"] .windows-titlebar {
+  padding-left: 0;
+}
+
+:root[data-platform="windows"] .windows-titlebar-brand {
+  width: var(--windows-titlebar-sidebar-width, 216px);
+  flex: 0 0 var(--windows-titlebar-sidebar-width, 216px);
+  padding-right: 0;
+  padding-left: 12px;
+}
+
+.windows-titlebar-control {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+
+.windows-titlebar-control:hover,
+.windows-titlebar-control.active {
+  background: var(--accent);
+  color: var(--foreground);
+}
+
+.windows-titlebar-control:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+
 .windows-caption-button {
   display: grid;
   width: 46px;
