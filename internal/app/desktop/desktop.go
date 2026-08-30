@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	desktopassets "github.com/openmodu/onecatch/internal/app/desktop/assets"
@@ -174,8 +175,18 @@ func Run() {
 			},
 		},
 		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: true,
+			// The menu-bar item is a first-class way back into the workbench.
+			// Closing the last window therefore leaves the process alive until
+			// the user chooses Quit from either native menu.
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
+	})
+	var shuttingDown atomic.Bool
+	wailsApp.OnShutdown(func() {
+		shuttingDown.Store(true)
+		// Stop a coalesced list notification before services and native menus
+		// begin tearing down.
+		listHub.Close()
 	})
 	terminalService.SetEmitter(func(name string, payload any) {
 		wailsApp.Event.Emit(name, payload)
@@ -190,9 +201,6 @@ func Run() {
 		// Every run mutation already lands here, so the run list rides along
 		// rather than needing its own decorator.
 		listHub.MarkDirty()
-	})
-	listHub.SetEmitter(func() {
-		wailsApp.Event.Emit(listchange.EventName, nil)
 	})
 	// ListRuntimes serves its cache immediately and re-probes in the background;
 	// this is how a corrected status reaches windows that already rendered.
@@ -273,8 +281,15 @@ func Run() {
 	// A hook rather than a listener: listeners are dispatched concurrently with
 	// Wails' own teardown, and this has to finish deciding before the window is
 	// gone.
-	mainWindow.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		auxiliaryWindows.CloseInspector()
+		if runtime.GOOS == "darwin" && !shuttingDown.Load() {
+			// Keep the webview warm and its event subscriptions alive. A tray
+			// action can then restore the exact workbench state immediately.
+			event.Cancel()
+			mainWindow.Hide()
+			return
+		}
 		if auxiliaryWindows.ReleaseHiddenWindows() {
 			// A settings or workflow window is still on screen, so the
 			// application outlives the workbench exactly as it did before.
@@ -301,6 +316,33 @@ func Run() {
 		// later is a Show() rather than a second full bundle load. Delayed so it
 		// competes with nothing during the launch it is meant to keep fast.
 		time.AfterFunc(3*time.Second, auxiliaryWindows.PrewarmSettings)
+	})
+
+	var trayController *macTrayController
+	if runtime.GOOS == "darwin" {
+		trayController = newMacTrayController(wailsApp, service, desktopassets.AppIcon, func(action trayAction) {
+			mainWindow.Show()
+			mainWindow.Restore()
+			mainWindow.Focus()
+			if action.Action != "show" {
+				wailsApp.Event.Emit(trayActionEvent, action)
+			}
+		}, func(err error) {
+			log.Warn("refresh system tray conversations", zap.Error(err))
+		})
+		unsubscribeLanguage := wailsApp.Event.On(languageChangedEvent, func(event *application.CustomEvent) {
+			language, ok := event.Data.(string)
+			if ok {
+				trayController.setLanguage(language)
+			}
+		})
+		defer unsubscribeLanguage()
+	}
+	listHub.SetEmitter(func() {
+		wailsApp.Event.Emit(listchange.EventName, nil)
+		if trayController != nil {
+			trayController.refresh()
+		}
 	})
 
 	if err := wailsApp.Run(); err != nil {

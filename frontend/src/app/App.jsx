@@ -54,6 +54,8 @@ import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeO
 import { collapsePanelAtCompact, COMPACT_LAYOUT_QUERY } from "./responsiveLayout.js";
 import { scheduleIdle } from "./scheduleIdle.js";
 import { REMOTE_FS_HEALTH_INTERVAL_MS, shouldAutoCheckRemoteFS } from "./remoteFSHealth.js";
+import { newestTaskRun, TRAY_ACTION_EVENT } from "./trayNavigation.js";
+import { LANGUAGE_CHANGED_EVENT } from "../i18n.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
@@ -128,7 +130,7 @@ function initialInspectorDetached() {
 }
 
 function App() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [mode, setMode] = useState("loading");
   const [view, setView] = useState("tasks");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -195,6 +197,7 @@ function App() {
   const runLoadVersion = useRef(0);
   const globalTaskSearchVersion = useRef(0);
   const runActionPending = useRef("");
+  const trayTaskRequestRef = useRef(null);
   const selectedRunIDRef = useRef("");
   const liveFramesRef = useRef([]);
   const liveFrameHistoryRef = useRef([]);
@@ -383,6 +386,14 @@ function App() {
   }, []);
 
   useEffect(() => { boot(); }, [boot]);
+
+  // Language is a WebView preference, while the macOS tray lives in Go.
+  // Announce the persisted value after the bridge is ready so a fresh launch
+  // does not briefly lock the native menu to its default language.
+  useEffect(() => {
+    if (mode !== "wails") return;
+    void Events.Emit(LANGUAGE_CHANGED_EVENT, i18n.resolvedLanguage || i18n.language || "en");
+  }, [i18n.language, i18n.resolvedLanguage, mode]);
 
   useEffect(() => {
     if (mode === "loading") return undefined;
@@ -1248,6 +1259,65 @@ function App() {
     setEditorSourceID("");
     setView(next);
   }, [mode, notify]);
+
+  const openTaskFromTray = useCallback(async (request) => {
+    if (!request?.taskId || request.started || mode !== "wails") return;
+    request.started = true;
+    try {
+      const run = newestTaskRun(await TaskRunBinding.ListRunsByTask(request.taskId));
+      if (trayTaskRequestRef.current !== request) return;
+      setEditor(null);
+      setEditorSourceID("");
+      setView("tasks");
+      setTaskModal(false);
+      setRunDetail(null);
+      if (run) {
+        setSelectedQueuedTaskID("");
+        setSelectedRunID("");
+        await loadRun(run.id);
+      } else {
+        setSelectedRunID("");
+        setSelectedQueuedTaskID(request.taskId);
+      }
+    } catch (error) {
+      if (trayTaskRequestRef.current === request) notify("error", errorMessage(error));
+    } finally {
+      if (trayTaskRequestRef.current === request) trayTaskRequestRef.current = null;
+    }
+  }, [loadRun, mode, notify]);
+
+  // A cross-project tray selection is held until the workspace-change effects
+  // have cleared the previous list and selection. Opening it afterwards avoids
+  // that normal reset racing away the tray request.
+  useEffect(() => {
+    const request = trayTaskRequestRef.current;
+    if (mode === "wails" && request?.workspaceId === workspaceID) void openTaskFromTray(request);
+  }, [mode, openTaskFromTray, workspaceID]);
+
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    return Events.On(TRAY_ACTION_EVENT, (event) => {
+      const action = event?.data;
+      if (action?.action === "new") {
+        trayTaskRequestRef.current = null;
+        setEditor(null);
+        setEditorSourceID("");
+        setView("tasks");
+        setTaskModal(true);
+        return;
+      }
+      if (action?.action !== "open" || !action.taskId) return;
+      const request = { taskId: action.taskId, workspaceId: action.workspaceId || workspaceID };
+      trayTaskRequestRef.current = request;
+      setTaskModal(false);
+      if (request.workspaceId && request.workspaceId !== workspaceID) {
+        selectWorkspace(request.workspaceId);
+        return;
+      }
+      void openTaskFromTray(request);
+    });
+  }, [mode, openTaskFromTray, selectWorkspace, workspaceID]);
+
   // Split rather than one "name @ path" string: the shell-prompt framing was
   // the loudest terminal cue in the chrome. The label is prose, the path is a
   // real filesystem path and keeps the mono face.
