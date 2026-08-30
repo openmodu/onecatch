@@ -54,6 +54,7 @@ import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeO
 import { collapsePanelAtCompact, COMPACT_LAYOUT_QUERY } from "./responsiveLayout.js";
 import { scheduleIdle } from "./scheduleIdle.js";
 import { REMOTE_FS_HEALTH_INTERVAL_MS, shouldAutoCheckRemoteFS } from "./remoteFSHealth.js";
+import { normalizeTrayNavigation, trayNavigationEvent } from "./trayNavigation.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
@@ -200,6 +201,7 @@ function App() {
   const liveFrameHistoryRef = useRef([]);
   const liveFrameGenerationRef = useRef(0);
   const liveFlushTimerRef = useRef(0);
+  const pendingTrayNavigationRef = useRef(null);
   // Latest-value refs so the polling loops can read fresh state without listing
   // `tasks`/`runDetail` as effect deps (which would tear down and rebuild the
   // timer on every tick — a big source of the jank).
@@ -1271,6 +1273,44 @@ function App() {
   // re-rendering on every unrelated App state change (toasts, busy flips, the
   // 80ms streaming cadence).
   const openTaskModal = useCallback(() => setTaskModal(true), []);
+  const openTrayTarget = useCallback((target) => {
+    setEditor(null);
+    setEditorSourceID("");
+    setView("tasks");
+    if (target.action === "new") {
+      setTaskModal(true);
+      return;
+    }
+    if (target.runId) {
+      selectRun({ id: target.runId });
+      return;
+    }
+    selectQueued({ id: target.taskId });
+  }, [selectQueued, selectRun]);
+
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    return Events.On(trayNavigationEvent, (event) => {
+      const target = normalizeTrayNavigation(event?.data);
+      if (!target) return;
+      if (target.action === "open" && target.workspaceId !== workspaceID) {
+        // The workspace-switch effect clears the old selection first. Consume
+        // this target after that reset so the requested tray session wins.
+        pendingTrayNavigationRef.current = target;
+        selectWorkspace(target.workspaceId);
+        return;
+      }
+      openTrayTarget(target);
+    });
+  }, [mode, openTrayTarget, selectWorkspace, workspaceID]);
+
+  useEffect(() => {
+    const target = pendingTrayNavigationRef.current;
+    if (!target || target.workspaceId !== workspaceID) return;
+    pendingTrayNavigationRef.current = null;
+    openTrayTarget(target);
+  }, [openTrayTarget, workspaceID]);
+
   const loadMoreRuns = useCallback(() => loadRunList({ cursor: runNextCursorRef.current }), [loadRunList]);
   const chooseTaskAttachments = useCallback(() => chooseAttachments("task"), [chooseAttachments]);
   const chooseComposerAttachments = useCallback(() => chooseAttachments("composer"), [chooseAttachments]);

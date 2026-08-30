@@ -191,9 +191,6 @@ func Run() {
 		// rather than needing its own decorator.
 		listHub.MarkDirty()
 	})
-	listHub.SetEmitter(func() {
-		wailsApp.Event.Emit(listchange.EventName, nil)
-	})
 	// ListRuntimes serves its cache immediately and re-probes in the background;
 	// this is how a corrected status reaches windows that already rendered.
 	runtimes.SetRuntimesChanged(func(items []desktopservice.RuntimeInfo) {
@@ -259,6 +256,13 @@ func Run() {
 			Backdrop: application.MacBackdropTransparent,
 		},
 	})
+	refreshSystemTray := installDesktopSystemTray(wailsApp, mainWindow, service, log, auxiliaryWindows.OpenSettings)
+	listHub.SetEmitter(func() {
+		wailsApp.Event.Emit(listchange.EventName, nil)
+		if refreshSystemTray != nil {
+			refreshSystemTray()
+		}
+	})
 	applyNativeWindowChrome(mainWindow)
 	// Re-assert the constraint after AppKit has created the native window. The
 	// option is the source of truth for startup; the runtime call also covers
@@ -266,14 +270,25 @@ func Run() {
 	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
 		mainWindow.SetMinSize(860, 720)
 	})
-	// The detached inspector only mirrors the main window's selection, so it
-	// must not outlive it — otherwise closing the workbench leaves a frozen
-	// panel behind that keeps the application alive. Retained windows the user
-	// cannot see go the same way, for the same reason.
+	// On platforms that actually destroy the main window, the detached inspector
+	// must not outlive it — otherwise closing the workbench leaves a frozen panel
+	// behind that keeps the application alive. Retained windows the user cannot
+	// see go the same way, for the same reason. Linux returns early below because
+	// closing there only hides the still-live main window to the tray.
 	// A hook rather than a listener: listeners are dispatched concurrently with
 	// Wails' own teardown, and this has to finish deciding before the window is
 	// gone.
-	mainWindow.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+	mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		if runtime.GOOS == "linux" {
+			// Keep the desktop process, active runs, and terminal sessions alive.
+			// This must happen before touching any auxiliary window: destroying a
+			// prewarmed hidden GTK window re-entrantly from a native close callback
+			// can leave Wails holding an invalid GdkSurface and crash in
+			// gtk_window_destroy. Quit remains an explicit tray action.
+			mainWindow.Hide()
+			event.Cancel()
+			return
+		}
 		auxiliaryWindows.CloseInspector()
 		if auxiliaryWindows.ReleaseHiddenWindows() {
 			// A settings or workflow window is still on screen, so the
