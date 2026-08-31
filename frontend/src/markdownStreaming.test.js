@@ -22,9 +22,9 @@ test("streaming markdown preserves the desktop link and image safety policy", ()
 
 test("markdown selection uses one theme-aware treatment across nested fragments", () => {
   assert.match(css, /@source "\.\.\/node_modules\/streamdown\/dist\/\*\.js"/);
-  assert.match(css, /\.markdown-content::selection,\s*\.markdown-content \*::selection\s*\{/);
-  assert.match(css, /background:\s*color-mix\(in oklab, var\(--primary\) 24%, var\(--background\)\)/);
-  assert.match(css, /\.markdown-content :is\(ul, ol, li, pre, code\)::selection/);
-  assert.match(css, /background:\s*transparent;\s*color:\s*var\(--info\)/);
+  assert.match(css, /\.markdown-content::selection\s*\{/);
+  assert.match(css, /background:\s*color-mix\(in oklab, var\(--primary\) 28%, transparent\)/);
+  assert.doesNotMatch(css, /\.markdown-content \*::selection/, "block descendants must inherit the root highlight instead of painting full-width selection bands");
+  assert.doesNotMatch(css, /\.markdown-content :is\(ul, ol, li, pre, code\)::selection/, "code and list selections must not punch transparent gaps through the shared highlight");
   assert.match(css, /text-shadow:\s*none/);
 });
