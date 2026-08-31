@@ -10,11 +10,11 @@
         <key>CFBundleIdentifier</key>
             <string>app.onecatch</string>
         <key>CFBundleVersion</key>
-            <string>0.1.4</string>
+            <string>0.1.5</string>
         <key>CFBundleGetInfoString</key>
             <string>OneCatch desktop application</string>
         <key>CFBundleShortVersionString</key>
-            <string>0.1.4</string>
+            <string>0.1.5</string>
         <key>CFBundleIconFile</key>
             <string>icons</string>
         <key>CFBundleIconName</key>

@@ -115,12 +115,18 @@ test("application grouping uses spacing and surfaces instead of horizontal rules
 
 test("workflow and settings share one contained footer menu", async () => {
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
+  assert.match(sidebar, /className="primary-nav[^\"]*grid-cols-\[minmax\(0,1fr\)_36px\][^\"]*bg-sidebar-accent\/20[^\"]*px-3[^\"]*pt-1 pb-3[^\"]*shadow-\[inset_0_1px_0_color-mix\(in_oklab,var\(--sidebar-border\)_35%,transparent\)\]/, "the footer must be full width, visually centered above the clipped rail edge, and use only one quiet top divider");
+  assert.doesNotMatch(sidebar, /className="primary-nav[^\"]*(?:mx-|mb-|rounded|\sborder(?:-|\s))/, "the footer must not be inset or outlined on four sides");
   assert.match(sidebar, /<DropdownMenuTrigger asChild>[\s\S]{0,200}?className={`secondary-navigation-trigger/);
+  assert.match(sidebar, /secondary-navigation-trigger-content[^`]*inline-flex h-8[^`]*max-w-full self-center[^`]*rounded-lg[^`]*group-data-\[state=open\]:bg-sidebar-accent/, "the visible menu selection must hug its label and stay vertically centered inside the button row");
+  assert.match(sidebar, /secondary-navigation-trigger group flex h-9[^`]*self-center items-center/, "the menu button must stay vertically centered in the footer band");
+  assert.match(sidebar, /secondary-navigation-trigger-content[^`]*items-center[^`]*leading-none/, "the menu icon and label must share one optical center");
+  assert.doesNotMatch(sidebar, /secondary-navigation-trigger-content[^`]*group-focus-visible:ring/, "the menu must not retain an outlined focus frame after pointer interaction");
   assert.match(sidebar, /<DropdownMenuItem[^>]*onSelect=\{\(\) => goToSecondaryView\("workflows"\)\}/);
   assert.match(sidebar, /<DropdownMenuItem[^>]*onSelect=\{\(\) => goToSecondaryView\("settings"\)\}/);
   // The footer sits at the bottom of the rail, so the menu opens upward while
-  // staying inset from both rounded rail edges instead of spilling over them.
-  assert.match(sidebar, /<DropdownMenuContent side="top"[^>]*alignOffset=\{8\}[^>]*collisionPadding=\{12\}[^>]*w-\[calc\(var\(--radix-dropdown-menu-trigger-width\)-16px\)\]/s, "the menu must stay inside the rounded rail");
+  // matching the full inner width of the two-button group.
+  assert.match(sidebar, /<DropdownMenuContent side="top"[^>]*alignOffset=\{0\}[^>]*collisionPadding=\{12\}[^>]*w-\[calc\(var\(--radix-dropdown-menu-trigger-width\)\+40px\)\]/s, "the menu must align to the footer band");
 });
 
 test("settings and workflows are routed to singleton native windows", async () => {
@@ -467,7 +473,7 @@ test("the transcript follows Codex's user, process, and answer rhythm", async ()
   assert.match(timeline, /<TooltipContent side="top" sideOffset=\{6\}>\{copyLabel\}<\/TooltipContent>/, "copy help belongs above the action instead of covering the next timeline block");
   assert.doesNotMatch(timeline, /title=\{copyLabel\}/, "the copy action must not use a browser-native tooltip below the button");
   assert.match(css, /\.conversation-user:hover \.conversation-message-actions[^}]*opacity:\s*1/s, "hovering a user turn must reveal its metadata actions");
-  assert.match(css, /\.conversation-round-body\s*\{[^}]*gap:\s*36px/s, "message hover actions need reserved clearance before the next process or file card");
+  assert.match(css, /\.conversation-round-body\s*\{[^}]*gap:\s*26px/s, "the compact hover rail must fit without leaving a large blank band around process blocks");
 });
 
 test("completed conversations remain available for a follow-up turn", async () => {
@@ -511,7 +517,7 @@ test("tool rows spend their width on the command, not on empty columns", async (
   const timeline = await readFile(path.join(sourceRoot, "app", "components", "ConversationTimeline.jsx"), "utf8");
   // The command owns the flexible track; only the transient state and caret
   // reserve space beside it. Timing metadata shares the command's flexible
-  // column on a second line instead of consuming another fixed-width track.
+  // column inline instead of adding a second row or a fixed-width track.
   assert.match(
     css,
     /\.conversation-tool-summary\s*\{[^}]*grid-template-columns:\s*20px\s+minmax\(0,\s*1fr\)\s+auto\s+15px/s,
@@ -528,11 +534,14 @@ test("tool rows spend their width on the command, not on empty columns", async (
   assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*text-overflow:\s*ellipsis/s);
   assert.match(timeline, /className="conversation-tool-meta"/);
   assert.match(timeline, /dateTime=\{entry\.at \|\| undefined\}/);
+  assert.match(timeline, /formatToolTime\(entry\.at\)/, "tool rows show only a compact clock while the full stamp remains in the title");
   assert.match(timeline, /t\("timeline\.toolDuration", \{ duration \}\)/);
   assert.doesNotMatch(timeline, /<time className="sr-only">/, "tool timing must be visible instead of screen-reader-only");
   assert.match(css, /\.conversation-tool\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/s, "tool events must not look like stacked cards");
   assert.match(css, /\.conversation-tool-icon\s*\{[^}]*background:\s*transparent/s, "tool icons stay unboxed like Codex activity rows");
   assert.match(css, /\.conversation-message-actions\s*\{[^}]*opacity:\s*0/s, "message metadata stays quiet until hover or focus");
+  assert.match(css, /\.conversation-tool-heading\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto[^}]*gap:\s*12px/s, "tool time stays inline with enough separation from the summary");
+  assert.match(css, /\.conversation-tool-body\s*\{[^}]*padding:\s*11px\s+12px\s+13px\s+40px/s, "expanded tool content must not crowd the summary metadata");
 });
 
 test("select options keep long labels and metadata from overlapping", async () => {

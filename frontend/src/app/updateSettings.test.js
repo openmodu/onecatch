@@ -8,6 +8,8 @@ test("software updates expose the signed check-download-restart flow", async () 
   assert.match(source, /UpdateBinding\.Download\(\)/);
   assert.match(source, /UpdateBinding\.Apply\(\)/);
   assert.match(source, /wails:updater:download-progress/);
+  assert.match(source, /const \[status, setStatus\] = useState\(null\)/);
+  assert.doesNotMatch(source, /demo(?:Available)?Status|pause\(|0\.1\.5/, "release validation must not be contaminated by simulated updater states");
   const settings = await readFile(new URL("./SettingsPage.jsx", import.meta.url), "utf8");
   assert.match(settings, /useAppUpdate\(mode\)/);
   assert.match(settings, /automaticSupported/);
@@ -20,8 +22,23 @@ test("the sidebar owns the glanceable update and progress control", async () => 
   assert.match(control, /data-update-state=\{state\}/);
   assert.match(control, /<ProgressRing ratio=\{percent \/ 100\}/);
   assert.match(control, /available \? <Download/);
+  assert.match(control, /data-codex-download=\{available \|\| undefined\}/, "an available release must switch the footer control to the Codex-style download action");
+  assert.match(control, /available \? "bg-info text-info-foreground shadow-sm hover:bg-info\/90 active:scale-95"/, "the Codex-style download action must be a high-contrast filled button");
+  assert.doesNotMatch(control, /available && <i/, "the filled download action must not rely on a tiny notification dot");
   assert.match(control, /state === "ready" \? <RotateCcw/);
   assert.match(control, /role="status" aria-live="polite"/);
+  assert.match(control, /sidebar-update-control[^\"]*relative grid size-9/, "the updater must occupy its own footer grid cell instead of overlaying the menu");
+  assert.match(control, /sidebar-update-trigger[^`]*size-9[^`]*rounded-lg/, "the updater needs its own button surface");
+  assert.doesNotMatch(control, /sidebar-update-control[^\"]*absolute/, "the updater must never cover the menu trigger");
+});
+
+test("the settings page keeps software updates to one compact status row", async () => {
+  const settings = await readFile(new URL("./SettingsPage.jsx", import.meta.url), "utf8");
+  assert.match(settings, /app-update-settings rounded-lg[^\"]*bg-muted\/25[^\"]*px-3 py-2\.5/);
+  assert.match(settings, /OneCatch \{status\?\.currentVersion \|\| "—"\} · \{stateLabel\}/);
+  assert.doesNotMatch(settings, /t\("settings\.appUpdateDescription"\)/, "the compact update row must not repeat an introductory description");
+  assert.doesNotMatch(settings, /t\("settings\.updateSecurityNote"\)/, "the compact update row must not keep a permanent security paragraph");
+  assert.match(settings, /role="progressbar"/, "download progress remains available only when it is useful");
 });
 
 test("download progress is clamped to a complete circular reading", async () => {

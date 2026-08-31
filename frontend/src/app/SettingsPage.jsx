@@ -294,21 +294,21 @@ function AppUpdateSettings({ mode, notify }) {
           : t(`settings.updateState.${state}`, { defaultValue: state });
   const percent = appUpdatePercent(progress);
 
-  return <SettingsSection title={t("settings.appUpdate")} description={t("settings.appUpdateDescription")}>
-    <div className="grid gap-2">
-      <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5">
-        <div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">OneCatch {status?.currentVersion || "—"}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{stateLabel}</p></div>
-        <div className="flex shrink-0 items-center gap-2">
-          {state === "ready" ? <SettingsButton tone="primary" disabled={busy || !status.automaticSupported} onClick={() => run(apply)}>{t("settings.restartToUpdate")}</SettingsButton>
-            : available ? <SettingsButton tone="primary" disabled={busy || downloading} onClick={() => run(download, "settings.updateVerified")}>{downloading ? t("settings.downloadingUpdate") : t("settings.downloadUpdate")}</SettingsButton>
-              : <SettingsButton tone="muted" disabled={busy || state === "unconfigured" || state === "checking"} onClick={() => run(check)}>{state === "checking" ? t("settings.checkingUpdate") : t("settings.checkForUpdates")}</SettingsButton>}
-        </div>
+  return <section className="app-update-settings rounded-lg bg-muted/25 px-3 py-2.5" aria-labelledby="app-update-heading">
+    <div className="flex min-h-9 items-center justify-between gap-4">
+      <div className="flex min-w-0 items-baseline gap-2">
+        <h3 className="m-0 shrink-0 text-sm font-medium text-foreground" id="app-update-heading">{t("settings.appUpdate")}</h3>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">OneCatch {status?.currentVersion || "—"} · {stateLabel}</span>
       </div>
-      {downloading && progress && <div className="rounded-lg bg-muted/35 px-4 py-3"><div className="mb-2 flex justify-between text-xs text-muted-foreground"><span>{t("settings.downloadingUpdate")}</span><span>{progress.total > 0 ? `${percent}%` : bytes(progress.written)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${percent}%` }} /></div></div>}
-      {!status?.automaticSupported && status?.verificationEnabled && <p className="m-0 rounded-lg bg-warning/8 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">{t("settings.manualUpdateRequired")}</p>}
-      <p className="m-0 px-1 text-[11px] leading-relaxed text-muted-foreground">{t("settings.updateSecurityNote")}</p>
+      <div className="flex shrink-0 items-center gap-2">
+        {state === "ready" ? <SettingsButton tone="primary" disabled={busy || !status.automaticSupported} onClick={() => run(apply)}>{t("settings.restartToUpdate")}</SettingsButton>
+          : available ? <SettingsButton tone="primary" disabled={busy || downloading} onClick={() => run(download, "settings.updateVerified")}>{downloading ? t("settings.downloadingUpdate") : t("settings.downloadUpdate")}</SettingsButton>
+            : <SettingsButton tone="muted" disabled={busy || state === "unconfigured" || state === "checking"} onClick={() => run(check)}>{state === "checking" ? t("settings.checkingUpdate") : t("settings.checkForUpdates")}</SettingsButton>}
+      </div>
     </div>
-  </SettingsSection>;
+    {downloading && progress && <div className="mt-2 flex items-center gap-3" role="progressbar" aria-label={t("settings.downloadingUpdate")} aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.total > 0 ? percent : undefined}><div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${percent}%` }} /></div><span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{progress.total > 0 ? `${percent}%` : bytes(progress.written)}</span></div>}
+    {!status?.automaticSupported && status?.verificationEnabled && <p className="mt-2 mb-0 text-xs text-muted-foreground">{t("settings.manualUpdateRequired")}</p>}
+  </section>;
 }
 
 function TerminalSettings({ value, setValue, errors }) {

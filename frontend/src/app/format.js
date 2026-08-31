@@ -10,6 +10,8 @@ function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMont
 
 function clockOf(date) { return date.toLocaleTimeString(locale(), { hour: "2-digit", minute: "2-digit", second: "2-digit" }); }
 
+function compactClockOf(date) { return `${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`; }
+
 function twoDigits(value) { return String(value).padStart(2, "0"); }
 
 function dayOf(date, now) {
@@ -51,6 +53,15 @@ export function formatMessageDateTime(value) {
   const day = `${twoDigits(date.getMonth() + 1)}/${twoDigits(date.getDate())}`;
   const datedDay = date.getFullYear() === now.getFullYear() ? day : `${date.getFullYear()}/${day}`;
   return `${datedDay} ${twoDigits(date.getHours())}:${twoDigits(date.getMinutes())}`;
+}
+
+// Tool activity is already nested inside a dated conversation. Keep its
+// always-visible timestamp glanceable; the full date and seconds remain on the
+// time element's title for inspection.
+export function formatToolTime(value) {
+  if (!value) return "—";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "—" : compactClockOf(date);
 }
 
 export function errorMessage(error) {

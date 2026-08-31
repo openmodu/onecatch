@@ -67,18 +67,17 @@ export default function SidebarUpdateButton({ mode, notify }) {
           : state === "error" ? <CircleAlert size={16} strokeWidth={2.2} aria-hidden="true" />
             : <RefreshCw size={15} strokeWidth={2.1} aria-hidden="true" />;
 
-  const attention = available || state === "ready";
+  const ready = state === "ready";
   const failed = state === "error";
-  return <div className="sidebar-update-control no-drag absolute right-4 top-3 z-20">
+  return <div className="sidebar-update-control no-drag relative grid size-9 place-items-center">
     {promptVisible && <div className="pointer-events-none absolute right-0 bottom-[calc(100%+9px)] w-48 rounded-lg border border-border/80 bg-popover px-3 py-2.5 text-left shadow-lg" role="status" aria-live="polite">
       <strong className="block text-xs font-semibold text-popover-foreground">{t("settings.updateAvailable", { version: status.availableVersion })}</strong>
       <span className="mt-0.5 block text-[11px] leading-snug text-muted-foreground">{t("sidebar.updatePromptAction")}</span>
     </div>}
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className={`sidebar-update-trigger relative grid size-7 place-items-center rounded-full border-0 bg-transparent p-0 shadow-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${attention ? "bg-primary/10 text-primary hover:bg-primary/18" : failed ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:bg-accent hover:text-foreground"}`} aria-label={label} aria-busy={busy || downloading || state === "checking" || undefined} disabled={!actionable} data-update-state={state} onClick={() => void act()}>
+        <button type="button" className={`sidebar-update-trigger relative grid size-9 place-items-center rounded-lg border-0 p-0 transition-[color,background-color,box-shadow,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/35 ${available ? "bg-info text-info-foreground shadow-sm hover:bg-info/90 active:scale-95" : ready ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-95" : failed ? "bg-transparent text-destructive shadow-none hover:bg-destructive/10" : "bg-transparent text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`} aria-label={label} aria-busy={busy || downloading || state === "checking" || undefined} disabled={!actionable} data-codex-download={available || undefined} data-update-state={state} onClick={() => void act()}>
           {icon}
-          {available && <i className="absolute top-0 right-0 size-1.5 rounded-full bg-primary ring-2 ring-sidebar" aria-hidden="true" />}
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" align="end" sideOffset={7}>{label}</TooltipContent>
