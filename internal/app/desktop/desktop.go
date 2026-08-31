@@ -141,6 +141,7 @@ func Run() {
 		application.NewService(wailstransport.NewGitBinding(service)),
 		application.NewService(wailstransport.NewRuntimeBinding(service)),
 		application.NewService(wailstransport.NewSettingsBinding(service)),
+		application.NewService(wailstransport.NewSkillBinding(service)),
 		application.NewService(workspaceBinding),
 		application.NewService(wailstransport.NewWorkflowBinding(service)),
 		application.NewService(wailstransport.NewTaskRunBinding(service)),

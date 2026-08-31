@@ -1,7 +1,7 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
-import { Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, RefreshCw, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
+import { Blocks, Ellipsis, Folder, FolderOpen, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, RefreshCw, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -505,6 +505,10 @@ function Sidebar({
     <div className="brand grid h-[46px] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-5"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">OneCatch</strong><div className="flex items-center gap-0.5"><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent ${workspaceSearchOpen ? "active bg-accent text-foreground" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={15} strokeWidth={2} aria-hidden="true" /></Action><Action size="compact" tone="muted" className="add-workspace size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent hover:text-foreground" aria-label={t("sidebar.addProject")} title={t("sidebar.addProject")} onClick={onAddWorkspace}><Plus size={15} strokeWidth={2} aria-hidden="true" /></Action></div></div>
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
       <div className="project-sections min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-2 pb-3">
+        <button type="button" className={`skills-navigation-trigger mb-2 flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[11px] font-bold transition-colors hover:bg-accent hover:text-foreground focus-visible:bg-accent focus-visible:outline-none ${view === "skills" && !editor ? "bg-accent text-foreground" : "text-foreground"}`} aria-current={view === "skills" && !editor ? "page" : undefined} onClick={() => goToSecondaryView("skills")}>
+          <Blocks size={14} aria-hidden="true" />
+          <span>{t("sidebar.skills")}</span>
+        </button>
         {pinnedTasks.length > 0 && <section className="project-section mb-3 min-w-0 max-w-full" aria-labelledby="pinned-task-heading">
           <div className="flex h-7 items-center px-2 text-[11px] font-bold text-foreground" id="pinned-task-heading">{t("sidebar.pinnedTasks")}</div>
           <div className="flex flex-col">{pinnedTasks.map(renderPinnedTask)}</div>

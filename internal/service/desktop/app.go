@@ -31,6 +31,7 @@ import (
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
+	"github.com/openmodu/onecatch/internal/service/skillmanager"
 	"github.com/openmodu/onecatch/internal/service/worker"
 	"github.com/openmodu/onecatch/internal/sshcredentials"
 	"github.com/openmodu/onecatch/internal/sshendpoint"
@@ -214,6 +215,9 @@ type Service struct {
 	remoteFSProbe     func(context.Context, domainworkspaces.RemoteFS) (string, error)
 	remoteCredentials sshcredentials.Store
 	remoteGitExecutor func(domainworkspaces.RemoteFS) agentrunseam.Executor
+	skills            *skillmanager.Manager
+	skillsErr         error
+	skillsMu          sync.Mutex
 }
 
 func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitrepo.Inspector) *Service {

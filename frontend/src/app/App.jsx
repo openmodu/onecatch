@@ -38,6 +38,7 @@ import Modal from "./components/Modal.jsx";
 // first paints. Importing them eagerly put the settings screen and the
 // workflow editor into the first load the user waits through.
 const SettingsPage = lazy(() => import("./SettingsPage.jsx"));
+const SkillManagerPage = lazy(() => import("./SkillManagerPage.jsx"));
 const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary.jsx"));
 const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
 const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
@@ -1383,6 +1384,8 @@ function App() {
   // real filesystem path and keeps the mono face.
   const location = view === "settings"
     ? { label: t("sidebar.settings"), path: "~/.onecatch" }
+    : view === "skills"
+      ? { label: t("sidebar.skills"), path: "" }
     : selectedWorkspace
       ? { label: selectedWorkspace.name, path: workspaceLocation(selectedWorkspace) }
       : { label: t("app.selectWorkspace"), path: "" };
@@ -1559,7 +1562,7 @@ function App() {
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
           </button>
-          {view !== "tasks" && <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
+          {view !== "tasks" && view !== "skills" && <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {mode === "wails" ? t(view === "tasks" && selectedWorkspace?.remoteFs ? "workspace.remoteFS" : "common.local") : t("common.preview")}
           </StatusBadge>}
@@ -1611,7 +1614,7 @@ function App() {
           onLoadEarlierTranscript={loadEarlierTranscript}
           onPermissionDecision={respondPermission}
           notify={notify}
-        /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
+        /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : view === "skills" ? <Suspense fallback={<ViewLoading />}><SkillManagerPage mode={mode} notify={notify} requestConfirm={requestConfirm} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
       </main>
     </div>
     {workspaceModal && <Modal className="workspace-create-dialog max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[480px]" title={t(workspaceEditingID ? "workspace.editTitle" : "workspace.addTitle")} subtitle={t(workspaceEditingID ? "workspace.editSubtitle" : "workspace.addSubtitle")} onClose={() => { if (busy !== "workspace") { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceEditingID(""); setWorkspaceModal(false); } }}>

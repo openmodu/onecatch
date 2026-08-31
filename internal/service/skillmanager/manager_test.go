@@ -1,0 +1,171 @@
+package skillmanager
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+)
+
+func skillSource(name, description string) string {
+	return "---\nname: " + name + "\ndescription: " + description + "\n---\n\n# " + name + "\n\nDo the thing.\n"
+}
+
+func TestManagerCreatesUpdatesListsAndDeletesSkills(t *testing.T) {
+	manager, err := New(filepath.Join(t.TempDir(), ".onecatch", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	created, err := manager.Create(SaveSkillInput{Name: "release-notes", Content: skillSource("release-notes", "Write release notes")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.Name != "release-notes" || created.Description != "Write release notes" {
+		t.Fatalf("unexpected created skill: %#v", created)
+	}
+	if _, err := os.Stat(filepath.Join(manager.Root(), "release-notes", "SKILL.md")); err != nil {
+		t.Fatal(err)
+	}
+
+	updated, err := manager.Update(SaveSkillInput{Name: "release-notes", Content: skillSource("release-notes", "Updated description")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Description != "Updated description" || updated.Digest == created.Digest {
+		t.Fatalf("update did not refresh metadata: %#v", updated)
+	}
+	items, err := manager.List()
+	if err != nil || len(items) != 1 || items[0].Name != "release-notes" {
+		t.Fatalf("unexpected list: %#v, %v", items, err)
+	}
+	if err := manager.Delete("release-notes"); err != nil {
+		t.Fatal(err)
+	}
+	items, err = manager.List()
+	if err != nil || len(items) != 0 {
+		t.Fatalf("expected empty list: %#v, %v", items, err)
+	}
+}
+
+func TestManagerRejectsUnsafeAndMalformedSkills(t *testing.T) {
+	manager, err := New(filepath.Join(t.TempDir(), "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range []SaveSkillInput{
+		{Name: "../escape", Content: skillSource("escape", "bad")},
+		{Name: "UPPER", Content: skillSource("UPPER", "bad")},
+		{Name: "valid", Content: "# no frontmatter"},
+		{Name: "valid", Content: "---\nname: other\ndescription: bad\n---\nbody"},
+	} {
+		if _, err := manager.Create(input); err == nil {
+			t.Fatalf("expected input to fail: %#v", input)
+		}
+	}
+}
+
+func TestManagerSyncsEachSkillWithRsyncAndRecordsMetadata(t *testing.T) {
+	base := t.TempDir()
+	manager, err := New(filepath.Join(base, ".onecatch", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.home = filepath.Join(base, "home")
+	manager.now = func() time.Time { return time.Date(2026, 8, 31, 4, 5, 6, 0, time.UTC) }
+	manager.lookPath = func(name string) (string, error) { return "/test/rsync", nil }
+	var calls [][]string
+	manager.run = func(_ context.Context, name string, args ...string) ([]byte, error) {
+		calls = append(calls, append([]string{name}, args...))
+		source, destination := args[len(args)-2], args[len(args)-1]
+		if err := copyTreeForTest(strings.TrimSuffix(source, string(filepath.Separator)), strings.TrimSuffix(destination, string(filepath.Separator))); err != nil {
+			return nil, err
+		}
+		return []byte("copied"), nil
+	}
+	if _, err := manager.Create(SaveSkillInput{Name: "helper", Content: skillSource("helper", "Help with a task")}); err != nil {
+		t.Fatal(err)
+	}
+	targetPath := filepath.Join(base, "agent", "skills")
+	target, err := manager.AddTarget(AddTargetInput{Name: "Test Agent", Path: targetPath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := manager.Sync(context.Background(), target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SyncedSkills != 1 || result.Target.Status != "synced" {
+		t.Fatalf("unexpected sync result: %#v", result)
+	}
+	want := []string{"/test/rsync", "-a", "--delete", filepath.Join(manager.Root(), "helper") + string(filepath.Separator), filepath.Join(targetPath, "helper") + string(filepath.Separator)}
+	if !reflect.DeepEqual(calls, [][]string{want}) {
+		t.Fatalf("unexpected rsync invocation: %#v", calls)
+	}
+	var metadata metadataFile
+	if err := localfileReadJSON(manager.metadataPath, &metadata); err != nil {
+		t.Fatal(err)
+	}
+	if got := metadata.Targets[target.ID]; got.LastSyncedAt != manager.now() || got.Skills["helper"] == "" {
+		t.Fatalf("metadata not recorded: %#v", got)
+	}
+}
+
+func TestManagerScansMissingTargetsAndRsyncAvailability(t *testing.T) {
+	base := t.TempDir()
+	manager, err := New(filepath.Join(base, "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.home = filepath.Join(base, "home")
+	manager.lookPath = func(string) (string, error) { return "", os.ErrNotExist }
+	targets, err := manager.ScanTargets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(targets) != 3 {
+		t.Fatalf("expected built-in targets, got %#v", targets)
+	}
+	for _, target := range targets {
+		if target.Status != "rsync-unavailable" || target.RsyncAvailable {
+			t.Fatalf("unexpected target state: %#v", target)
+		}
+	}
+}
+
+func copyTreeForTest(source, destination string) error {
+	if err := os.RemoveAll(destination); err != nil {
+		return err
+	}
+	return filepath.WalkDir(source, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		relative, err := filepath.Rel(source, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(destination, relative)
+		if entry.IsDir() {
+			return os.MkdirAll(target, 0o700)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o600)
+	})
+}
+
+// Kept local so tests exercise the on-disk representation without reaching
+// into the manager's read path.
+func localfileReadJSON(path string, target any) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(data, target)
+}
