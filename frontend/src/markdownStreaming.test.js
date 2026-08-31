@@ -20,6 +20,20 @@ test("streaming markdown preserves the desktop link and image safety policy", ()
   assert.match(markdown, /a: SafeLink/);
 });
 
+test("markdown tables use one application-owned scrolling frame", () => {
+  assert.match(markdown, /function PlainTable/);
+  assert.match(markdown, /className="markdown-table-scroll"/);
+  assert.match(markdown, /table: PlainTable/);
+  assert.match(css, /\.markdown-table-scroll\s*\{[^}]*overflow-x:\s*auto[^}]*border:\s*1px solid var\(--border\)/s);
+  assert.match(css, /\.markdown-content table\s*\{[^}]*margin:\s*0[^}]*table-layout:\s*auto/s);
+});
+
+test("markdown headings respect the configured conversation font size", () => {
+  for (const level of [1, 2, 3, 4]) assert.match(markdown, new RegExp(`h${level}: PlainH${level}`));
+  assert.match(css, /\.markdown-content h1,[\s\S]*?\.markdown-content h4\s*\{[^}]*font-size:\s*inherit/s);
+  assert.doesNotMatch(css, /\.markdown-content h[1-4]\s*\{[^}]*font-size:\s*[\d.]+em/s, "headings must not multiply the user's chat font size");
+});
+
 test("markdown selection uses one theme-aware treatment across nested fragments", () => {
   assert.match(css, /@source "\.\.\/node_modules\/streamdown\/dist\/\*\.js"/);
   assert.match(css, /\.markdown-content::selection\s*\{/);

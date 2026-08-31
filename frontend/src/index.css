@@ -1361,7 +1361,7 @@
     max-width: var(--conversation-content-width);
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 34px;
+    gap: 26px;
     margin: 0 auto;
     padding: 30px 0 44px;
   }
@@ -1384,10 +1384,9 @@
   .conversation-round-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    /* Message metadata is a 27px hover rail positioned immediately below the
-       prose. Keep enough rhythm between blocks for that rail plus a quiet
-       visual buffer, so it never covers the next tool or file-change card. */
-    gap: 36px;
+    /* The compact 24px hover rail fits inside this rhythm without turning a
+       short tool call into a large blank band between messages. */
+    gap: 26px;
   }
 
   .conversation-user {
@@ -1481,11 +1480,11 @@
   .conversation-message-actions {
     z-index: 2;
     box-sizing: border-box;
-    height: 27px;
+    height: 24px;
     display: flex;
     align-items: center;
     gap: 3px;
-    padding-top: 3px;
+    padding-top: 0;
     color: var(--muted-foreground);
     opacity: 0;
     pointer-events: none;
@@ -1615,7 +1614,7 @@
   /* Tool calls read as a quiet activity feed. They only gain a surface on
      hover/open; the icon and concise verb carry the hierarchy at rest. */
   .conversation-tool-summary {
-    min-height: 42px;
+    min-height: 36px;
     grid-template-columns: 20px minmax(0, 1fr) auto 15px;
     gap: 8px;
   }
@@ -1637,8 +1636,9 @@
   .conversation-tool-heading {
     min-width: 0;
     display: grid;
-    align-content: center;
-    gap: 1px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
   }
 
   /* The summary is human-readable prose. Machine text only appears after the
@@ -1655,7 +1655,7 @@
     white-space: nowrap;
   }
 
-.conversation-tool-meta {
+  .conversation-tool-meta {
     min-width: 0;
     display: flex;
     align-items: center;
@@ -1665,7 +1665,7 @@
     font-family: var(--font-ui-sans);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
-    line-height: 16px;
+    line-height: 18px;
     white-space: nowrap;
   }
 
@@ -1713,8 +1713,8 @@
   }
 
   .conversation-tool-body {
-    gap: 10px;
-    padding: 2px 12px 12px 40px;
+    gap: 12px;
+    padding: 11px 12px 13px 40px;
     border-left: 0;
     border-top: 1px solid color-mix(in oklab, var(--border) 72%, transparent);
   }
@@ -2369,7 +2369,7 @@
     .new-task-select.permission { max-width: 160px; }
     .new-task-shortcut { display: none; }
     .conversation-list {
-      gap: 28px;
+      gap: 24px;
       padding: 22px 0 34px;
     }
     .conversation-user { max-width: 88%; }
@@ -2621,12 +2621,10 @@
   .markdown-content h4 {
     margin: 1em 0 0.45em;
     color: inherit;
+    font-size: inherit;
     font-weight: 600;
     line-height: 1.3;
   }
-  .markdown-content h1 { font-size: 1.4em; }
-  .markdown-content h2 { font-size: 1.24em; }
-  .markdown-content h3 { font-size: 1.1em; }
 
   .markdown-content ul,
   .markdown-content ol { margin: 0.45em 0 0.75em; padding-left: 1.55em; }
@@ -2667,26 +2665,39 @@
     white-space: pre;
   }
 
-  .markdown-content table {
+  .markdown-table-scroll {
     width: 100%;
     min-width: 0;
     max-width: 100%;
     margin: 0.75em 0;
-    border-collapse: collapse;
-    table-layout: fixed;
-    overflow: hidden;
+    overflow-x: auto;
+    border: 1px solid var(--border);
     border-radius: calc(var(--radius) - 2px);
+    background: var(--card);
+  }
+
+  .markdown-content table {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    table-layout: auto;
   }
 
   .markdown-content th,
   .markdown-content td {
     padding: 7px 10px;
-    border: 1px solid var(--border);
+    border: 0;
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
     text-align: left;
     vertical-align: top;
     overflow-wrap: anywhere;
   }
 
+  .markdown-content tr > :last-child { border-right: 0; }
+  .markdown-content tbody tr:last-child > td { border-bottom: 0; }
   .markdown-content th { background: var(--muted); font-weight: 600; }
   .markdown-content a { color: var(--info); text-decoration: underline; text-underline-offset: 2px; }
   .markdown-content hr { margin: 1em 0; border: 0; border-top: 1px solid var(--border); }

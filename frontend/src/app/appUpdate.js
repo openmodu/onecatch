@@ -15,15 +15,6 @@ export const APP_UPDATE_EVENTS = [
   "onecatch:update:status-changed",
 ];
 
-const demoStatus = {
-  currentVersion: "0.1.4",
-  state: "up-to-date",
-  verificationEnabled: true,
-  automaticSupported: true,
-};
-
-const pause = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-
 export function appUpdatePercent(progress) {
   if (!(progress?.total > 0)) return 0;
   return Math.min(100, Math.max(0, Math.round(progress.written / progress.total * 100)));
@@ -34,7 +25,7 @@ export function appUpdatePercent(progress) {
 // stream instead of being owned by either screen. Both surfaces consequently
 // show the same release and follow the same check/download/apply transitions.
 export function useAppUpdate(mode) {
-  const [status, setStatus] = useState(() => mode === "demo" ? demoStatus : null);
+  const [status, setStatus] = useState(null);
   const [progress, setProgress] = useState(null);
   const [busy, setBusy] = useState(false);
   const mounted = useRef(true);
@@ -48,10 +39,6 @@ export function useAppUpdate(mode) {
   }, []);
 
   const refresh = useCallback(async () => {
-    if (mode === "demo") {
-      setStatus((current) => current || demoStatus);
-      return demoStatus;
-    }
     if (mode !== "wails") return null;
     try {
       const next = await UpdateBinding.GetStatus();
@@ -65,10 +52,6 @@ export function useAppUpdate(mode) {
   }, [mode]);
 
   useEffect(() => {
-    if (mode === "demo") {
-      setStatus((current) => current || demoStatus);
-      return undefined;
-    }
     if (mode !== "wails") return undefined;
     void refresh();
     const off = APP_UPDATE_EVENTS.map((name) => Events.On(name, () => { void refresh(); }));
@@ -91,37 +74,19 @@ export function useAppUpdate(mode) {
   }, [mode, refresh]);
 
   const check = useCallback(() => perform(async () => {
-    if (mode !== "demo") return UpdateBinding.Check();
-    setStatus({ ...demoStatus, state: "checking" });
-    await pause(420);
-    const next = { ...demoStatus, state: "available", availableVersion: "0.1.5", name: "OneCatch 0.1.5" };
-    if (mounted.current) setStatus(next);
-    return next;
+    if (mode !== "wails") return null;
+    return UpdateBinding.Check();
   }), [mode, perform]);
 
   const download = useCallback(() => perform(async () => {
-    if (mode !== "demo") return UpdateBinding.Download();
-    const release = { ...demoStatus, state: "downloading", availableVersion: "0.1.5", name: "OneCatch 0.1.5" };
-    setStatus(release);
-    for (const written of [5, 13, 24, 38, 55, 71, 84, 94, 100]) {
-      if (!mounted.current) return release;
-      setProgress({ written, total: 100, rate: 18 });
-      await pause(120);
-    }
-    if (mounted.current) setStatus({ ...release, state: "verifying" });
-    await pause(360);
-    const next = { ...release, state: "ready" };
-    if (mounted.current) setStatus(next);
-    return next;
+    if (mode !== "wails") return null;
+    return UpdateBinding.Download();
   }), [mode, perform]);
 
   const apply = useCallback(() => perform(async () => {
-    if (mode !== "demo") return UpdateBinding.Apply();
-    const next = { ...demoStatus, currentVersion: status?.availableVersion || demoStatus.currentVersion };
-    setProgress(null);
-    if (mounted.current) setStatus(next);
-    return next;
-  }), [mode, perform, status?.availableVersion]);
+    if (mode !== "wails") return null;
+    return UpdateBinding.Apply();
+  }), [mode, perform]);
 
   return { status, progress, busy, refresh, check, download, apply };
 }

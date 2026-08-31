@@ -30,11 +30,28 @@ function PlainPre({ node: _node, children, ...props }) {
   return <pre {...props}>{content}</pre>;
 }
 
+function PlainH1({ node: _node, ...props }) { return <h1 {...props} />; }
+function PlainH2({ node: _node, ...props }) { return <h2 {...props} />; }
+function PlainH3({ node: _node, ...props }) { return <h3 {...props} />; }
+function PlainH4({ node: _node, ...props }) { return <h4 {...props} />; }
+
+// Streamdown's default table renderer adds a padded card around its scrolling
+// frame even when controls are disabled. The transcript already owns the
+// document surface, so keep only one quiet border and one responsive scroller.
+function PlainTable({ node: _node, children, ...props }) {
+  return <div className="markdown-table-scroll"><table {...props}>{children}</table></div>;
+}
+
 const MARKDOWN_COMPONENTS = {
   a: SafeLink,
   code: PlainCode,
+  h1: PlainH1,
+  h2: PlainH2,
+  h3: PlainH3,
+  h4: PlainH4,
   img: ImagePlaceholder,
   pre: PlainPre,
+  table: PlainTable,
 };
 
 const LINK_SAFETY = { enabled: false };

@@ -532,17 +532,19 @@ function Sidebar({
         </section>
       </div>
     </div>
-    <nav className="primary-nav relative mt-auto pb-1">
-      {/* side="top" + sideOffset opens the menu upward and full-rail wide,
-          matching where the footer sits. */}
+    <nav className="primary-nav relative mt-auto grid grid-cols-[minmax(0,1fr)_36px] items-center gap-1 bg-sidebar-accent/20 px-3 pt-1 pb-3 shadow-[inset_0_1px_0_color-mix(in_oklab,var(--sidebar-border)_35%,transparent)]">
+      {/* The footer is a full-width band with one top divider and two buttons.
+          The menu still opens upward and spans the group's inner width. */}
       <DropdownMenu onOpenChange={(open) => { sidebarMenuOpen.current = open; if (open) revealSidebar(); else scheduleSidebarHide(); }}>
         <DropdownMenuTrigger asChild>
-          <button className={`secondary-navigation-trigger grid min-h-[52px] w-full grid-cols-[20px_minmax(0,1fr)] items-center gap-2 border-0 bg-transparent pr-4 pl-7 text-left text-sm font-medium shadow-none transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none focus-visible:ring-0 ${view === "workflows" || view === "settings" || editor ? "active text-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
-            <Menu size={16} aria-hidden="true" />
-            <b className="font-medium">{t("sidebar.menu")}</b>
+          <button className={`secondary-navigation-trigger group flex h-9 w-full min-w-0 self-center items-center border-0 bg-transparent p-0 text-left text-sm font-medium shadow-none focus-visible:outline-none ${view === "workflows" || view === "settings" || editor ? "active text-sidebar-accent-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
+            <span className={`secondary-navigation-trigger-content inline-flex h-8 max-w-full self-center items-center gap-2 rounded-lg px-2.5 leading-none transition-colors group-hover:bg-sidebar-accent group-focus-visible:bg-sidebar-accent group-data-[state=open]:bg-sidebar-accent ${view === "workflows" || view === "settings" || editor ? "bg-sidebar-accent" : ""}`}>
+              <Menu className="shrink-0" size={16} aria-hidden="true" />
+              <b className="truncate font-medium leading-none">{t("sidebar.menu")}</b>
+            </span>
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" alignOffset={8} sideOffset={6} collisionPadding={12} className="secondary-navigation-menu w-[calc(var(--radix-dropdown-menu-trigger-width)-20px)] p-1.5">
+        <DropdownMenuContent side="top" align="start" alignOffset={0} sideOffset={6} collisionPadding={12} className="secondary-navigation-menu w-[calc(var(--radix-dropdown-menu-trigger-width)+40px)] p-1.5">
           <DropdownMenuItem className={`min-h-8 rounded-md ${view === "settings" && !editor ? "active bg-accent text-accent-foreground" : ""}`} onSelect={() => goToSecondaryView("settings")}>
             <Settings2 aria-hidden="true" />
             <span>{t("sidebar.settings")}</span>
