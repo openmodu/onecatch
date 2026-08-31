@@ -280,6 +280,20 @@ func Run() {
 			Backdrop: application.MacBackdropTransparent,
 		},
 	})
+	if runtime.GOOS == "darwin" {
+		// Wails' default Dock-reopen handler shows every hidden window when the
+		// application has no visible windows. Settings is deliberately prewarmed
+		// as a hidden retained webview, so after closing the workbench a second
+		// Dock click used to surface Settings instead of the workbench. Claim the
+		// event first and restore only the main window; retained auxiliaries stay
+		// hidden until the user explicitly asks for them.
+		cancelReopenHook := wailsApp.Event.RegisterApplicationEventHook(events.Mac.ApplicationShouldHandleReopen, func(event *application.ApplicationEvent) {
+			if reopenMainWindow(event.Context().HasVisibleWindows(), mainWindow) {
+				event.Cancel()
+			}
+		})
+		defer cancelReopenHook()
+	}
 	refreshSystemTray := installDesktopSystemTray(wailsApp, mainWindow, service, log, auxiliaryWindows.OpenSettings)
 	applyNativeWindowChrome(mainWindow)
 	// Re-assert the constraint after AppKit has created the native window. The
