@@ -126,6 +126,8 @@ A non-loopback listener requires TLS through `--tls-cert` and `--tls-key`; add `
 
 The root [`VERSION`](VERSION) file is the source of the installer version and accepts only a three-part `X.Y.Z` value:
 
+Desktop builds sync that value into Wails/macOS metadata and inject it into the Go binary. Do not edit the generated version fields directly; use `go tool wails3 task version:check` to verify them.
+
 ```bash
 go tool wails3 task package:desktop
 ```
@@ -136,7 +138,17 @@ Windows packaging requires [NSIS](https://nsis.sourceforge.io/):
 winget install NSIS.NSIS
 ```
 
-Linux packaging uses GTK4 and WebKitGTK 6.0. The `.deb` and AppImage include the worker, shell, and SSH askpass helpers used by the desktop app.
+Linux packaging uses GTK4 and WebKitGTK 6.0. The `.deb` and AppImage include the worker, shell, SSH askpass, and update helpers used by the desktop app.
+
+The desktop checks for updates every six hours and also exposes a manual check under **Settings → Appearance → Software update**. Feeds are platform/architecture-specific Sparkle AppCasts, and every downloaded artifact must pass Ed25519 verification against the public key pinned at build time. macOS swaps the complete `.app`, Windows runs the complete Setup package silently, and Linux swaps the AppImage in place. Windows and AppImage installs roll back when the new process does not become ready within 45 seconds. A `.deb` remains under the system package manager and therefore offers a manual update. This is a rollback-aware seamless restart, not in-process code replacement.
+
+[`build/update/public-key.base64`](build/update/public-key.base64) is the release trust root. Keep the private key only in release-maintainer secure storage and GitHub Actions Secrets; do not regenerate it merely because a fresh clone has no private key. Once a maintainer has the matching key, set the secret:
+
+```bash
+gh secret set ONECATCH_UPDATE_PRIVATE_KEY < /secure/path/update-ed25519-private.pem
+```
+
+For a planned rotation, generate a replacement with `node build/scripts/update-feed.mjs keygen --force`. Ship a transition release signed by the old key before changing the pinned public key; otherwise existing clients cannot trust later releases. The release workflow rejects a missing private key or a private key that does not match the committed public key.
 
 For a release, update and commit `VERSION`, then push the matching tag:
 
@@ -145,7 +157,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag must equal `v` followed by the contents of `VERSION`. GitHub Actions builds the macOS DMG, Windows Setup package, Linux `.deb`, and Linux AppImage, then publishes the installers and their SHA-256 files to the matching GitHub Release.
+The tag must equal `v` followed by the contents of `VERSION`. GitHub Actions builds the macOS DMG and complete `.app` update ZIP, Windows Setup package, Linux `.deb`, and Linux AppImage, then generates signed AppCasts and SHA-256 files and publishes everything to the matching GitHub Release.
 
 To sign the macOS package with a Developer ID, set `SIGN_IDENTITY`. If notarization credentials have already been saved with `notarytool store-credentials`, also set `NOTARY_PROFILE`:
 

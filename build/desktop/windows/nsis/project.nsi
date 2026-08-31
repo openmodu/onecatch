@@ -15,6 +15,9 @@ Unicode true
 !ifndef ASKPASS_BINARY
     !error "ASKPASS_BINARY is required"
 !endif
+!ifndef UPDATER_BINARY
+    !error "UPDATER_BINARY is required"
+!endif
 !ifndef OUTPUT_FILE
     !error "OUTPUT_FILE is required"
 !endif
@@ -77,6 +80,7 @@ Section "Install"
     File "/oname=onecatch.exe" "${APP_BINARY}"
     File "/oname=onecatch-worker.exe" "${WORKER_BINARY}"
     File "/oname=onecatch-askpass.exe" "${ASKPASS_BINARY}"
+    File "/oname=onecatch-updater.exe" "${UPDATER_BINARY}"
 
     SetOutPath "$TEMP\OneCatchInstaller"
     File "/oname=MicrosoftEdgeWebview2Setup.exe" "MicrosoftEdgeWebview2Setup.exe"
@@ -122,6 +126,7 @@ Section "Uninstall"
     Delete "$INSTDIR\onecatch.exe"
     Delete "$INSTDIR\onecatch-worker.exe"
     Delete "$INSTDIR\onecatch-askpass.exe"
+    Delete "$INSTDIR\onecatch-updater.exe"
     Delete "$INSTDIR\uninstall.exe"
     RMDir "$INSTDIR"
 

@@ -7,10 +7,11 @@ $versionFile = Join-Path $repoRoot "VERSION"
 $appBinary = Join-Path $binRoot "onecatch.exe"
 $workerBinary = Join-Path $binRoot "onecatch-worker.exe"
 $askPassBinary = Join-Path $binRoot "onecatch-askpass.exe"
+$updaterBinary = Join-Path $binRoot "onecatch-updater.exe"
 $nsisRoot = Join-Path $scriptRoot "nsis"
 $projectFile = Join-Path $nsisRoot "project.nsi"
 
-foreach ($inputPath in @($appBinary, $workerBinary, $askPassBinary, $versionFile, $projectFile)) {
+foreach ($inputPath in @($appBinary, $workerBinary, $askPassBinary, $updaterBinary, $versionFile, $projectFile)) {
     if (-not (Test-Path -LiteralPath $inputPath -PathType Leaf)) {
         throw "Required build input not found: $inputPath"
     }
@@ -74,6 +75,7 @@ $nsisArguments = @(
     "-DAPP_BINARY=$appBinary",
     "-DWORKER_BINARY=$workerBinary",
     "-DASKPASS_BINARY=$askPassBinary",
+    "-DUPDATER_BINARY=$updaterBinary",
     "-DOUTPUT_FILE=$outputInstaller",
     (Split-Path -Leaf $projectFile)
 )

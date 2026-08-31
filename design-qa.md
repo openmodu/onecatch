@@ -1,73 +1,64 @@
-# Status Inspector Design QA
+# Design QA — Sidebar update control
 
-## Comparison Target
+## Comparison target
 
-- Source visual truth: `/Users/bytedance/.codex/generated_images/01a055bc-f462-76e3-8a44-0b535617a3bd/exec-d9b0b2ce-dcd0-4e69-9eb5-1b333ae1145a.png`
-- Browser-rendered implementation: `/Users/bytedance/.codex/visualizations/2026/08/31/01a055bc-f462-76e3-8a44-0b535617a3bd/status-ledger-implementation.png`
-- Full-view comparison: `/Users/bytedance/.codex/visualizations/2026/08/31/01a055bc-f462-76e3-8a44-0b535617a3bd/status-ledger-comparison.jpg`
-- Focused narrow-width evidence: `/Users/bytedance/.codex/visualizations/2026/08/31/01a055bc-f462-76e3-8a44-0b535617a3bd/status-ledger-narrow.png`
-- Browser URL: `http://127.0.0.1:9245/`
-- State: Chinese, light theme, running `codex` Execute step, with the selected concept's input/output/cache/reasoning/duration/execution sample data.
+- Source visual truth: `/var/folders/b1/0fd1b6hs7lz0fm_mh346lybm0000gn/T/codex-clipboard-78a1fe0f-7298-414f-bd6b-e86c783f4f77.png`
+- Rendered implementation, available state: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/update-button-light-available.png`
+- Rendered implementation, downloading state: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/update-button-downloading.png`
+- Rendered implementation, ready state: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/update-button-ready.png`
+- Full comparison evidence: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/comparison-full-light.png`
+- Focused footer comparison evidence: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/comparison-footer-light.png`
+- Browser viewport / implementation CSS size: `1182 × 704` at device scale factor `1`.
+- Source pixels: `1182 × 676`. The source is an annotated partial desktop capture rather than the same full app state.
+- Implementation pixels: `1182 × 704`.
+- Density normalization: the source footer crop (`424 × 168`) was downsampled to `212 × 84` to match the implementation sidebar footer crop (`212 × 84`). The full comparison pads the source to `1182 × 704` without scaling.
+- Compared state: light theme, new version available, sidebar expanded. The source specifies the target slot only; it does not prescribe the update icon or prompt styling.
 
-## Viewport And Normalization
+## Full-view comparison
 
-- Source pixels: 1449 × 1085, normalized to 764 × 572 for the full-view comparison.
-- Wide implementation CSS region: 764 × 572; captured to 764 × 572.
-- Narrow implementation CSS region: 382 × 572; captured to 382 × 572.
-- Browser device pixel ratio: 2. The browser screenshot API returned CSS-pixel-normalized captures, so no additional density scaling was applied to the implementation evidence.
-- The generated concept intentionally uses a more spacious presentation than the production inspector. The implementation preserves its vertical ledger hierarchy while using the product's production density and resizable-panel constraints.
+The implementation preserves the existing OneCatch layout and adds no new page or route. The update control remains confined to the bottom navigation row, so the task list, composer, and main content proportions are unchanged. The prompt opens upward inside the sidebar and does not cover the main workbench.
 
-## Full-View Comparison Evidence
+## Focused footer comparison
 
-The comparison confirms the selected Precision Ledger structure: status header, full-width Input Token block with aligned cache subrows, full-width Output Token block with an aligned reasoning subrow, and a two-column duration/execution footer. The hierarchy, copy, number alignment, status color, runtime color, icon roles, and rounded neutral surfaces match the concept's intent.
+The update control center aligns with the annotated empty slot to the right of “菜单”. The menu icon and label retain their original baseline and left padding. The 28 px update button stays inside the rounded sidebar inset, while the available-state dot and callout remain readable in both light and dark themes.
 
-The generated mock uses decorative dotted connectors and open horizontal rules. The implementation deliberately replaces these with OneCatch's existing tinted surfaces because application chrome is required to group content without open horizontal separators. This is an accepted system-level adaptation rather than an unresolved fidelity issue.
+## Required fidelity surfaces
 
-## Focused Region And Responsive Evidence
+- Fonts and typography: existing application font, weights, sizes, and line heights are reused. The prompt uses the same small UI hierarchy as current menus and tooltips; no wrapping or truncation issue was observed.
+- Spacing and layout rhythm: the footer remains 52 px high. The update button is 28 px, inset 16 px from the right, and vertically centered at 12 px from the row top. Its center matches the annotated target after density normalization.
+- Colors and visual tokens: the control uses existing sidebar, primary, muted, border, popover, and destructive tokens. Light and dark themes were both rendered and inspected; contrast and state emphasis remain consistent with the product.
+- Image quality and asset fidelity: no raster asset was required. Icons come from the product's existing Lucide icon library. The progress indicator is a vector data gauge shared with the existing context gauge and remains sharp at the compact size.
+- Copy and content: available, download progress, verification, error, and restart labels are localized in Chinese and English. The visible prompt says a new version was found and that the right-side button downloads and verifies it.
 
-The 382px focused capture validates the production sidebar width. Measured layout values:
+## Interaction and accessibility checks
 
-- Inspector: client width 358px, scroll width 358px.
-- Both token headings: client width 306px, scroll width 306px.
-- Both detail groups: client width 264px, scroll width 264px.
-
-No horizontal overflow, clipped totals, wrapped cache prose, or collisions are present. Cache labels and values remain independently aligned, and the large input total stays on one line.
-
-## Required Fidelity Surfaces
-
-- Fonts and typography: Uses OneCatch's system sans stack, clear 11px labels, 18–22px responsive totals, deliberate optical tracking, and tabular numerals. Labels truncate only as a last-resort narrow-panel safeguard; the verified 358px content width does not truncate the Chinese sample copy.
-- Spacing and layout rhythm: Full-width vertical metric groups match the selected ledger direction. Eight-pixel group gaps, compact nested detail surfaces, 8px radii, and stable icon/label/value columns keep the panel calm at production density.
-- Colors and visual tokens: All colors come from existing semantic tokens. Running state and numeric emphasis use the configured primary tone; runtime uses `text-info`; neutral surfaces use `muted`, `background`, `border`, and foreground tokens. No gradients or hard-coded theme colors were introduced.
-- Image quality and asset fidelity: The design contains no raster imagery. Standard metric icons use the app's established `lucide-react` library and render sharply at native size; no placeholder or hand-drawn assets are present.
-- Copy and content: Chinese labels and all supplied sample values match the selected visual target. Cache write remains supported as an additional independently aligned row when the backend reports it.
+- Checked for updates from the idle button.
+- Confirmed the available-version callout, notification dot, and download action.
+- Confirmed a determinate circular download indicator with a live numeric percentage (`84%` capture).
+- Confirmed the verifying transition and ready-to-restart action.
+- Confirmed the demo restart returns to the idle/check state.
+- Confirmed every state has an accessible button label, busy state, tooltip, and polite live announcement for the available-version prompt.
+- Checked browser console: no application errors. The only warning is Wails' expected notice that native bindings are unavailable in a standalone browser preview.
 
 ## Findings
 
-- No actionable P0, P1, or P2 differences remain.
-- [P3] The generated reference uses more generous vertical whitespace than the production inspector. This was intentionally tightened so workflow and recovery information remain reachable without making the right rail unnecessarily tall.
+No actionable P0, P1, or P2 visual or interaction findings remain.
 
-## Interaction And Runtime Checks
+## Comparison history
 
-- Selected an existing task in the local OneCatch preview.
-- Expanded the right status inspector and verified the status tab.
-- Verified the selected ledger with exact high-volume sample data at wide and narrow widths.
-- Checked the app and focused preview console: no errors.
-- Targeted layout test passed and the production frontend build passed.
+### Iteration 1
 
-## Comparison History
+- Earlier finding: `[P1]` the standalone preview entered the checking spinner but did not commit the asynchronous available state under React Strict Mode.
+- Fix: reset the mounted lifecycle guard in effect setup so Strict Mode's setup/cleanup/setup development cycle leaves the live instance writable.
+- Post-fix evidence: `update-button-light-available.png` shows the available prompt; `update-button-downloading.png` shows the determinate circular progress; `update-button-ready.png` shows the restart state.
 
-- First comparison of the user-selected option 2 found no actionable P0/P1/P2 issue. No visual-fix loop was required.
+### Iteration 2
 
-## Implementation Checklist
+- Recompared the normalized source and implementation footer crops in `comparison-footer-light.png`.
+- Result: no P0/P1/P2 differences. The control occupies the requested slot, preserves the menu row alignment, and remains inside the sidebar radius.
 
-- [x] Separate input and output into full-width ledger groups.
-- [x] Render cache and reasoning facts as aligned label/value rows rather than wrapping prose.
-- [x] Preserve duration and execution count as a compact footer pair.
-- [x] Support narrow inspector widths without horizontal overflow.
-- [x] Verify the production build and browser-rendered result.
+## Follow-up polish
 
-## Follow-up Polish
-
-- Revisit only if product telemetry shows inspectors narrower than 300px are common; the current container fallback stacks the footer at that breakpoint.
+No P3 refinement is required for this scope.
 
 final result: passed

@@ -2600,26 +2600,15 @@
     overflow-wrap: anywhere;
   }
 
-  /* WebKit paints native selection one text fragment at a time. A restrained,
-     opaque application colour keeps list indentation and preformatted leading
-     whitespace from turning into the high-contrast black notches produced by
-     the operating system's default blue selection. Apply it to every rendered
-     descendant so inline code and Streamdown's block wrappers agree. */
-  .markdown-content::selection,
-  .markdown-content *::selection {
-    background: color-mix(in oklab, var(--primary) 24%, var(--background));
-    color: var(--foreground);
+  /* Selection highlights inherit through the highlight tree, so defining the
+     treatment once on the Markdown root covers prose, inline code and fenced
+     code alike. Matching every descendant separately makes WebKit paint block
+     boundaries as full-width bands; making code transparent then punches gaps
+     through those bands. A translucent fill preserves each element's own
+     surface and syntax colour while keeping one continuous selection cue. */
+  .markdown-content::selection {
+    background: color-mix(in oklab, var(--primary) 28%, transparent);
     text-shadow: none;
-  }
-
-  /* Native selection never paints list indentation or leading spaces in a
-     preformatted line. In precisely those structures, use a text-colour cue
-     instead of a rectangular fill so the selection stays visible without the
-     staircase-shaped holes that WebKit otherwise exposes. */
-  .markdown-content :is(ul, ol, li, pre, code)::selection,
-  .markdown-content :is(ul, ol, li, pre, code) *::selection {
-    background: transparent;
-    color: var(--info);
   }
 
   .markdown-content > :first-child { margin-top: 0; }

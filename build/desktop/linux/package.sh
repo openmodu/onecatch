@@ -10,6 +10,7 @@ APP_BINARY="$BIN_ROOT/onecatch"
 WORKER_BINARY="$BIN_ROOT/onecatch-worker"
 SHELL_BINARY="$BIN_ROOT/onecatchsh"
 ASKPASS_BINARY="$BIN_ROOT/onecatch-askpass"
+UPDATER_BINARY="$BIN_ROOT/onecatch-updater"
 ICON_FILE="$REPO_ROOT/internal/app/desktop/assets/appicon.png"
 DESKTOP_FILE="$SCRIPT_DIR/onecatch.desktop"
 NFPM_CONFIG="$SCRIPT_DIR/nfpm.yaml"
@@ -27,6 +28,7 @@ for input in \
     "$WORKER_BINARY" \
     "$SHELL_BINARY" \
     "$ASKPASS_BINARY" \
+    "$UPDATER_BINARY" \
     "$ICON_FILE" \
     "$DESKTOP_FILE" \
     "$NFPM_CONFIG"; do
@@ -36,7 +38,7 @@ for input in \
     fi
 done
 
-for executable in "$APP_BINARY" "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY"; do
+for executable in "$APP_BINARY" "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY" "$UPDATER_BINARY"; do
     if [ ! -x "$executable" ]; then
         echo "error: built binary is not executable: $executable" >&2
         exit 1
@@ -112,7 +114,7 @@ mkdir -p "$EXTRACT_ROOT"
     "$BASE_APPIMAGE" --appimage-extract >/dev/null
 )
 APP_DIR="$EXTRACT_ROOT/squashfs-root"
-for helper in "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY"; do
+for helper in "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY" "$UPDATER_BINARY"; do
     install -m 0755 "$helper" "$APP_DIR/usr/bin/$(basename -- "$helper")"
 done
 
