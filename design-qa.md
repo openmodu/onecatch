@@ -1,45 +1,73 @@
-# macOS auxiliary window design QA
+# Status Inspector Design QA
 
-- Source visual truth: Settings `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-a3627999-61a3-44ca-bf56-4e3cf395202f.png`; Workflows `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-7e9b5654-ae8f-4c70-9d23-ff27d2431932.png`
-- Implementation screenshots: Settings `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/settings-macos-centered-clean.jpg`; Workflows `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/workflow-macos-current.png`
-- Combined comparisons: Settings `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/settings-macos-centered-comparison.png`; Workflows `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/workflow-macos-comparison.png`
-- Viewports: Settings 959 × 799 CSS pixels; Workflows 1039 × 759 CSS pixels
-- Pixel dimensions and density: Settings source 1918 × 1598 at 2×, normalized to 959 × 799; implementation 959 × 799 at 1×. Workflows source 2078 × 1518 at 2×, normalized to 1039 × 759; implementation 1039 × 759 at 1×.
-- State: macOS light appearance; Settings Appearance section selected; Workflows detail view selected
-- Primary interactions tested: loaded Settings, switched from Appearance to Terminal, and returned to Appearance; loaded the Workflows detail window
-- Console errors: none
+## Comparison Target
 
-## Full-view comparison evidence
+- Source visual truth: `/Users/bytedance/.codex/generated_images/01a055bc-f462-76e3-8a44-0b535617a3bd/exec-d9b0b2ce-dcd0-4e69-9eb5-1b333ae1145a.png`
+- Browser-rendered implementation: `/Users/bytedance/.codex/visualizations/2026/08/31/01a055bc-f462-76e3-8a44-0b535617a3bd/status-ledger-implementation.png`
+- Full-view comparison: `/Users/bytedance/.codex/visualizations/2026/08/31/01a055bc-f462-76e3-8a44-0b535617a3bd/status-ledger-comparison.jpg`
+- Focused narrow-width evidence: `/Users/bytedance/.codex/visualizations/2026/08/31/01a055bc-f462-76e3-8a44-0b535617a3bd/status-ledger-narrow.png`
+- Browser URL: `http://127.0.0.1:9245/`
+- State: Chinese, light theme, running `codex` Execute step, with the selected concept's input/output/cache/reasoning/duration/execution sample data.
 
-The normalized Settings comparison shows “设置” centred in the full-width top drag strip, matching the title treatment already used by Workflows. The macOS title strip no longer paints a 216 × 52 rectangular sidebar surface: the computed background is transparent and the native inset sidebar remains the only coloured panel under the traffic lights. The redundant “偏好设置” heading remains absent.
+## Viewport And Normalization
 
-The Workflows comparison continues to show “工作流” centred at the top of the full window, while Windows and Linux keep their compact sidebar title branch.
+- Source pixels: 1449 × 1085, normalized to 764 × 572 for the full-view comparison.
+- Wide implementation CSS region: 764 × 572; captured to 764 × 572.
+- Narrow implementation CSS region: 382 × 572; captured to 382 × 572.
+- Browser device pixel ratio: 2. The browser screenshot API returned CSS-pixel-normalized captures, so no additional density scaling was applied to the implementation evidence.
+- The generated concept intentionally uses a more spacious presentation than the production inspector. The implementation preserves its vertical ledger hierarchy while using the product's production density and resizable-panel constraints.
 
-## Focused region evidence
+## Full-View Comparison Evidence
 
-The full-view comparison renders the title and traffic-light region at sufficient size, so an additional crop was not needed. Computed evidence for Settings confirms the title occupies the full 959px strip and centres at x = 479.5, the macOS sidebar-title overlay has a transparent background and no right border, the inset sidebar clip remains `inset(8px 4px 8px 8px round 16px)`, and no “偏好设置” element is rendered. Native traffic lights are not drawn by the browser preview, so their placement is taken from the source image.
+The comparison confirms the selected Precision Ledger structure: status header, full-width Input Token block with aligned cache subrows, full-width Output Token block with an aligned reasoning subrow, and a two-column duration/execution footer. The hierarchy, copy, number alignment, status color, runtime color, icon roles, and rounded neutral surfaces match the concept's intent.
+
+The generated mock uses decorative dotted connectors and open horizontal rules. The implementation deliberately replaces these with OneCatch's existing tinted surfaces because application chrome is required to group content without open horizontal separators. This is an accepted system-level adaptation rather than an unresolved fidelity issue.
+
+## Focused Region And Responsive Evidence
+
+The 382px focused capture validates the production sidebar width. Measured layout values:
+
+- Inspector: client width 358px, scroll width 358px.
+- Both token headings: client width 306px, scroll width 306px.
+- Both detail groups: client width 264px, scroll width 264px.
+
+No horizontal overflow, clipped totals, wrapped cache prose, or collisions are present. Cache labels and values remain independently aligned, and the large input total stays on one line.
+
+## Required Fidelity Surfaces
+
+- Fonts and typography: Uses OneCatch's system sans stack, clear 11px labels, 18–22px responsive totals, deliberate optical tracking, and tabular numerals. Labels truncate only as a last-resort narrow-panel safeguard; the verified 358px content width does not truncate the Chinese sample copy.
+- Spacing and layout rhythm: Full-width vertical metric groups match the selected ledger direction. Eight-pixel group gaps, compact nested detail surfaces, 8px radii, and stable icon/label/value columns keep the panel calm at production density.
+- Colors and visual tokens: All colors come from existing semantic tokens. Running state and numeric emphasis use the configured primary tone; runtime uses `text-info`; neutral surfaces use `muted`, `background`, `border`, and foreground tokens. No gradients or hard-coded theme colors were introduced.
+- Image quality and asset fidelity: The design contains no raster imagery. Standard metric icons use the app's established `lucide-react` library and render sharply at native size; no placeholder or hand-drawn assets are present.
+- Copy and content: Chinese labels and all supplied sample values match the selected visual target. Cache write remains supported as an additional independently aligned row when the backend reports it.
 
 ## Findings
 
-- No actionable P0/P1/P2 differences remain for the requested macOS Settings title placement or protruding sidebar-title background.
-- Fonts and typography: the existing application font stack, 14px title size, semibold weight, and content hierarchy are preserved.
-- Spacing and layout rhythm: the title is centred against the full window rather than the 216px sidebar; the rounded sidebar inset and 216px content grid remain unchanged.
-- Colors and visual tokens: the macOS title overlay is transparent; the sidebar material retains the existing sidebar token. Windows/Linux still apply `var(--sidebar)` to their compact title segment.
-- Image quality and asset fidelity: no image, icon, or raster asset was added or replaced.
-- Copy and content: “设置” remains the window identity and “偏好设置” is absent.
+- No actionable P0, P1, or P2 differences remain.
+- [P3] The generated reference uses more generous vertical whitespace than the production inspector. This was intentionally tightened so workflow and recovery information remain reachable without making the right rail unnecessarily tall.
 
-## Comparison history
+## Interaction And Runtime Checks
 
-1. Earlier macOS Settings implementation kept “设置” in the compact left sidebar title region and painted a rectangular 216 × 52 sidebar-coloured overlay above the inset rounded native panel. These were P2 visual mismatches called out in the annotated source.
-2. Fix: reused the existing desktop-platform helper. Windows/Linux retain the compact left title and coloured sidebar segment; macOS renders the title in a full-window centred layer and leaves the sidebar title segment transparent.
-3. Post-fix evidence: the revised 959 × 799 browser capture shows the centred title and clean rounded sidebar top. DOM inspection confirms title centre x = 479.5, transparent overlay background, 0px overlay border, and zero redundant preferences headings.
+- Selected an existing task in the local OneCatch preview.
+- Expanded the right status inspector and verified the status tab.
+- Verified the selected ledger with exact high-volume sample data at wide and narrow widths.
+- Checked the app and focused preview console: no errors.
+- Targeted layout test passed and the production frontend build passed.
 
-## Implementation checklist
+## Comparison History
 
-- [x] Centre the Settings title on macOS, matching Workflows.
-- [x] Remove the macOS rectangular sidebar-title background that protruded over the rounded material.
-- [x] Preserve the inset rounded sidebar and existing Settings content layout.
-- [x] Keep Windows/Linux compact auxiliary chrome unchanged.
-- [x] Verify navigation, console output, targeted tests, and the production build.
+- First comparison of the user-selected option 2 found no actionable P0/P1/P2 issue. No visual-fix loop was required.
+
+## Implementation Checklist
+
+- [x] Separate input and output into full-width ledger groups.
+- [x] Render cache and reasoning facts as aligned label/value rows rather than wrapping prose.
+- [x] Preserve duration and execution count as a compact footer pair.
+- [x] Support narrow inspector widths without horizontal overflow.
+- [x] Verify the production build and browser-rendered result.
+
+## Follow-up Polish
+
+- Revisit only if product telemetry shows inspectors narrower than 300px are common; the current container fallback stacks the footer at that breakpoint.
 
 final result: passed

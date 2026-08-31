@@ -196,6 +196,7 @@ function roundItems(events, fallbackText, fallbackError, translate) {
       if (target) {
         if (event.text) target.details.push({ kind: event.kind, text: event.text, at: event.at });
         target.settled = !event.streaming;
+        if (!event.streaming) target.finishedAt = event.at;
         if (event.failed) target.failed = true;
         if (!event.streaming && event.streamId) pendingToolsById.delete(event.streamId);
         continue;

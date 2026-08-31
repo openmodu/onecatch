@@ -39,6 +39,8 @@ test("selected Agent produces prioritized line-specific findings", () => {
 test("review action is optically centered with the file-change disclosure", () => {
   assert.match(css, /\.conversation-file-changes > summary\s*\{[\s\S]*?display:\s*block;/);
   assert.match(css, /\.conversation-review-action\s*\{[\s\S]*?top:\s*35px;[\s\S]*?transform:\s*translateY\(-50%\);/);
+  assert.match(css, /\.conversation-file-changes > summary\s*\{[\s\S]*?padding:\s*14px 112px 14px 16px;/, "the disclosure reserves room for the English Review label");
+  assert.match(css, /\.conversation-review-action\s*\{[\s\S]*?right:\s*16px;/, "the action and disclosure caret occupy separate horizontal space");
 });
 
 // The review panel's grid gives its toolbar exactly one 46px row, so nothing in

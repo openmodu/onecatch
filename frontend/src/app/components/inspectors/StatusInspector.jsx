@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clipboard } from "@wailsio/runtime";
+import { Activity, Clock3, Download, Upload } from "lucide-react";
 import { Action, Kicker } from "../../../ui/primitives.jsx";
 import { errorMessage, formatDuration, formatTime, formatTokens } from "../../format.js";
 import { runtimeSessionEntries } from "../../sessionCommands.js";
@@ -16,12 +17,33 @@ function InspectorRow({ label, value }) {
   </div>;
 }
 
-function TokenMetric({ label, total, details = [] }) {
-  const visibleDetails = details.filter((item) => item.value > 0);
-  return <div className="px-1.5 py-3" title={`${label}：${formatTokens(total)}`}>
-    <span className="block text-[11px] text-muted-foreground">{label}</span>
-    <strong className="mt-1 block text-[17px] font-semibold tabular-nums text-foreground">{formatTokens(total)}</strong>
-    {visibleDetails.length > 0 && <small className="mt-1 block text-[11px] leading-snug text-muted-foreground">{visibleDetails.map((item) => `${item.label} ${item.display || formatTokens(item.value)}`).join(" · ")}</small>}
+function TokenLedger({ icon: Icon, label, total, details = [] }) {
+  return <section className="status-token-ledger rounded-lg bg-muted/35 px-3 py-3" aria-label={label}>
+    <div className="status-token-ledger-heading grid min-w-0 grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2.5">
+      <span className="grid size-8 place-items-center rounded-lg border border-border/60 bg-background/70 text-primary" aria-hidden="true">
+        <Icon size={15} strokeWidth={1.8} />
+      </span>
+      <span className="min-w-0 truncate text-[11px] text-muted-foreground">{label}</span>
+      <strong className="status-token-ledger-total whitespace-nowrap font-semibold tracking-[-0.02em] tabular-nums text-foreground" title={`${label}：${formatTokens(total)}`}>{formatTokens(total)}</strong>
+    </div>
+    {details.length > 0 && <div className="status-token-ledger-details mt-2 grid gap-1 rounded-md bg-background/55 px-2.5 py-2">
+      {details.map((item) => <div className="flex min-w-0 items-baseline justify-between gap-3" key={item.label} title={`${item.label}：${item.value}`}>
+        <span className="min-w-0 truncate text-[10px] text-muted-foreground">{item.label}</span>
+        <strong className={`shrink-0 whitespace-nowrap text-[11px] font-medium tabular-nums ${item.accent ? "text-primary" : "text-foreground"}`}>{item.value}</strong>
+      </div>)}
+    </div>}
+  </section>;
+}
+
+function RunMetric({ icon: Icon, label, value }) {
+  return <div className="status-run-metric flex min-w-0 items-center gap-2.5 px-1 py-1">
+    <span className="grid size-8 shrink-0 place-items-center rounded-lg border border-border/60 bg-background/70 text-primary" aria-hidden="true">
+      <Icon size={15} strokeWidth={1.8} />
+    </span>
+    <span className="min-w-0">
+      <span className="block truncate text-[10px] text-muted-foreground">{label}</span>
+      <strong className="mt-0.5 block truncate text-[15px] font-semibold tabular-nums text-foreground">{value}</strong>
+    </span>
   </div>;
 }
 
@@ -63,18 +85,27 @@ export default function StatusInspector({ detail, queuedTask, queuePosition, dra
   const currentStepID = currentWorkflowStepID(run, workflow, stepRuns);
   const statusRun = currentStepID === run.currentStepId ? run : { ...run, currentStepId: currentStepID };
   const currentStep = workflow.steps?.find((step) => step.id === currentStepID);
+  const inputTokenDetails = [
+    tokenUsage.inputTokens > 0 && { label: t("inspector.cacheHitRate"), value: `${tokenUsage.cacheHitRate.toFixed(1)}%`, accent: true },
+    tokenUsage.cachedInputTokens > 0 && { label: t("inspector.cacheRead"), value: formatTokens(tokenUsage.cachedInputTokens) },
+    tokenUsage.cacheCreationInputTokens > 0 && { label: t("inspector.cacheWrite"), value: formatTokens(tokenUsage.cacheCreationInputTokens) },
+  ].filter(Boolean);
+  const outputTokenDetails = [
+    tokenUsage.reasoningOutputTokens > 0 && { label: t("inspector.reasoning"), value: formatTokens(tokenUsage.reasoningOutputTokens) },
+  ].filter(Boolean);
   return <div className="status-inspector p-3.5">
     <div className="flex items-center gap-2.5 rounded-lg bg-muted/60 px-3 py-2.5">
       <StatusPill status={run.status} active={detail.active && run.status === "running"} />
       <strong className="min-w-0 truncate text-sm font-semibold text-foreground">{currentStep?.name || currentStepID || "—"}</strong>
       <small className="ml-auto shrink-0 text-[11px] font-medium text-info">{currentStep?.runtime || "agent"}</small>
     </div>
-    {/* Spacing and a shared tint group the four metrics without table rules. */}
-    <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-lg bg-muted/35 p-1.5">
-      <TokenMetric label={t("inspector.inputTokens")} total={tokenUsage.inputTokens} details={[{ label: t("inspector.cacheHitRate"), value: tokenUsage.inputTokens, display: `${tokenUsage.cacheHitRate.toFixed(1)}%` }, { label: t("inspector.cacheRead"), value: tokenUsage.cachedInputTokens }, { label: t("inspector.cacheWrite"), value: tokenUsage.cacheCreationInputTokens }]} />
-      <TokenMetric label={t("inspector.outputTokens")} total={tokenUsage.outputTokens} details={[{ label: t("inspector.reasoning"), value: tokenUsage.reasoningOutputTokens }]} />
-      <div className="px-1.5 py-3"><span className="block text-[11px] text-muted-foreground">{t("inspector.duration")}</span><strong className="mt-1 block text-[17px] font-semibold tabular-nums text-foreground">{formatDuration(duration)}</strong></div>
-      <div className="px-1.5 py-3"><span className="block text-[11px] text-muted-foreground">{t("inspector.executions")}</span><strong className="mt-1 block text-[17px] font-semibold tabular-nums text-foreground">{stepRuns.length}</strong></div>
+    <div className="status-metrics mt-2 grid gap-2">
+      <TokenLedger icon={Download} label={t("inspector.inputTokens")} total={tokenUsage.inputTokens} details={inputTokenDetails} />
+      <TokenLedger icon={Upload} label={t("inspector.outputTokens")} total={tokenUsage.outputTokens} details={outputTokenDetails} />
+      <div className="status-run-metrics grid grid-cols-2 gap-2 rounded-lg bg-muted/35 p-2.5">
+        <RunMetric icon={Clock3} label={t("inspector.duration")} value={formatDuration(duration)} />
+        <RunMetric icon={Activity} label={t("inspector.executions")} value={stepRuns.length} />
+      </div>
     </div>
     <section className="mt-3 rounded-lg bg-muted/30 px-3 py-3">
       <Kicker className="mb-2 block">{t("inspector.workflow")}</Kicker>

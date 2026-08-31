@@ -425,7 +425,10 @@
     position: absolute;
     z-index: 30;
     top: -32px;
-    right: calc(var(--workbench-inspector-width, 380px) - 9px);
+    /* Keep the resize hit target wholly inside the inspector. Centering its
+       18px width on the pane boundary covered the conversation's rightmost
+       9px, so wheel events there landed on this non-scrollable separator. */
+    right: calc(var(--workbench-inspector-width, 380px) - 18px);
     bottom: 20px;
     width: 18px;
     background: transparent;
@@ -442,12 +445,12 @@
     position: absolute;
     top: 12px;
     bottom: 12px;
-    left: 50%;
+    left: 0;
     width: 1px;
     border-radius: 999px;
     background: transparent;
     content: "";
-    transform: translateX(-50%);
+    transform: none;
     transition: width 120ms ease, background-color 120ms ease;
   }
 
@@ -1380,7 +1383,10 @@
   .conversation-round-body {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
-    gap: 20px;
+    /* Message metadata is a 27px hover rail positioned immediately below the
+       prose. Keep enough rhythm between blocks for that rail plus a quiet
+       visual buffer, so it never covers the next tool or file-change card. */
+    gap: 36px;
   }
 
   .conversation-user {
@@ -1629,7 +1635,9 @@
 
   .conversation-tool-heading {
     min-width: 0;
-    display: block;
+    display: grid;
+    align-content: center;
+    gap: 1px;
   }
 
   /* The summary is human-readable prose. Machine text only appears after the
@@ -1640,9 +1648,23 @@
     font-family: var(--font-ui-sans);
     font-size: 13px;
     font-weight: 500;
-    line-height: 42px;
+    line-height: 18px;
     overflow: hidden;
     text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+.conversation-tool-meta {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    overflow: hidden;
+    color: color-mix(in oklab, var(--muted-foreground) 82%, transparent);
+    font-family: var(--font-ui-sans);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    line-height: 16px;
     white-space: nowrap;
   }
 
@@ -1737,7 +1759,7 @@
 
   .conversation-file-changes > summary {
     display: block;
-    padding: 14px 92px 14px 16px;
+    padding: 14px 112px 14px 16px;
     cursor: pointer;
     list-style: none;
   }
@@ -1798,7 +1820,7 @@
     position: absolute;
     z-index: 2;
     top: 35px;
-    right: 42px;
+    right: 16px;
     transform: translateY(-50%);
     border-color: color-mix(in oklab, var(--border) 78%, transparent) !important;
     background: color-mix(in oklab, var(--card) 92%, transparent) !important;
@@ -2361,6 +2383,37 @@
     border: 1px solid color-mix(in oklab, var(--warning) 35%, var(--border));
     border-radius: var(--radius);
     background: color-mix(in oklab, var(--warning) 6%, var(--card));
+  }
+}
+
+/* The status inspector is a narrow, resizable surface. Token totals stay the
+   primary scan line; supporting usage facts each own a stable cell so long
+   localized labels and large counters never collapse into prose. */
+.status-inspector {
+  container-name: status-inspector;
+  container-type: inline-size;
+}
+
+.status-token-ledger-total {
+  font-size: clamp(1.125rem, 5.5cqi, 1.375rem);
+  line-height: 1.15;
+}
+
+.status-token-ledger-details {
+  margin-left: 42px;
+}
+
+@container status-inspector (max-width: 300px) {
+  .status-token-ledger-heading {
+    grid-template-columns: 32px minmax(0, 1fr);
+  }
+
+  .status-token-ledger-total {
+    grid-column: 2;
+  }
+
+  .status-run-metrics {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
