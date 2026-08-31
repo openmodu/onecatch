@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatTokens } from "../format.js";
 import { gaugeDash, gaugeGeometry, gaugeTone } from "../contextGauge.js";
+import ProgressRing from "./ProgressRing.jsx";
 
 /* A ring, not a bar, because the question is "how much room is left" rather
    than "how does this compare to the others" — there is nothing to compare
@@ -13,17 +14,8 @@ import { gaugeDash, gaugeGeometry, gaugeTone } from "../contextGauge.js";
 
 function Ring({ arc, dash }) {
   const { radius, stroke, size } = gaugeGeometry;
-  return <svg
-    className="shrink-0 -rotate-90"
-    width={size}
-    height={size}
-    viewBox={`0 0 ${size} ${size}`}
-    aria-hidden="true"
-    focusable="false"
-  >
-    <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={stroke} className="text-muted" stroke="currentColor" />
-    <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={dash} className={arc} stroke="currentColor" />
-  </svg>;
+  const [swept, circumference] = dash.split(" ").map(Number);
+  return <ProgressRing ratio={circumference > 0 ? swept / circumference : 0} size={size} radius={radius} stroke={stroke} className={arc} />;
 }
 
 /* The gauge spells its reading out in the tooltip rather than on the row: the

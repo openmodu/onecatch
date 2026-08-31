@@ -31,6 +31,7 @@ jobs:
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
           test "v$version" = "$GITHUB_REF_NAME"
+          go tool wails3 task version:check
       - name: Build macOS installer
         run: go tool wails3 task package:desktop
       - uses: actions/upload-artifact@v4
@@ -39,6 +40,8 @@ jobs:
           path: |
             bin/*.dmg
             bin/*.dmg.sha256
+            bin/*-darwin-*.zip
+            bin/*-darwin-*.zip.sha256
           if-no-files-found: error
 
   windows:
@@ -61,6 +64,7 @@ jobs:
           if ("v$version" -ne $env:GITHUB_REF_NAME) {
             throw "Tag $env:GITHUB_REF_NAME does not match VERSION=$version"
           }
+          go tool wails3 task version:check
       - name: Install NSIS
         shell: pwsh
         run: choco install nsis --no-progress -y
@@ -93,6 +97,7 @@ jobs:
         run: |
           version="$(tr -d '[:space:]' < VERSION)"
           test "v$version" = "$GITHUB_REF_NAME"
+          go tool wails3 task version:check
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -119,11 +124,23 @@ jobs:
     needs: [macos, windows, linux]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
       - uses: actions/download-artifact@v4
         with:
           pattern: desktop-*
           path: dist
           merge-multiple: true
+      - name: Generate signed update feeds
+        env:
+          ONECATCH_UPDATE_PRIVATE_KEY: ${{ secrets.ONECATCH_UPDATE_PRIVATE_KEY }}
+        run: |
+          node build/scripts/update-feed.mjs generate \
+            --dist dist \
+            --version "$GITHUB_REF_NAME" \
+            --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

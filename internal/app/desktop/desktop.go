@@ -11,6 +11,7 @@ import (
 	"time"
 
 	desktopassets "github.com/openmodu/onecatch/internal/app/desktop/assets"
+	"github.com/openmodu/onecatch/internal/buildinfo"
 	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
 	"github.com/openmodu/onecatch/internal/repo/git"
 	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
@@ -18,6 +19,7 @@ import (
 	repotasks "github.com/openmodu/onecatch/internal/repo/tasks"
 	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
+	appupdateservice "github.com/openmodu/onecatch/internal/service/appupdate"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 	"github.com/openmodu/onecatch/internal/service/desktop/listchange"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
@@ -49,6 +51,7 @@ func Run() {
 
 	log := logger.MustNew(logger.Config{Service: "onecatch-desktop"})
 	defer logger.Sync(log)
+	log.Info("starting OneCatch", zap.String("version", buildinfo.Version))
 
 	store, err := localdata.OpenStore("")
 	if err != nil {
@@ -127,6 +130,8 @@ func Run() {
 	})
 	terminalService := terminalservice.NewService()
 	defer terminalService.Close()
+	var updateService *appupdateservice.Service
+	updateBinding := wailstransport.NewUpdateBinding(func() *appupdateservice.Service { return updateService })
 
 	// The macOS notification service hard-fails its Startup without a bundle
 	// identifier, which would abort app launch. It only has one when running
@@ -142,6 +147,7 @@ func Run() {
 		application.NewService(wailstransport.NewTerminalBinding(terminalService, service)),
 		application.NewService(wailstransport.NewWorkerBinding(service)),
 		application.NewService(windowBinding),
+		application.NewService(updateBinding),
 	}
 	var notifier *notifications.NotificationService
 	if runningAsBundle() {
@@ -194,6 +200,12 @@ func Run() {
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 	})
+	updateService, err = appupdateservice.New(wailsApp)
+	if err != nil {
+		log.Fatal("configure app updater", zap.Error(err))
+	}
+	updateService.Start()
+	defer updateService.Close()
 	var shuttingDown atomic.Bool
 	wailsApp.OnShutdown(func() {
 		shuttingDown.Store(true)
@@ -224,6 +236,10 @@ func Run() {
 	if runtime.GOOS == "darwin" {
 		appMenu := menu.AddSubmenu(Name)
 		appMenu.AddRole(application.About)
+		appMenu.Add("检查更新…").OnClick(func(*application.Context) {
+			auxiliaryWindows.OpenSettings()
+			go func() { _, _ = updateService.Check(context.Background()) }()
+		})
 		appMenu.Add("设置…").SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
 			auxiliaryWindows.OpenSettings()
 		})
@@ -242,6 +258,10 @@ func Run() {
 		fileMenu := menu.AddSubmenu("文件")
 		fileMenu.Add("设置…").SetAccelerator("Ctrl+,").OnClick(func(*application.Context) {
 			auxiliaryWindows.OpenSettings()
+		})
+		fileMenu.Add("检查更新…").OnClick(func(*application.Context) {
+			auxiliaryWindows.OpenSettings()
+			go func() { _, _ = updateService.Check(context.Background()) }()
 		})
 		fileMenu.AddSeparator()
 		fileMenu.AddRole(application.Quit)
@@ -301,6 +321,9 @@ func Run() {
 	// restored/dev windows whose frame was applied after option initialisation.
 	mainWindow.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
 		mainWindow.SetMinSize(860, 720)
+		if err := appupdateservice.SignalReadyFromEnvironment(); err != nil {
+			log.Warn("signal updated app readiness", zap.Error(err))
+		}
 	})
 	// On platforms that actually destroy the main window, the detached inspector
 	// must not outlive it — otherwise closing the workbench leaves a frozen panel
