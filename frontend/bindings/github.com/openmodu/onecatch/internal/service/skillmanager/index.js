@@ -7,6 +7,7 @@ export {
     SaveSkillInput,
     Skill,
     SkillDocument,
+    SkillFileEntry,
     SyncResult,
     SyncTarget
 } from "./models.js";

@@ -16,6 +16,9 @@ func NewSkillBinding(service *desktopservice.Service) *SkillBinding {
 func (b *SkillBinding) ListSkills() ([]skillmanager.Skill, error) {
 	return b.service.ListManagedSkills()
 }
+func (b *SkillBinding) ListFiles(directory string) ([]skillmanager.SkillFileEntry, error) {
+	return b.service.ListSkillFiles(directory)
+}
 func (b *SkillBinding) GetSkill(name string) (skillmanager.SkillDocument, error) {
 	return b.service.GetSkill(name)
 }

@@ -94,7 +94,7 @@ function selectedTaskExecution(form) {
   };
 }
 
-function DesktopTitleBar({ title = "", workspaceName = "", taskStatus = "", taskActive = false, showTaskStatus = false, showWorkbenchControls = false, terminalVisible = false, inspectorCollapsed = true, inspectorDetached = false, lockActive = 0, sidebarCollapsed = false, sidebarWidth = SIDEBAR_DEFAULT_WIDTH, onLock, onToggleTerminal, onToggleInspector, onDockInspector }) {
+function DesktopTitleBar({ title = "", workspaceName = "", taskStatus = "", taskActive = false, showTaskStatus = false, showLock = true, showWorkbenchControls = false, terminalVisible = false, inspectorCollapsed = true, inspectorDetached = false, lockActive = 0, sidebarCollapsed = false, sidebarWidth = SIDEBAR_DEFAULT_WIDTH, onLock, onToggleTerminal, onToggleInspector, onDockInspector }) {
   const { t } = useTranslation();
   // Hyprland (and most Wayland tiling WMs) has no minimize concept and no
   // separate maximized size for a tiled window, so those two buttons would
@@ -117,10 +117,10 @@ function DesktopTitleBar({ title = "", workspaceName = "", taskStatus = "", task
       <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground" title={title}>{title}</strong>
       {showTaskStatus && <StatusPill status={taskStatus} active={taskActive} />}
     </span>}
-    <button type="button" className="windows-titlebar-control no-drag relative shrink-0" aria-label={t("lock.enter")} title={`${t("lock.enter")} · Ctrl+L`} onClick={onLock}>
+    {showLock && <button type="button" className="windows-titlebar-control no-drag relative shrink-0" aria-label={t("lock.enter")} title={`${t("lock.enter")} · Ctrl+L`} onClick={onLock}>
       <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
       {lockActive > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockActive}</em>}
-    </button>
+    </button>}
     <div className="windows-titlebar-workbench-actions no-drag ml-auto flex h-full shrink-0 items-center gap-1 pr-0 pl-2" onDoubleClick={(event) => event.stopPropagation()}>
       {showWorkbenchControls && <>
         <button type="button" className={`windows-titlebar-control ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={onToggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>
@@ -265,6 +265,9 @@ function App() {
   // A detached inspector leaves no dock behind, so the workbench sees the same
   // "no panel here" layout it uses for a deliberate collapse.
   const inspectorCollapsed = inspectorDetached || resolveInspectorCollapsed(inspectorPreference);
+  // Skills owns a contextual file panel in this window. A task inspector that
+  // happens to be detached must not pull the Skills panel out of its page.
+  const activeInspectorCollapsed = view === "skills" ? resolveInspectorCollapsed(inspectorPreference) : inspectorCollapsed;
   const desktopChrome = typeof document !== "undefined" && ["windows", "linux"].includes(document.documentElement.dataset.platform);
 
   useEffect(() => {
@@ -1481,10 +1484,11 @@ function App() {
       taskStatus={selectedTaskStatus}
       taskActive={runDetail?.active}
       showTaskStatus={Boolean(taskTitleVisible && selectedTask.workflowId && selectedTask.workflowId !== directAgentWorkflowID)}
-      showWorkbenchControls={view === "tasks" && !editor}
+      showLock={view !== "skills"}
+      showWorkbenchControls={!editor && (view === "tasks" || view === "skills")}
       terminalVisible={terminalVisible}
-      inspectorCollapsed={inspectorCollapsed}
-      inspectorDetached={inspectorDetached}
+      inspectorCollapsed={activeInspectorCollapsed}
+      inspectorDetached={view === "tasks" && inspectorDetached}
       lockActive={lockSignal.active}
       sidebarCollapsed={sidebarCollapsed}
       sidebarWidth={sidebarWidth}
@@ -1558,20 +1562,21 @@ function App() {
             <strong className="shrink-0 text-[13px] font-semibold text-foreground">{location.label}</strong>
             {location.path && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{location.path}</span>}
           </span>}
-          <button type="button" className="no-drag relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
+          {view !== "skills" && <button type="button" className="no-drag relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
-          </button>
+          </button>}
           {view !== "tasks" && view !== "skills" && <StatusBadge status={mode === "wails" ? "good" : "warn"} className="ml-auto shrink-0">
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {mode === "wails" ? t(view === "tasks" && selectedWorkspace?.remoteFs ? "workspace.remoteFS" : "common.local") : t("common.preview")}
           </StatusBadge>}
-          {view === "tasks" && !editor && inspectorCollapsed && <button type="button" className={`no-drag ml-auto grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${terminalVisible ? "bg-accent text-foreground" : "text-muted-foreground"}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => setTerminalToggleVersion((value) => value + 1)}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
+          {!editor && (view === "skills" || (view === "tasks" && inspectorCollapsed)) && <button type="button" className={`no-drag ml-auto grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${terminalVisible ? "bg-accent text-foreground" : "text-muted-foreground"}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={`${terminalVisible ? t("terminal.collapse") : t("terminal.open")} · Ctrl + \``} onClick={() => setTerminalToggleVersion((value) => value + 1)}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
           {view === "tasks" && (inspectorDetached
             ? <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.dock")} title={t("inspector.dockHint")} onClick={dockInspector}><PictureInPicture2 size={16} strokeWidth={2} aria-hidden="true" /></button>
             : inspectorCollapsed && <button type="button" className="no-drag grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("inspector.expand")} aria-expanded="false" aria-controls="workbench-inspector-content" title={t("inspector.expand")} onClick={toggleInspector}><PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /></button>)}
+          {view === "skills" && <button type="button" className={`no-drag grid size-7 shrink-0 place-items-center rounded-md transition-colors hover:bg-accent hover:text-foreground ${activeInspectorCollapsed ? "text-muted-foreground" : "bg-accent text-foreground"}`} aria-label={activeInspectorCollapsed ? t("inspector.expand") : t("inspector.collapse")} aria-expanded={!activeInspectorCollapsed} aria-controls="workbench-inspector-content" title={activeInspectorCollapsed ? t("inspector.expand") : t("inspector.collapse")} onClick={toggleInspector}>{activeInspectorCollapsed ? <PanelRightOpen size={16} strokeWidth={2} aria-hidden="true" /> : <PanelRightClose size={16} strokeWidth={2} aria-hidden="true" />}</button>}
         </div>}
-        {editor ? <Suspense fallback={<ViewLoading />}><WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} showBack /></Suspense> : view === "tasks" ? <TaskWorkbench
+        {editor ? <Suspense fallback={<ViewLoading />}><WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} showBack /></Suspense> : view === "tasks" || view === "skills" ? <TaskWorkbench
           mode={mode}
           workspace={selectedWorkspace}
           terminalPreferences={settings.terminal}
@@ -1587,13 +1592,15 @@ function App() {
           busy={busy}
           permissionBusy={permissionBusy}
           attachments={composerAttachments}
-          inspectorCollapsed={inspectorCollapsed}
+          inspectorCollapsed={activeInspectorCollapsed}
           inspectorToggleVersion={inspectorToggleVersion}
+          inspectorScope={view === "skills" ? "skills" : "task"}
           integratedDesktopTitlebar={desktopChrome}
           onToggleInspector={toggleInspector}
-          onDetachInspector={mode === "wails" ? detachInspector : null}
+          onDetachInspector={view === "tasks" && mode === "wails" ? detachInspector : null}
           onEditWorkspace={editWorkspace}
-          newTaskOpen={taskCreateVisible}
+          newTaskOpen={view === "tasks" && taskCreateVisible}
+          alternateContent={view === "skills" ? <Suspense fallback={<ViewLoading />}><SkillManagerPage mode={mode} notify={notify} requestConfirm={requestConfirm} /></Suspense> : null}
           taskForm={taskForm}
           workflows={workflows}
           runtimes={runtimes}
@@ -1614,7 +1621,7 @@ function App() {
           onLoadEarlierTranscript={loadEarlierTranscript}
           onPermissionDecision={respondPermission}
           notify={notify}
-        /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : view === "skills" ? <Suspense fallback={<ViewLoading />}><SkillManagerPage mode={mode} notify={notify} requestConfirm={requestConfirm} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
+        /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
       </main>
     </div>
     {workspaceModal && <Modal className="workspace-create-dialog max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[480px]" title={t(workspaceEditingID ? "workspace.editTitle" : "workspace.addTitle")} subtitle={t(workspaceEditingID ? "workspace.editSubtitle" : "workspace.addSubtitle")} onClose={() => { if (busy !== "workspace") { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceEditingID(""); setWorkspaceModal(false); } }}>

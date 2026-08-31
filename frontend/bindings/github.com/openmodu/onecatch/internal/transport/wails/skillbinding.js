@@ -62,11 +62,21 @@ export function GetSkill(name) {
 }
 
 /**
+ * @param {string} directory
+ * @returns {$CancellablePromise<skillmanager$0.SkillFileEntry[]>}
+ */
+export function ListFiles(directory) {
+    return $Call.ByID(2179431289, directory).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
+}
+
+/**
  * @returns {$CancellablePromise<skillmanager$0.Skill[]>}
  */
 export function ListSkills() {
     return $Call.ByID(3797723156).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType6($result);
     }));
 }
 
@@ -83,7 +93,7 @@ export function RemoveSyncTarget(id) {
  */
 export function ScanSyncTargets() {
     return $Call.ByID(2545266950).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType7($result);
     }));
 }
 
@@ -93,7 +103,7 @@ export function ScanSyncTargets() {
  */
 export function Sync(id) {
     return $Call.ByID(3220724177, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType8($result);
     }));
 }
 
@@ -111,7 +121,9 @@ export function UpdateSkill(input) {
 const $$createType0 = skillmanager$0.SyncTarget.createFrom;
 const $$createType1 = skillmanager$0.SkillDocument.createFrom;
 const $$createType2 = desktop$0.SkillDebugResult.createFrom;
-const $$createType3 = skillmanager$0.Skill.createFrom;
+const $$createType3 = skillmanager$0.SkillFileEntry.createFrom;
 const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = $Create.Array($$createType0);
-const $$createType6 = skillmanager$0.SyncResult.createFrom;
+const $$createType5 = skillmanager$0.Skill.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = $Create.Array($$createType0);
+const $$createType8 = skillmanager$0.SyncResult.createFrom;

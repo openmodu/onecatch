@@ -68,6 +68,46 @@ func TestManagerRejectsUnsafeAndMalformedSkills(t *testing.T) {
 	}
 }
 
+func TestManagerListsOnlyFilesInsideSkillsRoot(t *testing.T) {
+	base := t.TempDir()
+	manager, err := New(filepath.Join(base, "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Create(SaveSkillInput{Name: "release-notes", Content: skillSource("release-notes", "Write release notes")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(manager.Root(), "release-notes", "scripts"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(manager.Root(), "release-notes", "scripts", "render.sh"), []byte("#!/bin/sh\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(base, filepath.Join(manager.Root(), "outside")); err != nil {
+		t.Fatal(err)
+	}
+
+	rootEntries, err := manager.ListFiles("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rootEntries) != 1 || rootEntries[0].Path != "release-notes" || !rootEntries[0].Directory {
+		t.Fatalf("unexpected root entries: %#v", rootEntries)
+	}
+	scriptEntries, err := manager.ListFiles("release-notes/scripts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scriptEntries) != 1 || scriptEntries[0].Path != "release-notes/scripts/render.sh" || scriptEntries[0].Directory {
+		t.Fatalf("unexpected script entries: %#v", scriptEntries)
+	}
+	for _, unsafe := range []string{"../", "release-notes/../../../"} {
+		if _, err := manager.ListFiles(unsafe); err == nil {
+			t.Fatalf("expected %q to be rejected", unsafe)
+		}
+	}
+}
+
 func TestManagerSyncsEachSkillWithRsyncAndRecordsMetadata(t *testing.T) {
 	base := t.TempDir()
 	manager, err := New(filepath.Join(base, ".onecatch", "skills"))

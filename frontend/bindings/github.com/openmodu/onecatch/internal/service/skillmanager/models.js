@@ -215,6 +215,67 @@ export class SkillDocument {
     }
 }
 
+/**
+ * SkillFileEntry is one direct child of a directory inside the managed Skills
+ * root. Paths are always relative to ~/.onecatch/skills and symlinks are never
+ * followed or returned.
+ */
+export class SkillFileEntry {
+    /**
+     * Creates a new SkillFileEntry instance.
+     * @param {Partial<SkillFileEntry>} [$$source = {}] - The source object to create the SkillFileEntry.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("directory" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["directory"] = false;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["size"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["modifiedAt"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SkillFileEntry instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SkillFileEntry}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SkillFileEntry(/** @type {Partial<SkillFileEntry>} */($$parsedSource));
+    }
+}
+
 export class SyncResult {
     /**
      * Creates a new SyncResult instance.

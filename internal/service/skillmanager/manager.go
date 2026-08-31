@@ -45,6 +45,17 @@ type SkillDocument struct {
 	Content string `json:"content"`
 }
 
+// SkillFileEntry is one direct child of a directory inside the managed Skills
+// root. Paths are always relative to ~/.onecatch/skills and symlinks are never
+// followed or returned.
+type SkillFileEntry struct {
+	Name       string `json:"name"`
+	Path       string `json:"path"`
+	Directory  bool   `json:"directory"`
+	Size       int64  `json:"size,omitempty"`
+	ModifiedAt string `json:"modifiedAt,omitempty"`
+}
+
 type SaveSkillInput struct {
 	Name    string `json:"name"`
 	Content string `json:"content"`
@@ -149,6 +160,80 @@ func New(root string) (*Manager, error) {
 }
 
 func (m *Manager) Root() string { return m.root }
+
+// ListFiles returns the immediate children of a directory under the managed
+// Skills root. Keeping this API rooted in the manager prevents the Skills UI
+// from accidentally browsing the active project or escaping through a symlink.
+func (m *Manager) ListFiles(directory string) ([]SkillFileEntry, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	relative, err := cleanRelativeDirectory(directory)
+	if err != nil {
+		return nil, err
+	}
+	root, err := os.OpenRoot(m.root)
+	if err != nil {
+		return nil, fmt.Errorf("open skills root: %w", err)
+	}
+	defer root.Close()
+	dir, err := root.Open(relative)
+	if err != nil {
+		return nil, fmt.Errorf("open skills directory: %w", err)
+	}
+	defer dir.Close()
+	info, err := dir.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("inspect skills directory: %w", err)
+	}
+	if !info.IsDir() {
+		return nil, errors.New("skill file path is not a directory")
+	}
+	children, err := dir.ReadDir(-1)
+	if err != nil {
+		return nil, fmt.Errorf("read skills directory: %w", err)
+	}
+	entries := make([]SkillFileEntry, 0, len(children))
+	for _, child := range children {
+		if child.Type()&os.ModeSymlink != 0 {
+			continue
+		}
+		childInfo, infoErr := child.Info()
+		if infoErr != nil || (!childInfo.IsDir() && !childInfo.Mode().IsRegular()) {
+			continue
+		}
+		path := child.Name()
+		if relative != "." {
+			path = filepath.Join(relative, child.Name())
+		}
+		entries = append(entries, SkillFileEntry{
+			Name:       child.Name(),
+			Path:       filepath.ToSlash(path),
+			Directory:  childInfo.IsDir(),
+			Size:       childInfo.Size(),
+			ModifiedAt: childInfo.ModTime().UTC().Format(time.RFC3339Nano),
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool {
+		if entries[i].Directory != entries[j].Directory {
+			return entries[i].Directory
+		}
+		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
+	})
+	return entries, nil
+}
+
+func cleanRelativeDirectory(directory string) (string, error) {
+	directory = strings.TrimSpace(directory)
+	if directory == "" {
+		return ".", nil
+	}
+	relative := filepath.Clean(filepath.FromSlash(directory))
+	if filepath.IsAbs(relative) || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		return "", errors.New("skill file path must stay inside ~/.onecatch/skills")
+	}
+	return relative, nil
+}
 
 func validateSkillName(name string) error {
 	if len(name) > 64 || !skillNamePattern.MatchString(name) {

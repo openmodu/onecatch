@@ -59,6 +59,14 @@ func (a *Service) ListManagedSkills() ([]skillmanager.Skill, error) {
 	return manager.List()
 }
 
+func (a *Service) ListSkillFiles(directory string) ([]skillmanager.SkillFileEntry, error) {
+	manager, err := a.skillManager()
+	if err != nil {
+		return nil, err
+	}
+	return manager.ListFiles(directory)
+}
+
 func (a *Service) GetSkill(name string) (skillmanager.SkillDocument, error) {
 	manager, err := a.skillManager()
 	if err != nil {
