@@ -85,11 +85,8 @@ details[open] > summary .opened { display: block; }
 .conversation-message-meta { min-width: 0; display: inline-flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .conversation-message-meta time { width: var(--ui-event-time-width); text-align: right; }
 .conversation-round-index { color: #78837b; font: 500 var(--ui-font-micro) "DM Mono", monospace; white-space: nowrap; }
-.markdown-loading, .markdown-plain { white-space: pre-wrap; }
+.markdown-loading { white-space: pre-wrap; }
 .markdown-image-placeholder, .markdown-unsafe-link { color: #78837b; font-style: italic; }
-.markdown-stream-cursor { display: inline-block; width: 7px; height: 1.05em; margin-left: 3px; vertical-align: -.15em; background: #268ca1; animation: markdown-cursor-pulse 1s steps(2, jump-none) infinite; }
-@keyframes markdown-cursor-pulse { 50% { opacity: .25; } }
-@media (prefers-reduced-motion: reduce) { .markdown-stream-cursor { animation: none; } }
 .conversation-round { border: 0; background: transparent; }
 .conversation-round-body { display: grid; gap: 0; padding: 0; }
 .conversation-agent { margin: 0; padding: 16px 14px 17px; border: 1px solid #e0e5e0; border-radius: 10px; background: #fff; transition: background-color 120ms ease; }

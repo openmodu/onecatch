@@ -1,9 +1,7 @@
-import { memo } from "react";
+import { cloneElement, isValidElement, memo } from "react";
 import { Browser } from "@wailsio/runtime";
 import { useTranslation } from "react-i18next";
-import ReactMarkdown from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
-import remarkGfm from "remark-gfm";
+import { Streamdown } from "streamdown";
 
 function SafeLink({ href = "", children, node: _node, ...props }) {
   const external = /^(?:https?:|mailto:)/i.test(href);
@@ -15,34 +13,49 @@ function SafeLink({ href = "", children, node: _node, ...props }) {
   return <a {...props} href={href} onClick={openExternal} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined}>{children}</a>;
 }
 
-// Agent output is untrusted. ReactMarkdown does not enable raw HTML, the
-// sanitizer constrains the generated tree, and images are represented without
-// fetching their URLs from the desktop webview.
-function MarkdownContent({ content, streaming = false, className = "" }) {
+function ImagePlaceholder({ alt = "" }) {
   const { t } = useTranslation();
+  return <span className="markdown-image-placeholder">{t("markdown.image", { alt: alt ? `: ${alt}` : "" })}</span>;
+}
+
+// Keep fenced code in the application's existing, deliberately quiet visual
+// treatment. Streamdown still repairs incomplete fences and memoizes blocks;
+// these overrides only avoid introducing a second code-block toolbar/style.
+function PlainCode({ node: _node, children, ...props }) {
+  return <code {...props}>{children}</code>;
+}
+
+function PlainPre({ node: _node, children, ...props }) {
+  const content = isValidElement(children) ? cloneElement(children, { "data-block": "" }) : children;
+  return <pre {...props}>{content}</pre>;
+}
+
+const MARKDOWN_COMPONENTS = {
+  a: SafeLink,
+  code: PlainCode,
+  img: ImagePlaceholder,
+  pre: PlainPre,
+};
+
+const LINK_SAFETY = { enabled: false };
+
+// Agent output is untrusted. Streamdown sanitizes and hardens its generated
+// tree by default; raw HTML stays disabled here, while images remain inert
+// placeholders so the desktop webview never fetches model-provided URLs.
+function MarkdownContent({ content, streaming = false, className = "" }) {
   const text = String(content || "");
-  // While a message streams, its full text is re-fed here on every ~80ms flush.
-  // Running the whole remark/rehype pipeline that often (and re-parsing an
-  // ever-longer string) is the single biggest source of streaming jank, so the
-  // in-flight message renders as cheap pre-wrapped plain text. Markdown is
-  // parsed exactly once, when the message settles.
-  if (streaming) {
-    return <div className={`markdown-content markdown-plain streaming ${className}`.trim()} aria-busy>
-      {text}
-      <span className="markdown-stream-cursor" aria-hidden="true" />
-    </div>;
-  }
-  return <div className={`markdown-content ${className}`.trim()}>
-    <ReactMarkdown
-      skipHtml
-      remarkPlugins={[remarkGfm]}
-      rehypePlugins={[rehypeSanitize]}
-      components={{
-        a: SafeLink,
-        img: ({ alt = "" }) => <span className="markdown-image-placeholder">{t("markdown.image", { alt: alt ? `: ${alt}` : "" })}</span>,
-      }}
-    >{text}</ReactMarkdown>
-  </div>;
+  return <Streamdown
+    aria-busy={streaming || undefined}
+    caret={streaming ? "block" : undefined}
+    className={`markdown-content ${streaming ? "streaming" : ""} ${className}`.trim()}
+    components={MARKDOWN_COMPONENTS}
+    controls={false}
+    isAnimating={streaming}
+    lineNumbers={false}
+    linkSafety={LINK_SAFETY}
+    mode={streaming ? "streaming" : "static"}
+    skipHtml
+  >{text}</Streamdown>;
 }
 
 export default memo(MarkdownContent);
