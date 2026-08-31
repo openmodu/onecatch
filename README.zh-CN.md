@@ -126,6 +126,8 @@ go tool wails3 task build:worker
 
 根目录 [`VERSION`](VERSION) 是安装包版本来源，只接受 `X.Y.Z` 三段数字：
 
+桌面构建会把该值同步到 Wails/macOS 元数据，并注入 Go 可执行文件。不要直接修改生成的版本字段；可通过 `go tool wails3 task version:check` 校验一致性。
+
 ```bash
 go tool wails3 task package:desktop
 ```
@@ -136,7 +138,17 @@ Windows 打包前需要安装 [NSIS](https://nsis.sourceforge.io/)：
 winget install NSIS.NSIS
 ```
 
-Linux 使用 GTK4 和 WebKitGTK 6.0；`.deb` 与 AppImage 都包含桌面端调用的 worker、shell 和 SSH askpass。
+Linux 使用 GTK4 和 WebKitGTK 6.0；`.deb` 与 AppImage 都包含桌面端调用的 worker、shell、SSH askpass 和更新 helper。
+
+桌面端每 6 小时自动检查一次更新，也可在“设置 → 外观 → 软件更新”手动检查。更新清单按平台和架构拆分为 Sparkle AppCast；下载包必须通过构建时固定的 Ed25519 公钥验签。macOS 替换完整 `.app`，Windows 静默运行完整 Setup，Linux AppImage 原位切换；新进程未能在 45 秒内启动时，Windows 和 AppImage 会恢复旧安装。`.deb` 安装由系统包管理器管理，因此只提示手动更新。这是带回滚的无感重启，不是在运行中的进程内替换代码。
+
+仓库中的 [`build/update/public-key.base64`](build/update/public-key.base64) 是发布信任根。私钥只应保存在发布者的安全存储和 GitHub Actions Secret 中；不要因为新 clone 中没有私钥就重新生成。发布维护者取得匹配私钥后设置 Secret：
+
+```bash
+gh secret set ONECATCH_UPDATE_PRIVATE_KEY < /secure/path/update-ed25519-private.pem
+```
+
+有计划地轮换时使用 `node build/scripts/update-feed.mjs keygen --force` 生成新密钥；公钥变更必须先随旧密钥签名的过渡版本发布，否则旧客户端无法信任使用新密钥签名的后续版本。发布工作流会拒绝缺失私钥或公私钥不匹配的标签构建。
 
 正式发布时，先修改并提交 `VERSION`，再推送同版本标签：
 
@@ -145,7 +157,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-标签必须等于 `v` 加 `VERSION` 的内容。GitHub Actions 会构建 macOS DMG、Windows Setup、Linux `.deb` 和 AppImage，校验后把安装包及 SHA-256 文件发布到对应的 GitHub Release。
+标签必须等于 `v` 加 `VERSION` 的内容。GitHub Actions 会构建 macOS DMG 和完整 `.app` 更新 ZIP、Windows Setup、Linux `.deb` 和 AppImage，再生成签名 AppCast 与 SHA-256 文件并发布到对应的 GitHub Release。
 
 macOS 使用 Developer ID 签名时设置 `SIGN_IDENTITY`；已经通过 `notarytool store-credentials` 保存公证凭据时，再设置 `NOTARY_PROFILE`：
 

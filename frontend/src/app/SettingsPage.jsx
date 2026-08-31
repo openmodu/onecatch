@@ -30,6 +30,7 @@ import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
 import { ConfirmDialog } from "./components/settings/ConfirmDialog.jsx";
 import { demoSettings } from "./settingsDefaults.js";
 import { usesCompactAuxiliaryChrome } from "./platform.js";
+import { appUpdatePercent, useAppUpdate } from "./appUpdate.js";
 
 const sectionMeta = (t) => ["runtime", "harness", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -234,7 +235,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
         </header>
         {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><SettingsButton tone="muted" onClick={reload}>{t("settings.reload")}</SettingsButton></div>}
         {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
-        {section === "runtime" && <InterfaceSettings i18n={i18n} />}
+        {section === "runtime" && <InterfaceSettings i18n={i18n} mode={mode} notify={notify} />}
         {section === "harness" && <HarnessSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} harnessConfigurations={harnessConfigurations} />}
         {section === "terminal" && <TerminalSettings value={draft.terminal || demoSettings.terminal} setValue={(next) => setSectionValue("terminal", next)} errors={errorsByField} />}
         {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
@@ -248,7 +249,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
   </div>;
 }
 
-function InterfaceSettings({ i18n }) {
+function InterfaceSettings({ i18n, mode, notify }) {
   const { t } = useTranslation();
   const [appearance, setAppearance] = useState(readAppearance);
   const updateLanguage = (language) => {
@@ -261,12 +262,51 @@ function InterfaceSettings({ i18n }) {
     setAppearance(next);
     void Events.Emit(APPEARANCE_CHANGED_EVENT, next);
   };
-  return <SettingsSection title={t("settings.interface")} description={t("settings.interfaceDescription")}>
+  return <div className="grid gap-6"><SettingsSection title={t("settings.interface")} description={t("settings.interfaceDescription")}>
     <div className="grid gap-2">
       <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.language")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.languageDescription")}</p></div><SettingsSelect className="w-44 shrink-0" ariaLabel={t("language.label")} value={i18n.resolvedLanguage} onChange={updateLanguage} options={[{ value: "zh-CN", label: t("language.chinese") }, { value: "en", label: t("language.english") }]} /></div>
       <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.colorMode")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.colorModeDescription")}</p></div><div className="appearance-mode-picker inline-flex shrink-0 rounded-md border bg-muted p-0.5" role="radiogroup" aria-label={t("settings.colorMode")}>{themeModes.map((mode) => <Button type="button" variant="ghost" size="xs" role="radio" aria-checked={appearance.theme === mode} className={`rounded-sm px-3 ${appearance.theme === mode ? "bg-background text-foreground shadow-xs hover:bg-background" : "text-muted-foreground"}`} key={mode} onClick={() => updateAppearance({ theme: mode })}>{t(`settings.colorMode.${mode}`)}</Button>)}</div></div>
       <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.chatFontSize")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.chatFontSizeDescription")}</p></div><div className="appearance-font-size-picker inline-flex shrink-0 rounded-md border bg-muted p-0.5" role="radiogroup" aria-label={t("settings.chatFontSize")}>{chatFontSizes.map((size) => <Button type="button" variant="ghost" size="xs" role="radio" aria-checked={appearance.chatFontSize === size} aria-label={t(`settings.chatFontSize.${size}`)} title={t(`settings.chatFontSize.${size}`)} className={`min-w-9 rounded-sm px-2 ${appearance.chatFontSize === size ? "bg-background text-foreground shadow-xs hover:bg-background" : "text-muted-foreground"}`} key={size} onClick={() => updateAppearance({ chatFontSize: size })}><span className="leading-none" style={{ fontSize: { small: 11, standard: 13, large: 15, "extra-large": 17 }[size] }}>A</span><span className="sr-only">{t(`settings.chatFontSize.${size}`)}</span></Button>)}</div></div>
       <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5"><div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">{t("settings.themeColor")}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{t("settings.themeColorDescription")}</p></div><div className="appearance-accent-picker inline-flex shrink-0 gap-1.5" role="radiogroup" aria-label={t("settings.themeColor")}>{accentThemes.map((accent) => <Button type="button" variant="outline" size="xs" role="radio" aria-checked={appearance.accent === accent} className={appearance.accent === accent ? "border-ring bg-accent text-foreground" : "text-muted-foreground"} key={accent} onClick={() => updateAppearance({ accent })}><i className="size-2.5 rounded-full" style={{ background: ACCENT_SWATCH[accent] }} aria-hidden="true" />{t(`settings.themeColor.${accent}`)}</Button>)}</div></div>
+    </div>
+  </SettingsSection><AppUpdateSettings mode={mode} notify={notify} /></div>;
+}
+
+function AppUpdateSettings({ mode, notify }) {
+  const { t } = useTranslation();
+  const { status, busy, progress, check, download, apply } = useAppUpdate(mode);
+
+  const run = async (action, successKey) => {
+    try {
+      await action();
+      if (successKey) notify("success", t(successKey));
+    } catch (error) {
+      notify("error", message(error, t));
+    }
+  };
+  const state = status?.state || "unconfigured";
+  const available = Boolean(status?.availableVersion);
+  const downloading = ["downloading", "verifying", "installing"].includes(state);
+  const stateLabel = state === "available" ? t("settings.updateAvailable", { version: status.availableVersion })
+    : state === "ready" ? t("settings.updateReady", { version: status.availableVersion })
+      : state === "up-to-date" ? t("settings.updateCurrent")
+        : state === "unconfigured" ? t("settings.updateDisabled")
+          : t(`settings.updateState.${state}`, { defaultValue: state });
+  const percent = appUpdatePercent(progress);
+
+  return <SettingsSection title={t("settings.appUpdate")} description={t("settings.appUpdateDescription")}>
+    <div className="grid gap-2">
+      <div className="flex items-center justify-between gap-6 rounded-lg bg-muted/35 px-4 py-3.5">
+        <div className="min-w-0"><h4 className="m-0 text-sm font-medium text-foreground">OneCatch {status?.currentVersion || "—"}</h4><p className="mt-0.5 mb-0 text-xs leading-relaxed text-muted-foreground">{stateLabel}</p></div>
+        <div className="flex shrink-0 items-center gap-2">
+          {state === "ready" ? <SettingsButton tone="primary" disabled={busy || !status.automaticSupported} onClick={() => run(apply)}>{t("settings.restartToUpdate")}</SettingsButton>
+            : available ? <SettingsButton tone="primary" disabled={busy || downloading} onClick={() => run(download, "settings.updateVerified")}>{downloading ? t("settings.downloadingUpdate") : t("settings.downloadUpdate")}</SettingsButton>
+              : <SettingsButton tone="muted" disabled={busy || state === "unconfigured" || state === "checking"} onClick={() => run(check)}>{state === "checking" ? t("settings.checkingUpdate") : t("settings.checkForUpdates")}</SettingsButton>}
+        </div>
+      </div>
+      {downloading && progress && <div className="rounded-lg bg-muted/35 px-4 py-3"><div className="mb-2 flex justify-between text-xs text-muted-foreground"><span>{t("settings.downloadingUpdate")}</span><span>{progress.total > 0 ? `${percent}%` : bytes(progress.written)}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${percent}%` }} /></div></div>}
+      {!status?.automaticSupported && status?.verificationEnabled && <p className="m-0 rounded-lg bg-warning/8 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">{t("settings.manualUpdateRequired")}</p>}
+      <p className="m-0 px-1 text-[11px] leading-relaxed text-muted-foreground">{t("settings.updateSecurityNote")}</p>
     </div>
   </SettingsSection>;
 }

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Clipboard } from "@wailsio/runtime";
 import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Copy, FilePenLine, LoaderCircle, Search, Terminal, TriangleAlert, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fileName, formatDateTime, formatDuration, formatMessageDateTime, formatTime } from "../format.js";
 import { groupRoundItems } from "../runConversation.js";
 import { Action } from "../../ui/primitives.jsx";
@@ -48,7 +49,7 @@ function MessageActions({ at, content, align = "start" }) {
   const copyLabel = copied ? t("timeline.messageCopied") : t("timeline.copyMessage");
   return <div className={`conversation-message-actions ${align}`}>
     <time dateTime={at || undefined} title={formatDateTime(at)}>{formatMessageDateTime(at)}</time>
-    <Button type="button" variant="ghost" size="icon-xs" className="conversation-message-copy" aria-label={copyLabel} title={copyLabel} onClick={copyMessage}>{copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}</Button>
+    <Tooltip><TooltipTrigger asChild><Button type="button" variant="ghost" size="icon-xs" className="conversation-message-copy" aria-label={copyLabel} onClick={copyMessage}>{copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}</Button></TooltipTrigger><TooltipContent side="top" sideOffset={6}>{copyLabel}</TooltipContent></Tooltip>
   </div>;
 }
 
@@ -103,6 +104,15 @@ function toolIcon(entry) {
   return Wrench;
 }
 
+function toolDuration(entry, running) {
+  if (entry.kind !== "tool_use" || !entry.at) return "";
+  const startedAt = new Date(entry.at).getTime();
+  const finishedAt = new Date(entry.finishedAt || 0).getTime();
+  if (!Number.isFinite(startedAt)) return "";
+  const end = Number.isFinite(finishedAt) && finishedAt ? finishedAt : running ? Date.now() : 0;
+  return end ? formatDuration(Math.max(0, end - startedAt)) : "";
+}
+
 function ToolTimelineItem({ entry, running, stalled, time }) {
   const { t } = useTranslation();
   const labels = { tool_use: t("timeline.toolUse"), tool_result: t("timeline.result"), file_change: t("timeline.fileChange"), reasoning: t("timeline.process") };
@@ -110,8 +120,9 @@ function ToolTimelineItem({ entry, running, stalled, time }) {
   const state = failed ? t("timeline.failed") : running ? t("timeline.executing") : stalled ? t("timeline.incomplete") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.done");
   const ToolIcon = toolIcon(entry);
   const StateIcon = failed ? TriangleAlert : running ? LoaderCircle : stalled ? Clock3 : Check;
+  const duration = toolDuration(entry, running);
   return <details className={`conversation-tool kind-${entry.kind} ${running ? "running" : ""} ${failed ? "failed" : ""} ${stalled ? "stalled" : ""}`}>
-    <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-icon"><ToolIcon aria-hidden="true" /></span><span className="conversation-tool-heading"><strong title={entry.title}>{entry.title}</strong></span><span className="conversation-tool-state" title={state} role="status" aria-label={state}><StateIcon className={running ? "conversation-tool-state-icon spinning" : "conversation-tool-state-icon"} aria-hidden="true" /></span><span className="conversation-tool-caret"><ChevronRight className="closed" strokeWidth={2.25} /><ChevronDown className="opened" strokeWidth={2.25} /></span><time className="sr-only">{time ?? formatTime(entry.at)}</time></span></summary>
+    <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-icon"><ToolIcon aria-hidden="true" /></span><span className="conversation-tool-heading"><strong title={entry.title}>{entry.title}</strong><span className="conversation-tool-meta"><time dateTime={entry.at || undefined} title={formatDateTime(entry.at)}>{time ?? formatTime(entry.at)}</time>{duration && <><span aria-hidden="true">·</span><span title={t("timeline.toolDuration", { duration })}>{duration}</span></>}</span></span><span className="conversation-tool-state" title={state} role="status" aria-label={state}><StateIcon className={running ? "conversation-tool-state-icon spinning" : "conversation-tool-state-icon"} aria-hidden="true" /></span><span className="conversation-tool-caret"><ChevronRight className="closed" strokeWidth={2.25} /><ChevronDown className="opened" strokeWidth={2.25} /></span></span></summary>
     <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? t("timeline.path") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.command")}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
   </details>;
 }

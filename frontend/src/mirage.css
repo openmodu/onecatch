@@ -62,7 +62,6 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .conversation-user { border-color: var(--acp-line); border-radius: var(--radius); background: var(--acp-canvas); }
 .conversation-user .markdown-content, .conversation-agent .markdown-content { color: var(--acp-text); font-size: var(--ui-font-emphasis); }
 .markdown-image-placeholder, .markdown-unsafe-link { color: var(--acp-text-soft); }
-.markdown-stream-cursor { background: var(--acp-cyan); }
 .conversation-event-dot.user { color: var(--ui-event-user); filter: drop-shadow(0 0 1px var(--acp-text-muted)); }
 .conversation-event-dot.agent { color: var(--acp-cyan); }
 .conversation-speaker strong, .conversation-speaker time { color: var(--acp-text-soft); font-size: var(--ui-font-caption); }

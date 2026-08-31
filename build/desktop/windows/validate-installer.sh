@@ -37,6 +37,7 @@ makensis \
     "-DAPP_BINARY=$STAGING_ROOT/payload" \
     "-DWORKER_BINARY=$STAGING_ROOT/payload" \
     "-DASKPASS_BINARY=$STAGING_ROOT/payload" \
+    "-DUPDATER_BINARY=$STAGING_ROOT/payload" \
     "-DOUTPUT_FILE=$STAGING_ROOT/OneCatch-validation-Setup.exe" \
     "$STAGING_ROOT/windows/nsis/project.nsi"
 

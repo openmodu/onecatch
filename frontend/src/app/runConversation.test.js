@@ -96,6 +96,20 @@ test("keeps tool calls separate and attaches an adjacent tool result", () => {
   assert.equal(round.items[2].details.length, 0);
 });
 
+test("keeps tool start and finish timestamps for elapsed-time display", () => {
+  const [round] = buildRunConversation({
+    task: {}, run: {}, events: [],
+    workflow: { steps: [{ id: "execute", name: "执行", runtime: "codex" }] },
+    stepRuns: [{ id: "step-1", stepId: "execute", status: "succeeded" }],
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 1, kind: "tool_use", streamId: "call-1", text: "npm test", at: "2026-07-11T10:00:03.250Z" },
+      { stepRunId: "step-1", seq: 2, kind: "tool_result", streamId: "call-1", text: "ok", at: "2026-07-11T10:00:05.750Z" },
+    ],
+  });
+  assert.equal(round.items[0].at, "2026-07-11T10:00:03.250Z");
+  assert.equal(round.items[0].finishedAt, "2026-07-11T10:00:05.750Z");
+});
+
 test("groups only adjacent process rows and preserves text-tool-text order", () => {
   const blocks = groupRoundItems([
     { type: "message", id: "intro", text: "先检查" },

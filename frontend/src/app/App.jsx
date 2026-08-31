@@ -1503,6 +1503,8 @@ function App() {
         onCollapsedChange={setSidebarCollapsed}
         onWidthChange={setSidebarWidth}
         compactViewport={compactViewport}
+        mode={mode}
+        notify={notify}
       />
 
       <main className="flex min-h-0 min-w-0 flex-col overflow-hidden bg-background">

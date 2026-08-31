@@ -1,45 +1,64 @@
-# macOS auxiliary window design QA
+# Design QA — Sidebar update control
 
-- Source visual truth: Settings `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-a3627999-61a3-44ca-bf56-4e3cf395202f.png`; Workflows `/var/folders/nz/tjb3cj6s3cb3jrvrp27yf9x00000gn/T/codex-clipboard-7e9b5654-ae8f-4c70-9d23-ff27d2431932.png`
-- Implementation screenshots: Settings `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/settings-macos-centered-clean.jpg`; Workflows `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/workflow-macos-current.png`
-- Combined comparisons: Settings `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/settings-macos-centered-comparison.png`; Workflows `/Users/ityike/.codex/visualizations/2026/08/30/01a05089-d7e4-7242-8da5-71581b724b54/workflow-macos-comparison.png`
-- Viewports: Settings 959 × 799 CSS pixels; Workflows 1039 × 759 CSS pixels
-- Pixel dimensions and density: Settings source 1918 × 1598 at 2×, normalized to 959 × 799; implementation 959 × 799 at 1×. Workflows source 2078 × 1518 at 2×, normalized to 1039 × 759; implementation 1039 × 759 at 1×.
-- State: macOS light appearance; Settings Appearance section selected; Workflows detail view selected
-- Primary interactions tested: loaded Settings, switched from Appearance to Terminal, and returned to Appearance; loaded the Workflows detail window
-- Console errors: none
+## Comparison target
 
-## Full-view comparison evidence
+- Source visual truth: `/var/folders/b1/0fd1b6hs7lz0fm_mh346lybm0000gn/T/codex-clipboard-78a1fe0f-7298-414f-bd6b-e86c783f4f77.png`
+- Rendered implementation, available state: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/update-button-light-available.png`
+- Rendered implementation, downloading state: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/update-button-downloading.png`
+- Rendered implementation, ready state: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/update-button-ready.png`
+- Full comparison evidence: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/comparison-full-light.png`
+- Focused footer comparison evidence: `/Users/bytedance/Code/go/src/github.com/openmodu/onecatch/artifacts/design-qa/comparison-footer-light.png`
+- Browser viewport / implementation CSS size: `1182 × 704` at device scale factor `1`.
+- Source pixels: `1182 × 676`. The source is an annotated partial desktop capture rather than the same full app state.
+- Implementation pixels: `1182 × 704`.
+- Density normalization: the source footer crop (`424 × 168`) was downsampled to `212 × 84` to match the implementation sidebar footer crop (`212 × 84`). The full comparison pads the source to `1182 × 704` without scaling.
+- Compared state: light theme, new version available, sidebar expanded. The source specifies the target slot only; it does not prescribe the update icon or prompt styling.
 
-The normalized Settings comparison shows “设置” centred in the full-width top drag strip, matching the title treatment already used by Workflows. The macOS title strip no longer paints a 216 × 52 rectangular sidebar surface: the computed background is transparent and the native inset sidebar remains the only coloured panel under the traffic lights. The redundant “偏好设置” heading remains absent.
+## Full-view comparison
 
-The Workflows comparison continues to show “工作流” centred at the top of the full window, while Windows and Linux keep their compact sidebar title branch.
+The implementation preserves the existing OneCatch layout and adds no new page or route. The update control remains confined to the bottom navigation row, so the task list, composer, and main content proportions are unchanged. The prompt opens upward inside the sidebar and does not cover the main workbench.
 
-## Focused region evidence
+## Focused footer comparison
 
-The full-view comparison renders the title and traffic-light region at sufficient size, so an additional crop was not needed. Computed evidence for Settings confirms the title occupies the full 959px strip and centres at x = 479.5, the macOS sidebar-title overlay has a transparent background and no right border, the inset sidebar clip remains `inset(8px 4px 8px 8px round 16px)`, and no “偏好设置” element is rendered. Native traffic lights are not drawn by the browser preview, so their placement is taken from the source image.
+The update control center aligns with the annotated empty slot to the right of “菜单”. The menu icon and label retain their original baseline and left padding. The 28 px update button stays inside the rounded sidebar inset, while the available-state dot and callout remain readable in both light and dark themes.
+
+## Required fidelity surfaces
+
+- Fonts and typography: existing application font, weights, sizes, and line heights are reused. The prompt uses the same small UI hierarchy as current menus and tooltips; no wrapping or truncation issue was observed.
+- Spacing and layout rhythm: the footer remains 52 px high. The update button is 28 px, inset 16 px from the right, and vertically centered at 12 px from the row top. Its center matches the annotated target after density normalization.
+- Colors and visual tokens: the control uses existing sidebar, primary, muted, border, popover, and destructive tokens. Light and dark themes were both rendered and inspected; contrast and state emphasis remain consistent with the product.
+- Image quality and asset fidelity: no raster asset was required. Icons come from the product's existing Lucide icon library. The progress indicator is a vector data gauge shared with the existing context gauge and remains sharp at the compact size.
+- Copy and content: available, download progress, verification, error, and restart labels are localized in Chinese and English. The visible prompt says a new version was found and that the right-side button downloads and verifies it.
+
+## Interaction and accessibility checks
+
+- Checked for updates from the idle button.
+- Confirmed the available-version callout, notification dot, and download action.
+- Confirmed a determinate circular download indicator with a live numeric percentage (`84%` capture).
+- Confirmed the verifying transition and ready-to-restart action.
+- Confirmed the demo restart returns to the idle/check state.
+- Confirmed every state has an accessible button label, busy state, tooltip, and polite live announcement for the available-version prompt.
+- Checked browser console: no application errors. The only warning is Wails' expected notice that native bindings are unavailable in a standalone browser preview.
 
 ## Findings
 
-- No actionable P0/P1/P2 differences remain for the requested macOS Settings title placement or protruding sidebar-title background.
-- Fonts and typography: the existing application font stack, 14px title size, semibold weight, and content hierarchy are preserved.
-- Spacing and layout rhythm: the title is centred against the full window rather than the 216px sidebar; the rounded sidebar inset and 216px content grid remain unchanged.
-- Colors and visual tokens: the macOS title overlay is transparent; the sidebar material retains the existing sidebar token. Windows/Linux still apply `var(--sidebar)` to their compact title segment.
-- Image quality and asset fidelity: no image, icon, or raster asset was added or replaced.
-- Copy and content: “设置” remains the window identity and “偏好设置” is absent.
+No actionable P0, P1, or P2 visual or interaction findings remain.
 
 ## Comparison history
 
-1. Earlier macOS Settings implementation kept “设置” in the compact left sidebar title region and painted a rectangular 216 × 52 sidebar-coloured overlay above the inset rounded native panel. These were P2 visual mismatches called out in the annotated source.
-2. Fix: reused the existing desktop-platform helper. Windows/Linux retain the compact left title and coloured sidebar segment; macOS renders the title in a full-window centred layer and leaves the sidebar title segment transparent.
-3. Post-fix evidence: the revised 959 × 799 browser capture shows the centred title and clean rounded sidebar top. DOM inspection confirms title centre x = 479.5, transparent overlay background, 0px overlay border, and zero redundant preferences headings.
+### Iteration 1
 
-## Implementation checklist
+- Earlier finding: `[P1]` the standalone preview entered the checking spinner but did not commit the asynchronous available state under React Strict Mode.
+- Fix: reset the mounted lifecycle guard in effect setup so Strict Mode's setup/cleanup/setup development cycle leaves the live instance writable.
+- Post-fix evidence: `update-button-light-available.png` shows the available prompt; `update-button-downloading.png` shows the determinate circular progress; `update-button-ready.png` shows the restart state.
 
-- [x] Centre the Settings title on macOS, matching Workflows.
-- [x] Remove the macOS rectangular sidebar-title background that protruded over the rounded material.
-- [x] Preserve the inset rounded sidebar and existing Settings content layout.
-- [x] Keep Windows/Linux compact auxiliary chrome unchanged.
-- [x] Verify navigation, console output, targeted tests, and the production build.
+### Iteration 2
+
+- Recompared the normalized source and implementation footer crops in `comparison-footer-light.png`.
+- Result: no P0/P1/P2 differences. The control occupies the requested slot, preserves the menu row alignment, and remains inside the sidebar radius.
+
+## Follow-up polish
+
+No P3 refinement is required for this scope.
 
 final result: passed

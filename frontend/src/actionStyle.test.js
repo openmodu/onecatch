@@ -378,6 +378,8 @@ test("resizing the inspector preserves the minimum usable conversation width", a
   assert.match(workbench, /workbenchWidth - reservedConversationWidth/);
   assert.match(workbench, /new ResizeObserver\(keepConversationUsable\)/);
   assert.match(css, /\.task-workbench\.inspector-open\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(0,\s*var\(--workbench-inspector-width,\s*380px\)\)/s);
+  assert.match(css, /\.workbench-inspector-resize\s*\{[^}]*right:\s*calc\(var\(--workbench-inspector-width,\s*380px\)\s*-\s*18px\)/s, "the resize target must stay out of the conversation scroll surface");
+  assert.match(css, /\.workbench-inspector-resize::after\s*\{[^}]*left:\s*0;[^}]*transform:\s*none;/s, "the visible divider stays on the pane boundary while its hit target moves into the inspector");
   assert.match(css, /\.new-task-toolbar\s*\{[^}]*flex-wrap:\s*nowrap[^}]*\}[\s\S]*?\.new-task-submit-action\s*\{[^}]*min-width:\s*32px/s);
   assert.doesNotMatch(workbench, /workbenchWidth - INSPECTOR_SNAP_DISTANCE/);
 });
@@ -462,7 +464,10 @@ test("the transcript follows Codex's user, process, and answer rhythm", async ()
   assert.match(timeline, /<MessageActions at=\{item\.at\} content=\{item\.text\} align="end"/, "user messages expose hover actions");
   assert.match(timeline, /<MessageActions at=\{entry\.at \|\| round\.finishedAt \|\| round\.startedAt\} content=\{entry\.text\}/, "assistant messages expose hover actions");
   assert.match(timeline, /<Copy aria-hidden="true"/, "message actions must include a copy control");
+  assert.match(timeline, /<TooltipContent side="top" sideOffset=\{6\}>\{copyLabel\}<\/TooltipContent>/, "copy help belongs above the action instead of covering the next timeline block");
+  assert.doesNotMatch(timeline, /title=\{copyLabel\}/, "the copy action must not use a browser-native tooltip below the button");
   assert.match(css, /\.conversation-user:hover \.conversation-message-actions[^}]*opacity:\s*1/s, "hovering a user turn must reveal its metadata actions");
+  assert.match(css, /\.conversation-round-body\s*\{[^}]*gap:\s*36px/s, "message hover actions need reserved clearance before the next process or file card");
 });
 
 test("completed conversations remain available for a follow-up turn", async () => {
@@ -503,8 +508,10 @@ test("long user messages collapse behind a measured disclosure", async () => {
 
 test("tool rows spend their width on the command, not on empty columns", async () => {
   const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
+  const timeline = await readFile(path.join(sourceRoot, "app", "components", "ConversationTimeline.jsx"), "utf8");
   // The command owns the flexible track; only the transient state and caret
-  // reserve space beside it. The timestamp remains screen-reader metadata.
+  // reserve space beside it. Timing metadata shares the command's flexible
+  // column on a second line instead of consuming another fixed-width track.
   assert.match(
     css,
     /\.conversation-tool-summary\s*\{[^}]*grid-template-columns:\s*20px\s+minmax\(0,\s*1fr\)\s+auto\s+15px/s,
@@ -519,6 +526,10 @@ test("tool rows spend their width on the command, not on empty columns", async (
   // summary, transient state, and disclosure caret.
   assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*white-space:\s*nowrap/s);
   assert.match(css, /\.conversation-tool-summary strong\s*\{[^}]*text-overflow:\s*ellipsis/s);
+  assert.match(timeline, /className="conversation-tool-meta"/);
+  assert.match(timeline, /dateTime=\{entry\.at \|\| undefined\}/);
+  assert.match(timeline, /t\("timeline\.toolDuration", \{ duration \}\)/);
+  assert.doesNotMatch(timeline, /<time className="sr-only">/, "tool timing must be visible instead of screen-reader-only");
   assert.match(css, /\.conversation-tool\s*\{[^}]*border:\s*0[^}]*background:\s*transparent/s, "tool events must not look like stacked cards");
   assert.match(css, /\.conversation-tool-icon\s*\{[^}]*background:\s*transparent/s, "tool icons stay unboxed like Codex activity rows");
   assert.match(css, /\.conversation-message-actions\s*\{[^}]*opacity:\s*0/s, "message metadata stays quiet until hover or focus");
