@@ -20,6 +20,8 @@ test("the sidebar owns the glanceable update and progress control", async () => 
   const control = await readFile(new URL("./components/SidebarUpdateButton.jsx", import.meta.url), "utf8");
   assert.match(sidebar, /<SidebarUpdateButton mode=\{mode\} notify=\{notify\} \/>/);
   assert.match(control, /data-update-state=\{state\}/);
+  assert.match(control, /if \(!visible\) return null;/, "the sidebar control stays hidden until an update needs attention");
+  assert.doesNotMatch(control, /RefreshCw/, "the sidebar must not expose a permanent manual-check button");
   assert.match(control, /<ProgressRing ratio=\{percent \/ 100\}/);
   assert.match(control, /available \? <Download/);
   assert.match(control, /data-codex-download=\{available \|\| undefined\}/, "an available release must switch the footer control to the Codex-style download action");
@@ -30,6 +32,19 @@ test("the sidebar owns the glanceable update and progress control", async () => 
   assert.match(control, /sidebar-update-control[^\"]*relative grid size-9/, "the updater must occupy its own footer grid cell instead of overlaying the menu");
   assert.match(control, /sidebar-update-trigger[^`]*size-9[^`]*rounded-lg/, "the updater needs its own button surface");
   assert.doesNotMatch(control, /sidebar-update-control[^\"]*absolute/, "the updater must never cover the menu trigger");
+});
+
+test("the sidebar update control appears only for a known update lifecycle", async () => {
+  const { shouldShowSidebarUpdate } = await import("./appUpdate.js");
+  assert.equal(shouldShowSidebarUpdate(null), false);
+  assert.equal(shouldShowSidebarUpdate({ state: "unconfigured" }), false);
+  assert.equal(shouldShowSidebarUpdate({ state: "checking" }), false);
+  assert.equal(shouldShowSidebarUpdate({ state: "up-to-date" }), false);
+  assert.equal(shouldShowSidebarUpdate({ state: "error" }), false);
+  assert.equal(shouldShowSidebarUpdate({ state: "available", availableVersion: "1.2.3" }), true);
+  assert.equal(shouldShowSidebarUpdate({ state: "downloading", availableVersion: "1.2.3" }), true);
+  assert.equal(shouldShowSidebarUpdate({ state: "ready", availableVersion: "1.2.3" }), true);
+  assert.equal(shouldShowSidebarUpdate({ state: "error", availableVersion: "1.2.3" }), true);
 });
 
 test("the settings page keeps software updates to one compact status row", async () => {

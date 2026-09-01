@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CircleAlert, Download, LoaderCircle, RefreshCw, RotateCcw } from "lucide-react";
+import { CircleAlert, Download, LoaderCircle, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { appUpdatePercent, useAppUpdate } from "../appUpdate.js";
+import { appUpdatePercent, shouldShowSidebarUpdate, useAppUpdate } from "../appUpdate.js";
 import { errorMessage } from "../format.js";
 import ProgressRing from "./ProgressRing.jsx";
 
@@ -10,13 +10,14 @@ const activeDownloadStates = new Set(["downloading", "verifying", "installing"])
 
 export default function SidebarUpdateButton({ mode, notify }) {
   const { t } = useTranslation();
-  const { status, progress, busy, check, download, apply } = useAppUpdate(mode);
+  const { status, progress, busy, download, apply } = useAppUpdate(mode);
   const [promptVisible, setPromptVisible] = useState(false);
   const promptedVersion = useRef("");
   const state = status?.state || "unconfigured";
   const percent = appUpdatePercent(progress);
   const available = state === "available" && Boolean(status?.availableVersion);
   const downloading = activeDownloadStates.has(state);
+  const visible = shouldShowSidebarUpdate(status);
   const actionable = !busy && !downloading && state !== "checking" && state !== "unconfigured" && !(state === "ready" && !status?.automaticSupported);
 
   useEffect(() => {
@@ -26,6 +27,8 @@ export default function SidebarUpdateButton({ mode, notify }) {
     const timer = window.setTimeout(() => setPromptVisible(false), 7000);
     return () => window.clearTimeout(timer);
   }, [available, status?.automaticSupported, status?.availableVersion]);
+
+  if (!visible) return null;
 
   const label = available
     ? t("sidebar.updateDownload", { version: status.availableVersion })
@@ -51,8 +54,10 @@ export default function SidebarUpdateButton({ mode, notify }) {
         notify?.("success", t("settings.updateVerified"));
         return;
       }
-      const next = await check();
-      if (next?.state === "up-to-date") notify?.("success", t("settings.updateCurrent"));
+      if (state === "error" && status?.availableVersion) {
+        await download();
+        notify?.("success", t("settings.updateVerified"));
+      }
     } catch (error) {
       notify?.("error", errorMessage(error));
     }
@@ -64,8 +69,7 @@ export default function SidebarUpdateButton({ mode, notify }) {
       ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
       : available ? <Download size={16} strokeWidth={2.2} aria-hidden="true" />
         : state === "ready" ? <RotateCcw size={16} strokeWidth={2.2} aria-hidden="true" />
-          : state === "error" ? <CircleAlert size={16} strokeWidth={2.2} aria-hidden="true" />
-            : <RefreshCw size={15} strokeWidth={2.1} aria-hidden="true" />;
+          : <CircleAlert size={16} strokeWidth={2.2} aria-hidden="true" />;
 
   const ready = state === "ready";
   const failed = state === "error";

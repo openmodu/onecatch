@@ -20,6 +20,17 @@ export function appUpdatePercent(progress) {
   return Math.min(100, Math.max(0, Math.round(progress.written / progress.total * 100)));
 }
 
+const visibleSidebarUpdateStates = new Set(["downloading", "verifying", "installing", "ready"]);
+
+export function shouldShowSidebarUpdate(status) {
+  const state = status?.state;
+  if (state === "available") return Boolean(status?.availableVersion);
+  if (visibleSidebarUpdateStates.has(state)) return true;
+  // Keep a failed download retryable, but do not turn a failed background
+  // check into another permanent sidebar control.
+  return state === "error" && Boolean(status?.availableVersion);
+}
+
 // The workbench sidebar and the standalone Settings window are separate React
 // roots, so updater state is reconciled from the native service and its event
 // stream instead of being owned by either screen. Both surfaces consequently
