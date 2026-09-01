@@ -92,12 +92,6 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Verify release version
-        shell: bash
-        run: |
-          version="$(tr -d '[:space:]' < VERSION)"
-          test "v$version" = "$GITHUB_REF_NAME"
-          go tool wails3 task version:check
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -108,6 +102,12 @@ jobs:
             libgtk-4-dev \
             libwebkitgtk-6.0-dev \
             pkg-config
+      - name: Verify release version
+        shell: bash
+        run: |
+          version="$(tr -d '[:space:]' < VERSION)"
+          test "v$version" = "$GITHUB_REF_NAME"
+          go tool wails3 task version:check
       - name: Build Linux packages
         run: go tool wails3 task package:desktop
       - uses: actions/upload-artifact@v4
