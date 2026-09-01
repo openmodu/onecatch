@@ -67,7 +67,7 @@ export default function SidebarUpdateButton({ mode, notify }) {
     ? <span className="relative grid size-6 place-items-center"><ProgressRing ratio={percent / 100} size={22} radius={8.5} stroke={2.25} /><span className="absolute text-[8px] font-semibold leading-none tabular-nums text-foreground">{percent}</span></span>
     : downloading || state === "checking" || busy
       ? <LoaderCircle size={17} className="animate-spin" aria-hidden="true" />
-      : available ? <Download size={16} strokeWidth={2.2} aria-hidden="true" />
+      : available ? <Download size={15} strokeWidth={2} aria-hidden="true" />
         : state === "ready" ? <RotateCcw size={16} strokeWidth={2.2} aria-hidden="true" />
           : <CircleAlert size={16} strokeWidth={2.2} aria-hidden="true" />;
 
@@ -80,7 +80,7 @@ export default function SidebarUpdateButton({ mode, notify }) {
     </div>}
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className={`sidebar-update-trigger relative grid size-9 place-items-center rounded-lg border-0 p-0 transition-[color,background-color,box-shadow,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/35 ${available ? "bg-info text-info-foreground shadow-sm hover:bg-info/90 active:scale-95" : ready ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-95" : failed ? "bg-transparent text-destructive shadow-none hover:bg-destructive/10" : "bg-transparent text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`} aria-label={label} aria-busy={busy || downloading || state === "checking" || undefined} disabled={!actionable} data-codex-download={available || undefined} data-update-state={state} onClick={() => void act()}>
+        <button type="button" className={`sidebar-update-trigger relative grid size-9 place-items-center rounded-lg border-0 p-0 transition-[color,background-color,box-shadow,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/35 ${available ? "bg-transparent text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-95" : ready ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-95" : failed ? "bg-transparent text-destructive shadow-none hover:bg-destructive/10" : "bg-transparent text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`} aria-label={label} aria-busy={busy || downloading || state === "checking" || undefined} disabled={!actionable} data-codex-download={available || undefined} data-update-state={state} onClick={() => void act()}>
           {icon}
         </button>
       </TooltipTrigger>

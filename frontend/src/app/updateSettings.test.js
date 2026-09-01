@@ -25,8 +25,8 @@ test("the sidebar owns the glanceable update and progress control", async () => 
   assert.match(control, /<ProgressRing ratio=\{percent \/ 100\}/);
   assert.match(control, /available \? <Download/);
   assert.match(control, /data-codex-download=\{available \|\| undefined\}/, "an available release must switch the footer control to the Codex-style download action");
-  assert.match(control, /available \? "bg-info text-info-foreground shadow-sm hover:bg-info\/90 active:scale-95"/, "the Codex-style download action must be a high-contrast filled button");
-  assert.doesNotMatch(control, /available && <i/, "the filled download action must not rely on a tiny notification dot");
+  assert.match(control, /available \? "bg-transparent text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-95"/, "the download action should match the footer's quiet icon controls");
+  assert.doesNotMatch(control, /available && <i/, "the download action must not rely on a tiny notification dot");
   assert.match(control, /state === "ready" \? <RotateCcw/);
   assert.match(control, /role="status" aria-live="polite"/);
   assert.match(control, /sidebar-update-control[^\"]*relative grid size-9/, "the updater must occupy its own footer grid cell instead of overlaying the menu");
