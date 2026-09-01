@@ -27,13 +27,16 @@ test("review combines repository state, diffs and untracked file content", () =>
   assert.match(review, /WorkspaceBinding\.ReadWorkspaceFile\(workspaceID, file\.path\)/);
 });
 
-test("selected Agent produces prioritized line-specific findings", () => {
-  assert.match(review, /<HarnessSelector value=\{reviewProfile\}/);
-  assert.match(review, /GitBinding\.ReviewChanges\(\{ workspaceId: workspaceID, runtime: reviewProfile\.harness/);
-  assert.match(review, /review-finding priority-\$\{finding\.priority\}/);
-  assert.match(review, /finding\.file\}:\$\{finding\.startLine\}/);
-  assert.match(css, /\.review-finding\.priority-0/);
-  assert.match(css, /\.review-diff-line\.review-finding-line/);
+test("review stays focused on the diff without Agent review controls", () => {
+  assert.doesNotMatch(review, /HarnessSelector|ReviewChanges|review-agent|review-finding/);
+  assert.doesNotMatch(css, /review-agent|review-finding|has-agent-review/);
+});
+
+test("long diff lines carry their background through horizontal overflow", () => {
+  assert.match(review, /className="review-diff-canvas"/);
+  assert.match(css, /\.review-diff-canvas\s*\{[^}]*width:\s*max-content;[^}]*min-width:\s*100%;/s);
+  assert.match(css, /\.review-file\s*\{[^}]*width:\s*100%;/s);
+  assert.match(css, /\.review-diff-line\s*\{[^}]*width:\s*100%;/s);
 });
 
 test("review action is optically centered with the file-change disclosure", () => {
@@ -44,9 +47,7 @@ test("review action is optically centered with the file-change disclosure", () =
 });
 
 // The review panel's grid gives its toolbar exactly one 46px row, so nothing in
-// that row may wrap: a two-line title overflows the row instead of growing it,
-// which is how the heading ended up stacked vertically beside the agent
-// controls in a narrow inspector.
+// that row may wrap.
 test("the review toolbar survives a narrow inspector without wrapping", () => {
   const toolbar = css.slice(css.indexOf(".review-toolbar {"), css.indexOf(".review-layout {"));
   assert.match(toolbar, /\.review-toolbar strong \{[^}]*white-space: nowrap/);
@@ -55,48 +56,12 @@ test("the review toolbar survives a narrow inspector without wrapping", () => {
   // are hidden.
   assert.match(toolbar, /\.review-toolbar > div:first-child \{[^}]*flex: 1 1 auto/);
 
-  // Controls drop in priority order rather than colliding.
+  // Secondary information drops before it can collide with the actions.
   assert.match(toolbar, /@container \(max-width: 470px\)[\s\S]*?div:first-child span \{ display: none/);
-  assert.match(toolbar, /@container \(max-width: 400px\)[\s\S]*?review-agent-run-label \{ display: none/);
   assert.match(toolbar, /@container \(max-width: 330px\)[\s\S]*?\.review-stats \{ display: none/);
 
   // Each override has to come after the base rule it overrides, or the cascade
   // resolves the other way on equal specificity.
   assert.ok(css.indexOf("@container (max-width: 330px)") > css.indexOf(".review-stats {"),
     "the narrow-width overrides must follow the base .review-stats rule");
-
-  // Hiding the label leaves the icon alone, so the button needs its own name.
-  assert.match(review, /className="review-agent-run"[^>]*aria-label=\{t\("review\.runAgent"\)\}/);
-  assert.match(review, /<span className="review-agent-run-label">/);
-});
-
-// A toolbar button and an agent name beside it say nothing about what pressing
-// them does. Both controls now explain themselves, and the findings slot
-// explains itself while it is still empty.
-test("the agent review controls say what they do", () => {
-  // The shared selector defaults to claiming it picks a task's execution
-  // target, which is the wrong sentence here — it picks the reviewer.
-  assert.match(review, /labelOverride=\{t\("review\.agentSelect"\)\}/);
-  const selector = readFileSync(new URL("./components/HarnessSelector.jsx", import.meta.url), "utf8");
-  assert.match(selector, /const controlLabel = labelOverride \|\|/);
-
-  // The tooltip has to add something the visible label does not already say.
-  assert.match(review, /title=\{t\("review\.runAgentHint"\)\}/);
-  assert.doesNotMatch(review, /title=\{t\("review\.runAgent"\)\}/);
-
-  // Shown only before a review exists, so real findings replace it rather than
-  // compete with it for the panel's height.
-  assert.match(review, /!agentReview && !reviewing && review\.files\.length > 0 && <p className="review-agent-intro">/);
-  assert.match(review, /t\("review\.agentIntro", \{ agent: runtimeHarness\(reviewProfile\.harness\)\.label \}\)/);
-
-  const strings = readFileSync(new URL("../i18n.js", import.meta.url), "utf8");
-  for (const key of ["review.runAgentHint", "review.agentSelect", "review.agentIntro"]) {
-    // Both languages carry it.
-    const count = strings.split(`"${key}":`).length - 1;
-    assert.equal(count, 2, `${key} must be translated in both languages`);
-  }
-  // The two facts a reader cannot infer from the button: it is read-only, and
-  // it spends quota.
-  assert.match(strings, /"review\.runAgentHint": "[^"]*只读[^"]*额度/);
-  assert.match(strings, /"review\.runAgentHint": "[^"]*never edits files[^"]*quota/);
 });

@@ -1867,20 +1867,6 @@
   .review-toolbar > div:first-child span { color: var(--muted-foreground); font-size: 11px; white-space: nowrap; }
   .review-toolbar button { flex: 0 0 auto; }
 
-  .review-agent-selector {
-    width: auto !important;
-    height: 28px !important;
-    min-width: 94px !important;
-    max-width: 132px !important;
-    padding-inline: 8px !important;
-    border-radius: 7px !important;
-    background: color-mix(in oklab, var(--muted) 72%, transparent) !important;
-    font-size: 10px !important;
-  }
-
-  .review-agent-run { height: 28px; gap: 5px; padding-inline: 9px; font-size: 10px; white-space: nowrap; }
-  .review-agent-run svg { width: 13px; height: 13px; }
-
   .review-stats {
     margin-left: auto;
     display: inline-flex;
@@ -1899,23 +1885,11 @@
   .review-file-stats em,
   .review-file-tree button em { color: var(--destructive); font-style: normal; font-weight: 600; }
 
-  /* The panel's grid reserves exactly one 46px row for this toolbar, so it can
-     never wrap: a title that broke over two lines overflowed the row instead of
-     growing it, which is how "审阅" ended up stacked vertically beside the agent
-     controls. Nothing in the row shrinks below its own text, so a narrow panel
-     drops the least load-bearing controls in order instead of colliding.
-     `.workbench-inspector-body` is the query container. */
+  /* The panel's grid reserves exactly one 46px row for this toolbar, so the
+     title and trailing actions must stay on one line. */
   @container (max-width: 470px) {
     /* The changed-file count is already the file list's own heading. */
     .review-toolbar > div:first-child span { display: none; }
-  }
-
-  @container (max-width: 400px) {
-    /* Icon only: the button keeps its accessible name from aria-label, and its
-       tooltip still spells it out. */
-    .review-agent-run { padding-inline: 8px; }
-    .review-agent-run .review-agent-run-label { display: none; }
-    .review-agent-selector { min-width: 0 !important; max-width: 110px !important; }
   }
 
   @container (max-width: 330px) {
@@ -1939,7 +1913,17 @@
     scrollbar-width: thin;
   }
 
+  /* One intrinsic-width canvas makes every file and line share the width of
+     the longest diff row. Without it, each changed row paints only as far as
+     its own text while the scroller can continue to a longer neighbouring
+     row, leaving a white gap after the add/delete background. */
+  .review-diff-canvas {
+    width: max-content;
+    min-width: 100%;
+  }
+
   .review-file {
+    width: 100%;
     min-width: 620px;
     border-bottom: 1px solid var(--border);
     background: var(--card);
@@ -1984,6 +1968,7 @@
   .review-hunk-header code { overflow: hidden; font: 11px/1.4 var(--font-ui-mono); text-overflow: ellipsis; white-space: nowrap; }
 
   .review-diff-line {
+    width: 100%;
     min-height: 21px;
     display: grid;
     grid-template-columns: 42px 42px 18px minmax(max-content, 1fr);
@@ -1996,9 +1981,6 @@
   .review-diff-line.add { background: color-mix(in oklab, var(--success) 12%, var(--card)); }
   .review-diff-line.delete { background: color-mix(in oklab, var(--destructive) 11%, var(--card)); }
   .review-diff-line.meta { color: var(--muted-foreground); }
-  .review-diff-line.review-finding-line { box-shadow: inset 3px 0 var(--info); }
-  .review-diff-line.review-finding-line.priority-0 { box-shadow: inset 3px 0 var(--destructive); }
-  .review-diff-line.review-finding-line.priority-1 { box-shadow: inset 3px 0 var(--warning); }
 
   .review-line-number {
     padding: 0 7px;
@@ -2021,102 +2003,6 @@
     border-left: 1px solid var(--border);
     background: color-mix(in oklab, var(--sidebar) 64%, var(--card));
   }
-
-  .review-files.has-agent-review { grid-template-rows: minmax(130px, 46%) 36px minmax(0, 1fr); }
-
-  /* Sits in the findings slot while it is empty, so it costs no toolbar space
-     and disappears the moment real findings replace it. */
-  .review-agent-intro {
-    margin: 0;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-    color: var(--muted-foreground);
-    font-size: 11px;
-    line-height: 1.6;
-  }
-
-  .review-findings {
-    min-height: 0;
-    display: grid;
-    grid-template-rows: 36px minmax(0, 1fr);
-    overflow: hidden;
-    border-bottom: 1px solid var(--border);
-    background: color-mix(in oklab, var(--card) 84%, var(--sidebar));
-  }
-
-  .review-findings-heading {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 11px;
-    border-bottom: 1px solid var(--border);
-    color: var(--muted-foreground);
-    font-size: 11px;
-  }
-
-  .review-findings-heading strong { color: var(--foreground); font-size: 11px; }
-  .review-findings-list { min-height: 0; overflow: auto; padding: 7px; }
-
-  .review-agent-summary,
-  .review-agent-partial {
-    margin: 0 2px 7px;
-    color: var(--muted-foreground);
-    font-size: 10.5px;
-    line-height: 1.45;
-  }
-
-  .review-agent-partial { color: var(--warning); }
-
-  .review-finding {
-    width: 100%;
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    gap: 4px 7px;
-    padding: 8px;
-    border: 1px solid color-mix(in oklab, var(--border) 78%, transparent);
-    border-radius: 7px;
-    background: color-mix(in oklab, var(--card) 90%, transparent);
-    color: var(--foreground);
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .review-finding + .review-finding { margin-top: 6px; }
-  .review-finding:hover,
-  .review-finding:focus-visible { border-color: color-mix(in oklab, var(--info) 58%, var(--border)); background: var(--accent); outline: none; }
-
-  .review-finding-priority {
-    min-width: 25px;
-    align-self: start;
-    padding: 2px 4px;
-    border-radius: 4px;
-    background: color-mix(in oklab, var(--info) 14%, transparent);
-    color: var(--info);
-    font: 650 9px/1.2 var(--font-ui-mono);
-    text-align: center;
-  }
-
-  .review-finding.priority-0 .review-finding-priority { background: color-mix(in oklab, var(--destructive) 14%, transparent); color: var(--destructive); }
-  .review-finding.priority-1 .review-finding-priority { background: color-mix(in oklab, var(--warning) 16%, transparent); color: var(--warning); }
-  .review-finding.priority-3 .review-finding-priority { background: var(--muted); color: var(--muted-foreground); }
-  .review-finding > strong { overflow: hidden; font-size: 10.5px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
-  .review-finding > small { grid-column: 2; overflow: hidden; color: var(--muted-foreground); font: 9px/1.25 var(--font-ui-mono); text-overflow: ellipsis; white-space: nowrap; }
-  .review-finding > p { grid-column: 1 / -1; margin: 2px 0 0; color: var(--muted-foreground); font-size: 10px; line-height: 1.42; }
-
-  .review-findings-empty {
-    min-height: 84px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    padding: 14px;
-    color: var(--muted-foreground);
-    font-size: 10.5px;
-    text-align: center;
-  }
-
-  .review-findings-empty svg { width: 15px; height: 15px; }
-  .review-findings-empty.success { color: var(--success); }
 
   .review-files-heading {
     height: 36px;
@@ -2188,17 +2074,6 @@
     .review-layout { grid-template-columns: minmax(0, 1fr); }
     .review-files { display: none; }
     .review-file { min-width: 520px; }
-    .review-layout.has-agent-review { grid-template-rows: minmax(130px, 38%) minmax(0, 1fr); }
-    .review-layout.has-agent-review .review-diff-scroll { grid-row: 2; }
-    .review-layout.has-agent-review .review-files {
-      grid-row: 1;
-      display: grid;
-      grid-template-rows: minmax(0, 1fr);
-      border-left: 0;
-      border-bottom: 1px solid var(--border);
-    }
-    .review-layout.has-agent-review .review-files-heading,
-    .review-layout.has-agent-review .review-file-tree { display: none; }
   }
 
   .workbench-composer {
