@@ -11,6 +11,8 @@ import { directAgentWorkflowID, supportsRuntimeProfile } from "../runtimeHarness
 import HarnessSelector from "./HarnessSelector.jsx";
 import ContextGauge from "./ContextGauge.jsx";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
+import { useCodexSkillPicker } from "./CodexSkillPicker.jsx";
+import CodexSkillTextarea from "./CodexSkillTextarea.jsx";
 import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
 import WorkspaceComposerMeta from "./WorkspaceComposerMeta.jsx";
 
@@ -65,13 +67,23 @@ export default function Composer({
     event.preventDefault();
     void send("queue");
   };
+  const skillPicker = useCodexSkillPicker({
+    enabled: directAgent && runtimeProfile?.harness === "codex" && editable,
+    mode,
+    workspacePath: workspace?.path || "",
+    value: draft,
+    onValueChange: setDraft,
+    textareaRef: draftRef,
+    onKeyDown: submitFromComposer,
+  });
+  const skillHighlight = directAgent && runtimeProfile?.harness === "codex";
 
   return <div className="workbench-composer shrink-0" onMouseDown={preserveComposerFocus}>
     <div className="workbench-composer-inner">
       <div className={`workbench-composer-shell ${editable ? "" : "disabled"}`.trim()}>
         {pendingInstructions.length > 0 && <div className="instruction-queue grid gap-1.5 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground"><span>{t("composer.nextInstructions", { count: pendingInstructions.length })}</span>{pendingInstructions.map((instruction, index) => <div className={`instruction-item flex items-center gap-2 rounded-sm px-1 py-0.5 ${instruction.priority ? "priority text-warning" : ""}`} key={instruction.id}><b>{instruction.priority ? t("composer.priority") : `#${index + 1}`}</b><span>{instruction.content || t("common.attachmentsCount", { count: instruction.attachments?.length || 0 })}</span><Action size="compact" tone="danger" onClick={() => onRemoveInstruction(instruction.id)}>{t("common.remove")}</Action></div>)}</div>}
         {attachments.length > 0 && <div className="composer-attachments flex flex-wrap gap-1.5">{attachments.map((path) => <span className="attachment-chip inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground" key={path} title={path}>{fileName(path)}<Action size="compact" tone="danger" onClick={() => onRemoveAttachment(path)}>{t("common.remove")}</Action></span>)}</div>}
-        <div className="workbench-composer-input"><textarea ref={draftRef} aria-label={t("composer.aria")} value={draft} disabled={!editable} onChange={(event) => setDraft(event.target.value)} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }} onKeyDown={submitFromComposer} placeholder={runStatus === "running" ? t(directAgent ? "composer.directAgentRunningPlaceholder" : "composer.runningPlaceholder") : runStatus === "paused" ? t("composer.pausedPlaceholder") : runStatus === "completed" ? t("composer.continuePlaceholder") : t("composer.finishedPlaceholder")} /></div>
+        <div className="workbench-composer-input"><div className={`codex-skill-field ${skillHighlight ? "has-skill-highlight" : ""}`.trim()}><CodexSkillTextarea ref={draftRef} highlight={skillHighlight} aria-label={t("composer.aria")} value={draft} disabled={!editable} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }} placeholder={runStatus === "running" ? t(directAgent ? "composer.directAgentRunningPlaceholder" : "composer.runningPlaceholder") : runStatus === "paused" ? t("composer.pausedPlaceholder") : runStatus === "completed" ? t("composer.continuePlaceholder") : t("composer.finishedPlaceholder")} {...skillPicker.inputProps} />{skillPicker.menu}</div></div>
         <div className={`workbench-composer-actions ${showRuntimeProfile ? "profile-visible" : ""}`.trim()}>
           {onChooseAttachments && <Button type="button" variant="ghost" size="icon-sm" className="attachment-action" disabled={!editable} aria-label={t("composer.attachment")} title={t("composer.attachment")} onClick={onChooseAttachments}><Paperclip size={16} aria-hidden="true" /></Button>}
           {runtimeProfile && <div className="workbench-runtime-controls">

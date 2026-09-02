@@ -300,6 +300,27 @@ func (a *Service) GetRunStreamSnapshot(runID string) []runstream.Frame {
 
 func (a *Service) ListRuntimes() []RuntimeInfo { return a.runtimes.List() }
 
+// ListCodexSkills returns Codex's effective Skill catalog for a workspace.
+// It deliberately goes through app-server rather than walking ~/.codex so
+// project, system, and plugin Skills obey the same precedence as a real turn.
+func (a *Service) ListCodexSkills(ctx context.Context, cwd string) ([]agentrun.CodexSkill, error) {
+	settings, err := a.settings.Get(ctx)
+	if err != nil {
+		return nil, mapSettingsError(err)
+	}
+	runtimeSettings := settings.Runtimes[string(agentrun.RuntimeCodex)]
+	if !runtimeSettings.Enabled {
+		return nil, coded("runtime_disabled", "Codex is disabled")
+	}
+	cwd = strings.TrimSpace(cwd)
+	if cwd == "" {
+		cwd, _ = os.UserHomeDir()
+	}
+	listCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	return agentrun.NewCodexRunner(runtimeSettings.Binary).ListSkills(listCtx, cwd, allowedEnvironment(runtimeSettings.EnvironmentAllowlist))
+}
+
 // CheckRuntime answers "is this runtime available right now", so unlike
 // ListRuntimes it must not serve a cached probe.
 func (a *Service) CheckRuntime(runtime string) (RuntimeInfo, error) {

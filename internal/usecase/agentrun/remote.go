@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -45,6 +46,22 @@ Use shell commands for all file access; they run on the target:
 
 Paths are the target's own absolute paths. Do not translate them, and do not
 use paths from this machine in a shell command — they do not exist there.`
+
+// remoteCodexGuidance closes a subtle split-filesystem gap in Codex app-server:
+// Skills are discovered and injected by the local app-server, while every tool
+// call is deliberately routed to the remote target. The Skill input item already
+// supplies the complete SKILL.md body, so trying to "read it first" through a
+// remote shell can only fail (and looks exactly like an uninstalled Skill).
+const remoteCodexGuidance = `This Codex session operates on a REMOTE target through OneCatch.
+
+All shell and filesystem tools run on the remote target. Paths in Skill metadata
+may point to OneCatch's local managed CODEX_HOME and do not exist on the remote
+target.
+
+When a Skill is selected, Codex app-server injects the complete SKILL.md content
+into the conversation. Treat that injected content as the required full read of
+the Skill. Do not call a shell or filesystem tool to re-read its SKILL.md path.
+Use remote tools only for paths and work that belong to the remote target.`
 
 // remoteSetup is everything a remote run adds to a harness launch.
 type remoteSetup struct {
@@ -190,7 +207,8 @@ func setupRemoteCodex(req Request) (*remoteSetup, error) {
 			_ = session.Remove()
 			// codexHome is retained under ~/.onecatch so thread/resume can read
 			// the session transcript on a later workflow turn. It contains copies
-			// of auth/config, never links into the user's real CODEX_HOME.
+			// of auth, config and user Skills, never links the home itself into the
+			// user's real CODEX_HOME.
 		},
 	}, nil
 }
@@ -236,12 +254,114 @@ func writeRemoteCodexHome(req Request, name, shell string) (string, error) {
 				return "", fmt.Errorf("copy Codex %s: %w", filename, err)
 			}
 		}
+		if err := syncCodexUserSkills(source, destination); err != nil {
+			return "", err
+		}
 	}
 	toml := seam.EnvironmentsTOML(shell, name)
 	if err := os.WriteFile(filepath.Join(destination, "environments.toml"), []byte(toml), 0o600); err != nil {
 		return "", fmt.Errorf("write Codex remote environment: %w", err)
 	}
 	return destination, nil
+}
+
+// syncCodexUserSkills copies user-installed Skills into the private home used
+// by remote Codex runs. App-server resolves CODEX_HOME/skills locally even
+// when the workspace filesystem is backed by a remote exec-server, so copying
+// keeps the remote seam isolated while making the same user Skills available.
+// System Skills are installed by Codex itself and must not be copied over.
+func syncCodexUserSkills(sourceHome, destinationHome string) error {
+	sourceRoot := filepath.Join(sourceHome, "skills")
+	entries, err := os.ReadDir(sourceRoot)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read Codex user skills: %w", err)
+	}
+	destinationRoot := filepath.Join(destinationHome, "skills")
+	if err := os.MkdirAll(destinationRoot, 0o700); err != nil {
+		return fmt.Errorf("create remote Codex skills: %w", err)
+	}
+	for _, entry := range entries {
+		if entry.Name() == ".system" {
+			continue
+		}
+		source := filepath.Join(sourceRoot, entry.Name())
+		destination := filepath.Join(destinationRoot, entry.Name())
+		if err := os.RemoveAll(destination); err != nil {
+			return fmt.Errorf("replace remote Codex skill %s: %w", entry.Name(), err)
+		}
+		if err := copyCodexSkillPath(source, destination); err != nil {
+			return fmt.Errorf("copy Codex skill %s: %w", entry.Name(), err)
+		}
+	}
+	return nil
+}
+
+func copyCodexSkillPath(source, destination string) error {
+	return copyCodexSkillPathSeen(source, destination, make(map[string]struct{}))
+}
+
+func copyCodexSkillPathSeen(source, destination string, activeDirectories map[string]struct{}) error {
+	info, err := os.Lstat(source)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		resolved, err := filepath.EvalSymlinks(source)
+		if err != nil {
+			return err
+		}
+		source = resolved
+		info, err = os.Stat(source)
+		if err != nil {
+			return err
+		}
+	}
+	if info.IsDir() {
+		canonical, err := filepath.EvalSymlinks(source)
+		if err != nil {
+			return err
+		}
+		if _, cyclic := activeDirectories[canonical]; cyclic {
+			return fmt.Errorf("cyclic directory link at %s", source)
+		}
+		activeDirectories[canonical] = struct{}{}
+		defer delete(activeDirectories, canonical)
+		if err := os.MkdirAll(destination, info.Mode().Perm()); err != nil {
+			return err
+		}
+		entries, err := os.ReadDir(source)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			if err := copyCodexSkillPathSeen(filepath.Join(source, entry.Name()), filepath.Join(destination, entry.Name()), activeDirectories); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("unsupported file mode %s", info.Mode())
+	}
+
+	input, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer input.Close()
+	output, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	_, copyErr := io.Copy(output, input)
+	closeErr := output.Close()
+	if copyErr != nil {
+		return copyErr
+	}
+	return closeErr
 }
 
 func environmentValue(environment []string, name string) string {

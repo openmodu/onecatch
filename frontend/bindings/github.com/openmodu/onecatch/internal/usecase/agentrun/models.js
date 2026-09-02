@@ -279,6 +279,74 @@ export class CodexServiceTier {
 }
 
 /**
+ * CodexSkill is one enabled Skill discovered by Codex for a working directory.
+ * Name is the token users invoke after '$'; Path is sent back to app-server as
+ * an explicit skill input so Codex does not need to resolve the marker again.
+ */
+export class CodexSkill {
+    /**
+     * Creates a new CodexSkill instance.
+     * @param {Partial<CodexSkill>} [$$source = {}] - The source object to create the CodexSkill.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["displayName"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["description"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["shortDescription"] = undefined;
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["scope"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CodexSkill instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {CodexSkill}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CodexSkill(/** @type {Partial<CodexSkill>} */($$parsedSource));
+    }
+}
+
+/**
  * ContextUsage reports how full the model's context window is. It is a
  * different quantity from [Usage] and the two must not be substituted for one
  * another: Usage accumulates every model call in a step, so it only ever grows

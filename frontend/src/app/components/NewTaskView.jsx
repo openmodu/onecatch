@@ -18,6 +18,8 @@ import { autosizeComposerTextarea, NEW_TASK_TEXTAREA_MIN_HEIGHT } from "../compo
 import { fileName } from "../format.js";
 import { runtimeHarnessEnabled, supportsRuntimeProfile, workflowHarnessesEnabled } from "../runtimeHarnesses.js";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
+import { useCodexSkillPicker } from "./CodexSkillPicker.jsx";
+import CodexSkillTextarea from "./CodexSkillTextarea.jsx";
 import TaskExecutorSelector from "./TaskExecutorSelector.jsx";
 import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
 import WorkspaceComposerMeta from "./WorkspaceComposerMeta.jsx";
@@ -69,6 +71,15 @@ export default function NewTaskView({
       void onSubmit();
     }
   };
+  const skillPicker = useCodexSkillPicker({
+    enabled: directAgent && form.harness === "codex",
+    mode,
+    workspacePath: workspace?.path || "",
+    value: form.prompt,
+    onValueChange: (prompt) => onChange((current) => ({ ...current, prompt })),
+    textareaRef: promptRef,
+    onKeyDown: submitFromComposer,
+  });
 
   // overflow-y alone would compute overflow-x to `auto`, so a single control
   // that cannot shrink turns the whole screen into a horizontal scroller.
@@ -81,19 +92,23 @@ export default function NewTaskView({
 
       <div className="new-task-composer-stack">
         <div className="new-task-composer">
-          <Textarea
-            ref={promptRef}
-            id="task-create-goal"
-            className="new-task-prompt"
-            autoFocus
-            value={form.prompt}
-            aria-label={t("task.goal")}
-            placeholder={t("task.goalPlaceholder")}
-            onChange={(event) => onChange((current) => ({ ...current, prompt: event.target.value }))}
-            onCompositionStart={() => { composing.current = true; }}
-            onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }}
-            onKeyDown={submitFromComposer}
-          />
+          <div className={`codex-skill-field ${directAgent && form.harness === "codex" ? "has-skill-highlight" : ""}`.trim()}>
+            <CodexSkillTextarea
+              ref={promptRef}
+              textareaComponent={Textarea}
+              highlight={directAgent && form.harness === "codex"}
+              id="task-create-goal"
+              className="new-task-prompt"
+              autoFocus
+              value={form.prompt}
+              aria-label={t("task.goal")}
+              placeholder={t("task.goalPlaceholder")}
+              onCompositionStart={() => { composing.current = true; }}
+              onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }}
+              {...skillPicker.inputProps}
+            />
+            {skillPicker.menu}
+          </div>
 
           {form.attachmentPaths?.length > 0 && <div className="new-task-attachments">
             {form.attachmentPaths.map((path) => <span className="new-task-attachment" key={path} title={path}>

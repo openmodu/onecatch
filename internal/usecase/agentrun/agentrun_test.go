@@ -137,10 +137,11 @@ while IFS= read -r line; do
   printf '%s\n' "$line" >> "$ONECATCH_CODEX_REQUESTS"
   case "$line" in
     *'"id":1'*) printf '%s\n' '{"id":1,"result":{}}' ;;
-    *'"id":2'*) printf '%s\n' '{"id":2,"result":{"thread":{"id":"thread-warm"}}}' ;;
-    *'"id":3'*)
+    *'"method":"skills/list"'*) printf '%s\n' '{"id":2,"result":{"data":[{"cwd":"REPLACE_CWD","skills":[],"errors":[]}]}}' ;;
+    *'"id":3'*) printf '%s\n' '{"id":3,"result":{"thread":{"id":"thread-warm"}}}' ;;
+    *'"id":4'*)
       turn=$((turn + 1))
-      printf '{"id":3,"result":{"turn":{"id":"turn-%s","status":"inProgress"}}}\n' "$turn"
+      printf '{"id":4,"result":{"turn":{"id":"turn-%s","status":"inProgress"}}}\n' "$turn"
       printf '{"method":"item/started","params":{"threadId":"thread-warm","turnId":"turn-%s","item":{"id":"message-%s","type":"agentMessage","text":""}}}\n' "$turn" "$turn"
       printf '{"method":"item/completed","params":{"threadId":"thread-warm","turnId":"turn-%s","item":{"id":"message-%s","type":"agentMessage","text":"Hello %s"}}}\n' "$turn" "$turn" "$turn"
       printf '{"method":"turn/completed","params":{"threadId":"thread-warm","turn":{"id":"turn-%s","status":"completed"}}}\n' "$turn"
@@ -148,6 +149,7 @@ while IFS= read -r line; do
   esac
 done
 `
+	script = strings.ReplaceAll(script, "REPLACE_CWD", dir)
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -219,7 +221,7 @@ func TestCodexRunnerPassesModelSettingsToAppServer(t *testing.T) {
 	capture := filepath.Join(t.TempDir(), "requests.jsonl")
 	runner := NewCodexRunner(bin)
 	request := Request{
-		Workspace: t.TempDir(), Prompt: "implement it", Sandbox: SandboxWorkspaceWrite,
+		Workspace: t.TempDir(), Prompt: "$git-commit implement it", Sandbox: SandboxWorkspaceWrite,
 		Model: "gpt-test", ReasoningEffort: "high", ServiceTier: "priority",
 		Environment: append(os.Environ(), "ONECATCH_CODEX_CAPTURE="+capture),
 	}
@@ -235,6 +237,9 @@ func TestCodexRunnerPassesModelSettingsToAppServer(t *testing.T) {
 		if !strings.Contains(value, expected) {
 			t.Fatalf("app-server requests missing %s: %s", expected, value)
 		}
+	}
+	if !strings.Contains(value, `{"name":"git-commit","path":"/skills/git-commit/SKILL.md","type":"skill"}`) {
+		t.Fatalf("turn/start did not include the referenced Skill: %s", value)
 	}
 
 	standardCapture := filepath.Join(t.TempDir(), "standard.jsonl")
@@ -314,6 +319,28 @@ done
 	}
 }
 
+func TestCodexRunnerListsEnabledSkills(t *testing.T) {
+	bin := stubCodexAppServerBinary(t)
+	skills, err := NewCodexRunner(bin).ListSkills(context.Background(), t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("skills = %+v", skills)
+	}
+	if skills[0].Name != "git-commit" || skills[0].DisplayName != "Git Commit" || skills[0].ShortDescription != "Create a clean commit" || skills[0].Path != "/skills/git-commit/SKILL.md" {
+		t.Fatalf("skill = %+v", skills[0])
+	}
+}
+
+func TestReferencedCodexSkillsRequireWhitespaceBoundaryAndDeduplicate(t *testing.T) {
+	skills := []CodexSkill{{Name: "git-commit", Path: "/skills/git-commit/SKILL.md"}}
+	got := referencedCodexSkills("price$git-commit $git-commit then $git-commit", skills)
+	if len(got) != 1 || got[0].Name != "git-commit" {
+		t.Fatalf("referenced skills = %+v", got)
+	}
+}
+
 func stubCodexAppServerBinary(t *testing.T) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -329,11 +356,14 @@ while IFS= read -r line; do
     *'"id":1'*)
       printf '%s\n' '{"id":1,"result":{}}'
       ;;
-    *'"id":2'*)
-      printf '%s\n' '{"id":2,"result":{"thread":{"id":"thread-live"}}}'
+    *'"method":"skills/list"'*)
+      printf '%s\n' '{"id":2,"result":{"data":[{"cwd":"REPLACE_CWD","skills":[{"name":"git-commit","description":"Commit changes","path":"/skills/git-commit/SKILL.md","scope":"user","enabled":true,"interface":{"displayName":"Git Commit","shortDescription":"Create a clean commit"}}],"errors":[]}]}}'
       ;;
     *'"id":3'*)
-      printf '%s\n' '{"id":3,"result":{"turn":{"id":"turn-live","status":"inProgress"}}}'
+      printf '%s\n' '{"id":3,"result":{"thread":{"id":"thread-live"}}}'
+      ;;
+    *'"id":4'*)
+      printf '%s\n' '{"id":4,"result":{"turn":{"id":"turn-live","status":"inProgress"}}}'
       printf '%s\n' '{"method":"item/started","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"message-1","type":"agentMessage","text":""}}}'
       printf '%s\n' '{"method":"item/agentMessage/delta","params":{"threadId":"thread-live","turnId":"turn-live","itemId":"message-1","delta":"Hel"}}'
       printf '%s\n' '{"method":"item/agentMessage/delta","params":{"threadId":"thread-live","turnId":"turn-live","itemId":"message-1","delta":"lo"}}'
@@ -347,6 +377,7 @@ while IFS= read -r line; do
   esac
 done
 `
+	script = strings.ReplaceAll(script, "REPLACE_CWD", filepath.Dir(path))
 	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
 		t.Fatalf("write Codex app-server stub: %v", err)
 	}

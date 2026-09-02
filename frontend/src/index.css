@@ -2114,12 +2114,15 @@
     background: transparent;
   }
 
-  .workbench-composer-input textarea {
+  .workbench-composer-input textarea,
+  .workbench-composer-input .codex-skill-input-mirror {
     width: 100%;
     min-height: 76px;
     max-height: 228px;
     overflow-y: hidden;
     resize: none;
+    box-sizing: border-box;
+    padding: 2px;
     border: 0;
     background: transparent;
     color: var(--foreground);
@@ -2130,6 +2133,145 @@
   }
 
   .workbench-composer-input textarea::placeholder { color: var(--muted-foreground); }
+
+  .codex-skill-field {
+    position: relative;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .codex-skill-input-mirror {
+    position: absolute;
+    z-index: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    white-space: pre-wrap;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .codex-skill-field.has-skill-highlight > .codex-skill-textarea {
+    position: relative;
+    z-index: 1;
+    color: transparent !important;
+    caret-color: var(--foreground);
+    -webkit-text-fill-color: transparent;
+  }
+
+  .codex-skill-field.has-skill-highlight > .codex-skill-textarea::placeholder {
+    color: var(--muted-foreground) !important;
+    -webkit-text-fill-color: var(--muted-foreground);
+  }
+
+  .codex-skill-mention {
+    border-radius: 4px;
+    background: color-mix(in oklab, var(--primary) 11%, transparent);
+    color: color-mix(in oklab, var(--primary) 78%, var(--foreground));
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 18%, transparent);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  .workbench-composer-input .codex-skill-field {
+    display: flex;
+  }
+
+  .codex-skill-menu {
+    position: absolute;
+    z-index: 40;
+    bottom: calc(100% + 8px);
+    left: 2px;
+    width: min(520px, calc(100% - 4px));
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: color-mix(in oklab, var(--popover) 97%, transparent);
+    color: var(--popover-foreground);
+    box-shadow: 0 14px 38px color-mix(in oklab, var(--foreground) 14%, transparent), 0 2px 6px color-mix(in oklab, var(--foreground) 6%, transparent);
+    backdrop-filter: blur(18px);
+  }
+
+  .codex-skill-menu-header {
+    display: flex;
+    min-height: 34px;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 10px 0 12px;
+    border-bottom: 1px solid color-mix(in oklab, var(--border) 74%, transparent);
+    color: var(--muted-foreground);
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .codex-skill-menu-header kbd {
+    display: grid;
+    min-width: 20px;
+    height: 20px;
+    place-items: center;
+    padding: 0 5px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    background: var(--muted);
+    font: inherit;
+  }
+
+  .codex-skill-menu-list {
+    max-height: 292px;
+    overflow-y: auto;
+    padding: 5px;
+  }
+
+  .codex-skill-option {
+    width: 100%;
+    display: grid;
+    gap: 2px;
+    padding: 8px 9px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  .codex-skill-option.active {
+    background: var(--accent);
+  }
+
+  .codex-skill-option-name {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--foreground);
+    font-family: var(--font-ui-mono);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .codex-skill-option-description {
+    min-width: 0;
+    overflow: hidden;
+    color: var(--muted-foreground);
+    font-size: 11px;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .codex-skill-menu-state {
+    padding: 18px 12px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+    text-align: center;
+  }
+
+  .codex-skill-menu-state.error { color: var(--destructive); }
 
   .workbench-composer-actions {
     min-width: 0;

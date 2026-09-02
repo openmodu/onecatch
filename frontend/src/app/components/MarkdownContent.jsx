@@ -2,8 +2,11 @@ import { cloneElement, isValidElement, memo } from "react";
 import { Browser } from "@wailsio/runtime";
 import { useTranslation } from "react-i18next";
 import { Streamdown } from "streamdown";
+import { defaultRemarkPlugins } from "streamdown";
+import { remarkCodexSkillMentions } from "../codexSkillMention.js";
 
 function SafeLink({ href = "", children, node: _node, ...props }) {
+  if (href.startsWith("#onecatch-skill:")) return <span className="codex-skill-mention">{children}</span>;
   const external = /^(?:https?:|mailto:)/i.test(href);
   if (!external && !href.startsWith("#")) return <span className="markdown-unsafe-link" title={href}>{children}</span>;
   const openExternal = external ? (event) => {
@@ -55,6 +58,7 @@ const MARKDOWN_COMPONENTS = {
 };
 
 const LINK_SAFETY = { enabled: false };
+const REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkCodexSkillMentions];
 
 // Agent output is untrusted. Streamdown sanitizes and hardens its generated
 // tree by default; raw HTML stays disabled here, while images remain inert
@@ -71,6 +75,7 @@ function MarkdownContent({ content, streaming = false, className = "" }) {
     lineNumbers={false}
     linkSafety={LINK_SAFETY}
     mode={streaming ? "streaming" : "static"}
+    remarkPlugins={REMARK_PLUGINS}
     skipHtml
   >{text}</Streamdown>;
 }

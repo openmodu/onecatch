@@ -42,6 +42,7 @@ type codexAppProcess struct {
 	scanner   *bufio.Scanner
 	stderr    *lineCapture
 	threadID  string
+	skills    []CodexSkill
 	key       string
 	idleTimer *time.Timer
 	stopOnce  sync.Once
@@ -87,6 +88,138 @@ type CodexConfiguration struct {
 	ReasoningEffort string           `json:"reasoningEffort,omitempty"`
 	ServiceTier     string           `json:"serviceTier,omitempty"`
 	Models          []CodexModelInfo `json:"models"`
+}
+
+// CodexSkill is one enabled Skill discovered by Codex for a working directory.
+// Name is the token users invoke after '$'; Path is sent back to app-server as
+// an explicit skill input so Codex does not need to resolve the marker again.
+type CodexSkill struct {
+	Name             string `json:"name"`
+	DisplayName      string `json:"displayName,omitempty"`
+	Description      string `json:"description,omitempty"`
+	ShortDescription string `json:"shortDescription,omitempty"`
+	Path             string `json:"path"`
+	Scope            string `json:"scope,omitempty"`
+}
+
+// ListSkills asks Codex app-server for the effective Skill catalog at cwd.
+// This includes project, user, system, and plugin-provided Skills after Codex
+// has applied its own precedence and enabled-state rules.
+func (r *CodexRunner) ListSkills(ctx context.Context, cwd string, environment []string) ([]CodexSkill, error) {
+	cmd := exec.CommandContext(ctx, r.binary, "app-server", "--listen", "stdio://")
+	configureProcessWindow(cmd)
+	if info, err := os.Stat(cwd); err == nil && info.IsDir() {
+		cmd.Dir = cwd
+	}
+	cmd.Env = environment
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		return nil, fmt.Errorf("Codex app-server stdin: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("Codex app-server stdout: %w", err)
+	}
+	var stderr lineCapture
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start Codex app-server: %w", err)
+	}
+	defer stopCodexAppServer(cmd, stdin)
+
+	encoder := json.NewEncoder(stdin)
+	if err := encoder.Encode(map[string]any{
+		"id": 1, "method": "initialize",
+		"params": map[string]any{
+			"clientInfo":   map[string]string{"name": "onecatch", "title": "OneCatch", "version": "0.1.0"},
+			"capabilities": map[string]any{"experimentalApi": true, "requestAttestation": false},
+		},
+	}); err != nil {
+		return nil, fmt.Errorf("initialize Codex app-server: %w", err)
+	}
+
+	scanner := bufio.NewScanner(stdout)
+	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		var envelope codexAppEnvelope
+		if json.Unmarshal([]byte(line), &envelope) != nil {
+			continue
+		}
+		if envelope.Method != "" && len(envelope.ID) > 0 {
+			_ = respondUnsupportedCodexRequest(encoder, envelope)
+			continue
+		}
+		switch responseID(envelope.ID) {
+		case 1:
+			if len(envelope.Error) > 0 {
+				return nil, fmt.Errorf("initialize Codex app-server: %s", envelope.Error)
+			}
+			if err := encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
+				return nil, err
+			}
+			params := map[string]any{"cwds": []string{cwd}, "forceReload": true}
+			if err := encoder.Encode(map[string]any{"id": 2, "method": "skills/list", "params": params}); err != nil {
+				return nil, err
+			}
+		case 2:
+			if len(envelope.Error) > 0 {
+				return nil, fmt.Errorf("list Codex skills: %s", envelope.Error)
+			}
+			skills, err := decodeCodexSkills(envelope.Result, cwd)
+			if err != nil {
+				return nil, fmt.Errorf("decode Codex skills: %w", err)
+			}
+			return skills, nil
+		}
+	}
+	if err := scanner.Err(); err != nil && ctx.Err() == nil {
+		return nil, fmt.Errorf("read Codex app-server: %w", err)
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return nil, fmt.Errorf("Codex app-server ended before skills were available%s", stderr.tail())
+}
+
+func decodeCodexSkills(raw json.RawMessage, _ string) ([]CodexSkill, error) {
+	var response struct {
+		Data []struct {
+			CWD    string `json:"cwd"`
+			Skills []struct {
+				Name        string `json:"name"`
+				Description string `json:"description"`
+				Path        string `json:"path"`
+				Scope       string `json:"scope"`
+				Enabled     bool   `json:"enabled"`
+				Interface   *struct {
+					DisplayName      string `json:"displayName"`
+					ShortDescription string `json:"shortDescription"`
+				} `json:"interface"`
+			} `json:"skills"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return nil, err
+	}
+	items := make([]CodexSkill, 0)
+	for _, group := range response.Data {
+		for _, item := range group.Skills {
+			if !item.Enabled || strings.TrimSpace(item.Name) == "" || strings.TrimSpace(item.Path) == "" {
+				continue
+			}
+			skill := CodexSkill{Name: item.Name, Description: item.Description, Path: item.Path, Scope: item.Scope}
+			if item.Interface != nil {
+				skill.DisplayName = item.Interface.DisplayName
+				skill.ShortDescription = item.Interface.ShortDescription
+			}
+			items = append(items, skill)
+		}
+	}
+	return items, nil
 }
 
 // InspectConfiguration reads Codex's effective configuration and model catalog
@@ -454,12 +587,15 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 	if warm {
 		state.sessionID = process.threadID
 		sink(Event{Kind: KindStarted, Text: process.threadID, At: r.now()})
-		if err := sendCodexTurnStart(process.encoder, req, process.threadID); err != nil {
+		if err := sendCodexTurnStart(process.encoder, req, process.threadID, process.skills); err != nil {
 			return Result{}, err
 		}
 	} else if err := process.encoder.Encode(map[string]any{
 		"id": 1, "method": "initialize",
-		"params": map[string]any{"clientInfo": map[string]string{"name": "onecatch", "title": "OneCatch", "version": "0.1.0"}},
+		"params": map[string]any{
+			"clientInfo":   map[string]string{"name": "onecatch", "title": "OneCatch", "version": "0.1.0"},
+			"capabilities": map[string]any{"experimentalApi": true, "requestAttestation": false},
+		},
 	}); err != nil {
 		return Result{}, fmt.Errorf("initialize Codex app-server: %w", err)
 	}
@@ -486,28 +622,26 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 			if err := process.encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
 				return Result{}, err
 			}
-			method := "thread/start"
-			params := map[string]any{"cwd": req.Workspace, "approvalPolicy": "never", "sandbox": codexSandbox(req.Sandbox)}
-			if req.ResumeSessionID != "" {
-				method = "thread/resume"
-				params["threadId"] = req.ResumeSessionID
-			}
-			if req.Model != "" {
-				params["model"] = req.Model
-			}
-			if req.ServiceTier != "" {
-				if req.ServiceTier == "standard" {
-					params["serviceTier"] = nil
-				} else {
-					params["serviceTier"] = req.ServiceTier
-				}
-			}
-			if err := process.encoder.Encode(map[string]any{"id": 2, "method": method, "params": params}); err != nil {
+			params := map[string]any{"cwds": []string{req.Workspace}, "forceReload": true}
+			if err := process.encoder.Encode(map[string]any{"id": 2, "method": "skills/list", "params": params}); err != nil {
 				return Result{}, err
 			}
 			continue
 		}
 		if responseID(envelope.ID) == 2 {
+			// Skill discovery enriches explicit `$name` inputs but must not stop a
+			// normal text turn if an older app-server cannot list Skills.
+			if len(envelope.Error) == 0 {
+				if skills, err := decodeCodexSkills(envelope.Result, req.Workspace); err == nil {
+					process.skills = skills
+				}
+			}
+			if err := sendCodexThreadStart(process.encoder, req); err != nil {
+				return Result{}, err
+			}
+			continue
+		}
+		if responseID(envelope.ID) == 3 {
 			if len(envelope.Error) > 0 {
 				return Result{}, fmt.Errorf("start Codex thread: %s", envelope.Error)
 			}
@@ -526,12 +660,12 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 			state.sessionID = response.Thread.ID
 			process.threadID = response.Thread.ID
 			sink(Event{Kind: KindStarted, Text: response.Thread.ID, Raw: line, At: r.now()})
-			if err := sendCodexTurnStart(process.encoder, req, response.Thread.ID); err != nil {
+			if err := sendCodexTurnStart(process.encoder, req, response.Thread.ID, process.skills); err != nil {
 				return Result{}, err
 			}
 			continue
 		}
-		if responseID(envelope.ID) == 3 {
+		if responseID(envelope.ID) == 4 {
 			if len(envelope.Error) > 0 {
 				return state.result(), fmt.Errorf("start Codex turn: %s", envelope.Error)
 			}
@@ -570,8 +704,35 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 	return state.result(), nil
 }
 
-func sendCodexTurnStart(encoder *json.Encoder, req Request, threadID string) error {
-	turnParams := map[string]any{"threadId": threadID, "input": []map[string]string{{"type": "text", "text": req.Prompt}}}
+func sendCodexThreadStart(encoder *json.Encoder, req Request) error {
+	method := "thread/start"
+	params := map[string]any{"cwd": req.Workspace, "approvalPolicy": "never", "sandbox": codexSandbox(req.Sandbox)}
+	if req.Remote != nil {
+		params["developerInstructions"] = remoteCodexGuidance
+	}
+	if req.ResumeSessionID != "" {
+		method = "thread/resume"
+		params["threadId"] = req.ResumeSessionID
+	}
+	if req.Model != "" {
+		params["model"] = req.Model
+	}
+	if req.ServiceTier != "" {
+		if req.ServiceTier == "standard" {
+			params["serviceTier"] = nil
+		} else {
+			params["serviceTier"] = req.ServiceTier
+		}
+	}
+	return encoder.Encode(map[string]any{"id": 3, "method": method, "params": params})
+}
+
+func sendCodexTurnStart(encoder *json.Encoder, req Request, threadID string, skills []CodexSkill) error {
+	input := []map[string]string{{"type": "text", "text": req.Prompt}}
+	for _, skill := range referencedCodexSkills(req.Prompt, skills) {
+		input = append(input, map[string]string{"type": "skill", "name": skill.Name, "path": skill.Path})
+	}
+	turnParams := map[string]any{"threadId": threadID, "input": input}
 	if req.Model != "" {
 		turnParams["model"] = req.Model
 	}
@@ -585,7 +746,48 @@ func sendCodexTurnStart(encoder *json.Encoder, req Request, threadID string) err
 			turnParams["serviceTier"] = req.ServiceTier
 		}
 	}
-	return encoder.Encode(map[string]any{"id": 3, "method": "turn/start", "params": turnParams})
+	return encoder.Encode(map[string]any{"id": 4, "method": "turn/start", "params": turnParams})
+}
+
+func referencedCodexSkills(prompt string, skills []CodexSkill) []CodexSkill {
+	byName := make(map[string]CodexSkill, len(skills))
+	for _, skill := range skills {
+		byName[skill.Name] = skill
+	}
+	seen := make(map[string]struct{})
+	referenced := make([]CodexSkill, 0)
+	for index := 0; index < len(prompt); {
+		marker := strings.IndexByte(prompt[index:], '$')
+		if marker < 0 {
+			break
+		}
+		marker += index
+		if marker > 0 && !isCodexSkillBoundary(prompt[marker-1]) {
+			index = marker + 1
+			continue
+		}
+		end := marker + 1
+		for end < len(prompt) && isCodexSkillNameByte(prompt[end]) {
+			end++
+		}
+		name := prompt[marker+1 : end]
+		if skill, ok := byName[name]; ok {
+			if _, exists := seen[name]; !exists {
+				seen[name] = struct{}{}
+				referenced = append(referenced, skill)
+			}
+		}
+		index = end
+	}
+	return referenced
+}
+
+func isCodexSkillBoundary(value byte) bool {
+	return value == ' ' || value == '\t' || value == '\n' || value == '\r'
+}
+
+func isCodexSkillNameByte(value byte) bool {
+	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z' || value >= '0' && value <= '9' || value == '-' || value == '_' || value == '.' || value == ':'
 }
 
 func codexNotificationMatches(raw json.RawMessage, threadID, turnID string) bool {
