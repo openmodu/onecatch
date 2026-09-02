@@ -209,3 +209,90 @@ func localfileReadJSON(path string, target any) error {
 	}
 	return json.Unmarshal(data, target)
 }
+
+func TestManagerReadsAndWritesSkillResources(t *testing.T) {
+	manager, err := New(filepath.Join(t.TempDir(), ".onecatch", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Create(SaveSkillInput{Name: "release-notes", Content: skillSource("release-notes", "Write release notes")}); err != nil {
+		t.Fatal(err)
+	}
+	references := filepath.Join(manager.Root(), "release-notes", "references")
+	if err := os.MkdirAll(references, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(references, "style.md"), []byte("# Style\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	file, err := manager.ReadFile("release-notes/references/style.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if file.Name != "style.md" || file.Content != "# Style\n" {
+		t.Fatalf("unexpected file: %#v", file)
+	}
+
+	saved, err := manager.WriteFile("release-notes/references/style.md", "# Style\n\nPrefer the imperative mood.\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.SizeBytes != int64(len(saved.Content)) {
+		t.Fatalf("size does not match written content: %#v", saved)
+	}
+	reread, err := manager.ReadFile("release-notes/references/style.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reread.Content != saved.Content {
+		t.Fatalf("write did not land on disk: %q", reread.Content)
+	}
+}
+
+func TestManagerGuardsSkillFileEdits(t *testing.T) {
+	manager, err := New(filepath.Join(t.TempDir(), ".onecatch", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.Create(SaveSkillInput{Name: "release-notes", Content: skillSource("release-notes", "Write release notes")}); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(filepath.Dir(manager.Root()), "escape.md")
+	if err := os.WriteFile(outside, []byte("secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, path := range []string{"", "../escape.md", "release-notes/missing.md", "release-notes"} {
+		if _, err := manager.ReadFile(path); err == nil {
+			t.Fatalf("expected ReadFile(%q) to fail", path)
+		}
+		if _, err := manager.WriteFile(path, "x"); err == nil {
+			t.Fatalf("expected WriteFile(%q) to fail", path)
+		}
+	}
+
+	// A skill's own SKILL.md keeps the frontmatter contract the library relies
+	// on, even when it is edited as a plain file rather than through Update.
+	if _, err := manager.WriteFile("release-notes/SKILL.md", "no frontmatter here\n"); err == nil {
+		t.Fatal("expected SKILL.md without frontmatter to be rejected")
+	}
+	if _, err := manager.WriteFile("release-notes/SKILL.md", skillSource("release-notes", "Rewritten through the file editor")); err != nil {
+		t.Fatal(err)
+	}
+	document, err := manager.Get("release-notes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if document.Description != "Rewritten through the file editor" {
+		t.Fatalf("SKILL.md edit did not refresh the summary: %#v", document.Skill)
+	}
+
+	binary := filepath.Join(manager.Root(), "release-notes", "logo.bin")
+	if err := os.WriteFile(binary, []byte{0x00, 0x01, 0x02}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.ReadFile("release-notes/logo.bin"); err == nil {
+		t.Fatal("expected a binary file to be refused")
+	}
+}

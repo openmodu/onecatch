@@ -4,9 +4,11 @@
 
 export {
     AddTargetInput,
+    SaveSkillFileInput,
     SaveSkillInput,
     Skill,
     SkillDocument,
+    SkillFileContent,
     SkillFileEntry,
     SyncResult,
     SyncTarget

@@ -3,6 +3,7 @@
 package skillmanager
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -25,6 +26,9 @@ import (
 const (
 	metadataVersion = 1
 	maxSkillBytes   = 2 << 20
+	// Resources beside SKILL.md are edited in a plain textarea, so the cap is
+	// about what a person can reasonably review rather than what fits in RAM.
+	maxSkillFileBytes = 1 << 20
 )
 
 var skillNamePattern = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
@@ -54,6 +58,25 @@ type SkillFileEntry struct {
 	Directory  bool   `json:"directory"`
 	Size       int64  `json:"size,omitempty"`
 	ModifiedAt string `json:"modifiedAt,omitempty"`
+}
+
+// SkillFileContent is one editable text file inside the managed Skills root.
+// It is how the Skills inspector reads and writes the resources that sit
+// beside SKILL.md — references, scripts, prompts — without handing the UI a
+// general-purpose filesystem.
+type SkillFileContent struct {
+	Path       string `json:"path"`
+	Name       string `json:"name"`
+	Content    string `json:"content"`
+	SizeBytes  int64  `json:"sizeBytes"`
+	ModifiedAt string `json:"modifiedAt,omitempty"`
+}
+
+// SaveSkillFileInput is a single-argument shape so the generated Wails binding
+// keeps a stable signature as the editor grows.
+type SaveSkillFileInput struct {
+	Path    string `json:"path"`
+	Content string `json:"content"`
 }
 
 type SaveSkillInput struct {
@@ -221,6 +244,132 @@ func (m *Manager) ListFiles(directory string) ([]SkillFileEntry, error) {
 		return strings.ToLower(entries[i].Name) < strings.ToLower(entries[j].Name)
 	})
 	return entries, nil
+}
+
+// ReadFile returns one text file under the managed Skills root. Binary
+// payloads are refused rather than mangled: the caller is a text editor, and
+// round-tripping arbitrary bytes through a JSON string would corrupt them.
+func (m *Manager) ReadFile(path string) (SkillFileContent, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	relative, err := cleanRelativeFile(path)
+	if err != nil {
+		return SkillFileContent{}, err
+	}
+	root, err := os.OpenRoot(m.root)
+	if err != nil {
+		return SkillFileContent{}, fmt.Errorf("open skills root: %w", err)
+	}
+	defer root.Close()
+	file, err := root.Open(relative)
+	if err != nil {
+		return SkillFileContent{}, fmt.Errorf("open skill file: %w", err)
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return SkillFileContent{}, fmt.Errorf("inspect skill file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return SkillFileContent{}, errors.New("skill file path is not a regular file")
+	}
+	if info.Size() > maxSkillFileBytes {
+		return SkillFileContent{}, fmt.Errorf("%s exceeds the %d MiB editor limit", filepath.Base(relative), maxSkillFileBytes>>20)
+	}
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return SkillFileContent{}, fmt.Errorf("read skill file: %w", err)
+	}
+	if bytes.IndexByte(data, 0) >= 0 {
+		return SkillFileContent{}, fmt.Errorf("%s is not a text file", filepath.Base(relative))
+	}
+	return SkillFileContent{
+		Path:       filepath.ToSlash(relative),
+		Name:       filepath.Base(relative),
+		Content:    string(data),
+		SizeBytes:  info.Size(),
+		ModifiedAt: info.ModTime().UTC().Format(time.RFC3339Nano),
+	}, nil
+}
+
+// WriteFile replaces the contents of a file that already exists under the
+// Skills root. Creating files is deliberately not exposed here — the editor
+// edits what the library already contains, and Create owns new skills.
+//
+// A skill's own SKILL.md still goes through the frontmatter validation Update
+// applies, so the library cannot be left with a skill no runtime can load.
+func (m *Manager) WriteFile(path, content string) (SkillFileContent, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	relative, err := cleanRelativeFile(path)
+	if err != nil {
+		return SkillFileContent{}, err
+	}
+	if len(content) > maxSkillFileBytes {
+		return SkillFileContent{}, fmt.Errorf("%s exceeds the %d MiB editor limit", filepath.Base(relative), maxSkillFileBytes>>20)
+	}
+	if skill, ok := skillDocumentPath(relative); ok {
+		if _, err := validateSkillContent(skill, content); err != nil {
+			return SkillFileContent{}, err
+		}
+	}
+	root, err := os.OpenRoot(m.root)
+	if err != nil {
+		return SkillFileContent{}, fmt.Errorf("open skills root: %w", err)
+	}
+	defer root.Close()
+	// Opening through the root is the containment check: it refuses to
+	// traverse a symlink or leave the directory. Only once that succeeds is
+	// the resolved path safe to hand to the atomic writer.
+	existing, err := root.Open(relative)
+	if err != nil {
+		return SkillFileContent{}, fmt.Errorf("open skill file: %w", err)
+	}
+	info, statErr := existing.Stat()
+	existing.Close()
+	if statErr != nil {
+		return SkillFileContent{}, fmt.Errorf("inspect skill file: %w", statErr)
+	}
+	if !info.Mode().IsRegular() {
+		return SkillFileContent{}, errors.New("skill file path is not a regular file")
+	}
+	if err := localfile.WriteTextAtomic(filepath.Join(m.root, relative), content); err != nil {
+		return SkillFileContent{}, fmt.Errorf("write skill file: %w", err)
+	}
+	return SkillFileContent{
+		Path:       filepath.ToSlash(relative),
+		Name:       filepath.Base(relative),
+		Content:    content,
+		SizeBytes:  int64(len(content)),
+		ModifiedAt: m.now().UTC().Format(time.RFC3339Nano),
+	}, nil
+}
+
+// skillDocumentPath reports whether a relative path is a skill's own SKILL.md,
+// which is the one file in the tree that carries library-wide invariants.
+func skillDocumentPath(relative string) (string, bool) {
+	directory, file := filepath.Split(relative)
+	if file != "SKILL.md" {
+		return "", false
+	}
+	name := strings.Trim(filepath.ToSlash(directory), "/")
+	if name == "" || strings.Contains(name, "/") {
+		return "", false
+	}
+	return name, true
+}
+
+func cleanRelativeFile(path string) (string, error) {
+	relative, err := cleanRelativeDirectory(path)
+	if err != nil {
+		return "", err
+	}
+	if relative == "." {
+		return "", errors.New("skill file path is required")
+	}
+	return relative, nil
 }
 
 func cleanRelativeDirectory(directory string) (string, error) {

@@ -67,6 +67,22 @@ func (a *Service) ListSkillFiles(directory string) ([]skillmanager.SkillFileEntr
 	return manager.ListFiles(directory)
 }
 
+func (a *Service) ReadSkillFile(path string) (skillmanager.SkillFileContent, error) {
+	manager, err := a.skillManager()
+	if err != nil {
+		return skillmanager.SkillFileContent{}, err
+	}
+	return manager.ReadFile(path)
+}
+
+func (a *Service) WriteSkillFile(input skillmanager.SaveSkillFileInput) (skillmanager.SkillFileContent, error) {
+	manager, err := a.skillManager()
+	if err != nil {
+		return skillmanager.SkillFileContent{}, err
+	}
+	return manager.WriteFile(input.Path, input.Content)
+}
+
 func (a *Service) GetSkill(name string) (skillmanager.SkillDocument, error) {
 	manager, err := a.skillManager()
 	if err != nil {

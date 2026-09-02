@@ -81,6 +81,16 @@ export function ListSkills() {
 }
 
 /**
+ * @param {string} path
+ * @returns {$CancellablePromise<skillmanager$0.SkillFileContent>}
+ */
+export function ReadFile(path) {
+    return $Call.ByID(3772465252, path).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType7($result);
+    }));
+}
+
+/**
  * @param {string} id
  * @returns {$CancellablePromise<void>}
  */
@@ -93,7 +103,7 @@ export function RemoveSyncTarget(id) {
  */
 export function ScanSyncTargets() {
     return $Call.ByID(2545266950).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType8($result);
     }));
 }
 
@@ -103,7 +113,7 @@ export function ScanSyncTargets() {
  */
 export function Sync(id) {
     return $Call.ByID(3220724177, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType9($result);
     }));
 }
 
@@ -117,6 +127,16 @@ export function UpdateSkill(input) {
     }));
 }
 
+/**
+ * @param {skillmanager$0.SaveSkillFileInput} input
+ * @returns {$CancellablePromise<skillmanager$0.SkillFileContent>}
+ */
+export function WriteFile(input) {
+    return $Call.ByID(207318723, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType7($result);
+    }));
+}
+
 // Private type creation functions
 const $$createType0 = skillmanager$0.SyncTarget.createFrom;
 const $$createType1 = skillmanager$0.SkillDocument.createFrom;
@@ -125,5 +145,6 @@ const $$createType3 = skillmanager$0.SkillFileEntry.createFrom;
 const $$createType4 = $Create.Array($$createType3);
 const $$createType5 = skillmanager$0.Skill.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = $Create.Array($$createType0);
-const $$createType8 = skillmanager$0.SyncResult.createFrom;
+const $$createType7 = skillmanager$0.SkillFileContent.createFrom;
+const $$createType8 = $Create.Array($$createType0);
+const $$createType9 = skillmanager$0.SyncResult.createFrom;

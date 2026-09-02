@@ -41,6 +41,45 @@ export class AddTargetInput {
     }
 }
 
+/**
+ * SaveSkillFileInput is a single-argument shape so the generated Wails binding
+ * keeps a stable signature as the editor grows.
+ */
+export class SaveSkillFileInput {
+    /**
+     * Creates a new SaveSkillFileInput instance.
+     * @param {Partial<SaveSkillFileInput>} [$$source = {}] - The source object to create the SaveSkillFileInput.
+     */
+    constructor($$source = {}) {
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("content" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["content"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SaveSkillFileInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SaveSkillFileInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SaveSkillFileInput(/** @type {Partial<SaveSkillFileInput>} */($$parsedSource));
+    }
+}
+
 export class SaveSkillInput {
     /**
      * Creates a new SaveSkillInput instance.
@@ -212,6 +251,68 @@ export class SkillDocument {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new SkillDocument(/** @type {Partial<SkillDocument>} */($$parsedSource));
+    }
+}
+
+/**
+ * SkillFileContent is one editable text file inside the managed Skills root.
+ * It is how the Skills inspector reads and writes the resources that sit
+ * beside SKILL.md — references, scripts, prompts — without handing the UI a
+ * general-purpose filesystem.
+ */
+export class SkillFileContent {
+    /**
+     * Creates a new SkillFileContent instance.
+     * @param {Partial<SkillFileContent>} [$$source = {}] - The source object to create the SkillFileContent.
+     */
+    constructor($$source = {}) {
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("content" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["content"] = "";
+        }
+        if (!("sizeBytes" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["sizeBytes"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["modifiedAt"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SkillFileContent instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SkillFileContent}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SkillFileContent(/** @type {Partial<SkillFileContent>} */($$parsedSource));
     }
 }
 

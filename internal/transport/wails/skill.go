@@ -19,6 +19,12 @@ func (b *SkillBinding) ListSkills() ([]skillmanager.Skill, error) {
 func (b *SkillBinding) ListFiles(directory string) ([]skillmanager.SkillFileEntry, error) {
 	return b.service.ListSkillFiles(directory)
 }
+func (b *SkillBinding) ReadFile(path string) (skillmanager.SkillFileContent, error) {
+	return b.service.ReadSkillFile(path)
+}
+func (b *SkillBinding) WriteFile(input skillmanager.SaveSkillFileInput) (skillmanager.SkillFileContent, error) {
+	return b.service.WriteSkillFile(input)
+}
 func (b *SkillBinding) GetSkill(name string) (skillmanager.SkillDocument, error) {
 	return b.service.GetSkill(name)
 }
