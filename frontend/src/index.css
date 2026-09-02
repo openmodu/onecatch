@@ -1582,6 +1582,91 @@
   .conversation-process-body > .conversation-tool + .conversation-tool {
     border-top: 1px solid var(--border);
   }
+  .conversation-process-body > .conversation-tool + .conversation-thought,
+  .conversation-process-body > .conversation-thought + .conversation-tool,
+  .conversation-process-body > .conversation-thought + .conversation-thought {
+    border-top: 1px solid var(--border);
+  }
+
+  /* Thinking is narration between operations: no state column, no timestamp,
+     and prose weight rather than the tool row's command line. */
+  .conversation-thought { min-width: 0; }
+
+  .conversation-thought > summary {
+    min-height: 36px;
+    display: block;
+    padding: 0 12px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .conversation-thought > summary::-webkit-details-marker { display: none; }
+
+  .conversation-thought > summary:hover {
+    background: color-mix(in oklab, var(--muted) 42%, transparent);
+  }
+
+  .conversation-thought > summary:focus-visible {
+    outline: 0;
+    background: color-mix(in oklab, var(--muted) 58%, transparent);
+  }
+
+  .conversation-thought-summary {
+    min-height: 36px;
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) 15px;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .conversation-thought-icon {
+    display: grid;
+    width: 20px;
+    height: 20px;
+    place-items: center;
+    color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  }
+
+  .conversation-thought-icon svg { width: 15px; height: 15px; stroke-width: 1.75; }
+
+  .conversation-thought-preview {
+    min-width: 0;
+    color: color-mix(in oklab, var(--muted-foreground) 88%, transparent);
+    font-family: var(--font-ui-sans);
+    font-size: 13px;
+    font-style: italic;
+    font-weight: 400;
+    line-height: 18px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversation-thought > summary:hover .conversation-thought-preview,
+  .conversation-thought[open] .conversation-thought-preview {
+    color: var(--muted-foreground);
+  }
+
+  .conversation-thought-caret { display: grid; place-items: center; color: var(--muted-foreground); opacity: .55; }
+  .conversation-thought-caret svg { width: 15px; height: 15px; }
+  .conversation-thought-caret .opened,
+  .conversation-thought[open] .conversation-thought-caret .closed { display: none; }
+  .conversation-thought[open] .conversation-thought-caret .opened { display: block; }
+
+  .conversation-thought[open] { background: color-mix(in oklab, var(--muted) 20%, transparent); }
+
+  .conversation-thought-body {
+    padding: 2px 12px 12px 40px;
+    border-top: 1px solid color-mix(in oklab, var(--border) 60%, transparent);
+  }
+
+  .conversation-agent .conversation-thought-body .markdown-content {
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-sans);
+    font-size: 13px;
+    font-style: italic;
+    line-height: 1.6;
+  }
 
   .conversation-agent-message.error {
     padding: 10px 12px;

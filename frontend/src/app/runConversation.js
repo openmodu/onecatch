@@ -127,6 +127,22 @@ export function readableToolTitle(value, translate = defaultTranslate) {
   return command || firstLine;
 }
 
+// A thought is prose, not an invocation: readableToolTitle's shell heuristics
+// would rewrite "find the config first" into a `find` command. The collapsed row
+// therefore shows the opening of the thought itself, flattened to one line.
+export function reasoningSummary(value) {
+  // The preview is one line of plain text, so the markers a model wraps its
+  // opening in ("## **Checking the plan**") would only read as noise; the
+  // expanded body still renders the thought as markdown.
+  const text = String(value || "")
+    .replace(/\s+/g, " ")
+    .replace(/^(?:#{1,6} +|> *|[-*+] +)+/, "")
+    .replace(/\*\*|__|\*|`/g, "")
+    .trim();
+  if (!text) return "";
+  return text.length > 160 ? `${text.slice(0, 159)}…` : text;
+}
+
 function commandToolName(value) {
   const first = String(value || "").trim().split(/\s+/, 1)[0] || "";
   return first.split(/[\\/]/).pop() || first;
@@ -211,7 +227,11 @@ function roundItems(events, fallbackText, fallbackError, translate) {
       lastTool = null;
       continue;
     }
-    const invocation = event.kind === "tool_use" ? readableToolInvocation(event.text, translate) : { toolName: "", title: readableToolTitle(event.text, translate), text: event.text };
+    const invocation = event.kind === "tool_use"
+      ? readableToolInvocation(event.text, translate)
+      : event.kind === "reasoning"
+        ? { toolName: "", title: reasoningSummary(event.text), text: event.text }
+        : { toolName: "", title: readableToolTitle(event.text, translate), text: event.text };
     const tool = { type: "tool", id: event.streamId || `${event.kind}-${event.seq}`, kind: event.kind, toolName: invocation.toolName, title: invocation.title, text: invocation.text, streaming: Boolean(event.streaming), at: event.at, details: [], failed: Boolean(event.failed), settled: event.kind !== "tool_use" };
     items.push(tool);
     if (event.kind === "tool_use") {

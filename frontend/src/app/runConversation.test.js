@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildRunConversation, groupRoundItems, readableAgentMessage, readableToolTitle, streamingOutcomeContent } from "./runConversation.js";
+import { buildRunConversation, groupRoundItems, readableAgentMessage, readableToolTitle, reasoningSummary, streamingOutcomeContent } from "./runConversation.js";
 
 test("renders outcome JSON as readable content", () => {
   assert.equal(readableAgentMessage('{"signal":"need_human","content":"请授权浏览器后继续"}'), "请授权浏览器后继续");
@@ -231,4 +231,28 @@ test("keeps an interactive permission card and applies its decision", () => {
   assert.equal(permission.type, "permission");
   assert.equal(permission.request.toolName, "WebFetch");
   assert.equal(permission.decision, "allow");
+});
+
+test("keeps a thought as prose instead of reading it as a command", () => {
+  const [round] = buildRunConversation({
+    task: {}, run: {}, events: [],
+    workflow: { steps: [{ id: "execute", name: "执行", runtime: "pi" }] },
+    stepRuns: [{ id: "step-1", stepId: "execute", status: "succeeded" }],
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 1, kind: "reasoning", text: "find the config file first,\nthen read it." },
+      { stepRunId: "step-1", seq: 2, kind: "tool_use", text: "rg -n config internal" },
+    ],
+  });
+  // readableToolTitle would turn the thought into a `find` invocation.
+  assert.equal(round.items[0].title, "find the config file first, then read it.");
+  assert.equal(round.items[0].text, "find the config file first,\nthen read it.");
+  assert.equal(round.items[1].title, "搜索 rg -n config internal");
+});
+
+test("trims a long thought preview and drops its markdown lead-in", () => {
+  assert.equal(reasoningSummary("## **Checking** the plan"), "Checking the plan");
+  assert.equal(reasoningSummary("  "), "");
+  const long = reasoningSummary("x".repeat(400));
+  assert.equal(long.length, 160);
+  assert.ok(long.endsWith("…"));
 });

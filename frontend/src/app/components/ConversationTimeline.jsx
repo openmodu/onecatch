@@ -98,7 +98,6 @@ function toolIcon(entry) {
   const command = `${entry.toolName || ""} ${entry.title || ""}`.toLocaleLowerCase();
   if (/\b(?:rg|grep|find)\b|(?:搜索|查找|search|find)/.test(command)) return Search;
   if (/\b(?:cat|sed|head|tail|read)\b|(?:读取|read)/.test(command)) return BookOpen;
-  if (entry.kind === "reasoning") return BrainCircuit;
   if (/\b(?:go|npm|pnpm|yarn|bun|git|bash|zsh|sh)\b|(?:运行|检查|run|inspect)/.test(command)) return Terminal;
   return Wrench;
 }
@@ -114,15 +113,29 @@ function toolDuration(entry, running) {
 
 function ToolTimelineItem({ entry, running, stalled }) {
   const { t } = useTranslation();
-  const labels = { tool_use: t("timeline.toolUse"), tool_result: t("timeline.result"), file_change: t("timeline.fileChange"), reasoning: t("timeline.process") };
+  const labels = { tool_use: t("timeline.toolUse"), tool_result: t("timeline.result"), file_change: t("timeline.fileChange") };
   const failed = Boolean(entry.failed);
-  const state = failed ? t("timeline.failed") : running ? t("timeline.executing") : stalled ? t("timeline.incomplete") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.done");
+  const state = failed ? t("timeline.failed") : running ? t("timeline.executing") : stalled ? t("timeline.incomplete") : t("timeline.done");
   const ToolIcon = toolIcon(entry);
   const StateIcon = failed ? TriangleAlert : running ? LoaderCircle : stalled ? Clock3 : Check;
   const duration = toolDuration(entry, running);
   return <details className={`conversation-tool kind-${entry.kind} ${running ? "running" : ""} ${failed ? "failed" : ""} ${stalled ? "stalled" : ""}`}>
     <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-icon"><ToolIcon aria-hidden="true" /></span><span className="conversation-tool-heading"><strong title={entry.title}>{entry.title}</strong><span className="conversation-tool-meta"><time dateTime={entry.at || undefined} title={formatDateTime(entry.at)}>{formatToolTime(entry.at)}</time>{duration && <><span aria-hidden="true">·</span><span title={t("timeline.toolDuration", { duration })}>{duration}</span></>}</span></span><span className="conversation-tool-state" title={state} role="status" aria-label={state}><StateIcon className={running ? "conversation-tool-state-icon spinning" : "conversation-tool-state-icon"} aria-hidden="true" /></span><span className="conversation-tool-caret"><ChevronRight className="closed" strokeWidth={2.25} /><ChevronDown className="opened" strokeWidth={2.25} /></span></span></summary>
-    <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? t("timeline.path") : entry.kind === "reasoning" ? t("timeline.process") : t("timeline.command")}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
+    <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? t("timeline.path") : t("timeline.command")}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
+  </details>;
+}
+
+// Thinking is narration, not an operation, so it gets none of a tool row's
+// apparatus: no completion state, no duration, no monospace command line. The
+// collapsed row is the opening of the thought; opening it renders the whole
+// thing as prose, the way Claude Code and Codex present reasoning.
+function ThoughtTimelineItem({ entry }) {
+  const { t } = useTranslation();
+  const streaming = Boolean(entry.streaming);
+  const preview = streaming ? t("timeline.thinking") : entry.title || t("timeline.thought");
+  return <details className="conversation-thought">
+    <summary aria-label={`${t("timeline.thought")}: ${preview}`}><span className="conversation-thought-summary"><span className="conversation-thought-icon"><BrainCircuit aria-hidden="true" /></span><span className="conversation-thought-preview" title={entry.title}>{preview}</span><span className="conversation-thought-caret"><ChevronRight className="closed" strokeWidth={2.25} /><ChevronDown className="opened" strokeWidth={2.25} /></span></span></summary>
+    <div className="conversation-thought-body"><MessageBody content={entry.text} streaming={streaming} /></div>
   </details>;
 }
 
@@ -162,17 +175,20 @@ function ProcessGroup({ entries, active, round, permissionBusy, onPermissionDeci
   const timeLabel = createTimeLabeler();
   const lastEntry = entries[entries.length - 1];
   const toolCount = entries.filter((entry) => entry.type === "tool" && entry.kind === "tool_use").length;
+  const thoughtCount = entries.filter((entry) => entry.type === "tool" && entry.kind === "reasoning").length;
   const duration = roundDuration(round);
   const label = active
     ? t("timeline.processing")
     : toolCount ? t("timeline.ranTools", { count: toolCount })
-      : duration ? t("timeline.processedFor", { duration }) : t("timeline.processed");
+      : thoughtCount ? t("timeline.thought")
+        : duration ? t("timeline.processedFor", { duration }) : t("timeline.processed");
   return <details className="conversation-process" open={active || undefined}>
     <summary aria-label={`${label} · ${round.runtime}`}><span>{label}</span><ChevronRight className="closed" aria-hidden="true" /><ChevronDown className="opened" aria-hidden="true" /></summary>
     <div className="conversation-process-body">{entries.map((entry, index) => {
       if (entry.type === "permission") {
         return <PermissionTimelineItem key={entry.id} entry={entry} busy={permissionBusy === entry.request?.id} onDecision={onPermissionDecision} time={timeLabel(entry.at)} />;
       }
+      if (entry.kind === "reasoning") return <ThoughtTimelineItem key={entry.id || `thought-${index}`} entry={entry} />;
       const running = Boolean(active) && entry === lastEntry && entry.kind === "tool_use";
       const stalled = !entry.settled && !running && round.status !== "succeeded";
       return <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} running={running} stalled={stalled} />;
