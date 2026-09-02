@@ -24,9 +24,17 @@ test("skill sizes stay compact", () => {
   assert.equal(formatSkillBytes(1536), "1.5 KB");
 });
 
-test("skill library uses selectable cards that adapt to available width", () => {
-  assert.match(page, /function SkillCard/);
+test("skill library is a text-first rail beside one detail pane", () => {
+  assert.match(page, /function SkillRow/);
   assert.match(page, /aria-pressed=\{selected\}/);
-  assert.match(page, /repeat\(auto-fill, minmax\(min\(100%, 220px\), 300px\)\)/);
+  assert.match(page, /grid-cols-\[248px_minmax\(0,1fr\)\]/);
+  // The rail replaced the card grid; cards forced a second scroll region above
+  // the editor and pushed the actual document below the fold.
+  assert.doesNotMatch(page, /repeat\(auto-fill, minmax/);
   assert.doesNotMatch(page, /<SelectTrigger[^>]*skill\.library/);
+});
+
+test("sync is a library-level destination rather than a per-skill tab", () => {
+  assert.match(page, /pane === "sync"/);
+  assert.doesNotMatch(page, /<TabsTrigger[^>]*value="sync"/);
 });

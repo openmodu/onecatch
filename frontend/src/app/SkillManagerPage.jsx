@@ -1,89 +1,112 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bug, FileCode2, FolderSync, Plus, RefreshCw, Save, Trash2, Play, X } from "lucide-react";
+import { Bug, Ellipsis, FileCode2, FolderSync, Plus, RefreshCw, Search, Trash2, Play, X } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { SkillBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { StatusBadge } from "../ui/primitives.jsx";
 import { errorMessage, formatDateTime, formatDuration, formatTokens } from "./format.js";
 import { formatSkillBytes, newSkillTemplate, syncStatusTone } from "./skills.js";
 
-const demoSkill = {
-  name: "release-notes",
-  description: "Write concise, user-facing release notes from a real diff.",
-  path: "~/.onecatch/skills/release-notes/SKILL.md",
-  updatedAt: new Date().toISOString(),
-  sizeBytes: 284,
+// A search field is only worth its chrome once the rail stops fitting on one
+// screen, so the demo library has to be big enough to exercise that branch.
+const SEARCH_THRESHOLD = 4;
+
+const demoSkills = [
+  ["release-notes", "Write concise, user-facing release notes from a real diff."],
+  ["code-review", "Review a diff for correctness and report only what is verified."],
+  ["commit-message", "Draft a Conventional Commits message from the staged changes."],
+  ["api-docs", "Document an HTTP endpoint from its handler and its tests."],
+  ["incident-report", "Turn a run log into a timeline and a root-cause summary."],
+].map(([name, description], index) => ({
+  name,
+  description,
+  path: `~/.onecatch/skills/${name}/SKILL.md`,
+  updatedAt: new Date(Date.now() - index * 3_600_000).toISOString(),
+  sizeBytes: 284 + index * 96,
   digest: "demo",
-  content: newSkillTemplate("release-notes", "Write concise, user-facing release notes from a real diff."),
-};
+  content: newSkillTemplate(name, description),
+}));
 
 const demoTargets = [
-  { id: "codex", name: "Codex", path: "~/.codex/skills", builtin: true, exists: true, status: "synced", syncedSkills: 1, totalSkills: 1, lastSyncedAt: new Date().toISOString(), rsyncAvailable: true },
-  { id: "claude", name: "Claude Code", path: "~/.claude/skills", builtin: true, exists: false, status: "missing", syncedSkills: 0, totalSkills: 1, rsyncAvailable: true },
-  { id: "modu", name: "Modu", path: "~/.modu/skills", builtin: true, exists: true, status: "ready", syncedSkills: 0, totalSkills: 1, rsyncAvailable: true },
+  { id: "codex", name: "Codex", path: "~/.codex/skills", builtin: true, exists: true, status: "synced", syncedSkills: 5, totalSkills: 5, lastSyncedAt: new Date().toISOString(), rsyncAvailable: true },
+  { id: "claude", name: "Claude Code", path: "~/.claude/skills", builtin: true, exists: false, status: "missing", syncedSkills: 0, totalSkills: 5, rsyncAvailable: true },
+  { id: "modu", name: "Modu", path: "~/.modu/skills", builtin: true, exists: true, status: "out-of-sync", syncedSkills: 3, totalSkills: 5, lastSyncedAt: new Date(Date.now() - 86_400_000).toISOString(), rsyncAvailable: true },
 ];
 
-function TargetCard({ target, busy, onSync, onRemove }) {
-  const { t } = useTranslation();
-  const status = t(`skill.syncStatus.${target.status}`, { defaultValue: target.status });
-  return <article className="rounded-xl border bg-card p-4">
-    <div className="flex items-start gap-3">
-      <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"><FolderSync className="size-4" aria-hidden="true" /></span>
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <strong className="text-sm font-semibold text-foreground">{target.name}</strong>
-          <StatusBadge status={syncStatusTone(target.status)}>{status}</StatusBadge>
-        </div>
-        <code className="mt-1.5 block truncate text-[11px] text-muted-foreground" title={target.path}>{target.path}</code>
-      </div>
-      {!target.builtin && <Button variant="ghost" size="icon-xs" disabled={Boolean(busy)} aria-label={t("skill.removeTarget", { name: target.name })} onClick={onRemove}><X aria-hidden="true" /></Button>}
-    </div>
-    <div className="mt-4 flex items-end justify-between gap-4 rounded-lg bg-muted/35 px-3 py-2.5">
-      <div className="min-w-0 text-[11px] leading-relaxed text-muted-foreground">
-        <span className="block">{t("skill.syncedCount", { synced: target.syncedSkills, total: target.totalSkills })}</span>
-        <span className="block truncate">{target.lastSyncedAt ? t("skill.lastSynced", { time: formatDateTime(target.lastSyncedAt) }) : t("skill.neverSynced")}</span>
-        {target.lastError && <span className="mt-1 block text-destructive">{target.lastError}</span>}
-      </div>
-      <Button variant="outline" size="sm" className="shrink-0" disabled={Boolean(busy) || !target.rsyncAvailable} onClick={onSync}>
-        <RefreshCw className={busy === `sync-${target.id}` ? "animate-spin" : ""} aria-hidden="true" />
-        {busy === `sync-${target.id}` ? t("skill.syncing") : t("skill.syncNow")}
-      </Button>
-    </div>
-  </article>;
-}
-
-function SkillCard({ skill, selected, dirty, disabled, onSelect }) {
-  const { t } = useTranslation();
+// The rail rows carry the whole library, so they stay text-first: a name, one
+// line of purpose, and a dot when the open buffer is dirty. Anything heavier
+// (icon tiles, borders, elevation) turns a scannable list into a wall of cards.
+function SkillRow({ skill, selected, dirty, disabled, onSelect }) {
   return <button
     type="button"
-    className={`group flex min-h-28 min-w-0 flex-col rounded-xl border p-4 text-left transition-[border-color,background-color,box-shadow,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-wait disabled:opacity-65 ${selected ? "border-primary/45 bg-primary/6 shadow-sm ring-1 ring-primary/15" : "bg-card hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-sm"}`}
+    className={`group flex w-full min-w-0 flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-wait disabled:opacity-60 ${selected ? "bg-accent" : "hover:bg-accent/45"}`}
     aria-pressed={selected}
     disabled={disabled}
     onClick={onSelect}
   >
-    <span className="flex min-w-0 items-start gap-3">
-      <span className={`grid size-9 shrink-0 place-items-center rounded-lg ${selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground group-hover:text-foreground"}`}><FileCode2 className="size-4" aria-hidden="true" /></span>
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-center gap-2">
-          <strong className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{skill.name}</strong>
-          {selected && dirty && <Badge variant="secondary" className="shrink-0">{t("skill.unsaved")}</Badge>}
-        </span>
-        <span className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">{skill.description}</span>
-      </span>
+    <span className="flex min-w-0 items-center gap-1.5">
+      <strong className={`min-w-0 flex-1 truncate text-[13px] font-medium ${selected ? "text-foreground" : "text-foreground/85"}`}>{skill.name}</strong>
+      {dirty && <i className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />}
     </span>
-    <span className="mt-auto flex items-end justify-between gap-3 pt-3 text-[10px] text-muted-foreground">
-      <span>{formatSkillBytes(skill.sizeBytes)}</span>
-      <span className="truncate text-right">{formatDateTime(skill.updatedAt)}</span>
-    </span>
+    <span className="line-clamp-1 text-[11px] leading-relaxed text-muted-foreground">{skill.description}</span>
   </button>;
+}
+
+function RailTab({ active, icon: Icon, label, onSelect }) {
+  return <button
+    type="button"
+    className={`flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/45 hover:text-foreground"}`}
+    aria-current={active ? "page" : undefined}
+    onClick={onSelect}
+  >
+    <Icon size={14} strokeWidth={2} aria-hidden="true" />
+    <span className="min-w-0 flex-1 truncate">{label}</span>
+  </button>;
+}
+
+function PaneTab({ active, icon: Icon, label, onSelect }) {
+  return <button
+    type="button"
+    className={`relative flex h-9 items-center gap-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+    aria-current={active ? "page" : undefined}
+    onClick={onSelect}
+  >
+    <Icon size={14} strokeWidth={2} aria-hidden="true" />
+    {label}
+    {active && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-foreground" aria-hidden="true" />}
+  </button>;
+}
+
+function TargetRow({ target, busy, onSync, onRemove }) {
+  const { t } = useTranslation();
+  const syncing = busy === `sync-${target.id}`;
+  return <div className="flex items-start gap-4 border-b border-border/50 py-3.5 last:border-b-0">
+    <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <strong className="text-[13px] font-medium text-foreground">{target.name}</strong>
+        <StatusBadge status={syncStatusTone(target.status)}>{t(`skill.syncStatus.${target.status}`, { defaultValue: target.status })}</StatusBadge>
+      </div>
+      <code className="mt-1 block truncate font-mono text-[11px] text-muted-foreground" title={target.path}>{target.path}</code>
+      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+        {t("skill.syncedCount", { synced: target.syncedSkills, total: target.totalSkills })} · {target.lastSyncedAt ? t("skill.lastSynced", { time: formatDateTime(target.lastSyncedAt) }) : t("skill.neverSynced")}
+      </p>
+      {target.lastError && <p className="mt-1 text-[11px] leading-relaxed text-destructive">{target.lastError}</p>}
+    </div>
+    <div className="flex shrink-0 items-center gap-0.5">
+      <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" disabled={Boolean(busy) || !target.rsyncAvailable} onClick={onSync}>
+        <RefreshCw className={syncing ? "animate-spin" : ""} aria-hidden="true" />
+        {syncing ? t("skill.syncing") : t("skill.syncNow")}
+      </Button>
+      {!target.builtin && <Button variant="ghost" size="icon-xs" className="text-muted-foreground" disabled={Boolean(busy)} aria-label={t("skill.removeTarget", { name: target.name })} onClick={onRemove}><X aria-hidden="true" /></Button>}
+    </div>
+  </div>;
 }
 
 export default function SkillManagerPage({ mode, notify, requestConfirm }) {
@@ -95,7 +118,8 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
-  const [tab, setTab] = useState("editor");
+  const [query, setQuery] = useState("");
+  const [pane, setPane] = useState("editor");
   const [createDialog, setCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", description: "" });
   const [targetDialog, setTargetDialog] = useState(false);
@@ -108,7 +132,7 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
   const loadDocument = useCallback(async (name) => {
     if (!name) { setDocument(null); setDraft(""); return; }
     try {
-      const value = mode === "demo" ? { ...demoSkill, name } : await SkillBinding.GetSkill(name);
+      const value = mode === "demo" ? demoSkills.find((item) => item.name === name) || { ...demoSkills[0], name } : await SkillBinding.GetSkill(name);
       setDocument(value);
       setDraft(value.content || "");
       setSelectedName(name);
@@ -122,7 +146,7 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
     setLoading(true);
     try {
       const [skillItems, targetItems] = mode === "demo"
-        ? [[demoSkill], demoTargets]
+        ? [demoSkills, demoTargets]
         : await Promise.all([SkillBinding.ListSkills(), SkillBinding.ScanSyncTargets()]);
       setSkills(skillItems || []);
       setTargets(targetItems || []);
@@ -140,6 +164,7 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
   useEffect(() => { void refresh({ keepSelection: false }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const selectSkill = async (name) => {
+    if (pane === "sync") setPane("editor");
     if (name === selectedName) return;
     if (dirty && !await requestConfirm({ title: t("skill.discardTitle"), description: t("skill.discardChanges"), confirmLabel: t("skill.discard") })) return;
     void loadDocument(name);
@@ -169,14 +194,14 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
     setBusy("create");
     try {
       const content = newSkillTemplate(name, description);
-      const created = mode === "demo" ? { ...demoSkill, name, description, content } : await SkillBinding.CreateSkill({ name, content });
+      const created = mode === "demo" ? { ...demoSkills[0], name, description, content } : await SkillBinding.CreateSkill({ name, content });
       setSkills((items) => [...items.filter((item) => item.name !== created.name), created].sort((a, b) => a.name.localeCompare(b.name)));
       setCreateDialog(false);
       setCreateForm({ name: "", description: "" });
       setDocument(created);
       setDraft(created.content);
       setSelectedName(created.name);
-      setTab("editor");
+      setPane("editor");
       notify("success", t("skill.created"));
       if (mode !== "demo") setTargets(await SkillBinding.ScanSyncTargets());
     } catch (error) {
@@ -274,72 +299,119 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
   };
 
   const debugTokens = useMemo(() => (debugResult?.usage?.inputTokens || 0) + (debugResult?.usage?.outputTokens || 0), [debugResult]);
+  const visibleSkills = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    if (!needle) return skills;
+    return skills.filter((item) => `${item.name} ${item.description || ""}`.toLowerCase().includes(needle));
+  }, [query, skills]);
 
-  return <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-background">
-      <div className="flex h-[52px] shrink-0 items-center gap-2.5 bg-muted/20 px-6">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2"><strong className="truncate text-sm font-semibold text-foreground">{t("skill.title")}</strong>{dirty && <Badge variant="secondary">{t("skill.unsaved")}</Badge>}</div>
-          <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{t("skill.count", { count: skills.length })} · ~/.onecatch/skills</span>
-        </div>
-        <Button variant="outline" size="icon-sm" disabled={Boolean(busy)} aria-label={t("skill.new")} title={t("skill.new")} onClick={() => setCreateDialog(true)}><Plus aria-hidden="true" /></Button>
-        <Button variant="ghost" size="icon-sm" disabled={loading} aria-label={t("common.refresh")} title={t("common.refresh")} onClick={() => void refresh()}><RefreshCw className={loading ? "animate-spin" : ""} aria-hidden="true" /></Button>
-        {document && <Button variant="outline" size="sm" disabled={Boolean(busy) || !dirty} onClick={saveSkill}><Save aria-hidden="true" />{busy === "save" ? t("common.saving") : t("common.save")}</Button>}
+  return <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[248px_minmax(0,1fr)] overflow-hidden bg-background max-[900px]:grid-cols-[196px_minmax(0,1fr)]">
+    <aside className="flex min-h-0 min-w-0 flex-col border-r border-border/60" aria-label={t("skill.library")}>
+      <div className="flex h-12 shrink-0 items-center gap-0.5 pr-2 pl-4">
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.library")}</span>
+        <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={loading} aria-label={t("common.refresh")} title={t("common.refresh")} onClick={() => void refresh()}><RefreshCw className={loading ? "animate-spin" : ""} aria-hidden="true" /></Button>
+        <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={Boolean(busy)} aria-label={t("skill.new")} title={t("skill.new")} onClick={() => setCreateDialog(true)}><Plus aria-hidden="true" /></Button>
       </div>
 
-      {skills.length > 0 && <section className="shrink-0 border-b border-border/70 bg-muted/10 px-6 py-4" aria-label={t("skill.library")}>
-        <div className="max-h-[244px] overflow-y-auto pr-1">
-          <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(min(100%, 220px), 300px))" }}>
-            {skills.map((skill) => <SkillCard
-              key={skill.name}
-              skill={skill}
-              selected={skill.name === selectedName}
-              dirty={dirty && skill.name === selectedName}
-              disabled={Boolean(busy)}
-              onSelect={() => void selectSkill(skill.name)}
-            />)}
-          </div>
+      {skills.length > SEARCH_THRESHOLD && <div className="relative shrink-0 px-3 pb-2">
+        <Search size={13} className="pointer-events-none absolute top-1/2 left-5.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Input className="h-7 rounded-lg border-0 bg-muted/50 pl-6 text-[12px] shadow-none focus-visible:ring-1" aria-label={t("skill.search")} placeholder={t("skill.search")} value={query} onChange={(event) => setQuery(event.target.value)} />
+      </div>}
+
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
+        <div className="flex flex-col gap-px">
+          {visibleSkills.map((skill) => <SkillRow
+            key={skill.name}
+            skill={skill}
+            selected={pane !== "sync" && skill.name === selectedName}
+            dirty={dirty && skill.name === selectedName}
+            disabled={Boolean(busy)}
+            onSelect={() => void selectSkill(skill.name)}
+          />)}
         </div>
-      </section>}
+        {skills.length > 0 && visibleSkills.length === 0 && <p className="px-2.5 py-3 text-[11px] text-muted-foreground">{t("skill.noMatches")}</p>}
+        {!loading && skills.length === 0 && <p className="px-2.5 py-3 text-[11px] leading-relaxed text-muted-foreground">{t("skill.empty")}</p>}
+      </div>
 
-      {document ? <Tabs className="flex min-h-0 flex-1 flex-col" value={tab} onValueChange={setTab}>
-        <div className="flex shrink-0 items-center bg-muted/10 px-6 py-1.5">
-          <TabsList className="h-9 bg-muted/40 p-1">
-            <TabsTrigger className="h-7 px-3" value="editor"><FileCode2 aria-hidden="true" />{t("skill.editor")}</TabsTrigger>
-            <TabsTrigger className="h-7 px-3" value="debug"><Bug aria-hidden="true" />{t("skill.debug")}</TabsTrigger>
-            <TabsTrigger className="h-7 px-3" value="sync"><FolderSync aria-hidden="true" />{t("skill.sync")}</TabsTrigger>
-          </TabsList>
-        </div>
+      <div className="shrink-0 border-t border-border/60 p-2">
+        <RailTab active={pane === "sync"} icon={FolderSync} label={t("skill.sync")} onSelect={() => setPane("sync")} />
+      </div>
+    </aside>
 
-        <TabsContent className="m-0 min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col" value="editor">
-          <div className="flex shrink-0 items-start justify-between gap-6 px-6 py-4">
-            <div className="min-w-0"><h2 className="text-base font-semibold text-foreground">SKILL.md</h2><p className="mt-1 text-xs leading-relaxed text-muted-foreground">{t("skill.editorHint")}</p></div>
-            <div className="shrink-0 text-right text-[10px] leading-relaxed text-muted-foreground"><span className="block">{formatSkillBytes(document.sizeBytes)}</span><span className="block">{formatDateTime(document.updatedAt)}</span></div>
+    {pane === "sync" ? <ScrollArea className="min-h-0 min-w-0">
+      <section className="mx-auto max-w-3xl px-8 pt-8 pb-10">
+        <header className="flex items-start justify-between gap-6">
+          <div className="min-w-0">
+            <h1 className="text-[19px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.syncTitle")}</h1>
+            <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{t("skill.syncDescription")}</p>
           </div>
-          <div className="min-h-0 flex-1 px-6 pb-4"><Textarea className="h-full min-h-0 resize-none rounded-lg bg-card p-4 font-mono text-[12px] leading-6" spellCheck="false" value={draft} onChange={(event) => setDraft(event.target.value)} /></div>
-          <div className="flex shrink-0 items-center justify-between gap-4 bg-muted/20 px-6 py-3"><span className="text-[11px] text-muted-foreground">{t("skill.resourcesPreserved")}</span><Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" disabled={Boolean(busy)} onClick={() => setDeleteDialog({ name: document.name })}><Trash2 aria-hidden="true" />{t("common.delete")}</Button></div>
-        </TabsContent>
+          <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={() => setTargetDialog(true)}><Plus aria-hidden="true" />{t("skill.addTarget")}</Button>
+        </header>
+        {!targets.every((target) => target.rsyncAvailable) && <p className="mt-5 rounded-lg bg-destructive/8 px-4 py-3 text-[12px] leading-relaxed text-destructive">{t("skill.rsyncRequired")}</p>}
+        <div className="mt-5 border-t border-border/50">{targets.map((target) => <TargetRow key={target.id} target={target} busy={busy} onSync={() => void syncTarget(target)} onRemove={() => setDeleteDialog({ target })} />)}</div>
+        <p className="mt-6 text-[11px] leading-relaxed text-muted-foreground">{t("skill.metadataHint")}</p>
+      </section>
+    </ScrollArea> : document ? <div className="flex min-h-0 min-w-0 flex-col">
+      <header className="flex shrink-0 items-start gap-4 px-8 pt-7 pb-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="min-w-0 truncate text-[19px] font-semibold tracking-[-0.01em] text-foreground">{document.name}</h1>
+            {dirty && <span className="shrink-0 text-[11px] text-muted-foreground">{t("skill.unsaved")}</span>}
+          </div>
+          <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{document.description}</p>
+          <p className="mt-2 truncate font-mono text-[11px] text-muted-foreground/80" title={document.path}>{document.path} · {formatSkillBytes(document.sizeBytes)} · {formatDateTime(document.updatedAt)}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {/* A clean buffer has nothing to save, and a disabled filled button
+              reads as a broken primary action — so it recedes to a ghost until
+              the draft actually diverges. */}
+          <Button size="sm" variant={dirty ? "default" : "ghost"} className={dirty ? "" : "text-muted-foreground"} disabled={Boolean(busy) || !dirty} onClick={saveSkill}>{busy === "save" ? t("common.saving") : t("common.save")}</Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={Boolean(busy)} aria-label={t("skill.actions")}><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialog({ name: document.name })}><Trash2 aria-hidden="true" />{t("common.delete")}</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </header>
 
-        <TabsContent className="m-0 min-h-0 flex-1 data-[state=active]:flex data-[state=active]:flex-col" value="debug">
-          <ScrollArea className="min-h-0 flex-1"><section className="mx-auto grid max-w-3xl gap-5 px-7 py-6">
-            <header><h2 className="text-lg font-semibold text-foreground">{t("skill.debugTitle")}</h2><p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{t("skill.debugDescription")}</p></header>
-            <div className="grid gap-2"><Label htmlFor="skill-debug-prompt">{t("skill.testPrompt")}</Label><Textarea id="skill-debug-prompt" className="min-h-28 bg-card" value={debugPrompt} onChange={(event) => setDebugPrompt(event.target.value)} placeholder={t("skill.debugPlaceholder")} /><div className="flex justify-end"><Button disabled={Boolean(busy) || dirty || !debugPrompt.trim()} onClick={runDebug}><Play aria-hidden="true" />{busy === "debug" ? t("skill.debugging") : t("skill.runDebug")}</Button></div></div>
-            {debugResult && <section className="overflow-hidden rounded-xl border bg-card">
-              <div className="flex items-center justify-between gap-4 bg-muted/30 px-4 py-3"><div className="flex items-center gap-2"><StatusBadge status={debugResult.succeeded ? "good" : "danger"}>{t(debugResult.succeeded ? "skill.debugPassed" : "skill.debugFailed")}</StatusBadge><span className="text-[11px] text-muted-foreground">{formatDuration(debugResult.durationMs)} · {t("skill.tokens", { count: formatTokens(debugTokens) })}</span></div>{debugResult.sessionId && <code className="text-[10px] text-muted-foreground">{debugResult.sessionId}</code>}</div>
-              <div className="whitespace-pre-wrap px-4 py-4 text-sm leading-6 text-foreground">{debugResult.output || t("skill.noDebugOutput")}</div>
-              {debugResult.events?.length > 0 && <details className="bg-muted/10"><summary className="cursor-pointer px-4 py-3 text-xs font-medium text-muted-foreground">{t("skill.debugEvents", { count: debugResult.events.length })}</summary><div className="grid gap-2 bg-muted/25 px-4 py-3">{debugResult.events.map((event, index) => <div className="grid grid-cols-[86px_minmax(0,1fr)] gap-3 font-mono text-[10px] leading-relaxed" key={`${event.kind}-${index}`}><span className={event.failed ? "text-destructive" : "text-muted-foreground"}>{event.kind}</span><span className="whitespace-pre-wrap text-foreground/80">{event.text}</span></div>)}</div></details>}
-            </section>}
-          </section></ScrollArea>
-        </TabsContent>
+      <nav className="flex shrink-0 items-center gap-5 border-b border-border/60 px-8" aria-label={t("skill.title")}>
+        <PaneTab active={pane === "editor"} icon={FileCode2} label={t("skill.editor")} onSelect={() => setPane("editor")} />
+        <PaneTab active={pane === "debug"} icon={Bug} label={t("skill.debug")} onSelect={() => setPane("debug")} />
+      </nav>
 
-        <TabsContent className="m-0 min-h-0 flex-1" value="sync">
-          <ScrollArea className="h-full"><section className="mx-auto max-w-4xl px-7 py-6">
-            <header className="mb-5 flex items-start justify-between gap-5"><div><h2 className="text-lg font-semibold text-foreground">{t("skill.syncTitle")}</h2><p className="mt-1.5 max-w-2xl text-xs leading-relaxed text-muted-foreground">{t("skill.syncDescription")}</p></div><Button variant="outline" size="sm" onClick={() => setTargetDialog(true)}><Plus aria-hidden="true" />{t("skill.addTarget")}</Button></header>
-            {!targets.every((target) => target.rsyncAvailable) && <div className="mb-4 rounded-lg bg-destructive/8 px-4 py-3 text-xs leading-relaxed text-destructive">{t("skill.rsyncRequired")}</div>}
-            <div className="grid grid-cols-2 gap-3 max-[850px]:grid-cols-1">{targets.map((target) => <TargetCard key={target.id} target={target} busy={busy} onSync={() => void syncTarget(target)} onRemove={() => setDeleteDialog({ target })} />)}</div>
-            <p className="mt-5 text-[11px] leading-relaxed text-muted-foreground">{t("skill.metadataHint")}</p>
-          </section></ScrollArea>
-        </TabsContent>
-      </Tabs> : <div className="flex min-h-0 flex-1 items-center justify-center px-8 text-center"><div className="max-w-sm"><FileCode2 className="mx-auto mb-3 size-8 text-muted-foreground" aria-hidden="true" /><h2 className="text-base font-semibold text-foreground">{t("skill.emptyTitle")}</h2><p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{t("skill.emptyDescription")}</p><Button className="mt-4" size="sm" onClick={() => setCreateDialog(true)}><Plus aria-hidden="true" />{t("skill.new")}</Button></div></div>}
+      {pane === "editor" ? <div className="flex min-h-0 flex-1 flex-col px-8 pt-5 pb-5">
+        <Textarea className="min-h-0 flex-1 resize-none rounded-xl border-border/60 bg-card px-5 py-4 font-mono text-[12.5px] leading-[1.75] shadow-none" spellCheck="false" aria-label="SKILL.md" value={draft} onChange={(event) => setDraft(event.target.value)} />
+        <p className="mt-3 shrink-0 text-[11px] leading-relaxed text-muted-foreground">{t("skill.editorHint")} {t("skill.resourcesPreserved")}</p>
+      </div> : <ScrollArea className="min-h-0 flex-1">
+        <section className="max-w-2xl px-8 pt-6 pb-10">
+          <p className="text-[13px] leading-relaxed text-muted-foreground">{t("skill.debugDescription")}</p>
+          <div className="mt-5 grid gap-2">
+            <Label htmlFor="skill-debug-prompt" className="text-[12px] text-muted-foreground">{t("skill.testPrompt")}</Label>
+            <Textarea id="skill-debug-prompt" className="min-h-24 rounded-xl border-border/60 bg-card px-4 py-3 text-[13px] shadow-none" value={debugPrompt} onChange={(event) => setDebugPrompt(event.target.value)} placeholder={t("skill.debugPlaceholder")} />
+            <div className="flex justify-end"><Button size="sm" disabled={Boolean(busy) || dirty || !debugPrompt.trim()} onClick={runDebug}><Play aria-hidden="true" />{busy === "debug" ? t("skill.debugging") : t("skill.runDebug")}</Button></div>
+          </div>
+          {debugResult && <section className="mt-7 border-t border-border/50 pt-5">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <StatusBadge status={debugResult.succeeded ? "good" : "danger"}>{t(debugResult.succeeded ? "skill.debugPassed" : "skill.debugFailed")}</StatusBadge>
+              <span className="text-[11px] text-muted-foreground">{formatDuration(debugResult.durationMs)} · {t("skill.tokens", { count: formatTokens(debugTokens) })}</span>
+              {debugResult.sessionId && <code className="ml-auto font-mono text-[10px] text-muted-foreground">{debugResult.sessionId}</code>}
+            </div>
+            <div className="mt-3 whitespace-pre-wrap text-[13px] leading-[1.75] text-foreground">{debugResult.output || t("skill.noDebugOutput")}</div>
+            {debugResult.events?.length > 0 && <details className="mt-4">
+              <summary className="cursor-pointer text-[11px] text-muted-foreground transition-colors hover:text-foreground">{t("skill.debugEvents", { count: debugResult.events.length })}</summary>
+              <div className="mt-2 grid gap-2 rounded-lg bg-muted/35 px-3.5 py-3">{debugResult.events.map((event, index) => <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-3 font-mono text-[10px] leading-relaxed" key={`${event.kind}-${index}`}><span className={event.failed ? "text-destructive" : "text-muted-foreground"}>{event.kind}</span><span className="whitespace-pre-wrap text-foreground/80">{event.text}</span></div>)}</div>
+            </details>}
+          </section>}
+        </section>
+      </ScrollArea>}
+    </div> : <div className="flex min-h-0 min-w-0 items-center justify-center px-8">
+      <div className="max-w-sm text-center">
+        <h1 className="text-[17px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.emptyTitle")}</h1>
+        <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">{t("skill.emptyDescription")}</p>
+        <Button className="mt-5" size="sm" onClick={() => setCreateDialog(true)}><Plus aria-hidden="true" />{t("skill.new")}</Button>
+      </div>
+    </div>}
 
     <Dialog open={createDialog} onOpenChange={(open) => !busy && setCreateDialog(open)}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{t("skill.new")}</DialogTitle><DialogDescription>{t("skill.newDescription")}</DialogDescription></DialogHeader><div className="grid gap-4"><div className="grid gap-2"><Label htmlFor="new-skill-name">{t("skill.name")}</Label><Input id="new-skill-name" autoFocus value={createForm.name} onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-") }))} placeholder="release-notes" /></div><div className="grid gap-2"><Label htmlFor="new-skill-description">{t("skill.description")}</Label><Textarea id="new-skill-description" className="min-h-20" value={createForm.description} onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))} placeholder={t("skill.descriptionPlaceholder")} /></div></div><DialogFooter><Button variant="outline" disabled={Boolean(busy)} onClick={() => setCreateDialog(false)}>{t("common.cancel")}</Button><Button disabled={Boolean(busy)} onClick={createSkill}>{busy === "create" ? t("common.processing") : t("common.add")}</Button></DialogFooter></DialogContent></Dialog>
 
