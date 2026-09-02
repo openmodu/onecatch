@@ -1,13 +1,13 @@
 import { forwardRef, useCallback, useLayoutEffect, useRef } from "react";
-import { splitCodexSkillMentions } from "../codexSkillMention.js";
+import { splitSkillMentions } from "../skillMention.js";
 
-export function CodexSkillMentionText({ value = "" }) {
-  return splitCodexSkillMentions(value).map((part, index) => part.type === "skill"
+export function SkillMentionText({ value = "" }) {
+  return splitSkillMentions(value).map((part, index) => part.type === "skill"
     ? <span className="codex-skill-mention" data-skill-name={part.name} key={`${part.name}-${index}`}>{part.value}</span>
     : <span key={`text-${index}`}>{part.value}</span>);
 }
 
-const CodexSkillTextarea = forwardRef(function CodexSkillTextarea({
+const SkillTextarea = forwardRef(function SkillTextarea({
   highlight = true,
   textareaComponent: TextareaComponent = "textarea",
   value = "",
@@ -38,7 +38,7 @@ const CodexSkillTextarea = forwardRef(function CodexSkillTextarea({
 
   return <>
     {highlight && <div ref={mirrorRef} className={`codex-skill-input-mirror ${className}`.trim()} aria-hidden="true">
-      <CodexSkillMentionText value={value} />
+      <SkillMentionText value={value} />
       {String(value).endsWith("\n") && <span>{"\u200b"}</span>}
     </div>}
     <TextareaComponent
@@ -51,4 +51,4 @@ const CodexSkillTextarea = forwardRef(function CodexSkillTextarea({
   </>;
 });
 
-export default CodexSkillTextarea;
+export default SkillTextarea;

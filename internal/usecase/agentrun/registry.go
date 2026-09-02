@@ -129,6 +129,19 @@ func (e *Engine) SupportsInteractivePermissions(rt Runtime, sandbox Sandbox) boo
 	return ok && runner.SupportsInteractivePermissions(sandbox)
 }
 
+// ListSkills returns a runtime's effective user-invocable Skill catalog.
+func (e *Engine) ListSkills(ctx context.Context, rt Runtime, cwd string, environment []string) ([]Skill, error) {
+	runner := e.runners[rt]
+	if runner == nil {
+		return nil, ErrUnknownRuntime{Runtime: rt}
+	}
+	lister, ok := runner.(SkillLister)
+	if !ok {
+		return nil, fmt.Errorf("agentrun: runtime %q does not expose skills", rt)
+	}
+	return lister.ListSkills(ctx, cwd, environment)
+}
+
 // HarnessModel is one model a harness advertises.
 type HarnessModel struct {
 	Model       string `json:"model"`

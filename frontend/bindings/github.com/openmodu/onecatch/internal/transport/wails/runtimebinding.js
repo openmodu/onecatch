@@ -24,20 +24,21 @@ export function CheckRuntime(runtime) {
 }
 
 /**
- * @param {string} cwd
- * @returns {$CancellablePromise<agentrun$0.CodexSkill[]>}
- */
-export function ListCodexSkills(cwd) {
-    return $Call.ByID(3450453088, cwd).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
-    }));
-}
-
-/**
  * @returns {$CancellablePromise<desktop$0.RuntimeInfo[]>}
  */
 export function ListRuntimes() {
     return $Call.ByID(2569787766).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * @param {string} runtime
+ * @param {string} cwd
+ * @returns {$CancellablePromise<agentrun$0.Skill[]>}
+ */
+export function ListSkills(runtime, cwd) {
+    return $Call.ByID(635889301, runtime, cwd).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType3($result);
     }));
 }
@@ -54,6 +55,6 @@ export function UpdateRuntimeConfig(input) {
 
 // Private type creation functions
 const $$createType0 = desktop$0.RuntimeInfo.createFrom;
-const $$createType1 = agentrun$0.CodexSkill.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = $Create.Array($$createType0);
+const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = agentrun$0.Skill.createFrom;
+const $$createType3 = $Create.Array($$createType2);

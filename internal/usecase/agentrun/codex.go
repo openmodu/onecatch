@@ -42,7 +42,7 @@ type codexAppProcess struct {
 	scanner   *bufio.Scanner
 	stderr    *lineCapture
 	threadID  string
-	skills    []CodexSkill
+	skills    []Skill
 	key       string
 	idleTimer *time.Timer
 	stopOnce  sync.Once
@@ -90,22 +90,10 @@ type CodexConfiguration struct {
 	Models          []CodexModelInfo `json:"models"`
 }
 
-// CodexSkill is one enabled Skill discovered by Codex for a working directory.
-// Name is the token users invoke after '$'; Path is sent back to app-server as
-// an explicit skill input so Codex does not need to resolve the marker again.
-type CodexSkill struct {
-	Name             string `json:"name"`
-	DisplayName      string `json:"displayName,omitempty"`
-	Description      string `json:"description,omitempty"`
-	ShortDescription string `json:"shortDescription,omitempty"`
-	Path             string `json:"path"`
-	Scope            string `json:"scope,omitempty"`
-}
-
 // ListSkills asks Codex app-server for the effective Skill catalog at cwd.
 // This includes project, user, system, and plugin-provided Skills after Codex
 // has applied its own precedence and enabled-state rules.
-func (r *CodexRunner) ListSkills(ctx context.Context, cwd string, environment []string) ([]CodexSkill, error) {
+func (r *CodexRunner) ListSkills(ctx context.Context, cwd string, environment []string) ([]Skill, error) {
 	cmd := exec.CommandContext(ctx, r.binary, "app-server", "--listen", "stdio://")
 	configureProcessWindow(cmd)
 	if info, err := os.Stat(cwd); err == nil && info.IsDir() {
@@ -185,7 +173,7 @@ func (r *CodexRunner) ListSkills(ctx context.Context, cwd string, environment []
 	return nil, fmt.Errorf("Codex app-server ended before skills were available%s", stderr.tail())
 }
 
-func decodeCodexSkills(raw json.RawMessage, _ string) ([]CodexSkill, error) {
+func decodeCodexSkills(raw json.RawMessage, _ string) ([]Skill, error) {
 	var response struct {
 		Data []struct {
 			CWD    string `json:"cwd"`
@@ -205,13 +193,13 @@ func decodeCodexSkills(raw json.RawMessage, _ string) ([]CodexSkill, error) {
 	if err := json.Unmarshal(raw, &response); err != nil {
 		return nil, err
 	}
-	items := make([]CodexSkill, 0)
+	items := make([]Skill, 0)
 	for _, group := range response.Data {
 		for _, item := range group.Skills {
 			if !item.Enabled || strings.TrimSpace(item.Name) == "" || strings.TrimSpace(item.Path) == "" {
 				continue
 			}
-			skill := CodexSkill{Name: item.Name, Description: item.Description, Path: item.Path, Scope: item.Scope}
+			skill := Skill{Name: item.Name, Description: item.Description, Path: item.Path, Scope: item.Scope}
 			if item.Interface != nil {
 				skill.DisplayName = item.Interface.DisplayName
 				skill.ShortDescription = item.Interface.ShortDescription
@@ -727,9 +715,9 @@ func sendCodexThreadStart(encoder *json.Encoder, req Request) error {
 	return encoder.Encode(map[string]any{"id": 3, "method": method, "params": params})
 }
 
-func sendCodexTurnStart(encoder *json.Encoder, req Request, threadID string, skills []CodexSkill) error {
+func sendCodexTurnStart(encoder *json.Encoder, req Request, threadID string, skills []Skill) error {
 	input := []map[string]string{{"type": "text", "text": req.Prompt}}
-	for _, skill := range referencedCodexSkills(req.Prompt, skills) {
+	for _, skill := range referencedSkills(req.Prompt, skills) {
 		input = append(input, map[string]string{"type": "skill", "name": skill.Name, "path": skill.Path})
 	}
 	turnParams := map[string]any{"threadId": threadID, "input": input}
@@ -747,47 +735,6 @@ func sendCodexTurnStart(encoder *json.Encoder, req Request, threadID string, ski
 		}
 	}
 	return encoder.Encode(map[string]any{"id": 4, "method": "turn/start", "params": turnParams})
-}
-
-func referencedCodexSkills(prompt string, skills []CodexSkill) []CodexSkill {
-	byName := make(map[string]CodexSkill, len(skills))
-	for _, skill := range skills {
-		byName[skill.Name] = skill
-	}
-	seen := make(map[string]struct{})
-	referenced := make([]CodexSkill, 0)
-	for index := 0; index < len(prompt); {
-		marker := strings.IndexByte(prompt[index:], '$')
-		if marker < 0 {
-			break
-		}
-		marker += index
-		if marker > 0 && !isCodexSkillBoundary(prompt[marker-1]) {
-			index = marker + 1
-			continue
-		}
-		end := marker + 1
-		for end < len(prompt) && isCodexSkillNameByte(prompt[end]) {
-			end++
-		}
-		name := prompt[marker+1 : end]
-		if skill, ok := byName[name]; ok {
-			if _, exists := seen[name]; !exists {
-				seen[name] = struct{}{}
-				referenced = append(referenced, skill)
-			}
-		}
-		index = end
-	}
-	return referenced
-}
-
-func isCodexSkillBoundary(value byte) bool {
-	return value == ' ' || value == '\t' || value == '\n' || value == '\r'
-}
-
-func isCodexSkillNameByte(value byte) bool {
-	return value >= 'a' && value <= 'z' || value >= 'A' && value <= 'Z' || value >= '0' && value <= '9' || value == '-' || value == '_' || value == '.' || value == ':'
 }
 
 func codexNotificationMatches(raw json.RawMessage, threadID, turnID string) bool {

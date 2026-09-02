@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -90,6 +91,19 @@ type RuntimeRegistry struct {
 	pendingPermissions map[string]*pendingPermission
 	changedMu          sync.RWMutex
 	changed            func([]RuntimeInfo)
+}
+
+// ListSkills uses the same long-lived runner instance as task execution. This
+// lets runtimes such as Claude merge their filesystem preflight with metadata
+// learned from a real session's initialization event.
+func (r *RuntimeRegistry) ListSkills(ctx context.Context, runtime agentrun.Runtime, cwd string, environment []string) ([]agentrun.Skill, error) {
+	r.mu.RLock()
+	engine := r.engine
+	r.mu.RUnlock()
+	if engine == nil {
+		return nil, fmt.Errorf("runtime engine is not configured")
+	}
+	return engine.ListSkills(ctx, runtime, cwd, environment)
 }
 
 type pendingPermission struct {

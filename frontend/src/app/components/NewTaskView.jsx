@@ -18,8 +18,8 @@ import { autosizeComposerTextarea, NEW_TASK_TEXTAREA_MIN_HEIGHT } from "../compo
 import { fileName } from "../format.js";
 import { runtimeHarnessEnabled, supportsRuntimeProfile, workflowHarnessesEnabled } from "../runtimeHarnesses.js";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
-import { useCodexSkillPicker } from "./CodexSkillPicker.jsx";
-import CodexSkillTextarea from "./CodexSkillTextarea.jsx";
+import { useSkillPicker } from "./SkillPicker.jsx";
+import SkillTextarea from "./SkillTextarea.jsx";
 import TaskExecutorSelector from "./TaskExecutorSelector.jsx";
 import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
 import WorkspaceComposerMeta from "./WorkspaceComposerMeta.jsx";
@@ -71,9 +71,11 @@ export default function NewTaskView({
       void onSubmit();
     }
   };
-  const skillPicker = useCodexSkillPicker({
-    enabled: directAgent && form.harness === "codex",
+  const skillRuntime = directAgent && ["codex", "claude"].includes(form.harness) ? form.harness : "";
+  const skillPicker = useSkillPicker({
+    enabled: Boolean(skillRuntime),
     mode,
+    runtime: skillRuntime,
     workspacePath: workspace?.path || "",
     value: form.prompt,
     onValueChange: (prompt) => onChange((current) => ({ ...current, prompt })),
@@ -92,11 +94,11 @@ export default function NewTaskView({
 
       <div className="new-task-composer-stack">
         <div className="new-task-composer">
-          <div className={`codex-skill-field ${directAgent && form.harness === "codex" ? "has-skill-highlight" : ""}`.trim()}>
-            <CodexSkillTextarea
+          <div className={`codex-skill-field ${skillRuntime ? "has-skill-highlight" : ""}`.trim()}>
+            <SkillTextarea
               ref={promptRef}
               textareaComponent={Textarea}
-              highlight={directAgent && form.harness === "codex"}
+              highlight={Boolean(skillRuntime)}
               id="task-create-goal"
               className="new-task-prompt"
               autoFocus

@@ -8,7 +8,6 @@ export {
     CodexConfiguration,
     CodexModelInfo,
     CodexServiceTier,
-    CodexSkill,
     ContextUsage,
     Event,
     EventKind,
@@ -17,6 +16,7 @@ export {
     PermissionRequest,
     Result,
     Runtime,
+    Skill,
     StreamPhase,
     Usage
 } from "./models.js";

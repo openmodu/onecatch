@@ -14,8 +14,8 @@ func NewRuntimeBinding(service *desktopservice.Service) *RuntimeBinding {
 }
 
 func (b *RuntimeBinding) ListRuntimes() []desktopservice.RuntimeInfo { return b.service.ListRuntimes() }
-func (b *RuntimeBinding) ListCodexSkills(cwd string) ([]agentrun.CodexSkill, error) {
-	return b.service.ListCodexSkills(context.Background(), cwd)
+func (b *RuntimeBinding) ListSkills(runtime, cwd string) ([]agentrun.Skill, error) {
+	return b.service.ListSkills(context.Background(), runtime, cwd)
 }
 func (b *RuntimeBinding) CheckRuntime(runtime string) (desktopservice.RuntimeInfo, error) {
 	return b.service.CheckRuntime(runtime)

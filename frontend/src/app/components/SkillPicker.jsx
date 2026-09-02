@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { RuntimeBinding } from "../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
-import { filterCodexSkills, findCodexSkillTrigger, insertCodexSkill } from "../codexSkillMention.js";
+import { filterSkills, findSkillTrigger, insertSkill } from "../skillMention.js";
 
 const skillCache = new Map();
 const demoSkills = [
@@ -10,11 +10,11 @@ const demoSkills = [
   { name: "skill-creator", displayName: "Skill Creator", shortDescription: "Create or update a Codex Skill" },
 ];
 
-function cachedCodexSkills(mode, workspacePath) {
+function cachedSkills(mode, runtime, workspacePath) {
   if (mode !== "wails") return Promise.resolve(demoSkills);
-  const key = workspacePath || "__home__";
+  const key = `${runtime}:${workspacePath || "__home__"}`;
   if (!skillCache.has(key)) {
-    const request = RuntimeBinding.ListCodexSkills(workspacePath || "")
+    const request = RuntimeBinding.ListSkills(runtime, workspacePath || "")
       .then((items) => Array.isArray(items) ? items : [])
       .catch((error) => {
         skillCache.delete(key);
@@ -25,9 +25,9 @@ function cachedCodexSkills(mode, workspacePath) {
   return skillCache.get(key);
 }
 
-export function useCodexSkillPicker({ enabled, mode, workspacePath, value, onValueChange, textareaRef, onKeyDown }) {
+export function useSkillPicker({ enabled, mode, runtime, workspacePath, value, onValueChange, textareaRef, onKeyDown }) {
   const { t } = useTranslation();
-  const menuID = `codex-skill-picker-${useId().replaceAll(":", "")}`;
+  const menuID = `skill-picker-${useId().replaceAll(":", "")}`;
   const [trigger, setTrigger] = useState(null);
   const [skills, setSkills] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -41,14 +41,14 @@ export function useCodexSkillPicker({ enabled, mode, workspacePath, value, onVal
     setSkills(null);
     setLoading(false);
     setError("");
-  }, [enabled, mode, workspacePath]);
+  }, [enabled, mode, runtime, workspacePath]);
 
   const ensureSkills = useCallback(() => {
     if (!enabled || skills || loading) return;
     const version = loadVersion.current;
     setLoading(true);
     setError("");
-    void cachedCodexSkills(mode, workspacePath).then((items) => {
+    void cachedSkills(mode, runtime, workspacePath).then((items) => {
       if (version !== loadVersion.current) return;
       setSkills(items);
       setLoading(false);
@@ -57,19 +57,19 @@ export function useCodexSkillPicker({ enabled, mode, workspacePath, value, onVal
       setError(t("skills.loadFailed"));
       setLoading(false);
     });
-  }, [enabled, loading, mode, skills, t, workspacePath]);
+  }, [enabled, loading, mode, runtime, skills, t, workspacePath]);
 
   const updateTrigger = useCallback((nextValue, caret) => {
     if (!enabled) {
       setTrigger(null);
       return;
     }
-    const nextTrigger = findCodexSkillTrigger(nextValue, caret);
+    const nextTrigger = findSkillTrigger(nextValue, caret);
     setTrigger(nextTrigger);
     if (nextTrigger) ensureSkills();
   }, [enabled, ensureSkills]);
 
-  const filtered = useMemo(() => filterCodexSkills(skills || [], trigger?.query || ""), [skills, trigger?.query]);
+  const filtered = useMemo(() => filterSkills(skills || [], trigger?.query || ""), [skills, trigger?.query]);
 
   useEffect(() => {
     setActiveIndex(0);
@@ -77,7 +77,7 @@ export function useCodexSkillPicker({ enabled, mode, workspacePath, value, onVal
 
   const selectSkill = useCallback((skill) => {
     if (!trigger) return;
-    const inserted = insertCodexSkill(value, trigger, skill.name);
+    const inserted = insertSkill(value, trigger, skill.name);
     onValueChange(inserted.value);
     setTrigger(null);
     window.requestAnimationFrame(() => {

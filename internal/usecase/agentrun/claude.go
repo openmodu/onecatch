@@ -19,8 +19,9 @@ const claudeBinaryDefault = "claude"
 // (`claude -p --output-format stream-json`), parsing the documented event
 // stream of system/assistant/user/result records.
 type ClaudeRunner struct {
-	binary string
-	now    nowFunc
+	binary       string
+	now          nowFunc
+	skillCatalog *claudeSkillCatalog
 }
 
 // NewClaudeRunner builds a runner driving the given claude binary. An empty
@@ -29,7 +30,7 @@ func NewClaudeRunner(binary string) *ClaudeRunner {
 	if binary == "" {
 		binary = claudeBinaryDefault
 	}
-	return &ClaudeRunner{binary: binary, now: time.Now}
+	return &ClaudeRunner{binary: binary, now: time.Now, skillCatalog: newClaudeSkillCatalog()}
 }
 
 func (r *ClaudeRunner) Runtime() Runtime { return RuntimeClaude }
@@ -167,6 +168,9 @@ func (r *ClaudeRunner) SupportsInteractivePermissions(sandbox Sandbox) bool {
 }
 
 func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
+	// `$name` is OneCatch's cross-runtime syntax. Claude Code's native Skill
+	// command uses `/name`, including plugin namespaces such as `/plugin:name`.
+	req.Prompt = adaptClaudeSkillMentions(req.Prompt)
 	interactivePermissions := req.Sandbox == SandboxReadOnly && req.PermissionHandler != nil
 	args := []string{
 		"--output-format", "stream-json",
@@ -236,7 +240,7 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 		return r.runInteractive(ctx, cmd, req, sink)
 	}
 	cmd.Stdin = nil
-	return streamProcess(ctx, cmd, &claudeParser{}, r.now, sink)
+	return streamProcess(ctx, cmd, &claudeParser{onSkills: func(names []string) { r.skillCatalog.remember(req.Workspace, names) }}, r.now, sink)
 }
 
 type claudeControlEnvelope struct {
@@ -315,7 +319,7 @@ func (r *ClaudeRunner) runInteractive(ctx context.Context, cmd *exec.Cmd, req Re
 		return Result{}, fmt.Errorf("write Claude Code prompt: %w", err)
 	}
 
-	parser := &claudeParser{}
+	parser := &claudeParser{onSkills: func(names []string) { r.skillCatalog.remember(req.Workspace, names) }}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	stdinClosed := false
@@ -414,6 +418,7 @@ type claudeParser struct {
 	messageOpen       bool
 	textStreaming     bool
 	thinkingStreaming bool
+	onSkills          func([]string)
 }
 
 type claudeEnvelope struct {
@@ -425,6 +430,7 @@ type claudeEnvelope struct {
 	IsError   bool              `json:"is_error"`
 	Usage     claudeUsage       `json:"usage"`
 	Event     claudeStreamEvent `json:"event"`
+	Skills    []string          `json:"skills"`
 	// ModelUsage is keyed by model id and is the only place `claude -p`
 	// reports the context window — and only on the terminal result event, so
 	// the window is unknown for the whole run that needed it.
@@ -495,6 +501,9 @@ func (p *claudeParser) parse(line string, at time.Time, sink Sink) {
 	case "system":
 		if env.Subtype == "init" {
 			p.sessionID = env.SessionID
+			if p.onSkills != nil {
+				p.onSkills(env.Skills)
+			}
 			sink(Event{Kind: KindStarted, Text: env.SessionID, Raw: line, At: at})
 		}
 		// Other system events (hooks, thinking-token meters) are progress noise.

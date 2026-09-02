@@ -1,4 +1,4 @@
-export function findCodexSkillTrigger(value, caret = value.length) {
+export function findSkillTrigger(value, caret = value.length) {
   const safeCaret = Math.max(0, Math.min(Number.isFinite(caret) ? caret : value.length, value.length));
   const match = value.slice(0, safeCaret).match(/(^|\s)\$([A-Za-z0-9._:-]*)$/);
   if (!match) return null;
@@ -9,7 +9,7 @@ export function findCodexSkillTrigger(value, caret = value.length) {
   };
 }
 
-export function filterCodexSkills(skills = [], query = "", limit = 8) {
+export function filterSkills(skills = [], query = "", limit = 8) {
   const needle = query.trim().toLocaleLowerCase();
   const ranked = skills.map((skill, index) => {
     const name = String(skill.name || "").toLocaleLowerCase();
@@ -27,7 +27,7 @@ export function filterCodexSkills(skills = [], query = "", limit = 8) {
   return ranked.slice(0, limit).map((item) => item.skill);
 }
 
-export function insertCodexSkill(value, trigger, name) {
+export function insertSkill(value, trigger, name) {
   let suffix = value.slice(trigger.caret);
   let separator = " ";
   if (/^[ \t]/.test(suffix)) suffix = suffix.slice(1);
@@ -43,7 +43,7 @@ function isSkillNameCharacter(value) {
   return /[A-Za-z0-9._:-]/.test(value);
 }
 
-export function splitCodexSkillMentions(value = "") {
+export function splitSkillMentions(value = "") {
   const text = String(value);
   const parts = [];
   let plainStart = 0;
@@ -64,7 +64,7 @@ export function splitCodexSkillMentions(value = "") {
 }
 
 function skillMentionNodes(value) {
-  const parts = splitCodexSkillMentions(value);
+  const parts = splitSkillMentions(value);
   if (!parts.some((part) => part.type === "skill")) return null;
   return parts.map((part) => part.type === "skill" ? {
     type: "link",
@@ -75,7 +75,7 @@ function skillMentionNodes(value) {
 
 // Turn Skill mentions into inert links so Streamdown can render them through
 // the existing safe link component. Code and existing links stay untouched.
-export function remarkCodexSkillMentions() {
+export function remarkSkillMentions() {
   const visit = (node) => {
     if (!node || !Array.isArray(node.children) || ["code", "inlineCode", "link", "linkReference"].includes(node.type)) return;
     const children = [];

@@ -333,9 +333,9 @@ func TestCodexRunnerListsEnabledSkills(t *testing.T) {
 	}
 }
 
-func TestReferencedCodexSkillsRequireWhitespaceBoundaryAndDeduplicate(t *testing.T) {
-	skills := []CodexSkill{{Name: "git-commit", Path: "/skills/git-commit/SKILL.md"}}
-	got := referencedCodexSkills("price$git-commit $git-commit then $git-commit", skills)
+func TestReferencedSkillsRequireWhitespaceBoundaryAndDeduplicate(t *testing.T) {
+	skills := []Skill{{Name: "git-commit", Path: "/skills/git-commit/SKILL.md"}}
+	got := referencedSkills("price$git-commit $git-commit then $git-commit", skills)
 	if len(got) != 1 || got[0].Name != "git-commit" {
 		t.Fatalf("referenced skills = %+v", got)
 	}
@@ -451,7 +451,7 @@ ONECATCH_EOF
 		t.Fatal(err)
 	}
 	_, err := NewClaudeRunner(path).Run(context.Background(), Request{
-		Workspace: dir, Prompt: "go", Model: "opus", ReasoningEffort: "high",
+		Workspace: dir, Prompt: "$a-stock-data go", Model: "opus", ReasoningEffort: "high",
 		Environment: append(os.Environ(), "ONECATCH_CLAUDE_CAPTURE="+capture),
 	}, nil)
 	if err != nil {
@@ -466,6 +466,9 @@ ONECATCH_EOF
 	}
 	if !strings.Contains(string(payload), "--effort\nhigh\n") {
 		t.Fatalf("Claude args = %q", payload)
+	}
+	if !strings.Contains(string(payload), "-p\n/a-stock-data go\n") || strings.Contains(string(payload), "$a-stock-data") {
+		t.Fatalf("Claude Skill prompt was not adapted = %q", payload)
 	}
 }
 
@@ -519,7 +522,7 @@ printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"d
 	}
 	var events []Event
 	result, err := NewClaudeRunner(path).Run(context.Background(), Request{
-		Workspace: dir, Prompt: "research Wails mobile", Sandbox: SandboxReadOnly,
+		Workspace: dir, Prompt: "$openai-docs research Wails mobile", Sandbox: SandboxReadOnly,
 		Environment: append(os.Environ(), "ONECATCH_CLAUDE_CAPTURE="+capture),
 		PermissionHandler: func(_ context.Context, request PermissionRequest) (PermissionDecision, error) {
 			if request.ID != "permission-1" || request.ToolName != "WebFetch" || request.Input["url"] != "https://v3.wails.io/guides/mobile/" {
@@ -536,7 +539,7 @@ printf '%s\n' '{"type":"result","subtype":"success","is_error":false,"result":"d
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSpace(string(payload)), "\n")
-	if len(lines) != 2 || !strings.Contains(lines[0], `"text":"research Wails mobile"`) || !strings.Contains(lines[1], `"request_id":"permission-1"`) || !strings.Contains(lines[1], `"behavior":"allow"`) {
+	if len(lines) != 2 || !strings.Contains(lines[0], `"text":"/openai-docs research Wails mobile"`) || !strings.Contains(lines[1], `"request_id":"permission-1"`) || !strings.Contains(lines[1], `"behavior":"allow"`) {
 		t.Fatalf("control exchange = %q", payload)
 	}
 	if countKind(events, KindPermissionRequest) != 1 || countKind(events, KindPermissionResolved) != 1 {

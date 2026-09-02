@@ -300,17 +300,21 @@ func (a *Service) GetRunStreamSnapshot(runID string) []runstream.Frame {
 
 func (a *Service) ListRuntimes() []RuntimeInfo { return a.runtimes.List() }
 
-// ListCodexSkills returns Codex's effective Skill catalog for a workspace.
-// It deliberately goes through app-server rather than walking ~/.codex so
-// project, system, and plugin Skills obey the same precedence as a real turn.
-func (a *Service) ListCodexSkills(ctx context.Context, cwd string) ([]agentrun.CodexSkill, error) {
+// ListSkills returns the selected runtime's effective user-invocable Skill
+// catalog. OneCatch exposes every runtime through the same `$name` UI syntax;
+// the runner retains ownership of discovery and native invocation details.
+func (a *Service) ListSkills(ctx context.Context, runtime, cwd string) ([]agentrun.Skill, error) {
 	settings, err := a.settings.Get(ctx)
 	if err != nil {
 		return nil, mapSettingsError(err)
 	}
-	runtimeSettings := settings.Runtimes[string(agentrun.RuntimeCodex)]
+	runtimeID := agentrun.Runtime(strings.TrimSpace(runtime))
+	runtimeSettings, ok := settings.Runtimes[string(runtimeID)]
+	if !ok {
+		return nil, coded("runtime_not_found", "Unknown runtime")
+	}
 	if !runtimeSettings.Enabled {
-		return nil, coded("runtime_disabled", "Codex is disabled")
+		return nil, coded("runtime_disabled", string(runtimeID)+" is disabled")
 	}
 	cwd = strings.TrimSpace(cwd)
 	if cwd == "" {
@@ -318,7 +322,7 @@ func (a *Service) ListCodexSkills(ctx context.Context, cwd string) ([]agentrun.C
 	}
 	listCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	return agentrun.NewCodexRunner(runtimeSettings.Binary).ListSkills(listCtx, cwd, allowedEnvironment(runtimeSettings.EnvironmentAllowlist))
+	return a.runtimes.ListSkills(listCtx, runtimeID, cwd, allowedEnvironment(runtimeSettings.EnvironmentAllowlist))
 }
 
 // CheckRuntime answers "is this runtime available right now", so unlike
