@@ -6,7 +6,7 @@ OneCatch 是一个 local-first 的桌面 Coding Agent 工作台。它在本机�
 
 OneCatch 不代管模型账号，也不要求把项目复制到它的服务器。本地工作区仍在原目录，OneCatch 的任务、工作流、运行事件和日志默认保存在 `~/.onecatch/`；模型请求是否联网、会向服务商发送哪些内容，取决于你选择的 Harness 及其配置。
 
-> **项目状态：** OneCatch 仍在快速迭代，发布版本以 [`VERSION`](VERSION) 为准。桌面安装包面向 macOS 12+、Windows 10+，以及带 GTK4/WebKitGTK 6.0 的 Linux 系统；配置格式和交互可能在小版本中变化。远端 Worker 的服务端和调度代码已经进入仓库，但桌面端入口目前只作预览，尚不能启用或管理。
+> **项目状态：** OneCatch 仍在快速迭代，发布版本和说明以 [`CHANGELOG.md`](CHANGELOG.md) 最上方的版本小节为准。桌面安装包面向 macOS 12+、Windows 10+，以及带 GTK4/WebKitGTK 6.0 的 Linux 系统；配置格式和交互可能在小版本中变化。远端 Worker 的服务端和调度代码已经进入仓库，但桌面端入口目前只作预览，尚不能启用或管理。
 
 ## 能做什么
 
@@ -124,9 +124,7 @@ go tool wails3 task build:worker
 
 ## 桌面打包与发布
 
-根目录 [`VERSION`](VERSION) 是安装包版本来源，只接受 `X.Y.Z` 三段数字：
-
-桌面构建会把该值同步到 Wails/macOS 元数据，并注入 Go 可执行文件。不要直接修改生成的版本字段；可通过 `go tool wails3 task version:check` 校验一致性。
+根目录 [`CHANGELOG.md`](CHANGELOG.md) 中第一个 `## X.Y.Z` 小节是桌面、iOS、Android、安装包和更新程序的统一版本来源，小节正文也会作为 GitHub Release 和应用更新说明。构建模板固定使用中性的 `0.0.0`，打包时再注入当前版本，不会改写受版本控制的文件。可运行 `go tool wails3 task release:check` 校验发布信息。
 
 ```bash
 go tool wails3 task package:desktop
@@ -150,14 +148,14 @@ gh secret set ONECATCH_UPDATE_PRIVATE_KEY < /secure/path/update-ed25519-private.
 
 有计划地轮换时使用 `node build/scripts/update-feed.mjs keygen --force` 生成新密钥；公钥变更必须先随旧密钥签名的过渡版本发布，否则旧客户端无法信任使用新密钥签名的后续版本。发布工作流会拒绝缺失私钥或公私钥不匹配的标签构建。
 
-正式发布时，先修改并提交 `VERSION`，再推送同版本标签：
+正式发布时，只需在 `CHANGELOG.md` 顶部新增带修改内容的 `## X.Y.Z` 小节，提交后再推送同版本标签：
 
 ```bash
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-标签必须等于 `v` 加 `VERSION` 的内容。GitHub Actions 会构建 macOS DMG 和完整 `.app` 更新 ZIP、Windows Setup、Linux `.deb` 和 AppImage，再生成签名 AppCast 与 SHA-256 文件并发布到对应的 GitHub Release。
+标签必须等于 `v` 加 `CHANGELOG.md` 中第一个版本号。GitHub Actions 会构建 macOS DMG 和完整 `.app` 更新 ZIP、Windows Setup、Linux `.deb` 和 AppImage，再生成签名 AppCast 与 SHA-256 文件，并用同一段修改说明发布对应的 GitHub Release。
 
 macOS 使用 Developer ID 签名时设置 `SIGN_IDENTITY`；已经通过 `notarytool store-credentials` 保存公证凭据时，再设置 `NOTARY_PROFILE`：
 

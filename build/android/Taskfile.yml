@@ -39,6 +39,7 @@ tasks:
   build:
     summary: Creates a debug build of the application for Android
     deps:
+      - task: :release:check
       - task: common:go:download
       - task: generate:android:overlay
       - task: common:build:frontend
@@ -53,7 +54,7 @@ tasks:
         vars:
           ARCH: '{{.ARCH | default .HOST_ARCH}}'
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l"{{end}}'
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false -ldflags="-X github.com/openmodu/onecatch/internal/buildinfo.Version={{.APP_VERSION}} -w -s"{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l" -ldflags="-X github.com/openmodu/onecatch/internal/buildinfo.Version={{.APP_VERSION}}"{{end}}'
     env:
       PRODUCTION: '{{.PRODUCTION | default "false"}}'
 
@@ -111,7 +112,7 @@ tasks:
         go build -buildmode=c-shared -overlay build/android/overlay.json {{.BUILD_FLAGS}} ./cmd/app \
           -o build/android/app/src/main/jniLibs/$JNI_DIR/libwails.so
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l"{{end}}'
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,android -trimpath -buildvcs=false -ldflags="-X github.com/openmodu/onecatch/internal/buildinfo.Version={{.APP_VERSION}} -w -s"{{else}}-tags android,debug -buildvcs=false -gcflags=all="-l" -ldflags="-X github.com/openmodu/onecatch/internal/buildinfo.Version={{.APP_VERSION}}"{{end}}'
 
   compile:go:all-archs:
     summary: Compile Go code for all Android architectures (fat APK)

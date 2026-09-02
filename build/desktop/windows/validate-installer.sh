@@ -4,14 +4,14 @@ set -eu
 
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
-VERSION=$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")
+VERSION=$(node "$REPO_ROOT/build/scripts/release-info.mjs" --version)
 
 if ! command -v makensis >/dev/null 2>&1; then
     echo "error: makensis is required; on macOS run: brew install makensis" >&2
     exit 1
 fi
 if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-    echo "error: VERSION must use X.Y.Z numeric format, got: $VERSION" >&2
+    echo "error: release version must use X.Y.Z numeric format, got: $VERSION" >&2
     exit 1
 fi
 
@@ -26,9 +26,9 @@ install -m 0644 "$SCRIPT_DIR/icon.ico" "$STAGING_ROOT/windows/icon.ico"
 install -m 0644 "$SCRIPT_DIR/nsis/project.nsi" "$STAGING_ROOT/windows/nsis/project.nsi"
 
 # NSIS only needs readable payloads to validate the installer definition. The
-# VERSION file keeps this check fast and avoids cross-compiling Windows binaries.
-install -m 0644 "$REPO_ROOT/VERSION" "$STAGING_ROOT/payload"
-install -m 0644 "$REPO_ROOT/VERSION" "$STAGING_ROOT/windows/nsis/MicrosoftEdgeWebview2Setup.exe"
+# The changelog keeps this check fast and avoids cross-compiling Windows binaries.
+install -m 0644 "$REPO_ROOT/CHANGELOG.md" "$STAGING_ROOT/payload"
+install -m 0644 "$REPO_ROOT/CHANGELOG.md" "$STAGING_ROOT/windows/nsis/MicrosoftEdgeWebview2Setup.exe"
 
 makensis \
     -WX \

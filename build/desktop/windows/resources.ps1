@@ -13,13 +13,16 @@ if ($Clean) {
     exit 0
 }
 
-$versionFile = Join-Path $repoRoot "VERSION"
-if (-not (Test-Path -LiteralPath $versionFile -PathType Leaf)) {
-    throw "VERSION file not found: $versionFile"
+$releaseInfo = Join-Path $repoRoot "build\scripts\release-info.mjs"
+if (-not (Test-Path -LiteralPath $releaseInfo -PathType Leaf)) {
+    throw "Release metadata reader not found: $releaseInfo"
 }
-$version = if ($env:VERSION) { $env:VERSION.Trim() } else { (Get-Content -LiteralPath $versionFile -Raw).Trim() }
+$version = (& node $releaseInfo --version).Trim()
+if ($LASTEXITCODE -ne 0) {
+    throw "Unable to read release version"
+}
 if ($version -notmatch '^\d+\.\d+\.\d+$') {
-    throw "VERSION must use X.Y.Z numeric format, got: $version"
+    throw "Release version must use X.Y.Z numeric format, got: $version"
 }
 
 $architecture = (& go env GOARCH).Trim()

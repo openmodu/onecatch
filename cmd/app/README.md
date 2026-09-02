@@ -41,7 +41,7 @@ go tool wails3 task build:desktop
 go tool wails3 task package:desktop
 ```
 
-版本从仓库根目录 `VERSION` 读取，只接受 `X.Y.Z` 三段数字。macOS 输出
+版本和发布说明从仓库根目录 `CHANGELOG.md` 的第一个 `## X.Y.Z` 小节读取。macOS 输出
 `bin/OneCatch-<version>-macOS-<arch>.dmg`，Windows 输出
 `bin/OneCatch-<version>-Windows-<arch>-Setup.exe`，Linux 输出同版本的 `.deb` 和
 AppImage；每个产物同时生成 `.sha256` 校验文件。Windows 打包前需要安装 NSIS：
@@ -72,10 +72,10 @@ NOTARY_PROFILE="onecatch-notary" \
   go tool wails3 task package:desktop
 ```
 
-需要临时覆盖版本或输出路径时，macOS 使用 `VERSION`、`OUTPUT_DMG`，Windows 使用
-`VERSION`、`OUTPUT_INSTALLER`，Linux 使用 `VERSION`、`OUTPUT_APPIMAGE`、`OUTPUT_DEB`。
-正式发版仍应修改根目录 `VERSION`，并推送同版本标签，例如 `VERSION=0.2.0` 对应
-`v0.2.0`；GitHub Actions 会构建三个平台并创建 GitHub Release。
+需要临时覆盖输出路径时，macOS 使用 `OUTPUT_DMG`，Windows 使用
+`OUTPUT_INSTALLER`，Linux 使用 `OUTPUT_APPIMAGE`、`OUTPUT_DEB`。正式发版只需在
+`CHANGELOG.md` 顶部新增版本小节并推送同版本标签，例如 `## 0.2.0` 对应
+`v0.2.0`；GitHub Actions 会构建三个平台，并用该小节正文创建 GitHub Release。
 
 ## 代码位置
 

@@ -9,6 +9,7 @@ app_bundle="$project_root/bin/OneCatch.dev.app"
 contents="$app_bundle/Contents"
 macos_dir="$contents/MacOS"
 resources_dir="$contents/Resources"
+version=$(node "$project_root/build/scripts/release-info.mjs" --version)
 
 if [ ! -x "$binary" ]; then
 	echo "development binary not found: $binary" >&2
@@ -19,6 +20,8 @@ mkdir -p "$macos_dir" "$resources_dir"
 cp "$binary" "$macos_dir/onecatch"
 chmod +x "$macos_dir/onecatch"
 cp "$script_dir/Info.dev.plist" "$contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleVersion $version" "$contents/Info.plist"
+/usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$contents/Info.plist"
 cp "$script_dir/icons.icns" "$resources_dir/icons.icns"
 
 if [ -f "$script_dir/Assets.car" ]; then

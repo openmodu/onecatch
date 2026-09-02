@@ -6,7 +6,7 @@ OneCatch is a local-first desktop workbench for coding agents. It runs harnesses
 
 OneCatch does not broker model accounts or require uploading your repository to a OneCatch server. Your workspace stays in its original directory. OneCatch stores tasks, workflows, run events, and logs under `~/.onecatch/` by default. Whether a model request uses the network and what it sends to a provider depend on the harness and its configuration.
 
-> **Project status:** OneCatch is under active development; release versions come from [`VERSION`](VERSION). Desktop installers target macOS 12+, Windows 10+, and Linux systems with GTK4/WebKitGTK 6.0. Configuration formats and interactions may change between minor releases. The repository contains the Remote Worker server and scheduler, but its desktop UI is preview-only and cannot yet be enabled or managed.
+> **Project status:** OneCatch is under active development; the latest section in [`CHANGELOG.md`](CHANGELOG.md) defines the release version and notes. Desktop installers target macOS 12+, Windows 10+, and Linux systems with GTK4/WebKitGTK 6.0. Configuration formats and interactions may change between minor releases. The repository contains the Remote Worker server and scheduler, but its desktop UI is preview-only and cannot yet be enabled or managed.
 
 ## What OneCatch does
 
@@ -124,9 +124,7 @@ A non-loopback listener requires TLS through `--tls-cert` and `--tls-key`; add `
 
 ## Desktop packaging and releases
 
-The root [`VERSION`](VERSION) file is the source of the installer version and accepts only a three-part `X.Y.Z` value:
-
-Desktop builds sync that value into Wails/macOS metadata and inject it into the Go binary. Do not edit the generated version fields directly; use `go tool wails3 task version:check` to verify them.
+The first `## X.Y.Z` section in [`CHANGELOG.md`](CHANGELOG.md) is the single source for desktop, iOS, Android, installer, and updater versions. Its body is also published as the GitHub Release and updater notes. Build templates intentionally keep a neutral `0.0.0`; packaging injects the current release version without rewriting tracked files. Run `go tool wails3 task release:check` to validate the entry.
 
 ```bash
 go tool wails3 task package:desktop
@@ -150,14 +148,14 @@ gh secret set ONECATCH_UPDATE_PRIVATE_KEY < /secure/path/update-ed25519-private.
 
 For a planned rotation, generate a replacement with `node build/scripts/update-feed.mjs keygen --force`. Ship a transition release signed by the old key before changing the pinned public key; otherwise existing clients cannot trust later releases. The release workflow rejects a missing private key or a private key that does not match the committed public key.
 
-For a release, update and commit `VERSION`, then push the matching tag:
+For a release, prepend a `## X.Y.Z` section with the changes to `CHANGELOG.md`, commit that one file, and push the matching tag:
 
 ```bash
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag must equal `v` followed by the contents of `VERSION`. GitHub Actions builds the macOS DMG and complete `.app` update ZIP, Windows Setup package, Linux `.deb`, and Linux AppImage, then generates signed AppCasts and SHA-256 files and publishes everything to the matching GitHub Release.
+The tag must equal `v` followed by the first version in `CHANGELOG.md`. GitHub Actions builds the macOS DMG and complete `.app` update ZIP, Windows Setup package, Linux `.deb`, and Linux AppImage, then generates signed AppCasts and SHA-256 files and publishes everything with the same release notes to the matching GitHub Release.
 
 To sign the macOS package with a Developer ID, set `SIGN_IDENTITY`. If notarization credentials have already been saved with `notarytool store-credentials`, also set `NOTARY_PROFILE`:
 

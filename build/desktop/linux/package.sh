@@ -5,7 +5,7 @@ set -eu
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
 BIN_ROOT="$REPO_ROOT/bin"
-VERSION_FILE="$REPO_ROOT/VERSION"
+RELEASE_INFO="$REPO_ROOT/build/scripts/release-info.mjs"
 APP_BINARY="$BIN_ROOT/onecatch"
 WORKER_BINARY="$BIN_ROOT/onecatch-worker"
 SHELL_BINARY="$BIN_ROOT/onecatchsh"
@@ -15,7 +15,7 @@ ICON_FILE="$REPO_ROOT/internal/app/desktop/assets/appicon.png"
 DESKTOP_FILE="$SCRIPT_DIR/onecatch.desktop"
 NFPM_CONFIG="$SCRIPT_DIR/nfpm.yaml"
 
-for tool in curl go sha256sum; do
+for tool in curl go node sha256sum; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "error: required command not found: $tool" >&2
         exit 1
@@ -23,7 +23,8 @@ for tool in curl go sha256sum; do
 done
 
 for input in \
-    "$VERSION_FILE" \
+    "$RELEASE_INFO" \
+    "$REPO_ROOT/CHANGELOG.md" \
     "$APP_BINARY" \
     "$WORKER_BINARY" \
     "$SHELL_BINARY" \
@@ -45,9 +46,9 @@ for executable in "$APP_BINARY" "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINAR
     fi
 done
 
-VERSION=${VERSION:-$(tr -d '[:space:]' < "$VERSION_FILE")}
+VERSION=$(node "$RELEASE_INFO" --version)
 if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-    echo "error: VERSION must use X.Y.Z numeric format, got: $VERSION" >&2
+    echo "error: release version must use X.Y.Z numeric format, got: $VERSION" >&2
     exit 1
 fi
 

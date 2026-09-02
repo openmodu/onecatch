@@ -42,6 +42,7 @@ tasks:
   build:
     summary: Creates a build of the application for iOS
     deps:
+      - task: :release:check
       - task: generate:ios:overlay
       - task: generate:ios:xcode
       - task: common:go:download
@@ -55,7 +56,7 @@ tasks:
       - echo "Building iOS app {{.IOS_APP_NAME}} ({{.IOS_PLATFORM}})..."
       - go build -buildmode=c-archive -overlay build/ios/xcode/overlay.json {{.BUILD_FLAGS}} -o {{.OUTPUT}}.a ./cmd/app
     vars:
-      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,ios -trimpath -buildvcs=false -ldflags="-w -s"{{else}}-tags ios,debug -buildvcs=false -gcflags=all="-l"{{end}}'
+      BUILD_FLAGS: '{{if eq .PRODUCTION "true"}}-tags production,ios -trimpath -buildvcs=false -ldflags="-X github.com/openmodu/onecatch/internal/buildinfo.Version={{.APP_VERSION}} -w -s"{{else}}-tags ios,debug -buildvcs=false -gcflags=all="-l" -ldflags="-X github.com/openmodu/onecatch/internal/buildinfo.Version={{.APP_VERSION}}"{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.IOS_APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
       SDK_PATH:
@@ -124,6 +125,8 @@ tasks:
       - mkdir -p "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.app"
       - cp "{{.BIN_DIR}}/{{.IOS_APP_NAME | lower}}" "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.app/"
       - cp build/ios/Info.plist "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.app/"
+      - /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString {{.APP_VERSION}}' "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.app/Info.plist"
+      - /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion {{.APP_VERSION}}' "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.app/Info.plist"
       - |
         # Embed the provisioning profile for device builds when provided
         if [ "{{.IOS_PLATFORM}}" = "device" ] && [ -n "{{.PROVISIONING_PROFILE}}" ]; then
@@ -280,6 +283,7 @@ tasks:
     summary: Generate iOS Xcode project structure and assets
     sources:
       - build/desktop/config.yml
+      - CHANGELOG.md
       - build/appicon.png
     generates:
       - build/ios/xcode/main/main.m
@@ -287,6 +291,8 @@ tasks:
       - build/ios/xcode/project.pbxproj
     cmds:
       - go tool wails3 ios xcode:gen -outdir build/ios/xcode -config build/desktop/config.yml
+      - /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString {{.APP_VERSION}}' build/ios/xcode/main/Info.plist
+      - /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion {{.APP_VERSION}}' build/ios/xcode/main/Info.plist
       - /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c 'Set :NSLocalNetworkUsageDescription "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist
 
   run:
@@ -299,6 +305,8 @@ tasks:
       - mkdir -p "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.dev.app"
       - cp "{{.BIN_DIR}}/{{.IOS_APP_NAME | lower}}" "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.dev.app/{{.IOS_APP_NAME | lower}}"
       - cp build/ios/Info.dev.plist "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.dev.app/Info.plist"
+      - /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString {{.APP_VERSION}}' "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.dev.app/Info.plist"
+      - /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion {{.APP_VERSION}}' "{{.BIN_DIR}}/{{.IOS_APP_NAME}}.dev.app/Info.plist"
       - |
         # Compile asset catalog and embed icons for dev bundle
         APP_BUNDLE="{{.BIN_DIR}}/{{.IOS_APP_NAME}}.dev.app"

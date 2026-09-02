@@ -3,7 +3,7 @@ version: '3'
 vars:
   APP_NAME: onecatch
   APP_VERSION:
-    sh: node build/scripts/sync-version.mjs --print
+    sh: node build/scripts/release-info.mjs --version
   UPDATE_PUBLIC_KEY:
     sh: tr -d '[:space:]' < build/update/public-key.base64
   MOBILE_APP_NAME: onecatch-mobile
@@ -33,15 +33,10 @@ tasks:
       - git config core.hooksPath .githooks
       - git config --get core.hooksPath
 
-  version:sync:
-    desc: Sync desktop metadata from the root VERSION file
+  release:check:
+    desc: Validate the current version and release notes in CHANGELOG.md
     cmds:
-      - node build/scripts/sync-version.mjs
-
-  version:check:
-    desc: Verify desktop metadata matches the root VERSION file
-    cmds:
-      - node build/scripts/sync-version.mjs --check
+      - node build/scripts/release-info.mjs --check
 
   validate:windows-installer:
     desc: Compile the NSIS installer definition locally with warnings as errors
@@ -69,7 +64,7 @@ tasks:
 
   build:
     deps:
-      - task: version:sync
+      - task: release:check
     env:
       MACOSX_DEPLOYMENT_TARGET: '{{if eq OS "darwin"}}12.0{{end}}'
     cmds:
@@ -219,8 +214,14 @@ tasks:
     cmds:
       - go test -tags conformance -count=1 -timeout 300s ./internal/usecase/agentrun/...
 
+  test:release:
+    desc: Validate release metadata parsing and platform version derivation
+    cmds:
+      - node --test build/scripts/release-info.test.mjs build/scripts/update-feed.test.mjs
+
   test:
     desc: Run the repository test suite
     cmds:
       - task: test:go
       - task: test:frontend
+      - task: test:release

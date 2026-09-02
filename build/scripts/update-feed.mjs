@@ -37,6 +37,8 @@ if (command !== "generate") {
 const dist = path.resolve(option("dist", "dist"));
 const version = option("version").replace(/^v/, "");
 const baseURL = option("base-url").replace(/\/$/, "");
+const releaseNotesFile = option("release-notes-file");
+const releaseNotes = releaseNotesFile ? (await readFile(releaseNotesFile, "utf8")).trim() : "";
 const privateKeyFile = option("private-key-file");
 const privateValue = process.env.ONECATCH_UPDATE_PRIVATE_KEY || option("private-key") || (privateKeyFile ? await readFile(privateKeyFile, "utf8") : "");
 const expectedPublic = (await readFile(option("public", "build/update/public-key.base64"), "utf8")).trim();
@@ -84,7 +86,7 @@ for (const target of targets) {
     <item>
       <title>OneCatch ${escape(version)}</title>
       <pubDate>${published}</pubDate>
-      <description>Release notes: ${escape(releaseURL)}</description>
+      <description>${escape(releaseNotes || `Release notes: ${releaseURL}`)}</description>
       <sparkle:releaseNotesLink>${escape(releaseURL)}</sparkle:releaseNotesLink>
       <sparkle:version>${escape(version)}</sparkle:version>
       <sparkle:shortVersionString>${escape(version)}</sparkle:shortVersionString>

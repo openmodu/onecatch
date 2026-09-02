@@ -14,10 +14,10 @@ UPDATER_BINARY="$REPO_ROOT/bin/onecatch-updater"
 INFO_PLIST="$SCRIPT_DIR/Info.plist"
 ASSETS_CAR="$SCRIPT_DIR/Assets.car"
 ICON_FILE="$SCRIPT_DIR/icons.icns"
-VERSION_FILE="$REPO_ROOT/VERSION"
+RELEASE_INFO="$REPO_ROOT/build/scripts/release-info.mjs"
 PLIST_BUDDY=/usr/libexec/PlistBuddy
 
-for tool in codesign ditto hdiutil lipo plutil shasum; do
+for tool in codesign ditto hdiutil lipo node plutil shasum; do
     if ! command -v "$tool" >/dev/null 2>&1; then
         echo "error: required command not found: $tool" >&2
         exit 1
@@ -28,7 +28,7 @@ if [ ! -x "$PLIST_BUDDY" ]; then
     exit 1
 fi
 
-for input in "$BINARY" "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY" "$UPDATER_BINARY" "$INFO_PLIST" "$ASSETS_CAR" "$ICON_FILE" "$VERSION_FILE"; do
+for input in "$BINARY" "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY" "$UPDATER_BINARY" "$INFO_PLIST" "$ASSETS_CAR" "$ICON_FILE" "$RELEASE_INFO" "$REPO_ROOT/CHANGELOG.md"; do
     if [ ! -f "$input" ]; then
         echo "error: required build input not found: $input" >&2
         exit 1
@@ -41,9 +41,9 @@ for executable in "$BINARY" "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY" "
     fi
 done
 
-VERSION=${VERSION:-$(tr -d '[:space:]' < "$VERSION_FILE")}
+VERSION=$(node "$RELEASE_INFO" --version)
 if ! printf '%s\n' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-    echo "error: VERSION must use X.Y.Z numeric format, got: $VERSION" >&2
+    echo "error: release version must use X.Y.Z numeric format, got: $VERSION" >&2
     exit 1
 fi
 

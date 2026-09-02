@@ -1,7 +1,7 @@
 // Package buildinfo exposes metadata injected into OneCatch binaries at build time.
 package buildinfo
 
-// Version is replaced from the repository's VERSION file through -ldflags.
+// Version is replaced from the latest CHANGELOG.md release through -ldflags.
 // Keeping a development fallback makes direct `go run` and `go test` builds
 // identifiable without introducing a second version source.
 var Version = "dev"

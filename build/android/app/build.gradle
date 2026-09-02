@@ -2,6 +2,27 @@ plugins {
     id 'com.android.application'
 }
 
+def changelogFile = rootProject.file('../../CHANGELOG.md')
+if (!changelogFile.isFile()) {
+    throw new GradleException("Release changelog not found: ${changelogFile}")
+}
+def releaseHeading = changelogFile.readLines('UTF-8').find { it ==~ /^##[ \t]+.*$/ }
+def versionMatch = releaseHeading == null
+    ? null
+    : releaseHeading =~ /^##[ \t]+((0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*))[ \t]*$/
+if (versionMatch == null || !versionMatch.matches()) {
+    throw new GradleException('The first CHANGELOG.md section must use the exact ## X.Y.Z format')
+}
+def appVersion = versionMatch.group(1)
+def versionParts = appVersion.tokenize('.').collect { it as long }
+if (versionParts[1] > 999 || versionParts[2] > 999) {
+    throw new GradleException("Android release versions require minor and patch values below 1000: ${appVersion}")
+}
+def appVersionCode = versionParts[0] * 1_000_000L + versionParts[1] * 1_000L + versionParts[2]
+if (appVersionCode < 1 || appVersionCode > 2_100_000_000L) {
+    throw new GradleException("Android versionCode is outside the supported range: ${appVersionCode}")
+}
+
 android {
     namespace 'com.wails.app'
     compileSdk 35
@@ -14,8 +35,8 @@ android {
         applicationId "app.onecatch.mobile"
         minSdk 21
         targetSdk 35
-        versionCode 1
-        versionName "0.0.1"
+        versionCode appVersionCode as int
+        versionName appVersion
 
         // Configure supported ABIs
         ndk {
