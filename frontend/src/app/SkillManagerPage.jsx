@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Bug, Ellipsis, FileCode2, FolderSync, Plus, RefreshCw, Search, Trash2, Play, X } from "lucide-react";
+import { Ellipsis, FolderSync, Play, Plus, RefreshCw, Search, SquarePen, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,8 +11,11 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { SkillBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { StatusBadge } from "../ui/primitives.jsx";
-import { errorMessage, formatDateTime, formatDuration, formatTokens } from "./format.js";
-import { formatSkillBytes, newSkillTemplate, syncStatusTone } from "./skills.js";
+import MarkdownContent from "./components/MarkdownContent.jsx";
+import SkillDebugPanel from "./components/SkillDebugPanel.jsx";
+import { errorMessage, formatDateTime } from "./format.js";
+import { formatSkillBytes, newSkillTemplate, parseSkillDocument, syncStatusTone } from "./skills.js";
+import { publishSkillSelection, requestSkillFile, skillDocumentPath, SKILL_FILE_DRAFT_EVENT, subscribeSkillWorkspace } from "./skillWorkspace.js";
 
 // A search field is only worth its chrome once the rail stops fitting on one
 // screen, so the demo library has to be big enough to exercise that branch.
@@ -40,10 +43,10 @@ const demoTargets = [
   { id: "modu", name: "Modu", path: "~/.modu/skills", builtin: true, exists: true, status: "out-of-sync", syncedSkills: 3, totalSkills: 5, lastSyncedAt: new Date(Date.now() - 86_400_000).toISOString(), rsyncAvailable: true },
 ];
 
-// The rail rows carry the whole library, so they stay text-first: a name, one
-// line of purpose, and a dot when the open buffer is dirty. Anything heavier
-// (icon tiles, borders, elevation) turns a scannable list into a wall of cards.
-function SkillRow({ skill, selected, dirty, disabled, onSelect }) {
+// The rail rows carry the whole library, so they stay text-first: a name and
+// one line of purpose. Anything heavier (icon tiles, borders, elevation) turns
+// a scannable list into a wall of cards.
+function SkillRow({ skill, selected, disabled, onSelect }) {
   return <button
     type="button"
     className={`group flex w-full min-w-0 flex-col gap-0.5 rounded-lg px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-wait disabled:opacity-60 ${selected ? "bg-accent" : "hover:bg-accent/45"}`}
@@ -51,10 +54,7 @@ function SkillRow({ skill, selected, dirty, disabled, onSelect }) {
     disabled={disabled}
     onClick={onSelect}
   >
-    <span className="flex min-w-0 items-center gap-1.5">
-      <strong className={`min-w-0 flex-1 truncate text-[13px] font-medium ${selected ? "text-foreground" : "text-foreground/85"}`}>{skill.name}</strong>
-      {dirty && <i className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />}
-    </span>
+    <strong className={`min-w-0 truncate text-[13px] font-medium ${selected ? "text-foreground" : "text-foreground/85"}`}>{skill.name}</strong>
     <span className="line-clamp-1 text-[11px] leading-relaxed text-muted-foreground">{skill.description}</span>
   </button>;
 }
@@ -68,19 +68,6 @@ function RailTab({ active, icon: Icon, label, onSelect }) {
   >
     <Icon size={14} strokeWidth={2} aria-hidden="true" />
     <span className="min-w-0 flex-1 truncate">{label}</span>
-  </button>;
-}
-
-function PaneTab({ active, icon: Icon, label, onSelect }) {
-  return <button
-    type="button"
-    className={`relative flex h-9 items-center gap-1.5 text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${active ? "font-medium text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-    aria-current={active ? "page" : undefined}
-    onClick={onSelect}
-  >
-    <Icon size={14} strokeWidth={2} aria-hidden="true" />
-    {label}
-    {active && <span className="absolute inset-x-0 -bottom-px h-0.5 rounded-full bg-foreground" aria-hidden="true" />}
   </button>;
 }
 
@@ -109,17 +96,21 @@ function TargetRow({ target, busy, onSync, onRemove }) {
   </div>;
 }
 
-export default function SkillManagerPage({ mode, notify, requestConfirm }) {
+export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
   const { t } = useTranslation();
   const [skills, setSkills] = useState([]);
   const [selectedName, setSelectedName] = useState("");
   const [document, setDocument] = useState(null);
-  const [draft, setDraft] = useState("");
+  // The rendered copy. It tracks the inspector's editor keystroke by keystroke
+  // so the card is a live preview of the file being edited, and falls back to
+  // whatever the last save or load put on disk.
+  const [preview, setPreview] = useState("");
   const [targets, setTargets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState("");
   const [query, setQuery] = useState("");
-  const [pane, setPane] = useState("editor");
+  const [pane, setPane] = useState("skill");
+  const [debugOpen, setDebugOpen] = useState(false);
   const [createDialog, setCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", description: "" });
   const [targetDialog, setTargetDialog] = useState(false);
@@ -127,16 +118,16 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [debugPrompt, setDebugPrompt] = useState("");
   const [debugResult, setDebugResult] = useState(null);
-  const dirty = Boolean(document && draft !== document.content);
 
   const loadDocument = useCallback(async (name) => {
-    if (!name) { setDocument(null); setDraft(""); return; }
+    if (!name) { setDocument(null); setPreview(""); setSelectedName(""); publishSkillSelection({ name: "" }); return; }
     try {
       const value = mode === "demo" ? demoSkills.find((item) => item.name === name) || { ...demoSkills[0], name } : await SkillBinding.GetSkill(name);
       setDocument(value);
-      setDraft(value.content || "");
+      setPreview(value.content || "");
       setSelectedName(name);
       setDebugResult(null);
+      publishSkillSelection({ name, path: value.path || "" });
     } catch (error) {
       notify("error", errorMessage(error));
     }
@@ -153,38 +144,39 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
       const nextName = keepSelection && (skillItems || []).some((item) => item.name === selectedName)
         ? selectedName
         : skillItems?.[0]?.name || "";
-      if (!document || document.name !== nextName || !dirty) await loadDocument(nextName);
+      if (!document || document.name !== nextName) await loadDocument(nextName);
     } catch (error) {
       notify("error", errorMessage(error));
     } finally {
       setLoading(false);
     }
-  }, [dirty, document, loadDocument, mode, notify, selectedName]);
+  }, [document, loadDocument, mode, notify, selectedName]);
 
   useEffect(() => { void refresh({ keepSelection: false }); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const selectSkill = async (name) => {
-    if (pane === "sync") setPane("editor");
+  // Every keystroke in the inspector's editor arrives here. Only edits to the
+  // open skill's own SKILL.md change what the card renders; a save also
+  // refreshes the summary, because the description and size it prints came
+  // from that file.
+  useEffect(() => subscribeSkillWorkspace(SKILL_FILE_DRAFT_EVENT, (event) => {
+    const { path, content, saved } = event.detail || {};
+    if (!selectedName || path !== skillDocumentPath(selectedName)) return;
+    setPreview(content);
+    if (!saved) return;
+    setDocument((current) => current && current.name === selectedName ? { ...current, content, sizeBytes: content.length, updatedAt: new Date().toISOString(), description: parseSkillDocument(content).frontmatter.description || current.description } : current);
+    setSkills((items) => items.map((item) => item.name === selectedName ? { ...item, sizeBytes: content.length, updatedAt: new Date().toISOString(), description: parseSkillDocument(content).frontmatter.description || item.description } : item));
+  }), [selectedName]);
+
+  const selectSkill = (name) => {
+    if (pane === "sync") setPane("skill");
     if (name === selectedName) return;
-    if (dirty && !await requestConfirm({ title: t("skill.discardTitle"), description: t("skill.discardChanges"), confirmLabel: t("skill.discard") })) return;
+    setDebugOpen(false);
     void loadDocument(name);
   };
 
-  const saveSkill = async () => {
-    if (!document || !dirty) return;
-    setBusy("save");
-    try {
-      const saved = mode === "demo" ? { ...document, content: draft, updatedAt: new Date().toISOString() } : await SkillBinding.UpdateSkill({ name: document.name, content: draft });
-      setDocument(saved);
-      setDraft(saved.content);
-      setSkills((items) => items.map((item) => item.name === saved.name ? saved : item));
-      notify("success", t("skill.saved"));
-      if (mode !== "demo") setTargets(await SkillBinding.ScanSyncTargets());
-    } catch (error) {
-      notify("error", errorMessage(error));
-    } finally {
-      setBusy("");
-    }
+  const editDocument = () => {
+    onOpenInspector?.();
+    requestSkillFile(skillDocumentPath(selectedName));
   };
 
   const createSkill = async () => {
@@ -199,9 +191,10 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
       setCreateDialog(false);
       setCreateForm({ name: "", description: "" });
       setDocument(created);
-      setDraft(created.content);
+      setPreview(created.content);
       setSelectedName(created.name);
-      setPane("editor");
+      setPane("skill");
+      publishSkillSelection({ name: created.name, path: created.path || "" });
       notify("success", t("skill.created"));
       if (mode !== "demo") setTargets(await SkillBinding.ScanSyncTargets());
     } catch (error) {
@@ -231,17 +224,21 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
   };
 
   const runDebug = async () => {
-    if (dirty) { notify("error", t("skill.saveBeforeAction")); return; }
     if (!document || !debugPrompt.trim()) { notify("error", t("skill.debugPromptRequired")); return; }
     setBusy("debug");
     setDebugResult(null);
     try {
       const result = mode === "demo" ? {
         succeeded: true,
-        output: "The skill was loaded explicitly and produced this preview response.",
+        output: "Loaded the skill explicitly and produced this preview response.\n\n- Checked the frontmatter\n- Followed the workflow in `SKILL.md`",
         durationMs: 1280,
         usage: { inputTokens: 942, outputTokens: 86 },
-        events: [{ kind: "message", text: "The skill was loaded explicitly and produced this preview response.", at: new Date().toISOString() }],
+        events: [
+          { kind: "reasoning", text: "The prompt names the skill directly, so the body is already in context.", at: new Date().toISOString() },
+          { kind: "tool_use", text: "read_file ~/.onecatch/skills/" + document.name + "/SKILL.md", at: new Date().toISOString() },
+          { kind: "tool_result", text: "---\nname: " + document.name + "\n---\n\n# " + document.name + "\n\n(284 bytes)", at: new Date().toISOString() },
+          { kind: "message", text: "Loaded the skill explicitly and produced this preview response.", at: new Date().toISOString() },
+        ],
       } : await SkillBinding.Debug({ name: document.name, prompt: debugPrompt.trim() });
       setDebugResult(result);
       notify(result.succeeded ? "success" : "error", t(result.succeeded ? "skill.debugComplete" : "skill.debugFailed"));
@@ -253,7 +250,6 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
   };
 
   const syncTarget = async (target) => {
-    if (dirty) { notify("error", t("skill.saveBeforeAction")); return; }
     setBusy(`sync-${target.id}`);
     try {
       if (mode !== "demo") await SkillBinding.Sync(target.id);
@@ -298,12 +294,13 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
     }
   };
 
-  const debugTokens = useMemo(() => (debugResult?.usage?.inputTokens || 0) + (debugResult?.usage?.outputTokens || 0), [debugResult]);
   const visibleSkills = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return skills;
     return skills.filter((item) => `${item.name} ${item.description || ""}`.toLowerCase().includes(needle));
   }, [query, skills]);
+  const parsed = useMemo(() => parseSkillDocument(preview), [preview]);
+  const extraFrontmatter = useMemo(() => Object.entries(parsed.frontmatter).filter(([key]) => key !== "name" && key !== "description"), [parsed]);
 
   return <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[248px_minmax(0,1fr)] overflow-hidden bg-background max-[900px]:grid-cols-[196px_minmax(0,1fr)]">
     <aside className="flex min-h-0 min-w-0 flex-col border-r border-border/60" aria-label={t("skill.library")}>
@@ -323,10 +320,9 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
           {visibleSkills.map((skill) => <SkillRow
             key={skill.name}
             skill={skill}
-            selected={pane !== "sync" && skill.name === selectedName}
-            dirty={dirty && skill.name === selectedName}
+            selected={pane === "skill" && skill.name === selectedName}
             disabled={Boolean(busy)}
-            onSelect={() => void selectSkill(skill.name)}
+            onSelect={() => selectSkill(skill.name)}
           />)}
         </div>
         {skills.length > 0 && visibleSkills.length === 0 && <p className="px-2.5 py-3 text-[11px] text-muted-foreground">{t("skill.noMatches")}</p>}
@@ -352,59 +348,54 @@ export default function SkillManagerPage({ mode, notify, requestConfirm }) {
         <p className="mt-6 text-[11px] leading-relaxed text-muted-foreground">{t("skill.metadataHint")}</p>
       </section>
     </ScrollArea> : document ? <div className="flex min-h-0 min-w-0 flex-col">
-      <header className="flex shrink-0 items-start gap-4 px-8 pt-7 pb-4">
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1 className="min-w-0 truncate text-[19px] font-semibold tracking-[-0.01em] text-foreground">{document.name}</h1>
-            {dirty && <span className="shrink-0 text-[11px] text-muted-foreground">{t("skill.unsaved")}</span>}
-          </div>
-          <p className="mt-1 line-clamp-2 text-[13px] leading-relaxed text-muted-foreground">{document.description}</p>
-          <p className="mt-2 truncate font-mono text-[11px] text-muted-foreground/80" title={document.path}>{document.path} · {formatSkillBytes(document.sizeBytes)} · {formatDateTime(document.updatedAt)}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {/* A clean buffer has nothing to save, and a disabled filled button
-              reads as a broken primary action — so it recedes to a ghost until
-              the draft actually diverges. */}
-          <Button size="sm" variant={dirty ? "default" : "ghost"} className={dirty ? "" : "text-muted-foreground"} disabled={Boolean(busy) || !dirty} onClick={saveSkill}>{busy === "save" ? t("common.saving") : t("common.save")}</Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={Boolean(busy)} aria-label={t("skill.actions")}><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialog({ name: document.name })}><Trash2 aria-hidden="true" />{t("common.delete")}</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </header>
-
-      <nav className="flex shrink-0 items-center gap-5 border-b border-border/60 px-8" aria-label={t("skill.title")}>
-        <PaneTab active={pane === "editor"} icon={FileCode2} label={t("skill.editor")} onSelect={() => setPane("editor")} />
-        <PaneTab active={pane === "debug"} icon={Bug} label={t("skill.debug")} onSelect={() => setPane("debug")} />
-      </nav>
-
-      {pane === "editor" ? <div className="flex min-h-0 flex-1 flex-col px-8 pt-5 pb-5">
-        <Textarea className="min-h-0 flex-1 resize-none rounded-xl border-border/60 bg-card px-5 py-4 font-mono text-[12.5px] leading-[1.75] shadow-none" spellCheck="false" aria-label="SKILL.md" value={draft} onChange={(event) => setDraft(event.target.value)} />
-        <p className="mt-3 shrink-0 text-[11px] leading-relaxed text-muted-foreground">{t("skill.editorHint")} {t("skill.resourcesPreserved")}</p>
-      </div> : <ScrollArea className="min-h-0 flex-1">
-        <section className="max-w-2xl px-8 pt-6 pb-10">
-          <p className="text-[13px] leading-relaxed text-muted-foreground">{t("skill.debugDescription")}</p>
-          <div className="mt-5 grid gap-2">
-            <Label htmlFor="skill-debug-prompt" className="text-[12px] text-muted-foreground">{t("skill.testPrompt")}</Label>
-            <Textarea id="skill-debug-prompt" className="min-h-24 rounded-xl border-border/60 bg-card px-4 py-3 text-[13px] shadow-none" value={debugPrompt} onChange={(event) => setDebugPrompt(event.target.value)} placeholder={t("skill.debugPlaceholder")} />
-            <div className="flex justify-end"><Button size="sm" disabled={Boolean(busy) || dirty || !debugPrompt.trim()} onClick={runDebug}><Play aria-hidden="true" />{busy === "debug" ? t("skill.debugging") : t("skill.runDebug")}</Button></div>
-          </div>
-          {debugResult && <section className="mt-7 border-t border-border/50 pt-5">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <StatusBadge status={debugResult.succeeded ? "good" : "danger"}>{t(debugResult.succeeded ? "skill.debugPassed" : "skill.debugFailed")}</StatusBadge>
-              <span className="text-[11px] text-muted-foreground">{formatDuration(debugResult.durationMs)} · {t("skill.tokens", { count: formatTokens(debugTokens) })}</span>
-              {debugResult.sessionId && <code className="ml-auto font-mono text-[10px] text-muted-foreground">{debugResult.sessionId}</code>}
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="mx-auto w-full max-w-3xl px-8 pt-7 pb-9">
+          {/* One card is the whole skill: what it claims to be in its
+              frontmatter, and the prose a runtime actually loads. */}
+          <article className="overflow-hidden rounded-2xl border border-border/60 bg-card">
+            <header className="border-b border-border/50 px-6 pt-5 pb-4">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <h1 className="min-w-0 truncate text-[19px] font-semibold tracking-[-0.01em] text-foreground">{document.name}</h1>
+                  <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">{parsed.frontmatter.description || document.description}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" aria-label={t("skill.editDocument")} title={t("skill.editDocument")} onClick={editDocument}><SquarePen aria-hidden="true" /></Button>
+                  <Button variant="ghost" size="icon-sm" className={debugOpen ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"} aria-pressed={debugOpen} aria-label={t("skill.debug")} title={t("skill.debug")} onClick={() => setDebugOpen((current) => !current)}><Play aria-hidden="true" /></Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild><Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={Boolean(busy)} aria-label={t("skill.actions")}><Ellipsis aria-hidden="true" /></Button></DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onSelect={editDocument}><SquarePen aria-hidden="true" />{t("skill.editDocument")}</DropdownMenuItem>
+                      <DropdownMenuItem variant="destructive" onSelect={() => setDeleteDialog({ name: document.name })}><Trash2 aria-hidden="true" />{t("common.delete")}</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+              </div>
+              <p className="mt-2.5 truncate font-mono text-[11px] text-muted-foreground/80" title={document.path}>{document.path} · {formatSkillBytes(document.sizeBytes)} · {formatDateTime(document.updatedAt)}</p>
+              {extraFrontmatter.length > 0 && <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1">{extraFrontmatter.map(([key, value]) => <div className="flex min-w-0 items-baseline gap-1.5" key={key}>
+                <dt className="shrink-0 font-mono text-[10px] text-muted-foreground">{key}</dt>
+                <dd className="m-0 min-w-0 truncate text-[11px] text-foreground/80">{value}</dd>
+              </div>)}</dl>}
+            </header>
+            <div className="px-6 py-5">
+              {parsed.body.trim()
+                ? <MarkdownContent className="markdown-content text-[13.5px] leading-[1.75]" content={parsed.body} />
+                : <p className="text-[12px] text-muted-foreground">{t("skill.emptyBody")}</p>}
             </div>
-            <div className="mt-3 whitespace-pre-wrap text-[13px] leading-[1.75] text-foreground">{debugResult.output || t("skill.noDebugOutput")}</div>
-            {debugResult.events?.length > 0 && <details className="mt-4">
-              <summary className="cursor-pointer text-[11px] text-muted-foreground transition-colors hover:text-foreground">{t("skill.debugEvents", { count: debugResult.events.length })}</summary>
-              <div className="mt-2 grid gap-2 rounded-lg bg-muted/35 px-3.5 py-3">{debugResult.events.map((event, index) => <div className="grid grid-cols-[80px_minmax(0,1fr)] gap-3 font-mono text-[10px] leading-relaxed" key={`${event.kind}-${index}`}><span className={event.failed ? "text-destructive" : "text-muted-foreground"}>{event.kind}</span><span className="whitespace-pre-wrap text-foreground/80">{event.text}</span></div>)}</div>
-            </details>}
-          </section>}
-        </section>
-      </ScrollArea>}
+          </article>
+          <p className="mt-3 px-1 text-[11px] leading-relaxed text-muted-foreground">{t("skill.editorHint")}</p>
+        </div>
+      </ScrollArea>
+      {debugOpen && <SkillDebugPanel
+        skillName={document.name}
+        prompt={debugPrompt}
+        result={debugResult}
+        running={busy === "debug"}
+        blocked={Boolean(busy) && busy !== "debug"}
+        onPromptChange={setDebugPrompt}
+        onRun={() => void runDebug()}
+        onClose={() => setDebugOpen(false)}
+      />}
     </div> : <div className="flex min-h-0 min-w-0 items-center justify-center px-8">
       <div className="max-w-sm text-center">
         <h1 className="text-[17px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.emptyTitle")}</h1>

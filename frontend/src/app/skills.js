@@ -21,3 +21,20 @@ export function formatSkillBytes(value) {
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(bytes < 10 * 1024 ? 1 : 0)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
+
+// SKILL.md carries its identity in YAML frontmatter, which the detail card
+// already prints as a header. Splitting it off keeps the rendered preview to
+// the prose the skill actually is, instead of opening every skill with a wall
+// of `---` and key/value lines.
+export function parseSkillDocument(content) {
+  const text = String(content || "");
+  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/.exec(text);
+  if (!match) return { frontmatter: {}, body: text };
+  const frontmatter = {};
+  for (const line of match[1].split(/\r?\n/)) {
+    const separator = line.indexOf(":");
+    if (separator <= 0 || /^\s/.test(line)) continue;
+    frontmatter[line.slice(0, separator).trim()] = line.slice(separator + 1).trim().replace(/^["']|["']$/g, "");
+  }
+  return { frontmatter, body: text.slice(match[0].length) };
+}

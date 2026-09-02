@@ -286,6 +286,13 @@ function App() {
     return () => media.removeListener?.(update);
   }, []);
 
+  // The skills detail card hands editing to the inspector, so it needs to be
+  // able to reveal the aside rather than toggle it — a request to edit must
+  // never close the panel the editor is about to appear in.
+  const openInspector = useCallback(() => {
+    setInspectorPreference((current) => (resolveInspectorCollapsed(current) ? false : current));
+  }, []);
+
   const toggleInspector = useCallback(() => {
     setInspectorPreference((current) => !resolveInspectorCollapsed(current));
   }, []);
@@ -1600,7 +1607,7 @@ function App() {
           onDetachInspector={view === "tasks" && mode === "wails" ? detachInspector : null}
           onEditWorkspace={editWorkspace}
           newTaskOpen={view === "tasks" && taskCreateVisible}
-          alternateContent={view === "skills" ? <Suspense fallback={<ViewLoading />}><SkillManagerPage mode={mode} notify={notify} requestConfirm={requestConfirm} /></Suspense> : null}
+          alternateContent={view === "skills" ? <Suspense fallback={<ViewLoading />}><SkillManagerPage mode={mode} notify={notify} onOpenInspector={openInspector} /></Suspense> : null}
           taskForm={taskForm}
           workflows={workflows}
           runtimes={runtimes}

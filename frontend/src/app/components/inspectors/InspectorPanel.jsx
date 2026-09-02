@@ -25,7 +25,7 @@ export default function InspectorPanel({ className = "", scope = "task", mode, w
       <div className="workbench-inspector-window-actions ml-auto">{actions}</div>
     </div>
     <div className="workbench-inspector-body min-h-0 overflow-hidden" id="workbench-inspector-content">
-      <SkillFilesInspector mode={mode} />
+      <SkillFilesInspector mode={mode} notify={notify} onDirtyChange={onDirtyChange} />
     </div>
   </aside>;
 
