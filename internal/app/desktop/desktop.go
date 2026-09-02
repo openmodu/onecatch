@@ -200,7 +200,7 @@ func Run() {
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
 	})
-	updateService, err = appupdateservice.New(wailsApp)
+	updateService, err = appupdateservice.New(wailsApp, store.Data.Paths.Root)
 	if err != nil {
 		log.Fatal("configure app updater", zap.Error(err))
 	}

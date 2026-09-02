@@ -80,8 +80,8 @@ export default function SidebarUpdateButton({ mode, notify }) {
     </div>}
     <Tooltip>
       <TooltipTrigger asChild>
-        <button type="button" className={`sidebar-update-trigger relative grid size-9 place-items-center rounded-lg border-0 p-0 transition-[color,background-color,box-shadow,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/35 ${available ? "bg-transparent text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-95" : ready ? "bg-primary text-primary-foreground shadow-sm hover:bg-primary/90 active:scale-95" : failed ? "bg-transparent text-destructive shadow-none hover:bg-destructive/10" : "bg-transparent text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`} aria-label={label} aria-busy={busy || downloading || state === "checking" || undefined} disabled={!actionable} data-codex-download={available || undefined} data-update-state={state} onClick={() => void act()}>
-          {icon}
+        <button type="button" className={`sidebar-update-trigger relative grid size-9 place-items-center rounded-lg border-0 bg-transparent p-0 shadow-none transition-[color,background-color,transform] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring/35 ${available ? "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-95" : ready ? "text-primary-foreground hover:bg-sidebar-accent active:scale-95" : failed ? "text-destructive hover:bg-destructive/10" : "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"}`} aria-label={label} aria-busy={busy || downloading || state === "checking" || undefined} disabled={!actionable} data-codex-download={available || undefined} data-update-state={state} onClick={() => void act()}>
+          {ready ? <span className="grid size-7 place-items-center rounded-md bg-primary shadow-xs">{icon}</span> : icon}
         </button>
       </TooltipTrigger>
       <TooltipContent side="top" align="end" sideOffset={7}>{label}</TooltipContent>

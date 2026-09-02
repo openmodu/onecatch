@@ -80,6 +80,13 @@ export class Status {
              * @member
              * @type {string | undefined}
              */
+            this["downloadPath"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
             this["error"] = undefined;
         }
 

@@ -34,6 +34,7 @@ type Status struct {
 	AutomaticSupported  bool      `json:"automaticSupported"`
 	VerificationEnabled bool      `json:"verificationEnabled"`
 	FeedURL             string    `json:"feedUrl,omitempty"`
+	DownloadPath        string    `json:"downloadPath,omitempty"`
 	Error               string    `json:"error,omitempty"`
 }
 
@@ -41,21 +42,28 @@ type Service struct {
 	app         *application.App
 	updater     *updater.Updater
 	feedURL     string
+	cacheRoot   string
+	publicKey   []byte
 	verified    bool
 	operationMu sync.Mutex
 
 	mu      sync.RWMutex
 	release *updater.Release
+	cached  *cachedUpdate
 	lastErr string
 	cancel  context.CancelFunc
 	done    chan struct{}
 }
 
-func New(app *application.App) (*Service, error) {
+func New(app *application.App, dataRoot string) (*Service, error) {
 	if app == nil {
 		return nil, errors.New("app update: application is nil")
 	}
-	service := &Service{app: app, updater: app.Updater}
+	cacheRoot, err := updateCacheRoot(dataRoot)
+	if err != nil {
+		return nil, err
+	}
+	service := &Service{app: app, updater: app.Updater, cacheRoot: cacheRoot}
 	keyText := strings.TrimSpace(buildinfo.UpdatePublicKey)
 	if keyText == "" || buildinfo.Version == "dev" {
 		return service, nil
@@ -78,7 +86,19 @@ func New(app *application.App) (*Service, error) {
 	}); err != nil {
 		return nil, err
 	}
+	service.publicKey = append([]byte(nil), key...)
 	service.verified = true
+	if cached, restoreErr := restoreCachedUpdate(service.cacheRoot, buildinfo.Version, service.publicKey); restoreErr == nil {
+		service.cached = cached
+		if cached != nil {
+			release := cached.manifest.Release
+			service.release = &release
+		}
+	} else {
+		// A corrupt or incomplete cache is never allowed to become installable.
+		// Remove it so the next check can offer a clean download.
+		_ = removeCachedUpdate(service.cacheRoot)
+	}
 	return service, nil
 }
 
@@ -154,11 +174,19 @@ func (s *Service) Status() Status {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	status.Error = s.lastErr
-	if s.release != nil {
-		status.AvailableVersion = s.release.Version
-		status.Name = s.release.Name
-		status.Notes = s.release.Notes
-		status.PublishedAt = s.release.PublishedAt
+	release := s.release
+	if s.cached != nil {
+		status.State = string(updater.StateReady)
+		status.DownloadPath = s.cached.payload
+		release = &s.cached.manifest.Release
+	} else if status.State == string(updater.StateReady) {
+		status.DownloadPath = s.updater.DownloadedPath()
+	}
+	if release != nil {
+		status.AvailableVersion = release.Version
+		status.Name = release.Name
+		status.Notes = release.Notes
+		status.PublishedAt = release.PublishedAt
 	}
 	return status
 }
@@ -174,12 +202,19 @@ func (s *Service) Check(ctx context.Context) (Status, error) {
 	release, err := s.updater.Check(ctx)
 	s.mu.Lock()
 	s.release = release
+	removeStaleCache := release != nil && s.cached != nil && release.Version != s.cached.manifest.Release.Version
+	if removeStaleCache {
+		s.cached = nil
+	}
 	if err != nil {
 		s.lastErr = err.Error()
 	} else {
 		s.lastErr = ""
 	}
 	s.mu.Unlock()
+	if removeStaleCache {
+		_ = removeCachedUpdate(s.cacheRoot)
+	}
 	status := s.Status()
 	s.app.Event.Emit(EventStatusChanged, status)
 	return status, err
@@ -191,7 +226,25 @@ func (s *Service) Download(ctx context.Context) (Status, error) {
 	}
 	s.operationMu.Lock()
 	defer s.operationMu.Unlock()
+	s.mu.RLock()
+	release := s.release
+	s.mu.RUnlock()
+	if err := validateSignedRelease(release); err != nil {
+		s.rememberError(err)
+		return s.Status(), err
+	}
 	err := s.updater.DownloadAndInstall(ctx)
+	if err == nil {
+		cached, cacheErr := persistCachedUpdate(s.cacheRoot, release, s.updater.DownloadedPath())
+		if cacheErr != nil {
+			err = cacheErr
+		} else {
+			s.mu.Lock()
+			s.cached = cached
+			s.mu.Unlock()
+			discardTemporaryDownload(s.updater.DownloadedPath())
+		}
+	}
 	s.rememberError(err)
 	status := s.Status()
 	s.app.Event.Emit(EventStatusChanged, status)
@@ -202,20 +255,47 @@ func (s *Service) Apply(ctx context.Context) error {
 	if err := s.requireConfigured(); err != nil {
 		return err
 	}
-	if s.updater.State() != updater.StateReady {
-		return errors.New("app update: no verified update is ready")
-	}
 	if !automaticSupported() {
 		return errors.New("app update: this installation cannot update itself; download the package from the release page")
+	}
+	s.operationMu.Lock()
+	defer s.operationMu.Unlock()
+	s.mu.RLock()
+	cached := s.cached
+	s.mu.RUnlock()
+	if cached != nil {
+		restored, err := restoreCachedUpdate(s.cacheRoot, buildinfo.Version, s.publicKey)
+		if err != nil || restored == nil {
+			_ = removeCachedUpdate(s.cacheRoot)
+			s.mu.Lock()
+			s.cached = nil
+			s.release = nil
+			s.mu.Unlock()
+			if err == nil {
+				err = errors.New("app update: cached artifact is no longer newer than this application")
+			}
+			return err
+		}
+		if runtime.GOOS == "darwin" {
+			return s.restartCachedDarwin(restored.payload)
+		}
+		return s.startUpdaterHelper(restored.payload)
+	}
+	if s.updater.State() != updater.StateReady {
+		return errors.New("app update: no verified update is ready")
 	}
 	if runtime.GOOS == "darwin" {
 		return s.updater.Restart(ctx)
 	}
-	mode, target := updateTarget()
 	staged := s.updater.DownloadedPath()
 	if staged == "" {
 		return errors.New("app update: verified artifact is missing")
 	}
+	return s.startUpdaterHelper(staged)
+}
+
+func (s *Service) startUpdaterHelper(staged string) error {
+	mode, target := updateTarget()
 	helper, err := copyUpdaterHelper()
 	if err != nil {
 		return err
@@ -235,6 +315,50 @@ func (s *Service) Apply(ctx context.Context) error {
 	}
 	s.app.Quit()
 	return nil
+}
+
+func (s *Service) restartCachedDarwin(staged string) error {
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("app update: resolve executable: %w", err)
+	}
+	target := darwinBundleTarget(executable)
+	if target == executable {
+		return errors.New("app update: application is not running from a macOS bundle")
+	}
+	logPath := filepath.Join(os.TempDir(), fmt.Sprintf("wails-update-%d.log", os.Getpid()))
+	command := exec.Command(executable)
+	command.Stdin, command.Stdout, command.Stderr = nil, nil, nil
+	command.Env = append(os.Environ(),
+		"WAILS_UPDATER_HELPER=1",
+		"WAILS_UPDATER_HELPER_TARGET="+target,
+		"WAILS_UPDATER_HELPER_NEW="+staged,
+		"WAILS_UPDATER_HELPER_PID="+fmt.Sprint(os.Getpid()),
+		"WAILS_UPDATER_HELPER_LOG="+logPath,
+	)
+	if err := command.Start(); err != nil {
+		return fmt.Errorf("app update: start macOS updater helper: %w", err)
+	}
+	s.app.Quit()
+	return nil
+}
+
+func darwinBundleTarget(executable string) string {
+	parts := strings.Split(filepath.Clean(executable), string(os.PathSeparator))
+	for index, part := range parts {
+		if strings.HasSuffix(part, ".app") {
+			return string(os.PathSeparator) + filepath.Join(parts[1:index+1]...)
+		}
+	}
+	return executable
+}
+
+func discardTemporaryDownload(staged string) {
+	directory := filepath.Dir(filepath.Clean(staged))
+	if filepath.Clean(filepath.Dir(directory)) != filepath.Clean(os.TempDir()) || !strings.HasPrefix(filepath.Base(directory), "wails-update-") {
+		return
+	}
+	_ = os.RemoveAll(directory)
 }
 
 func (s *Service) requireConfigured() error {

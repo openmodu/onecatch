@@ -25,9 +25,11 @@ test("the sidebar owns the glanceable update and progress control", async () => 
   assert.match(control, /<ProgressRing ratio=\{percent \/ 100\}/);
   assert.match(control, /available \? <Download/);
   assert.match(control, /data-codex-download=\{available \|\| undefined\}/, "an available release must switch the footer control to the Codex-style download action");
-  assert.match(control, /available \? "bg-transparent text-muted-foreground shadow-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-95"/, "the download action should match the footer's quiet icon controls");
+  assert.match(control, /available \? "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-95"/, "the download action should match the footer's quiet icon controls");
   assert.doesNotMatch(control, /available && <i/, "the download action must not rely on a tiny notification dot");
   assert.match(control, /state === "ready" \? <RotateCcw/);
+  assert.match(control, /ready \? <span className="grid size-7 place-items-center rounded-md bg-primary shadow-xs">/, "the ready background stays compact inside the shared footer hit target");
+  assert.match(control, /sidebar-update-trigger[^`]*size-9[^`]*bg-transparent/, "ready and download actions share the footer's transparent outer surface");
   assert.match(control, /role="status" aria-live="polite"/);
   assert.match(control, /sidebar-update-control[^\"]*relative grid size-9/, "the updater must occupy its own footer grid cell instead of overlaying the menu");
   assert.match(control, /sidebar-update-trigger[^`]*size-9[^`]*rounded-lg/, "the updater needs its own button surface");
@@ -49,7 +51,8 @@ test("the sidebar update control appears only for a known update lifecycle", asy
 
 test("the settings page keeps software updates to one compact status row", async () => {
   const settings = await readFile(new URL("./SettingsPage.jsx", import.meta.url), "utf8");
-  assert.match(settings, /app-update-settings rounded-lg[^\"]*bg-muted\/25[^\"]*px-3 py-2\.5/);
+  assert.match(settings, /app-update-settings rounded-md[^\"]*bg-muted\/25[^\"]*px-2\.5 py-2/);
+  assert.match(settings, /state === "ready" \? <SettingsButton compact className="rounded-md"/, "the restart action must use the same compact control scale as the row");
   assert.match(settings, /OneCatch \{status\?\.currentVersion \|\| "—"\} · \{stateLabel\}/);
   assert.doesNotMatch(settings, /t\("settings\.appUpdateDescription"\)/, "the compact update row must not repeat an introductory description");
   assert.doesNotMatch(settings, /t\("settings\.updateSecurityNote"\)/, "the compact update row must not keep a permanent security paragraph");
