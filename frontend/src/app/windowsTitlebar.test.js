@@ -24,7 +24,7 @@ test("Windows and Linux integrate the conversation controls into one desktop cap
   assert.match(app, /\{title && <span className="windows-titlebar-task[^"]*pr-1 pl-3/, "the caption title keeps compact breathing room before the lock action");
   assert.match(app, /\{workspaceName && <Tooltip>[\s\S]*?<Folder size=\{14\}[\s\S]*?<TooltipContent side="bottom" sideOffset=\{6\}>\{workspaceName\}<\/TooltipContent>/, "the project folder in the caption reveals its workspace name on hover");
   assert.match(app, /workspaceName=\{view === "tasks" \? selectedWorkspace\?\.name \|\| "" : ""\}/, "only task views place the current project beside the caption title");
-  assert.match(app, /<\/span>\}\s*<button type="button" className="windows-titlebar-control no-drag relative shrink-0" aria-label=\{t\("lock\.enter"\)\}/, "standby lock sits immediately after the desktop caption title");
+  assert.match(app, /<\/span>\}\s*\{showLock && <button type="button" className="windows-titlebar-control no-drag relative shrink-0" aria-label=\{t\("lock\.enter"\)\}/, "standby lock sits immediately after the desktop caption title");
   assert.match(app, /className="windows-titlebar-workbench-actions no-drag ml-auto[^\"]*pr-0/, "status and terminal controls remain aligned flush beside the window buttons");
   assert.match(app, /<div className="no-drag flex h-full"/, "the window buttons sit directly beside the workbench controls");
   assert.doesNotMatch(app, /<div className="no-drag ml-auto flex h-full"/, "the window buttons must not introduce a second auto margin");
