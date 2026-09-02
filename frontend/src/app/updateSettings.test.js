@@ -28,7 +28,8 @@ test("the sidebar owns the glanceable update and progress control", async () => 
   assert.match(control, /available \? "text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:scale-95"/, "the download action should match the footer's quiet icon controls");
   assert.doesNotMatch(control, /available && <i/, "the download action must not rely on a tiny notification dot");
   assert.match(control, /state === "ready" \? <RotateCcw/);
-  assert.match(control, /ready \? <span className="grid size-7 place-items-center rounded-md bg-primary shadow-xs">/, "the ready background stays compact inside the shared footer hit target");
+  assert.match(control, /state === "ready" \? <RotateCcw size=\{14\}/, "the restart glyph stays visually quieter than the shared hit target");
+  assert.match(control, /ready \? <span className="grid size-6 place-items-center rounded-\[6px\] bg-primary shadow-xs">/, "the ready background stays compact inside the shared footer hit target");
   assert.match(control, /sidebar-update-trigger[^`]*size-9[^`]*bg-transparent/, "ready and download actions share the footer's transparent outer surface");
   assert.match(control, /role="status" aria-live="polite"/);
   assert.match(control, /sidebar-update-control[^\"]*relative grid size-9/, "the updater must occupy its own footer grid cell instead of overlaying the menu");
