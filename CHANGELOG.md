@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.1.9
+
+- Persist verified update packages across app restarts and revalidate them before installation.
+- Improve remote workspace performance with persistent command channels, cached metadata, and safer filesystem mirroring across Codex, Claude Code, and Modu Code.
+- Render streamed responses more smoothly with display-synchronized batching and a compact, theme-aware caret.
+
 ## 0.1.8
 
 - 支持在输入框中输入 `$skill_name`，选择并指定当前 Agent 的技能。
