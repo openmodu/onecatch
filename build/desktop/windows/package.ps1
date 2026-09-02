@@ -46,17 +46,34 @@ $outputInstaller = if ($env:OUTPUT_INSTALLER) {
 }
 New-Item -ItemType Directory -Force -Path (Split-Path -Parent $outputInstaller) | Out-Null
 
-$makeNsis = Get-Command "makensis.exe" -ErrorAction SilentlyContinue
+$makeNsis = if ($env:NSIS_MAKENSIS -and (Test-Path -LiteralPath $env:NSIS_MAKENSIS -PathType Leaf)) {
+    Get-Item -LiteralPath $env:NSIS_MAKENSIS
+} else {
+    Get-Command "makensis.exe" -ErrorAction SilentlyContinue
+}
 if (-not $makeNsis) {
+    $chocolateyRoot = if ($env:ChocolateyInstall) {
+        $env:ChocolateyInstall
+    } else {
+        Join-Path $env:ProgramData "chocolatey"
+    }
     $candidates = @(
         (Join-Path ${env:ProgramFiles(x86)} "NSIS\makensis.exe"),
-        (Join-Path $env:ProgramFiles "NSIS\makensis.exe")
+        (Join-Path $env:ProgramFiles "NSIS\makensis.exe"),
+        (Join-Path $chocolateyRoot "bin\makensis.exe")
     )
     $makeNsisPath = $candidates |
         Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Leaf) } |
         Select-Object -First 1
     if ($makeNsisPath) {
         $makeNsis = Get-Item -LiteralPath $makeNsisPath
+    }
+}
+if (-not $makeNsis) {
+    $chocolateyLib = Join-Path $chocolateyRoot "lib"
+    if (Test-Path -LiteralPath $chocolateyLib -PathType Container) {
+        $makeNsis = Get-ChildItem -LiteralPath $chocolateyLib -Filter "makensis.exe" -File -Recurse -ErrorAction SilentlyContinue |
+            Select-Object -First 1
     }
 }
 if (-not $makeNsis) {

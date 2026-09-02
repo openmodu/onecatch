@@ -67,7 +67,35 @@ jobs:
           go tool wails3 task release:check
       - name: Install NSIS
         shell: pwsh
-        run: choco install nsis --no-progress -y
+        run: |
+          choco install nsis.install --no-progress -y
+          if ($LASTEXITCODE -ne 0) {
+            throw "Chocolatey failed to install NSIS"
+          }
+
+          $chocolateyRoot = if ($env:ChocolateyInstall) {
+            $env:ChocolateyInstall
+          } else {
+            Join-Path $env:ProgramData "chocolatey"
+          }
+          $searchRoots = @(
+            (Join-Path ${env:ProgramFiles(x86)} "NSIS"),
+            (Join-Path $env:ProgramFiles "NSIS"),
+            (Join-Path $chocolateyRoot "bin"),
+            (Join-Path $chocolateyRoot "lib")
+          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Container) }
+          $makeNsis = $searchRoots |
+            ForEach-Object {
+              Get-ChildItem -LiteralPath $_ -Filter "makensis.exe" -File -Recurse -ErrorAction SilentlyContinue
+            } |
+            Select-Object -First 1
+          if (-not $makeNsis) {
+            throw "Chocolatey installed NSIS, but makensis.exe could not be located"
+          }
+
+          Write-Output "Using NSIS compiler: $($makeNsis.FullName)"
+          "NSIS_MAKENSIS=$($makeNsis.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $makeNsis.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Build Windows installer
         shell: pwsh
         run: |
