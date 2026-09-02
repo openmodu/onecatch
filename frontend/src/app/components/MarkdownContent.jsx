@@ -65,6 +65,11 @@ const REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkSkillMenti
 // placeholders so the desktop webview never fetches model-provided URLs.
 function MarkdownContent({ content, streaming = false, className = "" }) {
   const text = String(content || "");
+  // A trailing newline is meaningful to the accumulated transcript, but while
+  // streaming `white-space: pre-wrap` puts Streamdown's caret on a blank line.
+  // Trim only the display copy; the next frame still arrives with the original
+  // bytes and static output is never altered.
+  const renderedText = streaming ? text.replace(/\s+$/u, "") : text;
   return <Streamdown
     aria-busy={streaming || undefined}
     caret={streaming ? "block" : undefined}
@@ -77,7 +82,7 @@ function MarkdownContent({ content, streaming = false, className = "" }) {
     mode={streaming ? "streaming" : "static"}
     remarkPlugins={REMARK_PLUGINS}
     skipHtml
-  >{text}</Streamdown>;
+  >{renderedText}</Streamdown>;
 }
 
 export default memo(MarkdownContent);

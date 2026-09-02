@@ -2632,6 +2632,33 @@
   .markdown-content > :last-child { margin-bottom: 0; }
   .markdown-content p { margin: 0 0 0.72em; white-space: pre-wrap; }
 
+  /* Streamdown ships a full-height black block glyph. Keep its correct inline
+     placement, but render a quiet theme-aware insertion mark that does not
+     create a second line or compete with the answer text. */
+  .markdown-content.streaming > :last-child::after {
+    content: "" !important;
+    display: inline-block !important;
+    width: 1.5px;
+    height: 0.88em;
+    margin-inline-start: 3px;
+    border-radius: 999px;
+    background: color-mix(in oklab, var(--primary) 72%, transparent);
+    vertical-align: -0.08em !important;
+    animation: markdown-stream-caret 1.05s ease-in-out infinite;
+  }
+
+  @keyframes markdown-stream-caret {
+    0%, 100% { opacity: 0.28; }
+    50% { opacity: 0.86; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .markdown-content.streaming > :last-child::after {
+      opacity: 0.65;
+      animation: none;
+    }
+  }
+
   .markdown-content h1,
   .markdown-content h2,
   .markdown-content h3,

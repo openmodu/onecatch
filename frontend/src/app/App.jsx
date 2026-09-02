@@ -56,6 +56,7 @@ import { REMOTE_FS_HEALTH_INTERVAL_MS, shouldAutoCheckRemoteFS } from "./remoteF
 import { newestTaskRun, normalizeTrayNavigation, TRAY_ACTION_EVENT } from "./trayNavigation.js";
 import { LANGUAGE_CHANGED_EVENT } from "../i18n.js";
 import { SIDEBAR_DEFAULT_WIDTH } from "./sidebarLayout.js";
+import { createFrameBatcher } from "./frameBatcher.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
@@ -231,7 +232,6 @@ function App() {
   const liveFramesRef = useRef([]);
   const liveFrameHistoryRef = useRef([]);
   const liveFrameGenerationRef = useRef(0);
-  const liveFlushTimerRef = useRef(0);
   // Latest-value refs so the polling loops can read fresh state without listing
   // `tasks`/`runDetail` as effect deps (which would tear down and rebuild the
   // timer on every tick — a big source of the jank).
@@ -242,7 +242,7 @@ function App() {
   tasksRef.current = tasks;
   // Handlers passed down to memoized children read these instead of closing over
   // the fast-changing state directly, so the callbacks stay reference-stable and
-  // the children's memo() actually holds across the 80ms streaming cadence.
+  // the children's memo() actually holds across the display-frame stream cadence.
   const selectedQueuedTaskIDRef = useRef("");
   selectedQueuedTaskIDRef.current = selectedQueuedTaskID;
   const composerAttachmentsRef = useRef([]);
@@ -754,12 +754,18 @@ function App() {
   useEffect(() => {
     if (mode !== "wails") return undefined;
     const flush = () => {
-      liveFlushTimerRef.current = 0;
       const frames = liveFramesRef.current;
       liveFramesRef.current = [];
       if (!frames.length) return;
       setRunDetail((current) => applyRuntimeFrames(current, frames));
     };
+    const scheduleFrame = typeof window.requestAnimationFrame === "function"
+      ? window.requestAnimationFrame.bind(window)
+      : (callback) => window.setTimeout(callback, 16);
+    const cancelFrame = typeof window.cancelAnimationFrame === "function"
+      ? window.cancelAnimationFrame.bind(window)
+      : window.clearTimeout.bind(window);
+    const batcher = createFrameBatcher(flush, scheduleFrame, cancelFrame);
     const off = Events.On(runtimeFrameEvent, (event) => {
       const frame = event.data;
       if (!frame || frame.runId !== selectedRunIDRef.current) return;
@@ -767,14 +773,13 @@ function App() {
       liveFrameHistoryRef.current.push({ generation: liveFrameGenerationRef.current, frame });
       if (liveFrameHistoryRef.current.length > 512) liveFrameHistoryRef.current.splice(0, 256);
       liveFramesRef.current.push(frame);
-      if (!liveFlushTimerRef.current) liveFlushTimerRef.current = window.setTimeout(flush, 80);
+      batcher.schedule();
       // Run/step status no longer needs a transcript re-read here: the backend
       // pushes the bounded run state on the onecatch:run-state channel below.
     });
     return () => {
       off();
-      window.clearTimeout(liveFlushTimerRef.current);
-      liveFlushTimerRef.current = 0;
+      batcher.cancel();
       liveFramesRef.current = [];
       liveFrameHistoryRef.current = [];
     };
@@ -1370,7 +1375,7 @@ function App() {
   const selectQueued = useCallback((task) => { setTaskModal(false); setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(task.id); }, []);
   // Stable handler identities keep the memoized Sidebar/TaskWorkbench from
   // re-rendering on every unrelated App state change (toasts, busy flips, the
-  // 80ms streaming cadence).
+  // display-frame streaming cadence).
   const openTaskModal = useCallback(() => setTaskModal(true), []);
   const loadMoreRuns = useCallback(() => loadRunList({ cursor: runNextCursorRef.current }), [loadRunList]);
   const chooseTaskAttachments = useCallback(() => chooseAttachments("task"), [chooseAttachments]);

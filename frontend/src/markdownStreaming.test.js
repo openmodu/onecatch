@@ -10,7 +10,15 @@ test("assistant markdown stays formatted while content is streaming", () => {
   assert.match(markdown, /mode=\{streaming \? "streaming" : "static"\}/);
   assert.match(markdown, /isAnimating=\{streaming\}/);
   assert.match(markdown, /caret=\{streaming \? "block" : undefined\}/);
+  assert.match(markdown, /const renderedText = streaming \? text\.replace\(\/\\s\+\$\/u, ""\) : text/);
+  assert.match(markdown, />\{renderedText\}<\/Streamdown>/);
   assert.doesNotMatch(markdown, /if \(streaming\)[\s\S]*markdown-plain/);
+});
+
+test("streaming caret stays compact, inline, and motion-safe", () => {
+  assert.match(css, /\.markdown-content\.streaming > :last-child::after\s*\{[^}]*content:\s*"" !important[^}]*display:\s*inline-block !important[^}]*width:\s*1\.5px[^}]*height:\s*0\.88em/s);
+  assert.match(css, /background:\s*color-mix\(in oklab, var\(--primary\) 72%, transparent\)/);
+  assert.match(css, /@media \(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\.markdown-content\.streaming > :last-child::after\s*\{[^}]*animation:\s*none/s);
 });
 
 test("streaming markdown preserves the desktop link and image safety policy", () => {
