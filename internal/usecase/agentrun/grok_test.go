@@ -649,3 +649,54 @@ func TestGrokContextWindowComesFromTheHandshake(t *testing.T) {
 		}
 	}
 }
+
+// Grok spells `content` as an array of tool-call content on tool calls, and as
+// a lone block on message chunks. A shape that fails to decode would take the
+// whole update with it, so both must survive.
+func TestGrokRunnerAcceptsArrayContent(t *testing.T) {
+	updates := []string{
+		`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"agent_message_chunk","content":[{"type":"text","text":"Read "},{"type":"text","text":"the file."}]}}}`,
+		`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"tool_call","toolCallId":"t-1","title":"Read README.md","kind":"read","status":"pending","content":[]}}}`,
+		`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"tool_call_update","toolCallId":"t-1","status":"completed","content":[{"type":"content","content":{"type":"text","text":"# Title"}}]}}}`,
+	}
+	events, result, err := runGrokStub(t, Request{Prompt: "read the file"},
+		`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}`, updates)
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	kinds := map[EventKind]int{}
+	for _, event := range events {
+		kinds[event.Kind]++
+		if event.Kind == KindError {
+			t.Fatalf("array content must decode, got error event %q", event.Text)
+		}
+	}
+	if kinds[KindToolUse] != 1 || kinds[KindToolResult] != 1 {
+		t.Fatalf("tool events = %v, want one use and one result", kinds)
+	}
+	if result.FinalMessage != "Read the file." {
+		t.Fatalf("final message = %q", result.FinalMessage)
+	}
+}
+
+func TestACPContentText(t *testing.T) {
+	for _, testCase := range []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{name: "absent", raw: "", want: ""},
+		{name: "null", raw: `null`, want: ""},
+		{name: "block", raw: `{"type":"text","text":"hi"}`, want: "hi"},
+		{name: "array", raw: `[{"type":"text","text":"a"},{"type":"text","text":"b"}]`, want: "ab"},
+		{name: "empty array", raw: `[]`, want: ""},
+		{name: "tool call content", raw: `[{"type":"content","content":{"type":"text","text":"out"}}]`, want: "out"},
+		{name: "diff", raw: `[{"type":"diff","path":"a.go","newText":"x"}]`, want: ""},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			if got := acpContentText(acpUpdate{Content: json.RawMessage(testCase.raw)}); got != testCase.want {
+				t.Fatalf("acpContentText(%s) = %q, want %q", testCase.raw, got, testCase.want)
+			}
+		})
+	}
+}

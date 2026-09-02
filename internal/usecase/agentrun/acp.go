@@ -1,6 +1,7 @@
 package agentrun
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -100,10 +101,11 @@ type acpEnvelope struct {
 // OneCatch renders are modelled; the rest survives in the event's Raw line.
 type acpUpdate struct {
 	SessionUpdate string `json:"sessionUpdate"`
-	Content       *struct {
-		Type string `json:"type"`
-		Text string `json:"text"`
-	} `json:"content,omitempty"`
+	// Content is left raw because ACP spells it two ways: a single content
+	// block on message and thought chunks, and an array of tool-call content
+	// on tool calls. A typed field for one shape fails the whole update on
+	// the other, which would drop every tool call Grok reports.
+	Content    json.RawMessage `json:"content,omitempty"`
 	ToolCallID string          `json:"toolCallId,omitempty"`
 	Title      string          `json:"title,omitempty"`
 	Kind       string          `json:"kind,omitempty"`
@@ -590,11 +592,40 @@ func acpOptionID(options []acpPermissionOption, kinds ...string) string {
 	return ""
 }
 
+// acpContentText flattens an update's content into plain text, accepting both
+// a lone content block and an array of them, and unwrapping the ToolCallContent
+// envelope that nests the real block under its own `content` key.
 func acpContentText(update acpUpdate) string {
-	if update.Content == nil {
+	return acpBlockText(update.Content)
+}
+
+func acpBlockText(raw json.RawMessage) string {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || string(trimmed) == "null" {
 		return ""
 	}
-	return update.Content.Text
+	if trimmed[0] == '[' {
+		var blocks []json.RawMessage
+		if err := json.Unmarshal(trimmed, &blocks); err != nil {
+			return ""
+		}
+		var text strings.Builder
+		for _, block := range blocks {
+			text.WriteString(acpBlockText(block))
+		}
+		return text.String()
+	}
+	var block struct {
+		Text    string          `json:"text"`
+		Content json.RawMessage `json:"content,omitempty"`
+	}
+	if err := json.Unmarshal(trimmed, &block); err != nil {
+		return ""
+	}
+	if block.Text != "" {
+		return block.Text
+	}
+	return acpBlockText(block.Content)
 }
 
 func acpToolText(title string, rawInput json.RawMessage) string {
