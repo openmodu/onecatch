@@ -3,6 +3,11 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.1.10
+
+- Queue follow-up messages while an agent is running and promote any pending message to steer the active turn.
+- Reduce the visual footprint of the restart-to-update control while preserving its accessible click target.
+
 ## 0.1.9
 
 - Persist verified update packages across app restarts and revalidate them before installation.
