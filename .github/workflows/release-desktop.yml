@@ -70,7 +70,16 @@ jobs:
         run: choco install nsis --no-progress -y
       - name: Build Windows installer
         shell: pwsh
-        run: go tool wails3 task package:desktop
+        run: |
+          $buildOutput = @(& go tool wails3 task package:desktop 2>&1)
+          $buildExit = $LASTEXITCODE
+          $buildOutput | ForEach-Object { Write-Output $_ }
+          if ($buildExit -ne 0) {
+            $tail = (($buildOutput | Select-Object -Last 40) -join "`n")
+            $tail = $tail.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+            Write-Output "::error title=Windows packaging failed::$tail"
+            exit $buildExit
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows

@@ -65,8 +65,18 @@ if (-not $makeNsis) {
 
 # Wails downloads the official evergreen bootstrapper. The installer only runs
 # it when WebView2 is missing on the target machine.
-& go tool wails3 generate webview2bootstrapper -dir $nsisRoot
-if ($LASTEXITCODE -ne 0) {
+$bootstrapperReady = $false
+foreach ($attempt in 1..3) {
+    & go tool wails3 generate webview2bootstrapper -dir $nsisRoot
+    if ($LASTEXITCODE -eq 0) {
+        $bootstrapperReady = $true
+        break
+    }
+    if ($attempt -lt 3) {
+        Start-Sleep -Seconds (5 * $attempt)
+    }
+}
+if (-not $bootstrapperReady) {
     throw "Unable to prepare the WebView2 bootstrapper"
 }
 
