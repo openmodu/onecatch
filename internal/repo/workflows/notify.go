@@ -84,6 +84,15 @@ func (r *notifyingRepo) RemoveInstruction(ctx context.Context, runID, instructio
 	return nil
 }
 
+func (r *notifyingRepo) UpdateInstructionMode(ctx context.Context, runID, instructionID string, priority, followUp bool) (domainworkflows.Instruction, error) {
+	stored, err := r.WorkflowsRepo.UpdateInstructionMode(ctx, runID, instructionID, priority, followUp)
+	if err != nil {
+		return stored, err
+	}
+	r.notify.MarkDirty(runID)
+	return stored, nil
+}
+
 func (r *notifyingRepo) ClaimInstructions(ctx context.Context, runID string) ([]domainworkflows.Instruction, error) {
 	claimed, err := r.WorkflowsRepo.ClaimInstructions(ctx, runID)
 	if err != nil {

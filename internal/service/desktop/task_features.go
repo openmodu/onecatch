@@ -79,16 +79,35 @@ func (a *Service) DeleteTask(ctx context.Context, taskID string) error {
 }
 
 func (a *Service) EnqueueInstruction(ctx context.Context, runID string, input InstructionInput) (domainworkflows.Instruction, error) {
-	return a.enqueueInstruction(ctx, runID, input, false)
+	return a.enqueueInstruction(ctx, runID, input, false, false)
 }
 
-func (a *Service) enqueueInstruction(ctx context.Context, runID string, input InstructionInput, priority bool) (domainworkflows.Instruction, error) {
+// QueueFollowUp persists a message for the next Agent turn. If the active turn
+// reaches its terminal transition before the message is observed, dispatch's
+// completion hook resumes the same run and session automatically.
+func (a *Service) QueueFollowUp(ctx context.Context, runID string, input InstructionInput) (domainworkflows.Instruction, error) {
+	a.followUpMu.Lock()
+	defer a.followUpMu.Unlock()
+	instruction, err := a.enqueueInstruction(ctx, runID, input, false, true)
+	if err != nil {
+		return instruction, err
+	}
+	if err := a.resumePendingFollowUpLocked(ctx, runID); err != nil {
+		return instruction, err
+	}
+	return instruction, nil
+}
+
+func (a *Service) enqueueInstruction(ctx context.Context, runID string, input InstructionInput, priority, followUp bool) (domainworkflows.Instruction, error) {
 	run, err := a.store.Repos.Workflows.GetRun(ctx, strings.TrimSpace(runID))
 	if err != nil {
 		return domainworkflows.Instruction{}, coded("run_not_found", "run was not found")
 	}
 	if run.Status != domainworkflows.RunRunning && run.Status != domainworkflows.RunPaused && run.Status != domainworkflows.RunCompleted {
 		return domainworkflows.Instruction{}, coded("run_invalid_state", "instructions can only be queued for running, paused, or completed runs")
+	}
+	if followUp && run.Status == domainworkflows.RunPaused {
+		return domainworkflows.Instruction{}, coded("run_invalid_state", "follow-ups can only be queued while a run is active or just completed")
 	}
 	task, err := a.store.Repos.Tasks.GetTask(ctx, run.TaskID)
 	if err != nil {
@@ -102,7 +121,7 @@ func (a *Service) enqueueInstruction(ctx context.Context, runID string, input In
 	for _, attachment := range attachments {
 		paths = append(paths, attachment.StoredPath)
 	}
-	instruction := domainworkflows.Instruction{ID: randomID("instruction"), Content: strings.TrimSpace(input.Content), Attachments: paths, Priority: priority, CreatedAt: time.Now().UTC()}
+	instruction := domainworkflows.Instruction{ID: randomID("instruction"), Content: strings.TrimSpace(input.Content), Attachments: paths, Priority: priority, FollowUp: followUp, CreatedAt: time.Now().UTC()}
 	if instruction.Content == "" && len(paths) > 0 {
 		instruction.Content = "Review the attached files."
 	}
@@ -123,13 +142,46 @@ func (a *Service) RemoveInstruction(ctx context.Context, runID, instructionID st
 }
 
 func (a *Service) InterruptAndInsert(ctx context.Context, runID string, input InstructionInput) (domainworkflows.Instruction, error) {
-	instruction, err := a.enqueueInstruction(ctx, runID, input, true)
+	instruction, err := a.enqueueInstruction(ctx, runID, input, true, false)
 	if err != nil {
 		return instruction, err
 	}
-	if _, err := a.InterruptRun(ctx, runID); err != nil {
+	if err := a.interruptAndResume(ctx, runID); err != nil {
 		_ = a.store.Repos.Workflows.RemoveInstruction(context.Background(), runID, instruction.ID)
 		return instruction, err
+	}
+	return instruction, nil
+}
+
+// SteerInstruction promotes an existing queued follow-up in place, then ends
+// the active turn and resumes with that instruction first.
+func (a *Service) SteerInstruction(ctx context.Context, runID, instructionID string) (domainworkflows.Instruction, error) {
+	a.followUpMu.Lock()
+	defer a.followUpMu.Unlock()
+	instruction, err := a.store.Repos.Workflows.UpdateInstructionMode(ctx, strings.TrimSpace(runID), strings.TrimSpace(instructionID), true, false)
+	if err != nil {
+		return instruction, mapError(err)
+	}
+	_, _ = a.store.Repos.Workflows.AppendEvent(ctx, domainworkflows.WorkflowEvent{RunID: runID, Type: "instruction.steered", Payload: localEventPayload(map[string]any{"instructionId": instruction.ID}), At: time.Now().UTC()})
+	if err := a.interruptAndResume(ctx, runID); err != nil {
+		_, _ = a.store.Repos.Workflows.UpdateInstructionMode(context.Background(), runID, instruction.ID, false, true)
+		return instruction, err
+	}
+	return instruction, nil
+}
+
+func (a *Service) interruptAndResume(ctx context.Context, runID string) error {
+	if _, err := a.InterruptRun(ctx, runID); err != nil {
+		// The turn may have completed between the UI reading "running" and
+		// this interrupt reaching the service. Preserve the user's message by
+		// starting it as the next turn instead of reporting a stale-state error.
+		run, getErr := a.store.Repos.Workflows.GetRun(ctx, runID)
+		if getErr == nil && run.Status == domainworkflows.RunCompleted && !a.isActive(runID) {
+			if _, resumeErr := a.ResumeRun(ctx, runID, ""); resumeErr == nil {
+				return nil
+			}
+		}
+		return err
 	}
 	a.wg.Add(1)
 	go func() {
@@ -156,7 +208,36 @@ func (a *Service) InterruptAndInsert(ctx context.Context, runID string, input In
 			}
 		}
 	}()
-	return instruction, nil
+	return nil
+}
+
+func (a *Service) resumePendingFollowUp(runID string) {
+	a.followUpMu.Lock()
+	defer a.followUpMu.Unlock()
+	if err := a.resumePendingFollowUpLocked(context.Background(), runID); err != nil {
+		a.mu.Lock()
+		a.lastErrors[runID] = mapError(err).Error()
+		a.mu.Unlock()
+		a.markRunStateDirty(runID)
+	}
+}
+
+func (a *Service) resumePendingFollowUpLocked(ctx context.Context, runID string) error {
+	run, err := a.store.Repos.Workflows.GetRun(ctx, runID)
+	if err != nil || run.Status != domainworkflows.RunCompleted || a.isActive(runID) {
+		return err
+	}
+	instructions, err := a.store.Repos.Workflows.ListInstructions(ctx, runID)
+	if err != nil {
+		return err
+	}
+	for _, instruction := range instructions {
+		if instruction.Status == domainworkflows.InstructionPending && instruction.FollowUp {
+			_, err = a.ResumeRun(ctx, runID, "")
+			return err
+		}
+	}
+	return nil
 }
 
 func (a *Service) persistAttachments(ctx context.Context, task domaintasks.Task, paths []string) ([]domaintasks.Attachment, error) {

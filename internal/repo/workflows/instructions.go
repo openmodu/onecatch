@@ -76,6 +76,37 @@ func (r *workflowsImpl) ListInstructions(ctx context.Context, runID string) ([]d
 	return out, nil
 }
 
+// UpdateInstructionMode atomically changes how a pending instruction will be
+// consumed. Keeping the same durable record lets the UI promote a follow-up to
+// steer and restore it if interruption fails without replacing the message.
+func (r *workflowsImpl) UpdateInstructionMode(ctx context.Context, runID, instructionID string, priority, followUp bool) (domainworkflows.Instruction, error) {
+	if err := ctx.Err(); err != nil {
+		return domainworkflows.Instruction{}, err
+	}
+	if !localfile.ValidID(runID) || !localfile.ValidID(instructionID) {
+		return domainworkflows.Instruction{}, ErrRunNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	queue, err := r.readInstructionQueueLocked(runID)
+	if err != nil {
+		return domainworkflows.Instruction{}, err
+	}
+	for index := range queue.Items {
+		item := &queue.Items[index]
+		if item.ID != instructionID || item.Status != domainworkflows.InstructionPending {
+			continue
+		}
+		item.Priority = priority
+		item.FollowUp = followUp
+		if err := localfile.WriteJSONAtomic(r.instructionsPath(runID), queue); err != nil {
+			return domainworkflows.Instruction{}, fmt.Errorf("update workflow instruction mode: %w", err)
+		}
+		return *item, nil
+	}
+	return domainworkflows.Instruction{}, errors.New("pending instruction was not found")
+}
+
 func (r *workflowsImpl) RemoveInstruction(ctx context.Context, runID, instructionID string) error {
 	if err := ctx.Err(); err != nil {
 		return err

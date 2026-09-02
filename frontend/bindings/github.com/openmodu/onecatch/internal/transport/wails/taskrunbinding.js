@@ -175,6 +175,17 @@ export function PreviewRun(taskID) {
 }
 
 /**
+ * @param {string} runID
+ * @param {desktop$0.InstructionInput} input
+ * @returns {$CancellablePromise<workflows$0.Instruction>}
+ */
+export function QueueFollowUp(runID, input) {
+    return $Call.ByID(3173446428, runID, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType2($result);
+    }));
+}
+
+/**
  * @param {string} workspaceID
  * @returns {$CancellablePromise<tasks$0.Task[]>}
  */
@@ -263,6 +274,17 @@ export function SetTaskPinned(taskID, pinned) {
 export function StartRun(taskID, confirmationToken) {
     return $Call.ByID(2093366980, taskID, confirmationToken).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
+    }));
+}
+
+/**
+ * @param {string} runID
+ * @param {string} instructionID
+ * @returns {$CancellablePromise<workflows$0.Instruction>}
+ */
+export function SteerInstruction(runID, instructionID) {
+    return $Call.ByID(1909385582, runID, instructionID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType2($result);
     }));
 }
 

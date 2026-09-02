@@ -46,7 +46,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, inspectorToggleVersion, integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onLoadEarlierTranscript, onPermissionDecision, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, inspectorToggleVersion, integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onSteerInstruction, onLoadEarlierTranscript, onPermissionDecision, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
@@ -313,6 +313,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           onChooseAttachments={onChooseAttachments}
           onRemoveAttachment={onRemoveAttachment}
           onRemoveInstruction={onRemoveInstruction}
+          onSteerInstruction={onSteerInstruction}
           onInterrupt={onInterrupt}
           onSubmit={onSubmit}
           runtimeProfile={continuationRuntimeProfile || activeRuntimeProfile}

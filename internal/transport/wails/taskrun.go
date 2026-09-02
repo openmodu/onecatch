@@ -81,8 +81,14 @@ func (b *TaskRunBinding) CancelRun(runID string) (domainworkflows.Run, error) {
 func (b *TaskRunBinding) EnqueueInstruction(runID string, input desktopservice.InstructionInput) (domainworkflows.Instruction, error) {
 	return b.service.EnqueueInstruction(context.Background(), runID, input)
 }
+func (b *TaskRunBinding) QueueFollowUp(runID string, input desktopservice.InstructionInput) (domainworkflows.Instruction, error) {
+	return b.service.QueueFollowUp(context.Background(), runID, input)
+}
 func (b *TaskRunBinding) RemoveInstruction(runID, instructionID string) error {
 	return b.service.RemoveInstruction(context.Background(), runID, instructionID)
+}
+func (b *TaskRunBinding) SteerInstruction(runID, instructionID string) (domainworkflows.Instruction, error) {
+	return b.service.SteerInstruction(context.Background(), runID, instructionID)
 }
 func (b *TaskRunBinding) InterruptAndInsert(runID string, input desktopservice.InstructionInput) (domainworkflows.Instruction, error) {
 	return b.service.InterruptAndInsert(context.Background(), runID, input)

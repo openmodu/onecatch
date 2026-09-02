@@ -2090,7 +2090,73 @@
     margin: 0 auto;
   }
 
+  .workbench-composer-stack {
+    min-width: 0;
+    display: grid;
+  }
+
+  .composer-followups {
+    z-index: 0;
+    max-height: 168px;
+    display: grid;
+    gap: 1px;
+    margin: 0 20px -1px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .composer-followup {
+    min-width: 0;
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 0 10px 8px 14px;
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+    background: color-mix(in oklab, var(--card) 96%, var(--muted));
+    color: var(--foreground);
+  }
+
+  .composer-followup + .composer-followup { border-radius: 10px 10px 0 0; }
+
+  .composer-followup-icon {
+    color: var(--muted-foreground);
+    transform: translateY(1px);
+  }
+
+  .composer-followup-message {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 1.45;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .composer-followup-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .composer-followup-steer {
+    gap: 6px;
+    color: var(--muted-foreground);
+    font-weight: 500;
+  }
+
+  .composer-followup-steer:hover,
+  .composer-followup-remove:hover { color: var(--foreground); }
+
+  .composer-followup-steer svg,
+  .composer-followup-remove svg { width: 16px; height: 16px; }
+
   .workbench-composer-shell {
+    position: relative;
+    z-index: 1;
     display: grid;
     gap: 8px;
     padding: 10px 12px 9px;

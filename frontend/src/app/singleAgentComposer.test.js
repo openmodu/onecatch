@@ -10,15 +10,31 @@ test("single-Agent tasks omit the redundant titlebar status", () => {
   assert.match(app, /selectedTask\.workflowId && selectedTask\.workflowId !== directAgentWorkflowID && <StatusPill/);
 });
 
-test("single-Agent composer has one state-aware primary control", () => {
+test("single-Agent composer supports queued follow-ups and interruptive steering while running", () => {
   assert.match(composer, /directAgent \? <>/);
-  assert.match(composer, /className="composer-pause-action"[^>]*onClick=\{onInterrupt\}[^>]*><Pause/);
+  assert.doesNotMatch(composer, /if \(directAgent && runStatus === "running"\) return/);
+  assert.match(composer, /runStatus === "running" && \(canSend[\s\S]{0,800}send\("queue"\)/);
+  assert.match(composer, /composer\.queueHint/);
+  assert.match(composer, /primaryShortcutLabel\("⇧↵"\)/);
+  assert.match(composer, /composer-followups[\s\S]{0,1200}composer-followup-steer/);
+  assert.match(composer, /composer-followups[\s\S]{0,2400}workbench-composer-shell/);
+  assert.match(composer, /onSteerInstruction\(instruction\.id\)/);
+  assert.match(app, /TaskRunBinding\.SteerInstruction\(runID, instructionID\)/);
+  assert.match(composer, /className="composer-pause-action"[\s\S]{0,300}<Square/);
+  assert.match(app, /TaskRunBinding\.QueueFollowUp\(run\.id, input\)/);
+  assert.match(app, /TaskRunBinding\.InterruptAndInsert\(run\.id, input\)/);
   assert.match(composer, /className="composer-send-action"/);
   assert.match(composer, /aria-label=\{t\("composer\.sendMessage"\)\}/);
   assert.match(composer, /composer-send-action[\s\S]{0,500}<ArrowUp/);
   assert.match(composer, /composer\.sendMessage/);
-  assert.doesNotMatch(composer, /CircleStop|onCancel|composer\.(?:runningActions|stop|terminate)/);
+  assert.doesNotMatch(composer, /CircleStop|onCancel|composer\.(?:runningActions|terminate)/);
   assert.doesNotMatch(app, /TaskRunBinding\.CancelRun|onCancel=\{cancelRun\}/);
+});
+
+test("queued follow-ups sit above the composer instead of inside it", () => {
+  assert.doesNotMatch(composer, /instruction-queue|composer\.nextInstructions/);
+  assert.match(styles, /\.composer-followups\s*\{[\s\S]*?margin:\s*0 20px -1px;/);
+  assert.match(styles, /\.composer-followup\s*\{[\s\S]*?grid-template-columns:\s*auto minmax\(0, 1fr\) auto;/);
 });
 
 test("session runtime profile uses the same intrinsic width as new task", () => {

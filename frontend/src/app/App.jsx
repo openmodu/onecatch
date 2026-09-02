@@ -1082,7 +1082,7 @@ function App() {
     try {
       if (mode === "demo") {
         if (run.status === "running") {
-          const instruction = { id: `instruction_${Date.now()}`, content: content || t("composer.attachmentInstruction"), attachments: [...attachments], status: "pending", priority: modeName === "insert", createdAt: new Date().toISOString() };
+          const instruction = { id: `instruction_${Date.now()}`, content: content || t("composer.attachmentInstruction"), attachments: [...attachments], status: "pending", priority: modeName === "insert", followUp: modeName !== "insert", createdAt: new Date().toISOString() };
           setRunDetail((detail) => ({ ...detail, instructions: [...(detail.instructions || []), instruction] }));
         } else if (run.status === "paused" || run.status === "completed") {
           const instruction = content || (attachments.length ? t("composer.attachmentInstruction") : "");
@@ -1098,7 +1098,7 @@ function App() {
       } else if (run.status === "running") {
         const input = { content, attachmentPaths: attachments };
         if (modeName === "insert") await TaskRunBinding.InterruptAndInsert(run.id, input);
-        else await TaskRunBinding.EnqueueInstruction(run.id, input);
+        else await TaskRunBinding.QueueFollowUp(run.id, input);
       } else if (run.status === "paused" || run.status === "completed") {
         if (attachments.length) {
           await TaskRunBinding.EnqueueInstruction(run.id, { content: content || t("composer.attachmentInstruction"), attachmentPaths: attachments });
@@ -1121,6 +1121,30 @@ function App() {
     try { if (mode !== "demo") await TaskRunBinding.RemoveInstruction(runID, instructionID); await loadRun(runID, true); }
     catch (error) { notify("error", errorMessage(error)); }
   }, [loadRun, mode, notify]);
+
+  const steerQueuedInstruction = useCallback(async (instructionID) => {
+    const runID = runDetailRef.current?.run?.id;
+    if (!runID || !instructionID) return;
+    setBusy(`steer:${instructionID}`);
+    try {
+      if (mode === "demo") {
+        setRunDetail((detail) => ({
+          ...detail,
+          instructions: (detail.instructions || []).map((instruction) => instruction.id === instructionID
+            ? { ...instruction, priority: true, followUp: false }
+            : instruction),
+        }));
+      } else {
+        await TaskRunBinding.SteerInstruction(runID, instructionID);
+        await loadRun(runID, true);
+      }
+      notify("success", t("app.instructionSteered"));
+    } catch (error) {
+      notify("error", errorMessage(error));
+    } finally {
+      setBusy("");
+    }
+  }, [loadRun, mode, notify, t]);
 
   const respondPermission = useCallback(async (requestID, decision) => {
     const runID = runDetailRef.current?.run?.id;
@@ -1583,6 +1607,7 @@ function App() {
           onSubmit={submitWorkbenchComposer}
           onInterrupt={interruptRun}
           onRemoveInstruction={removeQueuedInstruction}
+          onSteerInstruction={steerQueuedInstruction}
           onLoadEarlierTranscript={loadEarlierTranscript}
           onPermissionDecision={respondPermission}
           notify={notify}

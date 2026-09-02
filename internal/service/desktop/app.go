@@ -206,6 +206,7 @@ type Service struct {
 	confirmations     map[string]runConfirmation
 	settingsReload    func(domainsettings.Settings) error
 	queueMu           sync.Mutex
+	followUpMu        sync.Mutex
 	titleMu           sync.Mutex
 	pendingTitles     map[string]pendingTaskTitle
 	runStreams        *runstream.Hub
@@ -1367,6 +1368,7 @@ func (a *Service) dispatch(runID string, execute func(context.Context) (domainwo
 			a.lastErrors[runID] = mapError(err).Error()
 		}
 		a.mu.Unlock()
+		a.resumePendingFollowUp(runID)
 		// active is repository-adjacent state (isActive reads it directly) but
 		// lives outside the WorkflowRepository the notifier decorates, so its
 		// transitions need their own push. Without this, a paused run's Resume

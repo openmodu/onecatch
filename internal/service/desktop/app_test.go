@@ -845,6 +845,145 @@ func TestInterruptAndInsertResumesWithPriorityInstruction(t *testing.T) {
 	}
 }
 
+func TestQueueFollowUpStartsNextTurnAfterActiveTurnCompletes(t *testing.T) {
+	ctx := context.Background()
+	engine := &fifoEngine{started: make(chan agentrun.Request, 2), release: make(chan struct{}, 2)}
+	app, _ := newLocalTestApp(t, engine)
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: directAgentWorkflowID, Title: "follow up", Prompt: "start work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := app.StartRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-engine.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial run did not start")
+	}
+	queued, err := app.QueueFollowUp(ctx, run.ID, InstructionInput{Content: "check the finished change"})
+	if err != nil || !queued.FollowUp || queued.Priority {
+		t.Fatalf("QueueFollowUp() = %+v, %v", queued, err)
+	}
+	engine.release <- struct{}{}
+	select {
+	case request := <-engine.started:
+		if request.ResumeSessionID != "session_fifo" || !strings.Contains(request.Prompt, "check the finished change") {
+			t.Fatalf("follow-up request = %+v", request)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("queued follow-up did not start")
+	}
+	engine.release <- struct{}{}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		detail, detailErr := app.GetRunDetail(ctx, run.ID)
+		if detailErr != nil {
+			t.Fatal(detailErr)
+		}
+		if !detail.Active && detail.Run.Status == domainworkflows.RunCompleted {
+			if len(detail.Instructions) != 1 || detail.Instructions[0].ID != queued.ID || detail.Instructions[0].Status != domainworkflows.InstructionApplied {
+				t.Fatalf("instructions after follow-up = %+v", detail.Instructions)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("follow-up run did not complete: %+v", detail.Run)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestSteerInstructionPromotesQueuedFollowUpAndInterrupts(t *testing.T) {
+	ctx := context.Background()
+	engine := &fifoEngine{started: make(chan agentrun.Request, 2), release: make(chan struct{}, 1)}
+	app, _ := newLocalTestApp(t, engine)
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: directAgentWorkflowID, Title: "steer follow-up", Prompt: "start work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := app.StartRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-engine.started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("initial run did not start")
+	}
+	queued, err := app.QueueFollowUp(ctx, run.ID, InstructionInput{Content: "change direction now"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	steered, err := app.SteerInstruction(ctx, run.ID, queued.ID)
+	if err != nil || steered.ID != queued.ID || !steered.Priority || steered.FollowUp {
+		t.Fatalf("SteerInstruction() = %+v, %v", steered, err)
+	}
+	select {
+	case request := <-engine.started:
+		if !strings.Contains(request.Prompt, "change direction now") {
+			t.Fatalf("steered request prompt = %q", request.Prompt)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("steered run did not resume")
+	}
+	engine.release <- struct{}{}
+}
+
+func TestInterruptAndInsertPreservesMessageWhenTurnJustCompleted(t *testing.T) {
+	ctx := context.Background()
+	app, _ := newLocalTestApp(t, completingEngine{})
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: directAgentWorkflowID, Title: "late steer", Prompt: "start work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := app.StartRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for app.isActive(run.ID) {
+		if time.Now().After(deadline) {
+			t.Fatal("initial run did not finish")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	inserted, err := app.InterruptAndInsert(ctx, run.ID, InstructionInput{Content: "keep this late correction"})
+	if err != nil || !inserted.Priority {
+		t.Fatalf("InterruptAndInsert() = %+v, %v", inserted, err)
+	}
+	deadline = time.Now().Add(2 * time.Second)
+	for {
+		detail, detailErr := app.GetRunDetail(ctx, run.ID)
+		if detailErr != nil {
+			t.Fatal(detailErr)
+		}
+		if !detail.Active && detail.Run.Status == domainworkflows.RunCompleted && len(detail.StepRuns) == 2 {
+			if len(detail.Instructions) != 1 || detail.Instructions[0].ID != inserted.ID || detail.Instructions[0].Status != domainworkflows.InstructionApplied {
+				t.Fatalf("instructions after late steer = %+v", detail.Instructions)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("late steer did not complete: run=%+v steps=%d", detail.Run, len(detail.StepRuns))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 // A transcript grows without bound and every entry becomes a mounted component
 // in the frontend, so opening a run must not hand over the whole history. The
 // window has to keep the newest end — that is where the user is looking — and

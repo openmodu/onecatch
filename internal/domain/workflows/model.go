@@ -218,6 +218,7 @@ type Instruction struct {
 	Attachments []string          `json:"attachments,omitempty"`
 	Status      InstructionStatus `json:"status"`
 	Priority    bool              `json:"priority,omitempty"`
+	FollowUp    bool              `json:"followUp,omitempty"`
 	CreatedAt   time.Time         `json:"createdAt"`
 	AppliedAt   time.Time         `json:"appliedAt,omitempty"`
 }

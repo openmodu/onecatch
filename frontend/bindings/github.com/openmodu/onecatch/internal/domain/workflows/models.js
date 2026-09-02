@@ -159,6 +159,13 @@ export class Instruction {
              */
             this["priority"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["followUp"] = undefined;
+        }
         if (!("createdAt" in $$source)) {
             /**
              * @member

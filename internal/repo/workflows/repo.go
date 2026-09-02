@@ -47,6 +47,7 @@ type WorkflowsRepo interface {
 	ListRuntimeEvents(context.Context, string, string, int64, int) ([]domainworkflows.RuntimeEvent, error)
 	EnqueueInstruction(context.Context, string, domainworkflows.Instruction) (domainworkflows.Instruction, error)
 	ListInstructions(context.Context, string) ([]domainworkflows.Instruction, error)
+	UpdateInstructionMode(context.Context, string, string, bool, bool) (domainworkflows.Instruction, error)
 	RemoveInstruction(context.Context, string, string) error
 	ClaimInstructions(context.Context, string) ([]domainworkflows.Instruction, error)
 	WriteRunSummary(context.Context, string, string) error
