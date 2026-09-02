@@ -3,6 +3,11 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.1.11
+
+- Render agent thinking as prose in the run timeline instead of dressing it as a tool call, and label a thinking-only group as thinking rather than as zero tool calls.
+- Restore Grok Build tool calls that disappeared from the run log when a session update carried its content as an array.
+
 ## 0.1.10
 
 - Queue follow-up messages while an agent is running and promote any pending message to steer the active turn.
