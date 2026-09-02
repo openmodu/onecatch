@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { shouldSubmitComposer } from "../composerKeyboard.js";
 import { autosizeComposerTextarea, NEW_TASK_TEXTAREA_MIN_HEIGHT } from "../composerTextarea.js";
 import { fileName } from "../format.js";
-import { runtimeHarnessEnabled, supportsRuntimeProfile, workflowHarnessesEnabled } from "../runtimeHarnesses.js";
+import { runtimeHarnessEnabled, supportsRuntimeProfile, supportsRuntimeSkills, workflowHarnessesEnabled } from "../runtimeHarnesses.js";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
 import { useSkillPicker } from "./SkillPicker.jsx";
 import SkillTextarea from "./SkillTextarea.jsx";
@@ -71,7 +71,7 @@ export default function NewTaskView({
       void onSubmit();
     }
   };
-  const skillRuntime = directAgent && ["codex", "claude"].includes(form.harness) ? form.harness : "";
+  const skillRuntime = directAgent && supportsRuntimeSkills(form.harness) ? form.harness : "";
   const skillPicker = useSkillPicker({
     enabled: Boolean(skillRuntime),
     mode,

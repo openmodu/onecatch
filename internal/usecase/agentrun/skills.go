@@ -74,26 +74,30 @@ func referencedSkills(prompt string, skills []Skill) []Skill {
 	return referenced
 }
 
-// adaptClaudeSkillMentions translates OneCatch's runtime-neutral `$name`
-// syntax to Claude Code's native `/name` syntax. The whitespace boundary is
+// adaptSkillMentions translates OneCatch's runtime-neutral `$name` syntax to
+// a runtime's native slash-command prefix. The whitespace boundary is
 // deliberately the same one used by the composer highlighter, so currency and
 // identifiers such as price$usd remain ordinary text.
-func adaptClaudeSkillMentions(prompt string) string {
+func adaptSkillMentions(prompt, prefix string) string {
 	mentions := skillMentions(prompt)
 	if len(mentions) == 0 {
 		return prompt
 	}
 	var output strings.Builder
-	output.Grow(len(prompt))
+	output.Grow(len(prompt) + len(mentions)*len(prefix))
 	previous := 0
 	for _, mention := range mentions {
 		output.WriteString(prompt[previous:mention.start])
-		output.WriteByte('/')
+		output.WriteString(prefix)
 		output.WriteString(mention.name)
 		previous = mention.end
 	}
 	output.WriteString(prompt[previous:])
 	return output.String()
+}
+
+func adaptClaudeSkillMentions(prompt string) string {
+	return adaptSkillMentions(prompt, "/")
 }
 
 func isSkillBoundary(value byte) bool {

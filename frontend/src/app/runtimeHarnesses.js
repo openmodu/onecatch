@@ -34,6 +34,7 @@ export function hydrateRuntimeHarnesses(runtimes = []) {
 }
 
 export const directAgentWorkflowID = "single_agent";
+const runtimeSkillHarnesses = new Set(["codex", "claude", "modu", "pi", "grok"]);
 
 export function runtimeHarness(id = "codex") {
   return runtimeHarnesses.find((item) => item.id === id) || { id, label: id || "Codex", supportsReasoning: false, supportsSpeed: false };
@@ -42,6 +43,10 @@ export function runtimeHarness(id = "codex") {
 export function supportsRuntimeProfile(id = "codex") {
   const capability = runtimeHarness(id);
   return capability.supportsReasoning || capability.supportsSpeed;
+}
+
+export function supportsRuntimeSkills(id = "codex") {
+  return runtimeSkillHarnesses.has(id);
 }
 
 export function runtimeHarnessEnabled(id, runtimes = [], runtimeSettings = {}, remoteFS = false) {

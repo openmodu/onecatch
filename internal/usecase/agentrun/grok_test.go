@@ -18,6 +18,20 @@ import (
 // model probe reads.
 const grokInitializeResult = `{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"sessionCapabilities":{"list":{},"resume":{},"close":{}}},"authMethods":[{"id":"grok.com","name":"Grok"}],"_meta":{"agentVersion":"1.0.5","modelState":{"currentModelId":"grok-4.6","availableModels":[{"modelId":"grok-4.6","name":"Grok 4.6","description":"SpaceXAI's latest frontier model","_meta":{"totalContextTokens":500000,"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"xhigh","value":"xhigh","label":"Extra High Effort","default":false},{"id":"high","value":"high","label":"High Effort","default":true},{"id":"medium","value":"medium","label":"Medium Effort","default":false},{"id":"low","value":"low","label":"Low Effort","default":false}]}},{"modelId":"grok-4.5","name":"Grok 4.5","_meta":{"totalContextTokens":500000,"supportsReasoningEffort":true,"reasoningEfforts":[{"id":"high","value":"high","label":"High Effort","default":true},{"id":"low","value":"low","label":"Low Effort","default":false}]}}]}}}}`
 
+func TestGrokRunnerListsInvocableSkillsAndCollisionAliases(t *testing.T) {
+	inspection := `{"skills":[{"name":"a-stock-data","description":"Stock data","source":{"type":"user","path":"/home/me/.claude/skills/a-stock-data/SKILL.md"},"userInvocable":true,"vendor":"claude","compatibilityStatus":"enabled"},{"name":"review","description":"Review code","source":{"type":"plugin","plugin_name":"codex","path":"/plugins/review.md"},"userInvocable":true,"compatibilityStatus":"enabled","collidesWith":"review","invocableAs":"codex:review"},{"name":"hidden","source":{"type":"user","path":"/hidden/SKILL.md"},"userInvocable":false},{"name":"disabled","source":{"type":"user","path":"/disabled/SKILL.md"},"userInvocable":true,"compatibilityStatus":"disabled"}]}`
+	skills, err := NewGrokRunner(stubBinary(t, inspection, "", 0)).ListSkills(context.Background(), t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 2 || skills[0].Name != "a-stock-data" || skills[1].Name != "codex:review" {
+		t.Fatalf("skills = %+v", skills)
+	}
+	if skills[1].DisplayName != "review" || skills[1].Scope != "plugin/codex" {
+		t.Fatalf("collision skill = %+v", skills[1])
+	}
+}
+
 // acpStub builds a stdio agent that answers the three handshake requests in
 // order and streams promptLines while answering the prompt. It is the protocol
 // half of a harness, so the client can be exercised without one installed.

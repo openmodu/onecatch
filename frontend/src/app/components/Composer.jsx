@@ -7,7 +7,7 @@ import { preserveComposerFocus } from "../composerInteraction.js";
 import { shouldSubmitComposer } from "../composerKeyboard.js";
 import { autosizeComposerTextarea, WORKBENCH_TEXTAREA_MIN_HEIGHT } from "../composerTextarea.js";
 import { fileName } from "../format.js";
-import { directAgentWorkflowID, supportsRuntimeProfile } from "../runtimeHarnesses.js";
+import { directAgentWorkflowID, supportsRuntimeProfile, supportsRuntimeSkills } from "../runtimeHarnesses.js";
 import HarnessSelector from "./HarnessSelector.jsx";
 import ContextGauge from "./ContextGauge.jsx";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
@@ -67,7 +67,7 @@ export default function Composer({
     event.preventDefault();
     void send("queue");
   };
-  const skillRuntime = directAgent && ["codex", "claude"].includes(runtimeProfile?.harness) ? runtimeProfile.harness : "";
+  const skillRuntime = directAgent && supportsRuntimeSkills(runtimeProfile?.harness) ? runtimeProfile.harness : "";
   const skillPicker = useSkillPicker({
     enabled: Boolean(skillRuntime) && editable,
     mode,

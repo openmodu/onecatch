@@ -1,10 +1,12 @@
 package agentrun
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 )
@@ -40,6 +42,57 @@ func (r *GrokRunner) Available() bool {
 	return err == nil
 }
 
+// ListSkills reads Grok Build's resolved catalog. inspect applies Grok's own
+// compatibility, disabled-state, plugin, and collision rules, so the returned
+// invocation names are exactly the slash commands a later run can accept.
+func (r *GrokRunner) ListSkills(ctx context.Context, cwd string, environment []string) ([]Skill, error) {
+	cmd := exec.CommandContext(ctx, r.binary, "inspect", "--json")
+	if strings.TrimSpace(cwd) != "" {
+		cmd.Dir = cwd
+	}
+	cmd.Env = environment
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("list Grok skills: %w%s", err, stderrSuffix(stderr.String()))
+	}
+	var inspection struct {
+		Skills []struct {
+			Name                string `json:"name"`
+			Description         string `json:"description"`
+			UserInvocable       bool   `json:"userInvocable"`
+			CompatibilityStatus string `json:"compatibilityStatus"`
+			InvocableAs         string `json:"invocableAs"`
+			Source              struct {
+				Type       string `json:"type"`
+				Path       string `json:"path"`
+				PluginName string `json:"plugin_name"`
+			} `json:"source"`
+		} `json:"skills"`
+	}
+	if err := json.Unmarshal(output, &inspection); err != nil {
+		return nil, fmt.Errorf("decode Grok skills: %w", err)
+	}
+	items := make([]Skill, 0, len(inspection.Skills))
+	for _, item := range inspection.Skills {
+		if !item.UserInvocable || item.CompatibilityStatus != "" && item.CompatibilityStatus != "enabled" {
+			continue
+		}
+		name := strings.TrimPrefix(strings.TrimSpace(item.InvocableAs), "/")
+		if name == "" {
+			name = item.Name
+		}
+		scope := item.Source.Type
+		if scope == "plugin" && item.Source.PluginName != "" {
+			scope += "/" + item.Source.PluginName
+		}
+		items = append(items, Skill{Name: name, DisplayName: item.Name, Description: item.Description, Path: item.Source.Path, Scope: scope})
+	}
+	sort.Slice(items, func(i, j int) bool { return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name) })
+	return items, nil
+}
+
 // SupportsInteractivePermissions covers read-only and workspace-write runs.
 //
 // ACP carries permission requests in every mode, so unlike Claude Code there is
@@ -52,6 +105,7 @@ func (r *GrokRunner) SupportsInteractivePermissions(sandbox Sandbox) bool {
 }
 
 func (r *GrokRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
+	req.Prompt = adaptSkillMentions(req.Prompt, "/")
 	return runACPSession(ctx, acpLaunch{
 		runtime:     RuntimeGrok,
 		displayName: "Grok Build",

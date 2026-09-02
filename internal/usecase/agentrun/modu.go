@@ -22,6 +22,7 @@ const (
 type ModuRunner struct {
 	binary       string
 	now          nowFunc
+	agentDir     string
 	remoteRunner Runner
 }
 
@@ -49,6 +50,7 @@ func (r *ModuRunner) Available() bool {
 }
 
 func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
+	req.Prompt = adaptSkillMentions(req.Prompt, "/")
 	if req.Remote != nil {
 		if r.remoteRunner == nil {
 			return Result{}, fmt.Errorf("remote FS runs require the Modu native SDK adapter")

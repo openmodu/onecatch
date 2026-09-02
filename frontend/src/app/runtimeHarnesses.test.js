@@ -8,6 +8,7 @@ import {
   selectRuntimeHarness,
   selectTaskExecutionTarget,
   supportsRuntimeProfile,
+  supportsRuntimeSkills,
   taskExecutionTarget,
   workflowHarnessesEnabled,
 } from "./runtimeHarnesses.js";
@@ -34,6 +35,8 @@ test("runtime harness metadata exposes the supported task runtimes", () => {
   assert.equal(runtimeHarness("grok").supportsSpeed, false);
   assert.equal(runtimeHarness("codex").supportsRemoteFs, true);
   assert.equal(runtimeHarness("pi").supportsRemoteFs, false);
+  for (const id of ["codex", "claude", "modu", "pi", "grok"]) assert.equal(supportsRuntimeSkills(id), true);
+  assert.equal(supportsRuntimeSkills("dsh"), false);
 });
 
 test("harness preferences filter local and remote choices", () => {

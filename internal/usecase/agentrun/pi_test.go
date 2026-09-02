@@ -191,6 +191,26 @@ func TestPiCommandArgs(t *testing.T) {
 	if argValue(resumed, "--thinking") != "high" {
 		t.Fatalf("reasoning effort not passed: %v", resumed)
 	}
+	if got := piCommandArgs(Request{Prompt: "$a-stock-data 昨日行情"}); got[len(got)-1] != "/skill:a-stock-data 昨日行情" {
+		t.Fatalf("skill prompt = %q", got[len(got)-1])
+	}
+}
+
+func TestPiRunnerListsSkillsFromRPCCommands(t *testing.T) {
+	response := `{"type":"response","command":"get_commands","success":true,"data":{"commands":[{"name":"skill:web-perf","description":"Inspect performance","source":"skill","sourceInfo":{"path":"/home/me/.pi/agent/skills/web-perf/SKILL.md","scope":"user"}},{"name":"skill:project-check","description":"Check project","source":"skill","location":"project","path":"/repo/.pi/skills/project-check/SKILL.md"},{"name":"fix-tests","description":"Fix tests","source":"prompt"}]}}`
+	skills, err := NewPiRunner(stubBinary(t, response, "", 0)).ListSkills(context.Background(), t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 2 || skills[0].Name != "project-check" || skills[1].Name != "web-perf" {
+		t.Fatalf("skills = %+v", skills)
+	}
+	if skills[0].Scope != "project" || skills[0].Path != "/repo/.pi/skills/project-check/SKILL.md" {
+		t.Fatalf("legacy metadata = %+v", skills[0])
+	}
+	if skills[1].Scope != "user" || skills[1].Path != "/home/me/.pi/agent/skills/web-perf/SKILL.md" {
+		t.Fatalf("sourceInfo metadata = %+v", skills[1])
+	}
 }
 
 // piModelTable is the padded table `pi --list-models` prints, including the

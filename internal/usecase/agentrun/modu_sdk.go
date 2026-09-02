@@ -50,6 +50,7 @@ func (r *ModuSDKRunner) Available() bool {
 }
 
 func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result Result, err error) {
+	req.Prompt = adaptSkillMentions(req.Prompt, "/")
 	if sink == nil {
 		sink = func(Event) {}
 	}
@@ -127,6 +128,10 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 	sink(Event{Kind: KindUsage, Usage: &result.Usage, Context: &result.Context, At: adapter.timestamp()})
 	sink(Event{Kind: KindResult, Text: result.FinalMessage, At: adapter.timestamp()})
 	return result, nil
+}
+
+func (r *ModuSDKRunner) ListSkills(_ context.Context, cwd string, environment []string) ([]Skill, error) {
+	return listModuSkills(r.agentDir, cwd, environment)
 }
 
 func (r *ModuSDKRunner) resolveConfiguration() (*types.Model, func(string) (string, error), types.ThinkingLevel, []string, error) {

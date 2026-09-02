@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -91,6 +93,85 @@ func (r *PiRunner) Available() bool {
 	return err == nil
 }
 
+// ListSkills asks Pi's RPC resource loader for the effective slash-command
+// catalog, then keeps only Skills. This honors Pi's configured paths,
+// packages, project precedence, and enableSkillCommands setting without
+// starting a model turn.
+func (r *PiRunner) ListSkills(ctx context.Context, cwd string, environment []string) ([]Skill, error) {
+	cmd := exec.CommandContext(ctx, r.binary, "--mode", "rpc", "--no-session")
+	if strings.TrimSpace(cwd) != "" {
+		cmd.Dir = cwd
+	}
+	cmd.Env = environment
+	cmd.Stdin = strings.NewReader("{\"type\":\"get_commands\"}\n")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("list Pi skills: %w%s", err, stderrSuffix(stderr.String()))
+	}
+
+	decoder := json.NewDecoder(&stdout)
+	for {
+		var response struct {
+			Type    string `json:"type"`
+			Command string `json:"command"`
+			Success bool   `json:"success"`
+			Data    struct {
+				Commands []struct {
+					Name        string `json:"name"`
+					Description string `json:"description"`
+					Source      string `json:"source"`
+					Location    string `json:"location"`
+					Path        string `json:"path"`
+					SourceInfo  struct {
+						Path  string `json:"path"`
+						Scope string `json:"scope"`
+					} `json:"sourceInfo"`
+				} `json:"commands"`
+			} `json:"data"`
+		}
+		if err := decoder.Decode(&response); err != nil {
+			if err == io.EOF {
+				break
+			}
+			return nil, fmt.Errorf("decode Pi skills: %w", err)
+		}
+		if response.Type != "response" || response.Command != "get_commands" {
+			continue
+		}
+		if !response.Success {
+			return nil, fmt.Errorf("Pi get_commands failed%s", stderrSuffix(stderr.String()))
+		}
+		items := make([]Skill, 0, len(response.Data.Commands))
+		for _, command := range response.Data.Commands {
+			if command.Source != "skill" || !strings.HasPrefix(command.Name, "skill:") {
+				continue
+			}
+			name := strings.TrimPrefix(command.Name, "skill:")
+			path, scope := command.SourceInfo.Path, command.SourceInfo.Scope
+			if path == "" {
+				path = command.Path
+			}
+			if scope == "" {
+				scope = command.Location
+			}
+			items = append(items, Skill{Name: name, DisplayName: name, Description: command.Description, Path: path, Scope: scope})
+		}
+		sort.Slice(items, func(i, j int) bool { return strings.ToLower(items[i].Name) < strings.ToLower(items[j].Name) })
+		return items, nil
+	}
+	return nil, fmt.Errorf("Pi RPC ended before skills were available%s", stderrSuffix(stderr.String()))
+}
+
+func stderrSuffix(stderr string) string {
+	stderr = strings.TrimSpace(stderr)
+	if stderr == "" {
+		return ""
+	}
+	return ": " + stderr
+}
+
 func (r *PiRunner) Run(ctx context.Context, req Request, sink Sink) (Result, error) {
 	if req.Remote != nil {
 		return Result{}, fmt.Errorf("Pi does not support remote FS runs")
@@ -125,7 +206,7 @@ func piCommandArgs(req Request) []string {
 		// prompt as the next turn.
 		args = append(args, "--session", req.ResumeSessionID)
 	}
-	return append(args, req.Prompt)
+	return append(args, adaptSkillMentions(req.Prompt, "/skill:"))
 }
 
 // piEnvelope is the discriminated JSONL line pi writes in --mode json. The
