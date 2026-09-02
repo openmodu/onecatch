@@ -77,6 +77,55 @@ func TestExecServerFileCallsOperateOnTarget(t *testing.T) {
 	}
 }
 
+type countingTargetFiles struct {
+	localTargetFiles
+	opens int
+}
+
+func (f *countingTargetFiles) OpenRead(name string) (targetReadFile, error) {
+	f.opens++
+	return os.Open(name)
+}
+
+func TestExecServerReadBlocksReuseOpenFile(t *testing.T) {
+	server, workspace, target := newLocalExecServer(t, false)
+	content := []byte("abcdefghij")
+	if err := os.WriteFile(filepath.Join(target, "blocks.txt"), content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	files := &countingTargetFiles{}
+	server.files = files
+
+	openParams, _ := json.Marshal(map[string]any{
+		"handleId": "file-1",
+		"path":     localPathURI(filepath.Join(workspace, "blocks.txt")),
+	})
+	if _, rpcErr := server.handleFSOpen(context.Background(), openParams); rpcErr != nil {
+		t.Fatal(rpcErr.Message)
+	}
+	for index, want := range []string{"abcd", "efgh"} {
+		readParams, _ := json.Marshal(map[string]any{
+			"handleId": "file-1", "offset": index * 4, "len": 4,
+		})
+		result, rpcErr := server.handleFSReadBlock(context.Background(), readParams)
+		if rpcErr != nil {
+			t.Fatal(rpcErr.Message)
+		}
+		encoded := result.(map[string]any)["chunk"].(string)
+		data, err := base64.StdEncoding.DecodeString(encoded)
+		if err != nil || string(data) != want {
+			t.Fatalf("block %d = %q, %v; want %q", index, data, err, want)
+		}
+	}
+	if files.opens != 1 {
+		t.Fatalf("file opens = %d, want 1 for multiple blocks", files.opens)
+	}
+	closeParams, _ := json.Marshal(map[string]any{"handleId": "file-1"})
+	if _, rpcErr := server.handleFSClose(closeParams); rpcErr != nil {
+		t.Fatal(rpcErr.Message)
+	}
+}
+
 func TestExecServerReadOnlyIsEnforcedAtTargetBoundary(t *testing.T) {
 	server, workspace, target := newLocalExecServer(t, true)
 	params, _ := json.Marshal(map[string]any{

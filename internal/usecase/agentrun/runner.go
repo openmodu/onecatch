@@ -45,12 +45,13 @@ type Request struct {
 	// Remote, when set, runs the agent's shell commands on another machine
 	// while the agent itself, and the credentials it holds, stay here.
 	//
-	// Claude reaches the target through a transparently remote shell and has
-	// its unredirectable native file tools denied. Codex uses its remote-
-	// environment protocol, so both shell commands and native fs tools are
-	// redirected. Grok's ACP client operations and Modu's native SDK workspace
-	// tools are backed by SSH/SFTP implementations. No adapter falls back to
-	// local execution if its seam cannot be established.
+	// Claude reaches the target through a transparently remote shell; its
+	// Read/Edit/Write tools use a conflict-checked sparse mirror while search
+	// stays on the remote shell. Codex uses its remote-environment protocol, so
+	// both shell commands and native fs tools are redirected. Grok's ACP client
+	// operations and Modu's native SDK workspace tools are backed by SSH/SFTP
+	// implementations. No adapter falls back to local execution if its seam
+	// cannot be established.
 	Remote *seam.Target
 	// Prompt is the task description handed to the agent.
 	Prompt string

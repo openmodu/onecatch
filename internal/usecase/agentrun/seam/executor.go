@@ -330,15 +330,13 @@ func (s *sshExecutor) sshArgs(port int) []string {
 			"-o", "NumberOfPasswordPrompts=1",
 		)
 	}
-	if socket, err := s.controlPath(); err == nil {
+	if options := SSHMultiplexOptions(s.target); len(options) > 0 {
 		// One authenticated connection reused across tool calls. Without it
 		// every command pays a full handshake, and on a host wanting a
 		// password or a hardware token it pays one per command.
-		args = append(args,
-			"-o", "ControlMaster=auto",
-			"-o", "ControlPath="+socket,
-			"-o", "ControlPersist=600",
-		)
+		for _, option := range options {
+			args = append(args, "-o", option)
+		}
 	}
 	for _, option := range s.target.SSHOptions {
 		if strings.TrimSpace(option) != "" {
@@ -349,6 +347,22 @@ func (s *sshExecutor) sshArgs(port int) []string {
 		args = append(args, "-l", username)
 	}
 	return args
+}
+
+// SSHMultiplexOptions returns command-line -o values that let every transport
+// for a target share one OpenSSH master. Callers prepend these values to their
+// own SSH options so commands and SFTP avoid separate authentication handshakes.
+func SSHMultiplexOptions(target Target) []string {
+	s := &sshExecutor{target: target}
+	socket, err := s.controlPath()
+	if err != nil {
+		return nil
+	}
+	return []string{
+		"ControlMaster=auto",
+		"ControlPath=" + socket,
+		"ControlPersist=600",
+	}
 }
 
 // controlPath names the multiplexing socket for this destination.

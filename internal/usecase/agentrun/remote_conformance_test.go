@@ -88,8 +88,8 @@ supports_websockets = false
 // The target is a second local directory rather than an ssh host, so the test
 // needs no remote machine and can run in CI. That covers everything except the
 // ssh hop itself: the launch flags, the session, the shell prefix, the envelope
-// parse, the routing decision, the working-directory bookkeeping and the tool
-// denial are all the same code either way.
+// parse, the routing decision, the working-directory bookkeeping and the
+// native file mirror are all the same code either way.
 func TestClaudeRunnerRunsCommandsOnTheTarget(t *testing.T) {
 	binary, err := exec.LookPath("claude")
 	if err != nil {
@@ -153,17 +153,82 @@ func TestClaudeRunnerRunsCommandsOnTheTarget(t *testing.T) {
 			"agent is acting on this machine while believing it is on the target:\n%s", out)
 	}
 
-	// The other half of the contract: with no seam to redirect them, the
-	// native file tools must not be offered to the model at all.
-	for _, name := range deniedFileTools {
+	// Sparse mirrors cannot implement a correct directory-wide search, so only
+	// those tools remain unavailable. Read/Edit/Write are deliberately present
+	// now and are redirected by the hook.
+	for _, name := range remoteClaudeSearchTools {
 		if mock.SawTool(name) {
-			t.Errorf("%s was advertised to the model on a remote run; it would act on this machine", name)
+			t.Errorf("%s was advertised to the model on a remote run", name)
+		}
+	}
+	for _, name := range []string{"Read", "Edit", "Write"} {
+		if !mock.SawTool(name) {
+			t.Errorf("%s was not advertised to the model; the remote mirror has an unexpected capability loss", name)
 		}
 	}
 
 	// A run must not outlive its own state.
 	if _, err := seam.LoadSession("conformance-remote"); err == nil {
 		t.Error("the session file survived the run")
+	}
+}
+
+func TestClaudeRunnerMirrorsNativeEditOnTarget(t *testing.T) {
+	binary, err := exec.LookPath("claude")
+	if err != nil {
+		t.Skip("claude is not installed; skipping the remote mirror conformance")
+	}
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	workspace := filepath.Join(dir, "workspace")
+	target := filepath.Join(dir, "target")
+	for _, directory := range []string{filepath.Join(home, ".claude"), workspace, target} {
+		if err := os.MkdirAll(directory, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeFile(t, filepath.Join(home, ".claude", "settings.json"), `{"permissions":{}}`+"\n")
+	targetFile := filepath.Join(target, "message.txt")
+	writeFile(t, targetFile, "before\n")
+	t.Setenv(seam.DirEnv, filepath.Join(dir, "sessions"))
+	t.Setenv(ShellBinaryEnv, buildShellBinary(t, dir))
+
+	mock := seamtest.StartMockWithTools(seamtest.DialectAnthropic, []seamtest.ToolCall{
+		{Name: "Read", Input: map[string]any{"file_path": targetFile}},
+		{Name: "Edit", Input: map[string]any{
+			"file_path":  targetFile,
+			"old_string": "before",
+			"new_string": "after",
+		}},
+	})
+	defer mock.Close()
+	req := Request{
+		Runtime: RuntimeClaude, Workspace: workspace,
+		Prompt:  "Follow the tool-call instructions exactly.",
+		Sandbox: SandboxWorkspaceWrite, RunID: "conformance-claude-mirror",
+		Remote: &seam.Target{Root: target},
+		Environment: harnessEnvironment(map[string]string{
+			"HOME": home, "ANTHROPIC_API_KEY": "dummy", "ANTHROPIC_BASE_URL": mock.BaseURL(),
+			"CLAUDE_TELEMETRY_OPT_OUT": "1", "DO_NOT_TRACK": "1",
+		}),
+		InterruptGrace: 5 * time.Second,
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	var events []Event
+	if _, err := NewClaudeRunner(binary).Run(ctx, req, func(event Event) { events = append(events, event) }); err != nil {
+		t.Logf("run returned %v (the target content is what matters)", err)
+	}
+	if !mock.Wait(90 * time.Second) {
+		t.Fatal("the harness never completed the scripted Edit call")
+	}
+	data, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "after\n" {
+		toolResult, _ := mock.Result()
+		t.Fatalf("native Edit did not reach the target: %q\nmodel saw: %s\nevents: %+v", data, toolResult, events)
 	}
 }
 

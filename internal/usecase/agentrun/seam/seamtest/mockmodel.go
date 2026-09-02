@@ -42,14 +42,16 @@ const (
 // behaviour is actually in question, fully in the loop while removing the
 // model, the network and the cost.
 //
-// The script has two turns. Turn one answers the harness's first request with
-// an instruction to run one command. Turn two arrives when the harness posts
-// the command's output back; the mock stores it and replies with a plain
-// assistant message so the harness finishes cleanly and exits.
+// The default script has two turns. Turn one answers the harness's first
+// request with an instruction to run one command. Turn two arrives when the
+// harness posts the command's output back; the mock stores it and replies with
+// a plain assistant message so the harness finishes cleanly and exits. The
+// explicit-tool constructor can script several calls before that final turn.
 type Mock struct {
-	srv     *httptest.Server
-	dialect Dialect
-	command string
+	srv        *httptest.Server
+	dialect    Dialect
+	command    string
+	toolScript []ToolCall
 
 	mu         sync.Mutex
 	toolResult string
@@ -63,11 +65,35 @@ type Mock struct {
 	doneOnce sync.Once
 }
 
+// ToolCall is one scripted model-requested tool invocation.
+type ToolCall struct {
+	Name  string
+	Input map[string]any
+}
+
 // StartMock starts a mock model on a random localhost port. command is what
 // the scripted turn instructs the harness to run.
 func StartMock(dialect Dialect, command string) *Mock {
 	m := &Mock{
 		dialect: dialect, command: command,
+		tools: map[string]bool{}, done: make(chan struct{}),
+	}
+	m.srv = httptest.NewServer(m)
+	return m
+}
+
+// StartMockWithTool scripts one explicit tool invocation. It is primarily for
+// conformance checks that must exercise a native file tool rather than the
+// shell tool selected by StartMock.
+func StartMockWithTool(dialect Dialect, toolName string, input map[string]any) *Mock {
+	return StartMockWithTools(dialect, []ToolCall{{Name: toolName, Input: input}})
+}
+
+// StartMockWithTools scripts an ordered series of tool invocations. Each tool
+// result advances to the next call, and the following request ends the turn.
+func StartMockWithTools(dialect Dialect, script []ToolCall) *Mock {
+	m := &Mock{
+		dialect: dialect, toolScript: append([]ToolCall(nil), script...),
 		tools: map[string]bool{}, done: make(chan struct{}),
 	}
 	m.srv = httptest.NewServer(m)
@@ -196,6 +222,7 @@ func (m *Mock) serveAnthropic(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "seam mock: malformed request: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	resultCount := 0
 	for _, msg := range req.Messages {
 		if msg.Role != "user" {
 			continue
@@ -225,6 +252,7 @@ func (m *Mock) serveAnthropic(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			m.record(out)
+			resultCount++
 		}
 	}
 
@@ -235,6 +263,10 @@ func (m *Mock) serveAnthropic(w http.ResponseWriter, r *http.Request) {
 	m.recordTools(names)
 
 	_, hasResult := m.Result()
+	finished := hasResult
+	if len(m.toolScript) > 0 {
+		finished = resultCount >= len(m.toolScript)
+	}
 	f := startStream(w)
 
 	m.writeEvent(w, f, "message_start", map[string]any{
@@ -248,13 +280,20 @@ func (m *Mock) serveAnthropic(w http.ResponseWriter, r *http.Request) {
 	})
 	m.writeEvent(w, f, "ping", map[string]any{"type": "ping"})
 
-	if !hasResult {
-		argJSON, _ := json.Marshal(map[string]any{"command": m.command})
+	if !finished {
+		name := pickAnthropicTool(req.Tools)
+		input := map[string]any{"command": m.command}
+		if len(m.toolScript) > 0 {
+			call := m.toolScript[resultCount]
+			name = call.Name
+			input = call.Input
+		}
+		argJSON, _ := json.Marshal(input)
 		m.writeEvent(w, f, "content_block_start", map[string]any{
 			"type": "content_block_start", "index": 0,
 			"content_block": map[string]any{
-				"type": "tool_use", "id": "toolu_seam_1",
-				"name": pickAnthropicTool(req.Tools), "input": map[string]any{},
+				"type": "tool_use", "id": fmt.Sprintf("toolu_seam_%d", resultCount+1),
+				"name": name, "input": map[string]any{},
 			},
 		})
 		m.writeEvent(w, f, "content_block_delta", map[string]any{

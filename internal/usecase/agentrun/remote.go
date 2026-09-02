@@ -19,33 +19,20 @@ import (
 // it does not sit beside the running executable.
 const ShellBinaryEnv = "ONECATCH_SHELL_BINARY"
 
-// deniedFileTools are Claude Code's native file tools.
-//
-// Denying them is a safety property, not a preference. They call straight into
-// Node's fs with no seam to redirect, so on a remote run they would keep
-// reading and writing *this* machine while the agent believes it is operating
-// on the target. An agent that reads a local file it thinks is remote reports
-// confident nonsense; one that writes a local file it thinks is remote destroys
-// the user's own work. The conformance suite asserts that a deny list still
-// removes them from the model's tool surface; if that ever stops being true, a
-// remote run must not be started at all.
-var deniedFileTools = []string{"Read", "Edit", "Write", "NotebookEdit", "Glob", "Grep"}
+var remoteClaudeSearchTools = []string{"Grep", "Glob"}
 
-const remoteGuidance = `This session operates on a REMOTE target through OneCatch.
+const remoteClaudeMirrorGuidance = `This session operates on a REMOTE target through OneCatch.
 
-Your Bash tool runs on the remote target, not on this machine. The native file
-tools (Read, Edit, Write, Glob, Grep) are disabled because they would act on
-this machine instead of the target, silently giving you the wrong file.
+Your Bash tool runs on the remote target. Read, Write, Edit and NotebookEdit
+also operate on files inside the configured remote workspace: OneCatch fetches
+each file immediately before the tool opens it and writes changes back only if
+the remote file has not changed in the meantime.
 
-Use shell commands for all file access; they run on the target:
-  read      cat -- FILE        (or sed -n 'A,Bp' FILE for a range)
-  search    rg PATTERN DIR     (falls back to grep if ripgrep is absent)
-  list      ls -la DIR ; find DIR -name PATTERN
-  write     cat > FILE <<'EOF' ... EOF
-  edit      apply a patch, or use sed -i / python3 for in-place edits
-
-Paths are the target's own absolute paths. Do not translate them, and do not
-use paths from this machine in a shell command — they do not exist there.`
+Grep and Glob are disabled because the local mirror is intentionally sparse.
+Search through Bash with rg, grep or find; those commands run on the target.
+Use Bash for remote paths outside the configured workspace. Native file tools
+are denied outside that boundary so they can never fall through to this local
+machine.`
 
 // remoteCodexGuidance closes a subtle split-filesystem gap in Codex app-server:
 // Skills are discovered and injected by the local app-server, while every tool
@@ -102,12 +89,11 @@ func prepareRemoteRequest(req Request) (Request, error) {
 // must be launched with to reach it.
 func setupRemoteClaude(req Request) (*remoteSetup, error) {
 	if req.Sandbox == SandboxReadOnly {
-		// Read-only disallows Bash, and a remote run denies the file tools;
-		// together they leave the agent with no way to reach the target at
-		// all. Refusing beats starting a run that can do nothing and reports
-		// no reason why.
+		// Read-only disallows Bash and native file tools can only cover the
+		// declared workspace. Refuse this misleading partial mode until the
+		// hook can enforce read-only independently of Claude's Bash policy.
 		return nil, fmt.Errorf("a remote run cannot be read-only: read-only disallows Bash, " +
-			"which is the only tool that reaches the target")
+			"and OneCatch cannot yet enforce read-only access independently in Claude's native file hooks")
 	}
 	if runtime.GOOS == "windows" {
 		// The prefix contract, the shim and the POSIX quoting all assume a
@@ -131,7 +117,7 @@ func setupRemoteClaude(req Request) (*remoteSetup, error) {
 		return nil, err
 	}
 
-	settings, err := writeDenySettings(name)
+	settings, err := writeClaudeMirrorSettings(name, shell)
 	if err != nil {
 		_ = session.Remove()
 		return nil, err
@@ -152,11 +138,12 @@ func setupRemoteClaude(req Request) (*remoteSetup, error) {
 			// something that is not true. A path that does not exist on this
 			// machine is accepted here, which is the whole point.
 			"--add-dir", req.Remote.Root,
-			"--append-system-prompt", remoteGuidance,
+			"--append-system-prompt", remoteClaudeMirrorGuidance,
 		},
 		cleanup: func() {
 			_ = os.Remove(settings)
 			_ = session.Remove()
+			_ = seam.RemoveClaudeMirror(name)
 			// The ssh control master is deliberately left alive. It is keyed
 			// on the host and shared by every run against it, so tearing it
 			// down here would drop a connection another run is using.
@@ -351,7 +338,7 @@ func copyCodexSkillPathSeen(source, destination string, activeDirectories map[st
 	if err != nil {
 		return err
 	}
-	defer input.Close()
+	defer func() { _ = input.Close() }()
 	output, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, info.Mode().Perm())
 	if err != nil {
 		return err
@@ -442,23 +429,44 @@ func shellBinaryCandidates(executable string) []string {
 	return candidates
 }
 
-// writeDenySettings emits the settings document that removes the local file
-// tools from the model's surface, and returns its path.
-func writeDenySettings(name string) (string, error) {
+func writeClaudeMirrorSettings(name, shell string) (string, error) {
 	dir, err := seam.SessionDir()
 	if err != nil {
 		return "", err
 	}
+	type hookSpec struct {
+		Type    string `json:"type"`
+		Command string `json:"command"`
+	}
+	type matcherSpec struct {
+		Matcher string     `json:"matcher"`
+		Hooks   []hookSpec `json:"hooks"`
+	}
+	command := quotePOSIXCommandWord(shell) + " claude-hook"
 	doc := map[string]any{
-		"permissions": map[string]any{"deny": deniedFileTools},
+		"permissions": map[string]any{"deny": remoteClaudeSearchTools},
+		"hooks": map[string]any{
+			"PreToolUse": []matcherSpec{{
+				Matcher: "Read|Write|Edit|NotebookEdit|Grep|Glob",
+				Hooks:   []hookSpec{{Type: "command", Command: command}},
+			}},
+			"PostToolUse": []matcherSpec{{
+				Matcher: "Write|Edit|NotebookEdit",
+				Hooks:   []hookSpec{{Type: "command", Command: command}},
+			}},
+		},
 	}
 	data, err := json.MarshalIndent(doc, "", "  ")
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(dir, name+".claude-settings.json")
-	if err := os.WriteFile(path, append(data, '\n'), 0o600); err != nil {
+	settings := filepath.Join(dir, name+".claude-mirror-settings.json")
+	if err := os.WriteFile(settings, append(data, '\n'), 0o600); err != nil {
 		return "", err
 	}
-	return path, nil
+	return settings, nil
+}
+
+func quotePOSIXCommandWord(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
 }

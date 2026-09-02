@@ -17,17 +17,20 @@
 | `executor.go` | 本地 / SSH 执行，一次往返同时取回退出码和结果目录 |
 | `dispatch.go` | 把上面三者接起来：解析 → 判路由 → 执行 → 回写 cwd |
 | `execserver*.go` | Codex remote-environment JSON-RPC：远端进程与原生 `fs/*` |
+| `claudehook.go` | Claude 原生 Read/Edit/Write/NotebookEdit 的稀疏镜像、摘要校验与原子写回 |
 
 调用链：
 
 - Claude：`ClaudeRunner.Run`（`Request.Remote` 非空）→ `agentrun/remote.go`
-  → `onecatchsh` shell prefix → `Dispatcher`。
+  → Bash 走 `onecatchsh` shell prefix/`Dispatcher`；原生文件工具走
+  `onecatchsh claude-hook`/稀疏镜像。
 - Codex：`CodexRunner.Run`（`Request.Remote` 非空）→ 私有 `CODEX_HOME` 的
   `environments.toml` → `onecatchsh exec-server` → SSH 命令与 SFTP `fs/*`。
 
 这里没有挂载点，也不挂载远端文件系统。Agent 看到的是 harness 自己的远端
-environment；Codex 的原生文件工具通过 JSON-RPC/SFTP 操作目标机，Claude 因原生
-文件工具没有可重定向接缝而禁用它们，改走远端 shell。
+environment；Codex 的原生文件工具通过 JSON-RPC/SFTP 操作目标机；Claude 的
+Read/Edit/Write/NotebookEdit 只按需镜像单个工作区文件，Grep/Glob 因稀疏镜像无法
+保证完整结果而禁用，改走远端 shell 的 `rg`/`find`。
 
 其余是 conformance 套件：拿真实安装的 harness 验证接缝还是我们以为的形状。
 
@@ -42,10 +45,10 @@ task test:conformance                      # 加上真实 harness 验证
 `ONECATCH_SHELL_BINARY` 指向别处。conformance 套件自己编译它，不依赖先 build。
 
 conformance 套件**不花任何 API 额度**：内嵌一个 mock model server，脚本化地让
-harness 发起恰好一次工具调用。也**不需要远端机器**：recorder 拿到命令后在本地
-执行——被测的是拦截的形状，不是执行的目的地。
+harness 发起工具调用。也**不需要远端机器**：recorder 拿到命令后在本地执行——
+被测的是拦截的形状，不是执行的目的地。
 
-harness 没装就自动 skip，所以挂 CI 是安全的。整套约 2 秒。
+harness 没装就自动 skip，所以挂 CI 是安全的。整套通常是十几秒到数十秒。
 
 ## 每个测试锁住了什么
 
@@ -53,11 +56,12 @@ harness 没装就自动 skip，所以挂 CI 是安全的。整套约 2 秒。
 |---|---|---|
 | `TestParse*` | 解析器对已抓获的真实信封仍然正确 | 解析器退化了 |
 | `TestClaudeCodeShellSeam` | `-p` 模式认 shell prefix；argv 恰好 1 个元素；命令逐字 round-trip；`cd` 重定向还在 | Claude Code 换了封装形状，适配层必须跟着改 |
-| `TestClaudeCodeDeniesLocalFileTools` | `permissions.deny` 仍然把 Read/Edit/Write/Glob/Grep 从模型的工具表里**删掉** | exec 模式不再安全，启动器必须拒绝启动 |
-| `TestClaudeRunnerRunsCommandsOnTheTarget` | 整条链路：`ClaudeRunner` 配了 target 之后，模型的命令真的在 target 上执行，且本地文件工具没被提供给模型 | 接缝在某一环断了；错误信息会说断在哪 |
+| `TestClaudeCodeDenyRemovesSearchTools` | `permissions.deny` 只删除 Grep/Glob，保留镜像支持的 Read/Edit/Write | Claude 工具面发生不兼容变化 |
+| `TestClaudeRunnerRunsCommandsOnTheTarget` | 整条链路：模型的 Bash 命令真的在 target 上执行，Read/Edit/Write 仍可用 | shell 接缝或工具配置断了 |
+| `TestClaudeRunnerMirrorsNativeEditOnTarget` | 真实 Claude 先 Read、再 Edit，修改经 hook 写回 target | 原生文件镜像的 hook 生命周期不再兼容 |
 | `TestCodexExecServerSeam` | `environments.toml` 的 stdio(`program`) 路线仍然生效；命令以 `process/start` 到达；argv 是 `[shell, -lc, script]`；路径是 `file://` URI；输出能回到模型 | Codex 换了 exec-server 协议 |
 
-## 已验证的事实（2026-08，claude 2.1.239 / codex 0.149.0）
+## 已验证的事实（Claude 原有基线 2.1.239；mirror 于 2026-09 实测 2.1.89；Codex 0.149.0）
 
 这些是实测结论，不是从文档抄的。写适配层时按这个来：
 
@@ -74,22 +78,27 @@ harness 没装就自动 skip，所以挂 CI 是安全的。整套约 2 秒。
    不复现这个文件，`cd` 就在调用之间静默失效。
 6. Claude Code 自己的 shell 调用（hook、plugin 启动）**也走同一个 prefix**，
    且**不带信封**。把它们转发到远端会让每个 hook 都失败。
+7. 远端启动会对每个 Claude 二进制版本做一次离线行为探测并缓存结论。实测命令
+   落到本地 harness 工作区时拒绝启动；探测本身失败只警告，不把“没测到”伪装成
+   “确认旁路”。
+8. 原生文件写回前比较远端 SHA-256 摘要；目标变化、越界路径或解析后越界的
+   符号链接都会拒绝写回，目标侧通过临时文件 rename 原子替换。
 
 **Codex**
 
-7. `environments.toml` 的 `program` + `args`（stdio）在 0.149 仍然有效。
+9. `environments.toml` 的 `program` + `args`（stdio）在 0.149 仍然有效。
    schema：`{id, url, program, args, env, connect_timeout_sec,
    initialize_timeout_sec}`，外层 `{default, include_local, environments}`。
-8. 模型的命令以 `process/start` 到达，argv 为 `["/bin/bash","-lc",<脚本>]`，
+10. 模型的命令以 `process/start` 到达，argv 为 `["/bin/bash","-lc",<脚本>]`，
    脚本部分原样保留。
-9. **输出走服务端推送**：exec-server 线协议使用 `process/output` +
+11. **输出走服务端推送**：exec-server 线协议使用 `process/output` +
    `process/exited` 通知；app-server 再将前者转换成对 UI 的
    `process/outputDelta`。
    **不是** `process/read` 轮询。只实现轮询的话，codex 会等满
    `yield_time_ms` 然后告诉模型"Process running / Output:（空）"，
    接着 `process/terminate`——一个看起来在工作、只是什么都不返回的 agent，
    比直接报错难查得多。
-10. 关掉 `unified_exec`（`-c features.unified_exec=false`）之后 0.149
+12. 关掉 `unified_exec`（`-c features.unified_exec=false`）之后 0.149
     不再提供任何 shell 工具，所以 `exec_command` 是唯一路径。
 
 ## 还没定的事

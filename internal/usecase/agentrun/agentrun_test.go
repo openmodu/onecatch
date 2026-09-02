@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
 // stubBinary writes an executable shell script that prints the given stdout
@@ -216,6 +218,68 @@ done
 	}
 }
 
+func TestCodexRunnerReusesAppServerForRemoteConversationFollowUp(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("stub binary uses a POSIX shell script")
+	}
+	dir := t.TempDir()
+	sourceHome := filepath.Join(dir, "source-codex-home")
+	target := filepath.Join(dir, "target")
+	for _, path := range []string{sourceHome, target} {
+		if err := os.MkdirAll(path, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv(seam.DirEnv, filepath.Join(dir, "seams"))
+	t.Setenv(ShellBinaryEnv, "/bin/sh")
+	processes := filepath.Join(dir, "processes.txt")
+	environment := append(os.Environ(),
+		"CODEX_HOME="+sourceHome,
+		"ONECATCH_CODEX_PROCESSES="+processes,
+	)
+	runner := NewCodexRunner(stubCodexAppServerBinary(t))
+	defer func() { _ = runner.Close() }()
+	request := Request{
+		RunID: "remote-warm", Workspace: dir, Prompt: "first",
+		Sandbox:     SandboxWorkspaceWrite,
+		Remote:      &seam.Target{Root: target},
+		Environment: environment,
+	}
+	first, err := runner.Run(context.Background(), request, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Prompt = "second"
+	request.ResumeSessionID = first.SessionID
+	if _, err := runner.Run(context.Background(), request, nil); err != nil {
+		t.Fatal(err)
+	}
+	started, err := os.ReadFile(processes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(started), "started\n"); got != 1 {
+		t.Fatalf("remote Codex app-server starts = %d, want 1", got)
+	}
+
+	// The remote target is frozen into the exec-server process. Changing it
+	// must create a new app-server rather than reuse the old SFTP connection.
+	request.Remote = &seam.Target{Root: filepath.Join(dir, "other-target")}
+	if err := os.MkdirAll(request.Remote.Root, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runner.Run(context.Background(), request, nil); err != nil {
+		t.Fatal(err)
+	}
+	started, err = os.ReadFile(processes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Count(string(started), "started\n"); got != 2 {
+		t.Fatalf("remote Codex app-server starts after target change = %d, want 2", got)
+	}
+}
+
 func TestCodexRunnerPassesModelSettingsToAppServer(t *testing.T) {
 	bin := stubCodexAppServerBinary(t)
 	capture := filepath.Join(t.TempDir(), "requests.jsonl")
@@ -349,6 +413,7 @@ func stubCodexAppServerBinary(t *testing.T) string {
 	path := filepath.Join(t.TempDir(), "codex")
 	script := `#!/bin/sh
 [ "$1" = "app-server" ] || { echo "expected app-server" >&2; exit 9; }
+[ -n "$ONECATCH_CODEX_PROCESSES" ] && printf '%s\n' started >> "$ONECATCH_CODEX_PROCESSES"
 [ -n "$ONECATCH_CODEX_ARGV" ] && printf '%s\n' "$*" > "$ONECATCH_CODEX_ARGV"
 while IFS= read -r line; do
   [ -n "$ONECATCH_CODEX_CAPTURE" ] && printf '%s\n' "$line" >> "$ONECATCH_CODEX_CAPTURE"

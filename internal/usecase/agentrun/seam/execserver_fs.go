@@ -19,13 +19,23 @@ type targetFiles interface {
 	Lstat(string) (os.FileInfo, error)
 	ReadDir(string) ([]os.FileInfo, error)
 	ReadFile(string) ([]byte, error)
-	ReadAt(string, int64, int64) ([]byte, error)
+	OpenRead(string) (targetReadFile, error)
 	WriteFile(string, []byte, os.FileMode) error
 	MkdirAll(string, os.FileMode) error
 	Remove(string, bool) error
 	Copy(string, string, bool) error
 	Canonicalize(string) (string, error)
 	Close() error
+}
+
+type targetReadFile interface {
+	io.ReaderAt
+	io.Closer
+}
+
+type targetReadHandle struct {
+	path string
+	file targetReadFile
 }
 
 type localTargetFiles struct{}
@@ -46,15 +56,8 @@ func (localTargetFiles) ReadDir(name string) ([]os.FileInfo, error) {
 	}
 	return infos, nil
 }
-func (localTargetFiles) ReadFile(name string) ([]byte, error) { return os.ReadFile(name) }
-func (localTargetFiles) ReadAt(name string, offset, length int64) ([]byte, error) {
-	file, err := os.Open(name)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	return readAt(file, offset, length)
-}
+func (localTargetFiles) ReadFile(name string) ([]byte, error)         { return os.ReadFile(name) }
+func (localTargetFiles) OpenRead(name string) (targetReadFile, error) { return os.Open(name) }
 func (localTargetFiles) WriteFile(name string, data []byte, mode os.FileMode) error {
 	return os.WriteFile(name, data, mode)
 }
@@ -75,7 +78,14 @@ func (localTargetFiles) Canonicalize(name string) (string, error) {
 }
 func (localTargetFiles) Close() error { return nil }
 
-type sftpTargetFiles struct{ backend *remotefs.SFTPBackend }
+type remoteCanonicalizer interface {
+	RealPath(string) (string, error)
+}
+
+type sftpTargetFiles struct {
+	backend       remotefs.Backend
+	canonicalizer remoteCanonicalizer
+}
 
 func sftpRelative(name string) (string, error) {
 	if !path.IsAbs(name) {
@@ -99,28 +109,19 @@ func (s *sftpTargetFiles) ReadDir(name string) ([]os.FileInfo, error) {
 	return s.backend.ReadDir(relative)
 }
 func (s *sftpTargetFiles) ReadFile(name string) ([]byte, error) {
-	relative, err := sftpRelative(name)
-	if err != nil {
-		return nil, err
-	}
-	file, err := s.backend.OpenFile(relative, os.O_RDONLY, 0)
+	file, err := s.OpenRead(name)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 	return io.ReadAll(io.NewSectionReader(file, 0, 1<<63-1))
 }
-func (s *sftpTargetFiles) ReadAt(name string, offset, length int64) ([]byte, error) {
+func (s *sftpTargetFiles) OpenRead(name string) (targetReadFile, error) {
 	relative, err := sftpRelative(name)
 	if err != nil {
 		return nil, err
 	}
-	file, err := s.backend.OpenFile(relative, os.O_RDONLY, 0)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-	return readAt(file, offset, length)
+	return s.backend.OpenFile(relative, os.O_RDONLY, 0)
 }
 func (s *sftpTargetFiles) WriteFile(name string, data []byte, mode os.FileMode) error {
 	relative, err := sftpRelative(name)
@@ -220,7 +221,7 @@ func (s *sftpTargetFiles) Canonicalize(name string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return s.backend.RealPath(relative)
+	return s.canonicalizer.RealPath(relative)
 }
 func (s *sftpTargetFiles) Close() error { return s.backend.Close() }
 
@@ -527,7 +528,7 @@ func (s *ExecServer) handleFSCopy(ctx context.Context, raw json.RawMessage) (any
 	return map[string]any{}, nil
 }
 
-func (s *ExecServer) handleFSOpen(raw json.RawMessage) (any, *rpcError) {
+func (s *ExecServer) handleFSOpen(ctx context.Context, raw json.RawMessage) (any, *rpcError) {
 	var params struct {
 		HandleID string `json:"handleId"`
 		Path     string `json:"path"`
@@ -539,8 +540,22 @@ func (s *ExecServer) handleFSOpen(raw json.RawMessage) (any, *rpcError) {
 	if rpcErr != nil {
 		return nil, rpcErr
 	}
+	operationCtx, cancel := s.operationContext(ctx)
+	defer cancel()
+	if err := operationCtx.Err(); err != nil {
+		return nil, internalError("%v", err)
+	}
+	file, err := s.files.OpenRead(target)
+	if err != nil {
+		return nil, internalError("open %s: %v", target, err)
+	}
 	s.mu.Lock()
-	s.handles[params.HandleID] = target
+	if _, exists := s.handles[params.HandleID]; exists {
+		s.mu.Unlock()
+		_ = file.Close()
+		return nil, invalidParams("fs/open: handleId %q is already in use", params.HandleID)
+	}
+	s.handles[params.HandleID] = &targetReadHandle{path: target, file: file}
 	s.mu.Unlock()
 	return map[string]any{"handleId": params.HandleID}, nil
 }
@@ -555,7 +570,7 @@ func (s *ExecServer) handleFSReadBlock(ctx context.Context, raw json.RawMessage)
 		return nil, invalidParams("fs/readBlock: %v", err)
 	}
 	s.mu.Lock()
-	target, exists := s.handles[params.HandleID]
+	handle, exists := s.handles[params.HandleID]
 	s.mu.Unlock()
 	if !exists {
 		return nil, invalidRequest("fs/readBlock: unknown handle %q", params.HandleID)
@@ -565,9 +580,9 @@ func (s *ExecServer) handleFSReadBlock(ctx context.Context, raw json.RawMessage)
 	if err := operationCtx.Err(); err != nil {
 		return nil, internalError("%v", err)
 	}
-	data, err := s.files.ReadAt(target, int64(params.Offset), params.Length)
+	data, err := readAt(handle.file, int64(params.Offset), params.Length)
 	if err != nil {
-		return nil, internalError("read %s: %v", target, err)
+		return nil, internalError("read %s: %v", handle.path, err)
 	}
 	return map[string]any{"chunk": base64.StdEncoding.EncodeToString(data), "eof": int64(len(data)) < params.Length}, nil
 }
@@ -580,8 +595,14 @@ func (s *ExecServer) handleFSClose(raw json.RawMessage) (any, *rpcError) {
 		return nil, invalidParams("fs/close: %v", err)
 	}
 	s.mu.Lock()
+	handle := s.handles[params.HandleID]
 	delete(s.handles, params.HandleID)
 	s.mu.Unlock()
+	if handle != nil {
+		if err := handle.file.Close(); err != nil {
+			return nil, internalError("close %s: %v", handle.path, err)
+		}
+	}
 	return map[string]any{}, nil
 }
 

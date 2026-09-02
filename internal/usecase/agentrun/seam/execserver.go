@@ -35,6 +35,7 @@ const (
 
 	maxFinishedProcesses   = 32
 	remoteOperationTimeout = 2 * time.Minute
+	remoteFSCacheTTL       = 2 * time.Second
 )
 
 type rpcError struct {
@@ -80,7 +81,7 @@ type ExecServer struct {
 	sawInitialize bool
 	processes     map[string]*remoteProcess
 	finished      []string
-	handles       map[string]string
+	handles       map[string]*targetReadHandle
 	order         *requestSequencer
 	closed        bool
 }
@@ -102,6 +103,13 @@ func NewExecServer(ctx context.Context, session *Session, workspace string) (*Ex
 	if strings.TrimSpace(session.Target.Host) == "" {
 		files = localTargetFiles{}
 	} else {
+		sshOptions := append([]string(nil), session.Target.SSHOptions...)
+		if _, ok := executor.(*sshExecutor); ok {
+			// probeTargetShell has already opened this master connection. Put
+			// these options first so SFTP joins it instead of doing a second SSH
+			// handshake; explicit target options remain available afterwards.
+			sshOptions = append(SSHMultiplexOptions(session.Target), sshOptions...)
+		}
 		backend, err := remotefs.NewSFTPBackend(ctx, remotefs.SFTPConfig{
 			Host:          session.Target.Host,
 			Root:          "/",
@@ -109,13 +117,16 @@ func NewExecServer(ctx context.Context, session *Session, workspace string) (*Ex
 			CredentialID:  session.Target.CredentialID,
 			SSHBinary:     session.Target.SSHBinary,
 			AskPassBinary: session.Target.AskPassBinary,
-			SSHOptions:    session.Target.SSHOptions,
+			SSHOptions:    sshOptions,
 			Stderr:        os.Stderr,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("open the target filesystem: %w", err)
 		}
-		files = &sftpTargetFiles{backend: backend}
+		files = &sftpTargetFiles{
+			backend:       remotefs.NewCachedBackend(backend, remoteFSCacheTTL),
+			canonicalizer: backend,
+		}
 	}
 	if workspace == "" {
 		workspace, _ = os.Getwd()
@@ -130,7 +141,7 @@ func NewExecServer(ctx context.Context, session *Session, workspace string) (*Ex
 		shellPath: shellPath,
 		sessionID: "onecatch-" + randomHex(8),
 		processes: map[string]*remoteProcess{},
-		handles:   map[string]string{},
+		handles:   map[string]*targetReadHandle{},
 		order:     newRequestSequencer(),
 	}, nil
 }
@@ -287,7 +298,7 @@ func (s *ExecServer) handle(ctx context.Context, method string, params json.RawM
 		}
 		return s.handleFSCopy(ctx, params)
 	case "fs/open":
-		return s.handleFSOpen(params)
+		return s.handleFSOpen(ctx, params)
 	case "fs/readBlock":
 		return s.handleFSReadBlock(ctx, params)
 	case "fs/close":
@@ -406,8 +417,16 @@ func (s *ExecServer) Close() error {
 		return nil
 	}
 	s.closed = true
+	handles := make([]*targetReadHandle, 0, len(s.handles))
+	for id, handle := range s.handles {
+		handles = append(handles, handle)
+		delete(s.handles, id)
+	}
 	s.mu.Unlock()
 	s.terminateAll()
+	for _, handle := range handles {
+		_ = handle.file.Close()
+	}
 	if s.files != nil {
 		return s.files.Close()
 	}

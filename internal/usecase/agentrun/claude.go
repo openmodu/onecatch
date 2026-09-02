@@ -224,6 +224,9 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 		defer remote.cleanup()
 		args = append(args, remote.args...)
 		environment = mergeEnvironment(environment, remote.env)
+		if err := r.verifyRemoteSeam(ctx, req, environment, remote.args); err != nil {
+			return Result{}, err
+		}
 	}
 
 	cmd := exec.CommandContext(ctx, r.binary, args...)

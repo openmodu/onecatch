@@ -166,14 +166,10 @@ func TestClaudeCodeShellSeam(t *testing.T) {
 		harnessVersion(t, binary), modelCalls, internalCalls)
 }
 
-// TestClaudeCodeDeniesLocalFileTools asserts that permissions.deny in a
-// settings file still removes the native file tools in print mode.
-//
-// This is the safety property of exec mode. Those tools call straight into
-// Node's fs with no seam to redirect them, so an agent that keeps them reads
-// and writes the operator's disk while believing it is on the target. If deny
-// ever stops working, exec mode is unsafe and the launcher must refuse.
-func TestClaudeCodeDeniesLocalFileTools(t *testing.T) {
+// TestClaudeCodeDenyRemovesSearchTools asserts that permissions.deny still
+// removes Grep and Glob while leaving the tools backed by OneCatch's sparse
+// remote mirror available.
+func TestClaudeCodeDenyRemovesSearchTools(t *testing.T) {
 	binary := lookHarness(t, "claude")
 	self := testBinary(t)
 
@@ -184,7 +180,7 @@ func TestClaudeCodeDeniesLocalFileTools(t *testing.T) {
 	mustMkdirAll(t, filepath.Join(home, ".claude"), workspace)
 	mustWrite(t, filepath.Join(home, ".claude", "settings.json"), `{"permissions":{}}`+"\n")
 
-	denied := []string{"Read", "Edit", "Write", "NotebookEdit", "Glob", "Grep"}
+	denied := []string{"Grep", "Glob"}
 	settings := filepath.Join(dir, "deny.json")
 	mustWrite(t, settings, `{"permissions":{"deny":["`+strings.Join(denied, `","`)+`"]}}`+"\n")
 
@@ -213,14 +209,17 @@ func TestClaudeCodeDeniesLocalFileTools(t *testing.T) {
 		"--dangerously-skip-permissions",
 		"-p", "Follow the tool-call instructions exactly.",
 	}, env, workspace)
-
 	if !mock.Wait(probeTimeout) {
 		t.Fatal("the harness never completed the scripted tool call")
 	}
 	for _, name := range denied {
 		if mock.SawTool(name) {
-			t.Errorf("%s was still advertised to the model despite permissions.deny; "+
-				"exec mode would let the agent touch the local filesystem", name)
+			t.Errorf("%s remained in Claude's tool surface after permissions.deny", name)
+		}
+	}
+	for _, name := range []string{"Read", "Edit", "Write"} {
+		if !mock.SawTool(name) {
+			t.Errorf("%s disappeared with the search-only deny settings", name)
 		}
 	}
 	if !mock.SawTool("Bash") {

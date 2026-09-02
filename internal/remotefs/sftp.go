@@ -256,6 +256,21 @@ func (b *SFTPBackend) RealPath(name string) (string, error) {
 }
 
 func (b *SFTPBackend) OpenFile(name string, flags int, mode os.FileMode) (File, error) {
+	// A read-only open needs only one canonicalization before opening the file.
+	// The create-aware path below also probes existence and canonicalizes the
+	// parent/leaf separately; paying those extra round trips for every Codex
+	// read is especially expensive on high-latency SSH links.
+	if flags&(os.O_WRONLY|os.O_RDWR|os.O_CREATE|os.O_TRUNC|os.O_APPEND|os.O_EXCL) == 0 {
+		remote, err := b.resolveExisting(name)
+		if err != nil {
+			return nil, err
+		}
+		file, err := b.client.OpenFile(remote, flags)
+		if err != nil {
+			return nil, err
+		}
+		return &sftpFile{File: file}, nil
+	}
 	remote, existed, err := b.resolveOpen(name)
 	if err != nil {
 		return nil, err

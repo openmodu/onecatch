@@ -22,7 +22,10 @@ import (
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
-const remoteModuMaxReadBytes = 8 * 1024 * 1024
+const (
+	remoteModuMaxReadBytes = 8 * 1024 * 1024
+	remoteModuFSCacheTTL   = 2 * time.Second
+)
 
 const remoteModuGuidance = `This session operates on a REMOTE target through OneCatch.
 
@@ -55,6 +58,8 @@ type remoteModuToolProvider struct {
 }
 
 func newRemoteModuToolProvider(ctx context.Context, target seam.Target, readOnly bool) (*remoteModuToolProvider, error) {
+	executor := seam.NewExecutor(target)
+	sshOptions := append(seam.SSHMultiplexOptions(target), target.SSHOptions...)
 	files, err := remotefs.NewSFTPBackend(ctx, remotefs.SFTPConfig{
 		Host:          target.Host,
 		Root:          target.Root,
@@ -62,7 +67,7 @@ func newRemoteModuToolProvider(ctx context.Context, target seam.Target, readOnly
 		CredentialID:  target.CredentialID,
 		SSHBinary:     target.SSHBinary,
 		AskPassBinary: target.AskPassBinary,
-		SSHOptions:    target.SSHOptions,
+		SSHOptions:    sshOptions,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open remote workspace for Modu Code: %w", err)
@@ -72,7 +77,7 @@ func newRemoteModuToolProvider(ctx context.Context, target seam.Target, readOnly
 		set = codingtools.ToolSetReadOnly
 	}
 	return &remoteModuToolProvider{
-		base: codingtools.NewProvider(set), files: files, executor: seam.NewExecutor(target),
+		base: codingtools.NewProvider(set), files: remotefs.NewCachedBackend(files, remoteModuFSCacheTTL), executor: executor,
 		root: path.Clean(target.Root), readOnly: readOnly, reads: make(map[string]string),
 	}, nil
 }

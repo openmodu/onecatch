@@ -46,6 +46,8 @@ type codexAppProcess struct {
 	key       string
 	idleTimer *time.Timer
 	stopOnce  sync.Once
+	waitOnce  sync.Once
+	waitDone  chan struct{}
 }
 
 // NewCodexRunner builds a runner driving the given codex binary. An empty
@@ -491,11 +493,12 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 	}
 
 	// Workflow turns have a durable run ID and may be resumed later. Keep that
-	// thread's local app-server alive so the next message does not pay the CLI,
-	// plugin and skill cold-start cost again. Standalone helpers (for example
-	// title generation) and remote seams remain one-shot processes.
-	cacheable := req.RunID != "" && req.Remote == nil
-	processKey := codexAppProcessKey(req.Workspace, commandArgs, environment)
+	// thread's app-server alive so the next message does not pay the CLI,
+	// plugin, Skill and (for remote runs) SSH/SFTP cold-start cost again. The
+	// process key includes the remote target and sandbox because the delegated
+	// environment freezes both when its exec-server starts.
+	cacheable := req.RunID != ""
+	processKey := codexAppProcessKey(req, commandArgs, environment)
 	if cacheable && strings.TrimSpace(req.ResumeSessionID) != "" {
 		if process := r.takeSession(strings.TrimSpace(req.ResumeSessionID), processKey); process != nil {
 			result, err := r.runCodexTurn(ctx, process, req, sink, true)
@@ -509,7 +512,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 		}
 	}
 
-	process, err := r.startCodexAppProcess(req, commandArgs, environment)
+	process, err := r.startCodexAppProcess(req, commandArgs, environment, processKey)
 	if err != nil {
 		return Result{}, err
 	}
@@ -527,7 +530,7 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 	return result, err
 }
 
-func (r *CodexRunner) startCodexAppProcess(req Request, commandArgs, environment []string) (*codexAppProcess, error) {
+func (r *CodexRunner) startCodexAppProcess(req Request, commandArgs, environment []string, processKey string) (*codexAppProcess, error) {
 	cmd := exec.Command(r.binary, commandArgs...)
 	configureProcessWindow(cmd)
 	cmd.Dir = req.Workspace
@@ -549,7 +552,7 @@ func (r *CodexRunner) startCodexAppProcess(req Request, commandArgs, environment
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
 	return &codexAppProcess{
 		cmd: cmd, stdin: stdin, encoder: json.NewEncoder(stdin), scanner: scanner,
-		stderr: stderr, key: codexAppProcessKey(req.Workspace, commandArgs, environment),
+		stderr: stderr, key: processKey, waitDone: make(chan struct{}),
 	}, nil
 }
 
@@ -680,6 +683,14 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 	if err := process.scanner.Err(); err != nil && ctx.Err() == nil {
 		return state.result(), fmt.Errorf("read Codex app-server: %w", err)
 	}
+	if !state.completed && !state.failed {
+		// The scanner reached EOF rather than stopping after a terminal turn
+		// notification. Wait joins exec.Cmd's stderr-copy goroutine. Without
+		// this, a fast process can close stdout and reach the error path before
+		// its stderr tail has been copied, intermittently hiding the only useful
+		// failure message. A healthy warm process must never be waited here.
+		<-process.startWait()
+	}
 	if ctx.Err() != nil {
 		return state.result(), ctx.Err()
 	}
@@ -751,9 +762,14 @@ func codexNotificationMatches(raw json.RawMessage, threadID, turnID string) bool
 	return ids.TurnID == "" || turnID == "" || ids.TurnID == turnID
 }
 
-func codexAppProcessKey(workspace string, args, environment []string) string {
+func codexAppProcessKey(req Request, args, environment []string) string {
 	hash := sha256.New()
-	for _, value := range append(append([]string{workspace}, args...), environment...) {
+	values := append(append([]string{req.Workspace}, args...), environment...)
+	if req.Remote != nil {
+		remote, _ := json.Marshal(req.Remote)
+		values = append(values, "remote:"+string(remote), "sandbox:"+string(req.Sandbox))
+	}
+	for _, value := range values {
 		_, _ = io.WriteString(hash, value)
 		_, _ = hash.Write([]byte{0})
 	}
@@ -851,11 +867,7 @@ func (p *codexAppProcess) stopWithGrace(grace time.Duration) {
 			_ = p.cmd.Process.Signal(os.Interrupt)
 		}
 		_ = p.stdin.Close()
-		done := make(chan struct{})
-		go func() {
-			_ = p.cmd.Wait()
-			close(done)
-		}()
+		done := p.startWait()
 		select {
 		case <-done:
 		case <-time.After(grace):
@@ -865,6 +877,16 @@ func (p *codexAppProcess) stopWithGrace(grace time.Duration) {
 			<-done
 		}
 	})
+}
+
+func (p *codexAppProcess) startWait() <-chan struct{} {
+	p.waitOnce.Do(func() {
+		go func() {
+			_ = p.cmd.Wait()
+			close(p.waitDone)
+		}()
+	})
+	return p.waitDone
 }
 
 func stopCodexAppServer(cmd *exec.Cmd, stdin io.Closer) {

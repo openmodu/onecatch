@@ -3,9 +3,9 @@
 //
 // Claude Code is told about it through CLAUDE_CODE_SHELL_PREFIX and invokes it
 // once per Bash tool call, passing the whole command envelope as a single
-// argument. This program takes that envelope apart, forwards the model's own
-// command to the run's target over ssh, and reproduces locally the bookkeeping
-// the harness expects to find on this machine.
+// argument. Claude's file hooks also invoke its claude-hook mode. This program
+// forwards shell commands, mirrors native file operations, and reproduces
+// locally the bookkeeping the harness expects to find on this machine.
 //
 // It is not a program anyone runs by hand. It exists as a separate binary
 // because harnesses want a *program path* for their shell hook, not a command
@@ -60,6 +60,15 @@ func run(ctx context.Context) int {
 		if err := server.Serve(ctx, os.Stdin, os.Stdout); err != nil {
 			fmt.Fprintln(os.Stderr, "onecatchsh exec-server:", err)
 			return seam.ExitTransportFailure
+		}
+		return 0
+	}
+	if len(os.Args) == 2 && os.Args[1] == "claude-hook" {
+		if err := seam.RunClaudeHook(ctx, session, os.Stdin, os.Stdout); err != nil {
+			// Hook stdout is a JSON protocol channel. Diagnostics must stay on
+			// stderr so Claude can always parse the response.
+			fmt.Fprintln(os.Stderr, "onecatchsh claude-hook:", err)
+			_, _ = fmt.Fprintln(os.Stdout, "{}")
 		}
 		return 0
 	}

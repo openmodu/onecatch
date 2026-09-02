@@ -31,3 +31,24 @@ func TestSSHExecutorUsesExplicitPort(t *testing.T) {
 		t.Fatalf("SSH arguments do not contain the explicit port: %s", joined)
 	}
 }
+
+func TestSSHExecutorAndFilesystemShareMultiplexOptions(t *testing.T) {
+	t.Parallel()
+	target := Target{Host: "devbox", Username: "deploy"}
+	options := SSHMultiplexOptions(target)
+	if len(options) != 3 {
+		t.Fatalf("multiplex options = %v, want three options", options)
+	}
+	joinedOptions := strings.Join(options, " ")
+	for _, expected := range []string{"ControlMaster=auto", "ControlPath=", "ControlPersist=600"} {
+		if !strings.Contains(joinedOptions, expected) {
+			t.Errorf("multiplex options do not contain %q: %s", expected, joinedOptions)
+		}
+	}
+	joinedArgs := strings.Join((&sshExecutor{target: target}).sshArgs(0), " ")
+	for _, option := range options {
+		if !strings.Contains(joinedArgs, option) {
+			t.Errorf("SSH command arguments do not share %q: %s", option, joinedArgs)
+		}
+	}
+}
