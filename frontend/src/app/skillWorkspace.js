@@ -14,6 +14,7 @@ export const SKILL_DEBUG_EVENT = "onecatch:skill-debug";
 export const SKILL_SELECTED_EVENT = "onecatch:skill-selected";
 export const SKILL_FILE_OPEN_EVENT = "onecatch:skill-file-open";
 export const SKILL_FILE_DRAFT_EVENT = "onecatch:skill-file-draft";
+export const SKILL_INSPECTOR_TAB_EVENT = "onecatch:skill-inspector-tab";
 
 // The inspector starts collapsed and may mount long after a skill was picked,
 // so the last selection is retained for whoever subscribes late.
@@ -57,6 +58,20 @@ export function requestSkillFile(path) {
 
 export function currentSkillFileRequest() {
   return fileRequest;
+}
+
+// Which of the inspector's two tabs to show. Retained and tokened for the same
+// reason the file request is: expanding a collapsed aside mounts the inspector
+// in the render that dispatches this, so the event alone arrives too early.
+let tabRequest = { tab: "", token: 0 };
+
+export function requestSkillInspectorTab(tab) {
+  tabRequest = { tab, token: tabRequest.token + 1 };
+  window.dispatchEvent(new CustomEvent(SKILL_INSPECTOR_TAB_EVENT, { detail: tabRequest }));
+}
+
+export function currentSkillInspectorTab() {
+  return tabRequest;
 }
 
 // `saved` separates a keystroke from a write that reached disk. The detail card

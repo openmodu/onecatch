@@ -191,6 +191,16 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const clampInspectorWidth = (width) => {
     return Math.max(MIN_INSPECTOR_WIDTH, Math.min(width, inspectorMaximumWidth()));
   };
+  // The skills aside holds a file editor and a debug transcript, not a status
+  // list. At 380px neither is readable, so it opens at the same half-workbench
+  // width review already asks for.
+  useEffect(() => {
+    if (inspectorScope !== "skills" || inspectorCollapsed) return;
+    const workbenchWidth = workbenchRef.current?.getBoundingClientRect().width || window.innerWidth;
+    setInspectorMaximized(false);
+    setInspectorWidth(clampInspectorWidth(preferredReviewInspectorWidth(workbenchWidth)));
+  }, [inspectorCollapsed, inspectorScope]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openReview = () => {
     const workbenchWidth = workbenchRef.current?.getBoundingClientRect().width || window.innerWidth;
     setInspectorMaximized(false);

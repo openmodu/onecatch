@@ -7,7 +7,9 @@ import { applyDebugFrames } from "./skillWorkspace.js";
 
 const page = readFileSync(new URL("./SkillManagerPage.jsx", import.meta.url), "utf8");
 const inspector = readFileSync(new URL("./components/inspectors/SkillFilesInspector.jsx", import.meta.url), "utf8");
-const debugPanel = readFileSync(new URL("./components/SkillDebugPanel.jsx", import.meta.url), "utf8");
+const debugPanel = readFileSync(new URL("./components/inspectors/SkillDebugInspector.jsx", import.meta.url), "utf8");
+const inspectorPanel = readFileSync(new URL("./components/inspectors/InspectorPanel.jsx", import.meta.url), "utf8");
+const workbench = readFileSync(new URL("./components/TaskWorkbench.jsx", import.meta.url), "utf8");
 const settings = readFileSync(new URL("./SettingsPage.jsx", import.meta.url), "utf8");
 const resize = readFileSync(new URL("./columnResize.js", import.meta.url), "utf8");
 
@@ -74,26 +76,41 @@ test("both columns are draggable, and the drag knows which side it grows", () =>
   assert.match(resize, /event\.key !== "ArrowLeft" && event\.key !== "ArrowRight"/);
 });
 
-test("debug is one small toggle, and its events render by kind", () => {
-  assert.match(page, /aria-pressed=\{debugOpen\}/);
-  assert.match(page, /size="icon-sm"[^>]*aria-label=\{t\("skill\.debug"\)\}/);
+test("the inspector holds both a file editor and a debug conversation", () => {
+  assert.match(inspectorPanel, /function SkillsInspector/);
+  assert.match(inspectorPanel, /\{ value: "files"[\s\S]{0,120}\{ value: "debug"/, "two tabs, files first");
+  // Switching tabs must not throw away an unsaved buffer or a live transcript.
+  assert.match(inspectorPanel, /tab === "files" \? "h-full" : "hidden"/);
+  assert.match(inspectorPanel, /tab === "debug" \? "h-full" : "hidden"/);
+  // The card's actions route to a tab rather than opening a drawer of their own.
+  assert.match(page, /requestSkillInspectorTab\("debug"\)/);
+  assert.match(page, /requestSkillInspectorTab\("files"\)/);
+  assert.doesNotMatch(page, /SkillDebugPanel|debugOpen/, "the debug drawer is gone from the document pane");
+});
+
+test("debug events render by kind, and a run streams and can be stopped", () => {
   assert.match(debugPanel, /const EVENT_VISUALS = \{/);
   assert.match(debugPanel, /reasoning: \{[^}]*prose: true/, "reasoning and messages are prose, not preformatted text");
   assert.match(debugPanel, /<MarkdownContent[^>]*content=\{result\.output\}/);
+  assert.match(debugPanel, /Events\.On\(SKILL_DEBUG_EVENT/, "frames arrive while Debug is still awaiting");
+  assert.match(debugPanel, /createFrameBatcher\(/, "streamed frames coalesce per display frame like runtime frames");
+  assert.match(debugPanel, /frame\.runId !== runRef\.current/, "a frame from an abandoned run must not paint over the current one");
+  assert.match(debugPanel, /SkillBinding\.StopDebug\(runID\)/);
+  assert.match(debugPanel, /SkillBinding\.DebugHistory\(name\)/);
+  assert.match(debugPanel, /streaming=\{Boolean\(event\.streaming\)\}/, "a growing message shows a caret rather than reading as final");
 });
 
-test("a debug run streams, can be stopped, and is kept", () => {
-  assert.match(page, /Events\.On\(SKILL_DEBUG_EVENT/, "frames arrive while Debug is still awaiting");
-  assert.match(page, /createFrameBatcher\(/, "streamed frames coalesce per display frame like runtime frames");
-  assert.match(page, /frame\.runId !== debugRunRef\.current/, "a frame from an abandoned run must not paint over the current one");
-  assert.match(page, /SkillBinding\.StopDebug\(runID\)/);
-  assert.match(page, /SkillBinding\.DebugHistory\(selectedName\)|SkillBinding\.DebugHistory\(name\)/);
-  assert.match(debugPanel, /streaming=\{Boolean\(event\.streaming\)\}/, "a growing message shows a caret rather than reading as final");
+test("the skills aside opens wide enough to read both of its panels", () => {
+  assert.match(workbench, /inspectorScope !== "skills" \|\| inspectorCollapsed/);
+  assert.match(workbench, /setInspectorWidth\(clampInspectorWidth\(preferredReviewInspectorWidth\(workbenchWidth\)\)\)/);
 });
 
 test("sync is a library-level destination rather than a per-skill tab", () => {
   assert.match(page, /pane === "sync"/);
   assert.doesNotMatch(page, /<TabsTrigger[^>]*value="sync"/);
+  // It leads the rail rather than hiding under the list it is not part of.
+  const railTab = page.indexOf('<RailTab active={pane === "sync"}');
+  assert.ok(railTab > 0 && railTab < page.indexOf("visibleSkills.map"), "sync sits above the skills, not in a footer");
 });
 
 test("frontmatter is lifted out of the rendered body", () => {
