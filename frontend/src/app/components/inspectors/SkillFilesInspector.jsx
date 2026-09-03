@@ -235,8 +235,12 @@ function SkillFilesInspector({ mode, notify, onDirtyChange }) {
           <button type="button" className="h-7 shrink-0 rounded-md bg-primary px-2.5 text-[11px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:bg-transparent disabled:text-muted-foreground disabled:opacity-100" disabled={!dirty || saving} onClick={saveFile}>{saving ? t("common.saving") : t("common.save")}</button>
           <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("common.close")} title={t("common.close")} onClick={closeFile}><X size={14} aria-hidden="true" /></button>
         </div>
+        {/* A bare <textarea> inherits the legacy stylesheet's form chrome — a
+            1px border and a rounded box — which drew a second hairline right
+            beside the panel's own edge. The editor is framed by the panel it
+            fills, so it carries no box of its own. */}
         <textarea
-          className="min-h-0 flex-1 resize-none bg-transparent px-3 pb-2 font-mono text-[11.5px] leading-[1.7] text-foreground outline-none"
+          className="min-h-0 flex-1 resize-none border-0 bg-transparent px-3 pt-1 pb-2 font-mono text-[11.5px] leading-[1.7] text-foreground shadow-none outline-none focus:ring-0"
           spellCheck="false"
           aria-label={file.path}
           value={draft}

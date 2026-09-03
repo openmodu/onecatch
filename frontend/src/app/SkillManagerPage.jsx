@@ -17,10 +17,6 @@ import { demoSyncTargets, formatSkillBytes, newSkillTemplate, parseSkillDocument
 import { COLUMN_SEPARATOR_CLASS, useColumnWidth } from "./columnResize.js";
 import { publishSkillSelection, requestSkillFile, requestSkillInspectorTab, skillDocumentPath, SKILL_FILE_DRAFT_EVENT, subscribeSkillWorkspace } from "./skillWorkspace.js";
 
-// A search field is only worth its chrome once the rail stops fitting on one
-// screen, so the demo library has to be big enough to exercise that branch.
-const SEARCH_THRESHOLD = 4;
-
 const demoSkills = [
   ["release-notes", "Write concise, user-facing release notes from a real diff."],
   ["code-review", "Review a diff for correctness and report only what is verified."],
@@ -53,20 +49,6 @@ function SkillRow({ skill, selected, disabled, onSelect }) {
   </button>;
 }
 
-function RailTab({ active, icon: Icon, label, onSelect }) {
-  return <button
-    type="button"
-    className={`flex h-8 w-full items-center gap-2 rounded-lg px-2.5 text-left text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${active ? "bg-accent text-foreground" : "text-muted-foreground hover:bg-accent/45 hover:text-foreground"}`}
-    aria-current={active ? "page" : undefined}
-    onClick={onSelect}
-  >
-    <Icon size={14} strokeWidth={2} aria-hidden="true" />
-    <span className="min-w-0 flex-1 truncate">{label}</span>
-  </button>;
-}
-
-// Where a skill can go. Paths and membership of the list are settings; this is
-// only the status of each destination.
 function TargetStatus({ target }) {
   const { t } = useTranslation();
   return <div className="flex min-w-0 items-center gap-2 py-1.5">
@@ -327,20 +309,18 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
 
   return <div className={`flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background ${rail.resizing ? "cursor-col-resize select-none" : ""}`}>
     <aside className="flex min-h-0 min-w-0 flex-col" style={{ width: `${rail.width}px` }} aria-label={t("skill.library")}>
-      <div className="flex h-12 shrink-0 items-center gap-0.5 pr-2 pl-4">
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.library")}</span>
+      {/* The pane's own title already names this column, so the rail spends its
+          header row on actions rather than repeating the word. */}
+      <div className="flex h-12 shrink-0 items-center gap-0.5 px-2">
         <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={loading} aria-label={t("common.refresh")} title={t("common.refresh")} onClick={() => void refresh()}><RefreshCw className={loading ? "animate-spin" : ""} aria-hidden="true" /></Button>
         <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={Boolean(busy)} aria-label={t("skill.new")} title={t("skill.new")} onClick={() => setCreateDialog(true)}><Plus aria-hidden="true" /></Button>
+        <Button variant="ghost" size="icon-sm" className={pane === "sync" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"} aria-pressed={pane === "sync"} aria-label={t("skill.sync")} title={t("skill.sync")} onClick={() => setPane("sync")}><FolderSync aria-hidden="true" /></Button>
       </div>
 
-      <div className="shrink-0 px-2 pb-1">
-        <RailTab active={pane === "sync"} icon={FolderSync} label={t("skill.sync")} onSelect={() => setPane("sync")} />
-      </div>
-
-      {skills.length > SEARCH_THRESHOLD && <div className="relative shrink-0 px-3 pb-2">
-        <Search size={13} className="pointer-events-none absolute top-1/2 left-5.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+      <div className="relative shrink-0 px-2 pb-2">
+        <Search size={13} className="pointer-events-none absolute top-1/2 left-4.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
         <Input className="h-7 rounded-lg border-0 bg-muted/50 pl-6 text-[12px] shadow-none focus-visible:ring-1" aria-label={t("skill.search")} placeholder={t("skill.search")} value={query} onChange={(event) => setQuery(event.target.value)} />
-      </div>}
+      </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
         <div className="flex flex-col gap-px">
@@ -359,7 +339,7 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
     </aside>
     <span className={COLUMN_SEPARATOR_CLASS} aria-label={t("skill.resizeLibrary")} title={t("skill.resizeHint")} {...rail.separatorProps} />
 
-    {pane === "sync" ? <ScrollArea className="min-h-0 min-w-0 flex-1">
+    {pane === "sync" ? <ScrollArea className="min-h-0 min-w-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
       <section className="mx-auto max-w-3xl px-8 pt-8 pb-10">
         <header className="min-w-0">
           <h1 className="text-[19px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.syncTitle")}</h1>
@@ -396,7 +376,7 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
         <p className="mt-6 text-[11px] leading-relaxed text-muted-foreground">{t("skill.metadataHint")}</p>
       </section>
     </ScrollArea> : document ? <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1 [&_[data-slot=scroll-area-viewport]>div]:block!">
         <div className="mx-auto w-full max-w-3xl px-8 pt-7 pb-9">
           {/* One card is the whole skill: what it claims to be in its
               frontmatter, and the prose a runtime actually loads. */}

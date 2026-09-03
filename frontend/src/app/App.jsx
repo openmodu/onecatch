@@ -1395,7 +1395,7 @@ function App() {
   const location = view === "settings"
     ? { label: t("sidebar.settings"), path: "~/.onecatch" }
     : view === "skills"
-      ? { label: t("sidebar.skills"), path: "" }
+      ? { label: t("skill.workspaceTitle"), path: "" }
     : selectedWorkspace
       ? { label: selectedWorkspace.name, path: workspaceLocation(selectedWorkspace) }
       : { label: t("app.selectWorkspace"), path: "" };

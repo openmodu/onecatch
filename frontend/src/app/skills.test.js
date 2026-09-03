@@ -38,9 +38,13 @@ test("skill library is a text-first rail beside one detail card", () => {
   // Every branch of the detail column claims the rest of the row. Without it
   // the column shrink-wraps its content and the document never reaches the
   // reading width it is capped at.
-  for (const branch of [/\{pane === "sync" \? <ScrollArea className="[^"]*flex-1"/, /: document \? <div className="[^"]*flex-1[^"]*flex-col"/, /: <div className="[^"]*flex-1 items-center justify-center/]) {
+  for (const branch of [/\{pane === "sync" \? <ScrollArea className="[^"]*flex-1[\s"]/, /: document \? <div className="[^"]*flex-1[^"]*flex-col"/, /: <div className="[^"]*flex-1 items-center justify-center/]) {
     assert.match(page, branch);
   }
+  // Radix wraps a scroll viewport's children in an inline `display:table` box,
+  // which shrink-wraps to max-content: the capped card grew past the column and
+  // slid under the inspector instead of narrowing with it.
+  assert.match(page, /\[&_\[data-slot=scroll-area-viewport\]>div\]:block!/);
   // The rail replaced the card grid; cards forced a second scroll region above
   // the document and pushed the skill itself below the fold.
   assert.doesNotMatch(page, /repeat\(auto-fill, minmax/);
@@ -114,9 +118,11 @@ test("the skills aside opens wide enough to read both of its panels", () => {
 test("sync is a library-level destination rather than a per-skill tab", () => {
   assert.match(page, /pane === "sync"/);
   assert.doesNotMatch(page, /<TabsTrigger[^>]*value="sync"/);
-  // It leads the rail rather than hiding under the list it is not part of.
-  const railTab = page.indexOf('<RailTab active={pane === "sync"}');
-  assert.ok(railTab > 0 && railTab < page.indexOf("visibleSkills.map"), "sync sits above the skills, not in a footer");
+  // It sits with refresh and add in the rail's header row rather than in a
+  // footer, and shows which pane is open.
+  const syncAction = page.indexOf('aria-pressed={pane === "sync"}');
+  assert.ok(syncAction > 0 && syncAction < page.indexOf("visibleSkills.map"), "sync leads the rail, not a footer");
+  assert.doesNotMatch(page, /function RailTab/, "one row of icon actions, not a labelled nav row");
 });
 
 test("frontmatter is lifted out of the rendered body", () => {
