@@ -123,6 +123,11 @@ test("sync is a library-level destination rather than a per-skill tab", () => {
   const syncAction = page.indexOf('aria-pressed={pane === "sync"}');
   assert.ok(syncAction > 0 && syncAction < page.indexOf("visibleSkills.map"), "sync leads the rail, not a footer");
   assert.doesNotMatch(page, /function RailTab/, "one row of icon actions, not a labelled nav row");
+  // The rail keeps one text gutter: the search field's own padding puts its
+  // placeholder on the same line as the skill names, so it carries no leading
+  // icon to push that text 14px past them.
+  assert.match(page, /placeholder=\{t\("skill\.search"\)\}/);
+  assert.doesNotMatch(page, /<Search /);
 });
 
 test("frontmatter is lifted out of the rendered body", () => {

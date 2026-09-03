@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronDown, Ellipsis, FolderSync, Play, Plus, RefreshCw, Search, SquarePen, Trash2, X } from "lucide-react";
+import { ChevronDown, Ellipsis, FolderSync, Play, Plus, RefreshCw, SquarePen, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -317,9 +317,12 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
         <Button variant="ghost" size="icon-sm" className={pane === "sync" ? "bg-accent text-foreground" : "text-muted-foreground hover:text-foreground"} aria-pressed={pane === "sync"} aria-label={t("skill.sync")} title={t("skill.sync")} onClick={() => setPane("sync")}><FolderSync aria-hidden="true" /></Button>
       </div>
 
-      <div className="relative shrink-0 px-2 pb-2">
-        <Search size={13} className="pointer-events-none absolute top-1/2 left-4.5 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-        <Input className="h-7 rounded-lg border-0 bg-muted/50 pl-6 text-[12px] shadow-none focus-visible:ring-1" aria-label={t("skill.search")} placeholder={t("skill.search")} value={query} onChange={(event) => setQuery(event.target.value)} />
+      {/* The rail has one text gutter — the skill names sit 10px inside their
+          row — and the search field joins it. A leading icon would push the
+          placeholder 14px past that line, which is the only text in the field
+          and so the line the eye follows. The placeholder says what it is. */}
+      <div className="shrink-0 px-2 pb-2">
+        <Input className="h-7 rounded-lg border-0 bg-muted/50 px-2.5 text-[12px] shadow-none focus-visible:ring-1" aria-label={t("skill.search")} placeholder={t("skill.search")} value={query} onChange={(event) => setQuery(event.target.value)} />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2">
