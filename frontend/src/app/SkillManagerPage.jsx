@@ -354,7 +354,7 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
     </aside>
     <span className={COLUMN_SEPARATOR_CLASS} aria-label={t("skill.resizeLibrary")} title={t("skill.resizeHint")} {...rail.separatorProps} />
 
-    {pane === "sync" ? <ScrollArea className="min-h-0 min-w-0">
+    {pane === "sync" ? <ScrollArea className="min-h-0 min-w-0 flex-1">
       <section className="mx-auto max-w-3xl px-8 pt-8 pb-10">
         <header className="min-w-0">
           <h1 className="text-[19px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.syncTitle")}</h1>
@@ -390,7 +390,7 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
 
         <p className="mt-6 text-[11px] leading-relaxed text-muted-foreground">{t("skill.metadataHint")}</p>
       </section>
-    </ScrollArea> : document ? <div className="flex min-h-0 min-w-0 flex-col">
+    </ScrollArea> : document ? <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <ScrollArea className="min-h-0 flex-1">
         <div className="mx-auto w-full max-w-3xl px-8 pt-7 pb-9">
           {/* One card is the whole skill: what it claims to be in its
@@ -429,7 +429,7 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
           <p className="mt-3 px-1 text-[11px] leading-relaxed text-muted-foreground">{t("skill.editorHint")}</p>
         </div>
       </ScrollArea>
-    </div> : <div className="flex min-h-0 min-w-0 items-center justify-center px-8">
+    </div> : <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center px-8">
       <div className="max-w-sm text-center">
         <h1 className="text-[17px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.emptyTitle")}</h1>
         <p className="mt-2 text-[13px] leading-relaxed text-muted-foreground">{t("skill.emptyDescription")}</p>

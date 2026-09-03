@@ -35,6 +35,12 @@ test("skill library is a text-first rail beside one detail card", () => {
   assert.match(page, /function SkillRow/);
   assert.match(page, /aria-pressed=\{selected\}/);
   assert.match(page, /style=\{\{ width: `\$\{rail\.width\}px` \}\}/, "the rail is one resizable column beside the detail pane");
+  // Every branch of the detail column claims the rest of the row. Without it
+  // the column shrink-wraps its content and the document never reaches the
+  // reading width it is capped at.
+  for (const branch of [/\{pane === "sync" \? <ScrollArea className="[^"]*flex-1"/, /: document \? <div className="[^"]*flex-1[^"]*flex-col"/, /: <div className="[^"]*flex-1 items-center justify-center/]) {
+    assert.match(page, branch);
+  }
   // The rail replaced the card grid; cards forced a second scroll region above
   // the document and pushed the skill itself below the fold.
   assert.doesNotMatch(page, /repeat\(auto-fill, minmax/);
