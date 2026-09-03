@@ -6,31 +6,106 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/openmodu/onecatch/internal/service/skillmanager"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
+// SkillDebugEventName is the channel a debug run streams over while it is
+// still running. The call that started the run still returns the whole result;
+// these frames only make the wait legible.
+const SkillDebugEventName = "onecatch:skill-debug"
+
 type SkillDebugInput struct {
 	Name   string `json:"name"`
 	Prompt string `json:"prompt"`
+	// RunID is chosen by the caller because frames start arriving before the
+	// call returns — there is no earlier moment to hand an identifier back.
+	// An empty RunID runs without streaming and cannot be stopped.
+	RunID string `json:"runId,omitempty"`
 }
 
 type SkillDebugEvent struct {
-	Kind   string    `json:"kind"`
-	Text   string    `json:"text,omitempty"`
-	Failed bool      `json:"failed,omitempty"`
-	At     time.Time `json:"at"`
+	Kind string `json:"kind"`
+	Text string `json:"text,omitempty"`
+	// Streaming marks an event whose text is still growing, so the renderer
+	// can show a caret instead of presenting a half-written message as final.
+	Streaming bool      `json:"streaming,omitempty"`
+	Failed    bool      `json:"failed,omitempty"`
+	At        time.Time `json:"at"`
+}
+
+// SkillDebugFrame is one incremental update from a running debug session.
+// Index addresses a slot in the run's event list, so a message arriving as
+// token deltas is replaced in place rather than appended once per chunk.
+type SkillDebugFrame struct {
+	RunID string          `json:"runId"`
+	Index int             `json:"index"`
+	Event SkillDebugEvent `json:"event"`
 }
 
 type SkillDebugResult struct {
-	Succeeded  bool              `json:"succeeded"`
-	Output     string            `json:"output"`
+	Succeeded bool   `json:"succeeded"`
+	Output    string `json:"output"`
+	// Stopped separates a run the user interrupted from one that failed. Both
+	// end early, but only a failure is worth reporting as an error.
+	Stopped    bool              `json:"stopped,omitempty"`
 	SessionID  string            `json:"sessionId,omitempty"`
 	DurationMS int64             `json:"durationMs"`
 	Usage      agentrun.Usage    `json:"usage"`
 	Events     []SkillDebugEvent `json:"events"`
+}
+
+// skillDebugRun is the handle StopSkillDebug reaches a live run through.
+type skillDebugRun struct {
+	cancel  context.CancelFunc
+	stopped atomic.Bool
+}
+
+// SetSkillDebugEmitter installs the transport that carries streamed frames to
+// the UI. It stays nil outside the desktop app, where a debug run simply
+// delivers its whole transcript on completion.
+func (a *Service) SetSkillDebugEmitter(emit func(SkillDebugFrame)) {
+	a.skillDebugMu.Lock()
+	a.skillDebugEmit = emit
+	a.skillDebugMu.Unlock()
+}
+
+func (a *Service) skillDebugEmitter() func(SkillDebugFrame) {
+	a.skillDebugMu.Lock()
+	defer a.skillDebugMu.Unlock()
+	return a.skillDebugEmit
+}
+
+func (a *Service) registerSkillDebug(runID string, run *skillDebugRun) {
+	a.skillDebugMu.Lock()
+	if a.skillDebugRuns == nil {
+		a.skillDebugRuns = make(map[string]*skillDebugRun)
+	}
+	a.skillDebugRuns[runID] = run
+	a.skillDebugMu.Unlock()
+}
+
+func (a *Service) releaseSkillDebug(runID string) {
+	a.skillDebugMu.Lock()
+	delete(a.skillDebugRuns, runID)
+	a.skillDebugMu.Unlock()
+}
+
+// StopSkillDebug interrupts a streaming run. DebugSkill then returns the
+// transcript collected so far instead of an error: the user asked for it to
+// end, and the partial output is usually the point of stopping.
+func (a *Service) StopSkillDebug(runID string) {
+	a.skillDebugMu.Lock()
+	run := a.skillDebugRuns[strings.TrimSpace(runID)]
+	a.skillDebugMu.Unlock()
+	if run == nil {
+		return
+	}
+	run.stopped.Store(true)
+	run.cancel()
 }
 
 func (a *Service) skillManager() (*skillmanager.Manager, error) {
@@ -182,8 +257,22 @@ func (a *Service) DebugSkill(ctx context.Context, input SkillDebugInput) (SkillD
 		return SkillDebugResult{}, coded("skill_debug_unavailable", "configure the Modu native SDK and a model before debugging skills")
 	}
 
+	runID := strings.TrimSpace(input.RunID)
 	debugContext, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
+	run := &skillDebugRun{cancel: cancel}
+	if runID != "" {
+		a.registerSkillDebug(runID, run)
+		defer a.releaseSkillDebug(runID)
+	}
+	publish := a.skillDebugEmitter()
+	emit := func(index int, event SkillDebugEvent) {
+		if publish == nil || runID == "" {
+			return
+		}
+		publish(SkillDebugFrame{RunID: runID, Index: index, Event: event})
+	}
+
 	startedAt := time.Now()
 	events := make([]SkillDebugEvent, 0, 32)
 	streamIndexes := make(map[string]int)
@@ -195,6 +284,7 @@ func (a *Service) DebugSkill(ctx context.Context, input SkillDebugInput) (SkillD
 		if text == "" && event.Phase != agentrun.StreamStart {
 			return
 		}
+		streaming := event.StreamID != "" && event.Phase != agentrun.StreamEnd
 		if event.StreamID != "" {
 			if index, ok := streamIndexes[event.StreamID]; ok {
 				switch event.Phase {
@@ -203,6 +293,8 @@ func (a *Service) DebugSkill(ctx context.Context, input SkillDebugInput) (SkillD
 				case agentrun.StreamSnapshot:
 					events[index].Text = text
 				}
+				events[index].Streaming = streaming
+				emit(index, events[index])
 				return
 			}
 		}
@@ -212,7 +304,8 @@ func (a *Service) DebugSkill(ctx context.Context, input SkillDebugInput) (SkillD
 		if event.StreamID != "" {
 			streamIndexes[event.StreamID] = len(events)
 		}
-		events = append(events, SkillDebugEvent{Kind: string(event.Kind), Text: text, Failed: event.Failed, At: event.At})
+		events = append(events, SkillDebugEvent{Kind: string(event.Kind), Text: text, Streaming: streaming, Failed: event.Failed, At: event.At})
+		emit(len(events)-1, events[len(events)-1])
 	}
 	result, runErr := runner.Run(debugContext, agentrun.Request{
 		Runtime:   agentrun.RuntimeModu,
@@ -222,6 +315,11 @@ func (a *Service) DebugSkill(ctx context.Context, input SkillDebugInput) (SkillD
 		Model:     moduSettings.DefaultModel,
 		Sandbox:   agentrun.SandboxReadOnly,
 	}, sink)
+	// The run is over, so no event can still be growing. Leaving a stream
+	// marked live would leave a caret blinking under a finished transcript.
+	for index := range events {
+		events[index].Streaming = false
+	}
 	debugResult := SkillDebugResult{
 		Succeeded:  result.Succeeded,
 		Output:     result.FinalMessage,
@@ -230,7 +328,24 @@ func (a *Service) DebugSkill(ctx context.Context, input SkillDebugInput) (SkillD
 		Usage:      result.Usage,
 		Events:     events,
 	}
-	if runErr != nil {
+	stopped := run.stopped.Load() && errors.Is(runErr, context.Canceled)
+	if stopped {
+		debugResult.Stopped = true
+		debugResult.Succeeded = false
+	}
+	// A failed or interrupted run is the transcript most worth keeping, so the
+	// record is written before any error is returned. A history that cannot be
+	// written must not fail the run the user just watched.
+	// The transcript is already on screen and the run itself is over, so a
+	// history that cannot be written is not worth turning into a failed call.
+	_ = a.appendSkillDebugRun(SkillDebugRecord{
+		RunID:     runID,
+		Skill:     document.Name,
+		Prompt:    prompt,
+		StartedAt: startedAt,
+		Result:    debugResult,
+	})
+	if runErr != nil && !stopped {
 		if errors.Is(runErr, context.Canceled) || errors.Is(runErr, context.DeadlineExceeded) {
 			return debugResult, runErr
 		}

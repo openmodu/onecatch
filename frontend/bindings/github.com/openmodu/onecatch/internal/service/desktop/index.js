@@ -30,6 +30,7 @@ export {
     SearchTasksInput,
     SkillDebugEvent,
     SkillDebugInput,
+    SkillDebugRecord,
     SkillDebugResult,
     StorageCategory,
     StorageUsage,

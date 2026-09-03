@@ -7,6 +7,10 @@
 // The skills inspector is never detached into its own window, so a plain
 // CustomEvent on `window` is enough — no Wails event bridge is involved.
 
+// Emitted from Go while a debug run is still going. Unlike the three below it
+// is a Wails channel, not a window event: it crosses the process boundary.
+export const SKILL_DEBUG_EVENT = "onecatch:skill-debug";
+
 export const SKILL_SELECTED_EVENT = "onecatch:skill-selected";
 export const SKILL_FILE_OPEN_EVENT = "onecatch:skill-file-open";
 export const SKILL_FILE_DRAFT_EVENT = "onecatch:skill-file-draft";
@@ -22,6 +26,21 @@ export function publishSkillSelection(value) {
 
 export function currentSkillSelection() {
   return selection;
+}
+
+// Applies one streamed debug frame to the transcript rendered so far. Index
+// addresses a slot rather than appending, so a message arriving as token
+// deltas grows in place instead of once per chunk.
+export function applyDebugFrames(events, frames) {
+  if (!frames.length) return events;
+  const next = events.slice();
+  for (const frame of frames) {
+    if (!frame?.event || !Number.isInteger(frame.index) || frame.index < 0) continue;
+    // A dropped frame would otherwise leave a hole the renderer walks into.
+    while (next.length < frame.index) next.push({ kind: "message", text: "" });
+    next[frame.index] = frame.event;
+  }
+  return next;
 }
 
 // Asks the inspector to open one file for editing. Expanding a collapsed aside

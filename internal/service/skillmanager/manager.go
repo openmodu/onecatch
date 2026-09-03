@@ -384,6 +384,14 @@ func cleanRelativeDirectory(directory string) (string, error) {
 	return relative, nil
 }
 
+// ValidSkillName reports whether a name is one the library could hold. It is
+// exported so callers that key their own per-skill storage off a name can
+// refuse a value that would escape their directory, without duplicating the
+// pattern.
+func ValidSkillName(name string) bool {
+	return validateSkillName(strings.TrimSpace(name)) == nil
+}
+
 func validateSkillName(name string) error {
 	if len(name) > 64 || !skillNamePattern.MatchString(name) {
 		return errors.New("skill name must use lowercase alphanumeric segments separated by hyphens")

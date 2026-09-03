@@ -50,3 +50,10 @@ func (b *SkillBinding) Sync(id string) (skillmanager.SyncResult, error) {
 func (b *SkillBinding) Debug(input desktopservice.SkillDebugInput) (desktopservice.SkillDebugResult, error) {
 	return b.service.DebugSkill(context.Background(), input)
 }
+func (b *SkillBinding) StopDebug(runID string) { b.service.StopSkillDebug(runID) }
+func (b *SkillBinding) DebugHistory(name string) ([]desktopservice.SkillDebugRecord, error) {
+	return b.service.ListSkillDebugRuns(name)
+}
+func (b *SkillBinding) ClearDebugHistory(name string) error {
+	return b.service.ClearSkillDebugRuns(name)
+}

@@ -217,6 +217,9 @@ func Run() {
 	terminalService.SetEmitter(func(name string, payload any) {
 		wailsApp.Event.Emit(name, payload)
 	})
+	service.SetSkillDebugEmitter(func(frame desktopservice.SkillDebugFrame) {
+		wailsApp.Event.Emit(desktopservice.SkillDebugEventName, frame)
+	})
 	auxiliaryWindows = newAuxiliaryWindowController(wailsApp)
 	unsubscribeRunStream := streamHub.Subscribe(func(frame runstream.Frame) {
 		wailsApp.Event.Emit(runstream.EventName, frame)

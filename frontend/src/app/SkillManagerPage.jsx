@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Events } from "@wailsio/runtime";
 import { Ellipsis, FolderSync, Play, Plus, RefreshCw, Search, SquarePen, Trash2, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -15,7 +16,8 @@ import MarkdownContent from "./components/MarkdownContent.jsx";
 import SkillDebugPanel from "./components/SkillDebugPanel.jsx";
 import { errorMessage, formatDateTime } from "./format.js";
 import { formatSkillBytes, newSkillTemplate, parseSkillDocument, syncStatusTone } from "./skills.js";
-import { publishSkillSelection, requestSkillFile, skillDocumentPath, SKILL_FILE_DRAFT_EVENT, subscribeSkillWorkspace } from "./skillWorkspace.js";
+import { createFrameBatcher } from "./frameBatcher.js";
+import { applyDebugFrames, publishSkillSelection, requestSkillFile, skillDocumentPath, SKILL_DEBUG_EVENT, SKILL_FILE_DRAFT_EVENT, subscribeSkillWorkspace } from "./skillWorkspace.js";
 
 // A search field is only worth its chrome once the rail stops fitting on one
 // screen, so the demo library has to be big enough to exercise that branch.
@@ -42,6 +44,50 @@ const demoTargets = [
   { id: "claude", name: "Claude Code", path: "~/.claude/skills", builtin: true, exists: false, status: "missing", syncedSkills: 0, totalSkills: 5, rsyncAvailable: true },
   { id: "modu", name: "Modu", path: "~/.modu/skills", builtin: true, exists: true, status: "out-of-sync", syncedSkills: 3, totalSkills: 5, lastSyncedAt: new Date(Date.now() - 86_400_000).toISOString(), rsyncAvailable: true },
 ];
+
+// Demo mode has no Modu behind it, so the streaming path is reproduced here
+// rather than stubbed out: without it the browser preview would exercise a
+// code path the desktop app never takes.
+const DEMO_DEBUG_SCRIPT = [
+  { kind: "reasoning", text: "The prompt names the skill directly, so its body is already in context." },
+  { kind: "tool_use", text: "read_file ~/.onecatch/skills/{{name}}/SKILL.md" },
+  { kind: "tool_result", text: "---\nname: {{name}}\n---\n\n# {{name}}\n\n(284 bytes)" },
+  { kind: "message", text: "Loaded the skill explicitly and produced this preview response.\n\n- Checked the frontmatter\n- Followed the workflow in `SKILL.md`" },
+];
+
+function streamDemoDebug(name, onFrames) {
+  const events = DEMO_DEBUG_SCRIPT.map((step) => ({ ...step, text: step.text.replaceAll("{{name}}", name), at: new Date().toISOString() }));
+  return new Promise((resolve) => {
+    let index = 0;
+    const step = () => {
+      if (index >= events.length) {
+        resolve({ succeeded: true, output: events[events.length - 1].text, durationMs: 1280, usage: { inputTokens: 942, outputTokens: 86 }, events });
+        return;
+      }
+      const event = events[index];
+      // Prose arrives a few words at a time so the caret has something to do.
+      const words = event.text.split(" ");
+      let cursor = 0;
+      const grow = () => {
+        cursor = Math.min(words.length, cursor + 4);
+        const partial = words.slice(0, cursor).join(" ");
+        onFrames([{ index, event: { ...event, text: partial, streaming: cursor < words.length } }]);
+        if (cursor < words.length) { window.setTimeout(grow, 90); return; }
+        index += 1;
+        window.setTimeout(step, 160);
+      };
+      grow();
+    };
+    window.setTimeout(step, 200);
+  });
+}
+
+function demoDebugHistory(name) {
+  return [
+    { runId: "demo-1", skill: name, prompt: "Draft notes for v0.1.11", startedAt: new Date(Date.now() - 3_600_000).toISOString(), result: { succeeded: true, output: "Wrote five bullets from the diff.", durationMs: 2140, usage: { inputTokens: 880, outputTokens: 120 }, events: [{ kind: "message", text: "Wrote five bullets from the diff." }] } },
+    { runId: "demo-2", skill: name, prompt: "Summarise the revert", startedAt: new Date(Date.now() - 86_400_000).toISOString(), result: { succeeded: false, output: "", durationMs: 640, usage: {}, events: [{ kind: "error", text: "modu: no model configured", failed: true }] } },
+  ];
+}
 
 // The rail rows carry the whole library, so they stay text-first: a name and
 // one line of purpose. Anything heavier (icon tiles, borders, elevation) turns
@@ -118,6 +164,12 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [debugPrompt, setDebugPrompt] = useState("");
   const [debugResult, setDebugResult] = useState(null);
+  const [debugEvents, setDebugEvents] = useState([]);
+  const [debugHistory, setDebugHistory] = useState([]);
+  const [viewingRunID, setViewingRunID] = useState("");
+  // Frames arrive on a Wails channel that has no idea which run the panel is
+  // showing, so the live run id is read from a ref inside the listener.
+  const debugRunRef = useRef("");
 
   const loadDocument = useCallback(async (name) => {
     if (!name) { setDocument(null); setPreview(""); setSelectedName(""); publishSkillSelection({ name: "" }); return; }
@@ -127,6 +179,7 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
       setPreview(value.content || "");
       setSelectedName(name);
       setDebugResult(null);
+      setDebugEvents([]);
       publishSkillSelection({ name, path: value.path || "" });
     } catch (error) {
       notify("error", errorMessage(error));
@@ -171,6 +224,8 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
     if (pane === "sync") setPane("skill");
     if (name === selectedName) return;
     setDebugOpen(false);
+    setDebugEvents([]);
+    setViewingRunID("");
     void loadDocument(name);
   };
 
@@ -223,29 +278,92 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
     }
   };
 
+  const loadDebugHistory = useCallback(async (name) => {
+    if (!name) { setDebugHistory([]); return; }
+    try {
+      setDebugHistory(mode === "demo" ? demoDebugHistory(name) : await SkillBinding.DebugHistory(name) || []);
+    } catch {
+      // History is a convenience beside the live run; a panel that opens
+      // without it is still usable.
+      setDebugHistory([]);
+    }
+  }, [mode]);
+
+  useEffect(() => { if (debugOpen) void loadDebugHistory(selectedName); }, [debugOpen, loadDebugHistory, selectedName]);
+
+  // Streamed frames arrive on a Wails channel while Debug is still awaiting.
+  // They are coalesced per display frame, the same way runtime frames are.
+  useEffect(() => {
+    if (mode !== "wails") return undefined;
+    let pending = [];
+    const scheduleFrame = typeof window.requestAnimationFrame === "function" ? window.requestAnimationFrame.bind(window) : (callback) => window.setTimeout(callback, 16);
+    const cancelFrame = typeof window.cancelAnimationFrame === "function" ? window.cancelAnimationFrame.bind(window) : window.clearTimeout.bind(window);
+    const batcher = createFrameBatcher(() => {
+      const frames = pending;
+      pending = [];
+      if (frames.length) setDebugEvents((current) => applyDebugFrames(current, frames));
+    }, scheduleFrame, cancelFrame);
+    const off = Events.On(SKILL_DEBUG_EVENT, (event) => {
+      const frame = event?.data;
+      if (!frame || frame.runId !== debugRunRef.current) return;
+      pending.push(frame);
+      batcher.schedule();
+    });
+    return () => { batcher.cancel(); off(); };
+  }, [mode]);
+
   const runDebug = async () => {
     if (!document || !debugPrompt.trim()) { notify("error", t("skill.debugPromptRequired")); return; }
+    const prompt = debugPrompt.trim();
+    const runID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    debugRunRef.current = runID;
     setBusy("debug");
     setDebugResult(null);
+    setDebugEvents([]);
+    setViewingRunID("");
     try {
-      const result = mode === "demo" ? {
-        succeeded: true,
-        output: "Loaded the skill explicitly and produced this preview response.\n\n- Checked the frontmatter\n- Followed the workflow in `SKILL.md`",
-        durationMs: 1280,
-        usage: { inputTokens: 942, outputTokens: 86 },
-        events: [
-          { kind: "reasoning", text: "The prompt names the skill directly, so the body is already in context.", at: new Date().toISOString() },
-          { kind: "tool_use", text: "read_file ~/.onecatch/skills/" + document.name + "/SKILL.md", at: new Date().toISOString() },
-          { kind: "tool_result", text: "---\nname: " + document.name + "\n---\n\n# " + document.name + "\n\n(284 bytes)", at: new Date().toISOString() },
-          { kind: "message", text: "Loaded the skill explicitly and produced this preview response.", at: new Date().toISOString() },
-        ],
-      } : await SkillBinding.Debug({ name: document.name, prompt: debugPrompt.trim() });
+      const result = mode === "demo"
+        ? await streamDemoDebug(document.name, (frames) => setDebugEvents((current) => applyDebugFrames(current, frames)))
+        : await SkillBinding.Debug({ name: document.name, prompt, runId: runID });
+      if (debugRunRef.current !== runID) return;
       setDebugResult(result);
-      notify(result.succeeded ? "success" : "error", t(result.succeeded ? "skill.debugComplete" : "skill.debugFailed"));
+      setDebugEvents(result.events || []);
+      notify(result.stopped ? "info" : result.succeeded ? "success" : "error", t(result.stopped ? "skill.debugStopped" : result.succeeded ? "skill.debugComplete" : "skill.debugFailed"));
+      void loadDebugHistory(document.name);
+    } catch (error) {
+      // The streamed transcript is the only record of a failed run, so it
+      // stays on screen; only the outcome is reported.
+      notify("error", errorMessage(error));
+      void loadDebugHistory(document.name);
+    } finally {
+      if (debugRunRef.current === runID) debugRunRef.current = "";
+      setBusy("");
+    }
+  };
+
+  const stopDebug = () => {
+    const runID = debugRunRef.current;
+    if (!runID) return;
+    if (mode === "demo") { debugRunRef.current = ""; setBusy(""); return; }
+    void SkillBinding.StopDebug(runID).catch((error) => notify("error", errorMessage(error)));
+  };
+
+  const viewDebugRun = (record) => {
+    if (busy === "debug") return;
+    setViewingRunID(record.runId);
+    setDebugResult(record.result);
+    setDebugEvents(record.result?.events || []);
+    setDebugPrompt(record.prompt || "");
+  };
+
+  const clearDebugHistory = async () => {
+    if (!selectedName) return;
+    try {
+      if (mode !== "demo") await SkillBinding.ClearDebugHistory(selectedName);
+      setDebugHistory([]);
+      setViewingRunID("");
     } catch (error) {
       notify("error", errorMessage(error));
-    } finally {
-      setBusy("");
     }
   };
 
@@ -390,10 +508,16 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
         skillName={document.name}
         prompt={debugPrompt}
         result={debugResult}
+        events={debugEvents}
+        history={debugHistory}
+        viewingRunID={viewingRunID}
         running={busy === "debug"}
         blocked={Boolean(busy) && busy !== "debug"}
         onPromptChange={setDebugPrompt}
         onRun={() => void runDebug()}
+        onStop={stopDebug}
+        onViewRun={viewDebugRun}
+        onClearHistory={() => void clearDebugHistory()}
         onClose={() => setDebugOpen(false)}
       />}
     </div> : <div className="flex min-h-0 min-w-0 items-center justify-center px-8">

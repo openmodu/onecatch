@@ -218,6 +218,9 @@ type Service struct {
 	skills            *skillmanager.Manager
 	skillsErr         error
 	skillsMu          sync.Mutex
+	skillDebugMu      sync.Mutex
+	skillDebugEmit    func(SkillDebugFrame)
+	skillDebugRuns    map[string]*skillDebugRun
 }
 
 func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitrepo.Inspector) *Service {

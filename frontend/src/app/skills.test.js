@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { formatSkillBytes, newSkillTemplate, parseSkillDocument, syncStatusTone } from "./skills.js";
+import { applyDebugFrames } from "./skillWorkspace.js";
 
 const page = readFileSync(new URL("./SkillManagerPage.jsx", import.meta.url), "utf8");
 const inspector = readFileSync(new URL("./components/inspectors/SkillFilesInspector.jsx", import.meta.url), "utf8");
@@ -58,6 +59,15 @@ test("debug is one small toggle, and its events render by kind", () => {
   assert.match(debugPanel, /<MarkdownContent[^>]*content=\{result\.output\}/);
 });
 
+test("a debug run streams, can be stopped, and is kept", () => {
+  assert.match(page, /Events\.On\(SKILL_DEBUG_EVENT/, "frames arrive while Debug is still awaiting");
+  assert.match(page, /createFrameBatcher\(/, "streamed frames coalesce per display frame like runtime frames");
+  assert.match(page, /frame\.runId !== debugRunRef\.current/, "a frame from an abandoned run must not paint over the current one");
+  assert.match(page, /SkillBinding\.StopDebug\(runID\)/);
+  assert.match(page, /SkillBinding\.DebugHistory\(selectedName\)|SkillBinding\.DebugHistory\(name\)/);
+  assert.match(debugPanel, /streaming=\{Boolean\(event\.streaming\)\}/, "a growing message shows a caret rather than reading as final");
+});
+
 test("sync is a library-level destination rather than a per-skill tab", () => {
   assert.match(page, /pane === "sync"/);
   assert.doesNotMatch(page, /<TabsTrigger[^>]*value="sync"/);
@@ -72,4 +82,23 @@ test("frontmatter is lifted out of the rendered body", () => {
   // A file that never declared frontmatter renders whole rather than losing
   // its first paragraph to a partial match.
   assert.equal(parseSkillDocument("# Notes\n").body, "# Notes\n");
+});
+
+test("streamed debug frames replace their slot instead of appending", () => {
+  // A message arriving as token deltas is one event that grows, not one event
+  // per chunk.
+  let events = applyDebugFrames([], [{ index: 0, event: { kind: "message", text: "Loa", streaming: true } }]);
+  events = applyDebugFrames(events, [{ index: 0, event: { kind: "message", text: "Loaded the", streaming: true } }]);
+  events = applyDebugFrames(events, [{ index: 1, event: { kind: "tool_use", text: "read_file" } }]);
+  assert.deepEqual(events.map((event) => event.text), ["Loaded the", "read_file"]);
+
+  // A dropped frame must not leave a hole the renderer walks into.
+  const sparse = applyDebugFrames([], [{ index: 2, event: { kind: "message", text: "third" } }]);
+  assert.equal(sparse.length, 3);
+  assert.equal(sparse[2].text, "third");
+  assert.equal(sparse[0].text, "");
+
+  // Malformed frames are ignored rather than corrupting the transcript.
+  assert.deepEqual(applyDebugFrames(events, [{ index: -1, event: { text: "x" } }, { index: 0 }]), events);
+  assert.equal(applyDebugFrames(events, []), events);
 });
