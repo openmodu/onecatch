@@ -52,6 +52,18 @@ test("the file editor drives the preview and the preview drives the editor", () 
   assert.match(inspector, /SkillBinding\.WriteFile\(\{ path: file\.path, content: draft \}\)/);
 });
 
+test("the inspector splits the tree beside the file, not above it", () => {
+  // Stacked, the tree took a third of an already short panel and the editor
+  // never had the rows to show a skill's body at once.
+  // The file leads, its tree follows on the right.
+  assert.match(inspector, /w-\[152px\] shrink-0 border-l/);
+  assert.ok(inspector.indexOf('aria-label={t("skill.fileEditor")}') < inspector.indexOf('role="tree"'), "the editor column comes before the tree column");
+  assert.doesNotMatch(inspector, /max-h-\[36%\]/);
+  // A side-by-side tree costs editor width, so it folds away.
+  assert.match(inspector, /setTreeCollapsed\(\(current\) => !current\)/);
+  assert.match(inspector, /const treeVisible = !file \|\| !treeCollapsed/);
+});
+
 test("debug is one small toggle, and its events render by kind", () => {
   assert.match(page, /aria-pressed=\{debugOpen\}/);
   assert.match(page, /size="icon-sm"[^>]*aria-label=\{t\("skill\.debug"\)\}/);

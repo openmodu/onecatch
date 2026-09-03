@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, File, FileCode2, FileText, Folder, FolderOpen, RefreshCw, RotateCcw, X } from "lucide-react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { ChevronDown, ChevronRight, File, FileCode2, FileText, Folder, FolderOpen, PanelRightClose, PanelRightOpen, RefreshCw, RotateCcw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { SkillBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { errorMessage } from "../../format.js";
@@ -86,6 +86,9 @@ function SkillFilesInspector({ mode, notify, onDirtyChange }) {
   const [file, setFile] = useState(null);
   const [draft, setDraft] = useState("");
   const [saving, setSaving] = useState(false);
+  // A side-by-side tree costs the editor width it cannot spare in a narrow
+  // panel, so the column folds away when only the file matters.
+  const [treeCollapsed, setTreeCollapsed] = useState(false);
   const generationRef = useRef(0);
   const handledRequestRef = useRef(0);
   const dirty = Boolean(file && draft !== file.content);
@@ -201,7 +204,7 @@ function SkillFilesInspector({ mode, notify, onDirtyChange }) {
 
   const rootEntries = entriesByDirectory[""] || [];
   const rootLoading = loadingDirectories.has("");
-  const treeClassName = useMemo(() => file ? "max-h-[36%] shrink-0 overflow-y-auto border-b border-border/60 px-2 py-2" : "min-h-0 flex-1 overflow-y-auto px-2 py-2", [file]);
+  const treeVisible = !file || !treeCollapsed;
 
   return <div className="flex h-full min-h-0 flex-col">
     <div className="flex h-11 shrink-0 items-center gap-2 border-b border-border/70 px-3">
@@ -210,39 +213,51 @@ function SkillFilesInspector({ mode, notify, onDirtyChange }) {
       <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("common.refresh")} title={t("common.refresh")} onClick={refresh}>
         <RefreshCw size={14} className={rootLoading ? "animate-spin" : ""} aria-hidden="true" />
       </button>
+      {/* Panel chrome, not file chrome: it governs the column, so it sits in
+          the bar that spans the panel rather than in the file's own header. */}
+      {file && <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={treeCollapsed ? t("skill.showFiles") : t("skill.hideFiles")} aria-expanded={!treeCollapsed} title={treeCollapsed ? t("skill.showFiles") : t("skill.hideFiles")} onClick={() => setTreeCollapsed((current) => !current)}>
+        {treeCollapsed ? <PanelRightOpen size={14} aria-hidden="true" /> : <PanelRightClose size={14} aria-hidden="true" />}
+      </button>}
     </div>
 
-    <div className={treeClassName}>
-      {error && <p className="m-1 rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">{error}</p>}
-      {!error && rootLoading && <p className="m-1 text-xs text-muted-foreground">{t("common.loading")}</p>}
-      {!error && !rootLoading && rootEntries.length === 0 && <p className="m-1 text-xs text-muted-foreground">{t("skill.filesEmpty")}</p>}
-      {!error && rootEntries.length > 0 && <div role="tree" aria-label={t("skill.files")}><SkillFileRows entriesByDirectory={entriesByDirectory} expanded={expanded} loadingDirectories={loadingDirectories} activePath={file?.path || ""} onToggleDirectory={(path) => {
-        setExpanded((current) => {
-          const next = new Set(current);
-          if (next.has(path)) next.delete(path); else next.add(path);
-          return next;
-        });
-        if (!Object.hasOwn(entriesByDirectory, path)) void listDirectory(path);
-      }} onOpenFile={openFile} /></div>}
-    </div>
+    {/* The file leads and the tree follows it, the way the workbench puts the
+        document first and its context to the right. Stacked, the tree took a
+        third of an already short panel and the editor never had the rows to
+        show a skill's body at once. */}
+    <div className="flex min-h-0 flex-1">
+      {file && <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label={t("skill.fileEditor")}>
+        <div className="flex h-10 shrink-0 items-center gap-1 px-2">
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={file.path}>{file.name}</span>
+          {dirty && <i className="size-1.5 shrink-0 rounded-full bg-primary" aria-label={t("skill.unsaved")} />}
+          <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40" disabled={!dirty || saving} aria-label={t("skill.revertFile")} title={t("skill.revertFile")} onClick={revertFile}><RotateCcw size={14} aria-hidden="true" /></button>
+          <button type="button" className="h-7 shrink-0 rounded-md bg-primary px-2.5 text-[11px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:bg-transparent disabled:text-muted-foreground disabled:opacity-100" disabled={!dirty || saving} onClick={saveFile}>{saving ? t("common.saving") : t("common.save")}</button>
+          <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("common.close")} title={t("common.close")} onClick={closeFile}><X size={14} aria-hidden="true" /></button>
+        </div>
+        <textarea
+          className="min-h-0 flex-1 resize-none bg-transparent px-3 pb-2 font-mono text-[11.5px] leading-[1.7] text-foreground outline-none"
+          spellCheck="false"
+          aria-label={file.path}
+          value={draft}
+          onChange={(event) => editDraft(event.target.value)}
+        />
+        <p className="shrink-0 truncate px-3 pb-2 text-[10px] text-muted-foreground">{formatSkillBytes(draft.length)} · {t("skill.livePreviewHint")}</p>
+      </section>}
 
-    {file ? <section className="flex min-h-0 flex-1 flex-col" aria-label={t("skill.fileEditor")}>
-      <div className="flex h-10 shrink-0 items-center gap-1.5 px-3">
-        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={file.path}>{file.name}</span>
-        {dirty && <i className="size-1.5 shrink-0 rounded-full bg-primary" aria-label={t("skill.unsaved")} />}
-        <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40" disabled={!dirty || saving} aria-label={t("skill.revertFile")} title={t("skill.revertFile")} onClick={revertFile}><RotateCcw size={14} aria-hidden="true" /></button>
-        <button type="button" className="h-7 shrink-0 rounded-md bg-primary px-2.5 text-[11px] font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:bg-transparent disabled:text-muted-foreground disabled:opacity-100" disabled={!dirty || saving} onClick={saveFile}>{saving ? t("common.saving") : t("common.save")}</button>
-        <button type="button" className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("common.close")} title={t("common.close")} onClick={closeFile}><X size={14} aria-hidden="true" /></button>
-      </div>
-      <textarea
-        className="min-h-0 flex-1 resize-none bg-transparent px-3 pb-2 font-mono text-[11.5px] leading-[1.7] text-foreground outline-none"
-        spellCheck="false"
-        aria-label={file.path}
-        value={draft}
-        onChange={(event) => editDraft(event.target.value)}
-      />
-      <p className="shrink-0 px-3 pb-2 text-[10px] text-muted-foreground">{formatSkillBytes(draft.length)} · {t("skill.livePreviewHint")}</p>
-    </section> : <p className="shrink-0 px-3 pb-3 text-[11px] leading-relaxed text-muted-foreground">{t("skill.selectFileHint")}</p>}
+      {treeVisible && <div className={`min-h-0 overflow-y-auto px-2 py-2 ${file ? "w-[152px] shrink-0 border-l border-border/60" : "flex-1"}`}>
+        {error && <p className="m-1 rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">{error}</p>}
+        {!error && rootLoading && <p className="m-1 text-xs text-muted-foreground">{t("common.loading")}</p>}
+        {!error && !rootLoading && rootEntries.length === 0 && <p className="m-1 text-xs text-muted-foreground">{t("skill.filesEmpty")}</p>}
+        {!error && rootEntries.length > 0 && <div role="tree" aria-label={t("skill.files")}><SkillFileRows entriesByDirectory={entriesByDirectory} expanded={expanded} loadingDirectories={loadingDirectories} activePath={file?.path || ""} onToggleDirectory={(path) => {
+          setExpanded((current) => {
+            const next = new Set(current);
+            if (next.has(path)) next.delete(path); else next.add(path);
+            return next;
+          });
+          if (!Object.hasOwn(entriesByDirectory, path)) void listDirectory(path);
+        }} onOpenFile={openFile} /></div>}
+        {!file && <p className="mt-3 px-1 text-[11px] leading-relaxed text-muted-foreground">{t("skill.selectFileHint")}</p>}
+      </div>}
+    </div>
   </div>;
 }
 
