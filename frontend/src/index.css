@@ -2860,6 +2860,92 @@
     white-space: pre;
   }
 
+  .markdown-code-block {
+    min-width: 0;
+    max-width: 100%;
+    margin: 0.75em 0;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    background: var(--muted);
+  }
+
+  .markdown-code-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 10px 0 16px;
+  }
+
+  .markdown-code-language {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    color: var(--foreground);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 20px;
+  }
+
+  .markdown-code-language svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .markdown-code-language > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .markdown-code-actions {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 2px;
+  }
+
+  .markdown-code-toolbar,
+  .markdown-code-toolbar * {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  /* WebKit can paint an inherited highlight when a selection crosses chrome. */
+  .markdown-code-toolbar::selection,
+  .markdown-code-toolbar *::selection {
+    background: transparent;
+  }
+
+  .markdown-code-copy,
+  .markdown-code-wrap { color: var(--muted-foreground); }
+
+  .markdown-code-wrap[aria-pressed="true"] {
+    background: var(--accent);
+    color: var(--accent-foreground);
+  }
+
+  .markdown-content .markdown-code-block pre {
+    margin: 0;
+    padding: 8px 16px 16px;
+    border: 0;
+    border-radius: inherit;
+    background: transparent;
+    tab-size: 4;
+  }
+
+  .markdown-content .markdown-code-block pre code { color: var(--foreground); }
+
+  .markdown-content .markdown-code-block.is-wrapped pre,
+  .markdown-content .markdown-code-block.is-wrapped pre code {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: normal;
+  }
+
+  .markdown-code-block .token:is(.comment, .prolog, .doctype, .cdata) { color: var(--muted-foreground); }
+  .markdown-code-block .token:is(.punctuation, .operator) { color: var(--muted-foreground); }
+  .markdown-code-block .token:is(.property, .tag, .constant, .symbol, .deleted) { color: var(--destructive); }
+  .markdown-code-block .token:is(.boolean, .number, .regex, .important, .variable) { color: var(--warning); }
+  .markdown-code-block .token:is(.selector, .attr-name, .string, .char, .builtin, .inserted) { color: var(--success); }
+  .markdown-code-block .token:is(.atrule, .attr-value, .keyword) { color: var(--primary); }
+  .markdown-code-block .token:is(.function, .class-name) { color: var(--info); }
+  .markdown-code-block .token.key { color: var(--warning); }
+  .markdown-content .markdown-code-block pre code[data-language="yaml"] { color: var(--success); }
+
   .markdown-table-scroll {
     width: 100%;
     min-width: 0;

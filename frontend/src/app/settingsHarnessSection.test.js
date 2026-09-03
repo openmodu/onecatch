@@ -41,6 +41,22 @@ test("uses a frameless collapsible list for harness configuration", () => {
   assert.match(harness, /const \[expanded, setExpanded\] = useState\(\{\}\)/, "every harness must start collapsed");
 });
 
+test("native harness disclosures remain named, keyboard-accessible controls", () => {
+  const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
+  const buttons = [...harness.matchAll(/<button\b[\s\S]*?<\/button>/g)].map(([button]) => button);
+  assert.equal(buttons.length, 2, "only the identity area and chevron are native disclosure buttons");
+  for (const button of buttons) {
+    assert.match(button, /type="button"/);
+    assert.match(button, /aria-expanded=\{isExpanded\}/);
+    assert.match(button, /aria-controls=\{panelID\}/);
+    assert.match(button, /onClick=\{\(\) => setExpanded\(\(current\) => \(\{ \.\.\.current, \[id\]: !current\[id\] \}\)\)\}/);
+    assert.match(button, /focus-visible:ring-2/);
+    assert.doesNotMatch(button, /<(?:Switch|Input|Select|Textarea|Settings\w*)\b/, "form controls must not be nested inside a disclosure button");
+  }
+  assert.match(buttons[0], /\{meta\[id\]\.name\}/, "the identity button gets its name from the harness title");
+  assert.match(buttons[1], /aria-label=\{t\(isExpanded \? "settings\.collapseHarness" : "settings\.expandHarness"/, "the icon-only button needs a localized name");
+});
+
 test("keeps the compact harness row focused on identity and availability", () => {
   const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
   const row = harness.slice(harness.indexOf("<div className=\"group flex"), harness.indexOf("{isExpanded &&"));

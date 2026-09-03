@@ -56,3 +56,45 @@ No actionable P0, P1, or P2 visual, interaction, responsive, or accessibility di
 No P3 refinement is required for this scope.
 
 final result: passed
+
+# Design QA — Markdown code blocks (2026-09-03)
+
+## Comparison target and evidence
+
+- Source visual truth: `/var/folders/qs/3_jyc8zx6c92f97cpx6tkq380000gn/T/codex-clipboard-a74fb9f1-f971-4fd9-82d6-fb582aca4443.png` (3010 × 1100 pixels), opened and inspected.
+- Target state: a light-theme YAML block with a language label on the left, wrap/copy icon actions on the right, and syntax-colored code below.
+- Implementation: `frontend/src/app/components/MarkdownContent.jsx` and its application-owned styles.
+- Implementation screenshot: unavailable. Local browser access was denied in the preceding iteration; renewed permission was requested and has not been received.
+- Viewport, CSS dimensions, and source density: not established. No density-normalized visual comparison was performed.
+- Full-view and focused-region comparison evidence: unavailable until browser capture is authorized.
+
+## Required fidelity surfaces
+
+- Fonts and typography: retains the application's UI and monospace font stacks; rendered size and line-height comparison pending.
+- Spacing and layout rhythm: implements a two-sided toolbar, inset code content, and rounded card; screenshot comparison pending.
+- Colors and visual tokens: uses existing light/dark theme tokens, with YAML keys in the warning color and scalar/string values in the success color; visual contrast verification pending.
+- Image quality and asset fidelity: no raster assets are needed. CodeXml, WrapText, Copy, Check, and TriangleAlert use the existing Lucide icon library. Reference annotations and watermarks are not UI assets.
+- Copy and content: uses the reference's language-label structure and icon-only controls. Copy's tooltip remains “复制” / “Copy”; line-wrap and status labels are localized.
+
+## Implementation and non-visual checks
+
+- Added per-block wrapping, semantic pressed state, and copy feedback without placing toolbar text inside the copied code.
+- Reused Prism with common fence-language aliases; unknown languages fall back to escaped plain text.
+- Preserved inline code, streaming fences, source whitespace, and the existing link/image safety policy.
+- Real React/Streamdown server-rendering tests cover YAML toolbar/token output, inline code, unfinished streaming fences, unknown languages, and indented blocks.
+- Pure highlighting tests cover aliases, source preservation, and untrusted HTML/language names.
+- Browser interactions and console checks: not performed; server-rendering tests do not substitute for browser verification.
+
+## Findings and comparison history
+
+1. Reference inspected and implementation updated; no browser-rendered comparison has been made.
+2. Visual fidelity, keyboard/pointer interaction, mobile-width layout, and dark-theme appearance remain unverified. This is a verification blocker, not a claimed visual finding.
+
+## Remaining checklist
+
+1. Obtain permission for local browser preview.
+2. Capture the matching reference state and compare normalized full/focused views together.
+3. Test wrap/copy, keyboard focus, light/dark themes, narrow widths, and console errors.
+4. Fix any P0/P1/P2 findings and repeat the visual comparison.
+
+final result: blocked

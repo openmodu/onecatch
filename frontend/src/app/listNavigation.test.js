@@ -1,15 +1,41 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mergeRunItems, preserveByFingerprint, preserveEqualValue, runDetailFingerprint, runItemFingerprint, workspaceResults, workspaceSections } from "./listNavigation.js";
+import { mergeRunItems, preserveByFingerprint, preserveEqualValue, runDetailFingerprint, runItemFingerprint, sortWorkspaces, workspaceResults, workspaceSections } from "./listNavigation.js";
 
-test("compact workspaces keep pinned, recent and the current selection", () => {
+test("compact workspaces preserve their loaded order across navigation", () => {
   const items = Array.from({ length: 10 }, (_, index) => ({ id: `ws-${index}`, name: `Workspace ${index}`, path: `/tmp/${index}`, pinned: index === 3, lastOpenedAt: new Date(2026, 0, index + 1).toISOString() }));
-  const compact = workspaceResults(items, { selectedID: "ws-0", limit: 4 });
-  assert.equal(compact.length, 4);
-  assert.equal(compact[0].id, "ws-3");
-  assert.equal(compact.some((item) => item.id === "ws-0"), true);
+  const original = structuredClone(items);
+  const compact = workspaceResults(items, { limit: 4 });
+  assert.deepEqual(compact.map((item) => item.id), ["ws-0", "ws-1", "ws-2", "ws-3"]);
+  const opened = items.map((item) => item.id === "ws-9" ? { ...item, lastOpenedAt: "2026-09-03T00:00:00Z" } : item);
+  assert.deepEqual(workspaceResults(opened, { limit: 4 }).map((item) => item.id), compact.map((item) => item.id), "opening a project must not reshuffle the compact list");
   assert.deepEqual(workspaceResults(items, { query: "/tmp/8" }).map((item) => item.id), ["ws-8"]);
-  assert.equal(workspaceResults(items, { expanded: true }).length, 10);
+  assert.deepEqual(workspaceResults(items, { expanded: true }), items);
+  assert.deepEqual(items, original, "navigation must not mutate workspace records or their order");
+});
+
+test("initial workspace sorting uses recency then name without mutating input", () => {
+  const items = [
+    { id: "old", name: "Old", lastOpenedAt: "2026-01-01T00:00:00Z" },
+    { id: "z", name: "Zulu", lastOpenedAt: "2026-02-01T00:00:00Z" },
+    { id: "a", name: "Alpha", lastOpenedAt: "2026-02-01T00:00:00Z" },
+    { id: "invalid", name: "Unknown", lastOpenedAt: "invalid" },
+  ];
+  assert.deepEqual(sortWorkspaces(items).map((item) => item.id), ["a", "z", "old", "invalid"]);
+  assert.deepEqual(items.map((item) => item.id), ["old", "z", "a", "invalid"]);
+});
+
+test("workspace search includes collapsed results and remote identities in loaded order", () => {
+  const items = [
+    { id: "local", name: "Local", path: "/tmp/local" },
+    { id: "remote-a", name: "Remote A", remoteFs: { username: "Alice", host: "Build.Example" } },
+    { id: "remote-b", name: "Remote B", remoteFs: { username: "Bob", host: "Build.Example" } },
+  ];
+  assert.deepEqual(workspaceResults(items, { query: " BUILD.EXAMPLE ", limit: 1 }).map((item) => item.id), ["remote-a", "remote-b"]);
+  assert.deepEqual(workspaceResults(items, { query: "alice" }).map((item) => item.id), ["remote-a"]);
+  assert.deepEqual(workspaceResults(items, { query: "missing" }), []);
+  assert.deepEqual(workspaceResults([]), []);
+  assert.deepEqual(workspaceResults(items, { limit: 0 }), []);
 });
 
 test("sidebar separates pinned projects from the compact project list", () => {

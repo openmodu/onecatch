@@ -6,6 +6,13 @@ import path from "node:path";
 
 const sourceRoot = path.dirname(fileURLToPath(import.meta.url));
 
+function harnessSettingsSection(source) {
+  const start = source.indexOf("function HarnessSettings(");
+  const end = source.indexOf("function ExecutionSettings(", start);
+  assert.ok(start >= 0 && end > start, "locate the bounded Harness section before applying its chrome exceptions");
+  return source.slice(start, end);
+}
+
 async function jsxSources(directory = sourceRoot) {
   const entries = await readdir(directory, { withFileTypes: true });
   const sources = [];
@@ -62,11 +69,13 @@ test("workspace actions use a compact project menu and tasks stay visually light
   // source still has to prove is that the row keeps its actions revealed while
   // the menu is up — Radix stamps data-state on the trigger.
   assert.match(sidebar, /className="workspace-row-actions[^"]*has-\[\[data-state=open\]\]:opacity-100/, "the row must stay revealed while its menu is open");
-  assert.match(sidebar, /<DropdownMenuTrigger asChild>[\s\S]{0,240}?className="workspace-menu-trigger"/, "the ellipsis button must be the menu trigger");
-  assert.match(sidebar, /<DropdownMenuItem onSelect=\{\(\) => onTogglePinned\(workspace\)\}/);
+  assert.match(sidebar, /<DropdownMenuTrigger asChild>\s*<Action\b[^>]*className="workspace-menu-trigger(?:\s[^"]*)?"[^>]*><Ellipsis\b/, "the ellipsis button must be the menu trigger");
+  // Pinning moved from projects to tasks; task rows own the pin/unpin action.
+  assert.doesNotMatch(sidebar, /\bonTogglePinned\b/);
+  assert.match(sidebar, /onClick=\{\(\) => onToggleTaskPinned\(task\)\}/);
   assert.match(sidebar, /<DropdownMenuItem variant="destructive" onSelect=\{\(\) => onRemoveWorkspace\(workspace\)\}/, "remove must read as destructive");
-  assert.match(sidebar, /className="workspace-new-task"[^>]*sidebar\.newTaskInProject/);
-  assert.match(sidebar, /className="add-workspace"[^>]*>\{t\("sidebar\.addProject"\)\}/);
+  assert.match(sidebar, /className="workspace-new-task(?:\s[^"]*)?"[^>]*aria-label=\{t\("sidebar\.newTaskInProject"/);
+  assert.match(sidebar, /className="add-workspace(?:\s[^"]*)?"[^>]*aria-label=\{t\("sidebar\.addProject"\)\}[^>]*onClick=\{onAddWorkspace\}/);
   assert.doesNotMatch(sidebar, /<StatusPill\b|project-task-time|project-task-heading/);
   assert.match(sidebar, /aria-current=\{selected \? "page" : undefined\}/);
   // A selected task is tinted, never railed with a leading accent bar.
@@ -80,8 +89,8 @@ test("sidebar reserves its footer for navigation and exposes a resize separator"
   assert.doesNotMatch(sidebar, /runtime-panel|runtime-row/, "runtime status belongs on the settings page, not in the sidebar");
   assert.match(sidebar, /className="sidebar-resizer[^"]*"[^>]*role="separator"/);
   assert.match(sidebar, /className="primary-nav[^"]*\bmt-auto\b/, "navigation must sit at the bottom of the rail");
-  assert.match(app, /className="app-shell grid min-h-0 grid-cols-\[auto_minmax\(0,1fr\)\]"/, "the rail keeps its user-selected width; only the main column flexes");
-  assert.doesNotMatch(app, /className="app-shell[^"]*grid-cols-\[\d+px/, "the shell must not pin the rail to a fixed width");
+  assert.match(app, /className=\{`app-shell\b[^`]*\bgrid-cols-\[auto_minmax\(0,1fr\)\]/, "the rail keeps its user-selected width; only the main column flexes");
+  assert.doesNotMatch(app, /className=\{`app-shell[^`]*grid-cols-\[\d+px/, "the shell must not pin the rail to a fixed width");
 });
 
 test("application chrome cannot be selected while transcript content remains copyable", async () => {
@@ -92,24 +101,31 @@ test("application chrome cannot be selected while transcript content remains cop
   assert.match(workbench, /className="conversation-scroll[^"]*\bselect-text\b/, "conversation content must remain explicitly selectable");
 });
 
-test("application grouping uses spacing and surfaces instead of horizontal rules", async () => {
+test("application separators stay thin and use the shared border theme", async () => {
+  // Harness disclosures, workflow editors, review panes and Markdown tables
+  // now have intentional separators. A blanket ban contradicts those flows;
+  // protect their quiet, theme-aware treatment instead.
   const sources = await jsxSources();
   for (const [filename, source] of sources) {
     const relative = path.relative(sourceRoot, filename);
     if (relative !== path.join("ui", "primitives.jsx") && !relative.startsWith(`app${path.sep}`)) continue;
-    assert.doesNotMatch(
-      source,
-      /\b(?:border-(?:t|b)(?:-[^\s"'`}]+)?|border-y(?:-[^\s"'`}]+)?|divide-y(?:-[^\s"'`}]+)?)\b/,
-      `${relative} still draws an open horizontal separator`,
-    );
+    for (const [, literal, template] of source.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`)/g)) {
+      const classes = literal ?? template;
+      const seams = classes.match(/\b(?:border-[tby]|divide-y)(?:-[^\s"'`}]+)?\b/g) || [];
+      for (const seam of seams) {
+        assert.match(seam, /^(?:border-[tby]|divide-y)(?:-[01])?$/, `${relative} adds a heavy or hard-coded separator: ${seam}`);
+        if (seam.endsWith("-0")) continue;
+        const color = seam.startsWith("divide-") ? /\bdivide-border(?:\/\d+)?\b/ : /\bborder-border(?:\/\d+)?\b/;
+        assert.match(classes, color, `${relative} must color ${seam} through the shared border token`);
+      }
+    }
   }
 
   for (const file of ["styles.css", "mirage.css", "index.css"]) {
-    const raw = await readFile(path.join(sourceRoot, file), "utf8");
-    // A horizontal rule authored inside markdown is document content, not app
-    // chrome, and remains a valid part of the renderer.
-    const css = raw.replace(/\.markdown-content hr\s*\{[^}]*\}/g, "");
-    assert.doesNotMatch(css, /border-(?:top|bottom)\s*:/, `${file} still contains a horizontal separator rule`);
+    const css = await readFile(path.join(sourceRoot, file), "utf8");
+    for (const [, value] of css.matchAll(/border-(?:top|bottom)\s*:\s*([^;}]+)/g)) {
+      assert.match(value.trim(), /^(?:0|1px solid (?:var\(--border\)|color-mix\(in oklab, var\(--border\) \d+%, transparent\)))$/, `${file} adds a heavy or unthemed separator: ${value}`);
+    }
   }
 });
 
@@ -174,7 +190,7 @@ test("the settings window uses the main window's inset sidebar and draggable chr
   assert.match(nativeWindow, /Frameless:\s*runtime\.GOOS == "windows" \|\| runtime\.GOOS == "linux"/, "desktop auxiliary windows keep their divider inside app-drawn chrome");
 });
 
-test("settings renders directly through shadcn instead of the TUI compatibility layer", async () => {
+test("settings uses shadcn form controls with native harness disclosures", async () => {
   const settings = await readFile(path.join(sourceRoot, "app", "SettingsPage.jsx"), "utf8");
   const controls = await readFile(path.join(sourceRoot, "app", "components", "settings", "SettingsControls.jsx"), "utf8");
   const workerPage = await readFile(path.join(sourceRoot, "app", "components", "WorkerPage.jsx"), "utf8");
@@ -184,7 +200,13 @@ test("settings renders directly through shadcn instead of the TUI compatibility 
   // not load the whole screen with it.
   const confirmDialog = await readFile(path.join(sourceRoot, "app", "components", "settings", "ConfirmDialog.jsx"), "utf8");
   for (const [name, source] of [["settings", settings], ["worker page", workerPage], ["worker dialog", workerModal], ["confirm dialog", confirmDialog]]) {
-    assert.doesNotMatch(source, /ui\/primitives|\bTUISelect\b|<(?:button|input|select|textarea)\b/, `${name} still uses the TUI layer or raw form controls`);
+    assert.doesNotMatch(source, /ui\/primitives|\bTUISelect\b|<(?:input|select|textarea)\b/, `${name} still uses the TUI layer or raw form inputs`);
+    // Native buttons are valid for the custom two-part harness disclosure.
+    // settingsHarnessSection.test.js checks their count, naming, panel
+    // linkage, and lack of nested form controls.
+    const harness = name === "settings" ? harnessSettingsSection(source) : "";
+    const controls = harness ? source.replace(harness, harness.replace(/<button\b[\s\S]*?<\/button>/g, "")) : source;
+    assert.doesNotMatch(controls, /<button\b/, `${name} has an unshared button outside the harness disclosures`);
   }
   for (const component of ["Button", "Card", "Input", "Label", "Select", "Switch"]) {
     assert.match(controls, new RegExp(`components/ui/${component.toLowerCase()}`), `${component} must come from shadcn`);
@@ -484,7 +506,14 @@ test("completed conversations remain available for a follow-up turn", async () =
   assert.match(composer, /runStatus === "completed"[\s\S]*t\("composer\.continue"\)/);
   assert.match(app, /run\.status === "paused" \|\| run\.status === "completed"/);
   assert.match(app, /TaskRunBinding\.ResumeRunConfigured\(run\.id, \{ instruction: content, \.\.\.runtimeProfile \}\)/);
-  assert.match(composer, /HarnessSelector value=\{runtimeProfile\} onChange=\{onRuntimeProfileChange\} runtimes=\{runtimes\}[^>]*agentLabel/);
+  // Direct-agent conversations lock their harness; model/effort controls
+  // remain editable between turns via RuntimeProfileMenu.
+  const harnessProps = composer.match(/<HarnessSelector\b([^>]*?)\/>/)?.[1] || "";
+  assert.match(harnessProps, /value=\{runtimeProfile\}/);
+  assert.match(harnessProps, /runtimes=\{runtimes\}/);
+  assert.match(harnessProps, /\breadOnly\s/);
+  assert.match(harnessProps, /\bagentLabel\b/);
+  assert.doesNotMatch(harnessProps, /\bonChange=/, "follow-up turns must not switch the conversation's harness");
   assert.match(composer, /RuntimeProfileMenu[^>]*onChange=\{onRuntimeProfileChange\}[^>]*configuration=\{runtimeConfiguration\?\.data\}/);
   assert.match(composer, /<TaskPermissionSelector value=\{permission\} readOnly/);
   assert.match(composer, /supportsRuntimeProfile\(runtimeProfile\.harness\)/, "runtimes without model controls must not repeat the Agent name");
@@ -567,15 +596,21 @@ test("select tolerates the empty-string option value Radix rejects", async () =>
   assert.match(primitives, /onValueChange=\{\(next\) => onChange\(fromRadix\(next\)\)\}/);
 });
 
-test("sidebar orders global search, pinned projects, projects, and nested tasks", async () => {
+test("sidebar orders global search, pinned tasks, projects, and nested tasks", async () => {
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
   const palette = await readFile(path.join(sourceRoot, "app", "components", "CommandPalette.jsx"), "utf8");
   const workbench = await readFile(path.join(sourceRoot, "app", "components", "TaskWorkbench.jsx"), "utf8");
-  const css = await readFile(path.join(sourceRoot, "mirage.css"), "utf8");
-  assert.ok(sidebar.indexOf('className={`sidebar-search-trigger') < sidebar.indexOf('id="pinned-project-heading"'), "global search must precede pinned projects");
-  assert.ok(sidebar.indexOf('id="pinned-project-heading"') < sidebar.indexOf('id="project-heading"'), "pinned projects must precede projects");
-  assert.match(sidebar, /id="project-heading"[^>]*>[\s\S]*?className="add-workspace"/);
+  const searchIndex = sidebar.indexOf('className={`sidebar-search-trigger');
+  const pinnedIndex = sidebar.indexOf('id="pinned-task-heading"');
+  const projectIndex = sidebar.indexOf('id="project-heading"');
+  assert.ok(searchIndex >= 0 && pinnedIndex >= 0 && projectIndex >= 0, "search and both section headings must exist");
+  assert.ok(searchIndex < pinnedIndex, "global search must precede pinned tasks");
+  assert.ok(pinnedIndex < projectIndex, "pinned tasks must precede projects");
+  assert.match(sidebar, /pinnedTasks\.map\(renderPinnedTask\)/);
+  assert.doesNotMatch(sidebar, /pinned-project-heading/);
+  const addProjectIndex = sidebar.indexOf('className="add-workspace ');
+  assert.ok(addProjectIndex > searchIndex && addProjectIndex < pinnedIndex, "add project belongs beside search in the rail header");
   assert.match(sidebar, /className="project-task-panel[^"]*"/);
   assert.doesNotMatch(sidebar, /className="cwd-shell"|sidebar-search-popover/, "search must use the global palette instead of a sidebar card");
   assert.match(palette, /createPortal\(<div className="command-palette-backdrop"/);
@@ -597,7 +632,7 @@ test("command palette keeps its row anatomy and icon treatment", async () => {
   // The palette's rules moved to @layer app in index.css; mirage.css no longer
   // owns them, so the CSS assertions follow them there.
   const css = await readFile(path.join(sourceRoot, "index.css"), "utf8");
-  assert.match(sidebar, /<Search size=\{16\}/);
+  assert.match(sidebar, /<Search size=\{15\} strokeWidth=\{2\} aria-hidden="true"/, "the compact sidebar search icon stays smaller than the palette's input icon");
   assert.match(palette, /className="command-palette__icon"[^>]*><Icon size=\{15\} strokeWidth=/);
   assert.match(palette, /<Search size=\{16\}/);
   assert.match(palette, /setActiveIndex\(0\);\s*\}, \[normalizedQuery, open\]\);/s, "filter changes must select the first matching result");

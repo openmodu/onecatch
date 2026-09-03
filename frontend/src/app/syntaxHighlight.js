@@ -65,6 +65,34 @@ const LANGUAGE_BY_FILENAME = {
   makefile: "makefile",
 };
 
+const LANGUAGE_ALIASES = {
+  text: "plain",
+  txt: "plain",
+  plaintext: "plain",
+  js: "javascript",
+  ts: "typescript",
+  yml: "yaml",
+  sh: "bash",
+  shell: "bash",
+  zsh: "bash",
+  py: "python",
+  rb: "ruby",
+  rs: "rust",
+  md: "markdown",
+  html: "markup",
+  xml: "markup",
+  svg: "markup",
+  jsonc: "json5",
+  dockerfile: "docker",
+  "c++": "cpp",
+  "c#": "csharp",
+  cs: "csharp",
+};
+
+export function codeLanguageFromClassName(className = "") {
+  return /(?:^|\s)language-([^\s]+)/i.exec(className)?.[1].toLowerCase() || "";
+}
+
 function escapeHTML(source) {
   return source.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 }
@@ -76,11 +104,19 @@ export function syntaxLanguageForPath(path = "") {
   return extensionIndex >= 0 ? LANGUAGE_BY_EXTENSION[filename.slice(extensionIndex)] || "plain" : "plain";
 }
 
-export function highlightSource(source = "", path = "") {
-  const language = syntaxLanguageForPath(path);
-  const grammar = language === "plain" ? null : Prism.languages[language];
+export function highlightCode(source = "", name = "") {
+  const normalized = name.trim().toLowerCase();
+  const language = Object.hasOwn(LANGUAGE_ALIASES, normalized) ? LANGUAGE_ALIASES[normalized] : normalized;
+  // Fence language names come from untrusted Markdown. Only use registered
+  // grammar objects, never Prism's helpers or inherited object properties.
+  const grammar = language !== "plain" && Object.hasOwn(Prism.languages, language) && typeof Prism.languages[language] === "object"
+    ? Prism.languages[language] : null;
   return {
     html: grammar ? Prism.highlight(source, grammar, language) : escapeHTML(source),
-    language,
+    language: grammar ? language : "plain",
   };
+}
+
+export function highlightSource(source = "", path = "") {
+  return highlightCode(source, syntaxLanguageForPath(path));
 }
