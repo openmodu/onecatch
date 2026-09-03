@@ -9,6 +9,7 @@ const page = readFileSync(new URL("./SkillManagerPage.jsx", import.meta.url), "u
 const inspector = readFileSync(new URL("./components/inspectors/SkillFilesInspector.jsx", import.meta.url), "utf8");
 const debugPanel = readFileSync(new URL("./components/SkillDebugPanel.jsx", import.meta.url), "utf8");
 const settings = readFileSync(new URL("./SettingsPage.jsx", import.meta.url), "utf8");
+const resize = readFileSync(new URL("./columnResize.js", import.meta.url), "utf8");
 
 test("new skill template emits valid matching frontmatter", () => {
   const source = newSkillTemplate("release-notes", "Write concise\n release notes");
@@ -31,7 +32,7 @@ test("skill sizes stay compact", () => {
 test("skill library is a text-first rail beside one detail card", () => {
   assert.match(page, /function SkillRow/);
   assert.match(page, /aria-pressed=\{selected\}/);
-  assert.match(page, /grid-cols-\[248px_minmax\(0,1fr\)\]/);
+  assert.match(page, /style=\{\{ width: `\$\{rail\.width\}px` \}\}/, "the rail is one resizable column beside the detail pane");
   // The rail replaced the card grid; cards forced a second scroll region above
   // the document and pushed the skill itself below the fold.
   assert.doesNotMatch(page, /repeat\(auto-fill, minmax/);
@@ -56,12 +57,21 @@ test("the inspector splits the tree beside the file, not above it", () => {
   // Stacked, the tree took a third of an already short panel and the editor
   // never had the rows to show a skill's body at once.
   // The file leads, its tree follows on the right.
-  assert.match(inspector, /w-\[152px\] shrink-0 border-l/);
   assert.ok(inspector.indexOf('aria-label={t("skill.fileEditor")}') < inspector.indexOf('role="tree"'), "the editor column comes before the tree column");
   assert.doesNotMatch(inspector, /max-h-\[36%\]/);
   // A side-by-side tree costs editor width, so it folds away.
   assert.match(inspector, /setTreeCollapsed\(\(current\) => !current\)/);
   assert.match(inspector, /const treeVisible = !file \|\| !treeCollapsed/);
+});
+
+test("both columns are draggable, and the drag knows which side it grows", () => {
+  assert.match(page, /useColumnWidth\(\{ defaultWidth: 248/);
+  assert.match(inspector, /useColumnWidth\(\{ defaultWidth: 152[^)]*fromRight: true/, "a column right of its handle grows as the pointer moves left");
+  assert.match(resize, /const delta = fromRight \? drag\.startX - event\.clientX : event\.clientX - drag\.startX/);
+  // The same manners the workbench edge already has.
+  assert.match(resize, /setPointerCapture/);
+  assert.match(resize, /onDoubleClick: reset/);
+  assert.match(resize, /event\.key !== "ArrowLeft" && event\.key !== "ArrowRight"/);
 });
 
 test("debug is one small toggle, and its events render by kind", () => {
@@ -116,6 +126,15 @@ test("streamed debug frames replace their slot instead of appending", () => {
   assert.equal(applyDebugFrames(events, []), events);
 });
 
+test("each skill carries its own targets and its own sync action", () => {
+  assert.match(page, /function SkillSyncRow/);
+  assert.match(page, /SkillBinding\.SyncSkill\(skill\.name\)/, "a skill is the unit that syncs");
+  assert.match(page, /const receiving = targets\.filter\(\(target\) => !target\.skills\?\.length \|\| target\.skills\.includes\(skill\.name\)\)/);
+  // The picker asks per skill, but the selection is stored per target.
+  assert.match(page, /const toggleSkillTarget = \(skill, target\) =>/);
+  assert.match(page, /SkillBinding\.SetSyncTargetSkills\(\{ id: target\.id, skills: selection \}\)/);
+});
+
 test("sync targets are configured in settings and filled from the skills page", () => {
   // Paths and membership are two different questions, so they live where each
   // is answered: the directory in Settings, the contents beside the library.
@@ -130,7 +149,7 @@ test("sync targets are configured in settings and filled from the skills page", 
   assert.match(settings, /rounded-lg bg-muted\/35/, "rows carry the surface so the card is not a slab of white");
 
   assert.match(page, /SkillBinding\.SetSyncTargetSkills\(\{ id: target\.id, skills: selection \}\)/);
-  assert.match(page, /<DropdownMenuCheckboxItem/, "a target's skills are picked, not typed");
+  assert.match(page, /<DropdownMenuCheckboxItem/, "membership is picked, not typed");
   assert.doesNotMatch(page, /AddSyncTarget|RemoveSyncTarget|UpdateSyncTarget/, "a target's existence and directory belong to settings");
 
   // Both surfaces read the same demo fixture, so the browser preview cannot
@@ -143,5 +162,5 @@ test("an empty selection means the whole library on both sides of the wire", () 
   // The page collapses "everything ticked" back to no selection so the target
   // keeps following the library as skills are added.
   assert.match(page, /names\.length === skills\.length \? \[\] : names/);
-  assert.match(page, /const everything = selection\.length === 0/);
+  assert.match(page, /const effective = target\.skills\?\.length \? target\.skills : skills\.map\(\(item\) => item\.name\)/, "unticking from an implicit \"all\" writes the explicit remainder");
 });

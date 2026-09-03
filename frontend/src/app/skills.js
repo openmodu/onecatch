@@ -41,8 +41,10 @@ export function parseSkillDocument(content) {
 
 // Shared by the Skills workspace and the Settings section that configures the
 // same targets, so the browser preview cannot show two different libraries.
+const demoLibrary = ["release-notes", "code-review", "commit-message", "api-docs", "incident-report"];
+
 export const demoSyncTargets = [
-  { id: "codex", name: "Codex", path: "~/.codex/skills", builtin: true, exists: true, status: "synced", syncedSkills: 5, totalSkills: 5, librarySkills: 5, skills: [], lastSyncedAt: new Date().toISOString(), rsyncAvailable: true },
-  { id: "claude", name: "Claude Code", path: "~/.claude/skills", builtin: true, exists: false, status: "missing", syncedSkills: 0, totalSkills: 2, librarySkills: 5, skills: ["release-notes", "code-review"], rsyncAvailable: true },
-  { id: "modu", name: "Modu", path: "~/.modu/skills", builtin: true, exists: true, status: "out-of-sync", syncedSkills: 3, totalSkills: 5, librarySkills: 5, skills: [], lastSyncedAt: new Date(Date.now() - 86_400_000).toISOString(), rsyncAvailable: true },
+  { id: "codex", name: "Codex", path: "~/.codex/skills", builtin: true, exists: true, status: "synced", syncedSkills: 5, totalSkills: 5, librarySkills: 5, skills: [], syncedNames: demoLibrary, lastSyncedAt: new Date().toISOString(), rsyncAvailable: true },
+  { id: "claude", name: "Claude Code", path: "~/.claude/skills", builtin: true, exists: false, status: "missing", syncedSkills: 0, totalSkills: 2, librarySkills: 5, skills: ["release-notes", "code-review"], syncedNames: [], rsyncAvailable: true },
+  { id: "modu", name: "Modu", path: "~/.modu/skills", builtin: true, exists: true, status: "out-of-sync", syncedSkills: 3, totalSkills: 5, librarySkills: 5, skills: [], syncedNames: demoLibrary.slice(0, 3), lastSyncedAt: new Date(Date.now() - 86_400_000).toISOString(), rsyncAvailable: true },
 ];

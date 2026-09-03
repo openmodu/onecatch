@@ -468,6 +468,62 @@ export class SyncResult {
 }
 
 /**
+ * SyncSkillResult reports one skill pushed to every target that receives it.
+ */
+export class SyncSkillResult {
+    /**
+     * Creates a new SyncSkillResult instance.
+     * @param {Partial<SyncSkillResult>} [$$source = {}] - The source object to create the SyncSkillResult.
+     */
+    constructor($$source = {}) {
+        if (!("skill" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["skill"] = "";
+        }
+        if (!("targets" in $$source)) {
+            /**
+             * @member
+             * @type {SyncTarget[]}
+             */
+            this["targets"] = [];
+        }
+        if (!("synced" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["synced"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["output"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SyncSkillResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SyncSkillResult}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("targets" in $$parsedSource) {
+            $$parsedSource["targets"] = $$createField1_0($$parsedSource["targets"]);
+        }
+        return new SyncSkillResult(/** @type {Partial<SyncSkillResult>} */($$parsedSource));
+    }
+}
+
+/**
  * SyncTarget is a scanned external Agent Skills directory.
  */
 export class SyncTarget {
@@ -572,6 +628,16 @@ export class SyncTarget {
              */
             this["librarySkills"] = 0;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * SyncedNames are the selected skills whose copy at the target matches the
+             * library byte for byte. Naming them, rather than only counting them, is
+             * what lets a per-skill view say which of its targets are behind.
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["syncedNames"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -583,9 +649,13 @@ export class SyncTarget {
      */
     static createFrom($$source = {}) {
         const $$createField11_0 = $$createType0;
+        const $$createField13_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("skills" in $$parsedSource) {
             $$parsedSource["skills"] = $$createField11_0($$parsedSource["skills"]);
+        }
+        if ("syncedNames" in $$parsedSource) {
+            $$parsedSource["syncedNames"] = $$createField13_0($$parsedSource["syncedNames"]);
         }
         return new SyncTarget(/** @type {Partial<SyncTarget>} */($$parsedSource));
     }
@@ -641,3 +711,4 @@ export class UpdateTargetInput {
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = SyncTarget.createFrom;
+const $$createType2 = $Create.Array($$createType1);

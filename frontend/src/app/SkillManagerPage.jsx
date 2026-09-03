@@ -17,6 +17,7 @@ import SkillDebugPanel from "./components/SkillDebugPanel.jsx";
 import { errorMessage, formatDateTime } from "./format.js";
 import { demoSyncTargets, formatSkillBytes, newSkillTemplate, parseSkillDocument, syncStatusTone } from "./skills.js";
 import { createFrameBatcher } from "./frameBatcher.js";
+import { COLUMN_SEPARATOR_CLASS, useColumnWidth } from "./columnResize.js";
 import { applyDebugFrames, publishSkillSelection, requestSkillFile, skillDocumentPath, SKILL_DEBUG_EVENT, SKILL_FILE_DRAFT_EVENT, subscribeSkillWorkspace } from "./skillWorkspace.js";
 
 // A search field is only worth its chrome once the rail stops fitting on one
@@ -111,53 +112,58 @@ function RailTab({ active, icon: Icon, label, onSelect }) {
   </button>;
 }
 
-function TargetRow({ target, skills, busy, onSync, onSelectSkills }) {
+// Where a skill can go. Paths and membership of the list are settings; this is
+// only the status of each destination.
+function TargetStatus({ target }) {
   const { t } = useTranslation();
-  const syncing = busy === `sync-${target.id}`;
-  // An empty selection means "everything", so the menu shows every skill
-  // checked rather than none — that is what the target actually receives.
-  const selection = target.skills || [];
-  const everything = selection.length === 0;
-  const chosen = new Set(everything ? skills.map((skill) => skill.name) : selection);
-  const toggle = (name) => {
-    const next = new Set(chosen);
-    if (next.has(name)) next.delete(name); else next.add(name);
-    onSelectSkills(target, [...next]);
-  };
-  return <div className="flex items-start gap-4 border-b border-border/50 py-3.5 last:border-b-0">
+  return <div className="flex min-w-0 items-center gap-2 py-1.5">
+    <strong className="shrink-0 text-[12px] font-medium text-foreground">{target.name}</strong>
+    <StatusBadge status={syncStatusTone(target.status)}>{t(`skill.syncStatus.${target.status}`, { defaultValue: target.status })}</StatusBadge>
+    <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground" title={target.path}>{target.path}</code>
+    {target.lastError && <span className="shrink-0 text-[11px] text-destructive" title={target.lastError}>{t("skill.syncStatus.error")}</span>}
+  </div>;
+}
+
+// One skill, the targets it goes to, and the action that pushes it. A skill is
+// the unit a person iterates on, so it is the unit that gets a sync button:
+// proving out one edit should not push four unfinished skills with it.
+function SkillSyncRow({ skill, targets, busy, onToggleTarget, onSync }) {
+  const { t } = useTranslation();
+  const syncing = busy === `sync-skill-${skill.name}`;
+  const receiving = targets.filter((target) => !target.skills?.length || target.skills.includes(skill.name));
+  const current = receiving.filter((target) => target.syncedNames?.includes(skill.name));
+  const blocked = receiving.filter((target) => !target.rsyncAvailable);
+  return <div className="flex items-center gap-3 border-b border-border/50 py-3 last:border-b-0">
     <div className="min-w-0 flex-1">
-      <div className="flex min-w-0 flex-wrap items-center gap-2">
-        <strong className="text-[13px] font-medium text-foreground">{target.name}</strong>
-        <StatusBadge status={syncStatusTone(target.status)}>{t(`skill.syncStatus.${target.status}`, { defaultValue: target.status })}</StatusBadge>
-      </div>
-      <code className="mt-1 block truncate font-mono text-[11px] text-muted-foreground" title={target.path}>{target.path}</code>
-      <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-        {t("skill.syncedCount", { synced: target.syncedSkills, total: target.totalSkills })} · {target.lastSyncedAt ? t("skill.lastSynced", { time: formatDateTime(target.lastSyncedAt) }) : t("skill.neverSynced")}
-      </p>
-      {target.lastError && <p className="mt-1 text-[11px] leading-relaxed text-destructive">{target.lastError}</p>}
+      <strong className="block truncate text-[13px] font-medium text-foreground">{skill.name}</strong>
+      <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
+        {receiving.length === 0
+          ? t("skill.noTargetsForSkill")
+          : current.length === receiving.length
+            ? t("skill.skillCurrentAt", { targets: receiving.map((target) => target.name).join("、") })
+            : t("skill.skillBehindAt", { count: receiving.length - current.length, total: receiving.length })}
+      </span>
     </div>
-    <div className="flex shrink-0 items-center gap-0.5">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" disabled={Boolean(busy) || skills.length === 0}>
-            {everything ? t("skill.allSkills", { count: skills.length }) : t("skill.someSkills", { count: selection.length, total: skills.length })}
-            <ChevronDown aria-hidden="true" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="max-h-80 overflow-y-auto">
-          <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{t("skill.chooseSkills", { name: target.name })}</DropdownMenuLabel>
-          {skills.map((skill) => <DropdownMenuCheckboxItem key={skill.name} checked={chosen.has(skill.name)} onSelect={(event) => { event.preventDefault(); toggle(skill.name); }}>
-            <span className="min-w-0 truncate text-[12px]">{skill.name}</span>
-          </DropdownMenuCheckboxItem>)}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={everything} onSelect={() => onSelectSkills(target, [])}>{t("skill.selectAllSkills")}</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-      <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground" disabled={Boolean(busy) || !target.rsyncAvailable || target.totalSkills === 0} onClick={onSync}>
-        <RefreshCw className={syncing ? "animate-spin" : ""} aria-hidden="true" />
-        {syncing ? t("skill.syncing") : t("skill.syncNow")}
-      </Button>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" disabled={Boolean(busy) || targets.length === 0}>
+          {t("skill.targetCount", { count: receiving.length, total: targets.length })}
+          <ChevronDown aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuLabel className="text-[11px] font-normal text-muted-foreground">{t("skill.chooseTargets", { name: skill.name })}</DropdownMenuLabel>
+        {targets.map((target) => <DropdownMenuCheckboxItem
+          key={target.id}
+          checked={receiving.some((item) => item.id === target.id)}
+          onSelect={(event) => { event.preventDefault(); onToggleTarget(skill, target); }}
+        ><span className="min-w-0 truncate text-[12px]">{target.name}</span></DropdownMenuCheckboxItem>)}
+      </DropdownMenuContent>
+    </DropdownMenu>
+    <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" disabled={Boolean(busy) || receiving.length === 0 || blocked.length > 0} onClick={() => onSync(skill)}>
+      <RefreshCw className={syncing ? "animate-spin" : ""} aria-hidden="true" />
+      {syncing ? t("skill.syncing") : t("skill.syncNow")}
+    </Button>
   </div>;
 }
 
@@ -187,6 +193,7 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
   // Frames arrive on a Wails channel that has no idea which run the panel is
   // showing, so the live run id is read from a ref inside the listener.
   const debugRunRef = useRef("");
+  const rail = useColumnWidth({ defaultWidth: 248, min: 176, max: 420 });
 
   const loadDocument = useCallback(async (name) => {
     if (!name) { setDocument(null); setPreview(""); setSelectedName(""); publishSkillSelection({ name: "" }); return; }
@@ -384,7 +391,7 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
     }
   };
 
-  const selectTargetSkills = async (target, names) => {
+  const applySelection = async (target, names) => {
     // Choosing every skill is the same thing as choosing none: both mean the
     // target follows the library, so the stored selection is cleared.
     const selection = names.length === skills.length ? [] : names;
@@ -401,13 +408,47 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
     }
   };
 
-  const syncTarget = async (target) => {
-    setBusy(`sync-${target.id}`);
+  // The picker asks "does this skill go to this target", but the selection is
+  // stored the other way round, so a toggle rewrites one target's list.
+  const toggleSkillTarget = (skill, target) => {
+    const receiving = !target.skills?.length || target.skills.includes(skill.name);
+    const effective = target.skills?.length ? target.skills : skills.map((item) => item.name);
+    const next = receiving ? effective.filter((name) => name !== skill.name) : [...effective, skill.name];
+    void applySelection(target, next);
+  };
+
+  const syncSkill = async (skill) => {
+    setBusy(`sync-skill-${skill.name}`);
     try {
-      if (mode !== "demo") await SkillBinding.Sync(target.id);
-      const count = target.skills?.length || skills.length;
-      setTargets(mode === "demo" ? targets.map((item) => item.id === target.id ? { ...item, exists: true, status: "synced", syncedSkills: count, totalSkills: count, lastSyncedAt: new Date().toISOString() } : item) : await SkillBinding.ScanSyncTargets());
-      notify("success", t("skill.syncComplete", { name: target.name, count }));
+      if (mode === "demo") {
+        setTargets((items) => items.map((item) => (!item.skills?.length || item.skills.includes(skill.name))
+          ? { ...item, exists: true, status: "synced", syncedNames: [...new Set([...(item.syncedNames || []), skill.name])], syncedSkills: (item.syncedNames || []).includes(skill.name) ? item.syncedSkills : item.syncedSkills + 1, lastSyncedAt: new Date().toISOString() }
+          : item));
+      } else {
+        const result = await SkillBinding.SyncSkill(skill.name);
+        setTargets(result.targets || []);
+      }
+      notify("success", t("skill.skillSynced", { name: skill.name }));
+    } catch (error) {
+      notify("error", errorMessage(error));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const syncEverything = async () => {
+    setBusy("sync-all");
+    try {
+      if (mode === "demo") {
+        setTargets((items) => items.map((item) => ({ ...item, exists: true, status: "synced", syncedNames: (item.skills?.length ? item.skills : skills.map((skill) => skill.name)), syncedSkills: item.totalSkills, lastSyncedAt: new Date().toISOString() })));
+      } else {
+        for (const target of targets) {
+          if (!target.rsyncAvailable || target.totalSkills === 0) continue;
+          await SkillBinding.Sync(target.id);
+        }
+        setTargets(await SkillBinding.ScanSyncTargets());
+      }
+      notify("success", t("skill.syncedEverything", { count: skills.length }));
     } catch (error) {
       notify("error", errorMessage(error));
     } finally {
@@ -423,8 +464,8 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
   const parsed = useMemo(() => parseSkillDocument(preview), [preview]);
   const extraFrontmatter = useMemo(() => Object.entries(parsed.frontmatter).filter(([key]) => key !== "name" && key !== "description"), [parsed]);
 
-  return <div className="grid min-h-0 min-w-0 flex-1 grid-cols-[248px_minmax(0,1fr)] overflow-hidden bg-background max-[900px]:grid-cols-[196px_minmax(0,1fr)]">
-    <aside className="flex min-h-0 min-w-0 flex-col border-r border-border/60" aria-label={t("skill.library")}>
+  return <div className={`flex min-h-0 min-w-0 flex-1 overflow-hidden bg-background ${rail.resizing ? "cursor-col-resize select-none" : ""}`}>
+    <aside className="flex min-h-0 min-w-0 flex-col" style={{ width: `${rail.width}px` }} aria-label={t("skill.library")}>
       <div className="flex h-12 shrink-0 items-center gap-0.5 pr-2 pl-4">
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.library")}</span>
         <Button variant="ghost" size="icon-sm" className="text-muted-foreground hover:text-foreground" disabled={loading} aria-label={t("common.refresh")} title={t("common.refresh")} onClick={() => void refresh()}><RefreshCw className={loading ? "animate-spin" : ""} aria-hidden="true" /></Button>
@@ -454,6 +495,7 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
         <RailTab active={pane === "sync"} icon={FolderSync} label={t("skill.sync")} onSelect={() => setPane("sync")} />
       </div>
     </aside>
+    <span className={COLUMN_SEPARATOR_CLASS} aria-label={t("skill.resizeLibrary")} title={t("skill.resizeHint")} {...rail.separatorProps} />
 
     {pane === "sync" ? <ScrollArea className="min-h-0 min-w-0">
       <section className="mx-auto max-w-3xl px-8 pt-8 pb-10">
@@ -462,8 +504,34 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
           <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{t("skill.syncDescription")}</p>
         </header>
         {!targets.every((target) => target.rsyncAvailable) && <p className="mt-5 rounded-lg bg-destructive/8 px-4 py-3 text-[12px] leading-relaxed text-destructive">{t("skill.rsyncRequired")}</p>}
-        <div className="mt-5 border-t border-border/50">{targets.map((target) => <TargetRow key={target.id} target={target} skills={skills} busy={busy} onSync={() => void syncTarget(target)} onSelectSkills={(item, names) => void selectTargetSkills(item, names)} />)}</div>
-        <p className="mt-6 text-[11px] leading-relaxed text-muted-foreground">{t("skill.targetsLiveInSettings")} {t("skill.metadataHint")}</p>
+
+        <section className="mt-6" aria-labelledby="skill-sync-targets">
+          <div className="flex items-center gap-3">
+            <h2 className="min-w-0 flex-1 text-[13px] font-semibold text-foreground" id="skill-sync-targets">{t("settings.skillTargets")}</h2>
+            <span className="shrink-0 text-[11px] text-muted-foreground">{t("skill.targetsLiveInSettings")}</span>
+          </div>
+          <div className="mt-2 rounded-xl bg-muted/30 px-3.5 py-1.5">{targets.map((target) => <TargetStatus key={target.id} target={target} />)}</div>
+        </section>
+
+        <section className="mt-7" aria-labelledby="skill-sync-skills">
+          <div className="flex items-center gap-3">
+            <h2 className="min-w-0 flex-1 text-[13px] font-semibold text-foreground" id="skill-sync-skills">{t("skill.library")}</h2>
+            <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" disabled={Boolean(busy) || skills.length === 0} onClick={() => void syncEverything()}>
+              <RefreshCw className={busy === "sync-all" ? "animate-spin" : ""} aria-hidden="true" />
+              {busy === "sync-all" ? t("skill.syncing") : t("skill.syncEverything")}
+            </Button>
+          </div>
+          <div className="mt-1 border-t border-border/50">{skills.map((skill) => <SkillSyncRow
+            key={skill.name}
+            skill={skill}
+            targets={targets}
+            busy={busy}
+            onToggleTarget={toggleSkillTarget}
+            onSync={(item) => void syncSkill(item)}
+          />)}</div>
+        </section>
+
+        <p className="mt-6 text-[11px] leading-relaxed text-muted-foreground">{t("skill.metadataHint")}</p>
       </section>
     </ScrollArea> : document ? <div className="flex min-h-0 min-w-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">

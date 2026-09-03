@@ -12,6 +12,7 @@ export {
     SkillFileContent,
     SkillFileEntry,
     SyncResult,
+    SyncSkillResult,
     SyncTarget,
     UpdateTargetInput
 } from "./models.js";

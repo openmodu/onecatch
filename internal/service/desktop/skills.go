@@ -238,6 +238,14 @@ func (a *Service) SyncSkills(ctx context.Context, id string) (skillmanager.SyncR
 	return manager.Sync(ctx, strings.TrimSpace(id))
 }
 
+func (a *Service) SyncSkill(ctx context.Context, name string) (skillmanager.SyncSkillResult, error) {
+	manager, err := a.skillManager()
+	if err != nil {
+		return skillmanager.SyncSkillResult{}, err
+	}
+	return manager.SyncSkill(ctx, name)
+}
+
 // DebugSkill creates an isolated Modu SDK session whose AgentDir is
 // ~/.onecatch. Modu consequently discovers the managed library at
 // ~/.onecatch/skills, while the slash invocation guarantees that the selected

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, File, FileCode2, FileText, Folder, FolderOpe
 import { useTranslation } from "react-i18next";
 import { SkillBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { errorMessage } from "../../format.js";
+import { COLUMN_SEPARATOR_CLASS, useColumnWidth } from "../../columnResize.js";
 import { formatSkillBytes, newSkillTemplate } from "../../skills.js";
 import { currentSkillFileRequest, currentSkillSelection, publishSkillFileDraft, SKILL_FILE_OPEN_EVENT, SKILL_SELECTED_EVENT, subscribeSkillWorkspace } from "../../skillWorkspace.js";
 
@@ -91,6 +92,7 @@ function SkillFilesInspector({ mode, notify, onDirtyChange }) {
   const [treeCollapsed, setTreeCollapsed] = useState(false);
   const generationRef = useRef(0);
   const handledRequestRef = useRef(0);
+  const tree = useColumnWidth({ defaultWidth: 152, min: 110, max: 320, fromRight: true });
   const dirty = Boolean(file && draft !== file.content);
 
   const listDirectory = useCallback(async (directory = "", generation = generationRef.current) => {
@@ -224,7 +226,7 @@ function SkillFilesInspector({ mode, notify, onDirtyChange }) {
         document first and its context to the right. Stacked, the tree took a
         third of an already short panel and the editor never had the rows to
         show a skill's body at once. */}
-    <div className="flex min-h-0 flex-1">
+    <div className={`flex min-h-0 flex-1 ${tree.resizing ? "cursor-col-resize select-none" : ""}`}>
       {file && <section className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label={t("skill.fileEditor")}>
         <div className="flex h-10 shrink-0 items-center gap-1 px-2">
           <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-foreground" title={file.path}>{file.name}</span>
@@ -243,7 +245,8 @@ function SkillFilesInspector({ mode, notify, onDirtyChange }) {
         <p className="shrink-0 truncate px-3 pb-2 text-[10px] text-muted-foreground">{formatSkillBytes(draft.length)} · {t("skill.livePreviewHint")}</p>
       </section>}
 
-      {treeVisible && <div className={`min-h-0 overflow-y-auto px-2 py-2 ${file ? "w-[152px] shrink-0 border-l border-border/60" : "flex-1"}`}>
+      {file && treeVisible && <span className={COLUMN_SEPARATOR_CLASS} aria-label={t("skill.resizeFiles")} title={t("skill.resizeHint")} {...tree.separatorProps} />}
+      {treeVisible && <div className="min-h-0 overflow-y-auto px-2 py-2" style={file ? { width: `${tree.width}px`, flex: "0 0 auto" } : { flex: "1 1 0%", minWidth: 0 }}>
         {error && <p className="m-1 rounded-md bg-destructive/10 px-2 py-1.5 text-xs text-destructive">{error}</p>}
         {!error && rootLoading && <p className="m-1 text-xs text-muted-foreground">{t("common.loading")}</p>}
         {!error && !rootLoading && rootEntries.length === 0 && <p className="m-1 text-xs text-muted-foreground">{t("skill.filesEmpty")}</p>}

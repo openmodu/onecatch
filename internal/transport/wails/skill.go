@@ -53,6 +53,9 @@ func (b *SkillBinding) RemoveSyncTarget(id string) error {
 func (b *SkillBinding) Sync(id string) (skillmanager.SyncResult, error) {
 	return b.service.SyncSkills(context.Background(), id)
 }
+func (b *SkillBinding) SyncSkill(name string) (skillmanager.SyncSkillResult, error) {
+	return b.service.SyncSkill(context.Background(), name)
+}
 func (b *SkillBinding) Debug(input desktopservice.SkillDebugInput) (desktopservice.SkillDebugResult, error) {
 	return b.service.DebugSkill(context.Background(), input)
 }

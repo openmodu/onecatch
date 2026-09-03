@@ -126,6 +126,18 @@ type SyncTarget struct {
 	// LibrarySkills is the size of the whole library, so a partial selection
 	// can be described without a second call.
 	LibrarySkills int `json:"librarySkills"`
+	// SyncedNames are the selected skills whose copy at the target matches the
+	// library byte for byte. Naming them, rather than only counting them, is
+	// what lets a per-skill view say which of its targets are behind.
+	SyncedNames []string `json:"syncedNames,omitempty"`
+}
+
+// SyncSkillResult reports one skill pushed to every target that receives it.
+type SyncSkillResult struct {
+	Skill   string       `json:"skill"`
+	Targets []SyncTarget `json:"targets"`
+	Synced  int          `json:"synced"`
+	Output  string       `json:"output,omitempty"`
 }
 
 type SyncResult struct {
@@ -740,6 +752,96 @@ func (m *Manager) Sync(ctx context.Context, id string) (SyncResult, error) {
 // scanTargetLocked reports a target against the subset it is configured to
 // receive: `skills` is the whole library, and everything counted below is what
 // this target actually expects to hold.
+// SyncSkill pushes one skill to every target configured to receive it. It is
+// the per-skill counterpart to Sync: the unit a person iterates on is a single
+// skill, and pushing the whole library to prove out one edit is both slow and
+// a way to ship four unfinished skills by accident.
+func (m *Manager) SyncSkill(ctx context.Context, name string) (SyncSkillResult, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	name = strings.TrimSpace(name)
+	metadata, err := m.loadMetadataLocked()
+	if err != nil {
+		return SyncSkillResult{}, err
+	}
+	library, err := m.listLocked()
+	if err != nil {
+		return SyncSkillResult{}, err
+	}
+	skill, ok := findSkill(library, name)
+	if !ok {
+		return SyncSkillResult{}, fmt.Errorf("skill %q not found", name)
+	}
+	rsync, err := m.lookPath("rsync")
+	if err != nil {
+		return SyncSkillResult{}, errors.New("rsync is not available on PATH")
+	}
+
+	var outputs []string
+	synced := 0
+	definitions := targetDefinitions(m, metadata)
+	for _, definition := range definitions {
+		if len(selectSkills(metadata.Selections[definition.ID], []Skill{skill})) == 0 {
+			continue
+		}
+		if err := ctx.Err(); err != nil {
+			return SyncSkillResult{}, err
+		}
+		path, pathErr := m.validateTargetPath(definition.Path)
+		if pathErr != nil {
+			return SyncSkillResult{}, pathErr
+		}
+		destination := filepath.Join(path, skill.Name) + string(filepath.Separator)
+		if err := os.MkdirAll(destination, 0o700); err != nil {
+			return SyncSkillResult{}, fmt.Errorf("prepare %s destination: %w", definition.Name, err)
+		}
+		source := filepath.Join(m.root, skill.Name) + string(filepath.Separator)
+		output, runErr := m.run(ctx, rsync, "-a", "--delete", source, destination)
+		if text := strings.TrimSpace(string(output)); text != "" {
+			outputs = append(outputs, text)
+		}
+		// One target's record is updated in place: syncing a single skill must
+		// not claim the target holds skills it was never sent.
+		record := metadata.Targets[definition.ID]
+		if record.Skills == nil {
+			record.Skills = make(map[string]string)
+		}
+		record.Path = path
+		if runErr != nil {
+			record.LastError = fmt.Sprintf("sync %s: %v", skill.Name, runErr)
+			metadata.Targets[definition.ID] = record
+			_ = m.saveMetadataLocked(metadata)
+			return SyncSkillResult{}, fmt.Errorf("%s%s", record.LastError, commandOutputSuffix(output))
+		}
+		record.LastError = ""
+		record.Skills[skill.Name] = skill.Digest
+		record.LastSyncedAt = m.now().UTC()
+		metadata.Targets[definition.ID] = record
+		synced++
+	}
+	if err := m.saveMetadataLocked(metadata); err != nil {
+		return SyncSkillResult{}, err
+	}
+	targets := make([]SyncTarget, 0, len(definitions))
+	for _, definition := range definitions {
+		item, scanErr := m.scanTargetLocked(metadata, definition, library)
+		if scanErr != nil {
+			item.LastError, item.Status = scanErr.Error(), "error"
+		}
+		targets = append(targets, item)
+	}
+	return SyncSkillResult{Skill: skill.Name, Targets: targets, Synced: synced, Output: strings.Join(outputs, "\n")}, nil
+}
+
+func findSkill(skills []Skill, name string) (Skill, bool) {
+	for _, skill := range skills {
+		if skill.Name == name {
+			return skill, true
+		}
+	}
+	return Skill{}, false
+}
+
 func (m *Manager) scanTargetLocked(metadata metadataFile, definition targetDefinition, skills []Skill) (SyncTarget, error) {
 	if skills == nil {
 		var err error
@@ -779,6 +881,7 @@ func (m *Manager) scanTargetLocked(metadata metadataFile, definition targetDefin
 		digest, _, _, err := digestTree(filepath.Join(path, skill.Name))
 		if err == nil && digest == skill.Digest {
 			item.SyncedSkills++
+			item.SyncedNames = append(item.SyncedNames, skill.Name)
 		}
 	}
 	switch {

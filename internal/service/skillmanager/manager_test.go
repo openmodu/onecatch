@@ -424,3 +424,80 @@ func findSyncTarget(targets []SyncTarget, id string) (SyncTarget, bool) {
 	}
 	return SyncTarget{}, false
 }
+
+func TestManagerSyncsOneSkillToEveryTargetThatWantsIt(t *testing.T) {
+	manager, err := New(filepath.Join(t.TempDir(), ".onecatch", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.lookPath = func(string) (string, error) { return "/usr/bin/rsync", nil }
+	var copied []string
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		source := filepath.Clean(args[len(args)-2])
+		destination := filepath.Clean(args[len(args)-1])
+		copied = append(copied, filepath.Base(destination))
+		if err := os.MkdirAll(destination, 0o700); err != nil {
+			return nil, err
+		}
+		entries, err := os.ReadDir(source)
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			data, readErr := os.ReadFile(filepath.Join(source, entry.Name()))
+			if readErr != nil {
+				return nil, readErr
+			}
+			if err := os.WriteFile(filepath.Join(destination, entry.Name()), data, 0o600); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	}
+	for _, name := range []string{"alpha", "beta"} {
+		if _, err := manager.Create(SaveSkillInput{Name: name, Content: skillSource(name, "Do "+name)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	everything, err := manager.AddTarget(AddTargetInput{Name: "Everything", Path: filepath.Join(t.TempDir(), "all", "skills")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	betaOnly, err := manager.AddTarget(AddTargetInput{Name: "Beta only", Path: filepath.Join(t.TempDir(), "beta", "skills")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.SetTargetSkills(SetTargetSkillsInput{ID: betaOnly.ID, Skills: []string{"beta"}}); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := manager.SyncSkill(context.Background(), "alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The built-ins take everything too, so alpha lands at each of them plus
+	// the custom "Everything" target, and never at the beta-only one.
+	if result.Synced != 4 {
+		t.Fatalf("alpha goes to every target that receives it: %d", result.Synced)
+	}
+	if _, err := os.Stat(filepath.Join(everything.Path, "alpha")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(betaOnly.Path, "alpha")); !os.IsNotExist(err) {
+		t.Fatal("a target that did not ask for alpha must not receive it")
+	}
+	// Only the skill that was pushed counts as current; the other is untouched.
+	target, ok := findSyncTarget(result.Targets, everything.ID)
+	if !ok || !reflect.DeepEqual(target.SyncedNames, []string{"alpha"}) {
+		t.Fatalf("only the synced skill is current: %#v", target)
+	}
+	for _, name := range copied {
+		if name != "alpha" {
+			t.Fatalf("only alpha may be copied, got %q", name)
+		}
+	}
+
+	if _, err := manager.SyncSkill(context.Background(), "ghost"); err == nil {
+		t.Fatal("an unknown skill must be refused")
+	}
+}

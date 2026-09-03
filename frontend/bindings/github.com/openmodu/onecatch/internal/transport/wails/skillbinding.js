@@ -154,6 +154,16 @@ export function Sync(id) {
 }
 
 /**
+ * @param {string} name
+ * @returns {$CancellablePromise<skillmanager$0.SyncSkillResult>}
+ */
+export function SyncSkill(name) {
+    return $Call.ByID(699964490, name).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType12($result);
+    }));
+}
+
+/**
  * @param {skillmanager$0.SaveSkillInput} input
  * @returns {$CancellablePromise<skillmanager$0.SkillDocument>}
  */
@@ -196,3 +206,4 @@ const $$createType8 = $Create.Array($$createType7);
 const $$createType9 = skillmanager$0.SkillFileContent.createFrom;
 const $$createType10 = $Create.Array($$createType0);
 const $$createType11 = skillmanager$0.SyncResult.createFrom;
+const $$createType12 = skillmanager$0.SyncSkillResult.createFrom;
