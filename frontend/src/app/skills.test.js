@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { formatSkillBytes, newSkillTemplate, parseSkillDocument, syncStatusTone } from "./skills.js";
+import { formatSkillBytes, newSkillTemplate, parseSkillDocument, skillNameFromInput, syncStatusTone } from "./skills.js";
 import { applyDebugFrames } from "./skillWorkspace.js";
 
 const page = readFileSync(new URL("./SkillManagerPage.jsx", import.meta.url), "utf8");
@@ -186,4 +186,20 @@ test("an empty selection means the whole library on both sides of the wire", () 
   // keeps following the library as skills are added.
   assert.match(page, /names\.length === skills\.length \? \[\] : names/);
   assert.match(page, /const effective = target\.skills\?\.length \? target\.skills : skills\.map\(\(item\) => item\.name\)/, "unticking from an implicit \"all\" writes the explicit remainder");
+});
+
+test("the name field derives a slug without fighting an IME", () => {
+  assert.equal(skillNameFromInput("Release Notes"), "release-notes");
+  assert.equal(skillNameFromInput("a__b  c"), "a-b-c", "runs of invalid characters collapse to one hyphen");
+  assert.equal(skillNameFromInput("发布说明"), "-", "a name the library cannot hold does not survive as one");
+
+  // The bug this guards: rewriting the field mid-composition cancels the IME
+  // and leaves half-converted latin behind. The value is kept verbatim until
+  // the composition commits.
+  assert.match(page, /composingNameRef\.current \|\| event\.nativeEvent\?\.isComposing/);
+  assert.match(page, /name: composing \? value : skillNameFromInput\(value\)/);
+  assert.match(page, /onCompositionEnd=\{\(event\) => \{/);
+  // Add can be pressed with a composition still open, so the buffer is
+  // normalized on the way out too.
+  assert.match(page, /const name = skillNameFromInput\(createForm\.name\)\.trim\(\)/);
 });

@@ -48,3 +48,15 @@ export const demoSyncTargets = [
   { id: "claude", name: "Claude Code", path: "~/.claude/skills", builtin: true, exists: false, status: "missing", syncedSkills: 0, totalSkills: 2, librarySkills: 5, skills: ["release-notes", "code-review"], syncedNames: [], rsyncAvailable: true },
   { id: "modu", name: "Modu", path: "~/.modu/skills", builtin: true, exists: true, status: "out-of-sync", syncedSkills: 3, totalSkills: 5, librarySkills: 5, skills: [], syncedNames: demoLibrary.slice(0, 3), lastSyncedAt: new Date(Date.now() - 86_400_000).toISOString(), rsyncAvailable: true },
 ];
+
+// A skill's name is also its directory and its `/name` command, so it is
+// restricted to lowercase alphanumerics and hyphens. Deriving that live gives
+// useful feedback while typing — "Release Notes" becomes "release-notes" as
+// you go — but it must never run over an in-progress IME composition, which is
+// a buffer the input owns and not text the user has committed yet.
+export function skillNameFromInput(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9-]/g, "-")
+    .replace(/-+/g, "-");
+}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronDown, Ellipsis, FolderSync, Play, Plus, RefreshCw, Search, SquarePen, Trash2, X } from "lucide-react";
 
@@ -13,7 +13,7 @@ import { SkillBinding } from "../../bindings/github.com/openmodu/onecatch/intern
 import { StatusBadge } from "../ui/primitives.jsx";
 import MarkdownContent from "./components/MarkdownContent.jsx";
 import { errorMessage, formatDateTime } from "./format.js";
-import { demoSyncTargets, formatSkillBytes, newSkillTemplate, parseSkillDocument, syncStatusTone } from "./skills.js";
+import { demoSyncTargets, formatSkillBytes, newSkillTemplate, parseSkillDocument, skillNameFromInput, syncStatusTone } from "./skills.js";
 import { COLUMN_SEPARATOR_CLASS, useColumnWidth } from "./columnResize.js";
 import { publishSkillSelection, requestSkillFile, requestSkillInspectorTab, skillDocumentPath, SKILL_FILE_DRAFT_EVENT, subscribeSkillWorkspace } from "./skillWorkspace.js";
 
@@ -138,6 +138,9 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
   const [createForm, setCreateForm] = useState({ name: "", description: "" });
   const [deleteDialog, setDeleteDialog] = useState(null);
   const rail = useColumnWidth({ defaultWidth: 248, min: 176, max: 420 });
+  // A ref, not state: the guard has to be correct inside the very next input
+  // event, before a re-render could have delivered it.
+  const composingNameRef = useRef(false);
 
   const loadDocument = useCallback(async (name) => {
     if (!name) { setDocument(null); setPreview(""); setSelectedName(""); publishSkillSelection({ name: "" }); return; }
@@ -204,7 +207,9 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
   };
 
   const createSkill = async () => {
-    const name = createForm.name.trim();
+    // A composition can still be open when Add is pressed, so the raw buffer
+    // is normalized here too rather than trusted from the field.
+    const name = skillNameFromInput(createForm.name).trim();
     const description = createForm.description.trim();
     if (!name || !description) { notify("error", t("skill.createFieldsRequired")); return; }
     setBusy("create");
@@ -437,7 +442,27 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
       </div>
     </div>}
 
-    <Dialog open={createDialog} onOpenChange={(open) => !busy && setCreateDialog(open)}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{t("skill.new")}</DialogTitle><DialogDescription>{t("skill.newDescription")}</DialogDescription></DialogHeader><div className="grid gap-4"><div className="grid gap-2"><Label htmlFor="new-skill-name">{t("skill.name")}</Label><Input id="new-skill-name" autoFocus value={createForm.name} onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-") }))} placeholder="release-notes" /></div><div className="grid gap-2"><Label htmlFor="new-skill-description">{t("skill.description")}</Label><Textarea id="new-skill-description" className="min-h-20" value={createForm.description} onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))} placeholder={t("skill.descriptionPlaceholder")} /></div></div><DialogFooter><Button variant="outline" disabled={Boolean(busy)} onClick={() => setCreateDialog(false)}>{t("common.cancel")}</Button><Button disabled={Boolean(busy)} onClick={createSkill}>{busy === "create" ? t("common.processing") : t("common.add")}</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={createDialog} onOpenChange={(open) => !busy && setCreateDialog(open)}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{t("skill.new")}</DialogTitle><DialogDescription>{t("skill.newDescription")}</DialogDescription></DialogHeader><div className="grid gap-4"><div className="grid gap-2"><Label htmlFor="new-skill-name">{t("skill.name")}</Label><Input
+      id="new-skill-name"
+      autoFocus
+      value={createForm.name}
+      placeholder="release-notes"
+      aria-describedby="new-skill-name-hint"
+      onCompositionStart={() => { composingNameRef.current = true; }}
+      onCompositionEnd={(event) => {
+        composingNameRef.current = false;
+        const committed = skillNameFromInput(event.target.value);
+        setCreateForm((current) => ({ ...current, name: committed }));
+      }}
+      onChange={(event) => {
+        // While the IME holds a composition its buffer lives in this field.
+        // Rewriting the value there cancels the composition and leaves the
+        // half-converted latin behind, so it is kept verbatim until commit.
+        const composing = composingNameRef.current || event.nativeEvent?.isComposing;
+        const value = event.target.value;
+        setCreateForm((current) => ({ ...current, name: composing ? value : skillNameFromInput(value) }));
+      }}
+    /><p className="m-0 text-[11px] leading-relaxed text-muted-foreground" id="new-skill-name-hint">{t("skill.namePattern")}</p></div><div className="grid gap-2"><Label htmlFor="new-skill-description">{t("skill.description")}</Label><Textarea id="new-skill-description" className="min-h-20" value={createForm.description} onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))} placeholder={t("skill.descriptionPlaceholder")} /></div></div><DialogFooter><Button variant="outline" disabled={Boolean(busy)} onClick={() => setCreateDialog(false)}>{t("common.cancel")}</Button><Button disabled={Boolean(busy)} onClick={createSkill}>{busy === "create" ? t("common.processing") : t("common.add")}</Button></DialogFooter></DialogContent></Dialog>
 
     <Dialog open={Boolean(deleteDialog)} onOpenChange={(open) => !open && !busy && setDeleteDialog(null)}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{t("skill.deleteTitle", { name: deleteDialog?.name })}</DialogTitle><DialogDescription>{t("skill.deleteDescription")}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={Boolean(busy)} onClick={() => setDeleteDialog(null)}>{t("common.cancel")}</Button><Button variant="destructive" disabled={Boolean(busy)} onClick={deleteSkill}>{busy ? t("common.processing") : t("common.delete")}</Button></DialogFooter></DialogContent></Dialog>
   </div>;
