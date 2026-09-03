@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.1.13
+
+- Stop double-clicks on the macOS review toolbar and other content areas from resizing the window; let Wails handle double-clicks only in marked titlebar regions.
+- Upgrade the Wails framework, project CLI, and JavaScript runtime to v3.0.0-beta.16 and enforce matching runtime versions.
+- Update the embedded Modu Code runtime to commit cc1462c and refresh its required Go dependencies.
+
 ## 0.1.12
 
 - Syntax-highlight fenced code blocks in agent responses with a language label toolbar, one-click copy, and a per-block wrap toggle.
