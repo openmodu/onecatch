@@ -111,10 +111,15 @@ test("sync targets are configured in settings and filled from the skills page", 
   assert.match(settings, /SkillBinding\.UpdateSyncTarget\(\{ id: target\.id, path \}\)/);
   assert.match(settings, /"skills", "terminal"/, "Skills is a settings section of its own");
   assert.doesNotMatch(settings, /SetSyncTargetSkills/, "choosing skills belongs to the skills page");
+  // Adding a target is one action behind a header control, not a permanent
+  // row of empty fields sitting under the real ones.
+  assert.match(settings, /aside=\{<SettingsButton[^>]*onClick=\{\(\) => setAdding\(true\)\}><Plus/);
+  assert.match(settings, /<Dialog open=\{adding\}/);
+  assert.match(settings, /rounded-lg bg-muted\/35/, "rows carry the surface so the card is not a slab of white");
 
   assert.match(page, /SkillBinding\.SetSyncTargetSkills\(\{ id: target\.id, skills: selection \}\)/);
   assert.match(page, /<DropdownMenuCheckboxItem/, "a target's skills are picked, not typed");
-  assert.doesNotMatch(page, /UpdateSyncTarget/, "repointing a target belongs to settings");
+  assert.doesNotMatch(page, /AddSyncTarget|RemoveSyncTarget|UpdateSyncTarget/, "a target's existence and directory belong to settings");
 
   // Both surfaces read the same demo fixture, so the browser preview cannot
   // show two different libraries.

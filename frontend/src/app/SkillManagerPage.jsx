@@ -111,7 +111,7 @@ function RailTab({ active, icon: Icon, label, onSelect }) {
   </button>;
 }
 
-function TargetRow({ target, skills, busy, onSync, onRemove, onSelectSkills }) {
+function TargetRow({ target, skills, busy, onSync, onSelectSkills }) {
   const { t } = useTranslation();
   const syncing = busy === `sync-${target.id}`;
   // An empty selection means "everything", so the menu shows every skill
@@ -157,7 +157,6 @@ function TargetRow({ target, skills, busy, onSync, onRemove, onSelectSkills }) {
         <RefreshCw className={syncing ? "animate-spin" : ""} aria-hidden="true" />
         {syncing ? t("skill.syncing") : t("skill.syncNow")}
       </Button>
-      {!target.builtin && <Button variant="ghost" size="icon-xs" className="text-muted-foreground" disabled={Boolean(busy)} aria-label={t("skill.removeTarget", { name: target.name })} onClick={onRemove}><X aria-hidden="true" /></Button>}
     </div>
   </div>;
 }
@@ -179,8 +178,6 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
   const [debugOpen, setDebugOpen] = useState(false);
   const [createDialog, setCreateDialog] = useState(false);
   const [createForm, setCreateForm] = useState({ name: "", description: "" });
-  const [targetDialog, setTargetDialog] = useState(false);
-  const [targetForm, setTargetForm] = useState({ name: "", path: "" });
   const [deleteDialog, setDeleteDialog] = useState(null);
   const [debugPrompt, setDebugPrompt] = useState("");
   const [debugResult, setDebugResult] = useState(null);
@@ -418,38 +415,6 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
     }
   };
 
-  const addTarget = async () => {
-    if (!targetForm.name.trim() || !targetForm.path.trim()) { notify("error", t("skill.targetFieldsRequired")); return; }
-    setBusy("add-target");
-    try {
-      const target = mode === "demo" ? { ...targetForm, id: `custom-${Date.now()}`, builtin: false, exists: false, status: "missing", syncedSkills: 0, totalSkills: skills.length, rsyncAvailable: true } : await SkillBinding.AddSyncTarget(targetForm);
-      setTargets((items) => [...items, target]);
-      setTargetDialog(false);
-      setTargetForm({ name: "", path: "" });
-      notify("success", t("skill.targetAdded"));
-    } catch (error) {
-      notify("error", errorMessage(error));
-    } finally {
-      setBusy("");
-    }
-  };
-
-  const removeTarget = async () => {
-    const target = deleteDialog?.target;
-    if (!target) return;
-    setBusy("remove-target");
-    try {
-      if (mode !== "demo") await SkillBinding.RemoveSyncTarget(target.id);
-      setTargets((items) => items.filter((item) => item.id !== target.id));
-      setDeleteDialog(null);
-      notify("success", t("skill.targetRemoved"));
-    } catch (error) {
-      notify("error", errorMessage(error));
-    } finally {
-      setBusy("");
-    }
-  };
-
   const visibleSkills = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return skills;
@@ -492,16 +457,13 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
 
     {pane === "sync" ? <ScrollArea className="min-h-0 min-w-0">
       <section className="mx-auto max-w-3xl px-8 pt-8 pb-10">
-        <header className="flex items-start justify-between gap-6">
-          <div className="min-w-0">
-            <h1 className="text-[19px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.syncTitle")}</h1>
-            <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{t("skill.syncDescription")}</p>
-          </div>
-          <Button variant="ghost" size="sm" className="shrink-0 text-muted-foreground hover:text-foreground" onClick={() => setTargetDialog(true)}><Plus aria-hidden="true" />{t("skill.addTarget")}</Button>
+        <header className="min-w-0">
+          <h1 className="text-[19px] font-semibold tracking-[-0.01em] text-foreground">{t("skill.syncTitle")}</h1>
+          <p className="mt-1.5 text-[13px] leading-relaxed text-muted-foreground">{t("skill.syncDescription")}</p>
         </header>
         {!targets.every((target) => target.rsyncAvailable) && <p className="mt-5 rounded-lg bg-destructive/8 px-4 py-3 text-[12px] leading-relaxed text-destructive">{t("skill.rsyncRequired")}</p>}
-        <div className="mt-5 border-t border-border/50">{targets.map((target) => <TargetRow key={target.id} target={target} skills={skills} busy={busy} onSync={() => void syncTarget(target)} onRemove={() => setDeleteDialog({ target })} onSelectSkills={(item, names) => void selectTargetSkills(item, names)} />)}</div>
-        <p className="mt-6 text-[11px] leading-relaxed text-muted-foreground">{t("skill.metadataHint")}</p>
+        <div className="mt-5 border-t border-border/50">{targets.map((target) => <TargetRow key={target.id} target={target} skills={skills} busy={busy} onSync={() => void syncTarget(target)} onSelectSkills={(item, names) => void selectTargetSkills(item, names)} />)}</div>
+        <p className="mt-6 text-[11px] leading-relaxed text-muted-foreground">{t("skill.targetsLiveInSettings")} {t("skill.metadataHint")}</p>
       </section>
     </ScrollArea> : document ? <div className="flex min-h-0 min-w-0 flex-col">
       <ScrollArea className="min-h-0 flex-1">
@@ -568,8 +530,6 @@ export default function SkillManagerPage({ mode, notify, onOpenInspector }) {
 
     <Dialog open={createDialog} onOpenChange={(open) => !busy && setCreateDialog(open)}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{t("skill.new")}</DialogTitle><DialogDescription>{t("skill.newDescription")}</DialogDescription></DialogHeader><div className="grid gap-4"><div className="grid gap-2"><Label htmlFor="new-skill-name">{t("skill.name")}</Label><Input id="new-skill-name" autoFocus value={createForm.name} onChange={(event) => setCreateForm((current) => ({ ...current, name: event.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-").replace(/-+/g, "-") }))} placeholder="release-notes" /></div><div className="grid gap-2"><Label htmlFor="new-skill-description">{t("skill.description")}</Label><Textarea id="new-skill-description" className="min-h-20" value={createForm.description} onChange={(event) => setCreateForm((current) => ({ ...current, description: event.target.value }))} placeholder={t("skill.descriptionPlaceholder")} /></div></div><DialogFooter><Button variant="outline" disabled={Boolean(busy)} onClick={() => setCreateDialog(false)}>{t("common.cancel")}</Button><Button disabled={Boolean(busy)} onClick={createSkill}>{busy === "create" ? t("common.processing") : t("common.add")}</Button></DialogFooter></DialogContent></Dialog>
 
-    <Dialog open={targetDialog} onOpenChange={(open) => !busy && setTargetDialog(open)}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{t("skill.addTarget")}</DialogTitle><DialogDescription>{t("skill.addTargetDescription")}</DialogDescription></DialogHeader><div className="grid gap-4"><div className="grid gap-2"><Label htmlFor="target-name">{t("skill.targetName")}</Label><Input id="target-name" autoFocus value={targetForm.name} onChange={(event) => setTargetForm((current) => ({ ...current, name: event.target.value }))} placeholder="Cursor" /></div><div className="grid gap-2"><Label htmlFor="target-path">{t("skill.targetPath")}</Label><Input id="target-path" className="font-mono text-xs" value={targetForm.path} onChange={(event) => setTargetForm((current) => ({ ...current, path: event.target.value }))} placeholder="~/.cursor/skills" /></div></div><DialogFooter><Button variant="outline" disabled={Boolean(busy)} onClick={() => setTargetDialog(false)}>{t("common.cancel")}</Button><Button disabled={Boolean(busy)} onClick={addTarget}>{busy === "add-target" ? t("common.processing") : t("common.add")}</Button></DialogFooter></DialogContent></Dialog>
-
-    <Dialog open={Boolean(deleteDialog)} onOpenChange={(open) => !open && !busy && setDeleteDialog(null)}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{deleteDialog?.target ? t("skill.removeTargetTitle", { name: deleteDialog.target.name }) : t("skill.deleteTitle", { name: deleteDialog?.name })}</DialogTitle><DialogDescription>{deleteDialog?.target ? t("skill.removeTargetDescription") : t("skill.deleteDescription")}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={Boolean(busy)} onClick={() => setDeleteDialog(null)}>{t("common.cancel")}</Button><Button variant="destructive" disabled={Boolean(busy)} onClick={deleteDialog?.target ? removeTarget : deleteSkill}>{busy ? t("common.processing") : deleteDialog?.target ? t("common.remove") : t("common.delete")}</Button></DialogFooter></DialogContent></Dialog>
+    <Dialog open={Boolean(deleteDialog)} onOpenChange={(open) => !open && !busy && setDeleteDialog(null)}><DialogContent className="sm:max-w-md"><DialogHeader><DialogTitle>{t("skill.deleteTitle", { name: deleteDialog?.name })}</DialogTitle><DialogDescription>{t("skill.deleteDescription")}</DialogDescription></DialogHeader><DialogFooter><Button variant="outline" disabled={Boolean(busy)} onClick={() => setDeleteDialog(null)}>{t("common.cancel")}</Button><Button variant="destructive" disabled={Boolean(busy)} onClick={deleteSkill}>{busy ? t("common.processing") : t("common.delete")}</Button></DialogFooter></DialogContent></Dialog>
   </div>;
 }

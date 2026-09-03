@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Plus, X } from "lucide-react";
 import { SettingsBinding, SkillBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import AuxWindowCloseButton from "./AuxWindowCloseButton.jsx";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Switch } from "@/components/ui/switch";
@@ -240,7 +241,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
         {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
         {section === "runtime" && <InterfaceSettings i18n={i18n} mode={mode} notify={notify} />}
         {section === "harness" && <HarnessSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} harnessConfigurations={harnessConfigurations} />}
-        {section === "skills" && <SkillSyncSettings mode={mode} notify={notify} />}
+        {section === "skills" && <SkillSyncSettings mode={mode} notify={notify} ask={ask} />}
         {section === "terminal" && <TerminalSettings value={draft.terminal || demoSettings.terminal} setValue={(next) => setSectionValue("terminal", next)} errors={errorsByField} />}
         {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
         {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
@@ -257,11 +258,12 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
 // library's own metadata, beside the digests and timestamps that describe each
 // copy. This section is a second surface onto that store rather than a second
 // copy of it, so it saves on its own instead of joining the page's draft.
-function SkillSyncSettings({ mode, notify }) {
+function SkillSyncSettings({ mode, notify, ask }) {
   const { t } = useTranslation();
   const [targets, setTargets] = useState([]);
   const [paths, setPaths] = useState({});
   const [busy, setBusy] = useState("");
+  const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: "", path: "" });
 
   const adopt = useCallback((items) => {
@@ -312,6 +314,7 @@ function SkillSyncSettings({ mode, notify }) {
       setTargets((current) => [...current, target]);
       setPaths((current) => ({ ...current, [target.id]: target.path }));
       setForm({ name: "", path: "" });
+      setAdding(false);
       notify("success", t("skill.targetAdded"));
     } catch (error) {
       notify("error", message(error, t));
@@ -333,31 +336,53 @@ function SkillSyncSettings({ mode, notify }) {
     }
   };
 
-  return <SettingsSection title={t("settings.skillTargets")} description={t("settings.skillTargetsDescription")} contentClassName="p-4">
+  return <SettingsSection
+    title={t("settings.skillTargets")}
+    description={t("settings.skillTargetsDescription")}
+    contentClassName="p-4"
+    aside={<SettingsButton tone="muted" compact aria-label={t("skill.addTarget")} title={t("skill.addTarget")} onClick={() => setAdding(true)}><Plus size={14} aria-hidden="true" /></SettingsButton>}
+  >
+    {/* Rows carry the section's surface, the way every other settings group
+        does. Left bare, the card underneath reads as a slab of white against
+        the page rather than as a group of settings. */}
     <div className="grid gap-2">
-      {targets.map((target) => <div className="grid grid-cols-[minmax(120px,160px)_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-muted/35 px-3.5 py-3 max-[720px]:grid-cols-1" key={target.id}>
+      {targets.map((target) => <div className="grid grid-cols-[minmax(110px,150px)_minmax(0,1fr)_auto] items-center gap-4 rounded-lg bg-muted/35 px-4 py-3 max-[720px]:grid-cols-1" key={target.id}>
         <div className="min-w-0">
           <strong className="block truncate text-[13px] font-medium text-foreground">{target.name}</strong>
-          <span className="text-[11px] text-muted-foreground">{target.builtin ? t("settings.skillTargetBuiltin") : t("settings.skillTargetCustom")}</span>
+          {!target.builtin && <span className="text-[11px] text-muted-foreground">{t("settings.skillTargetCustom")}</span>}
         </div>
         <Input
-          className="font-mono text-[12px]"
-          aria-label={t("skill.targetPath")}
+          className="h-8 border-transparent bg-transparent font-mono text-[12px] shadow-none hover:border-input focus-visible:border-ring focus-visible:bg-card"
+          aria-label={`${target.name} · ${t("skill.targetPath")}`}
           disabled={busy === target.id}
           value={paths[target.id] ?? ""}
           onChange={(event) => setPaths((current) => ({ ...current, [target.id]: event.target.value }))}
           onBlur={() => void commitPath(target)}
           onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
         />
-        <SettingsButton tone="muted" compact disabled={Boolean(busy) || target.builtin} className={target.builtin ? "invisible" : ""} aria-label={t("skill.removeTarget", { name: target.name })} onClick={() => void removeTarget(target)}>{t("common.remove")}</SettingsButton>
+        {/* A built-in cannot be removed, so its row keeps the column without
+            offering an action that would have to be refused. */}
+        <Button variant="ghost" size="icon-xs" className={`text-muted-foreground ${target.builtin ? "invisible" : ""}`} disabled={Boolean(busy) || target.builtin} aria-label={t("skill.removeTarget", { name: target.name })} onClick={() => ask({ title: t("skill.removeTargetTitle", { name: target.name }), description: t("skill.removeTargetDescription"), confirmLabel: t("common.remove"), dangerous: true }, () => removeTarget(target))}><X aria-hidden="true" /></Button>
       </div>)}
     </div>
-    <div className="mt-3 grid grid-cols-[minmax(120px,160px)_minmax(0,1fr)_auto] items-center gap-3 max-[720px]:grid-cols-1">
-      <Input aria-label={t("skill.targetName")} placeholder={t("skill.targetName")} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
-      <Input className="font-mono text-[12px]" aria-label={t("skill.targetPath")} placeholder="~/.cursor/skills" value={form.path} onChange={(event) => setForm((current) => ({ ...current, path: event.target.value }))} />
-      <SettingsButton tone="primary" compact disabled={Boolean(busy)} onClick={() => void addTarget()}>{t("skill.addTarget")}</SettingsButton>
-    </div>
-    <p className="mt-4 mb-0 rounded-lg bg-muted/45 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">{t("settings.skillTargetsNote")}</p>
+
+    <Dialog open={adding} onOpenChange={(open) => !busy && setAdding(open)}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader><DialogTitle>{t("skill.addTarget")}</DialogTitle><DialogDescription>{t("skill.addTargetDescription")}</DialogDescription></DialogHeader>
+        <div className="grid gap-4">
+          <SettingsField label={t("skill.targetName")}>
+            <Input autoFocus value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} placeholder="Cursor" />
+          </SettingsField>
+          <SettingsField label={t("skill.targetPath")}>
+            <Input className="font-mono text-[13px]" value={form.path} onChange={(event) => setForm((current) => ({ ...current, path: event.target.value }))} placeholder="~/.cursor/skills" />
+          </SettingsField>
+        </div>
+        <DialogFooter>
+          <SettingsButton tone="muted" disabled={Boolean(busy)} onClick={() => setAdding(false)}>{t("common.cancel")}</SettingsButton>
+          <SettingsButton tone="primary" disabled={Boolean(busy)} onClick={() => void addTarget()}>{busy === "add" ? t("common.processing") : t("common.add")}</SettingsButton>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </SettingsSection>;
 }
 
