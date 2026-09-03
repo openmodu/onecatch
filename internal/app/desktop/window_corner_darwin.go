@@ -11,26 +11,6 @@ package desktop
 #import <WebKit/WebKit.h>
 #import <objc/runtime.h>
 
-@interface OneCatchTitlebarDoubleClickHandler : NSObject <NSGestureRecognizerDelegate>
-@property(nonatomic, assign) NSWindow *window;
-@property(nonatomic, assign) CGFloat titlebarHeight;
-- (void)handleDoubleClick:(NSClickGestureRecognizer *)recognizer;
-@end
-
-@implementation OneCatchTitlebarDoubleClickHandler
-- (BOOL)gestureRecognizerShouldBegin:(NSGestureRecognizer *)recognizer {
-	NSPoint point = [recognizer locationInView:recognizer.view];
-	return point.y >= NSHeight(recognizer.view.bounds) - self.titlebarHeight;
-}
-
-- (void)handleDoubleClick:(NSClickGestureRecognizer *)recognizer {
-	if (recognizer.state == NSGestureRecognizerStateEnded) {
-		[self.window zoom:nil];
-	}
-}
-@end
-
-static char onecatchTitlebarDoubleClickKey;
 static char onecatchSidebarMaterialKey;
 static char onecatchCanvasBackdropKey;
 static char onecatchSidebarBorderKey;
@@ -326,38 +306,6 @@ static void onecatchInstallAppearanceObserver(NSWindow *window) {
 	[observer release];
 }
 
-static void onecatchInstallTitlebarDoubleClick(NSWindow *window) {
-	if (objc_getAssociatedObject(window, &onecatchTitlebarDoubleClickKey) != nil) {
-		return;
-	}
-
-	OneCatchTitlebarDoubleClickHandler *handler = [[OneCatchTitlebarDoubleClickHandler alloc] init];
-	handler.window = window;
-	handler.titlebarHeight = 80.0;
-
-	NSClickGestureRecognizer *recognizer = [[NSClickGestureRecognizer alloc]
-		initWithTarget:handler
-		action:@selector(handleDoubleClick:)];
-	recognizer.numberOfClicksRequired = 2;
-	recognizer.buttonMask = 0x1;
-	recognizer.delegate = handler;
-	// Without this, every single click in the window costs the user a second one.
-	// delaysPrimaryMouseButtonEvents defaults to YES, which holds left-button
-	// events back from the view hierarchy until the recognizer decides whether it
-	// matched. Requiring two clicks to match means a lone click is held for the
-	// double-click interval and then replayed, which the WKWebView underneath
-	// sees as a click that only moves focus — so the control fires on the *next*
-	// click instead. gestureRecognizerShouldBegin only limits where the gesture
-	// may begin (the titlebar strip); it does not stop the delay from applying to
-	// the whole content view. Setting NO lets the recognizer still observe the
-	// titlebar double-click without ever intercepting ordinary clicks.
-	recognizer.delaysPrimaryMouseButtonEvents = NO;
-	[window.contentView addGestureRecognizer:recognizer];
-	objc_setAssociatedObject(window, &onecatchTitlebarDoubleClickKey, handler, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-	[recognizer release];
-	[handler release];
-}
-
 static BOOL onecatchAcceptsFirstMouse(id self, SEL _cmd, NSEvent *event) {
 	return YES;
 }
@@ -388,7 +336,9 @@ static void onecatchInstallNativeWindowChrome(void *handle) {
 	if (window == nil || window.contentView == nil) {
 		return;
 	}
-	onecatchInstallTitlebarDoubleClick(window);
+	// Wails handles titlebar double-clicks from the frontend's drag regions and
+	// reads the macOS preference. A content-view gesture recognizer cannot see
+	// DOM no-drag controls and would also capture panel toolbars below the titlebar.
 	onecatchInstallAppearanceObserver(window);
 	onecatchEnableClickToFocus(window);
 	onecatchMatchBackgroundToCanvas(window);

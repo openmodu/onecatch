@@ -27,7 +27,7 @@ import {
   writeSidebarWidth,
 } from "../sidebarLayout.js";
 import { buildSidebarTaskEntries, visibleSidebarTaskEntries } from "../sidebarNavigation.js";
-import { desktopPlatform, primaryShortcutLabel } from "../platform.js";
+import { primaryShortcutLabel } from "../platform.js";
 import { collapsePanelAtCompact } from "../responsiveLayout.js";
 import { directAgentWorkflowID } from "../runtimeHarnesses.js";
 import RuntimeHarnessIcon from "./RuntimeHarnessIcon.jsx";
@@ -55,22 +55,6 @@ function initialSidebarWidth() {
 function initialSidebarCollapsed() {
   if (typeof window === "undefined") return false;
   try { return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true"; } catch { return false; }
-}
-
-function disarmMacSidebarDoubleClick(event) {
-  if (desktopPlatform() !== "macos" || event.button !== 0 || event.detail !== 2) return;
-  const dragHandle = event.currentTarget;
-  // Wails handles draggable-region double clicks on window capture before
-  // React sees the dblclick event. Disarm only the second press so the first
-  // press can still become a normal window drag.
-  dragHandle.style.setProperty("--wails-draggable", "no-drag");
-  window.setTimeout(() => dragHandle.style.removeProperty("--wails-draggable"), 500);
-}
-
-function finishMacSidebarDoubleClick(event) {
-  if (desktopPlatform() !== "macos") return;
-  event.preventDefault();
-  event.currentTarget.style.removeProperty("--wails-draggable");
 }
 
 // Its workspace and task data only change when the active project changes or a
@@ -517,7 +501,7 @@ function Sidebar({
     {/* Traffic-light gutter. The window hides its titlebar and insets the
         lights, so the rail has to reserve this strip itself — and it doubles
         as the window's drag handle, which is why it is empty. */}
-    <div className="drag-region h-[52px] shrink-0 cursor-default" aria-hidden="true" onMouseDown={disarmMacSidebarDoubleClick} onDoubleClick={finishMacSidebarDoubleClick} />
+    <div className="drag-region h-[52px] shrink-0 cursor-default" aria-hidden="true" />
     <div className="brand grid h-[46px] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-5"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">OneCatch</strong><div className="flex items-center gap-0.5"><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent ${workspaceSearchOpen ? "active bg-accent text-foreground" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={15} strokeWidth={2} aria-hidden="true" /></Action><Action size="compact" tone="muted" className="add-workspace size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent hover:text-foreground" aria-label={t("sidebar.addProject")} title={t("sidebar.addProject")} onClick={onAddWorkspace}><Plus size={15} strokeWidth={2} aria-hidden="true" /></Action></div></div>
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
       <div className="project-sections min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-2 pb-3">
