@@ -222,7 +222,7 @@ test("remote worker settings remain a disabled coming-soon preview", async () =>
   assert.match(settings, /pointer-events-none select-none opacity-50 grayscale/);
   assert.match(settings, /<SettingsSwitchRow checked=\{enabled\} disabled/);
   assert.doesNotMatch(settings, /function ExperimentalSettings[^]*workersPanel/);
-  assert.match(settings, /!\["runtime", "experimental"\]\.includes\(section\)/, "the preview section must not expose reset actions");
+  assert.match(settings, /!\["runtime", "skills", "experimental"\]\.includes\(section\)/, "sections that own their own store have nothing for reset to restore");
   assert.match(i18n, /"settings\.comingSoon": "敬请期待"/);
   assert.match(i18n, /"settings\.comingSoon": "Coming soon"/);
 });

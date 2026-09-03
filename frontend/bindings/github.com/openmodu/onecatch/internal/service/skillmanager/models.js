@@ -116,6 +116,50 @@ export class SaveSkillInput {
 }
 
 /**
+ * SetTargetSkillsInput narrows what a target receives. An empty list means the
+ * whole library, which is what every target did before selection existed and
+ * what a newly added target still does.
+ */
+export class SetTargetSkillsInput {
+    /**
+     * Creates a new SetTargetSkillsInput instance.
+     * @param {Partial<SetTargetSkillsInput>} [$$source = {}] - The source object to create the SetTargetSkillsInput.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("skills" in $$source)) {
+            /**
+             * @member
+             * @type {string[]}
+             */
+            this["skills"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SetTargetSkillsInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SetTargetSkillsInput}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("skills" in $$parsedSource) {
+            $$parsedSource["skills"] = $$createField1_0($$parsedSource["skills"]);
+        }
+        return new SetTargetSkillsInput(/** @type {Partial<SetTargetSkillsInput>} */($$parsedSource));
+    }
+}
+
+/**
  * Skill is the lightweight list representation of one directory-backed skill.
  */
 export class Skill {
@@ -414,7 +458,7 @@ export class SyncResult {
      * @returns {SyncResult}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType0;
+        const $$createField0_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("target" in $$parsedSource) {
             $$parsedSource["target"] = $$createField0_0($$parsedSource["target"]);
@@ -509,6 +553,25 @@ export class SyncTarget {
              */
             this["rsyncAvailable"] = false;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * Skills is the configured subset this target receives. Empty means the
+             * whole library; TotalSkills already counts only what will be sent, so the
+             * two together say both "3 of 5 chosen" and "2 of those 3 are current".
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["skills"] = undefined;
+        }
+        if (!("librarySkills" in $$source)) {
+            /**
+             * LibrarySkills is the size of the whole library, so a partial selection
+             * can be described without a second call.
+             * @member
+             * @type {number}
+             */
+            this["librarySkills"] = 0;
+        }
 
         Object.assign(this, $$source);
     }
@@ -519,10 +582,62 @@ export class SyncTarget {
      * @returns {SyncTarget}
      */
     static createFrom($$source = {}) {
+        const $$createField11_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("skills" in $$parsedSource) {
+            $$parsedSource["skills"] = $$createField11_0($$parsedSource["skills"]);
+        }
         return new SyncTarget(/** @type {Partial<SyncTarget>} */($$parsedSource));
     }
 }
 
+/**
+ * UpdateTargetInput repoints an existing target. A built-in target keeps its
+ * name — only the directory is the user's to choose, which is how Settings
+ * points Codex or Claude Code at a non-default install.
+ */
+export class UpdateTargetInput {
+    /**
+     * Creates a new UpdateTargetInput instance.
+     * @param {Partial<UpdateTargetInput>} [$$source = {}] - The source object to create the UpdateTargetInput.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["name"] = undefined;
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UpdateTargetInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UpdateTargetInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new UpdateTargetInput(/** @type {Partial<UpdateTargetInput>} */($$parsedSource));
+    }
+}
+
 // Private type creation functions
-const $$createType0 = SyncTarget.createFrom;
+const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = SyncTarget.createFrom;

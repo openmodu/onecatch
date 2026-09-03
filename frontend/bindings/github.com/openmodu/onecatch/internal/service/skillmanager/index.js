@@ -6,10 +6,12 @@ export {
     AddTargetInput,
     SaveSkillFileInput,
     SaveSkillInput,
+    SetTargetSkillsInput,
     Skill,
     SkillDocument,
     SkillFileContent,
     SkillFileEntry,
     SyncResult,
-    SyncTarget
+    SyncTarget,
+    UpdateTargetInput
 } from "./models.js";

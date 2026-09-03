@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
 import { ChevronDown } from "lucide-react";
-import { SettingsBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
+import { SettingsBinding, SkillBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import AuxWindowCloseButton from "./AuxWindowCloseButton.jsx";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,10 +29,11 @@ import { codexEffortValues, codexServiceTierValues, demoClaudeConfiguration, dem
 import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
 import { ConfirmDialog } from "./components/settings/ConfirmDialog.jsx";
 import { demoSettings } from "./settingsDefaults.js";
+import { demoSyncTargets } from "./skills.js";
 import { usesCompactAuxiliaryChrome } from "./platform.js";
 import { appUpdatePercent, useAppUpdate } from "./appUpdate.js";
 
-const sectionMeta = (t) => ["runtime", "harness", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
+const sectionMeta = (t) => ["runtime", "harness", "skills", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const message = (error, t) => String(error?.message || error || t("common.unknownError")).replace(/^Error:\s*/, "");
 const bytes = (value = 0) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : value < 1073741824 ? `${(value / 1048576).toFixed(1)} MB` : `${(value / 1073741824).toFixed(1)} GB`;
@@ -231,12 +232,15 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
       <section className="px-7 pt-[64px] pb-10">
         <header className="drag-region mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0"><SettingsKicker>{t("settings.localSettings")}</SettingsKicker><h1 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h1><p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p></div>
-          <div className="no-drag flex shrink-0 items-center gap-2.5"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span>{!["runtime", "experimental"].includes(section) && <SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton>}</div>
+          <div className="no-drag flex shrink-0 items-center gap-2.5"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span>{/* Sections that own their own store have nothing in the settings draft
+              for Reset to restore. */}
+          {!["runtime", "skills", "experimental"].includes(section) && <SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton>}</div>
         </header>
         {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><SettingsButton tone="muted" onClick={reload}>{t("settings.reload")}</SettingsButton></div>}
         {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
         {section === "runtime" && <InterfaceSettings i18n={i18n} mode={mode} notify={notify} />}
         {section === "harness" && <HarnessSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} harnessConfigurations={harnessConfigurations} />}
+        {section === "skills" && <SkillSyncSettings mode={mode} notify={notify} />}
         {section === "terminal" && <TerminalSettings value={draft.terminal || demoSettings.terminal} setValue={(next) => setSectionValue("terminal", next)} errors={errorsByField} />}
         {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
         {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
@@ -247,6 +251,114 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
     </ScrollArea>
     <ConfirmDialog dialog={dialog} busy={confirming} onCancel={closeDialog} onConfirm={acceptDialog} />
   </div>;
+}
+
+// Sync targets are not part of the settings document: they live in the skills
+// library's own metadata, beside the digests and timestamps that describe each
+// copy. This section is a second surface onto that store rather than a second
+// copy of it, so it saves on its own instead of joining the page's draft.
+function SkillSyncSettings({ mode, notify }) {
+  const { t } = useTranslation();
+  const [targets, setTargets] = useState([]);
+  const [paths, setPaths] = useState({});
+  const [busy, setBusy] = useState("");
+  const [form, setForm] = useState({ name: "", path: "" });
+
+  const adopt = useCallback((items) => {
+    const list = items || [];
+    setTargets(list);
+    setPaths(Object.fromEntries(list.map((target) => [target.id, target.path])));
+  }, []);
+
+  const load = useCallback(async () => {
+    if (mode === "demo") { adopt(demoSyncTargets); return; }
+    try {
+      adopt(await SkillBinding.ScanSyncTargets());
+    } catch (error) {
+      notify("error", message(error, t));
+    }
+  }, [adopt, mode, notify, t]);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const commitPath = async (target) => {
+    const path = (paths[target.id] || "").trim();
+    if (!path || path === target.path) { setPaths((current) => ({ ...current, [target.id]: target.path })); return; }
+    setBusy(target.id);
+    try {
+      if (mode === "demo") {
+        setTargets((current) => current.map((item) => item.id === target.id ? { ...item, path } : item));
+      } else {
+        const updated = await SkillBinding.UpdateSyncTarget({ id: target.id, path });
+        setTargets((current) => current.map((item) => item.id === target.id ? updated : item));
+      }
+      notify("success", t("settings.skillTargetUpdated", { name: target.name }));
+    } catch (error) {
+      // A refused path must not stay in the field pretending it was accepted.
+      setPaths((current) => ({ ...current, [target.id]: target.path }));
+      notify("error", message(error, t));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const addTarget = async () => {
+    if (!form.name.trim() || !form.path.trim()) { notify("error", t("skill.targetFieldsRequired")); return; }
+    setBusy("add");
+    try {
+      const target = mode === "demo"
+        ? { ...form, id: `custom-${Date.now()}`, builtin: false, exists: false, status: "missing", syncedSkills: 0, totalSkills: 0, librarySkills: 0, rsyncAvailable: true }
+        : await SkillBinding.AddSyncTarget({ name: form.name.trim(), path: form.path.trim() });
+      setTargets((current) => [...current, target]);
+      setPaths((current) => ({ ...current, [target.id]: target.path }));
+      setForm({ name: "", path: "" });
+      notify("success", t("skill.targetAdded"));
+    } catch (error) {
+      notify("error", message(error, t));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  const removeTarget = async (target) => {
+    setBusy(target.id);
+    try {
+      if (mode !== "demo") await SkillBinding.RemoveSyncTarget(target.id);
+      setTargets((current) => current.filter((item) => item.id !== target.id));
+      notify("success", t("skill.targetRemoved"));
+    } catch (error) {
+      notify("error", message(error, t));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  return <SettingsSection title={t("settings.skillTargets")} description={t("settings.skillTargetsDescription")} contentClassName="p-4">
+    <div className="grid gap-2">
+      {targets.map((target) => <div className="grid grid-cols-[minmax(120px,160px)_minmax(0,1fr)_auto] items-center gap-3 rounded-lg bg-muted/35 px-3.5 py-3 max-[720px]:grid-cols-1" key={target.id}>
+        <div className="min-w-0">
+          <strong className="block truncate text-[13px] font-medium text-foreground">{target.name}</strong>
+          <span className="text-[11px] text-muted-foreground">{target.builtin ? t("settings.skillTargetBuiltin") : t("settings.skillTargetCustom")}</span>
+        </div>
+        <Input
+          className="font-mono text-[12px]"
+          aria-label={t("skill.targetPath")}
+          disabled={busy === target.id}
+          value={paths[target.id] ?? ""}
+          onChange={(event) => setPaths((current) => ({ ...current, [target.id]: event.target.value }))}
+          onBlur={() => void commitPath(target)}
+          onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+        />
+        <SettingsButton tone="muted" compact disabled={Boolean(busy) || target.builtin} className={target.builtin ? "invisible" : ""} aria-label={t("skill.removeTarget", { name: target.name })} onClick={() => void removeTarget(target)}>{t("common.remove")}</SettingsButton>
+      </div>)}
+    </div>
+    <div className="mt-3 grid grid-cols-[minmax(120px,160px)_minmax(0,1fr)_auto] items-center gap-3 max-[720px]:grid-cols-1">
+      <Input aria-label={t("skill.targetName")} placeholder={t("skill.targetName")} value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} />
+      <Input className="font-mono text-[12px]" aria-label={t("skill.targetPath")} placeholder="~/.cursor/skills" value={form.path} onChange={(event) => setForm((current) => ({ ...current, path: event.target.value }))} />
+      <SettingsButton tone="primary" compact disabled={Boolean(busy)} onClick={() => void addTarget()}>{t("skill.addTarget")}</SettingsButton>
+    </div>
+    <p className="mt-4 mb-0 rounded-lg bg-muted/45 px-3.5 py-3 text-xs leading-relaxed text-muted-foreground">{t("settings.skillTargetsNote")}</p>
+  </SettingsSection>;
 }
 
 function InterfaceSettings({ i18n, mode, notify }) {

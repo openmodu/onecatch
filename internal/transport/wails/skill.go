@@ -41,6 +41,12 @@ func (b *SkillBinding) ScanSyncTargets() ([]skillmanager.SyncTarget, error) {
 func (b *SkillBinding) AddSyncTarget(input skillmanager.AddTargetInput) (skillmanager.SyncTarget, error) {
 	return b.service.AddSkillSyncTarget(input)
 }
+func (b *SkillBinding) UpdateSyncTarget(input skillmanager.UpdateTargetInput) (skillmanager.SyncTarget, error) {
+	return b.service.UpdateSkillSyncTarget(input)
+}
+func (b *SkillBinding) SetSyncTargetSkills(input skillmanager.SetTargetSkillsInput) (skillmanager.SyncTarget, error) {
+	return b.service.SetSkillSyncTargetSkills(input)
+}
 func (b *SkillBinding) RemoveSyncTarget(id string) error {
 	return b.service.RemoveSkillSyncTarget(id)
 }

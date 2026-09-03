@@ -8,6 +8,7 @@ import { applyDebugFrames } from "./skillWorkspace.js";
 const page = readFileSync(new URL("./SkillManagerPage.jsx", import.meta.url), "utf8");
 const inspector = readFileSync(new URL("./components/inspectors/SkillFilesInspector.jsx", import.meta.url), "utf8");
 const debugPanel = readFileSync(new URL("./components/SkillDebugPanel.jsx", import.meta.url), "utf8");
+const settings = readFileSync(new URL("./SettingsPage.jsx", import.meta.url), "utf8");
 
 test("new skill template emits valid matching frontmatter", () => {
   const source = newSkillTemplate("release-notes", "Write concise\n release notes");
@@ -101,4 +102,29 @@ test("streamed debug frames replace their slot instead of appending", () => {
   // Malformed frames are ignored rather than corrupting the transcript.
   assert.deepEqual(applyDebugFrames(events, [{ index: -1, event: { text: "x" } }, { index: 0 }]), events);
   assert.equal(applyDebugFrames(events, []), events);
+});
+
+test("sync targets are configured in settings and filled from the skills page", () => {
+  // Paths and membership are two different questions, so they live where each
+  // is answered: the directory in Settings, the contents beside the library.
+  assert.match(settings, /function SkillSyncSettings/);
+  assert.match(settings, /SkillBinding\.UpdateSyncTarget\(\{ id: target\.id, path \}\)/);
+  assert.match(settings, /"skills", "terminal"/, "Skills is a settings section of its own");
+  assert.doesNotMatch(settings, /SetSyncTargetSkills/, "choosing skills belongs to the skills page");
+
+  assert.match(page, /SkillBinding\.SetSyncTargetSkills\(\{ id: target\.id, skills: selection \}\)/);
+  assert.match(page, /<DropdownMenuCheckboxItem/, "a target's skills are picked, not typed");
+  assert.doesNotMatch(page, /UpdateSyncTarget/, "repointing a target belongs to settings");
+
+  // Both surfaces read the same demo fixture, so the browser preview cannot
+  // show two different libraries.
+  assert.match(settings, /import \{ demoSyncTargets \} from "\.\/skills\.js"/);
+  assert.match(page, /demoSyncTargets/);
+});
+
+test("an empty selection means the whole library on both sides of the wire", () => {
+  // The page collapses "everything ticked" back to no selection so the target
+  // keeps following the library as skills are added.
+  assert.match(page, /names\.length === skills\.length \? \[\] : names/);
+  assert.match(page, /const everything = selection\.length === 0/);
 });

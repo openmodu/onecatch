@@ -206,6 +206,22 @@ func (a *Service) AddSkillSyncTarget(input skillmanager.AddTargetInput) (skillma
 	return manager.AddTarget(input)
 }
 
+func (a *Service) UpdateSkillSyncTarget(input skillmanager.UpdateTargetInput) (skillmanager.SyncTarget, error) {
+	manager, err := a.skillManager()
+	if err != nil {
+		return skillmanager.SyncTarget{}, err
+	}
+	return manager.UpdateTarget(input)
+}
+
+func (a *Service) SetSkillSyncTargetSkills(input skillmanager.SetTargetSkillsInput) (skillmanager.SyncTarget, error) {
+	manager, err := a.skillManager()
+	if err != nil {
+		return skillmanager.SyncTarget{}, err
+	}
+	return manager.SetTargetSkills(input)
+}
+
 func (a *Service) RemoveSkillSyncTarget(id string) error {
 	manager, err := a.skillManager()
 	if err != nil {

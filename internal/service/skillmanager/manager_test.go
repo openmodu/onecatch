@@ -296,3 +296,131 @@ func TestManagerGuardsSkillFileEdits(t *testing.T) {
 		t.Fatal("expected a binary file to be refused")
 	}
 }
+
+func TestManagerSyncsOnlyTheSelectedSkills(t *testing.T) {
+	manager, err := New(filepath.Join(t.TempDir(), ".onecatch", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	manager.lookPath = func(string) (string, error) { return "/usr/bin/rsync", nil }
+	var copied []string
+	manager.run = func(_ context.Context, _ string, args ...string) ([]byte, error) {
+		source := args[len(args)-2]
+		destination := args[len(args)-1]
+		copied = append(copied, filepath.Base(filepath.Clean(source)))
+		if err := os.MkdirAll(destination, 0o700); err != nil {
+			return nil, err
+		}
+		entries, err := os.ReadDir(filepath.Clean(source))
+		if err != nil {
+			return nil, err
+		}
+		for _, entry := range entries {
+			data, readErr := os.ReadFile(filepath.Join(filepath.Clean(source), entry.Name()))
+			if readErr != nil {
+				return nil, readErr
+			}
+			if err := os.WriteFile(filepath.Join(filepath.Clean(destination), entry.Name()), data, 0o600); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	}
+	for _, name := range []string{"alpha", "beta", "gamma"} {
+		if _, err := manager.Create(SaveSkillInput{Name: name, Content: skillSource(name, "Do "+name)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	destination := filepath.Join(t.TempDir(), "agent", "skills")
+	target, err := manager.AddTarget(AddTargetInput{Name: "Agent", Path: destination})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if target.TotalSkills != 3 || len(target.Skills) != 0 {
+		t.Fatalf("a new target receives the whole library: %#v", target)
+	}
+
+	narrowed, err := manager.SetTargetSkills(SetTargetSkillsInput{ID: target.ID, Skills: []string{"alpha", "gamma", "ghost", "alpha"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(narrowed.Skills, []string{"alpha", "gamma"}) {
+		t.Fatalf("unknown and duplicate names must not be stored: %#v", narrowed.Skills)
+	}
+	if narrowed.TotalSkills != 2 || narrowed.LibrarySkills != 3 {
+		t.Fatalf("a target counts its own subset against the library: %#v", narrowed)
+	}
+
+	result, err := manager.Sync(context.Background(), target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SyncedSkills != 2 {
+		t.Fatalf("only the selection is copied: %d", result.SyncedSkills)
+	}
+	if !reflect.DeepEqual(copied, []string{"alpha", "gamma"}) {
+		t.Fatalf("beta must not be copied: %#v", copied)
+	}
+	if _, err := os.Stat(filepath.Join(destination, "beta")); !os.IsNotExist(err) {
+		t.Fatal("an unselected skill must not appear at the target")
+	}
+	if result.Target.Status != "synced" {
+		t.Fatalf("a fully copied selection is synced, not partial: %q", result.Target.Status)
+	}
+
+	// Clearing the selection restores the whole library.
+	restored, err := manager.SetTargetSkills(SetTargetSkillsInput{ID: target.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(restored.Skills) != 0 || restored.TotalSkills != 3 {
+		t.Fatalf("an empty selection means everything: %#v", restored)
+	}
+}
+
+func TestManagerRepointsBuiltinAndCustomTargets(t *testing.T) {
+	manager, err := New(filepath.Join(t.TempDir(), ".onecatch", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(t.TempDir(), "elsewhere", "skills")
+	updated, err := manager.UpdateTarget(UpdateTargetInput{ID: "codex", Path: moved})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.Path != moved || !updated.Builtin {
+		t.Fatalf("a built-in target keeps its identity and takes the new path: %#v", updated)
+	}
+	targets, err := manager.ScanTargets()
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex, ok := findSyncTarget(targets, "codex")
+	if !ok || codex.Path != moved {
+		t.Fatalf("the override must survive a rescan: %#v", targets)
+	}
+	if len(targets) != 3 {
+		t.Fatalf("repointing a built-in must not add a second entry: %d targets", len(targets))
+	}
+
+	// The same validation an added target gets applies to a repointed one.
+	if _, err := manager.UpdateTarget(UpdateTargetInput{ID: "codex", Path: manager.Root()}); err == nil {
+		t.Fatal("a target inside the library must be refused")
+	}
+	if _, err := manager.UpdateTarget(UpdateTargetInput{ID: "codex", Path: "relative/path"}); err == nil {
+		t.Fatal("a relative target must be refused")
+	}
+	if _, err := manager.UpdateTarget(UpdateTargetInput{ID: "missing", Path: moved}); err == nil {
+		t.Fatal("an unknown target must be refused")
+	}
+}
+
+func findSyncTarget(targets []SyncTarget, id string) (SyncTarget, bool) {
+	for _, target := range targets {
+		if target.ID == id {
+			return target, true
+		}
+	}
+	return SyncTarget{}, false
+}

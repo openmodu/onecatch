@@ -38,3 +38,11 @@ export function parseSkillDocument(content) {
   }
   return { frontmatter, body: text.slice(match[0].length) };
 }
+
+// Shared by the Skills workspace and the Settings section that configures the
+// same targets, so the browser preview cannot show two different libraries.
+export const demoSyncTargets = [
+  { id: "codex", name: "Codex", path: "~/.codex/skills", builtin: true, exists: true, status: "synced", syncedSkills: 5, totalSkills: 5, librarySkills: 5, skills: [], lastSyncedAt: new Date().toISOString(), rsyncAvailable: true },
+  { id: "claude", name: "Claude Code", path: "~/.claude/skills", builtin: true, exists: false, status: "missing", syncedSkills: 0, totalSkills: 2, librarySkills: 5, skills: ["release-notes", "code-review"], rsyncAvailable: true },
+  { id: "modu", name: "Modu", path: "~/.modu/skills", builtin: true, exists: true, status: "out-of-sync", syncedSkills: 3, totalSkills: 5, librarySkills: 5, skills: [], lastSyncedAt: new Date(Date.now() - 86_400_000).toISOString(), rsyncAvailable: true },
+];

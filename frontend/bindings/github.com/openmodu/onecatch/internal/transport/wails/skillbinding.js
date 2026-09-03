@@ -126,6 +126,16 @@ export function ScanSyncTargets() {
 }
 
 /**
+ * @param {skillmanager$0.SetTargetSkillsInput} input
+ * @returns {$CancellablePromise<skillmanager$0.SyncTarget>}
+ */
+export function SetSyncTargetSkills(input) {
+    return $Call.ByID(3171952302, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
  * @param {string} runID
  * @returns {$CancellablePromise<void>}
  */
@@ -150,6 +160,16 @@ export function Sync(id) {
 export function UpdateSkill(input) {
     return $Call.ByID(1157215936, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType1($result);
+    }));
+}
+
+/**
+ * @param {skillmanager$0.UpdateTargetInput} input
+ * @returns {$CancellablePromise<skillmanager$0.SyncTarget>}
+ */
+export function UpdateSyncTarget(input) {
+    return $Call.ByID(745781037, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
     }));
 }
 

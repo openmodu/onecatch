@@ -89,6 +89,23 @@ type AddTargetInput struct {
 	Path string `json:"path"`
 }
 
+// UpdateTargetInput repoints an existing target. A built-in target keeps its
+// name — only the directory is the user's to choose, which is how Settings
+// points Codex or Claude Code at a non-default install.
+type UpdateTargetInput struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+	Path string `json:"path"`
+}
+
+// SetTargetSkillsInput narrows what a target receives. An empty list means the
+// whole library, which is what every target did before selection existed and
+// what a newly added target still does.
+type SetTargetSkillsInput struct {
+	ID     string   `json:"id"`
+	Skills []string `json:"skills"`
+}
+
 // SyncTarget is a scanned external Agent Skills directory.
 type SyncTarget struct {
 	ID             string     `json:"id"`
@@ -102,6 +119,13 @@ type SyncTarget struct {
 	LastSyncedAt   *time.Time `json:"lastSyncedAt,omitempty"`
 	LastError      string     `json:"lastError,omitempty"`
 	RsyncAvailable bool       `json:"rsyncAvailable"`
+	// Skills is the configured subset this target receives. Empty means the
+	// whole library; TotalSkills already counts only what will be sent, so the
+	// two together say both "3 of 5 chosen" and "2 of those 3 are current".
+	Skills []string `json:"skills,omitempty"`
+	// LibrarySkills is the size of the whole library, so a partial selection
+	// can be described without a second call.
+	LibrarySkills int `json:"librarySkills"`
 }
 
 type SyncResult struct {
@@ -128,6 +152,13 @@ type metadataFile struct {
 	Version       int                       `json:"version"`
 	Targets       map[string]targetMetadata `json:"targets"`
 	CustomTargets []targetDefinition        `json:"customTargets,omitempty"`
+	// TargetPaths overrides a built-in target's default directory. Built-ins
+	// are defined in code, so an override is the only place a user-chosen path
+	// for one can live.
+	TargetPaths map[string]string `json:"targetPaths,omitempty"`
+	// Selections is the subset of the library each target receives, keyed by
+	// target id. A target with no entry receives everything.
+	Selections map[string][]string `json:"selections,omitempty"`
 }
 
 type commandRunner func(context.Context, string, ...string) ([]byte, error)
@@ -629,7 +660,7 @@ func (m *Manager) ScanTargets() ([]SyncTarget, error) {
 	if err != nil {
 		return nil, err
 	}
-	definitions := append(m.builtinTargets(), metadata.CustomTargets...)
+	definitions := targetDefinitions(m, metadata)
 	items := make([]SyncTarget, 0, len(definitions))
 	for _, definition := range definitions {
 		item, scanErr := m.scanTargetLocked(metadata, definition, skills)
@@ -649,7 +680,7 @@ func (m *Manager) Sync(ctx context.Context, id string) (SyncResult, error) {
 	if err != nil {
 		return SyncResult{}, err
 	}
-	definition, ok := findTarget(id, append(m.builtinTargets(), metadata.CustomTargets...))
+	definition, ok := findTarget(id, targetDefinitions(m, metadata))
 	if !ok {
 		return SyncResult{}, fmt.Errorf("sync target %q not found", id)
 	}
@@ -661,10 +692,13 @@ func (m *Manager) Sync(ctx context.Context, id string) (SyncResult, error) {
 	if err != nil {
 		return SyncResult{}, errors.New("rsync is not available on PATH")
 	}
-	skills, err := m.listLocked()
+	library, err := m.listLocked()
 	if err != nil {
 		return SyncResult{}, err
 	}
+	// Only the chosen subset is copied. Skills the target is not configured to
+	// receive are left alone rather than deleted: another tool may own them.
+	skills := selectSkills(metadata.Selections[id], library)
 	if err := os.MkdirAll(definition.Path, 0o700); err != nil {
 		return SyncResult{}, fmt.Errorf("create sync target: %w", err)
 	}
@@ -696,13 +730,16 @@ func (m *Manager) Sync(ctx context.Context, id string) (SyncResult, error) {
 	if err := m.saveMetadataLocked(metadata); err != nil {
 		return SyncResult{}, err
 	}
-	target, scanErr := m.scanTargetLocked(metadata, definition, skills)
+	target, scanErr := m.scanTargetLocked(metadata, definition, library)
 	if scanErr != nil {
 		return SyncResult{}, scanErr
 	}
 	return SyncResult{Target: target, SyncedSkills: len(skills), Output: strings.Join(outputs, "\n")}, nil
 }
 
+// scanTargetLocked reports a target against the subset it is configured to
+// receive: `skills` is the whole library, and everything counted below is what
+// this target actually expects to hold.
 func (m *Manager) scanTargetLocked(metadata metadataFile, definition targetDefinition, skills []Skill) (SyncTarget, error) {
 	if skills == nil {
 		var err error
@@ -711,8 +748,11 @@ func (m *Manager) scanTargetLocked(metadata metadataFile, definition targetDefin
 			return SyncTarget{}, err
 		}
 	}
+	library := len(skills)
+	selection := metadata.Selections[definition.ID]
+	skills = selectSkills(selection, skills)
 	path := expandHome(definition.Path, m.home)
-	item := SyncTarget{ID: definition.ID, Name: definition.Name, Path: path, Builtin: definition.Builtin, TotalSkills: len(skills)}
+	item := SyncTarget{ID: definition.ID, Name: definition.Name, Path: path, Builtin: definition.Builtin, TotalSkills: len(skills), LibrarySkills: library, Skills: selection}
 	_, rsyncErr := m.lookPath("rsync")
 	item.RsyncAvailable = rsyncErr == nil
 	info, statErr := os.Stat(path)
@@ -780,6 +820,133 @@ func (m *Manager) builtinTargets() []targetDefinition {
 		{ID: "claude", Name: "Claude Code", Path: filepath.Join(m.home, ".claude", "skills"), Builtin: true},
 		{ID: "modu", Name: "Modu", Path: filepath.Join(m.home, ".modu", "skills"), Builtin: true},
 	}
+}
+
+// targetDefinitions is every target the library knows about, with a built-in's
+// directory replaced by the user's override when one was configured.
+func targetDefinitions(m *Manager, metadata metadataFile) []targetDefinition {
+	builtins := m.builtinTargets()
+	for index, definition := range builtins {
+		if path := strings.TrimSpace(metadata.TargetPaths[definition.ID]); path != "" {
+			builtins[index].Path = path
+		}
+	}
+	return append(builtins, metadata.CustomTargets...)
+}
+
+// selectSkills narrows the library to what a target is configured to receive.
+// Names that no longer exist simply drop out, so deleting a skill never leaves
+// a target pointing at nothing.
+func selectSkills(selection []string, skills []Skill) []Skill {
+	if len(selection) == 0 {
+		return skills
+	}
+	wanted := make(map[string]struct{}, len(selection))
+	for _, name := range selection {
+		wanted[strings.TrimSpace(name)] = struct{}{}
+	}
+	filtered := make([]Skill, 0, len(selection))
+	for _, skill := range skills {
+		if _, ok := wanted[skill.Name]; ok {
+			filtered = append(filtered, skill)
+		}
+	}
+	return filtered
+}
+
+// UpdateTarget repoints a target at a different directory. The path is
+// validated the same way an added target's is, so Settings cannot aim the
+// library at the home directory or at itself.
+func (m *Manager) UpdateTarget(input UpdateTargetInput) (SyncTarget, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	id := strings.TrimSpace(input.ID)
+	metadata, err := m.loadMetadataLocked()
+	if err != nil {
+		return SyncTarget{}, err
+	}
+	definition, ok := findTarget(id, targetDefinitions(m, metadata))
+	if !ok {
+		return SyncTarget{}, fmt.Errorf("sync target %q not found", id)
+	}
+	path, err := m.validateTargetPath(input.Path)
+	if err != nil {
+		return SyncTarget{}, err
+	}
+	if definition.Builtin {
+		if metadata.TargetPaths == nil {
+			metadata.TargetPaths = make(map[string]string)
+		}
+		metadata.TargetPaths[id] = path
+	} else {
+		name := strings.TrimSpace(input.Name)
+		for index, custom := range metadata.CustomTargets {
+			if custom.ID != id {
+				continue
+			}
+			metadata.CustomTargets[index].Path = path
+			if name != "" {
+				metadata.CustomTargets[index].Name = name
+			}
+		}
+	}
+	if err := m.saveMetadataLocked(metadata); err != nil {
+		return SyncTarget{}, err
+	}
+	updated, _ := findTarget(id, targetDefinitions(m, metadata))
+	return m.scanTargetLocked(metadata, updated, nil)
+}
+
+// SetTargetSkills chooses which skills a target receives. Passing no names
+// restores "the whole library" rather than recording an empty selection, so a
+// target can always be put back the way it started.
+func (m *Manager) SetTargetSkills(input SetTargetSkillsInput) (SyncTarget, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	id := strings.TrimSpace(input.ID)
+	metadata, err := m.loadMetadataLocked()
+	if err != nil {
+		return SyncTarget{}, err
+	}
+	definition, ok := findTarget(id, targetDefinitions(m, metadata))
+	if !ok {
+		return SyncTarget{}, fmt.Errorf("sync target %q not found", id)
+	}
+	skills, err := m.listLocked()
+	if err != nil {
+		return SyncTarget{}, err
+	}
+	// Storing only names that exist keeps the record honest; a stale name
+	// would read as a chosen skill that never arrives.
+	known := make(map[string]struct{}, len(skills))
+	for _, skill := range skills {
+		known[skill.Name] = struct{}{}
+	}
+	selection := make([]string, 0, len(input.Skills))
+	seen := make(map[string]struct{}, len(input.Skills))
+	for _, name := range input.Skills {
+		name = strings.TrimSpace(name)
+		if _, ok := known[name]; !ok {
+			continue
+		}
+		if _, duplicate := seen[name]; duplicate {
+			continue
+		}
+		seen[name] = struct{}{}
+		selection = append(selection, name)
+	}
+	if metadata.Selections == nil {
+		metadata.Selections = make(map[string][]string)
+	}
+	if len(selection) == 0 || len(selection) == len(skills) {
+		delete(metadata.Selections, id)
+	} else {
+		metadata.Selections[id] = selection
+	}
+	if err := m.saveMetadataLocked(metadata); err != nil {
+		return SyncTarget{}, err
+	}
+	return m.scanTargetLocked(metadata, definition, skills)
 }
 
 func (m *Manager) loadMetadataLocked() (metadataFile, error) {
