@@ -18,13 +18,7 @@ const frontend = readJSON(join(root, "frontend/package.json"));
 const lock = readJSON(join(root, "frontend/package-lock.json"));
 const declaredRuntime = frontend.dependencies?.["@wailsio/runtime"];
 const lockedRuntime = lock.packages?.["node_modules/@wailsio/runtime"]?.version;
-// beta.10 did not publish a matching npm package. Its release only changes the
-// Linux host and release tooling, so the beta.9 JavaScript runtime remains the
-// upstream-published runtime for that Go release.
-const publishedRuntimeOverrides = new Map([
-  ["v3.0.0-beta.10", "3.0.0-beta.9"],
-]);
-const expectedRuntime = publishedRuntimeOverrides.get(wails.Version) ?? bundledRuntime;
+const expectedRuntime = bundledRuntime;
 
 if (declaredRuntime !== expectedRuntime || lockedRuntime !== expectedRuntime) {
   console.error([
