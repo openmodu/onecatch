@@ -3,6 +3,13 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.1.12
+
+- Syntax-highlight fenced code blocks in agent responses with a language label toolbar, one-click copy, and a per-block wrap toggle.
+- Map common fence-language aliases to Prism grammars while falling back to escaped plain text for unknown or untrusted language names.
+- Read the live code text when copying (including the latest streamed content) and exclude toolbar labels from the clipboard, with fallback to the Web Clipboard API and clear copy/error feedback.
+- Keep token colors theme-aware across light and dark modes.
+
 ## 0.1.11
 
 - Render agent thinking as prose in the run timeline instead of dressing it as a tool call, and label a thinking-only group as thinking rather than as zero tool calls.
