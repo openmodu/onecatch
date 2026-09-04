@@ -3,6 +3,10 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.1
+
+- Let embedded Modu runs pause for human input with multi-question cards, suggested choices, custom answers, and an explicit skip path.
+
 ## 0.2.0
 
 - Add a Skills workspace backed by `~/.onecatch/skills`, with an adaptive card library and create, edit, inspect, and delete workflows.
