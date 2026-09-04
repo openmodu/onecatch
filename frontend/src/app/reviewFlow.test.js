@@ -13,7 +13,7 @@ test("file-change cards open the inspector review flow", () => {
   assert.match(timeline, /onReview=\{onReview\}/);
   assert.match(workbench, /onReview=\{openReview\}/);
   assert.match(workbench, /reviewRequest=\{reviewRequest\}/);
-  assert.match(inspector, /if \(reviewRequest > 0\) setTab\("review"\)/);
+  assert.match(inspector, /if \(scope === "task" && reviewRequest > 0\) setTab\("review"\)/, "review auto-focus belongs to the task inspector, not the skills file tree");
 });
 
 test("review combines repository state, diffs and untracked file content", () => {

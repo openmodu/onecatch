@@ -7,6 +7,7 @@ import * as MobileBinding from "./mobilebinding.js";
 import * as NotifyBinding from "./notifybinding.js";
 import * as RuntimeBinding from "./runtimebinding.js";
 import * as SettingsBinding from "./settingsbinding.js";
+import * as SkillBinding from "./skillbinding.js";
 import * as TaskRunBinding from "./taskrunbinding.js";
 import * as TerminalBinding from "./terminalbinding.js";
 import * as UpdateBinding from "./updatebinding.js";
@@ -20,6 +21,7 @@ export {
     NotifyBinding,
     RuntimeBinding,
     SettingsBinding,
+    SkillBinding,
     TaskRunBinding,
     TerminalBinding,
     UpdateBinding,

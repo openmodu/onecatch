@@ -1502,6 +1502,252 @@ export class SearchTasksInput {
     }
 }
 
+export class SkillDebugEvent {
+    /**
+     * Creates a new SkillDebugEvent instance.
+     * @param {Partial<SkillDebugEvent>} [$$source = {}] - The source object to create the SkillDebugEvent.
+     */
+    constructor($$source = {}) {
+        if (!("kind" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["kind"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["text"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Streaming marks an event whose text is still growing, so the renderer
+             * can show a caret instead of presenting a half-written message as final.
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["streaming"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["failed"] = undefined;
+        }
+        if (!("at" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["at"] = "0001-01-01T00:00:00.000Z";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SkillDebugEvent instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SkillDebugEvent}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SkillDebugEvent(/** @type {Partial<SkillDebugEvent>} */($$parsedSource));
+    }
+}
+
+export class SkillDebugInput {
+    /**
+     * Creates a new SkillDebugInput instance.
+     * @param {Partial<SkillDebugInput>} [$$source = {}] - The source object to create the SkillDebugInput.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("prompt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["prompt"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * RunID is chosen by the caller because frames start arriving before the
+             * call returns — there is no earlier moment to hand an identifier back.
+             * An empty RunID runs without streaming and cannot be stopped.
+             * @member
+             * @type {string | undefined}
+             */
+            this["runId"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SkillDebugInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SkillDebugInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SkillDebugInput(/** @type {Partial<SkillDebugInput>} */($$parsedSource));
+    }
+}
+
+/**
+ * SkillDebugRecord is one persisted debug run, newest first on disk.
+ */
+export class SkillDebugRecord {
+    /**
+     * Creates a new SkillDebugRecord instance.
+     * @param {Partial<SkillDebugRecord>} [$$source = {}] - The source object to create the SkillDebugRecord.
+     */
+    constructor($$source = {}) {
+        if (!("runId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["runId"] = "";
+        }
+        if (!("skill" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["skill"] = "";
+        }
+        if (!("prompt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["prompt"] = "";
+        }
+        if (!("startedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["startedAt"] = "0001-01-01T00:00:00.000Z";
+        }
+        if (!("result" in $$source)) {
+            /**
+             * @member
+             * @type {SkillDebugResult}
+             */
+            this["result"] = (new SkillDebugResult());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SkillDebugRecord instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SkillDebugRecord}
+     */
+    static createFrom($$source = {}) {
+        const $$createField4_0 = $$createType22;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("result" in $$parsedSource) {
+            $$parsedSource["result"] = $$createField4_0($$parsedSource["result"]);
+        }
+        return new SkillDebugRecord(/** @type {Partial<SkillDebugRecord>} */($$parsedSource));
+    }
+}
+
+export class SkillDebugResult {
+    /**
+     * Creates a new SkillDebugResult instance.
+     * @param {Partial<SkillDebugResult>} [$$source = {}] - The source object to create the SkillDebugResult.
+     */
+    constructor($$source = {}) {
+        if (!("succeeded" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["succeeded"] = false;
+        }
+        if (!("output" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["output"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * Stopped separates a run the user interrupted from one that failed. Both
+             * end early, but only a failure is worth reporting as an error.
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["stopped"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["sessionId"] = undefined;
+        }
+        if (!("durationMs" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["durationMs"] = 0;
+        }
+        if (!("usage" in $$source)) {
+            /**
+             * @member
+             * @type {agentrun$0.Usage}
+             */
+            this["usage"] = (new agentrun$0.Usage());
+        }
+        if (!("events" in $$source)) {
+            /**
+             * @member
+             * @type {SkillDebugEvent[]}
+             */
+            this["events"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SkillDebugResult instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SkillDebugResult}
+     */
+    static createFrom($$source = {}) {
+        const $$createField5_0 = $$createType23;
+        const $$createField6_0 = $$createType25;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("usage" in $$parsedSource) {
+            $$parsedSource["usage"] = $$createField5_0($$parsedSource["usage"]);
+        }
+        if ("events" in $$parsedSource) {
+            $$parsedSource["events"] = $$createField6_0($$parsedSource["events"]);
+        }
+        return new SkillDebugResult(/** @type {Partial<SkillDebugResult>} */($$parsedSource));
+    }
+}
+
 export class StorageCategory {
     /**
      * Creates a new StorageCategory instance.
@@ -1588,7 +1834,7 @@ export class StorageUsage {
      * @returns {StorageUsage}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType23;
+        const $$createField2_0 = $$createType27;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("categories" in $$parsedSource) {
             $$parsedSource["categories"] = $$createField2_0($$parsedSource["categories"]);
@@ -1636,7 +1882,7 @@ export class TaskSearchItem {
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType6;
         const $$createField1_0 = $$createType7;
-        const $$createField2_0 = $$createType24;
+        const $$createField2_0 = $$createType28;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("task" in $$parsedSource) {
             $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
@@ -1681,7 +1927,7 @@ export class TaskSearchPage {
      * @returns {TaskSearchPage}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType26;
+        const $$createField0_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
@@ -1801,8 +2047,8 @@ export class WorkerStatus {
      * @returns {WorkerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType27;
-        const $$createField1_0 = $$createType28;
+        const $$createField0_0 = $$createType31;
+        const $$createField1_0 = $$createType32;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worker" in $$parsedSource) {
             $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
@@ -1851,9 +2097,9 @@ export class WorkerWorkspaceSetup {
      * @returns {WorkerWorkspaceSetup}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType29;
-        const $$createField1_0 = $$createType30;
-        const $$createField2_0 = $$createType30;
+        const $$createField0_0 = $$createType33;
+        const $$createField1_0 = $$createType34;
+        const $$createField2_0 = $$createType34;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("mapping" in $$parsedSource) {
             $$parsedSource["mapping"] = $$createField0_0($$parsedSource["mapping"]);
@@ -2074,7 +2320,7 @@ export class WorkspaceStatus {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType7;
-        const $$createField1_0 = $$createType30;
+        const $$createField1_0 = $$createType34;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -2158,12 +2404,16 @@ const $$createType18 = $Create.Array($$createType17);
 const $$createType19 = settings$0.RuntimeSettings.createFrom;
 const $$createType20 = agentrun$0.PermissionRequest.createFrom;
 const $$createType21 = $Create.Nullable($$createType20);
-const $$createType22 = StorageCategory.createFrom;
-const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = $Create.Nullable($$createType5);
-const $$createType25 = TaskSearchItem.createFrom;
-const $$createType26 = $Create.Array($$createType25);
-const $$createType27 = worker$0.Info.createFrom;
-const $$createType28 = worker$0.Health.createFrom;
-const $$createType29 = worker$0.WorkspaceMapping.createFrom;
-const $$createType30 = workspaces$0.GitSnapshot.createFrom;
+const $$createType22 = SkillDebugResult.createFrom;
+const $$createType23 = agentrun$0.Usage.createFrom;
+const $$createType24 = SkillDebugEvent.createFrom;
+const $$createType25 = $Create.Array($$createType24);
+const $$createType26 = StorageCategory.createFrom;
+const $$createType27 = $Create.Array($$createType26);
+const $$createType28 = $Create.Nullable($$createType5);
+const $$createType29 = TaskSearchItem.createFrom;
+const $$createType30 = $Create.Array($$createType29);
+const $$createType31 = worker$0.Info.createFrom;
+const $$createType32 = worker$0.Health.createFrom;
+const $$createType33 = worker$0.WorkspaceMapping.createFrom;
+const $$createType34 = workspaces$0.GitSnapshot.createFrom;

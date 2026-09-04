@@ -141,6 +141,7 @@ func Run() {
 		application.NewService(wailstransport.NewGitBinding(service)),
 		application.NewService(wailstransport.NewRuntimeBinding(service)),
 		application.NewService(wailstransport.NewSettingsBinding(service)),
+		application.NewService(wailstransport.NewSkillBinding(service)),
 		application.NewService(workspaceBinding),
 		application.NewService(wailstransport.NewWorkflowBinding(service)),
 		application.NewService(wailstransport.NewTaskRunBinding(service)),
@@ -215,6 +216,9 @@ func Run() {
 	})
 	terminalService.SetEmitter(func(name string, payload any) {
 		wailsApp.Event.Emit(name, payload)
+	})
+	service.SetSkillDebugEmitter(func(frame desktopservice.SkillDebugFrame) {
+		wailsApp.Event.Emit(desktopservice.SkillDebugEventName, frame)
 	})
 	auxiliaryWindows = newAuxiliaryWindowController(wailsApp)
 	unsubscribeRunStream := streamHub.Subscribe(func(frame runstream.Frame) {

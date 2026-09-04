@@ -46,7 +46,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, inspectorToggleVersion, integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onSteerInstruction, onLoadEarlierTranscript, onPermissionDecision, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, attachments, inspectorCollapsed, inspectorToggleVersion, inspectorScope = "task", integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, alternateContent = null, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onSteerInstruction, onLoadEarlierTranscript, onPermissionDecision, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
@@ -191,6 +191,16 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const clampInspectorWidth = (width) => {
     return Math.max(MIN_INSPECTOR_WIDTH, Math.min(width, inspectorMaximumWidth()));
   };
+  // The skills aside holds a file editor and a debug transcript, not a status
+  // list. At 380px neither is readable, so it opens at the same half-workbench
+  // width review already asks for.
+  useEffect(() => {
+    if (inspectorScope !== "skills" || inspectorCollapsed) return;
+    const workbenchWidth = workbenchRef.current?.getBoundingClientRect().width || window.innerWidth;
+    setInspectorMaximized(false);
+    setInspectorWidth(clampInspectorWidth(preferredReviewInspectorWidth(workbenchWidth)));
+  }, [inspectorCollapsed, inspectorScope]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const openReview = () => {
     const workbenchWidth = workbenchRef.current?.getBoundingClientRect().width || window.innerWidth;
     setInspectorMaximized(false);
@@ -282,7 +292,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       <button type="button" className="workbench-inspector-dock-toggle" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><PanelRightClose size={16} strokeWidth={2} aria-hidden="true" /></button>
     </div>}
     <section className="conversation-workspace flex min-h-0 min-w-0 flex-col bg-background">
-      {newTaskOpen ? <NewTaskView
+      {alternateContent || (newTaskOpen ? <NewTaskView
         workspaceID={workspaceID}
         workflows={workflows}
         runtimes={runtimes}
@@ -328,7 +338,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           workspace={workspace}
           onEditWorkspace={onEditWorkspace}
         />}
-      </> : null}
+      </> : null)}
       {terminalMounted && <Suspense fallback={null}><TerminalDock ref={setTerminalDock} mode={mode} workspace={workspace} preferences={terminalPreferences} notify={notify} onVisibilityChange={onTerminalVisibilityChange} /></Suspense>}
     </section>
 
@@ -352,6 +362,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
 
     {!inspectorCollapsed && <InspectorPanel
       className="workbench-inspector open min-h-0 min-w-0"
+      scope={inspectorScope}
       mode={mode}
       workspaceID={workspaceID}
       remoteFS={workspace?.remoteFs}
@@ -366,7 +377,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
       onDirtyChange={setFileInspectorDirty}
       actions={<>
         {!integratedDesktopTitlebar && inspectorMaximized && <button type="button" className={`workbench-terminal-toggle ${terminalVisible ? "active" : ""}`} aria-label={terminalVisible ? t("terminal.collapse") : t("terminal.open")} aria-pressed={terminalVisible} title={terminalVisible ? t("terminal.collapse") : t("terminal.open")} onClick={toggleTerminal}><SquareTerminal size={15} strokeWidth={2} aria-hidden="true" /></button>}
-        {onDetachInspector && <button type="button" className="workbench-inspector-detach" aria-label={t("inspector.detach")} title={t("inspector.detachHint")} onClick={detachInspector}><SquareArrowOutUpRight size={15} strokeWidth={2} aria-hidden="true" /></button>}
+        {inspectorScope === "task" && onDetachInspector && <button type="button" className="workbench-inspector-detach" aria-label={t("inspector.detach")} title={t("inspector.detachHint")} onClick={detachInspector}><SquareArrowOutUpRight size={15} strokeWidth={2} aria-hidden="true" /></button>}
         <button type="button" className="workbench-inspector-maximize" aria-label={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} aria-pressed={inspectorMaximized} title={inspectorMaximized ? t("inspector.restore") : t("inspector.maximize")} onClick={toggleInspectorMaximized}>{inspectorMaximized ? <Minimize2 size={15} strokeWidth={2} aria-hidden="true" /> : <Maximize2 size={15} strokeWidth={2} aria-hidden="true" />}</button>
         <button type="button" className="workbench-inspector-close" aria-label={t("inspector.collapse")} aria-expanded="true" aria-controls="workbench-inspector-content" title={t("inspector.collapse")} onClick={closeInspector}><X size={16} strokeWidth={2} aria-hidden="true" /></button>
       </>}

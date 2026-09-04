@@ -5,7 +5,7 @@ import test from "node:test";
 const source = readFileSync(new URL("./SettingsPage.jsx", import.meta.url), "utf8");
 
 test("places Harness between runtime and terminal in settings navigation", () => {
-  assert.match(source, /\["runtime", "harness", "terminal"/);
+  assert.match(source, /\["runtime", "harness", "skills", "terminal"/, "Skills sits between the harness section and the shell");
 });
 
 test("keeps appearance separate and moves all runtime controls into Harness", () => {

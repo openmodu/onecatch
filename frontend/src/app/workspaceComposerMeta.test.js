@@ -22,7 +22,7 @@ test("clicking the project name edits the existing workspace instead of replacin
 });
 
 test("task titlebar actions stay aligned to the right after moving workspace status below", () => {
-  assert.match(app, /inspectorCollapsed && <button[^>]+className=\{`no-drag ml-auto grid size-7[\s\S]{0,800}?<SquareTerminal/);
+  assert.match(app, /inspectorCollapsed\)\) && <button[^>]+className=\{`no-drag ml-auto grid size-7[\s\S]{0,800}?<SquareTerminal/);
 });
 
 test("workspace metadata keeps a visible gap below both composer cards", () => {
