@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.0
+
+- Add a Skills workspace backed by `~/.onecatch/skills`, with an adaptive card library and create, edit, inspect, and delete workflows.
+- Debug individual skills through Modu with streamed output, cancellation, and persisted run history.
+- Discover Codex, Claude Code, Modu Code, and custom skill directories, then sync selected skills with rsync while tracking per-target metadata and status.
+
 ## 0.1.13
 
 - Stop double-clicks on the macOS review toolbar and other content areas from resizing the window; let Wails handle double-clicks only in marked titlebar regions.
