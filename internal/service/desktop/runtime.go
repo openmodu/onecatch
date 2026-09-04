@@ -219,6 +219,15 @@ func (r *RuntimeRegistry) InspectConfiguration(ctx context.Context, runtime agen
 	return engine.InspectConfiguration(ctx, runtime, cwd, environment)
 }
 
+// ReadAccountUsage uses the current long-lived registry configuration while
+// the runner itself opens a short-lived provider connection for the read.
+func (r *RuntimeRegistry) ReadAccountUsage(ctx context.Context, runtime agentrun.Runtime, cwd string, environment []string) (agentrun.AccountUsage, error) {
+	r.mu.RLock()
+	engine := r.engine
+	r.mu.RUnlock()
+	return engine.ReadAccountUsage(ctx, runtime, cwd, environment)
+}
+
 func (r *RuntimeRegistry) Available(runtime agentrun.Runtime) bool {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

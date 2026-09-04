@@ -506,6 +506,7 @@ function Sidebar({
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
       <div className="project-sections min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-2 pb-3">
         <button type="button" className={`skills-navigation-trigger flex h-7 w-full items-center rounded-lg px-2 text-left text-[11px] font-bold text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${view === "skills" && !editor ? "bg-accent" : ""}`} aria-current={view === "skills" && !editor ? "page" : undefined} onClick={() => goToSecondaryView("skills")}>{t("sidebar.skills")}</button>
+        <button type="button" className={`skills-navigation-trigger flex h-7 w-full items-center rounded-lg px-2 text-left text-[11px] font-bold text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${view === "usage" && !editor ? "bg-accent" : ""}`} aria-current={view === "usage" && !editor ? "page" : undefined} onClick={() => goToSecondaryView("usage")}>{t("sidebar.usage")}</button>
         {pinnedTasks.length > 0 && <section className="project-section mb-3 min-w-0 max-w-full" aria-labelledby="pinned-task-heading">
           <div className="flex h-7 items-center px-2 text-[11px] font-bold text-foreground" id="pinned-task-heading">{t("sidebar.pinnedTasks")}</div>
           <div className="flex flex-col">{pinnedTasks.map(renderPinnedTask)}</div>

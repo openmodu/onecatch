@@ -8,6 +8,75 @@ import (
 	"time"
 )
 
+// TestLiveCodexReadsAccountUsage verifies the quota-only app-server request
+// against the installed CLI. It does not start a model turn or spend quota.
+//
+//	ONECATCH_LIVE_USAGE=1 go test ./internal/usecase/agentrun -run TestLiveCodexReadsAccountUsage -v
+func TestLiveCodexReadsAccountUsage(t *testing.T) {
+	if os.Getenv("ONECATCH_LIVE_USAGE") != "1" {
+		t.Skip("set ONECATCH_LIVE_USAGE=1 to run the live Codex usage check")
+	}
+	runner := NewCodexRunner("")
+	if !runner.Available() {
+		t.Skip("codex CLI not installed")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	usage, err := runner.ReadAccountUsage(ctx, t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatalf("read live Codex usage: %v", err)
+	}
+	if usage.Runtime != RuntimeCodex || len(usage.RateLimits) == 0 || len(usage.DailyUsage) == 0 {
+		t.Fatalf("incomplete live Codex usage: %+v", usage)
+	}
+	t.Logf("Codex account reported %d rate-limit buckets and %d active days", len(usage.RateLimits), len(usage.DailyUsage))
+}
+
+// TestLiveLocalHarnessesReadAccountUsage checks the real session layouts
+// without starting a model turn. Empty histories are valid; a successfully
+// decoded device-scoped snapshot is the contract under test.
+//
+//	ONECATCH_LIVE_USAGE=1 go test ./internal/usecase/agentrun -run TestLiveLocalHarnessesReadAccountUsage -v
+func TestLiveLocalHarnessesReadAccountUsage(t *testing.T) {
+	if os.Getenv("ONECATCH_LIVE_USAGE") != "1" {
+		t.Skip("set ONECATCH_LIVE_USAGE=1 to run local harness usage checks")
+	}
+	tests := []struct {
+		runtime Runtime
+		runner  Runner
+	}{
+		{RuntimeClaude, NewClaudeRunner("")},
+		{RuntimePi, NewPiRunner("")},
+		{RuntimeGrok, NewGrokRunner("")},
+		{RuntimeModu, NewModuRunner("")},
+	}
+	for _, test := range tests {
+		t.Run(string(test.runtime), func(t *testing.T) {
+			if !test.runner.Available() {
+				t.Skip("runtime is not installed")
+			}
+			reader, ok := test.runner.(AccountUsageReader)
+			if !ok {
+				t.Fatal("runner does not implement AccountUsageReader")
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			usage, err := reader.ReadAccountUsage(ctx, "", os.Environ())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if usage.Runtime != test.runtime || usage.Scope != AccountUsageScopeDevice {
+				t.Fatalf("unexpected snapshot identity: %+v", usage)
+			}
+			var total int64
+			for _, bucket := range usage.DailyUsage {
+				total += bucket.Tokens
+			}
+			t.Logf("%s reported %d active days and %d local tokens", test.runtime, len(usage.DailyUsage), total)
+		})
+	}
+}
+
 // TestLiveCodexProducesFile drives the real codex CLI end to end: it asks the
 // agent to write a file into a fresh workspace and asserts both that the file
 // lands on disk and that the runner captured a final message. It is skipped

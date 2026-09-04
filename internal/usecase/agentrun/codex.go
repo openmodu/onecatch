@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -96,6 +97,22 @@ type CodexConfiguration struct {
 // This includes project, user, system, and plugin-provided Skills after Codex
 // has applied its own precedence and enabled-state rules.
 func (r *CodexRunner) ListSkills(ctx context.Context, cwd string, environment []string) ([]Skill, error) {
+	raw, err := r.callAppServer(ctx, cwd, environment, "skills/list", map[string]any{"cwds": []string{cwd}, "forceReload": true})
+	if err != nil {
+		return nil, fmt.Errorf("list Codex skills: %w", err)
+	}
+	skills, err := decodeCodexSkills(raw, cwd)
+	if err != nil {
+		return nil, fmt.Errorf("decode Codex skills: %w", err)
+	}
+	return skills, nil
+}
+
+// callAppServer performs the initialize handshake and one request against a
+// short-lived Codex app-server. Account/configuration reads should not borrow a
+// warm task process: its environment belongs to that task and may differ from
+// the settings currently being inspected.
+func (r *CodexRunner) callAppServer(ctx context.Context, cwd string, environment []string, method string, params any) (json.RawMessage, error) {
 	cmd := exec.CommandContext(ctx, r.binary, "app-server", "--listen", "stdio://")
 	configureProcessWindow(cmd)
 	if info, err := os.Stat(cwd); err == nil && info.IsDir() {
@@ -151,19 +168,14 @@ func (r *CodexRunner) ListSkills(ctx context.Context, cwd string, environment []
 			if err := encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
 				return nil, err
 			}
-			params := map[string]any{"cwds": []string{cwd}, "forceReload": true}
-			if err := encoder.Encode(map[string]any{"id": 2, "method": "skills/list", "params": params}); err != nil {
+			if err := encoder.Encode(map[string]any{"id": 2, "method": method, "params": params}); err != nil {
 				return nil, err
 			}
 		case 2:
 			if len(envelope.Error) > 0 {
-				return nil, fmt.Errorf("list Codex skills: %s", envelope.Error)
+				return nil, fmt.Errorf("%s: %s", method, envelope.Error)
 			}
-			skills, err := decodeCodexSkills(envelope.Result, cwd)
-			if err != nil {
-				return nil, fmt.Errorf("decode Codex skills: %w", err)
-			}
-			return skills, nil
+			return envelope.Result, nil
 		}
 	}
 	if err := scanner.Err(); err != nil && ctx.Err() == nil {
@@ -172,7 +184,91 @@ func (r *CodexRunner) ListSkills(ctx context.Context, cwd string, environment []
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	return nil, fmt.Errorf("Codex app-server ended before skills were available%s", stderr.tail())
+	return nil, fmt.Errorf("Codex app-server ended before %s completed%s", method, stderr.tail())
+}
+
+// ReadAccountUsage fetches the signed-in Codex account's rate-limit snapshot
+// and account-wide daily token history through app-server. Neither request
+// starts a thread or consumes model quota.
+func (r *CodexRunner) ReadAccountUsage(ctx context.Context, cwd string, environment []string) (AccountUsage, error) {
+	raw, err := r.callAppServer(ctx, cwd, environment, "account/rateLimits/read", nil)
+	if err != nil {
+		return AccountUsage{}, fmt.Errorf("read Codex account usage: %w", err)
+	}
+	var response struct {
+		RateLimits     codexAccountRateLimit            `json:"rateLimits"`
+		RateLimitsByID map[string]codexAccountRateLimit `json:"rateLimitsByLimitId"`
+		ResetCredits   *AccountRateLimitResetCredits    `json:"rateLimitResetCredits"`
+	}
+	if err := json.Unmarshal(raw, &response); err != nil {
+		return AccountUsage{}, fmt.Errorf("decode Codex account usage: %w", err)
+	}
+	usage := AccountUsage{
+		Runtime: RuntimeCodex, Scope: AccountUsageScopeAccount, Source: "app-server",
+		FetchedAt: r.now(), ResetCredits: response.ResetCredits,
+	}
+	dailyRaw, err := r.callAppServer(ctx, cwd, environment, "account/usage/read", nil)
+	if err != nil {
+		return AccountUsage{}, fmt.Errorf("read Codex daily usage: %w", err)
+	}
+	var activity struct {
+		DailyUsage []AccountDailyUsage `json:"dailyUsageBuckets"`
+		Summary    AccountUsageSummary `json:"summary"`
+	}
+	if err := json.Unmarshal(dailyRaw, &activity); err != nil {
+		return AccountUsage{}, fmt.Errorf("decode Codex daily usage: %w", err)
+	}
+	usage.DailyUsage = activity.DailyUsage
+	usage.Summary = activity.Summary
+	sort.Slice(usage.DailyUsage, func(i, j int) bool {
+		return usage.DailyUsage[i].StartDate < usage.DailyUsage[j].StartDate
+	})
+	if len(response.RateLimitsByID) == 0 {
+		usage.RateLimits = append(usage.RateLimits, response.RateLimits.accountRateLimit())
+		return usage, nil
+	}
+	keys := make([]string, 0, len(response.RateLimitsByID))
+	for id := range response.RateLimitsByID {
+		keys = append(keys, id)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i] == string(RuntimeCodex) || keys[j] == string(RuntimeCodex) {
+			return keys[i] == string(RuntimeCodex)
+		}
+		return keys[i] < keys[j]
+	})
+	for _, id := range keys {
+		limit := response.RateLimitsByID[id].accountRateLimit()
+		if limit.ID == "" {
+			limit.ID = id
+		}
+		usage.RateLimits = append(usage.RateLimits, limit)
+	}
+	return usage, nil
+}
+
+// codexAccountRateLimit keeps provider wire names at the adapter boundary;
+// AccountRateLimit remains suitable for other harnesses and for the desktop
+// binding instead of leaking app-server's limitId/limitName vocabulary.
+type codexAccountRateLimit struct {
+	ID                   string                  `json:"limitId"`
+	Name                 string                  `json:"limitName"`
+	PlanType             string                  `json:"planType"`
+	Primary              *AccountRateLimitWindow `json:"primary"`
+	Secondary            *AccountRateLimitWindow `json:"secondary"`
+	Credits              *AccountCredits         `json:"credits"`
+	IndividualLimit      *AccountSpendControl    `json:"individualLimit"`
+	SpendControlReached  *bool                   `json:"spendControlReached"`
+	RateLimitReachedType string                  `json:"rateLimitReachedType"`
+}
+
+func (l codexAccountRateLimit) accountRateLimit() AccountRateLimit {
+	return AccountRateLimit{
+		ID: l.ID, Name: l.Name, PlanType: l.PlanType,
+		Primary: l.Primary, Secondary: l.Secondary, Credits: l.Credits,
+		IndividualLimit: l.IndividualLimit, SpendControlReached: l.SpendControlReached,
+		RateLimitReachedType: l.RateLimitReachedType,
+	}
 }
 
 func decodeCodexSkills(raw json.RawMessage, _ string) ([]Skill, error) {

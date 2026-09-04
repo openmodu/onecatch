@@ -230,6 +230,9 @@ type Service struct {
 	skillDebugMu      sync.Mutex
 	skillDebugEmit    func(SkillDebugFrame)
 	skillDebugRuns    map[string]*skillDebugRun
+	accountUsageCache *accountUsageCache
+	accountUsageSync  sync.Mutex
+	accountUsageWG    sync.WaitGroup
 }
 
 func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitrepo.Inspector) *Service {
@@ -245,9 +248,12 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 		remoteFSProbe:     canonicalRemoteFSRoot,
 		remoteCredentials: sshcredentials.KeyringStore{},
 		remoteGitExecutor: newRemoteGitExecutor,
+		accountUsageCache: newAccountUsageCache(store.Data.Paths.Root),
 	}
 	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
 	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, preparations: newRemotePreparationRegistry()})
+	app.accountUsageWG.Add(1)
+	go app.accountUsageSyncLoop()
 	return app
 }
 
@@ -259,6 +265,7 @@ func (a *Service) Close() error {
 	}
 	a.mu.Unlock()
 	a.wg.Wait()
+	a.accountUsageWG.Wait()
 	_ = a.runtimes.Close()
 	return a.store.Close()
 }
@@ -340,6 +347,67 @@ func (a *Service) ListSkills(ctx context.Context, runtime, cwd string) ([]agentr
 	listCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	return a.runtimes.ListSkills(listCtx, runtimeID, cwd, allowedEnvironment(runtimeSettings.EnvironmentAllowlist))
+}
+
+// GetAccountUsage returns provider-level daily activity and rolling quota
+// information for one enabled local harness. Each adapter owns its coverage:
+// Codex reports the signed-in account, while local-only harnesses reconstruct
+// the sessions visible on this device.
+func (a *Service) GetAccountUsage(ctx context.Context, runtime string) (agentrun.AccountUsage, error) {
+	return a.getAccountUsage(ctx, runtime, false)
+}
+
+// SyncAccountUsage bypasses the 30-minute cache and persists a new provider
+// snapshot. It backs the explicit "sync now" action in the desktop UI.
+func (a *Service) SyncAccountUsage(ctx context.Context, runtime string) (agentrun.AccountUsage, error) {
+	return a.getAccountUsage(ctx, runtime, true)
+}
+
+func (a *Service) getAccountUsage(ctx context.Context, runtime string, force bool) (agentrun.AccountUsage, error) {
+	runtimeID := agentrun.Runtime(strings.TrimSpace(runtime))
+	if !runtimeID.Valid() {
+		return agentrun.AccountUsage{}, coded("runtime_not_found", "Unknown runtime")
+	}
+	settings, err := a.settings.Get(ctx)
+	if err != nil {
+		return agentrun.AccountUsage{}, mapSettingsError(err)
+	}
+	runtimeSettings, ok := settings.Runtimes[string(runtimeID)]
+	if !ok {
+		return agentrun.AccountUsage{}, coded("runtime_not_found", "Unknown runtime")
+	}
+	if !runtimeSettings.Enabled {
+		return agentrun.AccountUsage{}, coded("runtime_disabled", string(runtimeID)+" is disabled")
+	}
+	cached, cachedOK, fresh := a.accountUsageCache.get(runtimeID, accountUsageSyncInterval)
+	if !force && fresh {
+		return cached, nil
+	}
+
+	// Provider reads and cache writes are serialized. A second page load that
+	// arrived while the first was syncing rechecks freshness after the lock and
+	// returns the newly written snapshot instead of spawning another CLI.
+	a.accountUsageSync.Lock()
+	defer a.accountUsageSync.Unlock()
+	if !force {
+		if current, _, currentFresh := a.accountUsageCache.get(runtimeID, accountUsageSyncInterval); currentFresh {
+			return current, nil
+		}
+	}
+	home, _ := os.UserHomeDir()
+	readCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	usage, err := a.runtimes.ReadAccountUsage(readCtx, runtimeID, home, allowedEnvironment(runtimeSettings.EnvironmentAllowlist))
+	if err != nil {
+		if !force && cachedOK {
+			return cached, nil
+		}
+		return agentrun.AccountUsage{}, coded("runtime_usage_failed", err.Error())
+	}
+	if err := a.accountUsageCache.put(runtimeID, usage); err != nil {
+		return agentrun.AccountUsage{}, coded("runtime_usage_cache_failed", err.Error())
+	}
+	return usage, nil
 }
 
 // CheckRuntime answers "is this runtime available right now", so unlike

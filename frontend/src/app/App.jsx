@@ -39,6 +39,7 @@ import Modal from "./components/Modal.jsx";
 // workflow editor into the first load the user waits through.
 const SettingsPage = lazy(() => import("./SettingsPage.jsx"));
 const SkillManagerPage = lazy(() => import("./SkillManagerPage.jsx"));
+const UsagePage = lazy(() => import("./UsagePage.jsx"));
 const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary.jsx"));
 const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
 const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
@@ -1409,6 +1410,8 @@ function App() {
   // real filesystem path and keeps the mono face.
   const location = view === "settings"
     ? { label: t("sidebar.settings"), path: "~/.onecatch" }
+    : view === "usage"
+      ? { label: t("usage.title"), path: "" }
     : view === "skills"
       ? { label: t("skill.workspaceTitle"), path: "" }
     : selectedWorkspace
@@ -1506,7 +1509,7 @@ function App() {
       taskStatus={selectedTaskStatus}
       taskActive={runDetail?.active}
       showTaskStatus={Boolean(taskTitleVisible && selectedTask.workflowId && selectedTask.workflowId !== directAgentWorkflowID)}
-      showLock={view !== "skills"}
+      showLock={view !== "skills" && view !== "usage"}
       showWorkbenchControls={!editor && (view === "tasks" || view === "skills")}
       terminalVisible={terminalVisible}
       inspectorCollapsed={activeInspectorCollapsed}
@@ -1584,7 +1587,7 @@ function App() {
             <strong className="shrink-0 text-[13px] font-semibold text-foreground">{location.label}</strong>
             {location.path && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{location.path}</span>}
           </span>}
-          {view !== "skills" && <button type="button" className="no-drag relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
+          {view !== "skills" && view !== "usage" && <button type="button" className="no-drag relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
           </button>}
@@ -1645,7 +1648,7 @@ function App() {
           onPermissionDecision={respondPermission}
           onUserInputResponse={respondUserInput}
           notify={notify}
-        /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
+        /> : view === "usage" ? <Suspense fallback={<ViewLoading />}><UsagePage mode={mode} runtimes={runtimes} /></Suspense> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
       </main>
     </div>
     {workspaceModal && <Modal className="workspace-create-dialog max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[480px]" title={t(workspaceEditingID ? "workspace.editTitle" : "workspace.addTitle")} subtitle={t(workspaceEditingID ? "workspace.editSubtitle" : "workspace.addSubtitle")} onClose={() => { if (busy !== "workspace") { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceEditingID(""); setWorkspaceModal(false); } }}>

@@ -397,6 +397,36 @@ func TestCodexRunnerListsEnabledSkills(t *testing.T) {
 	}
 }
 
+func TestCodexRunnerReadsAccountUsage(t *testing.T) {
+	runner := NewCodexRunner(stubCodexAppServerBinary(t))
+	runner.now = fixedClock()
+	usage, err := runner.ReadAccountUsage(context.Background(), t.TempDir(), os.Environ())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if usage.Runtime != RuntimeCodex || !usage.FetchedAt.Equal(fixedClock()()) {
+		t.Fatalf("usage identity = %+v", usage)
+	}
+	if len(usage.RateLimits) != 2 {
+		t.Fatalf("rate limits = %+v", usage.RateLimits)
+	}
+	if general := usage.RateLimits[0]; general.ID != "codex" || general.PlanType != "pro" || general.Primary == nil || general.Primary.UsedPercent != 41 || general.Primary.WindowDurationMins != 300 || general.Secondary == nil || general.Secondary.UsedPercent != 18 {
+		t.Fatalf("general rate limit = %+v", general)
+	}
+	if model := usage.RateLimits[1]; model.ID != "codex_spark" || model.Name != "GPT Spark" || model.Primary == nil || model.Primary.UsedPercent != 7 {
+		t.Fatalf("model rate limit = %+v", model)
+	}
+	if usage.ResetCredits == nil || usage.ResetCredits.AvailableCount != 1 || len(usage.ResetCredits.Credits) != 1 || usage.ResetCredits.Credits[0].Title != "Full reset" {
+		t.Fatalf("reset credits = %+v", usage.ResetCredits)
+	}
+	if len(usage.DailyUsage) != 3 || usage.DailyUsage[0].StartDate != "2026-08-31" || usage.DailyUsage[2].Tokens != 35_438_162 {
+		t.Fatalf("daily usage = %+v", usage.DailyUsage)
+	}
+	if usage.Summary.LifetimeTokens == nil || *usage.Summary.LifetimeTokens != 9_009_894_771 || usage.Summary.CurrentStreakDays == nil || *usage.Summary.CurrentStreakDays != 40 {
+		t.Fatalf("usage summary = %+v", usage.Summary)
+	}
+}
+
 func TestReferencedSkillsRequireWhitespaceBoundaryAndDeduplicate(t *testing.T) {
 	skills := []Skill{{Name: "git-commit", Path: "/skills/git-commit/SKILL.md"}}
 	got := referencedSkills("price$git-commit $git-commit then $git-commit", skills)
@@ -417,8 +447,14 @@ func stubCodexAppServerBinary(t *testing.T) string {
 [ -n "$ONECATCH_CODEX_ARGV" ] && printf '%s\n' "$*" > "$ONECATCH_CODEX_ARGV"
 while IFS= read -r line; do
   [ -n "$ONECATCH_CODEX_CAPTURE" ] && printf '%s\n' "$line" >> "$ONECATCH_CODEX_CAPTURE"
-  case "$line" in
-    *'"id":1'*)
+	case "$line" in
+	    *'"method":"account/rateLimits/read"'*)
+	      printf '%s\n' '{"id":2,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":41,"windowDurationMins":300,"resetsAt":1788515254},"secondary":{"usedPercent":18,"windowDurationMins":10080,"resetsAt":1789102054},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"planType":"pro"},"rateLimitsByLimitId":{"codex_spark":{"limitId":"codex_spark","limitName":"GPT Spark","primary":{"usedPercent":7,"windowDurationMins":300,"resetsAt":1788515254},"secondary":null,"credits":null,"planType":"pro"},"codex":{"limitId":"codex","primary":{"usedPercent":41,"windowDurationMins":300,"resetsAt":1788515254},"secondary":{"usedPercent":18,"windowDurationMins":10080,"resetsAt":1789102054},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"planType":"pro"}},"rateLimitResetCredits":{"availableCount":1,"credits":[{"id":"reset-1","resetType":"codexRateLimits","status":"available","grantedAt":1787358622,"expiresAt":1789950622,"title":"Full reset","description":"Granted reset"}]}}}'
+	      ;;
+	    *'"method":"account/usage/read"'*)
+	      printf '%s\n' '{"id":2,"result":{"summary":{"lifetimeTokens":9009894771,"peakDailyTokens":356078815,"longestRunningTurnSec":68956,"currentStreakDays":40,"longestStreakDays":85},"dailyUsageBuckets":[{"startDate":"2026-09-03","tokens":35438162},{"startDate":"2026-08-31","tokens":162223006},{"startDate":"2026-09-02","tokens":161911133}],"threadUsage":null}}'
+	      ;;
+	    *'"id":1'*)
       printf '%s\n' '{"id":1,"result":{}}'
       ;;
     *'"method":"skills/list"'*)

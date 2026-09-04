@@ -6,6 +6,570 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+export class AccountCredits {
+    /**
+     * Creates a new AccountCredits instance.
+     * @param {Partial<AccountCredits>} [$$source = {}] - The source object to create the AccountCredits.
+     */
+    constructor($$source = {}) {
+        if (!("hasCredits" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["hasCredits"] = false;
+        }
+        if (!("unlimited" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["unlimited"] = false;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["balance"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountCredits instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountCredits}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AccountCredits(/** @type {Partial<AccountCredits>} */($$parsedSource));
+    }
+}
+
+/**
+ * AccountDailyUsage is one source-defined calendar day of token activity.
+ * StartDate is kept as YYYY-MM-DD: turning it into a timestamp in the adapter
+ * would make the source's day drift across local time zones.
+ */
+export class AccountDailyUsage {
+    /**
+     * Creates a new AccountDailyUsage instance.
+     * @param {Partial<AccountDailyUsage>} [$$source = {}] - The source object to create the AccountDailyUsage.
+     */
+    constructor($$source = {}) {
+        if (!("startDate" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["startDate"] = "";
+        }
+        if (!("tokens" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["tokens"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountDailyUsage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountDailyUsage}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AccountDailyUsage(/** @type {Partial<AccountDailyUsage>} */($$parsedSource));
+    }
+}
+
+/**
+ * AccountRateLimit is one independently metered quota bucket. Providers can
+ * expose more than one bucket (for example a general Codex limit and a
+ * model-specific limit), so callers must not assume there is exactly one.
+ */
+export class AccountRateLimit {
+    /**
+     * Creates a new AccountRateLimit instance.
+     * @param {Partial<AccountRateLimit>} [$$source = {}] - The source object to create the AccountRateLimit.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["name"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["planType"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {AccountRateLimitWindow | null | undefined}
+             */
+            this["primary"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {AccountRateLimitWindow | null | undefined}
+             */
+            this["secondary"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {AccountCredits | null | undefined}
+             */
+            this["credits"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {AccountSpendControl | null | undefined}
+             */
+            this["individualLimit"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | null | undefined}
+             */
+            this["spendControlReached"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["rateLimitReachedType"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountRateLimit instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountRateLimit}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType1;
+        const $$createField4_0 = $$createType1;
+        const $$createField5_0 = $$createType3;
+        const $$createField6_0 = $$createType5;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("primary" in $$parsedSource) {
+            $$parsedSource["primary"] = $$createField3_0($$parsedSource["primary"]);
+        }
+        if ("secondary" in $$parsedSource) {
+            $$parsedSource["secondary"] = $$createField4_0($$parsedSource["secondary"]);
+        }
+        if ("credits" in $$parsedSource) {
+            $$parsedSource["credits"] = $$createField5_0($$parsedSource["credits"]);
+        }
+        if ("individualLimit" in $$parsedSource) {
+            $$parsedSource["individualLimit"] = $$createField6_0($$parsedSource["individualLimit"]);
+        }
+        return new AccountRateLimit(/** @type {Partial<AccountRateLimit>} */($$parsedSource));
+    }
+}
+
+export class AccountRateLimitResetCredit {
+    /**
+     * Creates a new AccountRateLimitResetCredit instance.
+     * @param {Partial<AccountRateLimitResetCredit>} [$$source = {}] - The source object to create the AccountRateLimitResetCredit.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("resetType" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["resetType"] = "";
+        }
+        if (!("status" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["status"] = "";
+        }
+        if (!("grantedAt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["grantedAt"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["expiresAt"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["title"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["description"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountRateLimitResetCredit instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountRateLimitResetCredit}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AccountRateLimitResetCredit(/** @type {Partial<AccountRateLimitResetCredit>} */($$parsedSource));
+    }
+}
+
+export class AccountRateLimitResetCredits {
+    /**
+     * Creates a new AccountRateLimitResetCredits instance.
+     * @param {Partial<AccountRateLimitResetCredits>} [$$source = {}] - The source object to create the AccountRateLimitResetCredits.
+     */
+    constructor($$source = {}) {
+        if (!("availableCount" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["availableCount"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {AccountRateLimitResetCredit[] | undefined}
+             */
+            this["credits"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountRateLimitResetCredits instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountRateLimitResetCredits}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType7;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("credits" in $$parsedSource) {
+            $$parsedSource["credits"] = $$createField1_0($$parsedSource["credits"]);
+        }
+        return new AccountRateLimitResetCredits(/** @type {Partial<AccountRateLimitResetCredits>} */($$parsedSource));
+    }
+}
+
+export class AccountRateLimitWindow {
+    /**
+     * Creates a new AccountRateLimitWindow instance.
+     * @param {Partial<AccountRateLimitWindow>} [$$source = {}] - The source object to create the AccountRateLimitWindow.
+     */
+    constructor($$source = {}) {
+        if (!("usedPercent" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["usedPercent"] = 0;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["windowDurationMins"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["resetsAt"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountRateLimitWindow instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountRateLimitWindow}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AccountRateLimitWindow(/** @type {Partial<AccountRateLimitWindow>} */($$parsedSource));
+    }
+}
+
+export class AccountSpendControl {
+    /**
+     * Creates a new AccountSpendControl instance.
+     * @param {Partial<AccountSpendControl>} [$$source = {}] - The source object to create the AccountSpendControl.
+     */
+    constructor($$source = {}) {
+        if (!("limit" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["limit"] = "";
+        }
+        if (!("used" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["used"] = "";
+        }
+        if (!("remainingPercent" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["remainingPercent"] = 0;
+        }
+        if (!("resetsAt" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["resetsAt"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountSpendControl instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountSpendControl}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AccountSpendControl(/** @type {Partial<AccountSpendControl>} */($$parsedSource));
+    }
+}
+
+/**
+ * AccountUsage is the daily activity and quota snapshot reported by one
+ * harness. It is deliberately separate from Usage: Usage counts tokens
+ * consumed by one workflow step, while AccountUsage describes a longer-lived
+ * account or device history according to Scope.
+ */
+export class AccountUsage {
+    /**
+     * Creates a new AccountUsage instance.
+     * @param {Partial<AccountUsage>} [$$source = {}] - The source object to create the AccountUsage.
+     */
+    constructor($$source = {}) {
+        if (!("runtime" in $$source)) {
+            /**
+             * @member
+             * @type {Runtime}
+             */
+            this["runtime"] = Runtime.$zero;
+        }
+        if (!("scope" in $$source)) {
+            /**
+             * @member
+             * @type {AccountUsageScope}
+             */
+            this["scope"] = AccountUsageScope.$zero;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["source"] = undefined;
+        }
+        if (!("fetchedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["fetchedAt"] = "0001-01-01T00:00:00.000Z";
+        }
+        if (!("rateLimits" in $$source)) {
+            /**
+             * @member
+             * @type {AccountRateLimit[]}
+             */
+            this["rateLimits"] = [];
+        }
+        if (!("dailyUsage" in $$source)) {
+            /**
+             * @member
+             * @type {AccountDailyUsage[]}
+             */
+            this["dailyUsage"] = [];
+        }
+        if (!("summary" in $$source)) {
+            /**
+             * @member
+             * @type {AccountUsageSummary}
+             */
+            this["summary"] = (new AccountUsageSummary());
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {AccountRateLimitResetCredits | null | undefined}
+             */
+            this["resetCredits"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountUsage instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountUsage}
+     */
+    static createFrom($$source = {}) {
+        const $$createField4_0 = $$createType9;
+        const $$createField5_0 = $$createType11;
+        const $$createField6_0 = $$createType12;
+        const $$createField7_0 = $$createType14;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("rateLimits" in $$parsedSource) {
+            $$parsedSource["rateLimits"] = $$createField4_0($$parsedSource["rateLimits"]);
+        }
+        if ("dailyUsage" in $$parsedSource) {
+            $$parsedSource["dailyUsage"] = $$createField5_0($$parsedSource["dailyUsage"]);
+        }
+        if ("summary" in $$parsedSource) {
+            $$parsedSource["summary"] = $$createField6_0($$parsedSource["summary"]);
+        }
+        if ("resetCredits" in $$parsedSource) {
+            $$parsedSource["resetCredits"] = $$createField7_0($$parsedSource["resetCredits"]);
+        }
+        return new AccountUsage(/** @type {Partial<AccountUsage>} */($$parsedSource));
+    }
+}
+
+/**
+ * AccountUsageScope says which population a snapshot covers. Account data can
+ * span other machines signed into the same provider, while device data is
+ * reconstructed from the harness session files visible on this computer.
+ * @readonly
+ * @enum {string}
+ */
+export const AccountUsageScope = {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero: "",
+
+    AccountUsageScopeAccount: "account",
+    AccountUsageScopeDevice: "device",
+};
+
+/**
+ * AccountUsageSummary contains optional lifetime statistics reported alongside
+ * the daily series. Pointers preserve the difference between a real zero and a
+ * field an older app-server did not report.
+ */
+export class AccountUsageSummary {
+    /**
+     * Creates a new AccountUsageSummary instance.
+     * @param {Partial<AccountUsageSummary>} [$$source = {}] - The source object to create the AccountUsageSummary.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | null | undefined}
+             */
+            this["lifetimeTokens"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | null | undefined}
+             */
+            this["peakDailyTokens"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | null | undefined}
+             */
+            this["longestRunningTurnSec"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | null | undefined}
+             */
+            this["currentStreakDays"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | null | undefined}
+             */
+            this["longestStreakDays"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountUsageSummary instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountUsageSummary}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AccountUsageSummary(/** @type {Partial<AccountUsageSummary>} */($$parsedSource));
+    }
+}
+
 export class ClaudeConfiguration {
     /**
      * Creates a new ClaudeConfiguration instance.
@@ -36,8 +600,8 @@ export class ClaudeConfiguration {
      * @returns {ClaudeConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType1;
-        const $$createField1_0 = $$createType2;
+        const $$createField0_0 = $$createType16;
+        const $$createField1_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
             $$parsedSource["models"] = $$createField0_0($$parsedSource["models"]);
@@ -135,7 +699,7 @@ export class CodexConfiguration {
      * @returns {CodexConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType4;
+        const $$createField3_0 = $$createType19;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
             $$parsedSource["models"] = $$createField3_0($$parsedSource["models"]);
@@ -223,8 +787,8 @@ export class CodexModelInfo {
      * @returns {CodexModelInfo}
      */
     static createFrom($$source = {}) {
-        const $$createField5_0 = $$createType2;
-        const $$createField6_0 = $$createType6;
+        const $$createField5_0 = $$createType17;
+        const $$createField6_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("reasoningEfforts" in $$parsedSource) {
             $$parsedSource["reasoningEfforts"] = $$createField5_0($$parsedSource["reasoningEfforts"]);
@@ -469,11 +1033,11 @@ export class Event {
      * @returns {Event}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType8;
-        const $$createField8_0 = $$createType10;
-        const $$createField9_0 = $$createType12;
-        const $$createField11_0 = $$createType14;
-        const $$createField12_0 = $$createType16;
+        const $$createField1_0 = $$createType23;
+        const $$createField8_0 = $$createType25;
+        const $$createField9_0 = $$createType27;
+        const $$createField11_0 = $$createType29;
+        const $$createField12_0 = $$createType31;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
@@ -620,8 +1184,8 @@ export class HarnessConfiguration {
      * @returns {HarnessConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType18;
-        const $$createField2_0 = $$createType2;
+        const $$createField1_0 = $$createType33;
+        const $$createField2_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
             $$parsedSource["models"] = $$createField1_0($$parsedSource["models"]);
@@ -701,7 +1265,7 @@ export class HarnessModel {
      * @returns {HarnessModel}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType2;
+        const $$createField3_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("efforts" in $$parsedSource) {
             $$parsedSource["efforts"] = $$createField3_0($$parsedSource["efforts"]);
@@ -808,8 +1372,8 @@ export class PermissionRequest {
      * @returns {PermissionRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType19;
-        const $$createField4_0 = $$createType21;
+        const $$createField3_0 = $$createType34;
+        const $$createField4_0 = $$createType36;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("input" in $$parsedSource) {
             $$parsedSource["input"] = $$createField3_0($$parsedSource["input"]);
@@ -888,8 +1452,8 @@ export class Result {
      * @returns {Result}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType7;
-        const $$createField2_0 = $$createType9;
+        const $$createField1_0 = $$createType22;
+        const $$createField2_0 = $$createType24;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
@@ -1176,7 +1740,7 @@ export class UserInputQuestion {
      * @returns {UserInputQuestion}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType23;
+        const $$createField3_0 = $$createType38;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField3_0($$parsedSource["options"]);
@@ -1218,7 +1782,7 @@ export class UserInputRequest {
      * @returns {UserInputRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType25;
+        const $$createField1_0 = $$createType40;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("questions" in $$parsedSource) {
             $$parsedSource["questions"] = $$createField1_0($$parsedSource["questions"]);
@@ -1261,7 +1825,7 @@ export class UserInputResponse {
      * @returns {UserInputResponse}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType26;
+        const $$createField0_0 = $$createType41;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("answers" in $$parsedSource) {
             $$parsedSource["answers"] = $$createField0_0($$parsedSource["answers"]);
@@ -1271,35 +1835,50 @@ export class UserInputResponse {
 }
 
 // Private type creation functions
-const $$createType0 = ClaudeModelInfo.createFrom;
-const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = $Create.Array($Create.Any);
-const $$createType3 = CodexModelInfo.createFrom;
-const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = CodexServiceTier.createFrom;
-const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = Usage.createFrom;
-const $$createType8 = $Create.Nullable($$createType7);
-const $$createType9 = ContextUsage.createFrom;
-const $$createType10 = $Create.Nullable($$createType9);
-const $$createType11 = PermissionRequest.createFrom;
-const $$createType12 = $Create.Nullable($$createType11);
-const $$createType13 = UserInputRequest.createFrom;
+const $$createType0 = AccountRateLimitWindow.createFrom;
+const $$createType1 = $Create.Nullable($$createType0);
+const $$createType2 = AccountCredits.createFrom;
+const $$createType3 = $Create.Nullable($$createType2);
+const $$createType4 = AccountSpendControl.createFrom;
+const $$createType5 = $Create.Nullable($$createType4);
+const $$createType6 = AccountRateLimitResetCredit.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = AccountRateLimit.createFrom;
+const $$createType9 = $Create.Array($$createType8);
+const $$createType10 = AccountDailyUsage.createFrom;
+const $$createType11 = $Create.Array($$createType10);
+const $$createType12 = AccountUsageSummary.createFrom;
+const $$createType13 = AccountRateLimitResetCredits.createFrom;
 const $$createType14 = $Create.Nullable($$createType13);
-const $$createType15 = UserInputResponse.createFrom;
-const $$createType16 = $Create.Nullable($$createType15);
-const $$createType17 = HarnessModel.createFrom;
-const $$createType18 = $Create.Array($$createType17);
-const $$createType19 = $Create.Map($Create.Any, $Create.Any);
-var $$createType20 = /** @type {(...args: any[]) => any} */(function $$initCreateType20(...args) {
-    if ($$createType20 === $$initCreateType20) {
-        $$createType20 = $$createType19;
-    }
-    return $$createType20(...args);
-});
+const $$createType15 = ClaudeModelInfo.createFrom;
+const $$createType16 = $Create.Array($$createType15);
+const $$createType17 = $Create.Array($Create.Any);
+const $$createType18 = CodexModelInfo.createFrom;
+const $$createType19 = $Create.Array($$createType18);
+const $$createType20 = CodexServiceTier.createFrom;
 const $$createType21 = $Create.Array($$createType20);
-const $$createType22 = UserInputOption.createFrom;
-const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = UserInputQuestion.createFrom;
-const $$createType25 = $Create.Array($$createType24);
-const $$createType26 = $Create.Map($Create.Any, $Create.Any);
+const $$createType22 = Usage.createFrom;
+const $$createType23 = $Create.Nullable($$createType22);
+const $$createType24 = ContextUsage.createFrom;
+const $$createType25 = $Create.Nullable($$createType24);
+const $$createType26 = PermissionRequest.createFrom;
+const $$createType27 = $Create.Nullable($$createType26);
+const $$createType28 = UserInputRequest.createFrom;
+const $$createType29 = $Create.Nullable($$createType28);
+const $$createType30 = UserInputResponse.createFrom;
+const $$createType31 = $Create.Nullable($$createType30);
+const $$createType32 = HarnessModel.createFrom;
+const $$createType33 = $Create.Array($$createType32);
+const $$createType34 = $Create.Map($Create.Any, $Create.Any);
+var $$createType35 = /** @type {(...args: any[]) => any} */(function $$initCreateType35(...args) {
+    if ($$createType35 === $$initCreateType35) {
+        $$createType35 = $$createType34;
+    }
+    return $$createType35(...args);
+});
+const $$createType36 = $Create.Array($$createType35);
+const $$createType37 = UserInputOption.createFrom;
+const $$createType38 = $Create.Array($$createType37);
+const $$createType39 = UserInputQuestion.createFrom;
+const $$createType40 = $Create.Array($$createType39);
+const $$createType41 = $Create.Map($Create.Any, $Create.Any);
