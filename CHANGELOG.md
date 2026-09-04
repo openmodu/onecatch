@@ -3,6 +3,11 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.2
+
+- Add an agent usage view that aggregates Codex, Claude Code, Pi, Grok, and Modu quotas, rolling windows, daily tokens, and yearly activity, cached locally and refreshed every 30 minutes or on demand.
+- Restore titlebar dragging and double-click zoom across the whole top of the workflow window on macOS, where only the sidebar strip responded.
+
 ## 0.2.1
 
 - Let embedded Modu runs pause for human input with multi-question cards, suggested choices, custom answers, and an explicit skip path.
