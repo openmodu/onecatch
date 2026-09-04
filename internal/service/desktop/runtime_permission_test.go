@@ -48,3 +48,46 @@ func TestRuntimeRegistryResolvesPendingPermission(t *testing.T) {
 		t.Fatal("permission decision was not delivered")
 	}
 }
+
+func TestRuntimeRegistryResolvesPendingUserInput(t *testing.T) {
+	registry := &RuntimeRegistry{pendingUserInputs: make(map[string]*pendingUserInput)}
+	request := agentrun.UserInputRequest{ID: "input-1", Questions: []agentrun.UserInputQuestion{
+		{ID: "base", Question: "Where from?", Options: []agentrun.UserInputOption{{Label: "main"}, {Label: "current"}}},
+		{ID: "name", Question: "Which name?", Options: []agentrun.UserInputOption{{Label: "feature"}, {Label: "fix"}}},
+	}}
+	result := make(chan agentrun.UserInputResponse, 1)
+	go func() {
+		response, _ := registry.awaitUserInput(context.Background(), "run-1", "step-1", request)
+		result <- response
+	}()
+	waitUntil := time.Now().Add(time.Second)
+	for {
+		registry.userInputMu.Lock()
+		pending := registry.pendingUserInputs[request.ID] != nil
+		registry.userInputMu.Unlock()
+		if pending {
+			break
+		}
+		if time.Now().After(waitUntil) {
+			t.Fatal("user input was not registered")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	if err := registry.ResolveUserInput("run-1", request.ID, agentrun.UserInputResponse{Answers: map[string]string{"base": "main"}}); err == nil {
+		t.Fatal("incomplete answers were accepted")
+	}
+	if err := registry.ResolveUserInput("another-run", request.ID, agentrun.UserInputResponse{Cancelled: true}); err == nil {
+		t.Fatal("another run resolved the input")
+	}
+	if err := registry.ResolveUserInput("run-1", request.ID, agentrun.UserInputResponse{Answers: map[string]string{"base": " main ", "name": "custom-name", "extra": "ignored"}}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case response := <-result:
+		if response.Cancelled || response.Answers["base"] != "main" || response.Answers["name"] != "custom-name" || len(response.Answers) != 2 {
+			t.Fatalf("response = %+v", response)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("user input response was not delivered")
+	}
+}

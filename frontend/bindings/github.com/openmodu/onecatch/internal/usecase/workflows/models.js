@@ -138,6 +138,22 @@ export class RuntimeEventFrame {
              */
             this["permissionDecision"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * UserInput is populated for user_input_request and user_input_resolved;
+             * UserInputResponse is populated only after the host answers or dismisses.
+             * @member
+             * @type {agentrun$0.UserInputRequest | null | undefined}
+             */
+            this["userInput"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {agentrun$0.UserInputResponse | null | undefined}
+             */
+            this["userInputResponse"] = undefined;
+        }
         if (!("at" in $$source)) {
             /**
              * At is when the engine observed the event.
@@ -159,6 +175,8 @@ export class RuntimeEventFrame {
         const $$createField4_0 = $$createType1;
         const $$createField11_0 = $$createType3;
         const $$createField12_0 = $$createType5;
+        const $$createField14_0 = $$createType7;
+        const $$createField15_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField4_0($$parsedSource["usage"]);
@@ -168,6 +186,12 @@ export class RuntimeEventFrame {
         }
         if ("permission" in $$parsedSource) {
             $$parsedSource["permission"] = $$createField12_0($$parsedSource["permission"]);
+        }
+        if ("userInput" in $$parsedSource) {
+            $$parsedSource["userInput"] = $$createField14_0($$parsedSource["userInput"]);
+        }
+        if ("userInputResponse" in $$parsedSource) {
+            $$parsedSource["userInputResponse"] = $$createField15_0($$parsedSource["userInputResponse"]);
         }
         return new RuntimeEventFrame(/** @type {Partial<RuntimeEventFrame>} */($$parsedSource));
     }
@@ -180,3 +204,7 @@ const $$createType2 = agentrun$0.ContextUsage.createFrom;
 const $$createType3 = $Create.Nullable($$createType2);
 const $$createType4 = agentrun$0.PermissionRequest.createFrom;
 const $$createType5 = $Create.Nullable($$createType4);
+const $$createType6 = agentrun$0.UserInputRequest.createFrom;
+const $$createType7 = $Create.Nullable($$createType6);
+const $$createType8 = agentrun$0.UserInputResponse.createFrom;
+const $$createType9 = $Create.Nullable($$createType8);

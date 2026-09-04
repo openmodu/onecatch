@@ -233,6 +233,24 @@ test("keeps an interactive permission card and applies its decision", () => {
   assert.equal(permission.decision, "allow");
 });
 
+test("keeps a human-input card and attaches the submitted answers", () => {
+  const detail = {
+    task: { prompt: "create a branch", createdAt: "2026-07-11T10:00:00Z" },
+    run: { id: "run-1" },
+    workflow: { steps: [{ id: "execute", name: "Execute", runtime: "modu" }] },
+    stepRuns: [{ id: "step-1", stepId: "execute", status: "running", attempt: 1, startedAt: "2026-07-11T10:00:01Z" }],
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 1, kind: "user_input_request", userInput: { id: "ask-1", questions: [{ id: "base", question: "Where from?", options: [{ label: "main" }, { label: "current" }] }] }, at: "2026-07-11T10:00:02Z" },
+      { stepRunId: "step-1", seq: 2, kind: "user_input_resolved", userInput: { id: "ask-1" }, userInputResponse: { answers: { base: "main" } }, at: "2026-07-11T10:00:03Z" },
+    ],
+  };
+  const conversation = buildRunConversation(detail);
+  const input = conversation.find((item) => item.type === "round").items[0];
+  assert.equal(input.type, "user_input");
+  assert.equal(input.request.questions[0].options[0].label, "main");
+  assert.equal(input.response.answers.base, "main");
+});
+
 test("keeps a thought as prose instead of reading it as a command", () => {
   const [round] = buildRunConversation({
     task: {}, run: {}, events: [],

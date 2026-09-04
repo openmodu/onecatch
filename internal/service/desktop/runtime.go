@@ -89,6 +89,8 @@ type RuntimeRegistry struct {
 	engine             *agentrun.Engine
 	permissionMu       sync.Mutex
 	pendingPermissions map[string]*pendingPermission
+	userInputMu        sync.Mutex
+	pendingUserInputs  map[string]*pendingUserInput
 	changedMu          sync.RWMutex
 	changed            func([]RuntimeInfo)
 }
@@ -113,6 +115,13 @@ type pendingPermission struct {
 	response  chan agentrun.PermissionDecision
 }
 
+type pendingUserInput struct {
+	runID     string
+	stepRunID string
+	request   agentrun.UserInputRequest
+	response  chan agentrun.UserInputResponse
+}
+
 const runtimeStatusCacheTTL = 5 * time.Minute
 
 // runtimeStatusFile persists the last probe result across restarts. Probing
@@ -132,7 +141,7 @@ type runtimeStatusSnapshot struct {
 }
 
 func NewRuntimeRegistry(root string) (*RuntimeRegistry, error) {
-	registry := &RuntimeRegistry{dataRoot: strings.TrimSpace(root), pendingPermissions: make(map[string]*pendingPermission), statusCache: make(map[string]runtimeStatusCacheEntry)}
+	registry := &RuntimeRegistry{dataRoot: strings.TrimSpace(root), pendingPermissions: make(map[string]*pendingPermission), pendingUserInputs: make(map[string]*pendingUserInput), statusCache: make(map[string]runtimeStatusCacheEntry)}
 	if strings.TrimSpace(root) != "" {
 		registry.statusPath = filepath.Join(root, runtimeStatusFile)
 		registry.loadStatusCache()
@@ -256,6 +265,12 @@ func (r *RuntimeRegistry) Run(ctx context.Context, request agentrun.Request, sin
 			return r.awaitPermission(ctx, runID, stepRunID, permission)
 		}
 	}
+	if engine.SupportsInteractiveUserInput(request.Runtime) && request.RunID != "" && request.UserInputHandler == nil {
+		runID, stepRunID := request.RunID, request.StepRunID
+		request.UserInputHandler = func(ctx context.Context, input agentrun.UserInputRequest) (agentrun.UserInputResponse, error) {
+			return r.awaitUserInput(ctx, runID, stepRunID, input)
+		}
+	}
 	return engine.Run(ctx, request, sink)
 }
 
@@ -323,6 +338,62 @@ func (r *RuntimeRegistry) ResolvePermission(runID, requestID, decision string) e
 	default:
 		r.permissionMu.Unlock()
 		return coded("permission_not_pending", "permission request was already answered")
+	}
+}
+
+func (r *RuntimeRegistry) awaitUserInput(ctx context.Context, runID, stepRunID string, request agentrun.UserInputRequest) (agentrun.UserInputResponse, error) {
+	pending := &pendingUserInput{runID: runID, stepRunID: stepRunID, request: request, response: make(chan agentrun.UserInputResponse, 1)}
+	r.userInputMu.Lock()
+	if r.pendingUserInputs == nil {
+		r.pendingUserInputs = make(map[string]*pendingUserInput)
+	}
+	r.pendingUserInputs[request.ID] = pending
+	r.userInputMu.Unlock()
+	defer func() {
+		r.userInputMu.Lock()
+		if r.pendingUserInputs[request.ID] == pending {
+			delete(r.pendingUserInputs, request.ID)
+		}
+		r.userInputMu.Unlock()
+	}()
+	select {
+	case response := <-pending.response:
+		return response, nil
+	case <-ctx.Done():
+		return agentrun.UserInputResponse{}, ctx.Err()
+	}
+}
+
+// ResolveUserInput delivers answers to the runtime blocked on requestID. Every
+// question must have a non-empty answer unless the whole card was dismissed.
+func (r *RuntimeRegistry) ResolveUserInput(runID, requestID string, response agentrun.UserInputResponse) error {
+	r.userInputMu.Lock()
+	pending := r.pendingUserInputs[requestID]
+	if pending == nil || pending.runID != runID {
+		r.userInputMu.Unlock()
+		return coded("user_input_not_pending", "user input request is no longer pending")
+	}
+	if !response.Cancelled {
+		answers := make(map[string]string, len(pending.request.Questions))
+		for _, question := range pending.request.Questions {
+			answer := strings.TrimSpace(response.Answers[question.ID])
+			if answer == "" {
+				r.userInputMu.Unlock()
+				return coded("user_input_incomplete", "every question requires an answer")
+			}
+			answers[question.ID] = answer
+		}
+		response.Answers = answers
+	} else {
+		response.Answers = nil
+	}
+	select {
+	case pending.response <- response:
+		r.userInputMu.Unlock()
+		return nil
+	default:
+		r.userInputMu.Unlock()
+		return coded("user_input_not_pending", "user input request was already answered")
 	}
 }
 

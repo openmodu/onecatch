@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { Clipboard } from "@wailsio/runtime";
 import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Copy, FilePenLine, LoaderCircle, Search, Terminal, TriangleAlert, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fileName, formatDateTime, formatDuration, formatMessageDateTime, formatTime, formatToolTime } from "../format.js";
 import { groupRoundItems } from "../runConversation.js";
@@ -158,6 +159,25 @@ function PermissionTimelineItem({ entry, busy, onDecision, time }) {
   </section>;
 }
 
+function UserInputTimelineItem({ entry, busy, onRespond, time }) {
+  const { t } = useTranslation();
+  const request = entry.request || {};
+  const questions = request.questions || [];
+  const [answers, setAnswers] = useState({});
+  const pending = !entry.response;
+  const complete = questions.length > 0 && questions.every((question) => String(answers[question.id] || "").trim());
+  const choose = (questionID, value) => setAnswers((current) => ({ ...current, [questionID]: value }));
+  return <section className={`conversation-user-input ${pending ? "pending" : entry.response?.cancelled ? "cancelled" : "answered"}`}>
+    <div className="conversation-user-input-head"><div><span>{t("timeline.userInputRequest")}</span><strong>{t("timeline.userInputTitle")}</strong></div><div><b>{pending ? t("timeline.userInputWaiting") : entry.response?.cancelled ? t("timeline.userInputDismissed") : t("timeline.userInputAnswered")}</b><time>{time ?? formatTime(entry.at)}</time></div></div>
+    <div className="conversation-user-input-questions">{questions.map((question) => <fieldset key={question.id} disabled={!pending || busy}>
+      <legend>{question.header && <span>{question.header}</span>}<strong>{question.question}</strong></legend>
+      {pending ? <><div className="conversation-user-input-options">{(question.options || []).map((option, index) => <button type="button" className={answers[question.id] === option.label ? "selected" : ""} aria-pressed={answers[question.id] === option.label} onClick={() => choose(question.id, option.label)} key={`${option.label}-${index}`}><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</button>)}</div>
+      <Input value={(question.options || []).some((option) => option.label === answers[question.id]) ? "" : answers[question.id] || ""} placeholder={t("timeline.userInputOther")} onChange={(event) => choose(question.id, event.target.value)} /></> : <p>{entry.response?.cancelled ? t("timeline.userInputNoAnswer") : entry.response?.answers?.[question.id] || t("timeline.userInputNoAnswer")}</p>}
+    </fieldset>)}</div>
+    {pending && <div className="conversation-user-input-actions"><Action size="compact" tone="muted" disabled={busy} onClick={() => onRespond?.(request.id, {}, true)}>{t("timeline.userInputDismiss")}</Action><Action size="compact" tone="primary" disabled={busy || !complete} onClick={() => onRespond?.(request.id, answers, false)}>{t("timeline.userInputSubmit")}</Action></div>}
+  </section>;
+}
+
 function FileChangeGroup({ entries, onReview }) {
   const { t } = useTranslation();
   const paths = [...new Set(entries.flatMap((entry) => String(entry.text || "").split("\n")).map((path) => path.trim()).filter(Boolean))];
@@ -170,7 +190,7 @@ function FileChangeGroup({ entries, onReview }) {
   </details>{onReview && <Action size="compact" tone="muted" className="conversation-review-action" onClick={onReview}>{t("review.open")}</Action>}</div>;
 }
 
-function ProcessGroup({ entries, active, round, permissionBusy, onPermissionDecision }) {
+function ProcessGroup({ entries, active, round, permissionBusy, userInputBusy, onPermissionDecision, onUserInputResponse }) {
   const { t } = useTranslation();
   const timeLabel = createTimeLabeler();
   const lastEntry = entries[entries.length - 1];
@@ -188,6 +208,9 @@ function ProcessGroup({ entries, active, round, permissionBusy, onPermissionDeci
       if (entry.type === "permission") {
         return <PermissionTimelineItem key={entry.id} entry={entry} busy={permissionBusy === entry.request?.id} onDecision={onPermissionDecision} time={timeLabel(entry.at)} />;
       }
+      if (entry.type === "user_input") {
+        return <UserInputTimelineItem key={entry.id} entry={entry} busy={userInputBusy === entry.request?.id} onRespond={onUserInputResponse} time={timeLabel(entry.at)} />;
+      }
       if (entry.kind === "reasoning") return <ThoughtTimelineItem key={entry.id || `thought-${index}`} entry={entry} />;
       const running = Boolean(active) && entry === lastEntry && entry.kind === "tool_use";
       const stalled = !entry.settled && !running && round.status !== "succeeded";
@@ -199,7 +222,7 @@ function ProcessGroup({ entries, active, round, permissionBusy, onPermissionDeci
 // One round of the transcript. `buildRunConversation` hands back a stable object
 // reference for any round whose step has finished, so memo() short-circuits every
 // finished round on a stream/poll frame — only the live round is reconciled.
-const ConversationRound = memo(function ConversationRound({ round, active, permissionBusy, onPermissionDecision, onReview }) {
+const ConversationRound = memo(function ConversationRound({ round, active, permissionBusy, userInputBusy, onPermissionDecision, onUserInputResponse, onReview }) {
   const { t } = useTranslation();
   const timeLabel = createTimeLabeler();
   const blocks = groupRoundItems(round.items);
@@ -212,7 +235,7 @@ const ConversationRound = memo(function ConversationRound({ round, active, permi
           return <div className={`conversation-agent-message ${entry.tone}`} key={block.id}><MessageBody content={entry.text} streaming={entry.streaming} /><MessageActions at={entry.at || round.finishedAt || round.startedAt} content={entry.text} /></div>;
         }
         if (block.type === "files") return <FileChangeGroup entries={block.items} onReview={onReview} key={block.id} />;
-        return <ProcessGroup entries={block.items} active={Boolean(active) && lastItem === block.items[block.items.length - 1]} round={round} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} key={block.id} />;
+        return <ProcessGroup entries={block.items} active={Boolean(active) && lastItem === block.items[block.items.length - 1]} round={round} permissionBusy={permissionBusy} userInputBusy={userInputBusy} onPermissionDecision={onPermissionDecision} onUserInputResponse={onUserInputResponse} key={block.id} />;
       })}
       <span className="sr-only">{round.runtime} · {t("timeline.round", { count: round.round })} · <time>{timeLabel(round.finishedAt || round.startedAt)}</time></span>
     </div>
@@ -222,7 +245,7 @@ const ConversationRound = memo(function ConversationRound({ round, active, permi
 // The timeline can grow to hundreds of rows; poll-driven parent re-renders must
 // not rebuild it unless `items`/`active` actually change, hence memo() paired
 // with the memoized conversation array the parent feeds in.
-function ConversationTimeline({ items, active, hiddenCount = 0, onLoadEarlier, permissionBusy = "", onPermissionDecision, onReview }) {
+function ConversationTimeline({ items, active, hiddenCount = 0, onLoadEarlier, permissionBusy = "", userInputBusy = "", onPermissionDecision, onUserInputResponse, onReview }) {
   const { t } = useTranslation();
   const [loadingEarlier, setLoadingEarlier] = useState(false);
   const rounds = items.filter((item) => item.type === "round");
@@ -242,7 +265,7 @@ function ConversationTimeline({ items, active, hiddenCount = 0, onLoadEarlier, p
           {loadingEarlier ? t("common.loading") : t("timeline.loadEarlier", { count: hiddenCount })}
         </Button>
       </div>}
-      {items.map((item) => item.type === "user" ? <UserMessage item={item} key={item.id} /> : <ConversationRound key={item.id} round={item} active={Boolean(active) && item === lastRound} permissionBusy={permissionBusy} onPermissionDecision={onPermissionDecision} onReview={onReview} />)}
+      {items.map((item) => item.type === "user" ? <UserMessage item={item} key={item.id} /> : <ConversationRound key={item.id} round={item} active={Boolean(active) && item === lastRound} permissionBusy={permissionBusy} userInputBusy={userInputBusy} onPermissionDecision={onPermissionDecision} onUserInputResponse={onUserInputResponse} onReview={onReview} />)}
       {!items.length && <p className="muted-copy">{t("timeline.empty")}</p>}
     </div>
   </div>;

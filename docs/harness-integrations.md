@@ -51,6 +51,11 @@ unsubscribe := session.Subscribe(func(event types.Event) {
 })
 defer unsubscribe()
 
+session.SetAskCallback(func(ctx context.Context, request coding_agent.AskRequest) (coding_agent.AskResult, error) {
+    // Publish a durable user_input_request card and block until the host
+    // returns its answers or dismisses it.
+})
+
 if err := session.Prompt(ctx, prompt); err != nil {
     return err
 }
@@ -64,6 +69,14 @@ goal, and subagent dependencies out of the desktop binary. It still applies
 model/provider overrides, maps token usage and streaming tool/message events,
 and strictly filters the tool catalog for read-only workflow nodes. Use Modu CLI
 mode when a task needs the full standalone `modu_code` extension set.
+
+The native adapter also wires Modu's `ask_user_question` tool to OneCatch's
+human-input cards. A request and its resolution are separate durable runtime
+events, so reconnecting or reopening a task preserves both the question and the
+answer. Cards may contain up to four questions, offer provider-authored choices,
+accept a custom answer for each question, or be dismissed so Modu can continue
+with its best judgment. CLI print mode remains headless and cannot host these
+blocking questions.
 
 The bundled remote worker is built with the `onecatch_worker` build tag and uses
 the Modu CLI adapter. This prevents the SDK graph from being duplicated into both

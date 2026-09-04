@@ -1282,6 +1282,20 @@ export class RuntimeEventView {
              */
             this["permissionDecision"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {agentrun$0.UserInputRequest | null | undefined}
+             */
+            this["userInput"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {agentrun$0.UserInputResponse | null | undefined}
+             */
+            this["userInputResponse"] = undefined;
+        }
         if (!("at" in $$source)) {
             /**
              * @member
@@ -1300,9 +1314,17 @@ export class RuntimeEventView {
      */
     static createFrom($$source = {}) {
         const $$createField8_0 = $$createType21;
+        const $$createField10_0 = $$createType23;
+        const $$createField11_0 = $$createType25;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("permission" in $$parsedSource) {
             $$parsedSource["permission"] = $$createField8_0($$parsedSource["permission"]);
+        }
+        if ("userInput" in $$parsedSource) {
+            $$parsedSource["userInput"] = $$createField10_0($$parsedSource["userInput"]);
+        }
+        if ("userInputResponse" in $$parsedSource) {
+            $$parsedSource["userInputResponse"] = $$createField11_0($$parsedSource["userInputResponse"]);
         }
         return new RuntimeEventView(/** @type {Partial<RuntimeEventView>} */($$parsedSource));
     }
@@ -1659,7 +1681,7 @@ export class SkillDebugRecord {
      * @returns {SkillDebugRecord}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType22;
+        const $$createField4_0 = $$createType26;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("result" in $$parsedSource) {
             $$parsedSource["result"] = $$createField4_0($$parsedSource["result"]);
@@ -1735,8 +1757,8 @@ export class SkillDebugResult {
      * @returns {SkillDebugResult}
      */
     static createFrom($$source = {}) {
-        const $$createField5_0 = $$createType23;
-        const $$createField6_0 = $$createType25;
+        const $$createField5_0 = $$createType27;
+        const $$createField6_0 = $$createType29;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField5_0($$parsedSource["usage"]);
@@ -1834,7 +1856,7 @@ export class StorageUsage {
      * @returns {StorageUsage}
      */
     static createFrom($$source = {}) {
-        const $$createField2_0 = $$createType27;
+        const $$createField2_0 = $$createType31;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("categories" in $$parsedSource) {
             $$parsedSource["categories"] = $$createField2_0($$parsedSource["categories"]);
@@ -1882,7 +1904,7 @@ export class TaskSearchItem {
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType6;
         const $$createField1_0 = $$createType7;
-        const $$createField2_0 = $$createType28;
+        const $$createField2_0 = $$createType32;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("task" in $$parsedSource) {
             $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
@@ -1927,7 +1949,7 @@ export class TaskSearchPage {
      * @returns {TaskSearchPage}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType30;
+        const $$createField0_0 = $$createType34;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
@@ -2003,6 +2025,59 @@ export class UpdateWorkspaceInput {
     }
 }
 
+export class UserInputResponseInput {
+    /**
+     * Creates a new UserInputResponseInput instance.
+     * @param {Partial<UserInputResponseInput>} [$$source = {}] - The source object to create the UserInputResponseInput.
+     */
+    constructor($$source = {}) {
+        if (!("runId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["runId"] = "";
+        }
+        if (!("requestId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["requestId"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {{ [_ in string]?: string } | undefined}
+             */
+            this["answers"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["cancelled"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UserInputResponseInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UserInputResponseInput}
+     */
+    static createFrom($$source = {}) {
+        const $$createField2_0 = $$createType35;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("answers" in $$parsedSource) {
+            $$parsedSource["answers"] = $$createField2_0($$parsedSource["answers"]);
+        }
+        return new UserInputResponseInput(/** @type {Partial<UserInputResponseInput>} */($$parsedSource));
+    }
+}
+
 export class WorkerStatus {
     /**
      * Creates a new WorkerStatus instance.
@@ -2047,8 +2122,8 @@ export class WorkerStatus {
      * @returns {WorkerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType31;
-        const $$createField1_0 = $$createType32;
+        const $$createField0_0 = $$createType36;
+        const $$createField1_0 = $$createType37;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worker" in $$parsedSource) {
             $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
@@ -2097,9 +2172,9 @@ export class WorkerWorkspaceSetup {
      * @returns {WorkerWorkspaceSetup}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType33;
-        const $$createField1_0 = $$createType34;
-        const $$createField2_0 = $$createType34;
+        const $$createField0_0 = $$createType38;
+        const $$createField1_0 = $$createType39;
+        const $$createField2_0 = $$createType39;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("mapping" in $$parsedSource) {
             $$parsedSource["mapping"] = $$createField0_0($$parsedSource["mapping"]);
@@ -2320,7 +2395,7 @@ export class WorkspaceStatus {
      */
     static createFrom($$source = {}) {
         const $$createField0_0 = $$createType7;
-        const $$createField1_0 = $$createType34;
+        const $$createField1_0 = $$createType39;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("workspace" in $$parsedSource) {
             $$parsedSource["workspace"] = $$createField0_0($$parsedSource["workspace"]);
@@ -2404,16 +2479,21 @@ const $$createType18 = $Create.Array($$createType17);
 const $$createType19 = settings$0.RuntimeSettings.createFrom;
 const $$createType20 = agentrun$0.PermissionRequest.createFrom;
 const $$createType21 = $Create.Nullable($$createType20);
-const $$createType22 = SkillDebugResult.createFrom;
-const $$createType23 = agentrun$0.Usage.createFrom;
-const $$createType24 = SkillDebugEvent.createFrom;
-const $$createType25 = $Create.Array($$createType24);
-const $$createType26 = StorageCategory.createFrom;
-const $$createType27 = $Create.Array($$createType26);
-const $$createType28 = $Create.Nullable($$createType5);
-const $$createType29 = TaskSearchItem.createFrom;
-const $$createType30 = $Create.Array($$createType29);
-const $$createType31 = worker$0.Info.createFrom;
-const $$createType32 = worker$0.Health.createFrom;
-const $$createType33 = worker$0.WorkspaceMapping.createFrom;
-const $$createType34 = workspaces$0.GitSnapshot.createFrom;
+const $$createType22 = agentrun$0.UserInputRequest.createFrom;
+const $$createType23 = $Create.Nullable($$createType22);
+const $$createType24 = agentrun$0.UserInputResponse.createFrom;
+const $$createType25 = $Create.Nullable($$createType24);
+const $$createType26 = SkillDebugResult.createFrom;
+const $$createType27 = agentrun$0.Usage.createFrom;
+const $$createType28 = SkillDebugEvent.createFrom;
+const $$createType29 = $Create.Array($$createType28);
+const $$createType30 = StorageCategory.createFrom;
+const $$createType31 = $Create.Array($$createType30);
+const $$createType32 = $Create.Nullable($$createType5);
+const $$createType33 = TaskSearchItem.createFrom;
+const $$createType34 = $Create.Array($$createType33);
+const $$createType35 = $Create.Map($Create.Any, $Create.Any);
+const $$createType36 = worker$0.Info.createFrom;
+const $$createType37 = worker$0.Health.createFrom;
+const $$createType38 = worker$0.WorkspaceMapping.createFrom;
+const $$createType39 = workspaces$0.GitSnapshot.createFrom;

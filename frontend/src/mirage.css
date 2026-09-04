@@ -94,6 +94,15 @@ select { height: 32px; padding: 0 8px; font-size: var(--ui-font-meta); }
 .conversation-permission pre { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, var(--acp-canvas)); color: var(--acp-text-muted); }
 .conversation-permission.allow { border-left-color: var(--acp-good); background: color-mix(in oklab, var(--acp-good) 6%, var(--acp-canvas)); }
 .conversation-permission.deny { border-left-color: var(--acp-danger); background: color-mix(in oklab, var(--acp-danger) 6%, var(--acp-canvas)); }
+.conversation-user-input { border-color: var(--acp-line); border-left-color: var(--acp-cyan); background: color-mix(in oklab, var(--acp-cyan) 6%, var(--acp-canvas)); }
+.conversation-user-input-head span, .conversation-user-input-head b, .conversation-user-input time, .conversation-user-input legend span { color: var(--acp-cyan); }
+.conversation-user-input-head strong, .conversation-user-input legend strong { color: var(--acp-text); }
+.conversation-user-input-options button { border-color: var(--acp-line); background: color-mix(in oklab, var(--acp-text) 2%, var(--acp-canvas)); color: var(--acp-text); }
+.conversation-user-input-options button:hover, .conversation-user-input-options button.selected { border-color: var(--acp-cyan); background: color-mix(in oklab, var(--acp-cyan) 10%, var(--acp-canvas)); }
+.conversation-user-input-options small { color: var(--acp-text-muted); }
+.conversation-user-input fieldset > p { background: color-mix(in oklab, var(--acp-cyan) 8%, var(--acp-canvas)); color: var(--acp-text); }
+.conversation-user-input.answered { border-left-color: var(--acp-good); background: color-mix(in oklab, var(--acp-good) 6%, var(--acp-canvas)); }
+.conversation-user-input.cancelled { border-left-color: var(--acp-text-soft); background: color-mix(in oklab, var(--acp-text) 3%, var(--acp-canvas)); }
 
 .library-page { padding: 0; overflow-y: auto; }
 .library-hero { min-height: 0; padding: 14px 20px 12px; align-items: flex-end; }

@@ -2550,11 +2550,16 @@
     .workbench-composer-submit { gap: 5px; }
   }
 
-  .conversation-permission {
+  .conversation-permission,
+  .conversation-user-input {
     border: 1px solid color-mix(in oklab, var(--warning) 35%, var(--border));
     border-radius: var(--radius);
     background: color-mix(in oklab, var(--warning) 6%, var(--card));
   }
+
+  .conversation-user-input { border-color: color-mix(in oklab, var(--info) 35%, var(--border)); background: color-mix(in oklab, var(--info) 6%, var(--card)); }
+
+  .conversation-user-input-options { grid-template-columns: minmax(0, 1fr); }
 }
 
 /* The status inspector is a narrow, resizable surface. Token totals stay the

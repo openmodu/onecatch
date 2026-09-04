@@ -18,7 +18,11 @@ export {
     Runtime,
     Skill,
     StreamPhase,
-    Usage
+    Usage,
+    UserInputOption,
+    UserInputQuestion,
+    UserInputRequest,
+    UserInputResponse
 } from "./models.js";
 
 import * as $models from "./models.js";

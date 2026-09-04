@@ -224,6 +224,14 @@ export function RespondPermission(input) {
 }
 
 /**
+ * @param {desktop$0.UserInputResponseInput} input
+ * @returns {$CancellablePromise<void>}
+ */
+export function RespondUserInput(input) {
+    return $Call.ByID(1419628947, input);
+}
+
+/**
  * @param {string} runID
  * @param {string} instruction
  * @returns {$CancellablePromise<workflows$0.Run>}

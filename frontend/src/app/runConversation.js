@@ -181,6 +181,7 @@ function roundItems(events, fallbackText, fallbackError, translate) {
   const items = [];
   const seenMessages = new Set();
   const permissions = new Map();
+  const userInputs = new Map();
   let lastTool = null;
   // Tool calls in a parallel batch all start before any of them return, so the
   // "most recent tool_use" is not the call a result belongs to. When the
@@ -199,6 +200,18 @@ function roundItems(events, fallbackText, fallbackError, translate) {
     if (event.kind === "permission_resolved" && event.permission?.id) {
       const permission = permissions.get(event.permission.id);
       if (permission) permission.decision = event.permissionDecision || event.text || "deny";
+      continue;
+    }
+    if (event.kind === "user_input_request" && event.userInput?.id) {
+      const input = { type: "user_input", id: `user-input-${event.userInput.id}`, request: event.userInput, response: null, at: event.at };
+      userInputs.set(event.userInput.id, input);
+      items.push(input);
+      lastTool = null;
+      continue;
+    }
+    if (event.kind === "user_input_resolved" && event.userInput?.id) {
+      const input = userInputs.get(event.userInput.id);
+      if (input) input.response = event.userInputResponse || { cancelled: true };
       continue;
     }
     // A tool's outcome is its own, not its step's: a step can fail on a token

@@ -66,6 +66,9 @@ func (b *TaskRunBinding) ListRunEvents(runID string, afterSeq int64) ([]desktops
 func (b *TaskRunBinding) RespondPermission(input desktopservice.PermissionDecisionInput) error {
 	return b.service.RespondPermission(input)
 }
+func (b *TaskRunBinding) RespondUserInput(input desktopservice.UserInputResponseInput) error {
+	return b.service.RespondUserInput(input)
+}
 func (b *TaskRunBinding) InterruptRun(runID string) (domainworkflows.Run, error) {
 	return b.service.InterruptRun(context.Background(), runID)
 }

@@ -435,6 +435,22 @@ export class Event {
              */
             this["permissionDecision"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * UserInput is populated for user_input_request and user_input_resolved;
+             * UserInputResponse is populated only after the host answers or dismisses.
+             * @member
+             * @type {UserInputRequest | null | undefined}
+             */
+            this["userInput"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {UserInputResponse | null | undefined}
+             */
+            this["userInputResponse"] = undefined;
+        }
         if (!("at" in $$source)) {
             /**
              * At is when the engine observed the event.
@@ -456,6 +472,8 @@ export class Event {
         const $$createField1_0 = $$createType8;
         const $$createField8_0 = $$createType10;
         const $$createField9_0 = $$createType12;
+        const $$createField11_0 = $$createType14;
+        const $$createField12_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
@@ -465,6 +483,12 @@ export class Event {
         }
         if ("permission" in $$parsedSource) {
             $$parsedSource["permission"] = $$createField9_0($$parsedSource["permission"]);
+        }
+        if ("userInput" in $$parsedSource) {
+            $$parsedSource["userInput"] = $$createField11_0($$parsedSource["userInput"]);
+        }
+        if ("userInputResponse" in $$parsedSource) {
+            $$parsedSource["userInputResponse"] = $$createField12_0($$parsedSource["userInputResponse"]);
         }
         return new Event(/** @type {Partial<Event>} */($$parsedSource));
     }
@@ -538,6 +562,19 @@ export const EventKind = {
      * KindPermissionResolved records the decision returned to the runtime.
      */
     KindPermissionResolved: "permission_resolved",
+
+    /**
+     * KindUserInputRequest asks the host to collect answers while the runtime
+     * remains blocked. It is distinct from permission requests: these choices
+     * shape the work rather than authorize a side effect.
+     */
+    KindUserInputRequest: "user_input_request",
+
+    /**
+     * KindUserInputResolved records the answers (or dismissal) returned to the
+     * runtime so the durable transcript explains why execution continued.
+     */
+    KindUserInputResolved: "user_input_resolved",
 };
 
 /**
@@ -583,7 +620,7 @@ export class HarnessConfiguration {
      * @returns {HarnessConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType14;
+        const $$createField1_0 = $$createType18;
         const $$createField2_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
@@ -771,8 +808,8 @@ export class PermissionRequest {
      * @returns {PermissionRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType15;
-        const $$createField4_0 = $$createType17;
+        const $$createField3_0 = $$createType19;
+        const $$createField4_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("input" in $$parsedSource) {
             $$parsedSource["input"] = $$createField3_0($$parsedSource["input"]);
@@ -1054,6 +1091,185 @@ export class Usage {
     }
 }
 
+/**
+ * UserInputOption is one suggested answer. The host may also accept free text.
+ */
+export class UserInputOption {
+    /**
+     * Creates a new UserInputOption instance.
+     * @param {Partial<UserInputOption>} [$$source = {}] - The source object to create the UserInputOption.
+     */
+    constructor($$source = {}) {
+        if (!("label" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["label"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["description"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UserInputOption instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UserInputOption}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new UserInputOption(/** @type {Partial<UserInputOption>} */($$parsedSource));
+    }
+}
+
+/**
+ * UserInputQuestion is one decision shown inside a human-input card.
+ */
+export class UserInputQuestion {
+    /**
+     * Creates a new UserInputQuestion instance.
+     * @param {Partial<UserInputQuestion>} [$$source = {}] - The source object to create the UserInputQuestion.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["header"] = undefined;
+        }
+        if (!("question" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["question"] = "";
+        }
+        if (!("options" in $$source)) {
+            /**
+             * @member
+             * @type {UserInputOption[]}
+             */
+            this["options"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UserInputQuestion instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UserInputQuestion}
+     */
+    static createFrom($$source = {}) {
+        const $$createField3_0 = $$createType23;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("options" in $$parsedSource) {
+            $$parsedSource["options"] = $$createField3_0($$parsedSource["options"]);
+        }
+        return new UserInputQuestion(/** @type {Partial<UserInputQuestion>} */($$parsedSource));
+    }
+}
+
+/**
+ * UserInputRequest is a runtime-neutral, blocking round of questions.
+ */
+export class UserInputRequest {
+    /**
+     * Creates a new UserInputRequest instance.
+     * @param {Partial<UserInputRequest>} [$$source = {}] - The source object to create the UserInputRequest.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("questions" in $$source)) {
+            /**
+             * @member
+             * @type {UserInputQuestion[]}
+             */
+            this["questions"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UserInputRequest instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UserInputRequest}
+     */
+    static createFrom($$source = {}) {
+        const $$createField1_0 = $$createType25;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("questions" in $$parsedSource) {
+            $$parsedSource["questions"] = $$createField1_0($$parsedSource["questions"]);
+        }
+        return new UserInputRequest(/** @type {Partial<UserInputRequest>} */($$parsedSource));
+    }
+}
+
+/**
+ * UserInputResponse carries answers keyed by question ID. Cancelled is kept
+ * separate from an empty answer so dismissal is never mistaken for consent.
+ */
+export class UserInputResponse {
+    /**
+     * Creates a new UserInputResponse instance.
+     * @param {Partial<UserInputResponse>} [$$source = {}] - The source object to create the UserInputResponse.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {{ [_ in string]?: string } | undefined}
+             */
+            this["answers"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["cancelled"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UserInputResponse instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {UserInputResponse}
+     */
+    static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType26;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("answers" in $$parsedSource) {
+            $$parsedSource["answers"] = $$createField0_0($$parsedSource["answers"]);
+        }
+        return new UserInputResponse(/** @type {Partial<UserInputResponse>} */($$parsedSource));
+    }
+}
+
 // Private type creation functions
 const $$createType0 = ClaudeModelInfo.createFrom;
 const $$createType1 = $Create.Array($$createType0);
@@ -1068,13 +1284,22 @@ const $$createType9 = ContextUsage.createFrom;
 const $$createType10 = $Create.Nullable($$createType9);
 const $$createType11 = PermissionRequest.createFrom;
 const $$createType12 = $Create.Nullable($$createType11);
-const $$createType13 = HarnessModel.createFrom;
-const $$createType14 = $Create.Array($$createType13);
-const $$createType15 = $Create.Map($Create.Any, $Create.Any);
-var $$createType16 = /** @type {(...args: any[]) => any} */(function $$initCreateType16(...args) {
-    if ($$createType16 === $$initCreateType16) {
-        $$createType16 = $$createType15;
+const $$createType13 = UserInputRequest.createFrom;
+const $$createType14 = $Create.Nullable($$createType13);
+const $$createType15 = UserInputResponse.createFrom;
+const $$createType16 = $Create.Nullable($$createType15);
+const $$createType17 = HarnessModel.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = $Create.Map($Create.Any, $Create.Any);
+var $$createType20 = /** @type {(...args: any[]) => any} */(function $$initCreateType20(...args) {
+    if ($$createType20 === $$initCreateType20) {
+        $$createType20 = $$createType19;
     }
-    return $$createType16(...args);
+    return $$createType20(...args);
 });
-const $$createType17 = $Create.Array($$createType16);
+const $$createType21 = $Create.Array($$createType20);
+const $$createType22 = UserInputOption.createFrom;
+const $$createType23 = $Create.Array($$createType22);
+const $$createType24 = UserInputQuestion.createFrom;
+const $$createType25 = $Create.Array($$createType24);
+const $$createType26 = $Create.Map($Create.Any, $Create.Any);

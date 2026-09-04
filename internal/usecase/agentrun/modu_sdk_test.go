@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	codingagent "github.com/openmodu/modu/pkg/coding_agent"
 	"github.com/openmodu/modu/pkg/types"
 )
 
@@ -67,6 +68,20 @@ func TestEngineSelectsConfiguredModuAdapter(t *testing.T) {
 	}
 	if cli.remoteRunner == nil {
 		t.Fatal("CLI Modu adapter has no native SDK fallback for Remote FS")
+	}
+}
+
+func TestModuSDKExposesHumanInputAndPreservesQuestionShape(t *testing.T) {
+	runner := NewModuSDKRunner()
+	if !runner.SupportsInteractiveUserInput() || !NewEngineWithRunners(runner).SupportsInteractiveUserInput(RuntimeModu) {
+		t.Fatal("native Modu SDK must advertise interactive user input")
+	}
+	request := moduUserInputRequest(codingagent.AskRequest{Questions: []codingagent.AskQuestion{{
+		ID: "branch", Header: "Branch base", Question: "Where should the branch start?",
+		Options: []codingagent.AskOption{{Label: "main", Description: "Start clean"}, {Label: "current"}},
+	}}})
+	if request.ID == "" || len(request.Questions) != 1 || request.Questions[0].ID != "branch" || request.Questions[0].Options[0].Description != "Start clean" {
+		t.Fatalf("request = %+v", request)
 	}
 }
 

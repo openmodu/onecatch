@@ -96,6 +96,9 @@ type Request struct {
 	// PermissionHandler blocks until the host approves or denies a tool call.
 	// It is never serialized to a remote worker.
 	PermissionHandler func(context.Context, PermissionRequest) (PermissionDecision, error)
+	// UserInputHandler blocks until the host answers or dismisses a question
+	// card. It is never serialized to a remote worker.
+	UserInputHandler func(context.Context, UserInputRequest) (UserInputResponse, error)
 }
 
 // Sink receives normalized events as they stream from the agent. It is called
@@ -128,6 +131,12 @@ type InteractivePermissionRunner interface {
 	// SupportsInteractivePermissions reports whether a run with this sandbox
 	// will route its tool approvals to Request.PermissionHandler.
 	SupportsInteractivePermissions(sandbox Sandbox) bool
+}
+
+// InteractiveUserInputRunner is implemented by runtimes that can pause while
+// the host collects non-permission decisions from the user.
+type InteractiveUserInputRunner interface {
+	SupportsInteractiveUserInput() bool
 }
 
 // lineParser turns one stdout JSONL line into zero or more normalized events

@@ -129,6 +129,13 @@ func (e *Engine) SupportsInteractivePermissions(rt Runtime, sandbox Sandbox) boo
 	return ok && runner.SupportsInteractivePermissions(sandbox)
 }
 
+// SupportsInteractiveUserInput reports whether the runtime can block on a
+// question card and resume with the host's answers.
+func (e *Engine) SupportsInteractiveUserInput(rt Runtime) bool {
+	runner, ok := e.runners[rt].(InteractiveUserInputRunner)
+	return ok && runner.SupportsInteractiveUserInput()
+}
+
 // ListSkills returns a runtime's effective user-invocable Skill catalog.
 func (e *Engine) ListSkills(ctx context.Context, rt Runtime, cwd string, environment []string) ([]Skill, error) {
 	runner := e.runners[rt]

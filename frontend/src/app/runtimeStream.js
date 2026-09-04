@@ -22,6 +22,8 @@ function frameEvent(frame) {
     failed: Boolean(frame.failed),
     ...(frame.permission ? { permission: frame.permission } : {}),
     ...(frame.permissionDecision ? { permissionDecision: frame.permissionDecision } : {}),
+    ...(frame.userInput ? { userInput: frame.userInput } : {}),
+    ...(frame.userInputResponse ? { userInputResponse: frame.userInputResponse } : {}),
     at: frame.at || "",
   };
 }

@@ -207,6 +207,7 @@ function App() {
   const [busy, setBusy] = useState("");
   const [locked, setLocked] = useState(false);
   const [permissionBusy, setPermissionBusy] = useState("");
+  const [userInputBusy, setUserInputBusy] = useState("");
   const [workers, setWorkers] = useState([]);
   const [workerHealth, setWorkerHealth] = useState({});
   const [remoteWorkspaceHealth, setRemoteWorkspaceHealth] = useState({});
@@ -1171,6 +1172,20 @@ function App() {
     }
   }, [loadRun, mode, notify]);
 
+  const respondUserInput = useCallback(async (requestID, answers, cancelled) => {
+    const runID = runDetailRef.current?.run?.id;
+    if (!runID || !requestID) return;
+    setUserInputBusy(requestID);
+    try {
+      if (mode !== "demo") await TaskRunBinding.RespondUserInput({ runId: runID, requestId: requestID, answers, cancelled });
+      window.setTimeout(() => loadRun(runID, true), 120);
+    } catch (error) {
+      notify("error", errorMessage(error));
+    } finally {
+      setUserInputBusy("");
+    }
+  }, [loadRun, mode, notify]);
+
   const openRenameTask = useCallback((requestedTask) => {
     const task = requestedTask || runDetailRef.current?.task || tasksRef.current.find((item) => item.id === selectedQueuedTaskIDRef.current);
     if (task) setRenameForm({ taskId: task.id, title: task.title, originalTitle: task.title });
@@ -1598,6 +1613,7 @@ function App() {
           selectedQueuedTaskID={selectedQueuedTaskID}
           busy={busy}
           permissionBusy={permissionBusy}
+          userInputBusy={userInputBusy}
           attachments={composerAttachments}
           inspectorCollapsed={activeInspectorCollapsed}
           inspectorToggleVersion={inspectorToggleVersion}
@@ -1627,6 +1643,7 @@ function App() {
           onSteerInstruction={steerQueuedInstruction}
           onLoadEarlierTranscript={loadEarlierTranscript}
           onPermissionDecision={respondPermission}
+          onUserInputResponse={respondUserInput}
           notify={notify}
         /> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
       </main>

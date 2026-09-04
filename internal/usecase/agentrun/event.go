@@ -83,7 +83,41 @@ const (
 	KindPermissionRequest EventKind = "permission_request"
 	// KindPermissionResolved records the decision returned to the runtime.
 	KindPermissionResolved EventKind = "permission_resolved"
+	// KindUserInputRequest asks the host to collect answers while the runtime
+	// remains blocked. It is distinct from permission requests: these choices
+	// shape the work rather than authorize a side effect.
+	KindUserInputRequest EventKind = "user_input_request"
+	// KindUserInputResolved records the answers (or dismissal) returned to the
+	// runtime so the durable transcript explains why execution continued.
+	KindUserInputResolved EventKind = "user_input_resolved"
 )
+
+// UserInputOption is one suggested answer. The host may also accept free text.
+type UserInputOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+}
+
+// UserInputQuestion is one decision shown inside a human-input card.
+type UserInputQuestion struct {
+	ID       string            `json:"id"`
+	Header   string            `json:"header,omitempty"`
+	Question string            `json:"question"`
+	Options  []UserInputOption `json:"options"`
+}
+
+// UserInputRequest is a runtime-neutral, blocking round of questions.
+type UserInputRequest struct {
+	ID        string              `json:"id"`
+	Questions []UserInputQuestion `json:"questions"`
+}
+
+// UserInputResponse carries answers keyed by question ID. Cancelled is kept
+// separate from an empty answer so dismissal is never mistaken for consent.
+type UserInputResponse struct {
+	Answers   map[string]string `json:"answers,omitempty"`
+	Cancelled bool              `json:"cancelled,omitempty"`
+}
 
 // PermissionUpdate is a provider-authored rule update. Claude supplies these
 // suggestions for an "always allow" decision; keeping the structure opaque
@@ -163,6 +197,10 @@ type Event struct {
 	// events. PermissionDecision is "allow" or "deny" on the resolved event.
 	Permission         *PermissionRequest `json:"permission,omitempty"`
 	PermissionDecision string             `json:"permissionDecision,omitempty"`
+	// UserInput is populated for user_input_request and user_input_resolved;
+	// UserInputResponse is populated only after the host answers or dismisses.
+	UserInput         *UserInputRequest  `json:"userInput,omitempty"`
+	UserInputResponse *UserInputResponse `json:"userInputResponse,omitempty"`
 	// At is when the engine observed the event.
 	At time.Time `json:"at"`
 }

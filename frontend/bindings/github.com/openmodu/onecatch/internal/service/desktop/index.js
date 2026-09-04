@@ -37,6 +37,7 @@ export {
     TaskSearchItem,
     TaskSearchPage,
     UpdateWorkspaceInput,
+    UserInputResponseInput,
     WorkerStatus,
     WorkerWorkspaceSetup,
     WorkflowEventView,

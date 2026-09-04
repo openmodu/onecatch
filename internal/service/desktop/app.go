@@ -123,6 +123,13 @@ type PermissionDecisionInput struct {
 	Decision  string `json:"decision"`
 }
 
+type UserInputResponseInput struct {
+	RunID     string            `json:"runId"`
+	RequestID string            `json:"requestId"`
+	Answers   map[string]string `json:"answers,omitempty"`
+	Cancelled bool              `json:"cancelled,omitempty"`
+}
+
 type ListRunsInput struct {
 	WorkspaceID string `json:"workspaceId"`
 	Status      string `json:"status,omitempty"`
@@ -162,6 +169,8 @@ type RuntimeEventView struct {
 	Failed             bool                        `json:"failed,omitempty"`
 	Permission         *agentrun.PermissionRequest `json:"permission,omitempty"`
 	PermissionDecision string                      `json:"permissionDecision,omitempty"`
+	UserInput          *agentrun.UserInputRequest  `json:"userInput,omitempty"`
+	UserInputResponse  *agentrun.UserInputResponse `json:"userInputResponse,omitempty"`
 	At                 string                      `json:"at"`
 }
 
@@ -1122,6 +1131,11 @@ func (a *Service) RespondPermission(input PermissionDecisionInput) error {
 	return a.runtimes.ResolvePermission(runID, requestID, decision)
 }
 
+func (a *Service) RespondUserInput(input UserInputResponseInput) error {
+	runID, requestID := strings.TrimSpace(input.RunID), strings.TrimSpace(input.RequestID)
+	return a.runtimes.ResolveUserInput(runID, requestID, agentrun.UserInputResponse{Answers: input.Answers, Cancelled: input.Cancelled})
+}
+
 func (a *Service) GetRunDetail(ctx context.Context, runID string) (RunDetail, error) {
 	run, err := a.store.Repos.Workflows.GetRun(ctx, runID)
 	if err != nil {
@@ -1321,7 +1335,7 @@ func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEven
 		if !event.At.IsZero() {
 			at = event.At
 		}
-		view := RuntimeEventView{StepRunID: stepRunID, Seq: item.Seq, Kind: string(event.Kind), StreamID: event.StreamID, Revision: event.Revision, Text: event.Text, Failed: event.Failed, Permission: event.Permission, PermissionDecision: event.PermissionDecision, At: at.Format(time.RFC3339Nano)}
+		view := RuntimeEventView{StepRunID: stepRunID, Seq: item.Seq, Kind: string(event.Kind), StreamID: event.StreamID, Revision: event.Revision, Text: event.Text, Failed: event.Failed, Permission: event.Permission, PermissionDecision: event.PermissionDecision, UserInput: event.UserInput, UserInputResponse: event.UserInputResponse, At: at.Format(time.RFC3339Nano)}
 		if event.StreamID == "" || event.Phase == "" {
 			views = append(views, view)
 			continue

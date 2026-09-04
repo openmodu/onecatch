@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	codingagent "github.com/openmodu/modu/pkg/coding_agent"
@@ -41,6 +42,8 @@ func NewModuSDKRunner(options ...ModuSDKOptions) *ModuSDKRunner {
 func (r *ModuSDKRunner) Runtime() Runtime { return RuntimeModu }
 
 func (r *ModuSDKRunner) ModuIntegration() string { return "sdk" }
+
+func (r *ModuSDKRunner) SupportsInteractiveUserInput() bool { return true }
 
 // The SDK is linked into the application, but it is runnable only after Modu
 // can resolve a model and provider from its configured source.
@@ -106,6 +109,18 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 	}
 	unsubscribe := session.Subscribe(adapter.handle)
 	defer unsubscribe()
+	if req.UserInputHandler != nil {
+		session.SetAskCallback(func(ctx context.Context, request codingagent.AskRequest) (codingagent.AskResult, error) {
+			input := moduUserInputRequest(request)
+			sink(Event{Kind: KindUserInputRequest, UserInput: &input, At: adapter.timestamp()})
+			response, askErr := req.UserInputHandler(ctx, input)
+			if askErr != nil {
+				return codingagent.AskResult{}, askErr
+			}
+			sink(Event{Kind: KindUserInputResolved, UserInput: &input, UserInputResponse: &response, At: adapter.timestamp()})
+			return codingagent.AskResult{Answers: response.Answers, Cancelled: response.Cancelled}, nil
+		})
+	}
 
 	// OneCatch has already authorized writable workflow steps. Read-only steps
 	// receive a read-only tool catalog above, so an approval callback is not
@@ -128,6 +143,20 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 	sink(Event{Kind: KindUsage, Usage: &result.Usage, Context: &result.Context, At: adapter.timestamp()})
 	sink(Event{Kind: KindResult, Text: result.FinalMessage, At: adapter.timestamp()})
 	return result, nil
+}
+
+var moduUserInputSequence atomic.Uint64
+
+func moduUserInputRequest(request codingagent.AskRequest) UserInputRequest {
+	questions := make([]UserInputQuestion, 0, len(request.Questions))
+	for _, question := range request.Questions {
+		options := make([]UserInputOption, 0, len(question.Options))
+		for _, option := range question.Options {
+			options = append(options, UserInputOption{Label: option.Label, Description: option.Description})
+		}
+		questions = append(questions, UserInputQuestion{ID: question.ID, Header: question.Header, Question: question.Question, Options: options})
+	}
+	return UserInputRequest{ID: fmt.Sprintf("modu-input-%d", moduUserInputSequence.Add(1)), Questions: questions}
 }
 
 func (r *ModuSDKRunner) ListSkills(_ context.Context, cwd string, environment []string) ([]Skill, error) {
