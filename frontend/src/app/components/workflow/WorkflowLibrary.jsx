@@ -139,7 +139,14 @@ export default function WorkflowLibrary({ workflows, selectedWorkflow, runtimes,
         </div>
         <div className="bg-background/80" />
       </div>
-      : <div className="pointer-events-none absolute inset-x-0 top-0 z-40 flex h-[52px] select-none items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85" aria-hidden="true">{t("workflow.title")}</div>}
+      : <div className="workflow-titlebar drag-region absolute inset-x-0 top-0 z-40 grid h-[52px] cursor-default grid-cols-[240px_minmax(0,1fr)] select-none" aria-hidden="true">
+        {/* The rail owns the first column: it draws its own drag strip and puts
+            the history controls there, so this caption stays out of its way and
+            only claims the content column as draggable window chrome. */}
+        <span className="pointer-events-none" />
+        <span />
+        <strong className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85">{t("workflow.title")}</strong>
+      </div>}
     <AuxWindowCloseButton />
 
     <aside className="sidebar workflow-sidebar relative z-30 flex min-h-0 select-none flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]" aria-label={t("workflow.title")}>

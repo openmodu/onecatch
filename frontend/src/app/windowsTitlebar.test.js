@@ -41,7 +41,9 @@ test("Windows and Linux integrate the conversation controls into one desktop cap
   assert.match(workflow, /<span[^>]*>\{t\("workflow\.title"\)\}<\/span>\s*\{\(onGoBack \|\| onGoForward\)/, "workflow history controls sit immediately after the sidebar title");
   assert.match(workflow, /size="icon-sm"[^>]*onClick=\{onGoBack\}[\s\S]*?<ChevronLeft strokeWidth=\{2\.5\}/, "workflow history controls use a clear native-scale weight");
   assert.match(workflow, /workflow-sidebar-title-spacer[\s\S]*?justify-end px-4 pb-3">\{newWorkflowMenu\}/, "the new-workflow action sits below the Windows and Linux sidebar title");
-  assert.match(workflow, /: <div className="pointer-events-none absolute inset-x-0[^\"]*justify-center[^>]*aria-hidden="true">\{t\("workflow\.title"\)\}/, "macOS keeps the centred native-window title");
+  assert.match(workflow, /: <div className="workflow-titlebar drag-region absolute inset-x-0 top-0 z-40 grid h-\[52px\][^\"]*grid-cols-\[240px_minmax\(0,1fr\)\][^\"]*" aria-hidden="true">/, "macOS drags and zooms from the workflow caption too");
+  assert.match(workflow, /<span className="pointer-events-none" \/>\s*<span \/>/, "the macOS caption leaves the rail column to the sidebar's own drag strip and history controls");
+  assert.match(workflow, /<strong className="pointer-events-none absolute inset-0 flex items-center justify-center[^\"]*">\{t\("workflow\.title"\)\}<\/strong>/, "macOS keeps the centred native-window title");
   assert.match(workflow, /size="icon-xs"[^>]*onClick=\{onGoBack\}[\s\S]*?<strong[^>]*>\{t\("workflow\.title"\)\}<\/strong>/, "macOS keeps its inset history controls and workflow rail heading");
   assert.match(sidebar, /onWidthChange\?\.\(width\)/, "the caption title should stay aligned when the resizable sidebar changes width");
   assert.match(css, /:root:is\(\[data-platform="windows"\], \[data-platform="linux"\]\) \.sidebar-visibility-toggle\s*\{[^}]*left:\s*36px/s, "the sidebar toggle sits immediately after the app icon");

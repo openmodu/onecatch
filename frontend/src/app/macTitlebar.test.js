@@ -134,6 +134,15 @@ test("review and inspector toolbars remain content even inside the old top 80pt 
   assert.deepEqual(host.calls, []);
 });
 
+test("the workflow window's caption is a drag region, so double-clicking it zooms", () => {
+  // It used to be pointer-events-none, which left the content column without a
+  // drag region: only the rail's own strip answered a titlebar double-click.
+  assert.match(source("./components/workflow/WorkflowLibrary.jsx"), /: <div className="workflow-titlebar drag-region /);
+  const host = createWindow();
+  host.fire("dblclick", element("workflow-titlebar drag-region"), { detail: 2 });
+  assert.deepEqual(host.calls, ["wails:drag:doubleclick"]);
+});
+
 test("single clicks remain immediate and dragging titlebar space still works", () => {
   const host = createWindow();
   const titlebar = element("drag-region");
