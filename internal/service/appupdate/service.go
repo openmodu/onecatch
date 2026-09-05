@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -20,7 +21,10 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/appcast"
 )
 
-const readyEnvironment = "ONECATCH_UPDATE_READY_FILE"
+const (
+	readyEnvironment      = "ONECATCH_UPDATE_READY_FILE"
+	updateDownloadTimeout = 10 * time.Minute
+)
 
 const EventStatusChanged = "onecatch:update:status-changed"
 
@@ -74,7 +78,10 @@ func New(app *application.App, dataRoot string) (*Service, error) {
 	}
 	base := strings.TrimRight(strings.TrimSpace(buildinfo.UpdateFeedURL), "/")
 	service.feedURL = fmt.Sprintf("%s/appcast-%s-%s.xml", base, runtime.GOOS, runtime.GOARCH)
-	provider, err := appcast.New(appcast.Config{URL: service.feedURL})
+	provider, err := appcast.New(appcast.Config{
+		URL:        service.feedURL,
+		HTTPClient: updateHTTPClient(),
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -100,6 +107,10 @@ func New(app *application.App, dataRoot string) (*Service, error) {
 		_ = removeCachedUpdate(service.cacheRoot)
 	}
 	return service, nil
+}
+
+func updateHTTPClient() *http.Client {
+	return &http.Client{Timeout: updateDownloadTimeout}
 }
 
 func (s *Service) Close() {

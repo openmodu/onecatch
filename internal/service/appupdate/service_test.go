@@ -6,9 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/openmodu/onecatch/internal/buildinfo"
 )
+
+func TestUpdateHTTPClientAllowsSlowInstallerDownloads(t *testing.T) {
+	if timeout := updateHTTPClient().Timeout; timeout != 10*time.Minute {
+		t.Fatalf("update HTTP timeout = %s, want 10m", timeout)
+	}
+}
 
 func TestSignalReadyFromEnvironmentWritesOnlyOwnedTempMarker(t *testing.T) {
 	marker := filepath.Join(os.TempDir(), fmt.Sprintf("onecatch-update-ready-test-%d", os.Getpid()))
