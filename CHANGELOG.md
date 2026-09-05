@@ -3,6 +3,10 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.3
+
+- Rebuild the desktop installers from the current main branch without product changes.
+
 ## 0.2.2
 
 - Add an agent usage view that aggregates Codex, Claude Code, Pi, Grok, and Modu quotas, rolling windows, daily tokens, and yearly activity, cached locally and refreshed every 30 minutes or on demand.
