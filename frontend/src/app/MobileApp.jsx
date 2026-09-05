@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Events } from "@wailsio/runtime";
 import {
   Activity,
@@ -44,6 +44,8 @@ import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/inter
 import MarkdownContent from "./components/MarkdownContent.jsx";
 import { errorMessage, formatTime } from "./format.js";
 import { applyMobileRunFrame, foldMobileEvents, groupMobileConversations, mergeMobileRun } from "./mobileRuns.js";
+import { useNativeChrome } from "./mobileChrome.js";
+import { isPinnedToBottom, useKeyboardInset } from "./mobileViewport.js";
 import "../mobile.css";
 
 const RUN_EVENT = "mobile:run";
@@ -283,8 +285,39 @@ function ConversationView({ conversation, workspace, snapshot, prompt, setPrompt
   const running = runs.find((item) => item.status === "running");
   const latest = runs.at(-1);
   const canSend = prompt.trim() && !running && !busy && snapshot?.isRepo && !snapshot?.status && !(snapshot?.files || []).length;
+  const transcriptRef = useRef(null);
+  const pinnedRef = useRef(true);
+  const promptRef = useRef(null);
+  const eventCount = runs.reduce((total, run) => total + (run.events?.length || 0), 0);
+
+  // Opening a conversation starts at its newest turn, and streamed events keep
+  // it there unless the reader has scrolled away to look at something.
+  useEffect(() => {
+    pinnedRef.current = true;
+    const element = transcriptRef.current;
+    if (element) element.scrollTop = element.scrollHeight;
+  }, [conversation?.id]);
+  useEffect(() => {
+    const element = transcriptRef.current;
+    if (element && pinnedRef.current) element.scrollTop = element.scrollHeight;
+  }, [eventCount, runs.length, running?.status]);
+
+  // Safari only grew `field-sizing: content` in 26, so the composer has to size
+  // itself for every iOS version this app still supports. The CSS max-height
+  // turns the overflow into an internal scroll.
+  useEffect(() => {
+    const element = promptRef.current;
+    if (!element) return;
+    element.style.height = "auto";
+    element.style.height = `${element.scrollHeight}px`;
+  }, [prompt]);
+
   return <div className="mobile-conversation-shell">
-    <main className={`mobile-transcript ${runs.length ? "has-messages" : "empty"}`}>
+    <main
+      className={`mobile-transcript ${runs.length ? "has-messages" : "empty"}`}
+      ref={transcriptRef}
+      onScroll={() => { pinnedRef.current = isPinnedToBottom(transcriptRef.current); }}
+    >
       {!runs.length && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)}</p></section>}
       {runs.map((run) => {
         const visibleEvents = foldMobileEvents(run.events || []);
@@ -301,7 +334,7 @@ function ConversationView({ conversation, workspace, snapshot, prompt, setPrompt
     <footer className="mobile-composer-wrap">
       {snapshot && (!snapshot.isRepo || snapshot.status || (snapshot.files || []).length) && <div className="mobile-workspace-alert"><CircleAlert />远端工作区需要保持干净才能开始只读任务</div>}
       <div className="mobile-composer">
-        <Textarea value={prompt} rows={1} placeholder={runs.length ? "继续追问…" : "给 Agent 发送任务"} onChange={(event) => setPrompt(event.target.value)} />
+        <Textarea ref={promptRef} value={prompt} rows={1} placeholder={runs.length ? "继续追问…" : "给 Agent 发送任务"} onChange={(event) => setPrompt(event.target.value)} />
         <div className="mobile-composer-footer"><button type="button" className="mobile-context-button" onClick={onOpenContext}><Plus /><span>{workspaceLabel(workspace)}</span><b>{runtime}</b></button>
           {running ? <button type="button" className="mobile-send-button stop" aria-label="停止" disabled={busy} onClick={() => onInterrupt(running.id)}><Square /></button> : <button type="button" className="mobile-send-button" aria-label="发送" disabled={!canSend} onClick={() => onStart({ resumeSessionId: latest?.result?.sessionId || "" })}>{busy ? <LoaderCircle className="animate-spin" /> : <Send />}</button>}
         </div>
@@ -388,6 +421,24 @@ function WorkersSheet({ open, workers, healthByID, busy, onClose, onPair, onRefr
   </div>;
 }
 
+// Wails' iOS webview installs no WKUIDelegate, so window.confirm() resolves to
+// false without ever showing anything — every destructive action behind one
+// silently did nothing on the phone. Ask in the app's own sheet instead.
+function ConfirmSheet({ request, onClose }) {
+  if (!request) return null;
+  return <div className="mobile-sheet-backdrop" role="presentation" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section className="mobile-sheet mobile-confirm-sheet" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+      <div className="mobile-sheet-handle" />
+      <header><div><small>请确认</small><h2 id="confirm-title">{request.title}</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" onClick={onClose}><X /></button></header>
+      <p className="mobile-sheet-copy">{request.body}</p>
+      <div className="mobile-confirm-actions">
+        <Button variant="outline" onClick={onClose}>取消</Button>
+        <Button variant={request.destructive ? "destructive" : "default"} onClick={() => { const run = request.onConfirm; onClose(); void run(); }}>{request.destructive && <Trash2 />}{request.confirmLabel || "确认"}</Button>
+      </div>
+    </section>
+  </div>;
+}
+
 export default function MobileWorkbench() {
   const [view, setView] = useState("projects");
   const [workers, setWorkers] = useState([]);
@@ -411,9 +462,12 @@ export default function MobileWorkbench() {
   const [pairTarget, setPairTarget] = useState(undefined);
   const [contextOpen, setContextOpen] = useState(false);
   const [workersOpen, setWorkersOpen] = useState(false);
+  const [confirmRequest, setConfirmRequest] = useState(null);
   const [busy, setBusy] = useState("");
   const [permissionBusy, setPermissionBusy] = useState("");
   const [notice, setNotice] = useState(null);
+  const keyboardInset = useKeyboardInset();
+  useNativeChrome();
 
   const conversations = useMemo(() => groupMobileConversations(runs), [runs]);
   const orderedWorkspaces = useMemo(() => {
@@ -563,8 +617,15 @@ export default function MobileWorkbench() {
     finally { setPermissionBusy(""); }
   };
 
-  const deleteWorker = async (worker) => {
-    if (!window.confirm(`删除 ${workerLabel(worker)} 的本地配对信息？`)) return;
+  const deleteWorker = (worker) => setConfirmRequest({
+    title: `删除 ${workerLabel(worker)}`,
+    body: "只移除这台设备上保存的配对信息，Worker 本身和它上面的数据不受影响。之后需要重新配对才能连接。",
+    confirmLabel: "删除配对",
+    destructive: true,
+    onConfirm: () => performDeleteWorker(worker),
+  });
+
+  const performDeleteWorker = async (worker) => {
     setBusy("delete");
     try { await MobileBinding.DeleteWorker(worker.id); setHealthByID((current) => { const next = { ...current }; delete next[worker.id]; return next; }); await loadWorkers(); }
     catch (error) { notify("error", errorMessage(error)); }
@@ -587,9 +648,15 @@ export default function MobileWorkbench() {
 	  finally { setBusy(""); }
 	};
 
-	const deleteWorkspace = async (workspace, deleteFiles) => {
-	  const action = deleteFiles ? "删除远端克隆及其文件" : "移除 Workspace 映射";
-	  if (!window.confirm(`${action}“${workspaceLabel(workspace)}”？${deleteFiles ? " 此操作不可恢复。" : " 代码文件会保留在 Worker。"}`)) return;
+	const deleteWorkspace = (workspace, deleteFiles) => setConfirmRequest({
+	  title: deleteFiles ? `删除 ${workspaceLabel(workspace)} 及其文件` : `移除 ${workspaceLabel(workspace)}`,
+	  body: deleteFiles ? "Worker 上的远端克隆会被一并删除，此操作不可恢复。" : "只解除 Workspace 映射，代码文件会保留在 Worker 上。",
+	  confirmLabel: deleteFiles ? "删除并清理文件" : "移除映射",
+	  destructive: true,
+	  onConfirm: () => performDeleteWorkspace(workspace, deleteFiles),
+	});
+
+	const performDeleteWorkspace = async (workspace, deleteFiles) => {
 	  setBusy("workspace-delete");
 	  try {
 	    await MobileBinding.RemoveWorkspace(selectedWorkerID, workspace.id, deleteFiles);
@@ -607,7 +674,7 @@ export default function MobileWorkbench() {
 	const subtitle = view === "projects" || view === "workspaces" ? <><StatusDot online={Boolean(selectedHealth)} />{selectedHealth?.worker?.name || workerLabel(workers.find((item) => item.id === selectedWorkerID))}</> : view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : `${conversations.filter((item) => item.workspaceId === workspaceID).length} 个会话`;
 	const goBack = view === "conversation" ? () => setView("sessions") : view === "sessions" || view === "workspaces" ? () => setView("projects") : null;
 
-  return <div className="mobile-app-shell">
+  return <div className="mobile-app-shell" style={{ "--mobile-keyboard-inset": `${keyboardInset}px` }}>
     <Header title={title} subtitle={subtitle} onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={view === "conversation" ? () => newConversation() : null} />
 	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomDock query={query} setQuery={setQuery} workerOnline={Boolean(selectedHealth)} onWorker={() => setWorkersOpen(true)} onNew={() => newConversation()} />}
@@ -617,6 +684,7 @@ export default function MobileWorkbench() {
     <WorkersSheet open={workersOpen} workers={workers} healthByID={healthByID} busy={Boolean(busy)} onClose={() => setWorkersOpen(false)} onPair={(worker) => { setWorkersOpen(false); setPairTarget(worker || null); }} onRefresh={refreshWorker} onDelete={deleteWorker} />
 	<PairSheet open={pairTarget !== undefined} busy={busy === "pair"} initialURL={pairTarget?.baseUrl || "https://"} onClose={() => setPairTarget(undefined)} onPair={pairWorker} />
 	<WorkspaceEditorSheet workspace={workspaceEditor} busy={busy} onClose={() => setWorkspaceEditor(undefined)} onSave={saveWorkspace} onDelete={deleteWorkspace} />
+    <ConfirmSheet request={confirmRequest} onClose={() => setConfirmRequest(null)} />
     <Notice value={notice} onClose={() => setNotice(null)} />
   </div>;
 }

@@ -4,6 +4,21 @@
     <meta charset="UTF-8"/>
     <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <script>
+        // The mobile shell is an app surface, not a document: it fills the
+        // screen and scrolls its own panes. Page zoom there is a trap — the
+        // scrollers declare `touch-action: pan-y`, so a pinch that lands on
+        // one is swallowed, and a page zoomed in from the chrome around them
+        // can no longer be zoomed back out. Lock the scale before first paint.
+        // Desktop windows keep the normal viewport.
+        if (new URLSearchParams(location.search).get("platform") === "mobile") {
+            document.querySelector('meta[name="viewport"]').content =
+                "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
+            // WKWebView honours user-scalable=no; mobile Safari (and the dev
+            // preview) ignore it and need the gesture events refused instead.
+            for (const name of ["gesturestart", "gesturechange", "gestureend"]) {
+                document.addEventListener(name, (event) => event.preventDefault(), { passive: false });
+            }
+        }
         (() => {
             try {
                 const theme = localStorage.getItem("onecatch.appearance.theme");
