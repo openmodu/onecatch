@@ -3,6 +3,8 @@
   "configurations": [
     {
       "name": "onecatch-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "frontend"],
       "url": "http://localhost:9245",
       "port": 9245
     }
