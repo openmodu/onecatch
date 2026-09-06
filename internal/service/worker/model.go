@@ -7,6 +7,7 @@ import (
 
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
 const MaxRunDuration = 24 * time.Hour
@@ -97,14 +98,37 @@ type PatchAckRequest struct {
 }
 
 type WorkspaceMapping struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name,omitempty"`
-	Path      string    `json:"path"`
-	RemoteURL string    `json:"remoteUrl,omitempty"`
-	Revision  string    `json:"revision,omitempty"`
-	Managed   bool      `json:"managed,omitempty"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID        string `json:"id"`
+	Name      string `json:"name,omitempty"`
+	Path      string `json:"path"`
+	RemoteURL string `json:"remoteUrl,omitempty"`
+	Revision  string `json:"revision,omitempty"`
+	Managed   bool   `json:"managed,omitempty"`
+	// Shared marks a mapping this worker serves but does not own — a project
+	// the desktop hosting it already had. The phone can run against it; only
+	// the desktop can change or remove it.
+	Shared bool `json:"shared,omitempty"`
+	// RemoteHost names the machine a shared Remote FS project lives on, so the
+	// phone can tell a project on the desktop from one the desktop reaches over
+	// SSH. Empty for anything on the worker's own disk.
+	RemoteHost string    `json:"remoteHost,omitempty"`
+	CreatedAt  time.Time `json:"createdAt"`
+	UpdatedAt  time.Time `json:"updatedAt"`
+}
+
+// SharedWorkspace is a project the process hosting this worker already has.
+// The worker serves it without owning it, and everything about where it lives
+// stays server-side: the phone only ever sees Mapping.
+type SharedWorkspace struct {
+	Mapping WorkspaceMapping
+	// Remote redirects the agent's commands and filesystem to another machine.
+	// It is set for a Remote FS project, whose files never existed here.
+	Remote *seam.Target
+	// Git runs git where the workspace actually lives. Nil means this machine.
+	Git GitRunner
+	// Inspector reads the workspace's git state from wherever it lives. Nil
+	// falls back to the worker's own inspector.
+	Inspector GitInspector
 }
 
 type WorkspacePrepareRequest struct {

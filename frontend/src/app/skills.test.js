@@ -174,7 +174,7 @@ test("sync targets are configured in settings and filled from the skills page", 
   // is answered: the directory in Settings, the contents beside the library.
   assert.match(settings, /function SkillSyncSettings/);
   assert.match(settings, /SkillBinding\.UpdateSyncTarget\(\{ id: target\.id, path \}\)/);
-  assert.match(settings, /"skills", "terminal"/, "Skills is a settings section of its own");
+  assert.match(settings, /sectionMeta = \(t\) => \[[^\]]*"skills"/, "Skills is a settings section of its own");
   assert.doesNotMatch(settings, /SetSyncTargetSkills/, "choosing skills belongs to the skills page");
   // Adding a target is one action behind a header control, not a permanent
   // row of empty fields sitting under the real ones.

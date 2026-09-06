@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	posixpath "path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -49,6 +50,7 @@ type Server struct {
 	workspaces        map[string]string
 	workspacesMu      sync.RWMutex
 	workspaceRegistry *WorkspaceRegistry
+	shared            map[string]SharedWorkspace
 	locks             map[string]*sync.RWMutex
 	engine            Engine
 	git               GitInspector
@@ -105,11 +107,89 @@ func (s *Server) SetWorkspaceRegistry(ctx context.Context, registry *WorkspaceRe
 		}
 	}
 	for id, path := range s.workspaces {
+		if _, shared := s.shared[id]; shared {
+			continue
+		}
 		if _, err := registry.Save(ctx, id, path); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// SetSharedWorkspaces publishes mappings this worker serves without owning
+// them: the projects the desktop hosting it already has. The set is replaced
+// wholesale, so a project removed on the desktop stops being reachable from a
+// phone on the next publish. A mapping this worker owns always wins, since it
+// is the one whose files the worker itself created.
+func (s *Server) SetSharedWorkspaces(items []SharedWorkspace) {
+	s.workspacesMu.Lock()
+	defer s.workspacesMu.Unlock()
+	for id := range s.shared {
+		delete(s.workspaces, id)
+	}
+	s.shared = make(map[string]SharedWorkspace, len(items))
+	for _, item := range items {
+		item.Mapping.ID = strings.TrimSpace(item.Mapping.ID)
+		item.Mapping.Path = cleanWorkspacePath(item.Mapping.Path, item.Remote != nil)
+		if item.Mapping.ID == "" || !isAbsWorkspacePath(item.Mapping.Path, item.Remote != nil) {
+			continue
+		}
+		if _, owned := s.workspaces[item.Mapping.ID]; owned {
+			continue
+		}
+		item.Mapping.Shared = true
+		if strings.TrimSpace(item.Mapping.Name) == "" {
+			item.Mapping.Name = item.Mapping.ID
+		}
+		s.shared[item.Mapping.ID] = item
+		s.workspaces[item.Mapping.ID] = item.Mapping.Path
+		if s.locks[item.Mapping.ID] == nil {
+			s.locks[item.Mapping.ID] = &sync.RWMutex{}
+		}
+	}
+}
+
+func (s *Server) sharedWorkspace(id string) (SharedWorkspace, bool) {
+	s.workspacesMu.RLock()
+	defer s.workspacesMu.RUnlock()
+	item, ok := s.shared[id]
+	return item, ok
+}
+
+// workspaceGitRunner picks where a workspace's git commands run: on this
+// machine for anything the worker owns, and on the target host for a Remote FS
+// project shared by the desktop.
+// workspaceInspector reads git state from wherever the workspace lives.
+func (s *Server) workspaceInspector(id string) GitInspector {
+	if item, ok := s.sharedWorkspace(id); ok && item.Inspector != nil {
+		return item.Inspector
+	}
+	return s.git
+}
+
+func (s *Server) workspaceGitRunner(id string) GitRunner {
+	if item, ok := s.sharedWorkspace(id); ok && item.Git != nil {
+		return item.Git
+	}
+	return localGitRunner{}
+}
+
+// A Remote FS root is a POSIX path on another machine, so it must not be run
+// through this machine's path cleaning rules.
+func cleanWorkspacePath(value string, remote bool) string {
+	value = strings.TrimSpace(value)
+	if remote {
+		return posixpath.Clean(value)
+	}
+	return filepath.Clean(value)
+}
+
+func isAbsWorkspacePath(value string, remote bool) bool {
+	if remote {
+		return posixpath.IsAbs(value)
+	}
+	return filepath.IsAbs(value)
 }
 
 // NewServer builds a worker HTTP server. maxConcurrency <= 0 uses
@@ -177,18 +257,22 @@ func (s *Server) pair(writer http.ResponseWriter, request *http.Request) {
 }
 
 func (s *Server) workspaceGit(writer http.ResponseWriter, request *http.Request) {
-	if s.git == nil {
-		writeError(writer, http.StatusNotImplemented, "worker_git_unsupported", "git inspection is not enabled on this worker")
-		return
-	}
-	workspace, workspaceLock, ok := s.workspaceState(request.PathValue("workspaceID"))
+	workspaceID := request.PathValue("workspaceID")
+	workspace, workspaceLock, ok := s.workspaceState(workspaceID)
 	if !ok {
 		writeError(writer, http.StatusConflict, "worker_workspace_unmapped", "workspace is not mapped on this worker")
 		return
 	}
+	// A shared workspace brings its own inspector, so a worker without a global
+	// one can still report git state for the machine that workspace lives on.
+	inspector := s.workspaceInspector(workspaceID)
+	if inspector == nil {
+		writeError(writer, http.StatusNotImplemented, "worker_git_unsupported", "git inspection is not enabled on this worker")
+		return
+	}
 	workspaceLock.RLock()
 	defer workspaceLock.RUnlock()
-	snapshot, err := s.git.Inspect(request.Context(), workspace)
+	snapshot, err := inspector.Inspect(request.Context(), workspace)
 	if err != nil {
 		writeError(writer, http.StatusInternalServerError, "worker_git_failed", "git inspection failed")
 		return
@@ -212,6 +296,9 @@ func (s *Server) listWorkspaces(writer http.ResponseWriter, request *http.Reques
 	items := make([]WorkspaceMapping, 0, len(s.workspaces))
 	for id, path := range s.workspaces {
 		mapping := stored[id]
+		if published, ok := s.shared[id]; ok {
+			mapping = published.Mapping
+		}
 		mapping.ID = id
 		mapping.Path = path
 		if strings.TrimSpace(mapping.Name) == "" {
@@ -232,7 +319,7 @@ func (s *Server) listWorkspaces(writer http.ResponseWriter, request *http.Reques
 			continue
 		}
 		workspaceLock.RLock()
-		remoteURL, revision := workspaceIdentity(request.Context(), items[index].Path)
+		remoteURL, revision := workspaceIdentity(request.Context(), s.workspaceGitRunner(items[index].ID), items[index].Path)
 		workspaceLock.RUnlock()
 		if items[index].RemoteURL == "" {
 			items[index].RemoteURL = remoteURL
@@ -253,6 +340,10 @@ func (s *Server) prepareWorkspace(writer http.ResponseWriter, request *http.Requ
 	workspaceID := request.PathValue("workspaceID")
 	if !runIDPattern.MatchString(workspaceID) {
 		writeError(writer, http.StatusBadRequest, "worker_workspace_prepare_invalid", "workspace id is invalid")
+		return
+	}
+	if _, shared := s.sharedWorkspace(workspaceID); shared {
+		writeError(writer, http.StatusConflict, "worker_workspace_shared", "this workspace belongs to the desktop hosting the worker and can only be changed there")
 		return
 	}
 	if s.workspaceInUse(workspaceID) {
@@ -349,6 +440,10 @@ func (s *Server) removeWorkspace(writer http.ResponseWriter, request *http.Reque
 		writeError(writer, http.StatusBadRequest, "worker_workspace_remove_invalid", "workspace id is invalid")
 		return
 	}
+	if _, shared := s.sharedWorkspace(workspaceID); shared {
+		writeError(writer, http.StatusConflict, "worker_workspace_shared", "this workspace belongs to the desktop hosting the worker and can only be changed there")
+		return
+	}
 	workspacePath, workspaceLock, ok := s.workspaceState(workspaceID)
 	if !ok {
 		writeError(writer, http.StatusNotFound, "worker_workspace_unmapped", "workspace is not mapped on this worker")
@@ -429,6 +524,9 @@ func (s *Server) workspacePathAvailable(id, path string) bool {
 	defer s.workspacesMu.RUnlock()
 	wanted := filepath.Clean(path)
 	for currentID, currentPath := range s.workspaces {
+		if _, shared := s.shared[currentID]; shared {
+			continue
+		}
 		if currentID != id && pathsOverlap(filepath.Clean(currentPath), wanted) {
 			return false
 		}
@@ -539,7 +637,7 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 			return
 		}
 		if input.BaseRevision != "" {
-			if err := validateWorkspaceBaseline(request.Context(), workspace, input.BaseRevision); err != nil {
+			if err := validateWorkspaceBaseline(request.Context(), s.workspaceGitRunner(input.WorkspaceID), workspace, input.BaseRevision); err != nil {
 				writeError(writer, http.StatusConflict, err.Code, err.Message)
 				return
 			}
@@ -555,7 +653,7 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 			writeError(writer, http.StatusConflict, "worker_write_sync_required", "writable remote runs require workspace synchronization")
 			return
 		}
-		if err := validateWorkspaceBaseline(request.Context(), workspace, input.BaseRevision); err != nil {
+		if err := validateWorkspaceBaseline(request.Context(), s.workspaceGitRunner(input.WorkspaceID), workspace, input.BaseRevision); err != nil {
 			writeError(writer, http.StatusConflict, err.Code, err.Message)
 			return
 		}
@@ -590,6 +688,9 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 		EnvironmentAllowlist:    append([]string{}, input.EnvironmentAllowlist...),
 		InterruptGrace:          time.Duration(input.InterruptGraceSeconds) * time.Second,
 		RuntimeDefaultsResolved: true,
+	}
+	if shared, ok := s.sharedWorkspace(input.WorkspaceID); ok {
+		runRequest.Remote = shared.Remote
 	}
 	if s.engine.SupportsInteractivePermissions(input.Runtime, input.Sandbox) {
 		runRequest.PermissionHandler = func(ctx context.Context, permission agentrun.PermissionRequest) (agentrun.PermissionDecision, error) {

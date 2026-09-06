@@ -75,14 +75,20 @@ func prepareGitWorkspace(ctx context.Context, path, remoteURL, revision string) 
 	if err != nil || strings.TrimSpace(string(resolved)) == "" {
 		return &RemoteError{Code: "worker_workspace_revision_missing", Message: "the requested Git revision is unavailable on the worker"}
 	}
-	if baselineErr := validateWorkspaceBaseline(ctx, path, strings.TrimSpace(string(resolved))); baselineErr != nil {
+	if baselineErr := validateWorkspaceBaseline(ctx, localGitRunner{}, path, strings.TrimSpace(string(resolved))); baselineErr != nil {
 		return baselineErr
 	}
 	return nil
 }
 
+// WorkspaceRemoteURL reads the origin of a worktree on this machine. The
+// coordinator calls it for its own checkout.
 func WorkspaceRemoteURL(ctx context.Context, workspace string) (string, error) {
-	output, err := gitOutput(ctx, workspace, "config", "--get", "remote.origin.url")
+	return workspaceRemoteURL(ctx, localGitRunner{}, workspace)
+}
+
+func workspaceRemoteURL(ctx context.Context, git GitRunner, workspace string) (string, error) {
+	output, err := git.Output(ctx, workspace, "config", "--get", "remote.origin.url")
 	if err != nil || strings.TrimSpace(string(output)) == "" {
 		return "", RemoteError{Code: "worker_workspace_remote_missing", Message: "the local project has no origin URL"}
 	}
@@ -123,19 +129,19 @@ func prepareExistingWorkspace(ctx context.Context, path, revision string) (strin
 			return "", "", &RemoteError{Code: "worker_workspace_checkout_failed", Message: commandMessage(output, "could not check out the requested revision on the worker")}
 		}
 	}
-	remoteURL, resolvedRevision := workspaceIdentity(ctx, path)
+	remoteURL, resolvedRevision := workspaceIdentity(ctx, localGitRunner{}, path)
 	if resolvedRevision == "" {
 		return "", "", &RemoteError{Code: "worker_workspace_git_required", Message: "the worker workspace must contain a Git commit"}
 	}
-	if baselineErr := validateWorkspaceBaseline(ctx, path, resolvedRevision); baselineErr != nil {
+	if baselineErr := validateWorkspaceBaseline(ctx, localGitRunner{}, path, resolvedRevision); baselineErr != nil {
 		return "", "", baselineErr
 	}
 	return remoteURL, resolvedRevision, nil
 }
 
-func workspaceIdentity(ctx context.Context, path string) (string, string) {
-	remoteURL, _ := WorkspaceRemoteURL(ctx, path)
-	head, err := gitOutput(ctx, path, "rev-parse", "--verify", "HEAD")
+func workspaceIdentity(ctx context.Context, git GitRunner, path string) (string, string) {
+	remoteURL, _ := workspaceRemoteURL(ctx, git, path)
+	head, err := git.Output(ctx, path, "rev-parse", "--verify", "HEAD")
 	if err != nil {
 		return remoteURL, ""
 	}

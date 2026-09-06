@@ -99,6 +99,12 @@ func Run() {
 	if err := service.InitializeSettings(context.Background()); err != nil {
 		log.Fatal("initialize settings", zap.Error(err))
 	}
+	// Remote access is restored, never forced: a machine the user never opened
+	// to their phone stays closed, and a failure to reopen one must not stop
+	// the desktop from starting.
+	if err := service.RestoreHostedWorker(context.Background()); err != nil {
+		log.Warn("restore hosted worker", zap.Error(err))
+	}
 	if err := service.EnsureBuiltinDefinitions(context.Background()); err != nil {
 		log.Fatal("create builtin workflows", zap.Error(err))
 	}

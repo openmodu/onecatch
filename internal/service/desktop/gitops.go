@@ -100,11 +100,34 @@ func (a *Service) gitForWorkspace(workspace domainworkspaces.Workspace) *gitrepo
 	if workspace.RemoteFS == nil {
 		return a.git
 	}
+	return gitrepo.NewWithRunner(a.remoteGitRunner(workspace))
+}
+
+// remoteGitRunner reaches the machine a Remote FS workspace lives on. It backs
+// both the git inspector and, when this desktop hosts a worker, the worker's
+// own git checks for that workspace.
+func (a *Service) remoteGitRunner(workspace domainworkspaces.Workspace) *remoteGitCommandRunner {
 	factory := a.remoteGitExecutor
 	if factory == nil {
 		factory = newRemoteGitExecutor
 	}
-	return gitrepo.NewWithRunner(&remoteGitCommandRunner{executor: factory(*workspace.RemoteFS)})
+	return &remoteGitCommandRunner{executor: factory(*workspace.RemoteFS)}
+}
+
+// remoteSeamTarget mirrors a Remote FS workspace onto the seam target the agent
+// runner takes, so a hosted worker redirects a run the same way a desktop run
+// is redirected.
+func remoteSeamTarget(workspace domainworkspaces.Workspace) *seam.Target {
+	if workspace.RemoteFS == nil {
+		return nil
+	}
+	return &seam.Target{
+		Host:         workspace.RemoteFS.Host,
+		Root:         workspace.RemoteFS.Root,
+		Username:     workspace.RemoteFS.Username,
+		CredentialID: workspace.RemoteFS.CredentialID,
+		SSHOptions:   append([]string{}, workspace.RemoteFS.SSHOptions...),
+	}
 }
 
 func (a *Service) GitStatus(ctx context.Context, workspaceID string) (domainworkspaces.GitSnapshot, error) {

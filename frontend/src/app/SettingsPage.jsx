@@ -29,12 +29,13 @@ import { APPEARANCE_CHANGED_EVENT, accentThemes, chatFontSizes, readAppearance, 
 import { codexEffortValues, codexServiceTierValues, demoClaudeConfiguration, demoCodexConfiguration, selectedCodexModel } from "./codexRuntimeOptions.js";
 import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
 import { ConfirmDialog } from "./components/settings/ConfirmDialog.jsx";
+import MobileAccessSettings from "./components/settings/MobileAccessSettings.jsx";
 import { demoSettings } from "./settingsDefaults.js";
 import { demoSyncTargets } from "./skills.js";
 import { usesCompactAuxiliaryChrome } from "./platform.js";
 import { appUpdatePercent, useAppUpdate } from "./appUpdate.js";
 
-const sectionMeta = (t) => ["runtime", "harness", "skills", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
+const sectionMeta = (t) => ["runtime", "harness", "skills", "mobile", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
 const message = (error, t) => String(error?.message || error || t("common.unknownError")).replace(/^Error:\s*/, "");
 const bytes = (value = 0) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : value < 1073741824 ? `${(value / 1048576).toFixed(1)} MB` : `${(value / 1073741824).toFixed(1)} GB`;
@@ -235,13 +236,14 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
           <div className="min-w-0"><SettingsKicker>{t("settings.localSettings")}</SettingsKicker><h1 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h1><p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p></div>
           <div className="no-drag flex shrink-0 items-center gap-2.5"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span>{/* Sections that own their own store have nothing in the settings draft
               for Reset to restore. */}
-          {!["runtime", "skills", "experimental"].includes(section) && <SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton>}</div>
+          {!["runtime", "skills", "mobile", "experimental"].includes(section) && <SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton>}</div>
         </header>
         {conflict && <div className="mb-4 flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/8 px-4 py-3" role="alert"><div><strong className="block text-sm font-semibold text-foreground">{t("settings.conflictTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.conflictDescription")}</span></div><SettingsButton tone="muted" onClick={reload}>{t("settings.reload")}</SettingsButton></div>}
         {validationErrors.length > 0 && <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/7 px-4 py-3" role="alert"><strong className="block text-sm font-semibold text-destructive">{t("settings.validationCount", { count: validationErrors.length })}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.validationDescription")}</span></div>}
         {section === "runtime" && <InterfaceSettings i18n={i18n} mode={mode} notify={notify} />}
         {section === "harness" && <HarnessSettings value={draft.runtimes} setValue={(next) => setSectionValue("runtimes", next)} status={runtimeStatus} runtimes={runtimes} check={checkRuntime} errors={errorsByField} codexConfiguration={codexConfiguration} claudeConfiguration={claudeConfiguration} harnessConfigurations={harnessConfigurations} />}
         {section === "skills" && <SkillSyncSettings mode={mode} notify={notify} ask={ask} />}
+        {section === "mobile" && <MobileAccessSettings mode={mode} notify={notify} />}
         {section === "terminal" && <TerminalSettings value={draft.terminal || demoSettings.terminal} setValue={(next) => setSectionValue("terminal", next)} errors={errorsByField} />}
         {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
         {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}

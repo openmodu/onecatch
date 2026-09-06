@@ -2,11 +2,9 @@ package worker
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
@@ -89,7 +87,7 @@ func Run() {
 		log.Printf("follow the startup log for the pairing code: %s", result.LogHint)
 		return
 	}
-	secret, tokenCreated, err := loadOrCreateWorkerToken(stateRoot)
+	secret, tokenCreated, err := worker.LoadOrCreateToken(stateRoot)
 	if err != nil {
 		log.Fatalf("load worker token: %v", err)
 	}
@@ -109,7 +107,7 @@ func Run() {
 	}
 	service.SetGitInspector(gitrepo.New(""))
 	if *pair || pairRequested || tokenCreated {
-		code, err := newPairingCode()
+		code, err := worker.NewPairingCode()
 		if err != nil {
 			log.Fatalf("create pairing code: %v", err)
 		}
@@ -192,61 +190,6 @@ func consumeServicePairingRequest(stateRoot string) (bool, error) {
 		return false, err
 	}
 	return true, nil
-}
-
-func loadOrCreateWorkerToken(stateRoot string) (string, bool, error) {
-	if err := os.MkdirAll(stateRoot, 0o700); err != nil {
-		return "", false, err
-	}
-	path := filepath.Join(stateRoot, "token")
-	value, err := os.ReadFile(path)
-	if err == nil {
-		token := strings.TrimSpace(string(value))
-		if token == "" {
-			return "", false, fmt.Errorf("%s is empty", path)
-		}
-		if err := os.Chmod(path, 0o600); err != nil {
-			return "", false, err
-		}
-		return token, false, nil
-	}
-	if !os.IsNotExist(err) {
-		return "", false, err
-	}
-	buffer := make([]byte, 32)
-	if _, err := rand.Read(buffer); err != nil {
-		return "", false, err
-	}
-	token := hex.EncodeToString(buffer)
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
-	if os.IsExist(err) {
-		return loadOrCreateWorkerToken(stateRoot)
-	}
-	if err != nil {
-		return "", false, err
-	}
-	if _, err := file.WriteString(token + "\n"); err != nil {
-		_ = file.Close()
-		_ = os.Remove(path)
-		return "", false, err
-	}
-	if err := file.Close(); err != nil {
-		_ = os.Remove(path)
-		return "", false, err
-	}
-	return token, true, nil
-}
-
-func newPairingCode() (string, error) {
-	const alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
-	buffer := make([]byte, 8)
-	if _, err := rand.Read(buffer); err != nil {
-		return "", err
-	}
-	for index := range buffer {
-		buffer[index] = alphabet[int(buffer[index])%len(alphabet)]
-	}
-	return string(buffer[:4]) + "-" + string(buffer[4:]), nil
 }
 
 // adoptLegacyWorkerRoot moves a pre-rename worker state directory into place on

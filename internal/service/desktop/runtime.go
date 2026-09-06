@@ -234,6 +234,15 @@ func (r *RuntimeRegistry) Available(runtime agentrun.Runtime) bool {
 	return r.engine.Available(runtime)
 }
 
+// SupportsInteractivePermissions completes the worker engine contract, so a
+// desktop hosting a worker for a phone answers permission prompts the same way
+// the standalone worker does.
+func (r *RuntimeRegistry) SupportsInteractivePermissions(runtime agentrun.Runtime, sandbox agentrun.Sandbox) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.engine.SupportsInteractivePermissions(runtime, sandbox)
+}
+
 func (r *RuntimeRegistry) Run(ctx context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	r.mu.RLock()
 	engine := r.engine

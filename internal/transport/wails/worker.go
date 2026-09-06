@@ -6,6 +6,7 @@ import (
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 	"github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/service/worker/hosting"
 )
 
 type WorkerBinding struct{ service *desktopservice.Service }
@@ -33,4 +34,19 @@ func (b *WorkerBinding) WorkerGitStatus(id, workspaceID string) (domainworkspace
 }
 func (b *WorkerBinding) PrepareWorkerWorkspace(id, workspaceID string) (desktopservice.WorkerWorkspaceSetup, error) {
 	return b.service.PrepareWorkerWorkspace(context.Background(), id, workspaceID)
+}
+
+// The four calls below expose the reverse direction: this desktop acting as
+// the worker a phone connects to.
+func (b *WorkerBinding) HostedWorker() (hosting.Status, error) {
+	return b.service.HostedWorker(context.Background())
+}
+func (b *WorkerBinding) StartHostedWorker() (hosting.Status, error) {
+	return b.service.StartHostedWorker(context.Background())
+}
+func (b *WorkerBinding) StopHostedWorker() (hosting.Status, error) {
+	return b.service.StopHostedWorker(context.Background())
+}
+func (b *WorkerBinding) PairHostedWorker() (hosting.Status, error) {
+	return b.service.PairHostedWorker(context.Background())
 }

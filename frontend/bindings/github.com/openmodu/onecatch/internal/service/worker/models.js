@@ -311,6 +311,26 @@ export class WorkspaceMapping {
              */
             this["managed"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * Shared marks a mapping this worker serves but does not own — a project
+             * the desktop hosting it already had. The phone can run against it; only
+             * the desktop can change or remove it.
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["shared"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * RemoteHost names the machine a shared Remote FS project lives on, so the
+             * phone can tell a project on the desktop from one the desktop reaches over
+             * SSH. Empty for anything on the worker's own disk.
+             * @member
+             * @type {string | undefined}
+             */
+            this["remoteHost"] = undefined;
+        }
         if (!("createdAt" in $$source)) {
             /**
              * @member

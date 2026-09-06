@@ -20,6 +20,7 @@ import {
   LoaderCircle,
   Menu,
   MessageCircle,
+  Monitor,
   MoreHorizontal,
   PanelLeftClose,
 	Pencil,
@@ -120,7 +121,7 @@ function PairSheet({ open, busy, initialURL = "https://", onClose, onPair }) {
     <section className="mobile-sheet" role="dialog" aria-modal="true" aria-labelledby="pair-title">
       <div className="mobile-sheet-handle" />
       <header><div><small>安全配对</small><h2 id="pair-title">连接远端 Worker</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" disabled={busy} onClick={onClose}><X /></button></header>
-      <p className="mobile-sheet-copy">在远端执行 <code>onecatch-worker --pair</code>。配对码 10 分钟内有效且只能使用一次，失效后重新执行命令即可。</p>
+      <p className="mobile-sheet-copy">在电脑的 OneCatch 里打开「设置 › 手机连接」，开启后生成配对码；独立部署的 Worker 则执行 <code>onecatch-worker --pair</code>。配对码 10 分钟内有效且只能用一次。</p>
       <form onSubmit={(event) => { event.preventDefault(); void onPair({ baseURL, code }).then((ok) => { if (ok) { setCode(""); onClose(); } }); }}>
         <label><span>Worker 地址</span><Input value={baseURL} inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="https://192.168.1.20:9231" onChange={(event) => setBaseURL(event.target.value)} /></label>
         <label><span>一次性配对码</span><Input value={code} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="例如 ABCD-EFGH" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
@@ -209,7 +210,10 @@ function WorkspaceManagerPage({ workspaces, statusByID, managementSupported, bus
         return <article className="mobile-workspace-manage-card" key={workspace.id}>
           <header><span className="mobile-workspace-manage-icon"><FolderGit2 /></span><div><strong>{workspaceLabel(workspace)}</strong><small>{workspace.id}</small></div><span className={`mobile-git-state ${dirty ? "dirty" : snapshot?.isRepo ? "clean" : ""}`}>{state?.loading ? "检查中" : state?.error ? "不可用" : workspaceGitLabel(snapshot)}</span></header>
           <div className="mobile-workspace-manage-meta"><span><HardDrive />{workspace.path}</span>{workspace.remoteUrl && <span><GitBranch />{workspace.remoteUrl}</span>}</div>
-          <footer><Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={() => onOpen(workspace.id)}>打开</Button><Button variant="outline" size="icon-sm" aria-label={`刷新 ${workspaceLabel(workspace)}`} disabled={Boolean(busy) || state?.loading} onClick={() => onRefresh(workspace)}><RefreshCw className={state?.loading ? "animate-spin" : ""} /></Button><Button variant="ghost" size="icon-sm" aria-label={`编辑 ${workspaceLabel(workspace)}`} disabled={Boolean(busy)} onClick={() => onEdit(workspace)}><Pencil /></Button></footer>
+          {/* A shared workspace belongs to the desktop hosting this Worker; the
+              phone can run in it, but only that desktop can change it. */}
+          {workspace.shared && <p className="mobile-workspace-shared">{workspace.remoteHost ? <Cloud /> : <Monitor />}{workspace.remoteHost ? `来自桌面端 · 文件在 ${workspace.remoteHost}` : "来自桌面端"}，改名和删除请在电脑上操作</p>}
+          <footer><Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={() => onOpen(workspace.id)}>打开</Button><Button variant="outline" size="icon-sm" aria-label={`刷新 ${workspaceLabel(workspace)}`} disabled={Boolean(busy) || state?.loading} onClick={() => onRefresh(workspace)}><RefreshCw className={state?.loading ? "animate-spin" : ""} /></Button>{!workspace.shared && <Button variant="ghost" size="icon-sm" aria-label={`编辑 ${workspaceLabel(workspace)}`} disabled={Boolean(busy)} onClick={() => onEdit(workspace)}><Pencil /></Button>}</footer>
         </article>;
       })}
     </div>

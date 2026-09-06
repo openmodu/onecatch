@@ -5,7 +5,9 @@ import test from "node:test";
 const source = readFileSync(new URL("./SettingsPage.jsx", import.meta.url), "utf8");
 
 test("places Harness between runtime and terminal in settings navigation", () => {
-  assert.match(source, /\["runtime", "harness", "skills", "terminal"/, "Skills sits between the harness section and the shell");
+  const order = source.match(/sectionMeta = \(t\) => \[([^\]]+)\]/)[1].match(/"([a-z]+)"/g).map((item) => item.slice(1, -1));
+  assert.deepEqual(order.slice(0, 3), ["runtime", "harness", "skills"], "Skills sits between the harness section and the shell");
+  assert.ok(order.indexOf("harness") < order.indexOf("terminal"));
 });
 
 test("keeps appearance separate and moves all runtime controls into Harness", () => {

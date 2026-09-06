@@ -124,6 +124,8 @@ button, input, textarea, select { font: inherit; }
 .mobile-workspace-manage-meta { margin: 12px 0; padding: 10px; display: grid; gap: 7px; border-radius: 12px; background: var(--muted); color: var(--muted-foreground); }
 .mobile-workspace-manage-meta span { min-width: 0; display: flex; align-items: center; gap: 7px; overflow: hidden; font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-workspace-manage-meta svg { width: 13px; flex: 0 0 auto; }
+.mobile-workspace-shared { margin: -4px 0 10px; display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 9px; line-height: 1.45; }
+.mobile-workspace-shared svg { width: 12px; flex: 0 0 auto; }
 .mobile-workspace-manage-card > footer { display: flex; gap: 7px; }
 .mobile-workspace-manage-card > footer button:nth-child(2) { margin-left: auto; }
 

@@ -230,6 +230,8 @@ type Service struct {
 	skillDebugMu      sync.Mutex
 	skillDebugEmit    func(SkillDebugFrame)
 	skillDebugRuns    map[string]*skillDebugRun
+	hostWorker        *hostWorkerController
+	hostWorkerOnce    sync.Once
 	accountUsageCache *accountUsageCache
 	accountUsageSync  sync.Mutex
 	accountUsageWG    sync.WaitGroup
@@ -266,6 +268,9 @@ func (a *Service) Close() error {
 	a.mu.Unlock()
 	a.wg.Wait()
 	a.accountUsageWG.Wait()
+	if a.hostWorker != nil {
+		_ = a.hostWorker.stop(context.Background())
+	}
 	_ = a.runtimes.Close()
 	return a.store.Close()
 }
@@ -605,6 +610,7 @@ func (a *Service) saveWorkspace(ctx context.Context, input AddWorkspaceInput, up
 	if oldCredentialID != "" && oldCredentialID != newCredentialID {
 		_ = credentials.Delete(oldCredentialID)
 	}
+	a.refreshHostedWorkspaces(ctx)
 	return workspace, nil
 }
 
@@ -657,6 +663,7 @@ func (a *Service) RemoveWorkspace(ctx context.Context, id string) error {
 	if err := a.store.Repos.Tasks.SaveWorkspace(ctx, workspace); err != nil {
 		return err
 	}
+	a.refreshHostedWorkspaces(ctx)
 	return nil
 }
 

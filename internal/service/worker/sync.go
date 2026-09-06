@@ -16,15 +16,15 @@ const maxPatchBytes = 24 * 1024 * 1024
 // WorkspaceBaseline verifies that the coordinator worktree can be mirrored to
 // a remote worker and returns the exact commit both machines must share.
 func WorkspaceBaseline(ctx context.Context, workspace string) (string, error) {
-	head, remoteErr := cleanGitHead(ctx, workspace)
+	head, remoteErr := cleanGitHead(ctx, localGitRunner{}, workspace)
 	if remoteErr != nil {
 		return "", *remoteErr
 	}
 	return head, nil
 }
 
-func validateWorkspaceBaseline(ctx context.Context, workspace, expected string) *RemoteError {
-	head, err := cleanGitHead(ctx, workspace)
+func validateWorkspaceBaseline(ctx context.Context, git GitRunner, workspace, expected string) *RemoteError {
+	head, err := cleanGitHead(ctx, git, workspace)
 	if err != nil {
 		return err
 	}
@@ -34,12 +34,12 @@ func validateWorkspaceBaseline(ctx context.Context, workspace, expected string) 
 	return nil
 }
 
-func cleanGitHead(ctx context.Context, workspace string) (string, *RemoteError) {
-	head, err := gitOutput(ctx, workspace, "rev-parse", "--verify", "HEAD")
+func cleanGitHead(ctx context.Context, git GitRunner, workspace string) (string, *RemoteError) {
+	head, err := git.Output(ctx, workspace, "rev-parse", "--verify", "HEAD")
 	if err != nil {
 		return "", &RemoteError{Code: "worker_workspace_git_required", Message: "remote runs require a Git worktree with an initial commit"}
 	}
-	index, err := gitOutput(ctx, workspace, "ls-files", "--stage")
+	index, err := git.Output(ctx, workspace, "ls-files", "--stage")
 	if err != nil {
 		return "", &RemoteError{Code: "worker_workspace_git_failed", Message: "could not inspect the workspace index"}
 	}
@@ -48,7 +48,7 @@ func cleanGitHead(ctx context.Context, workspace string) (string, *RemoteError) 
 			return "", &RemoteError{Code: "worker_workspace_submodules_unsupported", Message: "remote runs do not support repositories with Git submodules"}
 		}
 	}
-	status, err := gitOutput(ctx, workspace, "status", "--porcelain=v1", "-z", "--untracked-files=all")
+	status, err := git.Output(ctx, workspace, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 	if err != nil {
 		return "", &RemoteError{Code: "worker_workspace_git_failed", Message: "could not inspect workspace Git state"}
 	}
@@ -128,7 +128,7 @@ func ApplyWorkspacePatch(ctx context.Context, workspace string, patch WorkspaceP
 	if hex.EncodeToString(digestBytes[:]) != patch.Digest {
 		return RemoteError{Code: "worker_patch_digest_mismatch", Message: "remote patch failed its integrity check"}
 	}
-	if baselineErr := validateWorkspaceBaseline(ctx, workspace, patch.BaseRevision); baselineErr != nil {
+	if baselineErr := validateWorkspaceBaseline(ctx, localGitRunner{}, workspace, patch.BaseRevision); baselineErr != nil {
 		return *baselineErr
 	}
 	command := exec.CommandContext(ctx, "git", "apply", "--binary", "--whitespace=nowarn", "-")
@@ -164,6 +164,20 @@ func cleanWorkspace(ctx context.Context, workspace string, patch WorkspacePatch)
 		return &RemoteError{Code: "worker_patch_cleanup_incomplete", Message: "remote workspace contains additional changes; they were preserved for manual recovery"}
 	}
 	return nil
+}
+
+// GitRunner runs one git command for a workspace. A worker's own workspaces
+// are directories on this machine, but a desktop hosting a worker can share a
+// Remote FS project whose files live on a third machine — its git has to run
+// there, over the same SSH seam the agent uses.
+type GitRunner interface {
+	Output(ctx context.Context, workspace string, args ...string) ([]byte, error)
+}
+
+type localGitRunner struct{}
+
+func (localGitRunner) Output(ctx context.Context, workspace string, args ...string) ([]byte, error) {
+	return gitOutput(ctx, workspace, args...)
 }
 
 func gitOutput(ctx context.Context, workspace string, args ...string) ([]byte, error) {

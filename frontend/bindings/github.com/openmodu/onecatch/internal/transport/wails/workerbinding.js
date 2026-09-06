@@ -15,6 +15,9 @@ import * as desktop$0 from "../../service/desktop/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as worker$0 from "../../service/worker/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as hosting$0 from "../../service/worker/hosting/models.js";
 
 /**
  * @param {string} id
@@ -35,11 +38,31 @@ export function DeleteWorker(id) {
 }
 
 /**
+ * The four calls below expose the reverse direction: this desktop acting as
+ * the worker a phone connects to.
+ * @returns {$CancellablePromise<hosting$0.Status>}
+ */
+export function HostedWorker() {
+    return $Call.ByID(325864608).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * @returns {$CancellablePromise<worker$0.Info[]>}
  */
 export function ListWorkers() {
     return $Call.ByID(957091384).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType3($result);
+    }));
+}
+
+/**
+ * @returns {$CancellablePromise<hosting$0.Status>}
+ */
+export function PairHostedWorker() {
+    return $Call.ByID(3837859668).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
     }));
 }
 
@@ -50,7 +73,7 @@ export function ListWorkers() {
  */
 export function PairWorker(baseURL, code) {
     return $Call.ByID(887449899, baseURL, code).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType2($result);
     }));
 }
 
@@ -61,7 +84,25 @@ export function PairWorker(baseURL, code) {
  */
 export function PrepareWorkerWorkspace(id, workspaceID) {
     return $Call.ByID(2183402867, id, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType4($result);
+    }));
+}
+
+/**
+ * @returns {$CancellablePromise<hosting$0.Status>}
+ */
+export function StartHostedWorker() {
+    return $Call.ByID(3194612398).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
+ * @returns {$CancellablePromise<hosting$0.Status>}
+ */
+export function StopHostedWorker() {
+    return $Call.ByID(3358761216).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
     }));
 }
 
@@ -71,7 +112,7 @@ export function PrepareWorkerWorkspace(id, workspaceID) {
  */
 export function UpdateWorker(input) {
     return $Call.ByID(3105664682, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType2($result);
     }));
 }
 
@@ -82,13 +123,14 @@ export function UpdateWorker(input) {
  */
 export function WorkerGitStatus(id, workspaceID) {
     return $Call.ByID(2531741623, id, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType5($result);
     }));
 }
 
 // Private type creation functions
 const $$createType0 = desktop$0.WorkerStatus.createFrom;
-const $$createType1 = worker$0.Info.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = desktop$0.WorkerWorkspaceSetup.createFrom;
-const $$createType4 = workspaces$0.GitSnapshot.createFrom;
+const $$createType1 = hosting$0.Status.createFrom;
+const $$createType2 = worker$0.Info.createFrom;
+const $$createType3 = $Create.Array($$createType2);
+const $$createType4 = desktop$0.WorkerWorkspaceSetup.createFrom;
+const $$createType5 = workspaces$0.GitSnapshot.createFrom;
