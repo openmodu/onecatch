@@ -177,8 +177,12 @@ tasks:
         APP="{{.BIN_DIR}}/{{.IOS_APP_NAME}}.app"
         BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
         xcrun simctl terminate booted "$BUNDLE_ID" 2>/dev/null || true
-        xcrun simctl uninstall booted "$BUNDLE_ID" 2>/dev/null || true
-        xcrun simctl install booted "$APP"
+        # As in `run`: keep the data container, and the pairing with it.
+        if ! xcrun simctl install booted "$APP"; then
+          echo "install-over failed; replacing the app (this clears its data)"
+          xcrun simctl uninstall booted "$BUNDLE_ID" 2>/dev/null || true
+          xcrun simctl install booted "$APP"
+        fi
         xcrun simctl launch booted "$BUNDLE_ID"
 
   deploy-device:
@@ -339,8 +343,14 @@ tasks:
         DEV_APP="{{.BIN_DIR}}/{{.IOS_APP_NAME}}.dev.app"
         BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$DEV_APP/Info.plist")
         xcrun simctl terminate booted "$BUNDLE_ID" 2>/dev/null || true
-        xcrun simctl uninstall booted "$BUNDLE_ID" 2>/dev/null || true
-        xcrun simctl install booted "$DEV_APP"
+        # Install over the existing app rather than replacing it. Uninstalling
+        # deletes the data container, which on this app means the worker it is
+        # paired with, so every rebuild used to cost a fresh pairing code.
+        if ! xcrun simctl install booted "$DEV_APP"; then
+          echo "install-over failed; replacing the app (this clears its data)"
+          xcrun simctl uninstall booted "$BUNDLE_ID" 2>/dev/null || true
+          xcrun simctl install booted "$DEV_APP"
+        fi
         xcrun simctl launch booted "$BUNDLE_ID"
 
   xcode:

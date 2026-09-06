@@ -354,8 +354,9 @@ tasks:
           ARCH: '{{.ARCH | default .HOST_ARCH}}'
     cmds:
       - task: ensure-emulator
-      - '"{{.ADB}}" uninstall {{.APP_ID}} 2>/dev/null || true'
-      - '"{{.ADB}}" install "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"'
+      # -r reinstalls in place. A plain uninstall would drop the app's data,
+      # and with it the worker this client is paired with.
+      - '"{{.ADB}}" install -r "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk" || { "{{.ADB}}" uninstall {{.APP_ID}} 2>/dev/null || true; "{{.ADB}}" install "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"; }'
       - '"{{.ADB}}" shell am start -n {{.APP_ID}}/com.wails.app.MainActivity'
 
   run:
@@ -365,8 +366,9 @@ tasks:
       - task: build
     cmds:
       - task: assemble:apk
-      - '"{{.ADB}}" uninstall {{.APP_ID}} 2>/dev/null || true'
-      - '"{{.ADB}}" install "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"'
+      # -r reinstalls in place. A plain uninstall would drop the app's data,
+      # and with it the worker this client is paired with.
+      - '"{{.ADB}}" install -r "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk" || { "{{.ADB}}" uninstall {{.APP_ID}} 2>/dev/null || true; "{{.ADB}}" install "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"; }'
       - '"{{.ADB}}" shell am start -n {{.APP_ID}}/com.wails.app.MainActivity'
 
   device:list:
@@ -398,8 +400,12 @@ tasks:
         fi
 
         echo "Deploying {{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk to device $DEVICE..."
-        "{{.ADB}}" -s "$DEVICE" uninstall {{.APP_ID}} 2>/dev/null || true
-        "{{.ADB}}" -s "$DEVICE" install "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"
+        # Reinstall in place so the pairing survives; fall back to replacing
+        # the app when the installed one cannot be upgraded over.
+        if ! "{{.ADB}}" -s "$DEVICE" install -r "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"; then
+          "{{.ADB}}" -s "$DEVICE" uninstall {{.APP_ID}} 2>/dev/null || true
+          "{{.ADB}}" -s "$DEVICE" install "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"
+        fi
         "{{.ADB}}" -s "$DEVICE" shell am start -n {{.APP_ID}}/com.wails.app.MainActivity
     preconditions:
       - sh: '[ -x "{{.ADB}}" ] || command -v adb'
@@ -428,8 +434,12 @@ tasks:
         fi
 
         echo "Deploying {{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk to device $DEVICE..."
-        "{{.ADB}}" -s "$DEVICE" uninstall {{.APP_ID}} 2>/dev/null || true
-        "{{.ADB}}" -s "$DEVICE" install "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"
+        # Reinstall in place so the pairing survives; fall back to replacing
+        # the app when the installed one cannot be upgraded over.
+        if ! "{{.ADB}}" -s "$DEVICE" install -r "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"; then
+          "{{.ADB}}" -s "$DEVICE" uninstall {{.APP_ID}} 2>/dev/null || true
+          "{{.ADB}}" -s "$DEVICE" install "{{.BIN_DIR}}/{{.ANDROID_APP_NAME}}.apk"
+        fi
         "{{.ADB}}" -s "$DEVICE" shell am start -n {{.APP_ID}}/com.wails.app.MainActivity
     preconditions:
       - sh: '[ -x "{{.ADB}}" ] || command -v adb'
