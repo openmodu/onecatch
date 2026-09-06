@@ -60,7 +60,18 @@ button, input, textarea, select { font: inherit; }
 .mobile-round-button:active, .mobile-dark-button:active { transform: scale(.95); }
 .mobile-topbar-title { min-width: 0; display: grid; justify-items: center; gap: 3px; text-align: center; }
 .mobile-topbar-title strong { max-width: 100%; overflow: hidden; font-size: 16px; font-weight: 700; letter-spacing: -.02em; text-overflow: ellipsis; white-space: nowrap; }
-.mobile-topbar-title > span { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--muted-foreground); font-size: 11px; white-space: nowrap; }
+.mobile-topbar-title > span, .mobile-worker-switch { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--muted-foreground); font-size: 11px; white-space: nowrap; }
+.mobile-worker-switch { max-width: 100%; padding: 3px 9px; margin: -3px auto -3px; border: 0; border-radius: 99px; background: color-mix(in oklab, var(--muted) 70%, transparent); }
+.mobile-worker-switch svg { width: 13px; flex: 0 0 auto; }
+.mobile-worker-switch:active { opacity: .6; }
+
+.mobile-worker-switch-list { display: grid; gap: 4px; margin: 16px 0; }
+.mobile-worker-switch-row { min-height: 58px; padding: 0 12px; display: grid; grid-template-columns: 9px minmax(0, 1fr) 18px; align-items: center; gap: 11px; border: 0; border-radius: 15px; background: transparent; color: var(--foreground); text-align: left; }
+.mobile-worker-switch-row.selected { background: var(--muted); }
+.mobile-worker-switch-row strong, .mobile-worker-switch-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-worker-switch-row strong { font-size: 14px; font-weight: 600; }
+.mobile-worker-switch-row small { margin-top: 3px; color: var(--muted-foreground); font-size: 10px; }
+.mobile-worker-switch-row > svg:last-child { width: 17px; }
 
 .mobile-status-dot { width: 7px; height: 7px; display: inline-block; flex: 0 0 auto; border-radius: 50%; background: var(--muted-foreground); }
 .mobile-status-dot.online { background: #22c983; }
@@ -68,13 +79,14 @@ button, input, textarea, select { font: inherit; }
 @keyframes mobile-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 201, 131, .28); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
 
 .mobile-project-page > h1 { margin: 4px 0 17px; }
-.mobile-project-list { display: grid; gap: 4px; }
-.mobile-project-row { min-height: 52px; display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: center; gap: 6px; }
-.mobile-project-link { min-width: 0; padding: 6px 0; display: grid; grid-template-columns: 29px minmax(0, auto) 15px 1fr auto; align-items: center; gap: 8px; border: 0; background: transparent; color: var(--foreground); text-align: left; }
-.mobile-project-link > svg:first-child { width: 23px; height: 23px; stroke-width: 2; }
-.mobile-project-link > svg:nth-of-type(2) { width: 15px; color: var(--muted-foreground); }
-.mobile-project-link strong { min-width: 0; overflow: hidden; font-size: 16px; font-weight: 540; text-overflow: ellipsis; white-space: nowrap; }
-.mobile-project-link .mobile-status-dot { grid-column: 5; }
+.mobile-project-list { display: grid; }
+.mobile-project-row { min-height: 60px; display: grid; grid-template-columns: minmax(0, 1fr) 42px; align-items: center; gap: 6px; }
+/* Name first, one quiet line under it, nothing else: no leading glyph and no
+   chevron, because the whole row is the target. */
+.mobile-project-link { min-width: 0; padding: 9px 0; display: grid; gap: 3px; border: 0; background: transparent; color: var(--foreground); text-align: left; }
+.mobile-project-name { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.mobile-project-link strong { min-width: 0; overflow: hidden; font-size: 16px; font-weight: 560; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-project-link small { overflow: hidden; color: var(--muted-foreground); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-compose-project { width: 42px; height: 42px; display: grid; place-items: center; border: 0; background: transparent; color: color-mix(in oklab, var(--foreground) 48%, transparent); }
 .mobile-compose-project svg { width: 20px; height: 20px; }
 .mobile-project-row button:active { opacity: .55; }
@@ -148,24 +160,38 @@ button, input, textarea, select { font: inherit; }
 .mobile-chat-empty h1 { margin: 0; font-size: 23px; letter-spacing: -.035em; overflow-wrap: anywhere; }
 .mobile-chat-empty p { margin: 8px 0 0; color: var(--muted-foreground); font-size: 12px; }
 .mobile-turn { width: 100%; max-width: 100%; min-width: 0; overflow: hidden; }
-.mobile-turn + .mobile-turn { margin-top: 30px; }
-.mobile-user-message { width: fit-content; max-width: 88%; margin-left: auto; padding: 11px 14px; border-radius: 20px 20px 5px 20px; background: var(--muted); font-size: var(--chat-font-size); line-height: 1.55; }
+.mobile-turn + .mobile-turn { margin-top: 26px; }
+.mobile-user-message { width: fit-content; max-width: 86%; margin-left: auto; padding: 10px 14px; border-radius: 19px 19px 6px 19px; background: var(--muted); font-size: var(--chat-font-size); line-height: 1.55; }
 .mobile-user-message .markdown-content { font-size: inherit; }
-.mobile-turn-meta { margin: 7px 4px 15px; display: flex; justify-content: flex-end; gap: 8px; color: var(--muted-foreground); font: 9px ui-monospace, SFMono-Regular, Menlo, monospace; text-transform: uppercase; }
-.mobile-assistant-message { width: 100%; max-width: 100%; min-width: 0; display: grid; grid-template-columns: 27px minmax(0, 1fr); align-items: flex-start; gap: 10px; font-size: var(--chat-font-size); line-height: 1.62; }
+/* The reply is the page. It runs the full width as prose, with no avatar
+   column and no per-turn stamp repeating what the title bar already says. */
+.mobile-assistant-message { width: 100%; max-width: 100%; min-width: 0; margin-top: 14px; font-size: var(--chat-font-size); line-height: 1.62; }
 .mobile-assistant-message .markdown-content { font-size: inherit; }
 .mobile-assistant-message + .mobile-assistant-message { margin-top: 12px; }
-.mobile-agent-mark { width: 27px; height: 27px; display: grid; place-items: center; border-radius: 9px; background: #1f201f; color: white; }
-.mobile-agent-mark svg { width: 15px; }
-.mobile-event-detail { margin: 8px 0 8px 37px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-.mobile-event-detail summary { min-height: 38px; padding: 0 11px; display: flex; align-items: center; justify-content: space-between; list-style: none; color: var(--muted-foreground); font-size: 11px; }
-.mobile-event-detail summary span { display: flex; align-items: center; gap: 7px; }
-.mobile-event-detail summary svg { width: 14px; }
-.mobile-event-detail[open] summary > svg { transform: rotate(180deg); }
-.mobile-event-detail pre { max-height: 220px; margin: 0; padding: 10px 11px; overflow: auto; border-top: 1px solid var(--border); background: var(--muted); font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
-.mobile-thinking { margin-left: 37px; display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 11px; }
+
+/* Everything that is not the reply is one quiet line you can open, not a
+   bordered card competing with it. */
+.mobile-event-detail, .mobile-event-line { margin: 9px 0; }
+.mobile-event-line, .mobile-event-detail summary { padding: 3px 0; display: flex; align-items: center; gap: 6px; list-style: none; color: var(--muted-foreground); font-size: 11px; }
+.mobile-event-bullet { width: 5px; height: 5px; flex: 0 0 auto; margin: 0 4px; border-radius: 50%; background: color-mix(in oklab, var(--muted-foreground) 55%, transparent); }
+.mobile-event-line.error, .mobile-event-line.error .mobile-event-bullet { color: var(--destructive); background-color: currentColor; }
+.mobile-event-label { flex: 0 0 auto; font-weight: 600; }
+/* A long command gets a second line before it is cut, and the cut is made by
+   width rather than by counting characters. */
+.mobile-event-line code, .mobile-event-detail summary code { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: color-mix(in oklab, var(--muted-foreground) 88%, transparent); font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.mobile-event-line, .mobile-event-detail summary { align-items: flex-start; }
+.mobile-event-label { padding-top: 1px; }
+.mobile-event-detail summary > svg, .mobile-event-bullet { margin-top: 3px; }
+.mobile-event-detail summary::-webkit-details-marker { display: none; }
+.mobile-event-detail summary svg { width: 13px; flex: 0 0 auto; transition: transform .15s ease; }
+.mobile-event-detail[open] summary svg { transform: rotate(90deg); }
+.mobile-event-detail.error summary { color: var(--destructive); }
+.mobile-event-result { color: color-mix(in oklab, var(--foreground) 78%, transparent); }
+.mobile-event-detail pre + pre { margin-top: 4px; }
+.mobile-event-detail pre { max-height: 220px; margin: 6px 0 0; padding: 0 0 0 11px; overflow: auto; border-left: 2px solid var(--border); background: transparent; font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
+.mobile-thinking { margin: 12px 0 0; display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 11px; }
 .mobile-thinking svg { width: 15px; }
-.mobile-run-error { margin: 10px 0 0 37px; padding: 10px; display: flex; align-items: flex-start; gap: 8px; border-radius: 11px; background: color-mix(in oklab, var(--destructive) 9%, transparent); color: var(--destructive); font-size: 11px; line-height: 1.45; }
+.mobile-run-error { margin: 12px 0 0; padding: 10px 12px; display: flex; align-items: flex-start; gap: 8px; border-radius: 11px; background: color-mix(in oklab, var(--destructive) 9%, transparent); color: var(--destructive); font-size: 11px; line-height: 1.45; }
 .mobile-run-error svg { width: 16px; flex: 0 0 auto; }
 
 .mobile-composer-wrap { width: 100%; max-width: 100%; min-width: 0; padding: 5px max(12px, calc((100% - var(--mobile-max)) / 2 + 14px)) calc(7px + env(safe-area-inset-bottom)); overflow: hidden; overscroll-behavior: none; background: linear-gradient(to top, var(--background) 80%, color-mix(in oklab, var(--background) 90%, transparent)); position: relative; z-index: 25; }
@@ -181,7 +207,6 @@ button, input, textarea, select { font: inherit; }
 .mobile-send-button:disabled { opacity: .2; }
 .mobile-send-button.stop { background: var(--destructive); }
 .mobile-send-button svg { width: 17px; }
-.mobile-composer-wrap > p { margin: 5px 0 0; color: var(--muted-foreground); font-size: 8px; text-align: center; }
 .mobile-workspace-alert { margin: 0 8px 6px; display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--destructive); font-size: 9px; }
 .mobile-workspace-alert svg { width: 12px; }
 
@@ -276,7 +301,7 @@ button, input, textarea, select { font: inherit; }
 .mobile-worker-card footer { display: flex; gap: 7px; }
 .mobile-worker-card footer button:last-child { margin-left: auto; }
 
-.mobile-permission-card { margin: 10px 0 10px 37px; padding: 12px; border: 1px solid color-mix(in oklab, var(--warning) 34%, var(--border)); border-radius: 14px; background: color-mix(in oklab, var(--warning) 7%, var(--card)); }
+.mobile-permission-card { margin: 12px 0; padding: 12px; border: 1px solid color-mix(in oklab, var(--warning) 34%, var(--border)); border-radius: 14px; background: color-mix(in oklab, var(--warning) 7%, var(--card)); }
 .mobile-permission-card header { display: flex; align-items: flex-start; gap: 8px; }.mobile-permission-card header > svg { width: 17px; color: var(--warning); }
 .mobile-permission-card strong, .mobile-permission-card small { display: block; }.mobile-permission-card strong { font-size: 12px; }.mobile-permission-card small { margin-top: 3px; color: var(--muted-foreground); font-size: 10px; }
 .mobile-permission-card pre { max-height: 140px; margin: 10px 0; padding: 9px; overflow: auto; border-radius: 9px; background: var(--muted); font: 10px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }

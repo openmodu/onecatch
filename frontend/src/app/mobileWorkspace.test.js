@@ -25,3 +25,63 @@ test("workspaces shared by the desktop are read-only on the phone", async () => 
   // Pairing no longer starts with a terminal command on the remote machine.
   assert.match(source, /设置 › 手机连接/);
 });
+
+// The project list is the first screen after connecting, so it stays a name
+// and one quiet line — no leading glyph, no chevron, the whole row tappable.
+test("project rows carry a name and its recent activity, nothing else", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  const row = source.match(/<button type="button" className="mobile-project-link"[\s\S]*?<\/button>/)[0];
+  assert.match(row, /className="mobile-project-name"/);
+  assert.match(row, /\$\{count\} 个会话 · \$\{relativeTime\(latestAt\)\}/);
+  assert.doesNotMatch(row, /<Folder \/>/, "the folder glyph repeats what the page already says");
+  assert.doesNotMatch(row, /<ChevronRight \/>/, "a chevron adds nothing when the row itself is the target");
+});
+
+// With more than one computer paired, switching machines belongs on the screen
+// the projects are listed on, not buried in the run-settings sheet.
+test("the paired machine is a switcher in the top bar", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  assert.match(source, /function WorkerSwitchSheet\(/);
+  assert.match(source, /onSwitchWorker=\{workers\.length > 1 &&/);
+  // Switching scope must not double as starting a task.
+  const select = source.match(/const selectWorker = \(id\) => \{[\s\S]*?\n  \};/)[0];
+  assert.match(select, /setView\("projects"\)/);
+  assert.doesNotMatch(select, /setView\("conversation"\)/);
+  // Dots only mean something if every machine is polled.
+  assert.match(source, /if \(workers\.length < 2\) return undefined;/);
+});
+
+// `files.length && <div/>` renders the number 0 when the list is empty, which
+// put a stray "0" above the composer for every clean workspace.
+test("a clean workspace does not leak a bare count into the composer", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  const alert = source.match(/\{[^\n]*mobile-workspace-alert[^\n]*\}/)[0];
+  assert.match(alert, /^\{Boolean\(/, "the guard ends in a number, so it has to be cast before React sees it");
+});
+
+// The reply is what the reader came for; everything around it stays quiet.
+test("the transcript reads as prose, not as a stack of cards", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  const css = await readFile(new URL("../mobile.css", sourceURL), "utf8");
+  assert.doesNotMatch(source, /mobile-agent-mark/, "an avatar on every reply is a column of noise");
+  assert.doesNotMatch(source, /mobile-turn-meta/, "the runtime and time already sit in the title bar");
+  // Events collapse to one muted line with no border of their own.
+  assert.doesNotMatch(css, /\.mobile-event-detail[^{]*\{[^}]*border:/);
+  assert.match(css, /\.mobile-event-detail pre \{[^}]*background: transparent/);
+  // The read-only caption is said once, on the empty screen.
+  assert.match(source, /Agent 在远端以只读模式运行/);
+  assert.doesNotMatch(css, /\.mobile-composer-wrap > p/);
+});
+
+// Connecting to a worker and counting tokens are facts about the machinery.
+// A row for each turned a two-line answer into a page of scaffolding.
+test("the transcript drops plumbing events and names what a tool touched", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  const runs = await readFile(new URL("./mobileRuns.js", sourceURL), "utf8");
+  assert.match(runs, /TRANSCRIPT_NOISE = new Set\(\["started", "usage", "permission_resolved"\]\)/);
+  assert.doesNotMatch(source, /usage: "用量"/);
+  assert.doesNotMatch(source, /started: "已连接 Worker"/);
+  // A row that opens onto nothing is not a control.
+  assert.match(source, /if \(!summary\.expandable\) return <div className=\{`mobile-event-line/);
+  assert.match(source, /<code>\{summary\.detail\}<\/code>/);
+});
