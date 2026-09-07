@@ -9,6 +9,9 @@ import { Create as $Create } from "@wailsio/runtime";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as workspaces$0 from "../../domain/workspaces/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as agentrun$0 from "../../usecase/agentrun/models.js";
 
 export class Health {
     /**
@@ -176,6 +179,137 @@ export class Info {
     static createFrom($$source = {}) {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new Info(/** @type {Partial<Info>} */($$parsedSource));
+    }
+}
+
+/**
+ * SharedRun is a projection of the host's durable task record. Clients cache
+ * it for offline viewing; only the host owns execution and history.
+ */
+export class SharedRun {
+    /**
+     * Creates a new SharedRun instance.
+     * @param {Partial<SharedRun>} [$$source = {}] - The source object to create the SharedRun.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("conversationId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["conversationId"] = "";
+        }
+        if (!("workerId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["workerId"] = "";
+        }
+        if (!("workspaceId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["workspaceId"] = "";
+        }
+        if (!("runtime" in $$source)) {
+            /**
+             * @member
+             * @type {agentrun$0.Runtime}
+             */
+            this["runtime"] = agentrun$0.Runtime.$zero;
+        }
+        if (!("prompt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["prompt"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["title"] = undefined;
+        }
+        if (!("status" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["status"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["shared"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {agentrun$0.Event[] | undefined}
+             */
+            this["events"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {agentrun$0.Result | null | undefined}
+             */
+            this["result"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["error"] = undefined;
+        }
+        if (!("startedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["startedAt"] = "0001-01-01T00:00:00.000Z";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | null | undefined}
+             */
+            this["finishedAt"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SharedRun instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {SharedRun}
+     */
+    static createFrom($$source = {}) {
+        const $$createField9_0 = $$createType2;
+        const $$createField10_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("events" in $$parsedSource) {
+            $$parsedSource["events"] = $$createField9_0($$parsedSource["events"]);
+        }
+        if ("result" in $$parsedSource) {
+            $$parsedSource["result"] = $$createField10_0($$parsedSource["result"]);
+        }
+        return new SharedRun(/** @type {Partial<SharedRun>} */($$parsedSource));
     }
 }
 
@@ -439,8 +573,8 @@ export class WorkspacePrepareResult {
      * @returns {WorkspacePrepareResult}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType1;
-        const $$createField1_0 = $$createType2;
+        const $$createField0_0 = $$createType5;
+        const $$createField1_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("mapping" in $$parsedSource) {
             $$parsedSource["mapping"] = $$createField0_0($$parsedSource["mapping"]);
@@ -454,5 +588,9 @@ export class WorkspacePrepareResult {
 
 // Private type creation functions
 const $$createType0 = $Create.Map($Create.Any, $Create.Any);
-const $$createType1 = WorkspaceMapping.createFrom;
-const $$createType2 = workspaces$0.GitSnapshot.createFrom;
+const $$createType1 = agentrun$0.Event.createFrom;
+const $$createType2 = $Create.Array($$createType1);
+const $$createType3 = agentrun$0.Result.createFrom;
+const $$createType4 = $Create.Nullable($$createType3);
+const $$createType5 = WorkspaceMapping.createFrom;
+const $$createType6 = workspaces$0.GitSnapshot.createFrom;

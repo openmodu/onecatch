@@ -28,6 +28,7 @@ const DefaultPort = 9232
 const PairingWindow = 10 * time.Minute
 
 type Options struct {
+	SharedRuns worker.SharedRuns
 	// Root holds the persistent identity: the bearer token and the self-signed
 	// certificate whose fingerprint paired phones pin.
 	Root           string
@@ -104,6 +105,7 @@ func (h *Host) Start(ctx context.Context) (Status, error) {
 		return Status{}, fmt.Errorf("prepare worker token: %w", err)
 	}
 	service := worker.NewServer(h.options.ID, h.options.Name, token, nil, h.options.Engine, h.options.MaxConcurrency)
+	service.SetSharedRuns(h.options.SharedRuns)
 	if err := service.SetWorkspaceRegistry(ctx, worker.NewWorkspaceRegistry(workspaceRegistryPath(h.options.Root))); err != nil {
 		return Status{}, fmt.Errorf("load workspace mappings: %w", err)
 	}

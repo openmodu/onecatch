@@ -131,6 +131,7 @@ func (a *Service) hostWorkerOptions(root string) hosting.Options {
 		Root: root, ID: hostWorkerID(), Name: hostWorkerName(),
 		Engine: a.runtimes, Git: a.git,
 		SharedWorkspaces: a.hostedWorkspaces,
+		SharedRuns:       &hostedRuns{app: a},
 	}
 }
 

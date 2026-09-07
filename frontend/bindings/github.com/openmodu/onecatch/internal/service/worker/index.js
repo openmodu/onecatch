@@ -5,6 +5,7 @@
 export {
     Health,
     Info,
+    SharedRun,
     UpdateInput,
     WorkspaceMapping,
     WorkspacePrepareRequest,

@@ -15,7 +15,7 @@ export function sortMobileRuns(items = []) {
 export function mergeMobileRun(items = [], run) {
   if (!run?.id) return sortMobileRuns(items);
   const next = [run, ...items.filter((item) => item.id !== run.id)];
-  return sortMobileRuns(next).slice(0, 100);
+  return sortMobileRuns(next);
 }
 
 export function applyMobileRunFrame(run, frame) {
@@ -38,7 +38,9 @@ const TRANSCRIPT_NOISE = new Set(["started", "usage", "permission_resolved", "re
 export function foldMobileEvents(items = []) {
   const events = [];
   const streamIndexes = new Map();
+  const resolvedPermissions = new Set(items.filter((event) => event.kind === "permission_resolved").map((event) => event.permission?.id));
   for (const event of items) {
+    if (event.kind === "permission_request" && resolvedPermissions.has(event.permission?.id)) continue;
     if (TRANSCRIPT_NOISE.has(event?.kind)) continue;
     // A thought the harness never filled in is a heading with nothing under it.
     if (event?.kind === "reasoning" && !String(event.text || "").trim()) continue;
@@ -93,7 +95,7 @@ export function groupMobileConversations(items = []) {
   }
   return [...groups.values()].map((conversation) => {
     const runs = [...conversation.runs].sort((left, right) => String(left.startedAt || "").localeCompare(String(right.startedAt || "")));
-    return { ...conversation, title: mobileRunTitle(runs[0]?.prompt), runs };
+    return { ...conversation, title: runs[0]?.title || mobileRunTitle(runs[0]?.prompt), runs };
   });
 }
 

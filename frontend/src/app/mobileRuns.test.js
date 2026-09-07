@@ -163,3 +163,32 @@ test("a run still in flight counts from its latest reading", () => {
   assert.equal(usage.total, 940, "a run with no result yet still reports what it has spent");
   assert.deepEqual(conversationUsage([]), { input: 0, output: 0, cached: 0, total: 0, context: null });
 });
+
+test("shared history keeps more than one page and desktop titles", () => {
+  const runs = Array.from({ length: 125 }, (_, index) => ({ id: `run-${index}`, conversationId: `task-${index}`, startedAt: new Date(index * 1000).toISOString(), prompt: "original", title: `Renamed ${index}`, shared: true }));
+  const merged = mergeMobileRun(runs, { ...runs[124], status: "succeeded" });
+  assert.equal(merged.length, 125);
+  assert.equal(groupMobileConversations(merged)[0].title, "Renamed 124");
+});
+
+test("shared snapshots keep tool calls paired across repeated step stream IDs", () => {
+  const events = foldMobileEvents([
+    { kind: "tool_use", streamId: "step1:call", text: "bash pwd" },
+    { kind: "tool_result", streamId: "step1:call", phase: "end", text: "/workspace" },
+    { kind: "user_message", text: "continue" },
+    { kind: "tool_use", streamId: "step2:call", text: "bash ls" },
+    { kind: "tool_result", streamId: "step2:call", phase: "end", text: "README.md" },
+  ]);
+  assert.deepEqual(events.map(({ kind, text, result }) => [kind, text, result]), [
+    ["tool_use", "bash pwd", "/workspace"], ["user_message", "continue", undefined], ["tool_use", "bash ls", "README.md"],
+  ]);
+});
+
+test("a permission answered on either device no longer asks again", () => {
+  const events = foldMobileEvents([
+    { kind: "permission_request", permission: { id: "permission-1" } },
+    { kind: "permission_request", permission: { id: "permission-2" } },
+    { kind: "permission_resolved", permission: { id: "permission-1" }, permissionDecision: "allow" },
+  ]);
+  assert.deepEqual(events.map((event) => event.permission.id), ["permission-2"]);
+});

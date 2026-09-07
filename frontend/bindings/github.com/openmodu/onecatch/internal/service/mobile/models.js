@@ -9,9 +9,6 @@ import { Create as $Create } from "@wailsio/runtime";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as worker$0 from "../worker/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
-import * as agentrun$0 from "../../usecase/agentrun/models.js";
 
 export class PermissionDecisionInput {
     /**
@@ -55,118 +52,11 @@ export class PermissionDecisionInput {
     }
 }
 
-export class RunView {
-    /**
-     * Creates a new RunView instance.
-     * @param {Partial<RunView>} [$$source = {}] - The source object to create the RunView.
-     */
-    constructor($$source = {}) {
-        if (!("id" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["id"] = "";
-        }
-        if (!("conversationId" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["conversationId"] = "";
-        }
-        if (!("workerId" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["workerId"] = "";
-        }
-        if (!("workspaceId" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["workspaceId"] = "";
-        }
-        if (!("runtime" in $$source)) {
-            /**
-             * @member
-             * @type {agentrun$0.Runtime}
-             */
-            this["runtime"] = agentrun$0.Runtime.$zero;
-        }
-        if (!("prompt" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["prompt"] = "";
-        }
-        if (!("status" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["status"] = "";
-        }
-        if (!("events" in $$source)) {
-            /**
-             * @member
-             * @type {agentrun$0.Event[]}
-             */
-            this["events"] = [];
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {agentrun$0.Result | null | undefined}
-             */
-            this["result"] = undefined;
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {string | undefined}
-             */
-            this["error"] = undefined;
-        }
-        if (!("startedAt" in $$source)) {
-            /**
-             * @member
-             * @type {string}
-             */
-            this["startedAt"] = "0001-01-01T00:00:00.000Z";
-        }
-        if (/** @type {any} */(false)) {
-            /**
-             * @member
-             * @type {string | null | undefined}
-             */
-            this["finishedAt"] = undefined;
-        }
+export const RunView = worker$0.SharedRun;
 
-        Object.assign(this, $$source);
-    }
-
-    /**
-     * Creates a new RunView instance from a string or object.
-     * @param {any} [$$source = {}]
-     * @returns {RunView}
-     */
-    static createFrom($$source = {}) {
-        const $$createField7_0 = $$createType1;
-        const $$createField8_0 = $$createType3;
-        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
-        if ("events" in $$parsedSource) {
-            $$parsedSource["events"] = $$createField7_0($$parsedSource["events"]);
-        }
-        if ("result" in $$parsedSource) {
-            $$parsedSource["result"] = $$createField8_0($$parsedSource["result"]);
-        }
-        return new RunView(/** @type {Partial<RunView>} */($$parsedSource));
-    }
-}
+/**
+ * @typedef {worker$0.SharedRun} RunView
+ */
 
 export class StartRunInput {
     /**
@@ -310,8 +200,8 @@ export class WorkerStatus {
      * @returns {WorkerStatus}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType4;
-        const $$createField1_0 = $$createType5;
+        const $$createField0_0 = $$createType0;
+        const $$createField1_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worker" in $$parsedSource) {
             $$parsedSource["worker"] = $$createField0_0($$parsedSource["worker"]);
@@ -324,9 +214,5 @@ export class WorkerStatus {
 }
 
 // Private type creation functions
-const $$createType0 = agentrun$0.Event.createFrom;
-const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = agentrun$0.Result.createFrom;
-const $$createType3 = $Create.Nullable($$createType2);
-const $$createType4 = worker$0.Info.createFrom;
-const $$createType5 = worker$0.Health.createFrom;
+const $$createType0 = worker$0.Info.createFrom;
+const $$createType1 = worker$0.Health.createFrom;

@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,5 +135,24 @@ func TestModuSDKReadOnlyProviderFiltersMutatingAndExtensionTools(t *testing.T) {
 	})
 	if len(filtered) != 2 || filtered[0].Name() != "read" || filtered[1].Name() != "context_remaining" {
 		t.Fatalf("filtered tools = %#v", filtered)
+	}
+}
+
+func TestModuSDKCodingProviderExecutesBash(t *testing.T) {
+	provider := newModuSDKToolProvider("coding")
+	defer provider.ShutdownTools()
+	tools := provider.Tools(types.ToolContext{Cwd: t.TempDir()})
+	var bash types.Tool
+	for _, tool := range tools {
+		if tool.Name() == "bash" {
+			bash = tool
+		}
+	}
+	if bash == nil {
+		t.Fatal("coding tasks must expose bash")
+	}
+	result, err := bash.Execute(context.Background(), "bash-smoke", map[string]any{"command": "printf onecatch-bash-ok"}, nil)
+	if err != nil || result.IsError || !strings.Contains(moduSDKToolResultText(result), "onecatch-bash-ok") {
+		t.Fatalf("bash = %+v, %v", result, err)
 	}
 }

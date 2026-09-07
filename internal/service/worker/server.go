@@ -44,6 +44,7 @@ const defaultMaxConcurrency = 4
 var runIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
 
 type Server struct {
+	sharedRuns        SharedRuns
 	id                string
 	name              string
 	token             string
@@ -223,6 +224,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/pair", s.pair)
 	mux.HandleFunc("GET /v1/health", s.authorize(s.health))
 	mux.HandleFunc("POST /v1/execute", s.authorize(s.execute))
+	for _, route := range []string{"GET /v1/shared-runs", "GET /v1/shared-runs/{runID}", "POST /v1/shared-runs", "POST /v1/shared-runs/import", "POST /v1/shared-runs/{runID}/interrupt", "POST /v1/shared-runs/{runID}/permissions/{requestID}"} {
+		mux.HandleFunc(route, s.authorize(s.sharedRunsHandler))
+	}
 	mux.HandleFunc("POST /v1/runs/{runID}/interrupt", s.authorize(s.interrupt))
 	mux.HandleFunc("POST /v1/runs/{runID}/permissions/{requestID}", s.authorize(s.respondPermission))
 	mux.HandleFunc("POST /v1/runs/{runID}/patch/ack", s.authorize(s.ackPatch))
@@ -563,7 +567,7 @@ func (s *Server) healthValue() Health {
 	return Health{
 		WorkerID: s.id, Name: s.name, ProtocolVersion: 3,
 		Runtimes:     workerRuntimeAvailability(s.engine),
-		Capabilities: map[string]bool{"interactivePermissions": true, "workspaceSync": true, "workspaceManagement": s.workspaceRegistry != nil, "pairing": s.pairing != nil},
+		Capabilities: map[string]bool{"sharedRuns": s.sharedRuns != nil, "interactivePermissions": true, "workspaceSync": true, "workspaceManagement": s.workspaceRegistry != nil, "pairing": s.pairing != nil},
 	}
 }
 

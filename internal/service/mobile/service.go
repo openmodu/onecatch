@@ -24,8 +24,6 @@ import (
 
 const RunEventName = "mobile:run"
 
-const maxStoredRuns = 100
-
 type WorkerStatus struct {
 	Worker              worker.Info   `json:"worker"`
 	Health              worker.Health `json:"health"`
@@ -53,20 +51,7 @@ type PermissionDecisionInput struct {
 	Decision  string `json:"decision"`
 }
 
-type RunView struct {
-	ID             string           `json:"id"`
-	ConversationID string           `json:"conversationId"`
-	WorkerID       string           `json:"workerId"`
-	WorkspaceID    string           `json:"workspaceId"`
-	Runtime        agentrun.Runtime `json:"runtime"`
-	Prompt         string           `json:"prompt"`
-	Status         string           `json:"status"`
-	Events         []agentrun.Event `json:"events"`
-	Result         *agentrun.Result `json:"result,omitempty"`
-	Error          string           `json:"error,omitempty"`
-	StartedAt      time.Time        `json:"startedAt"`
-	FinishedAt     *time.Time       `json:"finishedAt,omitempty"`
-}
+type RunView = worker.SharedRun
 
 type RunFrame struct {
 	RunID  string           `json:"runId"`
@@ -88,6 +73,7 @@ type Service struct {
 	client   *worker.Client
 	runsPath string
 
+	syncMu  sync.Mutex
 	mu      sync.RWMutex
 	runs    map[string]*runState
 	emitter func(RunFrame)
@@ -125,7 +111,7 @@ func (s *Service) loadRuns() error {
 		if strings.TrimSpace(view.ID) == "" {
 			continue
 		}
-		if view.Status == "running" {
+		if view.Status == "running" && !view.Shared {
 			finishedAt := time.Now().UTC()
 			view.Status = "failed"
 			view.FinishedAt = &finishedAt
@@ -227,10 +213,9 @@ func (s *Service) WorkspaceGitStatus(ctx context.Context, workerID, workspaceID 
 	return s.client.GitStatus(ctx, config, strings.TrimSpace(workspaceID))
 }
 
-// StartRun starts an analysis-only run on a mapped remote workspace. Writable
-// runs are intentionally absent: the worker protocol cleans a writable clone
-// only after its patch has been applied to a coordinator workspace, and a
-// sandboxed phone has no such workspace to receive that patch.
+// StartRun uses the host's task service when available. Legacy standalone
+// workers retain the read-only clone protocol, since a phone cannot apply
+// their writable patches to a coordinator worktree.
 func (s *Service) StartRun(ctx context.Context, input StartRunInput) (RunView, error) {
 	input.WorkerID = strings.TrimSpace(input.WorkerID)
 	input.WorkspaceID = strings.TrimSpace(input.WorkspaceID)
@@ -256,6 +241,32 @@ func (s *Service) StartRun(ctx context.Context, input StartRunInput) (RunView, e
 	}
 	if !health.Runtimes[input.Runtime] {
 		return RunView{}, worker.RemoteError{Code: "worker_runtime_unavailable", Message: "runtime is unavailable on this worker"}
+	}
+	sharedWorkspace := false
+	if health.Capabilities["sharedRuns"] {
+		mappings, err := s.client.ListWorkspaces(ctx, config)
+		if err != nil {
+			return RunView{}, err
+		}
+		for _, mapping := range mappings {
+			if mapping.ID == input.WorkspaceID {
+				sharedWorkspace = mapping.Shared
+				break
+			}
+		}
+	}
+	if sharedWorkspace {
+		s.syncMu.Lock()
+		defer s.syncMu.Unlock()
+		view, err := s.client.StartSharedRun(ctx, config, worker.SharedRunInput{WorkspaceID: input.WorkspaceID,
+			ConversationID: input.ConversationID, Runtime: input.Runtime, Prompt: input.Prompt,
+			Model: input.Model, ReasoningEffort: input.ReasoningEffort, ServiceTier: input.ServiceTier})
+		if err != nil {
+			return RunView{}, err
+		}
+		view.WorkerID, view.Shared = config.ID, true
+		s.cacheSharedRun(config, view)
+		return view, nil
 	}
 	snapshot, err := s.client.GitStatus(ctx, config, input.WorkspaceID)
 	if err != nil {
@@ -341,6 +352,8 @@ func (s *Service) execute(ctx context.Context, state *runState, input StartRunIn
 }
 
 func (s *Service) GetRun(id string) (RunView, error) {
+	s.syncMu.Lock()
+	defer s.syncMu.Unlock()
 	s.mu.RLock()
 	state := s.runs[strings.TrimSpace(id)]
 	if state == nil {
@@ -349,10 +362,24 @@ func (s *Service) GetRun(id string) (RunView, error) {
 	}
 	view := copyRunView(state.view)
 	s.mu.RUnlock()
+	if view.Shared {
+		config, err := s.enabledWorker(context.Background(), view.WorkerID)
+		if err != nil {
+			return view, err
+		}
+		remote, err := s.client.GetSharedRun(context.Background(), config, view.ID)
+		if err != nil {
+			return view, err
+		}
+		remote.WorkerID, remote.Shared = config.ID, true
+		s.cacheSharedRun(config, remote)
+		return remote, nil
+	}
 	return view, nil
 }
 
 func (s *Service) ListRuns() []RunView {
+	s.syncSharedRuns(context.Background())
 	s.mu.RLock()
 	items := s.runViewsLocked()
 	s.mu.RUnlock()
@@ -367,9 +394,6 @@ func (s *Service) runViewsLocked() []RunView {
 	sort.Slice(items, func(i, j int) bool {
 		return items[i].StartedAt.After(items[j].StartedAt)
 	})
-	if len(items) > maxStoredRuns {
-		items = items[:maxStoredRuns]
-	}
 	return items
 }
 
@@ -385,8 +409,16 @@ func (s *Service) InterruptRun(ctx context.Context, id string) error {
 		s.mu.RUnlock()
 		return worker.RemoteError{Code: "mobile_run_not_found", Message: "run was not found on this device"}
 	}
-	config := state.config
+	config, shared, workerID := state.config, state.view.Shared, state.view.WorkerID
 	s.mu.RUnlock()
+	if shared {
+		var err error
+		config, err = s.enabledWorker(ctx, workerID)
+		if err != nil {
+			return err
+		}
+		return s.client.InterruptSharedRun(ctx, config, id)
+	}
 	return s.client.Interrupt(ctx, config, id)
 }
 
@@ -400,8 +432,16 @@ func (s *Service) RespondPermission(ctx context.Context, input PermissionDecisio
 		s.mu.RUnlock()
 		return worker.RemoteError{Code: "mobile_run_not_found", Message: "run was not found on this device"}
 	}
-	config := state.config
+	config, shared, workerID := state.config, state.view.Shared, state.view.WorkerID
 	s.mu.RUnlock()
+	if shared {
+		var err error
+		config, err = s.enabledWorker(ctx, workerID)
+		if err != nil {
+			return err
+		}
+		return s.client.RespondSharedPermission(ctx, config, input.RunID, input.RequestID, input.Decision)
+	}
 	return s.client.RespondPermission(ctx, config, input.RunID, input.RequestID, input.Decision)
 }
 

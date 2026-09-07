@@ -144,7 +144,7 @@ export function WorkspaceGitStatus(workerID, workspaceID) {
 
 // Private type creation functions
 const $$createType0 = mobile$0.WorkerStatus.createFrom;
-const $$createType1 = mobile$0.RunView.createFrom;
+const $$createType1 = worker$0.SharedRun.createFrom;
 const $$createType2 = $Create.Array($$createType1);
 const $$createType3 = worker$0.Info.createFrom;
 const $$createType4 = $Create.Array($$createType3);

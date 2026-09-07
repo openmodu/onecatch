@@ -321,15 +321,15 @@ function AgentEvent({ run, event, index, permissionBusy, onRespond }) {
   </details>;
 }
 
-function ConversationView({ conversation, workspace, snapshot, prompt, setPrompt, busy, permissionBusy, runtime, onOpenContext, onStart, onInterrupt, onRespond }) {
+function ConversationView({ conversation, workspace, snapshot, sharedRuns, prompt, setPrompt, busy, permissionBusy, runtime, onOpenContext, onStart, onInterrupt, onRespond }) {
   const runs = conversation?.runs || [];
   const running = runs.find((item) => item.status === "running");
   const latest = runs.at(-1);
-  const canSend = prompt.trim() && !running && !busy && snapshot?.isRepo && !snapshot?.status && !(snapshot?.files || []).length;
+  const canSend = prompt.trim() && !running && !busy && (sharedRuns || (snapshot?.isRepo && !snapshot?.status && !(snapshot?.files || []).length));
   const transcriptRef = useRef(null);
   const pinnedRef = useRef(true);
   const promptRef = useRef(null);
-  const eventCount = runs.reduce((total, run) => total + (run.events?.length || 0), 0);
+  const transcriptLength = runs.reduce((total, run) => total + (run.events || []).reduce((size, event) => size + 1 + String(event.text || "").length, 0), 0);
 
   // Opening a conversation starts at its newest turn, and streamed events keep
   // it there unless the reader has scrolled away to look at something.
@@ -341,7 +341,7 @@ function ConversationView({ conversation, workspace, snapshot, prompt, setPrompt
   useEffect(() => {
     const element = transcriptRef.current;
     if (element && pinnedRef.current) element.scrollTop = element.scrollHeight;
-  }, [eventCount, runs.length, running?.status]);
+  }, [transcriptLength, runs.length, running?.status]);
 
   // Safari only grew `field-sizing: content` in 26, so the composer has to size
   // itself for every iOS version this app still supports. The CSS max-height
@@ -359,13 +359,13 @@ function ConversationView({ conversation, workspace, snapshot, prompt, setPrompt
       ref={transcriptRef}
       onScroll={() => { pinnedRef.current = isPinnedToBottom(transcriptRef.current); }}
     >
-      {!runs.length && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)} · Agent 在远端以只读模式运行</p></section>}
+      {!runs.length && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)} · {sharedRuns ? "与桌面共用任务和运行记录" : "Agent 在远端以只读模式运行"}</p></section>}
       {runs.length > 0 && <PageHead title={conversation?.title || mobileRunTitle(runs[0]?.prompt)} meta={`${workspaceLabel(workspace)} · ${runtime}`} />}
       {runs.map((run, turn) => {
         const visibleEvents = foldMobileEvents(run.events || []);
         return <section className="mobile-turn" key={run.id}>
         {turn > 0 && <div className="mobile-user-message"><MarkdownContent content={run.prompt} /></div>}
-        {visibleEvents.map((event, index) => <AgentEvent key={`${event.at || index}-${index}`} run={{ ...run, events: visibleEvents }} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />)}
+        {visibleEvents.map((event, index) => event.kind === "user_message" ? <div className="mobile-user-message" key={`user-${index}`}><MarkdownContent content={event.text} /></div> : <AgentEvent key={`${event.at || index}-${index}`} run={{ ...run, events: visibleEvents }} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />)}
         {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
         {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
         {run.result?.finalMessage && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <div className="mobile-assistant-message final"><MarkdownContent content={run.result.finalMessage} /></div>}
@@ -373,7 +373,7 @@ function ConversationView({ conversation, workspace, snapshot, prompt, setPrompt
       })}
     </main>
     <footer className="mobile-composer-wrap">
-      {Boolean(snapshot && (!snapshot.isRepo || snapshot.status || (snapshot.files || []).length)) && <div className="mobile-workspace-alert"><CircleAlert />远端工作区需要保持干净才能开始只读任务</div>}
+      {Boolean(!sharedRuns && snapshot && (!snapshot.isRepo || snapshot.status || (snapshot.files || []).length)) && <div className="mobile-workspace-alert"><CircleAlert />远端工作区需要保持干净才能开始只读任务</div>}
       <div className="mobile-composer">
         <Textarea ref={promptRef} value={prompt} rows={1} placeholder={runs.length ? "继续追问…" : "给 Agent 发送任务"} onChange={(event) => setPrompt(event.target.value)} />
         <div className="mobile-composer-footer"><button type="button" className="mobile-context-button" onClick={onOpenContext}><Plus /><span>{workspaceLabel(workspace)}</span><b>{runtime}</b></button>
@@ -649,6 +649,38 @@ export default function MobileWorkbench() {
     return () => off();
   }, []);
 
+  // Refresh on foreground/reconnect as well as while visible. The host owns
+  // execution, so this also discovers turns started on the desktop.
+  useEffect(() => {
+    let stopped = false;
+    let pending = false;
+    const refresh = async () => {
+      if (pending || document.hidden) return;
+      pending = true;
+      try {
+        const items = await MobileBinding.ListRuns();
+        if (stopped) return;
+        setRuns(items || []);
+        for (const run of items || []) {
+          if (!run.shared || run.conversationId !== selectedConversationID) continue;
+          const detail = await MobileBinding.GetRun(run.id);
+          if (!stopped) setRuns((current) => mergeMobileRun(current, detail));
+        }
+      } catch { /* Keep the last successful snapshot while offline. */ }
+      finally { pending = false; }
+    };
+    void refresh();
+    const timer = window.setInterval(refresh, 2000);
+    window.addEventListener("online", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.removeEventListener("online", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [selectedConversationID, selectedWorkerID]);
+
   const selectWorkspace = (id, nextView = "sessions") => { setWorkspaceID(id); setSelectedConversationID(""); setView(nextView); setQuery(""); };
   const openConversation = (id) => {
     const conversation = conversations.find((item) => item.id === id);
@@ -768,7 +800,7 @@ export default function MobileWorkbench() {
 
   return <div className="mobile-app-shell" style={{ "--mobile-keyboard-inset": `${keyboardInset}px` }}>
     <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} />
-	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} meta={workerMeta} onMeta={switchWorker} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
+	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} meta={workerMeta} onMeta={switchWorker} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
     <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
 	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
