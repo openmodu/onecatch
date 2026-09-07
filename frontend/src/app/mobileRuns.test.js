@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyMobileRunFrame, conversationUsage, describeToolArguments, foldMobileEvents, groupMobileConversations, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity, sortMobileRuns, unwrapShellCommand } from "./mobileRuns.js";
+import { applyMobileRunFrame, conversationUsage, describeToolArguments, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity, sortMobileRuns, unwrapShellCommand } from "./mobileRuns.js";
 
 test("mobile task titles use the first compact prompt line", () => {
   assert.equal(mobileRunTitle("  Review the worker API\nthen add tests  "), "Review the worker API");
@@ -129,6 +129,19 @@ test("a result rejoins its call even when prose came between them", () => {
   assert.deepEqual(folded.map((event) => event.kind), ["tool_use", "message"]);
   assert.equal(folded[0].result, "no matches");
   assert.equal(folded[0].failed, true);
+});
+
+test("adjacent tools share a disclosure without moving prose", () => {
+  const blocks = groupMobileTranscriptEvents([
+    { kind: "message", text: "先检查" },
+    { kind: "tool_use", streamId: "one", text: "rg issue" },
+    { kind: "tool_use", streamId: "two", text: "npm test" },
+    { kind: "reasoning", text: "测试通过后再检查状态" },
+    { kind: "tool_use", streamId: "three", text: "git status" },
+  ]);
+  assert.deepEqual(blocks.map((block) => block.type), ["event", "tools", "event", "tools"]);
+  assert.deepEqual(blocks[1].events.map((event) => event.streamId), ["one", "two"]);
+  assert.equal(blocks[2].event.kind, "reasoning");
 });
 
 // Modu ends a run with a `result` event carrying the same prose as the final

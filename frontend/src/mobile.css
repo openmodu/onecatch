@@ -185,6 +185,18 @@ button, input, textarea, select { font: inherit; }
 .mobile-event-line code, .mobile-event-detail summary code { min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: inherit; font: inherit; overflow-wrap: anywhere; }
 .mobile-event-detail pre { max-height: 220px; margin: 4px 0 0 14px; padding: 0; overflow: auto; border: 0; background: transparent; font: 10.5px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; color: var(--muted-foreground); }
 .mobile-event-result { color: color-mix(in oklab, var(--foreground) 76%, transparent); }
+.mobile-tool-group { min-width: 0; margin: 9px 0; }
+.mobile-tool-group-summary { min-height: 38px; padding: 5px 2px; display: flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; color: var(--muted-foreground); font-size: 12px; font-variant-numeric: tabular-nums; -webkit-tap-highlight-color: transparent; }
+.mobile-tool-group-summary::-webkit-details-marker { display: none; }
+.mobile-tool-group-summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; border-radius: 6px; }
+.mobile-tool-group-summary:active { opacity: .65; }
+.mobile-tool-group-summary svg { width: 13px; height: 13px; transition: transform .15s ease; }
+.mobile-tool-group[open] > .mobile-tool-group-summary svg { transform: rotate(90deg); }
+.mobile-tool-group-body { overflow: hidden; border: 1px solid var(--m-line); border-radius: 10px; background: color-mix(in oklab, var(--background) 96%, var(--muted)); }
+.mobile-tool-group-body > * { margin: 0; }
+.mobile-tool-group-body > * + * { border-top: 1px solid var(--m-line); }
+.mobile-tool-group-body .mobile-tool-row { padding: 7px 10px; }
+.mobile-tool-group-body .mobile-tool-content { margin-right: 10px; }
 .mobile-tool { margin: 4px 0; }
 .mobile-tool-row { min-height: 44px; min-width: 0; padding: 7px 0; display: flex; align-items: center; gap: 9px; list-style: none; color: var(--muted-foreground); }
 summary.mobile-tool-row { cursor: pointer; -webkit-tap-highlight-color: transparent; }
@@ -196,7 +208,8 @@ summary.mobile-tool-row:active { opacity: .65; }
 .mobile-tool-caption { min-width: 0; flex: 1; display: flex; align-items: baseline; gap: 8px; }
 .mobile-tool-name { max-width: 60%; flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--foreground); font-size: 12px; font-weight: 500; }
 .mobile-tool-caption code { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-.mobile-tool-duration { flex: 0 0 auto; color: var(--muted-foreground); font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.mobile-tool-meta { flex: 0 0 auto; display: flex; align-items: center; gap: 5px; color: var(--muted-foreground); font: 10px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.mobile-tool-meta > * + *::before { margin-right: 5px; content: "·"; }
 .mobile-tool-chevron { width: 13px; height: 13px; flex: 0 0 auto; transition: transform .15s ease; }
 .mobile-tool[open] .mobile-tool-chevron { transform: rotate(90deg); }
 .mobile-tool-failed { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; color: var(--destructive); font-size: 10px; }
@@ -206,7 +219,7 @@ summary.mobile-tool-row:active { opacity: .65; }
 .mobile-tool-content > div + div { margin-top: 12px; }
 .mobile-tool-section { color: var(--muted-foreground); font-size: 10px; font-weight: 500; }
 .mobile-tool-content pre { max-height: 240px; margin: 5px 0 0; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted-foreground); font: 11px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
-@media (prefers-reduced-motion: reduce) { .mobile-tool-chevron, .mobile-reasoning-row > svg { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mobile-tool-chevron, .mobile-reasoning-row > svg, .mobile-tool-group-summary svg { transition: none; } }
 .mobile-thinking { margin: 14px 0 0; display: flex; align-items: center; gap: 8px; color: var(--muted-foreground); font-size: 11.5px; }
 .mobile-thinking svg { width: 14px; }
 .mobile-run-error { margin: 14px 0 0; display: flex; align-items: flex-start; gap: 8px; color: var(--destructive); font-size: 11.5px; line-height: 1.55; }

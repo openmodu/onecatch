@@ -84,6 +84,15 @@ test("reasoning stays behind a collapsed icon row", async () => {
   assert.doesNotMatch(source, /<details className="mobile-reasoning"\s+open/);
 });
 
+test("adjacent mobile tools use the desktop disclosure pattern", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  const css = await readFile(new URL("../mobile.css", sourceURL), "utf8");
+  assert.match(source, /<summary className="mobile-tool-group-summary"><span>运行了 \{count\} 个工具<\/span>/);
+  assert.match(source, /<ToolGroup[^>]*events=\{block\.events\}/);
+  assert.match(source, /<details className="mobile-tool-group" open=\{active \|\| undefined\}>/);
+  assert.match(css, /\.mobile-tool-group-body \{[^}]*border: 1px solid var\(--m-line\)/);
+});
+
 // Connecting to a worker and counting tokens are facts about the machinery.
 // A row for each turned a two-line answer into a page of scaffolding.
 test("the transcript drops plumbing events and names what a tool touched", async () => {

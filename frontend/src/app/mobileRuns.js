@@ -67,6 +67,26 @@ export function foldMobileEvents(items = []) {
   return foldToolResults(events);
 }
 
+// Match the desktop transcript's rhythm: adjacent tools share one disclosure,
+// while prose, thoughts and permission prompts keep their original position.
+export function groupMobileTranscriptEvents(items = []) {
+  const blocks = [];
+  for (const event of items) {
+    const tool = event?.kind === "tool_use" || event?.kind === "tool_result";
+    const previous = blocks[blocks.length - 1];
+    if (tool && previous?.type === "tools") {
+      previous.events.push(event);
+      continue;
+    }
+    if (tool) {
+      blocks.push({ type: "tools", events: [event] });
+      continue;
+    }
+    blocks.push({ type: "event", event });
+  }
+  return blocks;
+}
+
 export function mobileConversationID(run) {
   return String(run?.conversationId || run?.id || "");
 }

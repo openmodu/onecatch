@@ -44,8 +44,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import MarkdownContent from "./components/MarkdownContent.jsx";
-import { errorMessage, formatDuration, formatTime, compactTokens, shortenPath } from "./format.js";
-import { applyMobileRunFrame, conversationUsage, foldMobileEvents, groupMobileConversations, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
+import { errorMessage, formatDuration, formatTime, formatToolTime, compactTokens, shortenPath } from "./format.js";
+import { applyMobileRunFrame, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useKeyboardInset } from "./mobileViewport.js";
 import "../mobile.css";
@@ -346,10 +346,11 @@ function ToolEvent({ event, summary }) {
   const duration = Number.isFinite(startedAt) && startedAt > 0 && Number.isFinite(finishedAt) && finishedAt >= startedAt
     ? formatDuration(finishedAt - startedAt)
     : "";
+  const time = event.at ? formatToolTime(event.at) : "";
   const heading = <>
     <span className="mobile-tool-icon" aria-hidden="true"><Icon /></span>
     <span className="mobile-tool-caption"><span className="mobile-tool-name">{label}</span>{detail && <code>{detail}</code>}</span>
-    {duration && <span className="mobile-tool-duration" title={`耗时 ${duration}`}>{duration}</span>}
+    {(time || duration) && <span className="mobile-tool-meta">{time && <time dateTime={event.at}>{time}</time>}{duration && <span title={`耗时 ${duration}`}>{duration}</span>}</span>}
     {summary.failed && <span className="mobile-tool-failed"><CircleAlert aria-hidden="true" />失败</span>}
     {summary.expandable && <ChevronRight className="mobile-tool-chevron" aria-hidden="true" />}
   </>;
@@ -359,6 +360,16 @@ function ToolEvent({ event, summary }) {
     <div className="mobile-tool-content">
       {summary.body && <div><span className="mobile-tool-section">{event.kind === "tool_result" ? "输出" : "调用"}</span><pre>{summary.body}</pre></div>}
       {summary.result && <div><span className="mobile-tool-section">输出</span><pre>{summary.result}</pre></div>}
+    </div>
+  </details>;
+}
+
+function ToolGroup({ events, active = false }) {
+  const count = events.filter((event) => event.kind === "tool_use").length || events.length;
+  return <details className="mobile-tool-group" open={active || undefined}>
+    <summary className="mobile-tool-group-summary"><span>运行了 {count} 个工具</span><ChevronRight aria-hidden="true" /></summary>
+    <div className="mobile-tool-group-body">
+      {events.map((event, index) => <ToolEvent key={`${event.streamId || event.at || index}-${index}`} event={event} summary={mobileEventSummary(event, eventLabel(event.kind))} />)}
     </div>
   </details>;
 }
@@ -420,9 +431,16 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
       {!runs.length && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)} · {sharedRuns ? "与桌面共用任务和运行记录" : "Agent 在远端以只读模式运行"}</p></section>}
       {runs.map((run) => {
         const visibleEvents = foldMobileEvents(run.events || []);
+        const blocks = groupMobileTranscriptEvents(visibleEvents);
         return <section className="mobile-turn" key={run.id}>
         <UserMessage text={run.prompt} />
-        {visibleEvents.map((event, index) => event.kind === "user_message" ? <UserMessage key={`user-${index}`} text={event.text} /> : <AgentEvent key={`${event.at || index}-${index}`} run={{ ...run, events: visibleEvents }} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />)}
+        {blocks.map((block, index) => {
+          if (block.type === "tools") return <ToolGroup key={`tools-${block.events[0]?.streamId || index}`} events={block.events} active={run.status === "running" && index === blocks.length - 1} />;
+          const event = block.event;
+          return event.kind === "user_message"
+            ? <UserMessage key={`user-${index}`} text={event.text} />
+            : <AgentEvent key={`${event.at || index}-${index}`} run={{ ...run, events: visibleEvents }} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />;
+        })}
         {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
         {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
         {run.result?.finalMessage && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <AssistantMessage text={run.result.finalMessage} />}
