@@ -175,7 +175,7 @@ function WorkerSwitchSheet({ open, workers, selectedWorkerID, healthByID, onSele
           </button>;
         })}
       </div>
-      <Button className="mobile-main-action" variant="outline" onClick={() => { onClose(); onPair(); }}><Plus />添加电脑</Button>
+      <Button className="mobile-quiet-action" variant="ghost" onClick={() => { onClose(); onPair(); }}><Plus />添加电脑</Button>
     </section>
   </div>;
 }
@@ -232,7 +232,7 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
 function WorkspaceManagerPage({ workspaces, statusByID, managementSupported, busy, onOpen, onCreate, onEdit, onRefresh }) {
   if (!managementSupported) return <section className="mobile-page mobile-workspace-manager"><div className="mobile-list-empty"><CircleAlert /><h2>当前 Worker 不支持管理</h2><p>请更新并重启远端 Worker；已有 Workspace 仍然可以正常打开。</p></div></section>;
   return <section className="mobile-page mobile-workspace-manager">
-    <header className="mobile-section-heading"><PageHead title="Workspace" meta={`${workspaces.length} 个工作区`} /><Button size="sm" onClick={onCreate}><Plus />新建</Button></header>
+    <header className="mobile-section-heading"><PageHead title="Workspace" meta={`${workspaces.length} 个工作区`} /><Button className="mobile-row-action" variant="ghost" size="sm" onClick={onCreate}><Plus />新建</Button></header>
     <div className="mobile-workspace-manage-list">
       {workspaces.map((workspace) => {
         const state = statusByID[workspace.id];
@@ -244,7 +244,7 @@ function WorkspaceManagerPage({ workspaces, statusByID, managementSupported, bus
           {/* A shared workspace belongs to the desktop hosting this Worker; the
               phone can run in it, but only that desktop can change it. */}
           {workspace.shared && <p className="mobile-workspace-shared">{workspace.remoteHost ? <Cloud /> : <Monitor />}{workspace.remoteHost ? `来自桌面端 · 文件在 ${workspace.remoteHost}` : "来自桌面端"}，改名和删除请在电脑上操作</p>}
-          <footer><Button variant="outline" size="sm" disabled={Boolean(busy)} onClick={() => onOpen(workspace.id)}>打开</Button><Button variant="outline" size="icon-sm" aria-label={`刷新 ${workspaceLabel(workspace)}`} disabled={Boolean(busy) || state?.loading} onClick={() => onRefresh(workspace)}><RefreshCw className={state?.loading ? "animate-spin" : ""} /></Button>{!workspace.shared && <Button variant="ghost" size="icon-sm" aria-label={`编辑 ${workspaceLabel(workspace)}`} disabled={Boolean(busy)} onClick={() => onEdit(workspace)}><Pencil /></Button>}</footer>
+          <footer><Button className="mobile-row-action" variant="ghost" size="sm" disabled={Boolean(busy)} onClick={() => onOpen(workspace.id)}>打开</Button><Button className="mobile-row-action" variant="ghost" size="icon-sm" aria-label={`刷新 ${workspaceLabel(workspace)}`} disabled={Boolean(busy) || state?.loading} onClick={() => onRefresh(workspace)}><RefreshCw className={state?.loading ? "animate-spin" : ""} /></Button>{!workspace.shared && <Button className="mobile-row-action" variant="ghost" size="icon-sm" aria-label={`编辑 ${workspaceLabel(workspace)}`} disabled={Boolean(busy)} onClick={() => onEdit(workspace)}><Pencil /></Button>}</footer>
         </article>;
       })}
     </div>
@@ -289,7 +289,7 @@ function WorkspaceEditorSheet({ workspace, busy, onClose, onSave, onDelete }) {
       </form>
       {editing && <div className="mobile-workspace-danger-zone">
         {workspace.managed && <button type="button" className={`mobile-delete-toggle ${deleteFiles ? "selected" : ""}`} role="checkbox" aria-checked={deleteFiles} onClick={() => setDeleteFiles((value) => !value)}><span>{deleteFiles && <Check />}</span><div><strong>同时删除远端克隆</strong><small>仅允许删除由 Worker 创建且没有未提交变更的副本</small></div></button>}
-        <Button variant="destructive" disabled={Boolean(busy)} onClick={() => onDelete(workspace, deleteFiles)}>{busy === "workspace-delete" ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{deleteFiles ? "删除 Workspace 和文件" : "移除 Workspace"}</Button>
+        <Button className="mobile-main-action destructive" variant="ghost" disabled={Boolean(busy)} onClick={() => onDelete(workspace, deleteFiles)}>{busy === "workspace-delete" ? <LoaderCircle className="animate-spin" /> : <Trash2 />}{deleteFiles ? "删除 Workspace 和文件" : "移除 Workspace"}</Button>
       </div>}
     </section>
   </div>;
@@ -301,7 +301,7 @@ function PermissionCard({ runID, event, busy, onRespond }) {
   return <article className="mobile-permission-card">
     <header><CircleAlert /><div><strong>{permission.displayName || permission.title || permission.toolName || "工具权限"}</strong><small>{permission.description || "Agent 正在等待你的决定"}</small></div></header>
     {permission.input && <pre>{JSON.stringify(permission.input, null, 2)}</pre>}
-    <footer><Button variant="outline" size="sm" disabled={busy} onClick={() => onRespond(runID, permission.id, "deny")}>拒绝</Button><Button size="sm" disabled={busy} onClick={() => onRespond(runID, permission.id, "allow_once")}>允许一次</Button></footer>
+    <footer><Button className="mobile-row-action" variant="ghost" size="sm" disabled={busy} onClick={() => onRespond(runID, permission.id, "deny")}>拒绝</Button><Button className="mobile-row-action mobile-row-action-primary" variant="ghost" size="sm" disabled={busy} onClick={() => onRespond(runID, permission.id, "allow_once")}>允许一次</Button></footer>
   </article>;
 }
 
@@ -454,7 +454,7 @@ function WorkersSheet({ open, workers, selectedWorkerID, healthByID, busy, onClo
         return <article className="mobile-worker-card" key={worker.id}>
           <div className="mobile-worker-card-main"><span className="mobile-worker-glyph"><Server /></span><span><strong>{workerLabel(worker)}</strong><small>{worker.baseUrl}</small></span><span className={`mobile-worker-state ${health ? "online" : ""}`}>{health ? "在线" : "离线"}</span></div>
           <div className="mobile-worker-card-meta"><span><Wifi />{health ? `${health.latencyMilliseconds}ms` : "未连接"}</span><span><Cpu />{health ? RUNTIMES.filter((item) => health.health?.runtimes?.[item.id]).map((item) => item.label).join(" · ") : "—"}</span></div>
-          <footer>{worker.id === selectedWorkerID ? <Button variant="outline" size="sm" disabled><Check />当前</Button> : <Button variant="outline" size="sm" disabled={busy} onClick={() => { onSelect(worker.id); onClose(); }}>切换到这台</Button>}<Button variant="outline" size="sm" disabled={busy} onClick={() => onRefresh(worker.id)}><RefreshCw />检查</Button><Button variant="outline" size="sm" disabled={busy} onClick={() => onPair(worker)}><Link2 />重新配对</Button><Button variant="ghost" size="icon-sm" aria-label={`删除 ${workerLabel(worker)}`} disabled={busy} onClick={() => onDelete(worker)}><Trash2 /></Button></footer>
+          <footer>{worker.id === selectedWorkerID ? <Button className="mobile-row-action" variant="ghost" size="sm" disabled><Check />当前</Button> : <Button className="mobile-row-action" variant="ghost" size="sm" disabled={busy} onClick={() => { onSelect(worker.id); onClose(); }}>切换到这台</Button>}<Button className="mobile-row-action" variant="ghost" size="sm" disabled={busy} onClick={() => onRefresh(worker.id)}><RefreshCw />检查</Button><Button className="mobile-row-action" variant="ghost" size="sm" disabled={busy} onClick={() => onPair(worker)}><Link2 />重新配对</Button><Button className="mobile-row-action" variant="ghost" size="icon-sm" aria-label={`删除 ${workerLabel(worker)}`} disabled={busy} onClick={() => onDelete(worker)}><Trash2 /></Button></footer>
         </article>;
       })}</div>
 	  <Button className="mobile-main-action" onClick={() => onPair(null)}><Plus />添加 Worker</Button>
@@ -503,8 +503,8 @@ function ConfirmSheet({ request, onClose }) {
       <header><div><small>请确认</small><h2 id="confirm-title">{request.title}</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" onClick={onClose}><X /></button></header>
       <p className="mobile-sheet-copy">{request.body}</p>
       <div className="mobile-confirm-actions">
-        <Button variant="outline" onClick={onClose}>取消</Button>
-        <Button variant={request.destructive ? "destructive" : "default"} onClick={() => { const run = request.onConfirm; onClose(); void run(); }}>{request.destructive && <Trash2 />}{request.confirmLabel || "确认"}</Button>
+        <Button className="mobile-quiet-action" variant="ghost" onClick={onClose}>取消</Button>
+        <Button className={`mobile-main-action ${request.destructive ? "destructive" : ""}`} variant="ghost" onClick={() => { const run = request.onConfirm; onClose(); void run(); }}>{request.destructive && <Trash2 />}{request.confirmLabel || "确认"}</Button>
       </div>
     </section>
   </div>;

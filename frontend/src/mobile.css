@@ -116,6 +116,11 @@ button, input, textarea, select { font: inherit; }
 .mobile-quiet-action { min-height: 48px; padding: 0 14px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid var(--m-line); border-radius: var(--m-radius); background: transparent; color: var(--foreground); font-size: 15px; font-weight: 500; }
 .mobile-row-action { min-height: 34px; padding: 0 13px; display: flex; align-items: center; gap: 6px; border: 1px solid var(--m-line); border-radius: 8px; background: transparent; color: var(--foreground); font-size: 13px; font-weight: 500; }
 .mobile-quiet-action:active, .mobile-row-action:active { opacity: .55; }
+/* One action in a pair carries the weight; a destructive one carries it in the
+   colour of what it will do. */
+.mobile-row-action-primary { border-color: transparent; background: var(--primary); color: var(--primary-foreground); }
+.mobile-main-action.destructive { background: var(--destructive); color: #fff; }
+.mobile-app-shell .mobile-main-action:disabled, .mobile-app-shell .mobile-row-action:disabled, .mobile-app-shell .mobile-quiet-action:disabled { opacity: .38; }
 
 /* A session is a title, its machine-readable trail, and one word of outcome —
    coloured text rather than a pill, because a list of pills is a list of
@@ -243,6 +248,15 @@ button, input, textarea, select { font: inherit; }
 .mobile-sheet form, .mobile-context-sheet { display: grid; gap: 16px; }
 .mobile-sheet label { display: grid; gap: 8px; color: var(--muted-foreground); font-size: 12px; }
 .mobile-sheet input, .mobile-sheet select { width: 100%; height: 48px; padding: 0 14px; border: 0; border-radius: var(--m-radius); background: var(--m-field); color: var(--foreground); font-size: 16px; appearance: none; }
+/* `appearance: none` takes the native arrow with it, which left a picker
+   looking like a read-only field. The grey reads on both themes' field fill. */
+.mobile-sheet select {
+  padding-right: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238a8880' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+  background-size: 16px 16px;
+}
 .mobile-security-note { margin: 16px 0 0; color: var(--muted-foreground); font-size: 11px; line-height: 1.6; text-align: center; }
 .mobile-runtime-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .mobile-runtime-picker button { min-height: 44px; padding: 0 8px; display: flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid var(--m-line); border-radius: var(--m-radius); background: transparent; color: var(--muted-foreground); font-size: 12px; }

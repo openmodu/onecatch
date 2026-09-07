@@ -113,3 +113,11 @@ test("every layer shares one gutter, and the bar offsets for its targets", async
     assert.match(css, new RegExp(`${layer}[^}]*var\\(--m-gutter\\)`, "s"), `${layer} must use the shared gutter`);
   }
 });
+
+// Removing the native appearance takes the picker's arrow with it, and a
+// select with no arrow reads as a field you cannot change.
+test("a picker still looks like a picker after appearance is reset", async () => {
+  const css = await readFile(new URL("../mobile.css", sourceURL), "utf8");
+  assert.match(css, /\.mobile-sheet select \{[^}]*background-image: url\("data:image\/svg\+xml/s);
+  assert.match(css, /\.mobile-sheet select \{[^}]*padding-right: 40px/s);
+});
