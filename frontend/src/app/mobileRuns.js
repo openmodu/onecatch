@@ -64,7 +64,50 @@ export function foldMobileEvents(items = []) {
       events[index] = next;
     }
   }
-  return foldToolResults(events);
+  return stripGrokSessionReplay(foldToolResults(events));
+}
+
+function grokStreamKey(event) {
+  const streamID = String(event?.streamId || "");
+  const separator = streamID.indexOf(":");
+  const key = separator >= 0 ? streamID.slice(separator + 1) : streamID;
+  return key.startsWith("grok-") ? key : "";
+}
+
+// Older Grok ACP versions replayed the whole loaded session before producing
+// the next turn. The replay keeps stable tool IDs and emits prose as a growing
+// prefix, which lets existing records be repaired without guessing at text.
+function stripGrokSessionReplay(items) {
+  const seenTools = new Set();
+  const cumulativeText = new Map();
+  const cleaned = [];
+  for (const event of items) {
+    const key = grokStreamKey(event);
+    if (!key) {
+      cleaned.push(event);
+      continue;
+    }
+    if (event.kind === "tool_use" || event.kind === "tool_result") {
+      if (seenTools.has(key)) continue;
+      seenTools.add(key);
+      cleaned.push(event);
+      continue;
+    }
+    if (event.kind !== "message" && event.kind !== "reasoning") {
+      cleaned.push(event);
+      continue;
+    }
+    const text = String(event.text || "");
+    const previous = cumulativeText.get(event.kind) || "";
+    cumulativeText.set(event.kind, text);
+    if (!previous || !text.startsWith(previous)) {
+      cleaned.push(event);
+      continue;
+    }
+    const addition = text.slice(previous.length).trimStart();
+    if (addition) cleaned.push({ ...event, text: addition });
+  }
+  return cleaned;
 }
 
 // Match the desktop transcript's rhythm: adjacent tools share one disclosure,

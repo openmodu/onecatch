@@ -443,7 +443,7 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
         })}
         {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
         {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
-        {run.result?.finalMessage && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <AssistantMessage text={run.result.finalMessage} />}
+        {run.result?.finalMessage && !(run.events || []).some((event) => event.kind === "message" && event.text === run.result.finalMessage) && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <AssistantMessage text={run.result.finalMessage} />}
       </section>;
       })}
     </main>

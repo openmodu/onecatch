@@ -141,6 +141,50 @@ func TestGrokRunnerNormalizesACPUpdates(t *testing.T) {
 	}
 }
 
+func TestGrokResumeIgnoresLoadedSessionReplay(t *testing.T) {
+	oldMessage := `{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Old answer."}}}}`
+	oldTool := `{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"tool_call","toolCallId":"old-tool","title":"Old search","kind":"search","status":"completed"}}}`
+	newMessage := `{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Fresh answer."}}}}`
+	path := filepath.Join(t.TempDir(), "acp-replay-stub.sh")
+	script := `#!/bin/sh
+n=0
+while IFS= read -r line; do
+  n=$((n+1))
+  case $n in
+    1) printf '%s\n' ` + shellQuote(grokInitializeResult) + ` ;;
+    2)
+      printf '%s\n' ` + shellQuote(oldMessage) + `
+      printf '%s\n' ` + shellQuote(oldTool) + `
+      printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":2,"result":{"sessionId":"s-1"}}`) + `
+      ;;
+    3)
+      printf '%s\n' ` + shellQuote(newMessage) + `
+      printf '%s\n' ` + shellQuote(`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"end_turn"}}`) + `
+      ;;
+  esac
+done
+`
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatalf("write stub: %v", err)
+	}
+	runner := NewGrokRunner(path)
+	var events []Event
+	result, err := runner.Run(context.Background(), Request{
+		Prompt: "follow up", Workspace: t.TempDir(), ResumeSessionID: "s-1",
+	}, func(event Event) { events = append(events, event) })
+	if err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if result.FinalMessage != "Fresh answer." {
+		t.Fatalf("final message = %q, want current turn only", result.FinalMessage)
+	}
+	for _, event := range events {
+		if strings.Contains(event.Text, "Old answer") || event.Kind == KindToolUse {
+			t.Fatalf("loaded transcript leaked into current turn: %+v", event)
+		}
+	}
+}
+
 func TestGrokRunnerFailsOnNonTerminalStopReason(t *testing.T) {
 	events, result, err := runGrokStub(t, Request{Prompt: "write a summary"},
 		`{"jsonrpc":"2.0","id":3,"result":{"stopReason":"refusal"}}`, nil)

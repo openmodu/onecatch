@@ -144,6 +144,28 @@ test("adjacent tools share a disclosure without moving prose", () => {
   assert.equal(blocks[2].event.kind, "reasoning");
 });
 
+test("Grok session replay is reduced to each turn's new prose and tools", () => {
+  const folded = foldMobileEvents([
+    { kind: "message", streamId: "step_one:grok-message", phase: "end", text: "Hello." },
+    { kind: "user_message", text: "weather" },
+    { kind: "tool_use", streamId: "step_two:grok-tool-search-1", text: "Web search: weather" },
+    { kind: "tool_result", streamId: "step_two:grok-tool-search-1", text: "sunny" },
+    { kind: "message", streamId: "step_two:grok-message", phase: "end", text: "Hello.Weather answer." },
+    { kind: "user_message", text: "why" },
+    { kind: "tool_use", streamId: "step_three:grok-tool-search-1", text: "Web search: weather" },
+    { kind: "message", streamId: "step_three:grok-message", phase: "end", text: "Hello.Weather answer.Why answer." },
+  ]);
+  assert.deepEqual(folded.map((event) => [event.kind, event.text]), [
+    ["message", "Hello."],
+    ["user_message", "weather"],
+    ["tool_use", "Web search: weather"],
+    ["message", "Weather answer."],
+    ["user_message", "why"],
+    ["message", "Why answer."],
+  ]);
+  assert.equal(folded[2].result, "sunny");
+});
+
 // Modu ends a run with a `result` event carrying the same prose as the final
 // reply, so the transcript printed the answer twice.
 test("the terminal result event does not repeat the answer", () => {

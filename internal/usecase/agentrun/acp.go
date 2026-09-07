@@ -232,6 +232,14 @@ func runACPSession(ctx context.Context, launch acpLaunch, req Request, sink Sink
 			continue
 		}
 		if envelope.Method != "" {
+			// session/load replays the saved transcript before acknowledging the
+			// session. Those notifications belong to earlier turns; recording
+			// them again makes every resumed Grok reply contain all prior prose
+			// and tools. The current turn cannot emit until its prompt is sent,
+			// which happens only after the session response below.
+			if !sessionOpened {
+				continue
+			}
 			client.handleNotification(envelope, line, sink)
 			continue
 		}
