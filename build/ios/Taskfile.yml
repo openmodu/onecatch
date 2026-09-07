@@ -299,6 +299,7 @@ tasks:
     cmds:
       - go tool wails3 ios xcode:gen -outdir build/ios/xcode -config build/desktop/config.yml
       - go run build/ios/scripts/patch_xcode_project.go build/ios/xcode/main.xcodeproj/project.pbxproj
+      - /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable $(EXECUTABLE_NAME)' build/ios/xcode/main/Info.plist
       - /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString {{.APP_VERSION}}' build/ios/xcode/main/Info.plist
       - /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion {{.APP_VERSION}}' build/ios/xcode/main/Info.plist
       - /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c 'Set :NSLocalNetworkUsageDescription "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist
