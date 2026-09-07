@@ -13,6 +13,12 @@
   --m-field: color-mix(in oklab, var(--muted) 82%, var(--background));
   --m-line: color-mix(in oklab, var(--border) 62%, transparent);
   --m-radius: 10px;
+  /* One gutter for every layer. The bar's 44px targets are wider than their
+     19px glyphs, and the glyphs themselves sit inside about 4px of their own
+     padding (Lucide draws inside a 24-unit box), so the bar pulls back by both
+     to put the ink — not the box — on the text's line. */
+  --m-gutter: 24px;
+  --m-bar-inset: calc(var(--m-gutter) - 16px);
   position: fixed;
   inset: 0;
   width: 100%;
@@ -49,7 +55,7 @@
 }
 
 .mobile-main { min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
-.mobile-page { width: min(100%, var(--mobile-max)); min-height: 100%; margin: 0 auto; padding: 12px 24px 24px; }
+.mobile-page { width: min(100%, var(--mobile-max)); min-height: 100%; margin: 0 auto; padding: 12px var(--m-gutter) 24px; }
 button, input, textarea, select { font: inherit; }
 .mobile-app-shell input, .mobile-app-shell textarea, .mobile-app-shell select { font-size: 16px; }
 
@@ -57,7 +63,7 @@ button, input, textarea, select { font: inherit; }
    own first line, at a size worth reading. */
 .mobile-topbar {
   min-height: calc(52px + env(safe-area-inset-top));
-  padding: calc(14px + env(safe-area-inset-top)) 20px 0;
+  padding: calc(14px + env(safe-area-inset-top)) var(--m-bar-inset) 0;
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 44px;
   align-items: center;
@@ -96,7 +102,7 @@ button, input, textarea, select { font: inherit; }
 .mobile-project-row:active { opacity: .55; }
 
 /* One bar, one primary action, and a field that looks like a field. */
-.mobile-bottom-bar { padding: 10px 20px calc(18px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--m-line); background: var(--background); }
+.mobile-bottom-bar { padding: 10px var(--m-gutter) calc(18px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--m-line); background: var(--background); }
 .mobile-search-pill { flex: 1; min-width: 0; height: 48px; padding: 0 14px; display: flex; align-items: center; gap: 9px; border-radius: var(--m-radius); background: var(--m-field); color: var(--muted-foreground); }
 .mobile-search-pill svg { width: 17px; flex: 0 0 auto; }
 .mobile-search-pill input { min-width: 0; width: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--foreground); font-size: 16px; }
@@ -136,7 +142,7 @@ button, input, textarea, select { font: inherit; }
    is body text, and everything the agent did stays a dim monospace line. */
 .mobile-conversation-shell { width: 100%; max-width: 100%; min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; overscroll-behavior: none; }
 .mobile-transcript { width: 100%; max-width: 100%; min-width: 0; min-height: 0; overflow: hidden; overscroll-behavior: none; }
-.mobile-transcript.has-messages { padding: 4px max(24px, calc((100% - var(--mobile-max)) / 2 + 24px)) 34px; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; }
+.mobile-transcript.has-messages { padding: 4px max(var(--m-gutter), calc((100% - var(--mobile-max)) / 2 + var(--m-gutter))) 34px; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; }
 .mobile-transcript.empty { display: grid; place-items: center; padding: 28px; touch-action: none; }
 .mobile-chat-empty { width: 100%; max-width: 100%; min-width: 0; text-align: center; transform: translateY(-4vh); }
 .mobile-chat-mark { display: none; }
@@ -168,7 +174,7 @@ button, input, textarea, select { font: inherit; }
 
 /* The composer is one block: what you type, what it will run against, and the
    one control that sends it. */
-.mobile-composer-wrap { width: 100%; max-width: 100%; min-width: 0; padding: 12px 20px calc(18px + env(safe-area-inset-bottom)); overflow: hidden; overscroll-behavior: none; border-top: 1px solid var(--m-line); background: var(--background); position: relative; z-index: 25; }
+.mobile-composer-wrap { width: 100%; max-width: 100%; min-width: 0; padding: 12px var(--m-gutter) calc(18px + env(safe-area-inset-bottom)); overflow: hidden; overscroll-behavior: none; border-top: 1px solid var(--m-line); background: var(--background); position: relative; z-index: 25; }
 .mobile-composer { width: 100%; max-width: 100%; min-width: 0; padding: 14px 14px 12px; overflow: hidden; border: 0; border-radius: 12px; background: var(--m-field); }
 .mobile-composer textarea { width: 100%; max-width: 100%; min-width: 0; min-height: 24px; max-height: 130px; display: block; padding: 0; resize: none; overflow-x: hidden; border: 0; outline: 0; box-shadow: none; background: transparent; color: var(--foreground); font-size: 16px; line-height: 1.45; }
 .mobile-composer textarea:focus-visible { box-shadow: none; }
@@ -187,7 +193,7 @@ button, input, textarea, select { font: inherit; }
 /* Overlays sit on the page, they do not replace it: the sheet has a hairline
    and a small radius, no shadow, and what is underneath stays visible. */
 .mobile-drawer-backdrop, .mobile-popover-backdrop, .mobile-sheet-backdrop { position: fixed; z-index: 100; inset: 0; background: color-mix(in oklab, var(--foreground) 22%, transparent); }
-.mobile-drawer { width: min(84vw, 340px); height: 100%; padding: calc(16px + env(safe-area-inset-top)) 20px calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 10px; background: var(--background); border-right: 1px solid var(--m-line); animation: mobile-drawer-in .2s ease-out; }
+.mobile-drawer { width: min(84vw, 340px); height: 100%; padding: calc(16px + env(safe-area-inset-top)) var(--m-gutter) calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 10px; background: var(--background); border-right: 1px solid var(--m-line); animation: mobile-drawer-in .2s ease-out; }
 @keyframes mobile-drawer-in { from { transform: translateX(-100%); } }
 .mobile-drawer > header { min-height: 44px; display: flex; align-items: center; justify-content: space-between; }
 .mobile-drawer > header > div { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; }
@@ -216,7 +222,7 @@ button, input, textarea, select { font: inherit; }
 
 /* The conversation's status arrives as a sheet like every other overlay. */
 .mobile-popover-backdrop { display: flex; align-items: flex-end; justify-content: center; }
-.mobile-more-menu { width: min(100%, var(--mobile-max)); padding: 10px 24px calc(24px + env(safe-area-inset-bottom)); border: 0; border-radius: 20px 20px 0 0; background: var(--background); border-top: 1px solid var(--m-line); }
+.mobile-more-menu { width: min(100%, var(--mobile-max)); padding: 10px var(--m-gutter) calc(24px + env(safe-area-inset-bottom)); border: 0; border-radius: 20px 20px 0 0; background: var(--background); border-top: 1px solid var(--m-line); }
 .mobile-more-menu small { display: block; padding: 0 0 6px; color: var(--muted-foreground); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .08em; }
 .mobile-more-menu button { width: 100%; min-height: 48px; padding: 0 14px; display: grid; grid-template-columns: 17px 20px minmax(0, 1fr); align-items: center; gap: 8px; border: 1px solid var(--m-line); border-radius: var(--m-radius); background: transparent; color: var(--foreground); font-size: 15px; font-weight: 500; text-align: left; margin-top: 10px; }
 .mobile-more-menu button svg { width: 17px; color: var(--muted-foreground); }
@@ -227,7 +233,7 @@ button, input, textarea, select { font: inherit; }
 .mobile-menu-status > span { color: var(--muted-foreground); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; line-height: 1.55; overflow-wrap: anywhere; }
 
 .mobile-sheet-backdrop { display: flex; align-items: flex-end; justify-content: center; }
-.mobile-sheet { width: min(100%, var(--mobile-max)); max-height: 90dvh; padding: 10px 24px calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 20px 20px 0 0; border-top: 1px solid var(--m-line); background: var(--background); }
+.mobile-sheet { width: min(100%, var(--mobile-max)); max-height: 90dvh; padding: 10px var(--m-gutter) calc(24px + env(safe-area-inset-bottom)); overflow-y: auto; border-radius: 20px 20px 0 0; border-top: 1px solid var(--m-line); background: var(--background); }
 .mobile-sheet-handle { width: 36px; height: 4px; margin: 0 auto 18px; border-radius: 99px; background: var(--m-line); }
 .mobile-sheet > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .mobile-sheet > header small { color: var(--muted-foreground); font: 10px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .1em; }

@@ -101,3 +101,15 @@ test("a workspace path is shortened from its middle, not its end", async () => {
   assert.doesNotMatch(source, /个会话`;/);
   assert.match(source, /\{shortenPath\(workspace\.path, 3\)\}/, "the manage card has room for one more segment");
 });
+
+// The bar's 44px targets are wider than their glyphs, so a bar and a page that
+// both padded by "20px" still put the arrow 8px right of the title under it.
+test("every layer shares one gutter, and the bar offsets for its targets", async () => {
+  const css = await readFile(new URL("../mobile.css", sourceURL), "utf8");
+  assert.match(css, /--m-gutter: 24px;/);
+  assert.match(css, /--m-bar-inset: calc\(var\(--m-gutter\) - 16px\);/);
+  assert.match(css, /\.mobile-topbar \{[^}]*padding: calc\(14px \+ env\(safe-area-inset-top\)\) var\(--m-bar-inset\) 0;/s);
+  for (const layer of ["\\.mobile-page \\{", "\\.mobile-bottom-bar \\{", "\\.mobile-composer-wrap \\{", "\\.mobile-sheet \\{"]) {
+    assert.match(css, new RegExp(`${layer}[^}]*var\\(--m-gutter\\)`, "s"), `${layer} must use the shared gutter`);
+  }
+});
