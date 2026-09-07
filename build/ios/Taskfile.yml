@@ -287,14 +287,18 @@ tasks:
     summary: Generate iOS Xcode project structure and assets
     sources:
       - build/desktop/config.yml
+      - build/ios/Taskfile.yml
       - CHANGELOG.md
       - build/appicon.png
+      - build/ios/scripts/build_xcode_archive.sh
+      - build/ios/scripts/patch_xcode_project.go
     generates:
       - build/ios/xcode/main/main.m
       - build/ios/xcode/main/Assets.xcassets/**/*
-      - build/ios/xcode/project.pbxproj
+      - build/ios/xcode/main.xcodeproj/project.pbxproj
     cmds:
       - go tool wails3 ios xcode:gen -outdir build/ios/xcode -config build/desktop/config.yml
+      - go run build/ios/scripts/patch_xcode_project.go build/ios/xcode/main.xcodeproj/project.pbxproj
       - /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString {{.APP_VERSION}}' build/ios/xcode/main/Info.plist
       - /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion {{.APP_VERSION}}' build/ios/xcode/main/Info.plist
       - /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c 'Set :NSLocalNetworkUsageDescription "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist
