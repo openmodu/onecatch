@@ -761,7 +761,7 @@ Object.assign(zh, {
   "settings.section.mobile": "手机连接",
   "settings.section.mobileDescription": "把这台电脑作为手机端的远程 Worker",
   "settings.mobileAccessTitle": "作为远程 Worker",
-  "settings.mobileAccessDescription": "开启后，同一局域网里的 OneCatch 手机端可以连上这台电脑，用你在这里配置好的 Harness 跑任务。连接走 HTTPS，手机在配对时会记住这台电脑的证书指纹。",
+  "settings.mobileAccessDescription": "开启后，同一局域网里的 OneCatch 手机端可以连上这台电脑，使用这里配置好的 Harness 跑任务。连接走 HTTPS，手机在配对时会记住这台电脑的证书指纹。",
   "settings.mobileAccessOn": "已开启",
   "settings.mobileAccessToggle": "允许手机连接",
   "settings.mobileAccessToggleHint": "在端口 {{port}} 上监听局域网连接。默认关闭，关掉后已配对的手机也连不上。",

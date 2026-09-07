@@ -234,7 +234,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
       <section className="px-7 pt-[64px] pb-10">
         <header className="drag-region mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0"><SettingsKicker>{t("settings.localSettings")}</SettingsKicker><h1 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h1><p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p></div>
-          <div className="no-drag flex shrink-0 items-center gap-2.5"><span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span>{/* Sections that own their own store have nothing in the settings draft
+          <div className="no-drag flex shrink-0 items-center gap-2.5">{section !== "mobile" && <span className="text-xs text-muted-foreground">{dirty ? t("settings.waitingSave") : t("settings.synced", { revision: value?.revision || 1 })}</span>}{/* Sections that own their own store have nothing in the settings draft
               for Reset to restore. */}
           {!["runtime", "skills", "mobile", "experimental"].includes(section) && <SettingsButton tone="muted" onClick={reset}>{t("settings.reset")}</SettingsButton>}</div>
         </header>
