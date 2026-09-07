@@ -32,7 +32,7 @@ test("project rows carry a name and its recent activity, nothing else", async ()
   const source = await readFile(sourceURL, "utf8");
   const row = source.match(/<button type="button" className="mobile-project-link"[\s\S]*?<\/button>/)[0];
   assert.match(row, /className="mobile-project-name"/);
-  assert.match(row, /\$\{count\} 个会话 · \$\{relativeTime\(latestAt\)\}/);
+  assert.match(row, /relativeTime\(latestAt\)/, "a row says when the project last moved");
   assert.doesNotMatch(row, /<Folder \/>/, "the folder glyph repeats what the page already says");
   assert.doesNotMatch(row, /<ChevronRight \/>/, "a chevron adds nothing when the row itself is the target");
 });
@@ -42,7 +42,10 @@ test("project rows carry a name and its recent activity, nothing else", async ()
 test("the paired machine is a switcher in the top bar", async () => {
   const source = await readFile(sourceURL, "utf8");
   assert.match(source, /function WorkerSwitchSheet\(/);
-  assert.match(source, /onSwitchWorker=\{workers\.length > 1 &&/);
+  // The machine sits on the line under the page's name, where the page says
+  // where it runs — not squeezed into the action bar.
+  assert.match(source, /const switchWorker = workers\.length > 1 \? \(\) => setWorkerSwitchOpen\(true\) : null;/);
+  assert.match(source, /<PageHead title="项目" meta=\{meta\} onMeta=\{onMeta\} \/>/);
   // Switching scope must not double as starting a task.
   const select = source.match(/const selectWorker = \(id\) => \{[\s\S]*?\n  \};/)[0];
   assert.match(select, /setView\("projects"\)/);
@@ -66,7 +69,7 @@ test("the transcript reads as prose, not as a stack of cards", async () => {
   assert.doesNotMatch(source, /mobile-agent-mark/, "an avatar on every reply is a column of noise");
   assert.doesNotMatch(source, /mobile-turn-meta/, "the runtime and time already sit in the title bar");
   // Events collapse to one muted line with no border of their own.
-  assert.doesNotMatch(css, /\.mobile-event-detail[^{]*\{[^}]*border:/);
+  assert.doesNotMatch(css, /\.mobile-event-detail, \.mobile-event-line \{[^}]*border:/, "an event row is a line of text, not a box");
   assert.match(css, /\.mobile-event-detail pre \{[^}]*background: transparent/);
   // The read-only caption is said once, on the empty screen.
   assert.match(source, /Agent 在远端以只读模式运行/);
@@ -93,7 +96,8 @@ test("a workspace path is shortened from its middle, not its end", async () => {
   assert.doesNotMatch(source, /mobile-workspace-heading/, "the heading repeated the title bar");
   // The path sits under the name it describes, where the session count used to
   // repeat what the list below already shows.
-  assert.match(source, /: shortenPath\(selectedWorkspace\?\.path\);/);
+  // The page states where it lives; the bar carries only actions.
+  assert.match(source, /<PageHead title=\{workspaceLabel\(workspace\)\} meta=\{shortenPath\(workspace\?\.path\)\} \/>/);
   assert.doesNotMatch(source, /个会话`;/);
   assert.match(source, /\{shortenPath\(workspace\.path, 3\)\}/, "the manage card has room for one more segment");
 });

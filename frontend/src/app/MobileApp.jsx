@@ -42,7 +42,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import MarkdownContent from "./components/MarkdownContent.jsx";
 import { errorMessage, formatTime, compactTokens, shortenPath } from "./format.js";
-import { applyMobileRunFrame, conversationUsage, foldMobileEvents, groupMobileConversations, mergeMobileRun, mobileEventSummary, projectActivity } from "./mobileRuns.js";
+import { applyMobileRunFrame, conversationUsage, foldMobileEvents, groupMobileConversations, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useKeyboardInset } from "./mobileViewport.js";
 import "../mobile.css";
@@ -137,20 +137,26 @@ function EmptyConnection({ onPair }) {
   </section>;
 }
 
-function Header({ title, subtitle, onMenu, onBack, onMore, onNew, onSwitchWorker }) {
+// The bar carries the two actions and nothing else. What a page is about is
+// its own first line, at a size worth reading — repeating it in 15px above
+// the 22px heading was the same fact twice.
+function Header({ onMenu, onBack, onMore, onNew }) {
   return <header className="mobile-topbar">
     <button type="button" className="mobile-round-button" aria-label={onBack ? "返回" : "打开侧栏"} onClick={onBack || onMenu}>{onBack ? <ArrowLeft /> : <Menu />}</button>
-    <div className="mobile-topbar-title">
-      <strong>{title}</strong>
-      {/* The machine everything below belongs to. It is a control whenever
-          there is more than one, so switching does not mean going hunting
-          through the settings sheet. */}
-      {subtitle && (onSwitchWorker
-        ? <button type="button" className="mobile-worker-switch" onClick={onSwitchWorker}>{subtitle}<ChevronDown /></button>
-        : <span>{subtitle}</span>)}
-    </div>
+    <span />
     <button type="button" className="mobile-round-button" aria-label={onNew ? "新建会话" : "更多"} onClick={onNew || onMore}>{onNew ? <PenLine /> : <MoreHorizontal />}</button>
   </header>;
+}
+
+// The machine-readable line under a page's name: where it runs, where it
+// lives. It becomes a control when there is more than one machine to pick.
+function PageHead({ title, meta, onMeta }) {
+  return <div className="mobile-page-head">
+    <h1>{title}</h1>
+    {meta && (onMeta
+      ? <button type="button" className="mobile-worker-switch" onClick={onMeta}>{meta}<ChevronDown /></button>
+      : <p>{meta}</p>)}
+  </div>;
 }
 
 function WorkerSwitchSheet({ open, workers, selectedWorkerID, healthByID, onSelect, onPair, onClose }) {
@@ -174,15 +180,16 @@ function WorkerSwitchSheet({ open, workers, selectedWorkerID, healthByID, onSele
   </div>;
 }
 
-function BottomDock({ query, setQuery, onWorker, onNew, workerOnline }) {
-  return <footer className="mobile-bottom-dock">
+// Worker management moved into the ⋯ sheet: a bar with three controls and no
+// hierarchy made none of them read as the thing to press.
+function BottomBar({ query, setQuery, onNew }) {
+  return <footer className="mobile-bottom-bar">
     <label className="mobile-search-pill"><Search /><input value={query} placeholder="搜索聊天记录" aria-label="搜索聊天记录" onChange={(event) => setQuery(event.target.value)} /></label>
-    <button type="button" className="mobile-dark-button" aria-label="Worker 管理" onClick={onWorker}><Activity /><StatusDot online={workerOnline} /></button>
-    <button type="button" className="mobile-dark-button" aria-label="新建会话" onClick={onNew}><PenLine /></button>
+    <button type="button" className="mobile-primary-square" aria-label="新建会话" onClick={onNew}><PenLine /></button>
   </footer>;
 }
 
-function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew, onManage }) {
+function ProjectHome({ workspaces, conversations, query, meta, onMeta, onOpenWorkspace, onNew, onManage }) {
   const normalized = query.trim().toLowerCase();
   const visible = workspaces.filter((workspace) => {
     if (!normalized) return true;
@@ -190,7 +197,7 @@ function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew,
     return workspaceLabel(workspace).toLowerCase().includes(normalized) || sessions.some((item) => item.title.toLowerCase().includes(normalized));
   });
   return <div className="mobile-page mobile-project-page">
-    <h1>项目</h1>
+    <PageHead title="项目" meta={meta} onMeta={onMeta} />
     <div className="mobile-project-list">
       {visible.map((workspace) => {
         const sessions = conversations.filter((item) => item.workspaceId === workspace.id);
@@ -198,9 +205,8 @@ function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew,
         return <div className="mobile-project-row" key={workspace.id}>
           <button type="button" className="mobile-project-link" onClick={() => onOpenWorkspace(workspace.id)}>
             <span className="mobile-project-name"><strong>{workspaceLabel(workspace)}</strong>{running && <StatusDot online running />}</span>
-            <small>{count ? `${count} 个会话 · ${relativeTime(latestAt)}` : "还没有会话"}</small>
+            <small>{count ? relativeTime(latestAt) : "—"}</small>
           </button>
-          <button type="button" className="mobile-compose-project" aria-label={`在 ${workspaceLabel(workspace)} 新建会话`} onClick={() => onNew(workspace.id)}><PenLine /></button>
         </div>;
       })}
     </div>
@@ -212,11 +218,11 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
   const normalized = query.trim().toLowerCase();
   const visible = conversations.filter((item) => item.workspaceId === workspace?.id && (!normalized || item.title.toLowerCase().includes(normalized)));
   return <div className="mobile-page mobile-session-page">
+    <PageHead title={workspaceLabel(workspace)} meta={shortenPath(workspace?.path)} />
     <div className="mobile-session-list">
       {visible.map((conversation) => <button type="button" className="mobile-session-row" key={conversation.id} onClick={() => onOpen(conversation.id)}>
-        <span className="mobile-session-icon"><MessageCircle /></span>
         <span className="mobile-session-copy"><strong>{conversation.title}</strong><small>{conversation.runtime} · {conversation.runs.length} 轮 · {relativeTime(conversation.startedAt)}</small></span>
-        <span className={`mobile-session-status ${conversation.status}`}>{runStatusLabel(conversation.status)}</span><ChevronRight />
+        <span className={`mobile-session-status ${conversation.status}`}>{runStatusLabel(conversation.status)}</span>
       </button>)}
     </div>
 	{!visible.length && <section className="mobile-list-empty"><MessageCircle /><h2>还没有会话</h2><p>从一个明确的问题开始，后续可以在同一 session 里继续追问。</p><Button className="mobile-main-action" onClick={onNew}><Plus />新建会话</Button></section>}
@@ -226,7 +232,7 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
 function WorkspaceManagerPage({ workspaces, statusByID, managementSupported, busy, onOpen, onCreate, onEdit, onRefresh }) {
   if (!managementSupported) return <section className="mobile-page mobile-workspace-manager"><div className="mobile-list-empty"><CircleAlert /><h2>当前 Worker 不支持管理</h2><p>请更新并重启远端 Worker；已有 Workspace 仍然可以正常打开。</p></div></section>;
   return <section className="mobile-page mobile-workspace-manager">
-    <header className="mobile-section-heading"><div><h1>Workspace</h1><p>管理当前 Worker 上的代码工作区</p></div><Button size="sm" onClick={onCreate}><Plus />新建</Button></header>
+    <header className="mobile-section-heading"><PageHead title="Workspace" meta={`${workspaces.length} 个工作区`} /><Button size="sm" onClick={onCreate}><Plus />新建</Button></header>
     <div className="mobile-workspace-manage-list">
       {workspaces.map((workspace) => {
         const state = statusByID[workspace.id];
@@ -355,10 +361,11 @@ function ConversationView({ conversation, workspace, snapshot, prompt, setPrompt
       onScroll={() => { pinnedRef.current = isPinnedToBottom(transcriptRef.current); }}
     >
       {!runs.length && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)} · Agent 在远端以只读模式运行</p></section>}
-      {runs.map((run) => {
+      {runs.length > 0 && <PageHead title={conversation?.title || mobileRunTitle(runs[0]?.prompt)} meta={`${workspaceLabel(workspace)} · ${runtime}`} />}
+      {runs.map((run, turn) => {
         const visibleEvents = foldMobileEvents(run.events || []);
         return <section className="mobile-turn" key={run.id}>
-        <div className="mobile-user-message"><MarkdownContent content={run.prompt} /></div>
+        {turn > 0 && <div className="mobile-user-message"><MarkdownContent content={run.prompt} /></div>}
         {visibleEvents.map((event, index) => <AgentEvent key={`${event.at || index}-${index}`} run={{ ...run, events: visibleEvents }} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />)}
         {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
         {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
@@ -756,14 +763,14 @@ export default function MobileWorkbench() {
 
 	const openWorkspaceManager = () => { setView("workspaces"); setQuery(""); void loadWorkspaces(selectedWorkerID); };
 
-	const title = view === "projects" ? "远程" : view === "workspaces" ? "Workspace" : view === "sessions" ? workspaceLabel(selectedWorkspace) : selectedConversation?.title || "新会话";
-	const subtitle = view === "projects" || view === "workspaces" ? <><StatusDot online={Boolean(selectedHealth)} />{selectedHealth?.worker?.name || workerLabel(workers.find((item) => item.id === selectedWorkerID))}</> : view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : shortenPath(selectedWorkspace?.path);
+	const workerMeta = <><StatusDot online={Boolean(selectedHealth)} />{selectedHealth?.worker?.name || workerLabel(workers.find((item) => item.id === selectedWorkerID))}{selectedHealth ? ` · ${selectedHealth.latencyMilliseconds}ms` : " · 离线"}</>;
+	const switchWorker = workers.length > 1 ? () => setWorkerSwitchOpen(true) : null;
 	const goBack = view === "conversation" ? () => setView("sessions") : view === "sessions" || view === "workspaces" ? () => setView("projects") : null;
 
   return <div className="mobile-app-shell" style={{ "--mobile-keyboard-inset": `${keyboardInset}px` }}>
-    <Header title={title} subtitle={subtitle} onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} onSwitchWorker={workers.length > 1 && (view === "projects" || view === "workspaces") ? () => setWorkerSwitchOpen(true) : null} />
-	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
-	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomDock query={query} setQuery={setQuery} workerOnline={Boolean(selectedHealth)} onWorker={() => setWorkersOpen(true)} onNew={() => newConversation()} />}
+    <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} />
+	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} meta={workerMeta} onMeta={switchWorker} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
+	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
     <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
 	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
 	<MoreMenu open={menuOpen && view !== "conversation"} sortMode={sortMode} health={selectedHealth} onSort={setSortMode} onWorkspaces={openWorkspaceManager} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
