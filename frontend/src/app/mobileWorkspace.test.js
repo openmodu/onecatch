@@ -76,6 +76,14 @@ test("the transcript reads as prose, not as a stack of cards", async () => {
   assert.doesNotMatch(css, /\.mobile-composer-wrap > p/);
 });
 
+test("reasoning stays behind a collapsed icon row", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  assert.match(source, /<details className="mobile-reasoning">/);
+  assert.match(source, /<span className="mobile-reasoning-icon"[^>]*><Brain \/><\/span>/);
+  assert.match(source, /<summary className="mobile-reasoning-row">/);
+  assert.doesNotMatch(source, /<details className="mobile-reasoning"\s+open/);
+});
+
 // Connecting to a worker and counting tokens are facts about the machinery.
 // A row for each turned a two-line answer into a page of scaffolding.
 test("the transcript drops plumbing events and names what a tool touched", async () => {

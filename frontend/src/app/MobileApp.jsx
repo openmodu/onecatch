@@ -5,6 +5,7 @@ import {
   ArrowDownUp,
   ArrowLeft,
   Bot,
+  Brain,
   Check,
   ChevronDown,
   ChevronRight,
@@ -319,6 +320,18 @@ function AssistantMessage({ text, streaming = false }) {
   </article>;
 }
 
+function ReasoningEvent({ event }) {
+  if (!event.text) return null;
+  return <details className="mobile-reasoning">
+    <summary className="mobile-reasoning-row">
+      <span className="mobile-reasoning-icon" aria-hidden="true"><Brain /></span>
+      <span>思考过程</span>
+      <ChevronRight aria-hidden="true" />
+    </summary>
+    <div className="mobile-reasoning-content"><MarkdownContent content={event.text} streaming={Boolean(event.streaming)} /></div>
+  </details>;
+}
+
 function ToolEvent({ event, summary }) {
   const name = summary.label.toLowerCase();
   const webSearch = name === "web" && /^search\s*:/i.test(summary.detail);
@@ -353,6 +366,7 @@ function ToolEvent({ event, summary }) {
 function AgentEvent({ run, event, index, permissionBusy, onRespond }) {
   if (event.kind === "permission_request") return <PermissionCard runID={run.id} event={event} busy={permissionBusy === event.permission?.id} onRespond={onRespond} />;
   if (event.kind === "message") return <AssistantMessage text={event.text} streaming={Boolean(event.streaming || (run.status === "running" && index === run.events.length - 1))} />;
+  if (event.kind === "reasoning") return <ReasoningEvent event={event} />;
   if (!event.text && !event.kind) return null;
   const summary = mobileEventSummary(event, eventLabel(event.kind));
   if (event.kind === "tool_use" || event.kind === "tool_result") return <ToolEvent event={event} summary={summary} />;
