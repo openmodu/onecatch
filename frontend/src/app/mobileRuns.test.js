@@ -84,17 +84,19 @@ test("a tool row leads with the program and carries its output", () => {
   assert.equal(mobileEventSummary({ kind: "reasoning", text: "" }, "思考过程").expandable, false);
 });
 
-test("a call and its result become one row, and empty thoughts none at all", () => {
+test("a call and its result become one row with elapsed-time boundaries, and empty thoughts none at all", () => {
   const folded = foldMobileEvents([
     { kind: "reasoning", text: "" },
-    { kind: "tool_use", text: "/bin/zsh -lc 'ls -la'" },
-    { kind: "tool_result", text: "total 12" },
+    { kind: "tool_use", text: "/bin/zsh -lc 'ls -la'", at: "2026-09-07T02:00:00.250Z" },
+    { kind: "tool_result", text: "total 12", at: "2026-09-07T02:00:02.750Z" },
     { kind: "tool_use", text: "/bin/zsh -lc 'cat README.md'" },
     { kind: "tool_result", text: "# Modu", failed: true },
     { kind: "message", text: "done" },
   ]);
   assert.deepEqual(folded.map((event) => event.kind), ["tool_use", "tool_use", "message"]);
   assert.equal(folded[0].result, "total 12");
+  assert.equal(folded[0].at, "2026-09-07T02:00:00.250Z");
+  assert.equal(folded[0].finishedAt, "2026-09-07T02:00:02.750Z");
   assert.equal(folded[1].failed, true, "a failed result marks the call it came from");
 });
 

@@ -142,7 +142,12 @@ function foldToolResults(events) {
         : (folded[folded.length - 1]?.kind === "tool_use" && folded[folded.length - 1].result === undefined ? folded.length - 1 : -1);
       if (index >= 0) {
         const call = folded[index];
-        folded[index] = { ...call, result: String(event.text || ""), failed: Boolean(call.failed || event.failed) };
+        folded[index] = {
+          ...call,
+          result: String(event.text || ""),
+          finishedAt: event.at || call.finishedAt,
+          failed: Boolean(call.failed || event.failed),
+        };
         continue;
       }
     }

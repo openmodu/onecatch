@@ -43,7 +43,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import MarkdownContent from "./components/MarkdownContent.jsx";
-import { errorMessage, formatTime, compactTokens, shortenPath } from "./format.js";
+import { errorMessage, formatDuration, formatTime, compactTokens, shortenPath } from "./format.js";
 import { applyMobileRunFrame, conversationUsage, foldMobileEvents, groupMobileConversations, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useKeyboardInset } from "./mobileViewport.js";
@@ -328,9 +328,15 @@ function ToolEvent({ event, summary }) {
   const Icon = search ? Search : web ? Globe : file ? FileText : Terminal;
   const label = webSearch || name === "web_search" ? "网页搜索" : name === "web_fetch" ? "读取网页" : summary.label;
   const detail = webSearch ? summary.detail.replace(/^search\s*:\s*/i, "") : summary.detail;
+  const startedAt = new Date(event.at || 0).getTime();
+  const finishedAt = new Date(event.finishedAt || 0).getTime();
+  const duration = Number.isFinite(startedAt) && startedAt > 0 && Number.isFinite(finishedAt) && finishedAt >= startedAt
+    ? formatDuration(finishedAt - startedAt)
+    : "";
   const heading = <>
     <span className="mobile-tool-icon" aria-hidden="true"><Icon /></span>
     <span className="mobile-tool-caption"><span className="mobile-tool-name">{label}</span>{detail && <code>{detail}</code>}</span>
+    {duration && <span className="mobile-tool-duration" title={`耗时 ${duration}`}>{duration}</span>}
     {summary.failed && <span className="mobile-tool-failed"><CircleAlert aria-hidden="true" />失败</span>}
     {summary.expandable && <ChevronRight className="mobile-tool-chevron" aria-hidden="true" />}
   </>;
