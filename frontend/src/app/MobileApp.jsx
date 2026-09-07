@@ -11,9 +11,11 @@ import {
   CircleAlert,
   Cloud,
   Cpu,
+  FileText,
   Folder,
   FolderGit2,
 	GitBranch,
+  Globe,
 	HardDrive,
   Link2,
   LoaderCircle,
@@ -30,6 +32,7 @@ import {
   Server,
   Settings2,
   Square,
+  Terminal,
   Trash2,
   Wifi,
   X,
@@ -136,13 +139,11 @@ function EmptyConnection({ onPair }) {
   </section>;
 }
 
-// The bar carries the two actions and nothing else. What a page is about is
-// its own first line, at a size worth reading — repeating it in 15px above
-// the 22px heading was the same fact twice.
-function Header({ onMenu, onBack, onMore, onNew }) {
+// Conversation titles stay visible while the message list scrolls.
+function Header({ onMenu, onBack, onMore, onNew, title, meta }) {
   return <header className="mobile-topbar">
     <button type="button" className="mobile-round-button" aria-label={onBack ? "返回" : "打开侧栏"} onClick={onBack || onMenu}>{onBack ? <ArrowLeft /> : <Menu />}</button>
-    <span />
+    {title ? <div className="mobile-topbar-title"><h1 title={title}>{title}</h1>{meta && <span>{meta}</span>}</div> : <span />}
     <button type="button" className="mobile-round-button" aria-label={onNew ? "新建会话" : "更多"} onClick={onNew || onMore}>{onNew ? <Plus /> : <MoreHorizontal />}</button>
   </header>;
 }
@@ -304,14 +305,51 @@ function PermissionCard({ runID, event, busy, onRespond }) {
   </article>;
 }
 
+function UserMessage({ text }) {
+  if (!text) return null;
+  return <article className="mobile-user-message" aria-label="你的消息">
+    <div className="mobile-user-message-body">{text}</div>
+  </article>;
+}
+
+function AssistantMessage({ text, streaming = false }) {
+  if (!text) return null;
+  return <article className="mobile-assistant-message" aria-label="助手回复">
+    <MarkdownContent content={text} streaming={streaming} />
+  </article>;
+}
+
+function ToolEvent({ event, summary }) {
+  const name = summary.label.toLowerCase();
+  const webSearch = name === "web" && /^search\s*:/i.test(summary.detail);
+  const search = webSearch || /search|grep|^rg$|^find$/.test(name);
+  const web = /fetch|browse|^web$/.test(name);
+  const file = /file|read|write|edit|patch/.test(name);
+  const Icon = search ? Search : web ? Globe : file ? FileText : Terminal;
+  const label = webSearch || name === "web_search" ? "网页搜索" : name === "web_fetch" ? "读取网页" : summary.label;
+  const detail = webSearch ? summary.detail.replace(/^search\s*:\s*/i, "") : summary.detail;
+  const heading = <>
+    <span className="mobile-tool-icon" aria-hidden="true"><Icon /></span>
+    <span className="mobile-tool-caption"><span className="mobile-tool-name">{label}</span>{detail && <code>{detail}</code>}</span>
+    {summary.failed && <span className="mobile-tool-failed"><CircleAlert aria-hidden="true" />失败</span>}
+    {summary.expandable && <ChevronRight className="mobile-tool-chevron" aria-hidden="true" />}
+  </>;
+  if (!summary.expandable) return <div className={`mobile-tool-row ${summary.failed ? "error" : ""}`}>{heading}</div>;
+  return <details className={`mobile-tool ${summary.failed ? "error" : ""}`}>
+    <summary className="mobile-tool-row">{heading}</summary>
+    <div className="mobile-tool-content">
+      {summary.body && <div><span className="mobile-tool-section">{event.kind === "tool_result" ? "输出" : "调用"}</span><pre>{summary.body}</pre></div>}
+      {summary.result && <div><span className="mobile-tool-section">输出</span><pre>{summary.result}</pre></div>}
+    </div>
+  </details>;
+}
+
 function AgentEvent({ run, event, index, permissionBusy, onRespond }) {
   if (event.kind === "permission_request") return <PermissionCard runID={run.id} event={event} busy={permissionBusy === event.permission?.id} onRespond={onRespond} />;
-  if (event.kind === "message") return event.text ? <div className="mobile-assistant-message"><MarkdownContent content={event.text} streaming={Boolean(event.streaming || (run.status === "running" && index === run.events.length - 1))} /></div> : null;
+  if (event.kind === "message") return <AssistantMessage text={event.text} streaming={Boolean(event.streaming || (run.status === "running" && index === run.events.length - 1))} />;
   if (!event.text && !event.kind) return null;
-  // Everything that is not the answer stays a single quiet line until asked
-  // for: a box around each one turns a reply into a stack of paperwork. The
-  // line names what the agent touched, not just the category of the step.
   const summary = mobileEventSummary(event, eventLabel(event.kind));
+  if (event.kind === "tool_use" || event.kind === "tool_result") return <ToolEvent event={event} summary={summary} />;
   const line = <><span className="mobile-event-label">{summary.label}</span>{summary.detail && <code>{summary.detail}</code>}</>;
   if (!summary.expandable) return <div className={`mobile-event-line ${summary.failed ? "error" : ""}`}><span className="mobile-event-bullet" aria-hidden="true" />{line}</div>;
   return <details className={`mobile-event-detail ${summary.failed ? "error" : ""}`}>
@@ -360,15 +398,14 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
       onScroll={() => { pinnedRef.current = isPinnedToBottom(transcriptRef.current); }}
     >
       {!runs.length && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)} · {sharedRuns ? "与桌面共用任务和运行记录" : "Agent 在远端以只读模式运行"}</p></section>}
-      {runs.length > 0 && <PageHead title={conversation?.title || mobileRunTitle(runs[0]?.prompt)} meta={`${workspaceLabel(workspace)} · ${runtime}`} />}
-      {runs.map((run, turn) => {
+      {runs.map((run) => {
         const visibleEvents = foldMobileEvents(run.events || []);
         return <section className="mobile-turn" key={run.id}>
-        {turn > 0 && <div className="mobile-user-message"><MarkdownContent content={run.prompt} /></div>}
-        {visibleEvents.map((event, index) => event.kind === "user_message" ? <div className="mobile-user-message" key={`user-${index}`}><MarkdownContent content={event.text} /></div> : <AgentEvent key={`${event.at || index}-${index}`} run={{ ...run, events: visibleEvents }} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />)}
+        <UserMessage text={run.prompt} />
+        {visibleEvents.map((event, index) => event.kind === "user_message" ? <UserMessage key={`user-${index}`} text={event.text} /> : <AgentEvent key={`${event.at || index}-${index}`} run={{ ...run, events: visibleEvents }} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />)}
         {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
         {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
-        {run.result?.finalMessage && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <div className="mobile-assistant-message final"><MarkdownContent content={run.result.finalMessage} /></div>}
+        {run.result?.finalMessage && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <AssistantMessage text={run.result.finalMessage} />}
       </section>;
       })}
     </main>
@@ -799,7 +836,7 @@ export default function MobileWorkbench() {
 	const goBack = view === "conversation" ? () => setView("sessions") : view === "sessions" || view === "workspaces" ? () => setView("projects") : null;
 
   return <div className="mobile-app-shell" style={{ "--mobile-keyboard-inset": `${keyboardInset}px` }}>
-    <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} />
+    <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} title={view === "conversation" ? selectedConversation?.title || "新建会话" : ""} meta={view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : ""} />
 	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} meta={workerMeta} onMeta={switchWorker} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
     <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
