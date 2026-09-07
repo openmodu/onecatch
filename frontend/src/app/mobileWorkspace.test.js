@@ -78,10 +78,22 @@ test("the transcript reads as prose, not as a stack of cards", async () => {
 test("the transcript drops plumbing events and names what a tool touched", async () => {
   const source = await readFile(sourceURL, "utf8");
   const runs = await readFile(new URL("./mobileRuns.js", sourceURL), "utf8");
-  assert.match(runs, /TRANSCRIPT_NOISE = new Set\(\["started", "usage", "permission_resolved"\]\)/);
+  assert.match(runs, /TRANSCRIPT_NOISE = new Set\(\[[^\]]*"result"\]\)/);
   assert.doesNotMatch(source, /usage: "用量"/);
   assert.doesNotMatch(source, /started: "已连接 Worker"/);
   // A row that opens onto nothing is not a control.
   assert.match(source, /if \(!summary\.expandable\) return <div className=\{`mobile-event-line/);
   assert.match(source, /<code>\{summary\.detail\}<\/code>/);
+});
+
+// The title bar names the workspace, so the page below it should add where the
+// workspace lives — and a path cut from the right loses exactly that.
+test("a workspace path is shortened from its middle, not its end", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  assert.doesNotMatch(source, /mobile-workspace-heading/, "the heading repeated the title bar");
+  // The path sits under the name it describes, where the session count used to
+  // repeat what the list below already shows.
+  assert.match(source, /: shortenPath\(selectedWorkspace\?\.path\);/);
+  assert.doesNotMatch(source, /个会话`;/);
+  assert.match(source, /\{shortenPath\(workspace\.path, 3\)\}/, "the manage card has room for one more segment");
 });

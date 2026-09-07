@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyMobileRunFrame, foldMobileEvents, groupMobileConversations, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity, sortMobileRuns, unwrapShellCommand } from "./mobileRuns.js";
+import { applyMobileRunFrame, conversationUsage, describeToolArguments, foldMobileEvents, groupMobileConversations, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity, sortMobileRuns, unwrapShellCommand } from "./mobileRuns.js";
 
 test("mobile task titles use the first compact prompt line", () => {
   assert.equal(mobileRunTitle("  Review the worker API\nthen add tests  "), "Review the worker API");
@@ -96,4 +96,70 @@ test("a call and its result become one row, and empty thoughts none at all", () 
   assert.deepEqual(folded.map((event) => event.kind), ["tool_use", "tool_use", "message"]);
   assert.equal(folded[0].result, "total 12");
   assert.equal(folded[1].failed, true, "a failed result marks the call it came from");
+});
+
+// Codex hands over a shell command, Modu hands over the tool's JSON arguments.
+// The row has to read for both without dumping a payload into it.
+test("a tool row reads the same whichever harness produced it", () => {
+  assert.equal(
+    describeToolArguments(`{"command":"curl -s \\"https://wttr.in/Shanghai?format=3\\" --max-time 20"}`),
+    `curl -s "https://wttr.in/Shanghai?format=3" --max-time 20`,
+  );
+  assert.equal(
+    describeToolArguments(`{"path":"/Users/ityike/.modu/skills","pattern":"weather|wttr"}`),
+    "weather|wttr · ~/.modu/skills",
+    "a pattern alone does not say where it was looked for",
+  );
+  // A shape with no line worth writing keeps the row to its tool name.
+  assert.equal(describeToolArguments(`{"questions":[{"header":"城市确认"}]}`), "");
+  assert.equal(describeToolArguments("ls -la"), "ls -la");
+  assert.equal(describeToolArguments("{not json"), "{not json");
+});
+
+// The agent narrates between calling a tool and getting its answer, which left
+// the result stranded in a row of its own.
+test("a result rejoins its call even when prose came between them", () => {
+  const folded = foldMobileEvents([
+    { kind: "tool_use", streamId: "call-1", text: `grep {"pattern":"wttr"}` },
+    { kind: "message", text: "I don't have a weather skill, so I'll query a service." },
+    { kind: "tool_result", streamId: "call-1", text: "no matches", failed: true },
+  ]);
+  assert.deepEqual(folded.map((event) => event.kind), ["tool_use", "message"]);
+  assert.equal(folded[0].result, "no matches");
+  assert.equal(folded[0].failed, true);
+});
+
+// Modu ends a run with a `result` event carrying the same prose as the final
+// reply, so the transcript printed the answer twice.
+test("the terminal result event does not repeat the answer", () => {
+  const folded = foldMobileEvents([
+    { kind: "message", text: "I'll query a public weather service." },
+    { kind: "result", text: "I'll query a public weather service." },
+  ]);
+  assert.deepEqual(folded.map((event) => event.kind), ["message"]);
+});
+
+// The numbers ride on the usage events' structured fields, which is why the
+// transcript's old "usage" row — built from event text — opened onto nothing.
+test("conversationUsage adds up a conversation's tokens and its context", () => {
+  const usage = conversationUsage([
+    { result: { usage: { inputTokens: 18976, cachedInputTokens: 18816, outputTokens: 37 } },
+      events: [{ kind: "usage", context: { window: 258400, tokens: 18976 } }] },
+    { result: { usage: { inputTokens: 94346, cachedInputTokens: 83200, outputTokens: 826 } },
+      events: [{ kind: "usage", context: { window: 258400, tokens: 29421 } }] },
+  ]);
+  assert.equal(usage.total, 18976 + 37 + 94346 + 826);
+  assert.equal(usage.cached, 18816 + 83200);
+  assert.deepEqual(usage.context, { window: 258400, tokens: 29421 }, "the newest reading wins");
+});
+
+test("a run still in flight counts from its latest reading", () => {
+  const usage = conversationUsage([
+    { events: [
+      { kind: "usage", usage: { inputTokens: 100, outputTokens: 5 } },
+      { kind: "usage", usage: { inputTokens: 900, outputTokens: 40 } },
+    ] },
+  ]);
+  assert.equal(usage.total, 940, "a run with no result yet still reports what it has spent");
+  assert.deepEqual(conversationUsage([]), { input: 0, output: 0, cached: 0, total: 0, context: null });
 });

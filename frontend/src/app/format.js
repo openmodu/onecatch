@@ -95,3 +95,31 @@ export function taskTitleFromPrompt(value = "", fallback = "") {
   const characters = Array.from(firstLine);
   return characters.length > 48 ? `${characters.slice(0, 47).join("")}…` : firstLine;
 }
+
+// shortenPath keeps the end of a path, which is the part that identifies the
+// project. Cutting from the right — what plain ellipsis does — throws away the
+// project name and leaves everyone's paths looking identical.
+export function shortenPath(value, keep = 2) {
+  const path = String(value || "").trim();
+  if (!path) return "";
+  const home = /^\/(?:Users|home)\/[^/]+(?=\/|$)/.exec(path);
+  const rooted = home ? `~${path.slice(home[0].length)}` : path;
+  const segments = rooted.split("/").filter(Boolean);
+  const head = rooted.startsWith("~") ? "~" : "";
+  const tail = head ? segments.slice(1) : segments;
+  if (tail.length <= keep) return rooted;
+  const prefix = head || "";
+  return [prefix, "…", ...tail.slice(-keep)].filter(Boolean).join("/");
+}
+
+// compactTokens sits beside formatTokens, which spells a count out in full for
+// the desktop's usage tables. A phone row carries three of these numbers at
+// once and has no room for them: 94.3k is the same fact in a third of the
+// width.
+export function compactTokens(value) {
+  const tokens = Number(value) || 0;
+  if (tokens < 1000) return String(tokens);
+  const scaled = tokens < 1_000_000 ? tokens / 1000 : tokens / 1_000_000;
+  const unit = tokens < 1_000_000 ? "k" : "M";
+  return `${scaled >= 100 ? Math.round(scaled) : scaled.toFixed(1).replace(/\.0$/, "")}${unit}`;
+}

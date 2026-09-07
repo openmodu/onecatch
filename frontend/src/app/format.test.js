@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { errorMessage, formatDateTime, formatMessageDateTime, formatTime, formatToolTime, taskTitleFromPrompt } from "./format.js";
+import { compactTokens, errorMessage, formatDateTime, formatMessageDateTime, formatTime, formatToolTime, shortenPath, taskTitleFromPrompt } from "./format.js";
 
 test("worker protocol errors become actionable UI copy", () => {
   const message = errorMessage("worker_workspace_revision_missing: requested revision is unavailable");
@@ -68,4 +68,23 @@ test("a missing or unparseable timestamp reads as absent, not as the epoch", () 
   assert.equal(formatDateTime("not a date"), "—");
   assert.equal(formatMessageDateTime("not a date"), "—");
   assert.equal(formatToolTime("not a date"), "—");
+});
+
+test("shortenPath keeps the end of a path, where the project name lives", () => {
+  assert.equal(shortenPath("/Users/ityike/Code/go/src/github.com/openmodu/modu"), "~/…/openmodu/modu");
+  assert.equal(shortenPath("/home/dev/work/onecatch"), "~/work/onecatch", "nothing is elided when it already fits");
+  assert.equal(shortenPath("/home/dev/a/b/work/onecatch"), "~/…/work/onecatch");
+  assert.equal(shortenPath("/Users/ityike/modu"), "~/modu", "a path that already fits is left alone");
+  assert.equal(shortenPath("/srv/builds/site/current"), "…/site/current");
+  assert.equal(shortenPath("/opt/app"), "/opt/app");
+  assert.equal(shortenPath(""), "");
+});
+
+test("compactTokens keeps a count glanceable on a phone row", () => {
+  assert.equal(compactTokens(422), "422");
+  assert.equal(compactTokens(6791), "6.8k");
+  assert.equal(compactTokens(94346), "94.3k");
+  assert.equal(compactTokens(258400), "258k", "past a hundred the decimal is noise");
+  assert.equal(compactTokens(1000000), "1M");
+  assert.equal(compactTokens(0), "0");
 });

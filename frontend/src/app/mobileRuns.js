@@ -1,3 +1,5 @@
+import { shortenPath } from "./format.js";
+
 const MAX_VISIBLE_EVENTS = 2000;
 
 export function mobileRunTitle(prompt, maximum = 48) {
@@ -29,7 +31,9 @@ export function applyMobileRunFrame(run, frame) {
 // Plumbing the phone has no use for. Connecting to a worker and counting
 // tokens are facts about the machinery, not about the answer, and a row for
 // each one is what turned a short reply into a page of scaffolding.
-const TRANSCRIPT_NOISE = new Set(["started", "usage", "permission_resolved"]);
+// `result` carries the run's final message, which the transcript already shows
+// as the last reply, so leaving it in printed the answer twice.
+const TRANSCRIPT_NOISE = new Set(["started", "usage", "permission_resolved", "result"]);
 
 export function foldMobileEvents(items = []) {
   const events = [];
@@ -106,9 +110,6 @@ export function projectActivity(sessions = []) {
   return { count: sessions.length, latestAt, running };
 }
 
-// mobileEventSummary turns an event into the single line the transcript shows
-// for it. Text carries the human-meaningful payload — a command, a path — so
-// the row can say what the agent actually did instead of only its category.
 // Harnesses hand a command to the user's login shell, so almost every tool
 // call arrives wrapped in `/long/path/to/zsh -lc "…"`. The wrapper is identical
 // every time; what the agent actually ran is inside the quotes.
@@ -123,15 +124,57 @@ export function unwrapShellCommand(value) {
 // pair them up by eye.
 function foldToolResults(events) {
   const folded = [];
+  // A call and its result carry the same tool-call id. Pairing by that rather
+  // than by adjacency matters because the agent often narrates between the two,
+  // and a result stranded from its call reads as a row about nothing.
+  const callIndexes = new Map();
   for (const event of events) {
-    const previous = folded[folded.length - 1];
-    if (event?.kind === "tool_result" && previous?.kind === "tool_use" && previous.result === undefined) {
-      folded[folded.length - 1] = { ...previous, result: String(event.text || ""), failed: Boolean(previous.failed || event.failed) };
+    if (event?.kind === "tool_use") {
+      if (event.streamId) callIndexes.set(event.streamId, folded.length);
+      folded.push(event);
       continue;
+    }
+    if (event?.kind === "tool_result") {
+      const index = event.streamId && callIndexes.has(event.streamId)
+        ? callIndexes.get(event.streamId)
+        : (folded[folded.length - 1]?.kind === "tool_use" && folded[folded.length - 1].result === undefined ? folded.length - 1 : -1);
+      if (index >= 0) {
+        const call = folded[index];
+        folded[index] = { ...call, result: String(event.text || ""), failed: Boolean(call.failed || event.failed) };
+        continue;
+      }
     }
     folded.push(event);
   }
   return folded;
+}
+
+// Harnesses do not agree on what a tool call looks like: Codex hands over a
+// shell command, Modu hands over the tool's JSON arguments. Raw JSON in a
+// one-line row is unreadable, so pull out the field that says what the call
+// actually does and leave the rest to the expansion.
+const ARGUMENT_KEYS = ["command", "cmd", "script", "pattern", "query", "prompt", "question", "url", "file_path", "filePath", "path", "filename", "name"];
+
+export function describeToolArguments(value) {
+  const text = String(value || "").trim();
+  if (!text.startsWith("{")) return unwrapShellCommand(text);
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return text;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return text;
+  const key = ARGUMENT_KEYS.find((name) => typeof parsed[name] === "string" && parsed[name].trim());
+  if (!key) {
+    // An unfamiliar shape has no line worth writing; the row keeps its tool
+    // name and the whole payload stays one tap away.
+    return "";
+  }
+  const primary = unwrapShellCommand(parsed[key]);
+  // A pattern on its own does not say where it was looked for.
+  const where = key === "pattern" || key === "query" ? String(parsed.path || parsed.file_path || "").trim() : "";
+  return where ? `${primary} · ${shortenPath(where)}` : primary;
 }
 
 // commandParts splits a shell command into the program that ran and what it was
@@ -151,13 +194,15 @@ export function commandParts(value) {
 const MAX_ROW_TEXT = 400;
 const ROW_FITS = 38;
 
+// mobileEventSummary turns an event into the single line the transcript shows
+// for it, saying what the agent actually did rather than only its category.
 export function mobileEventSummary(event, label) {
   const text = String(event?.text || "").trim();
   const failed = Boolean(event?.failed) || event?.kind === "error";
   const result = String(event?.result || "").trim();
   if (event?.kind === "tool_use") {
     const { program, args } = commandParts(text);
-    return { label: program || label, detail: args.slice(0, MAX_ROW_TEXT), body: text, result, expandable: Boolean(text || result), failed };
+    return { label: program || label, detail: describeToolArguments(args).slice(0, MAX_ROW_TEXT), body: text, result, expandable: Boolean(text || result), failed };
   }
   const [first = "", ...rest] = unwrapShellCommand(text).split("\n");
   return {
@@ -170,4 +215,29 @@ export function mobileEventSummary(event, label) {
     expandable: Boolean(text) && (rest.length > 0 || first.length > ROW_FITS),
     failed,
   };
+}
+
+// conversationUsage adds up what a conversation has spent. The numbers ride on
+// the usage events' structured fields rather than their text, which is why the
+// transcript's old "usage" row opened onto nothing.
+export function conversationUsage(runs = []) {
+  let input = 0;
+  let output = 0;
+  let cached = 0;
+  let context = null;
+  for (const run of runs) {
+    // A run still in flight has no result yet, so fall back to its latest
+    // reading — the count should climb while the agent works.
+    let usage = run?.result?.usage || null;
+    for (const event of run?.events || []) {
+      if (event?.kind !== "usage") continue;
+      if (!run?.result?.usage && event.usage) usage = event.usage;
+      if (event.context?.tokens) context = event.context;
+    }
+    if (!usage) continue;
+    input += usage.inputTokens || 0;
+    output += usage.outputTokens || 0;
+    cached += usage.cachedInputTokens || 0;
+  }
+  return { input, output, cached, total: input + output, context };
 }

@@ -41,8 +41,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import MarkdownContent from "./components/MarkdownContent.jsx";
-import { errorMessage, formatTime } from "./format.js";
-import { applyMobileRunFrame, foldMobileEvents, groupMobileConversations, mergeMobileRun, mobileEventSummary, projectActivity } from "./mobileRuns.js";
+import { errorMessage, formatTime, compactTokens, shortenPath } from "./format.js";
+import { applyMobileRunFrame, conversationUsage, foldMobileEvents, groupMobileConversations, mergeMobileRun, mobileEventSummary, projectActivity } from "./mobileRuns.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useKeyboardInset } from "./mobileViewport.js";
 import "../mobile.css";
@@ -212,7 +212,6 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
   const normalized = query.trim().toLowerCase();
   const visible = conversations.filter((item) => item.workspaceId === workspace?.id && (!normalized || item.title.toLowerCase().includes(normalized)));
   return <div className="mobile-page mobile-session-page">
-    <div className="mobile-workspace-heading"><FolderGit2 /><div><h1>{workspaceLabel(workspace)}</h1><span>{workspace?.path}</span></div></div>
     <div className="mobile-session-list">
       {visible.map((conversation) => <button type="button" className="mobile-session-row" key={conversation.id} onClick={() => onOpen(conversation.id)}>
         <span className="mobile-session-icon"><MessageCircle /></span>
@@ -235,7 +234,7 @@ function WorkspaceManagerPage({ workspaces, statusByID, managementSupported, bus
         const dirty = Boolean(snapshot && (snapshot.status || (snapshot.files || []).length));
         return <article className="mobile-workspace-manage-card" key={workspace.id}>
           <header><span className="mobile-workspace-manage-icon"><FolderGit2 /></span><div><strong>{workspaceLabel(workspace)}</strong><small>{workspace.id}</small></div><span className={`mobile-git-state ${dirty ? "dirty" : snapshot?.isRepo ? "clean" : ""}`}>{state?.loading ? "检查中" : state?.error ? "不可用" : workspaceGitLabel(snapshot)}</span></header>
-          <div className="mobile-workspace-manage-meta"><span><HardDrive />{workspace.path}</span>{workspace.remoteUrl && <span><GitBranch />{workspace.remoteUrl}</span>}</div>
+          <div className="mobile-workspace-manage-meta"><span title={workspace.path}><HardDrive />{shortenPath(workspace.path, 3)}</span>{workspace.remoteUrl && <span><GitBranch />{workspace.remoteUrl}</span>}</div>
           {/* A shared workspace belongs to the desktop hosting this Worker; the
               phone can run in it, but only that desktop can change it. */}
           {workspace.shared && <p className="mobile-workspace-shared">{workspace.remoteHost ? <Cloud /> : <Monitor />}{workspace.remoteHost ? `来自桌面端 · 文件在 ${workspace.remoteHost}` : "来自桌面端"}，改名和删除请在电脑上操作</p>}
@@ -459,6 +458,36 @@ function WorkersSheet({ open, workers, selectedWorkerID, healthByID, busy, onClo
 // Wails' iOS webview installs no WKUIDelegate, so window.confirm() resolves to
 // false without ever showing anything — every destructive action behind one
 // silently did nothing on the phone. Ask in the app's own sheet instead.
+function ConversationMenu({ open, conversation, workspace, health, snapshot, runtime, model, onNew, onSettings, onClose }) {
+  if (!open) return null;
+  const turns = conversation?.runs?.length || 0;
+  const usage = conversationUsage(conversation?.runs || []);
+  const running = conversation?.runs?.some((run) => run.status === "running");
+  return <div className="mobile-popover-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section className="mobile-more-menu">
+      <div className="mobile-menu-status">
+        <small>运行在</small>
+        <strong><StatusDot online={Boolean(health)} running={running} />{health?.worker?.name || "远端 Worker"}</strong>
+        <span>{health ? `${health.latencyMilliseconds}ms · ` : "离线 · "}{runtime}{model ? ` · ${model}` : ""}</span>
+      </div>
+      <div className="mobile-menu-status">
+        <small>工作区</small>
+        <strong>{workspaceLabel(workspace)}</strong>
+        <span>{shortenPath(workspace?.path)}{snapshot ? ` · ${workspaceGitLabel(snapshot)}` : ""}</span>
+      </div>
+      <div className="mobile-menu-status">
+        <small>本次会话</small>
+        <span>{turns ? `${turns} 轮${running ? " · 进行中" : ""} · ${compactTokens(usage.total)} tokens` : "还没有开始"}</span>
+        {usage.cached > 0 && <span>其中缓存命中 {compactTokens(usage.cached)}，输出 {compactTokens(usage.output)}</span>}
+        {usage.context?.tokens > 0 && <span>上下文 {compactTokens(usage.context.tokens)}{usage.context.window ? ` / ${compactTokens(usage.context.window)}` : ""}</span>}
+      </div>
+      <hr />
+      <button type="button" onClick={() => { onNew(); onClose(); }}><span /><PenLine />新建会话</button>
+      <button type="button" onClick={() => { onSettings(); onClose(); }}><span /><Settings2 />运行设置</button>
+    </section>
+  </div>;
+}
+
 function ConfirmSheet({ request, onClose }) {
   if (!request) return null;
   return <div className="mobile-sheet-backdrop" role="presentation" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -728,15 +757,16 @@ export default function MobileWorkbench() {
 	const openWorkspaceManager = () => { setView("workspaces"); setQuery(""); void loadWorkspaces(selectedWorkerID); };
 
 	const title = view === "projects" ? "远程" : view === "workspaces" ? "Workspace" : view === "sessions" ? workspaceLabel(selectedWorkspace) : selectedConversation?.title || "新会话";
-	const subtitle = view === "projects" || view === "workspaces" ? <><StatusDot online={Boolean(selectedHealth)} />{selectedHealth?.worker?.name || workerLabel(workers.find((item) => item.id === selectedWorkerID))}</> : view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : `${conversations.filter((item) => item.workspaceId === workspaceID).length} 个会话`;
+	const subtitle = view === "projects" || view === "workspaces" ? <><StatusDot online={Boolean(selectedHealth)} />{selectedHealth?.worker?.name || workerLabel(workers.find((item) => item.id === selectedWorkerID))}</> : view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : shortenPath(selectedWorkspace?.path);
 	const goBack = view === "conversation" ? () => setView("sessions") : view === "sessions" || view === "workspaces" ? () => setView("projects") : null;
 
   return <div className="mobile-app-shell" style={{ "--mobile-keyboard-inset": `${keyboardInset}px` }}>
-    <Header title={title} subtitle={subtitle} onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={view === "conversation" ? () => newConversation() : null} onSwitchWorker={workers.length > 1 && (view === "projects" || view === "workspaces") ? () => setWorkerSwitchOpen(true) : null} />
+    <Header title={title} subtitle={subtitle} onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} onSwitchWorker={workers.length > 1 && (view === "projects" || view === "workspaces") ? () => setWorkerSwitchOpen(true) : null} />
 	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomDock query={query} setQuery={setQuery} workerOnline={Boolean(selectedHealth)} onWorker={() => setWorkersOpen(true)} onNew={() => newConversation()} />}
     <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
-	<MoreMenu open={menuOpen} sortMode={sortMode} health={selectedHealth} onSort={setSortMode} onWorkspaces={openWorkspaceManager} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
+	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
+	<MoreMenu open={menuOpen && view !== "conversation"} sortMode={sortMode} health={selectedHealth} onSort={setSortMode} onWorkspaces={openWorkspaceManager} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
     <ContextSheet open={contextOpen} workers={workers} selectedWorkerID={selectedWorkerID} workspaces={workspaces} workspaceID={workspaceID} health={selectedHealth} runtime={runtime} runtimeLocked={Boolean(selectedConversationID)} model={model} reasoningEffort={reasoningEffort} onClose={() => setContextOpen(false)} onSelectWorker={(id) => { setSelectedWorkerID(id); setSelectedConversationID(""); setView("conversation"); void refreshWorker(id, true); }} onSelectWorkspace={(id) => selectWorkspace(id, "conversation")} onRuntime={setRuntime} onModel={setModel} onReasoning={setReasoningEffort} />
     <WorkersSheet open={workersOpen} workers={workers} selectedWorkerID={selectedWorkerID} onSelect={selectWorker} healthByID={healthByID} busy={Boolean(busy)} onClose={() => setWorkersOpen(false)} onPair={(worker) => { setWorkersOpen(false); setPairTarget(worker || null); }} onRefresh={refreshWorker} onDelete={deleteWorker} />
 	<PairSheet open={pairTarget !== undefined} busy={busy === "pair"} initialURL={pairTarget?.baseUrl || "https://"} onClose={() => setPairTarget(undefined)} onPair={pairWorker} />
