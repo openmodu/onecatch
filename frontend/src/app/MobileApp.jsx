@@ -23,7 +23,6 @@ import {
   MoreHorizontal,
   PanelLeftClose,
 	Pencil,
-  PenLine,
   Plus,
   RefreshCw,
   Search,
@@ -144,7 +143,7 @@ function Header({ onMenu, onBack, onMore, onNew }) {
   return <header className="mobile-topbar">
     <button type="button" className="mobile-round-button" aria-label={onBack ? "返回" : "打开侧栏"} onClick={onBack || onMenu}>{onBack ? <ArrowLeft /> : <Menu />}</button>
     <span />
-    <button type="button" className="mobile-round-button" aria-label={onNew ? "新建会话" : "更多"} onClick={onNew || onMore}>{onNew ? <PenLine /> : <MoreHorizontal />}</button>
+    <button type="button" className="mobile-round-button" aria-label={onNew ? "新建会话" : "更多"} onClick={onNew || onMore}>{onNew ? <Plus /> : <MoreHorizontal />}</button>
   </header>;
 }
 
@@ -185,7 +184,7 @@ function WorkerSwitchSheet({ open, workers, selectedWorkerID, healthByID, onSele
 function BottomBar({ query, setQuery, onNew }) {
   return <footer className="mobile-bottom-bar">
     <label className="mobile-search-pill"><Search /><input value={query} placeholder="搜索聊天记录" aria-label="搜索聊天记录" onChange={(event) => setQuery(event.target.value)} /></label>
-    <button type="button" className="mobile-primary-square" aria-label="新建会话" onClick={onNew}><PenLine /></button>
+    <button type="button" className="mobile-primary-square" aria-label="新建会话" onClick={onNew}><Plus /></button>
   </footer>;
 }
 
@@ -390,7 +389,7 @@ function Sidebar({ open, workspaces, conversations, selectedConversationID, heal
   return <div className="mobile-drawer-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
     <aside className="mobile-drawer" aria-label="工作区与会话">
       <header><div><span className="mobile-brand-mark">1</span><strong>OneCatch</strong></div><button type="button" className="mobile-icon-button" aria-label="关闭侧栏" onClick={onClose}><PanelLeftClose /></button></header>
-      <button type="button" className="mobile-new-session" onClick={() => { onNew(); onClose(); }}><PenLine />新建会话</button>
+      <button type="button" className="mobile-new-session" onClick={() => { onNew(); onClose(); }}><Plus />新建会话</button>
       <button type="button" className="mobile-drawer-home" onClick={() => { onHome(); onClose(); }}><Folder />全部项目<ChevronRight /></button>
       <div className="mobile-drawer-scroll">
         {workspaces.map((workspace) => {
@@ -489,7 +488,7 @@ function ConversationMenu({ open, conversation, workspace, health, snapshot, run
         {usage.context?.tokens > 0 && <span>上下文 {compactTokens(usage.context.tokens)}{usage.context.window ? ` / ${compactTokens(usage.context.window)}` : ""}</span>}
       </div>
       <hr />
-      <button type="button" onClick={() => { onNew(); onClose(); }}><span /><PenLine />新建会话</button>
+      <button type="button" onClick={() => { onNew(); onClose(); }}><span /><Plus />新建会话</button>
       <button type="button" onClick={() => { onSettings(); onClose(); }}><span /><Settings2 />运行设置</button>
     </section>
   </div>;

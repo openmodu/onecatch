@@ -121,3 +121,12 @@ test("a picker still looks like a picker after appearance is reset", async () =>
   assert.match(css, /\.mobile-sheet select \{[^}]*background-image: url\("data:image\/svg\+xml/s);
   assert.match(css, /\.mobile-sheet select \{[^}]*padding-right: 40px/s);
 });
+
+// A pencil means "change what is there". Every "new" action creates something,
+// so it takes a plus; the pencil stays on the one control that edits.
+test("create actions use a plus, and the pencil stays with editing", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  assert.doesNotMatch(source, /<PenLine \/>/);
+  assert.match(source, /aria-label="新建会话" onClick=\{onNew\}><Plus \/>/);
+  assert.match(source, /<Pencil \/>/, "editing a workspace still edits");
+});
