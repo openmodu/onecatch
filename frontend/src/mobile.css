@@ -10,7 +10,7 @@
   --mobile-keyboard-inset: 0px;
   /* One filled surface for anything the finger lands on, one hairline for
      everything that only separates. */
-  --m-field: color-mix(in oklab, var(--muted) 82%, var(--background));
+  --m-field: color-mix(in oklab, var(--muted) 96%, var(--background));
   --m-line: color-mix(in oklab, var(--border) 62%, transparent);
   --m-radius: 10px;
   /* One gutter for every layer. The bar's 44px targets are wider than their
@@ -102,13 +102,16 @@ button, input, textarea, select { font: inherit; }
 .mobile-project-row:active { opacity: .55; }
 
 /* One bar, one primary action, and a field that looks like a field. */
-.mobile-bottom-bar { padding: 10px var(--m-gutter) calc(18px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; border-top: 1px solid var(--m-line); background: var(--background); }
-.mobile-search-pill { flex: 1; min-width: 0; height: 48px; padding: 0 14px; display: flex; align-items: center; gap: 9px; border-radius: var(--m-radius); background: var(--m-field); color: var(--muted-foreground); }
-.mobile-search-pill svg { width: 17px; flex: 0 0 auto; }
+.mobile-bottom-bar { padding: 12px var(--m-gutter) calc(18px + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--m-line); background: var(--background); }
+.mobile-search-pill { flex: 1; min-width: 0; height: 50px; padding: 0 16px; display: flex; align-items: center; gap: 10px; border-radius: 14px; background: var(--m-field); color: var(--muted-foreground); }
+.mobile-search-pill svg { width: 18px; flex: 0 0 auto; stroke-width: 2; }
 .mobile-search-pill input { min-width: 0; width: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--foreground); font-size: 16px; }
 .mobile-search-pill input::placeholder { color: var(--muted-foreground); }
-.mobile-primary-square { width: 48px; height: 48px; display: grid; place-items: center; flex: 0 0 auto; border: 0; border-radius: var(--m-radius); background: var(--primary); color: var(--primary-foreground); }
-.mobile-primary-square svg { width: 18px; }
+/* A solid block of the most saturated colour in the app is right for a
+   labelled commitment and too loud for a compact icon that sits in a utility
+   bar all day. These carry the accent as ink on a tint of itself. */
+.mobile-primary-square { width: 50px; height: 50px; display: grid; place-items: center; flex: 0 0 auto; border: 0; border-radius: 14px; background: color-mix(in oklab, var(--primary) 14%, var(--background)); color: var(--primary); }
+.mobile-primary-square svg { width: 21px; stroke-width: 1.9; }
 .mobile-primary-square:active, .mobile-main-action:active { opacity: .8; }
 
 /* Buttons: filled for the one action that matters, a hairline for the rest. */
@@ -188,10 +191,10 @@ button, input, textarea, select { font: inherit; }
 .mobile-context-button svg { width: 14px; color: var(--muted-foreground); }
 .mobile-context-button span { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-context-button b { color: var(--muted-foreground); font-weight: 400; }
-.mobile-send-button { width: 40px; height: 40px; display: grid; flex: 0 0 auto; place-items: center; border: 0; border-radius: 9px; background: var(--primary); color: var(--primary-foreground); }
+.mobile-send-button { width: 40px; height: 40px; display: grid; flex: 0 0 auto; place-items: center; border: 0; border-radius: 11px; background: color-mix(in oklab, var(--primary) 14%, var(--background)); color: var(--primary); }
 .mobile-send-button:disabled { opacity: .3; }
-.mobile-send-button.stop { background: var(--destructive); color: #fff; }
-.mobile-send-button svg { width: 16px; }
+.mobile-send-button.stop { background: color-mix(in oklab, var(--destructive) 14%, var(--background)); color: var(--destructive); }
+.mobile-send-button svg { width: 17px; stroke-width: 1.9; }
 .mobile-workspace-alert { margin: 0 0 8px; display: flex; align-items: center; gap: 6px; color: var(--destructive); font-size: 11px; }
 .mobile-workspace-alert svg { width: 13px; }
 
