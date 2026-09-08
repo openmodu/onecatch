@@ -47,6 +47,7 @@ import MarkdownContent from "./components/MarkdownContent.jsx";
 import { errorMessage, formatDuration, formatTime, formatToolTime, compactTokens, shortenPath } from "./format.js";
 import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { createFrameBatcher } from "./frameBatcher.js";
+import { createWorkspaceLoader } from "./mobileWorkspaceLoader.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useMobileViewportFrame } from "./mobileViewport.js";
 import "../mobile.css";
@@ -595,7 +596,8 @@ export default function MobileWorkbench() {
   const [workers, setWorkers] = useState([]);
   const [selectedWorkerID, setSelectedWorkerID] = useState("");
   const [healthByID, setHealthByID] = useState({});
-  const [workspaces, setWorkspaces] = useState([]);
+  const [workspacesByWorker, setWorkspacesByWorker] = useState({});
+  const workspaces = useMemo(() => workspacesByWorker[selectedWorkerID] || [], [workspacesByWorker, selectedWorkerID]);
   const [workspaceID, setWorkspaceID] = useState("");
 	const [workspaceStatusByID, setWorkspaceStatusByID] = useState({});
 	const [workspaceEditor, setWorkspaceEditor] = useState(undefined);
@@ -648,7 +650,7 @@ export default function MobileWorkbench() {
     return items || [];
   }, []);
 
-  const refreshWorker = useCallback(async (id = selectedWorkerID, silent = false) => {
+  const refreshWorker = useCallback(async (id, silent = false) => {
     if (!id) return null;
     try {
       const value = await MobileBinding.CheckWorker(id);
@@ -659,19 +661,25 @@ export default function MobileWorkbench() {
       if (!silent) notify("error", errorMessage(error));
       return null;
     }
-  }, [notify, selectedWorkerID]);
-
-  const loadWorkspaces = useCallback(async (workerID) => {
-    if (!workerID) { setWorkspaces([]); setWorkspaceID(""); return []; }
-    try {
-      const items = await MobileBinding.ListWorkspaces(workerID);
-      setWorkspaces(items || []);
-      setWorkspaceID((current) => items?.some((item) => item.id === current) ? current : items?.[0]?.id || "");
-      return items || [];
-    } catch (error) {
-      setWorkspaces([]); setWorkspaceID(""); notify("error", errorMessage(error)); return [];
-    }
   }, [notify]);
+
+  const fetchWorkspaces = useMemo(() => createWorkspaceLoader(
+    (id) => MobileBinding.ListWorkspaces(id),
+    (id, items) => setWorkspacesByWorker((current) => ({ ...current, [id]: items })),
+  ), []);
+  const loadWorkspaces = useCallback(async (workerID, silent = false) => {
+    if (!workerID) return [];
+    try {
+      return await fetchWorkspaces(workerID) || [];
+    } catch (error) {
+      if (!silent) notify("error", errorMessage(error));
+      return [];
+    }
+  }, [fetchWorkspaces, notify]);
+
+  useEffect(() => {
+    setWorkspaceID((current) => workspaces.some((item) => item.id === current) ? current : workspaces[0]?.id || "");
+  }, [workspaces]);
 
 	const refreshWorkspace = useCallback(async (workspace) => {
 	  const id = typeof workspace === "string" ? workspace : workspace?.id;
@@ -699,11 +707,26 @@ export default function MobileWorkbench() {
     })();
   }, [loadWorkers, notify, refreshWorker]);
 
-  useEffect(() => { if (selectedWorkerID) void loadWorkspaces(selectedWorkerID); }, [loadWorkspaces, selectedWorkerID]);
+  useEffect(() => {
+    if (!selectedWorkerID) return undefined;
+    void loadWorkspaces(selectedWorkerID);
+    const refresh = () => {
+      if (document.visibilityState === "hidden") return;
+      void loadWorkspaces(selectedWorkerID, true);
+    };
+    const timer = window.setInterval(refresh, 20000);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("online", refresh);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("online", refresh);
+    };
+  }, [loadWorkspaces, selectedWorkerID]);
   // The switcher shows every machine's state, so health cannot be polled for
   // the selected one alone.
   useEffect(() => {
-    if (workers.length < 2) return undefined;
+    if (!workers.length) return undefined;
     const poll = () => { for (const worker of workers) void refreshWorker(worker.id, true); };
     poll();
     const timer = window.setInterval(poll, 20000);

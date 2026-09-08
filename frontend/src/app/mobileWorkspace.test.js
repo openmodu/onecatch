@@ -51,7 +51,7 @@ test("the paired machine is a switcher in the top bar", async () => {
   assert.match(select, /setView\("projects"\)/);
   assert.doesNotMatch(select, /setView\("conversation"\)/);
   // Dots only mean something if every machine is polled.
-  assert.match(source, /if \(workers\.length < 2\) return undefined;/);
+  assert.match(source, /if \(!workers\.length\) return undefined;/);
 });
 
 // `files.length && <div/>` renders the number 0 when the list is empty, which
