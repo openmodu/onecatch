@@ -49,6 +49,7 @@ import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileC
 import { createFrameBatcher } from "./frameBatcher.js";
 import { createWorkspaceLoader } from "./mobileWorkspaceLoader.js";
 import { needsMobileRunDetail } from "./mobileRuns.js";
+import { useMobileBackGesture } from "./mobileBackGesture.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useMobileViewportFrame } from "./mobileViewport.js";
 import "../mobile.css";
@@ -955,9 +956,16 @@ export default function MobileWorkbench() {
 
 	const workerMeta = <><StatusDot online={Boolean(selectedHealth)} />{selectedHealth?.worker?.name || workerLabel(workers.find((item) => item.id === selectedWorkerID))}{selectedHealth ? ` · ${selectedHealth.latencyMilliseconds}ms` : " · 离线"}</>;
 	const switchWorker = workers.length > 1 ? () => setWorkerSwitchOpen(true) : null;
-	const goBack = view === "conversation" ? () => setView("sessions") : view === "sessions" || view === "workspaces" ? () => setView("projects") : null;
+  const navigateBack = useCallback(() => {
+    document.activeElement?.blur?.();
+    setView((current) => current === "conversation" ? "sessions" : "projects");
+  }, []);
+  const goBack = ["conversation", "sessions", "workspaces"].includes(view) ? navigateBack : null;
+  const backGestureBlocked = Boolean(drawerOpen || menuOpen || pairTarget !== undefined || contextOpen || workersOpen || workerSwitchOpen || confirmRequest || workspaceEditor !== undefined);
+  useMobileBackGesture(shellRef, goBack, backGestureBlocked);
 
   return <div className="mobile-app-shell" ref={shellRef}>
+    {goBack && !backGestureBlocked && <div className="mobile-back-gesture-edge" aria-hidden="true" />}
     <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} title={view === "conversation" ? selectedConversation?.title || "新建会话" : ""} meta={view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : ""} />
 	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} meta={workerMeta} onMeta={switchWorker} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}

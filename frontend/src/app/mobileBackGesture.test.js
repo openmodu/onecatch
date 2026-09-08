@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { createBackGesture } from "./mobileBackGesture.js";
+
+test("left edge swipe returns once; short, vertical, cancelled and multi-touch gestures do not", () => {
+  let backs = 0;
+  const gesture = createBackGesture(() => backs++);
+  gesture.start(8, 200);
+  assert.equal(gesture.move(110, 208), true);
+  gesture.end(110, 208);
+  gesture.end(110, 208);
+  assert.equal(backs, 1);
+  gesture.start(100, 200);
+  assert.equal(gesture.move(240, 200), false);
+  gesture.end(240, 200);
+  gesture.start(8, 200);
+  gesture.move(40, 200);
+  gesture.end(40, 200);
+  gesture.start(8, 200);
+  assert.equal(gesture.move(10, 240), false);
+  gesture.end(120, 240);
+  gesture.start(8, 200);
+  gesture.move(120, 200);
+  gesture.cancel();
+  gesture.end(120, 200);
+  gesture.start(8, 200);
+  gesture.move(120, 200, 2);
+  gesture.end(120, 200);
+  assert.equal(backs, 1);
+});

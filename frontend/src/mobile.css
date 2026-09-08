@@ -45,6 +45,10 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Reserve the gutter for edge navigation so WebKit's selectable transcript
+   cannot take ownership of a horizontal gesture before touchend. */
+.mobile-back-gesture-edge { position: absolute; top: 0; bottom: 0; left: 0; width: 20px; z-index: 50; touch-action: none; user-select: none; -webkit-user-select: none; }
+
 /* Controls behave like native ones: no grey tap flash, and a long press opens
    nothing. Transcript text stays selectable — copying an agent's answer is the
    whole point of it. */
