@@ -41,6 +41,10 @@ func pastedAttachmentRoot() string {
 	return filepath.Join(os.TempDir(), "onecatch-pasted-attachments")
 }
 
+func (a *Service) localAttachmentRoot() string {
+	return filepath.Join(a.store.Data.Paths.Root, "attachments")
+}
+
 // StagePastedImage turns a browser clipboard Blob into an ordinary local file.
 // Every runtime receives attachment paths, so keeping pasted screenshots on the
 // same path-based pipeline makes the feature available to all Agent harnesses.
@@ -95,6 +99,9 @@ func (a *Service) DiscardStagedAttachment(path string) error {
 func (a *Service) ReadAttachmentPreview(ctx context.Context, path string) ([]byte, string, error) {
 	clean := filepath.Clean(strings.TrimSpace(path))
 	allowed := isStagedAttachment(clean) && resolvedPathWithin(clean, pastedAttachmentRoot())
+	if !allowed {
+		allowed = resolvedPathWithin(clean, a.localAttachmentRoot())
+	}
 	if !allowed {
 		workspaces, err := a.store.Repos.Tasks.ListWorkspaces(ctx)
 		if err != nil {
@@ -192,6 +199,7 @@ func (a *Service) DeleteTask(ctx context.Context, taskID string) error {
 		return err
 	}
 	a.cancelTaskTitleRefinement(task.ID)
+	_ = os.RemoveAll(filepath.Join(a.localAttachmentRoot(), task.ID))
 	if workspace.Path != "" && workspace.RemoteFS == nil {
 		_ = os.RemoveAll(filepath.Join(workspace.Path, ".onecatch", "attachments", task.ID))
 	}
@@ -372,14 +380,21 @@ func (a *Service) persistAttachments(ctx context.Context, task domaintasks.Task,
 	if err != nil {
 		return nil, err
 	}
-	if workspace.RemoteFS != nil {
-		return nil, coded("remote_fs_attachments_unsupported", "attachments are not available for remote FS workspaces")
-	}
 	root := filepath.Join(workspace.Path, ".onecatch", "attachments", task.ID)
+	if workspace.RemoteFS != nil {
+		for _, source := range paths {
+			if !isStagedAttachment(source) {
+				return nil, coded("remote_fs_attachments_unsupported", "remote FS workspaces only accept locally pasted images")
+			}
+		}
+		root = filepath.Join(a.localAttachmentRoot(), task.ID)
+	}
 	if err := os.MkdirAll(root, 0o700); err != nil {
 		return nil, fmt.Errorf("create attachment directory: %w", err)
 	}
-	_ = excludeLocalOneCatch(workspace.Path)
+	if workspace.RemoteFS == nil {
+		_ = excludeLocalOneCatch(workspace.Path)
+	}
 	var total int64
 	items := make([]domaintasks.Attachment, 0, len(paths))
 	for _, source := range paths {

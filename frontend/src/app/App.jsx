@@ -1697,11 +1697,11 @@ function App() {
           onInspectRuntimeConfiguration={inspectRuntimeConfiguration}
           onTaskFormChange={setTaskForm}
           onChooseTaskAttachments={selectedWorkspace?.remoteFs ? null : chooseTaskAttachments}
-          onPasteTaskImages={selectedWorkspace?.remoteFs ? null : pasteTaskImages}
+          onPasteTaskImages={pasteTaskImages}
           onRemoveTaskAttachment={removeTaskAttachment}
           onCreateTask={createTaskAndRun}
           onChooseAttachments={selectedWorkspace?.remoteFs ? null : chooseComposerAttachments}
-          onPasteImages={selectedWorkspace?.remoteFs ? null : pasteComposerImages}
+          onPasteImages={pasteComposerImages}
           onRemoveAttachment={removeComposerAttachment}
           onSubmit={submitWorkbenchComposer}
           onInterrupt={interruptRun}

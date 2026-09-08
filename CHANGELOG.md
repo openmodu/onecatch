@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.5
+
+- Support pasting images into remote FS tasks while keeping their durable copies in OneCatch's local data directory.
+- Show image thumbnails above new-task and follow-up text, with compact removal controls and click-to-open large previews.
+- Keep preview close controls pinned to the top-right corner and clean up locally managed images when their task is deleted.
+
 ## 0.2.4
 
 - Show sent image and file attachments in conversation messages, including secure inline previews for supported images.

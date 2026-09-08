@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
-import { ArrowUp, ListPlus, Paperclip, Plus, X } from "lucide-react";
+import { ArrowUp, ListPlus, Paperclip, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,8 +15,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { shouldSubmitComposer } from "../composerKeyboard.js";
 import { autosizeComposerTextarea, NEW_TASK_TEXTAREA_MIN_HEIGHT } from "../composerTextarea.js";
-import { fileName } from "../format.js";
 import { runtimeHarnessEnabled, supportsRuntimeProfile, supportsRuntimeSkills, workflowHarnessesEnabled } from "../runtimeHarnesses.js";
+import ComposerAttachmentPreview from "./AttachmentPreview.jsx";
 import RuntimeProfileMenu from "./RuntimeProfileMenu.jsx";
 import { useSkillPicker } from "./SkillPicker.jsx";
 import SkillTextarea from "./SkillTextarea.jsx";
@@ -96,6 +96,10 @@ export default function NewTaskView({
 
       <div className="new-task-composer-stack">
         <div className="new-task-composer">
+          {form.attachmentPaths?.length > 0 && <div className="new-task-attachments">
+            {form.attachmentPaths.map((path) => <ComposerAttachmentPreview path={path} onRemove={onRemoveAttachment} chipClassName="new-task-attachment" removeIconSize={12} key={path} />)}
+          </div>}
+
           <div className={`codex-skill-field ${skillRuntime ? "has-skill-highlight" : ""}`.trim()}>
             <SkillTextarea
               ref={promptRef}
@@ -114,13 +118,6 @@ export default function NewTaskView({
             />
             {skillPicker.menu}
           </div>
-
-          {form.attachmentPaths?.length > 0 && <div className="new-task-attachments">
-            {form.attachmentPaths.map((path) => <span className="new-task-attachment" key={path} title={path}>
-              <span>{fileName(path)}</span>
-              <button type="button" aria-label={`${t("common.remove")} ${fileName(path)}`} title={t("common.remove")} onClick={() => onRemoveAttachment?.(path)}><X size={12} aria-hidden="true" /></button>
-            </span>)}
-          </div>}
 
           <div className={`new-task-toolbar ${directAgent ? "agent-mode" : "workflow-mode"} ${showRuntimeProfile ? "has-runtime-profile" : "no-runtime-profile"}`}>
             <DropdownMenu>

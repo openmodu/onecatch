@@ -9,6 +9,7 @@ import { fileName, formatDateTime, formatDuration, formatMessageDateTime, format
 import { groupRoundItems } from "../runConversation.js";
 import { attachmentName, attachmentPreviewURL, isImageAttachment } from "../attachments.js";
 import { Action } from "../../ui/primitives.jsx";
+import { AttachmentLightbox } from "./AttachmentPreview.jsx";
 
 const MarkdownContent = lazy(() => import("./MarkdownContent.jsx"));
 
@@ -17,13 +18,19 @@ function MessageBody({ content, streaming = false }) {
 }
 
 function MessageAttachment({ attachment }) {
+  const { t } = useTranslation();
   const [previewFailed, setPreviewFailed] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const name = attachmentName(attachment);
   if (isImageAttachment(attachment) && !previewFailed) {
-    return <figure className="conversation-attachment image" title={name}>
-      <img src={attachmentPreviewURL(attachment)} alt={name} loading="lazy" onError={() => setPreviewFailed(true)} />
-      <figcaption><Image aria-hidden="true" />{name}</figcaption>
-    </figure>;
+    const previewURL = attachmentPreviewURL(attachment);
+    return <>
+      <button type="button" className="conversation-attachment image" title={name} aria-label={t("timeline.openImage", { name })} onClick={() => setPreviewOpen(true)}>
+        <img src={previewURL} alt={name} loading="lazy" onError={() => setPreviewFailed(true)} />
+        <span className="conversation-attachment-caption"><Image aria-hidden="true" />{name}</span>
+      </button>
+      <AttachmentLightbox attachment={attachment} open={previewOpen} onOpenChange={setPreviewOpen} />
+    </>;
   }
   return <div className="conversation-attachment file" title={name}><Paperclip aria-hidden="true" /><span>{name}</span></div>;
 }

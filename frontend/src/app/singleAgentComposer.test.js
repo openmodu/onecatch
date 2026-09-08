@@ -4,6 +4,9 @@ import test from "node:test";
 
 const app = readFileSync(new URL("./App.jsx", import.meta.url), "utf8");
 const composer = readFileSync(new URL("./components/Composer.jsx", import.meta.url), "utf8");
+const newTask = readFileSync(new URL("./components/NewTaskView.jsx", import.meta.url), "utf8");
+const timeline = readFileSync(new URL("./components/ConversationTimeline.jsx", import.meta.url), "utf8");
+const attachmentPreview = readFileSync(new URL("./components/AttachmentPreview.jsx", import.meta.url), "utf8");
 const styles = readFileSync(new URL("../index.css", import.meta.url), "utf8");
 
 test("single-Agent tasks omit the redundant titlebar status", () => {
@@ -30,8 +33,9 @@ test("single-Agent composer supports queued follow-ups and interruptive steering
   assert.doesNotMatch(composer, /CircleStop|onCancel|composer\.(?:runningActions|terminate)/);
   assert.doesNotMatch(app, /TaskRunBinding\.CancelRun|onCancel=\{cancelRun\}/);
   assert.match(composer, /onPaste=\{onPasteImages\}/);
-  assert.match(composer, /className="attachment-chip"[\s\S]{0,500}<X/);
-  assert.doesNotMatch(composer, /attachment-chip[\s\S]{0,300}t\("common\.remove"\)<\/Action>/);
+  assert.match(composer, /<ComposerAttachmentPreview path=\{path\} onRemove=\{onRemoveAttachment\}/);
+  assert.match(attachmentPreview, /chipClassName = "attachment-chip"[\s\S]{0,800}<X/);
+  assert.doesNotMatch(attachmentPreview, /attachment-chip[\s\S]{0,300}t\("common\.remove"\)<\/Action>/);
 });
 
 test("queued follow-ups sit above the composer instead of inside it", () => {
@@ -48,4 +52,18 @@ test("session runtime profile uses the same intrinsic width as new task", () => 
 test("narrow new-task flex growth does not widen the session Codex label", () => {
   assert.match(styles, /\.new-task-toolbar \.new-task-select\.executor\s*\{\s*flex:\s*1 1 210px;/);
   assert.doesNotMatch(styles, /(?:^|,)\s*\.new-task-select\.executor\s*\{\s*flex:\s*1 1 210px;/m);
+});
+
+test("remote FS composers accept pasted images and conversation images open a lightbox", () => {
+  assert.match(app, /onPasteTaskImages=\{pasteTaskImages\}/);
+  assert.match(app, /onPasteImages=\{pasteComposerImages\}/);
+  assert.doesNotMatch(app, /onPaste(?:TaskImages|Images)=\{selectedWorkspace\?\.remoteFs \? null/);
+  assert.match(attachmentPreview, /<Dialog open=\{open\} onOpenChange=\{onOpenChange\}>/);
+  assert.match(attachmentPreview, /className="composer-image-preview"[\s\S]{0,200}timeline\.openImage/);
+  assert.match(attachmentPreview, /className="composer-image-remove"/);
+  assert.match(styles, /\.conversation-image-dialog\s*\{[^}]*width:\s*min\(94vw, 1200px\)/s);
+  assert.match(styles, /\.conversation-image-dialog > \[data-slot="dialog-close"\]\s*\{[^}]*top:\s*8px;[^}]*right:\s*8px;/s);
+  assert.ok(newTask.indexOf('className="new-task-attachments"') < newTask.indexOf("className={`codex-skill-field"), "new-task images must sit above the text input");
+  assert.match(styles, /\.composer-image-attachment\s*\{[^}]*width:\s*72px;[^}]*height:\s*72px;/s);
+  assert.match(styles, /\.composer-image-preview img\s*\{[^}]*object-fit:\s*contain;/s);
 });

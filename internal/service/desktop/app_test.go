@@ -792,7 +792,7 @@ func TestHarnessSwitchesBlockNewTasksAndRemoteWorkspaces(t *testing.T) {
 	}
 }
 
-func TestRemoteWorkspaceNeverStoresOrDeletesAttachmentsAtRemotePathLocally(t *testing.T) {
+func TestRemoteWorkspaceStoresPastedImagesLocallyWithoutMutatingRemotePath(t *testing.T) {
 	ctx := context.Background()
 	app, store := newLocalTestApp(t, completingEngine{})
 	coincidentalLocalPath := t.TempDir()
@@ -810,9 +810,25 @@ func TestRemoteWorkspaceNeverStoresOrDeletesAttachmentsAtRemotePathLocally(t *te
 	if _, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "remote", Prompt: "work", AttachmentPaths: []string{source}}); errorCode(err) != "remote_fs_attachments_unsupported" {
 		t.Fatalf("remote attachment error = %v", err)
 	}
-	now := time.Now().UTC()
-	task := domaintasks.Task{ID: "task-remote", WorkspaceID: workspace.ID, Title: "Remote", Prompt: "work", WorkflowID: "single_agent", Status: domaintasks.StatusReady, CreatedAt: now, UpdatedAt: now}
-	if err := store.Repos.Tasks.SaveTask(ctx, task); err != nil {
+	pngData, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged, err := app.StagePastedImage(ctx, PastedImageInput{Name: "remote.png", MIMEType: "image/png", DataBase64: base64.StdEncoding.EncodeToString(pngData)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "remote", Prompt: "work", AttachmentPaths: []string{staged}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(task.Attachments) != 1 || !pathWithin(task.Attachments[0].StoredPath, app.localAttachmentRoot()) || strings.Contains(task.Attachments[0].StoredPath, coincidentalLocalPath) {
+		t.Fatalf("remote attachments = %+v", task.Attachments)
+	}
+	if preview, mimeType, previewErr := app.ReadAttachmentPreview(ctx, task.Attachments[0].StoredPath); previewErr != nil || mimeType != "image/png" || !reflect.DeepEqual(preview, pngData) {
+		t.Fatalf("remote attachment preview = %q, %q, %v", preview, mimeType, previewErr)
+	}
+	if err := app.DiscardStagedAttachment(staged); err != nil {
 		t.Fatal(err)
 	}
 	marker := filepath.Join(coincidentalLocalPath, ".onecatch", "attachments", task.ID, "keep.txt")
@@ -827,6 +843,9 @@ func TestRemoteWorkspaceNeverStoresOrDeletesAttachmentsAtRemotePathLocally(t *te
 	}
 	if _, err := os.Stat(marker); err != nil {
 		t.Fatalf("remote path was mutated locally: %v", err)
+	}
+	if _, err := os.Stat(task.Attachments[0].StoredPath); !os.IsNotExist(err) {
+		t.Fatalf("local attachment still exists after task deletion: %v", err)
 	}
 }
 
