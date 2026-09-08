@@ -1,5 +1,16 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { needsMobileRunDetail } from "./mobileRuns.js";
+
+test("completed summaries keep requesting a body until detail loading succeeds", () => {
+  const summary = { status: "succeeded", finishedAt: "2026-09-08T10:00:00Z" };
+  assert.equal(needsMobileRunDetail(summary, undefined), true);
+  assert.equal(needsMobileRunDetail(summary, undefined), true, "a failed attempt does not count as loaded");
+  assert.equal(needsMobileRunDetail(summary, { ...summary }), false);
+  assert.equal(needsMobileRunDetail(summary, { status: "running" }), true);
+  assert.equal(needsMobileRunDetail({ ...summary, finishedAt: "2026-09-08T10:01:00Z" }, summary), true);
+  assert.equal(needsMobileRunDetail({ status: "running" }, { status: "running" }), true);
+});
 
 import { applyMobileRunFrame, applyMobileRunFrames, conversationUsage, describeToolArguments, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity, sortMobileRuns, unwrapShellCommand } from "./mobileRuns.js";
 

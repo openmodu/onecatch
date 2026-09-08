@@ -2,6 +2,11 @@ import { shortenPath } from "./format.js";
 
 const MAX_VISIBLE_EVENTS = 2000;
 
+export function needsMobileRunDetail(run, loaded) {
+  // Completion in a list summary says nothing about whether its body arrived.
+  return !loaded || run.status === "running" || loaded.status !== run.status || loaded.finishedAt !== run.finishedAt;
+}
+
 export function mobileRunTitle(prompt, maximum = 48) {
   const value = String(prompt || "").trim().split(/\r?\n/, 1)[0].replace(/\s+/g, " ");
   if (!value) return "未命名任务";

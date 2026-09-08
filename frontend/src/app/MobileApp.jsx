@@ -48,6 +48,7 @@ import { errorMessage, formatDuration, formatTime, formatToolTime, compactTokens
 import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { createFrameBatcher } from "./frameBatcher.js";
 import { createWorkspaceLoader } from "./mobileWorkspaceLoader.js";
+import { needsMobileRunDetail } from "./mobileRuns.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useMobileViewportFrame } from "./mobileViewport.js";
 import "../mobile.css";
@@ -621,6 +622,7 @@ export default function MobileWorkbench() {
   const [permissionBusy, setPermissionBusy] = useState("");
   const [notice, setNotice] = useState(null);
   const runsRef = useRef([]);
+  const loadedRunDetailsRef = useRef(new Map());
   const liveFramesRef = useRef([]);
   const shellRef = useRef(null);
   useMobileViewportFrame(shellRef);
@@ -784,11 +786,15 @@ export default function MobileWorkbench() {
     let stopped = false;
     for (const id of selectedConversationRunIDs.split("|")) {
       void MobileBinding.GetRun(id)
-        .then((detail) => { if (!stopped) setRuns((items) => mergeMobileRun(items, detail)); })
-        .catch(() => {});
+        .then((detail) => {
+          if (stopped) return;
+          loadedRunDetailsRef.current.set(id, { status: detail.status, finishedAt: detail.finishedAt });
+          setRuns((items) => mergeMobileRun(items, detail));
+        })
+        .catch((error) => { if (!stopped) notify("error", `会话详情加载失败，将自动重试：${errorMessage(error)}`); });
     }
     return () => { stopped = true; };
-  }, [selectedConversationRunIDs]);
+  }, [selectedConversationRunIDs, notify]);
 
   // Refresh on foreground/reconnect as well as while visible. The host owns
   // execution, so this also discovers turns started on the desktop.
@@ -802,13 +808,16 @@ export default function MobileWorkbench() {
       try {
         const items = await MobileBinding.ListRunSummaries();
         if (stopped) return false;
-        const before = new Map(runsRef.current.map((run) => [run.id, run]));
         setRuns((current) => mergeMobileRunSummaries(current, items || []));
         for (const run of items || []) {
-          if (run.conversationId !== selectedConversationID || (!run.shared && run.status === "running")) continue;
-          if (run.status !== "running" && before.get(run.id)?.status === run.status) continue;
-          const detail = await MobileBinding.GetRun(run.id);
-          if (!stopped) setRuns((current) => mergeMobileRun(current, detail));
+          if ((run.conversationId || run.id) !== selectedConversationID || (!run.shared && run.status === "running")) continue;
+          if (!needsMobileRunDetail(run, loadedRunDetailsRef.current.get(run.id))) continue;
+          try {
+            const detail = await MobileBinding.GetRun(run.id);
+            if (stopped) return false;
+            loadedRunDetailsRef.current.set(run.id, { status: detail.status, finishedAt: detail.finishedAt });
+            setRuns((current) => mergeMobileRun(current, detail));
+          } catch { /* Retry this body on the next poll; keep loading other turns. */ }
         }
         return (items || []).some((run) => run.status === "running");
       } catch { /* Keep the last successful snapshot while offline. */ }
