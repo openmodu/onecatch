@@ -35,11 +35,10 @@ function eventFingerprint(event = {}) {
 // skip rebuilding its Markdown tree.
 export function mobileRunFingerprint(run = {}) {
   const events = run.events || [];
-  const last = events[events.length - 1];
   return [
     run.id, run.conversationId, run.workerId, run.workspaceId, run.runtime,
     run.prompt, run.title, run.status, run.shared ? 1 : 0, run.error,
-    run.startedAt, run.finishedAt, events.length, eventFingerprint(last),
+    run.startedAt, run.finishedAt, events.length, JSON.stringify(events.map(eventFingerprint)),
     run.result?.sessionId, run.result?.succeeded ? 1 : 0,
     run.result?.finalMessage, run.result?.usage?.inputTokens,
     run.result?.usage?.outputTokens,

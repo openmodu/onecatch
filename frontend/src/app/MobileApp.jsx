@@ -228,7 +228,7 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
   const normalized = query.trim().toLowerCase();
   const visible = conversations.filter((item) => item.workspaceId === workspace?.id && (!normalized || item.title.toLowerCase().includes(normalized)));
   return <div className="mobile-page mobile-session-page">
-    <PageHead title={<span className="mobile-workspace-heading">{workspaceLabel(workspace)}<RemoteWorkspaceBadge workspace={workspace} /></span>} meta={[workspace?.remoteHost, shortenPath(workspace?.path)].filter(Boolean).join(" · ")} />
+    <PageHead title={<span className="mobile-project-heading">{workspaceLabel(workspace)}<RemoteWorkspaceBadge workspace={workspace} /></span>} meta={[workspace?.remoteHost, shortenPath(workspace?.path)].filter(Boolean).join(" · ")} />
     <div className="mobile-session-list">
       {visible.map((conversation) => <button type="button" className="mobile-session-row" key={conversation.id} onClick={() => onOpen(conversation.id)}>
         <span className="mobile-session-copy"><strong>{conversation.title}</strong><small>{conversation.runtime} · {conversation.runs.length} 轮 · {relativeTime(conversation.startedAt)}</small></span>

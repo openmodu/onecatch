@@ -1,6 +1,22 @@
 #!/bin/sh
 set -eu
 
+# Xcode starts with a minimal GUI PATH. Build the embedded frontend on every
+# Run/Archive, otherwise a new native binary can still ship an old chat UI.
+for bin_dir in "/etc/profiles/per-user/${USER:-}/bin" /opt/homebrew/bin /usr/local/bin /run/current-system/sw/bin; do
+  if [ -d "$bin_dir" ]; then PATH="$PATH:$bin_dir"; fi
+done
+export PATH
+if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
+  echo "Node.js and npm are required to build the iOS frontend. Make them available to Xcode." >&2
+  exit 1
+fi
+if [ "${CONFIGURATION:-Debug}" = "Release" ]; then
+  npm --prefix frontend run build
+else
+  npm --prefix frontend run build:dev
+fi
+
 go_bin=$(command -v go 2>/dev/null || true)
 if [ -z "$go_bin" ]; then
   for candidate in \

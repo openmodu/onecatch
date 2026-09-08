@@ -114,7 +114,10 @@ test("a workspace path is shortened from its middle, not its end", async () => {
   // The path sits under the name it describes, where the session count used to
   // repeat what the list below already shows.
   // The page states where it lives; the bar carries only actions.
-  assert.match(source, /<PageHead title=\{workspaceLabel\(workspace\)\} meta=\{shortenPath\(workspace\?\.path\)\} \/>/);
+  const sessionPage = source.slice(source.indexOf("function SessionList("), source.indexOf("function WorkspaceManagerPage("));
+  assert.match(sessionPage, /<PageHead title=/);
+  assert.match(sessionPage, /shortenPath\(workspace\?\.path\)/);
+  assert.match(sessionPage, /<RemoteWorkspaceBadge workspace=\{workspace\}/);
   assert.doesNotMatch(source, /个会话`;/);
   assert.match(source, /\{shortenPath\(workspace\.path, 3\)\}/, "the manage card has room for one more segment");
 });

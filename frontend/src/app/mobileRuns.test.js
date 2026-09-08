@@ -27,6 +27,18 @@ test("mobile run history is newest first and replaces updated runs", () => {
   assert.deepEqual(mergeMobileRun([older, newer], { ...older, status: "succeeded" }).map((item) => `${item.id}:${item.status}`), ["new:running", "old:succeeded"]);
 });
 
+test("loaded history replaces changed middle messages even when its ending is unchanged", () => {
+  const original = { id: "history", status: "succeeded", events: [
+    { kind: "message", text: "first" },
+    { kind: "message", text: "" },
+    { kind: "message", text: "last" },
+  ], result: { finalMessage: "last" } };
+  const full = { ...original, events: original.events.map((event, index) => index === 1 ? { ...event, text: "middle reply" } : event) };
+  const merged = mergeMobileRun([original], full);
+  assert.equal(merged[0].events[1].text, "middle reply");
+  assert.equal(mergeMobileRun(merged, structuredClone(full)), merged, "identical history keeps its rendering identity");
+});
+
 test("mobile run frames append events and settle the run", () => {
   const run = { id: "run-1", status: "running", events: [] };
   const withEvent = applyMobileRunFrame(run, { runId: "run-1", event: { kind: "message", text: "hello" } });
