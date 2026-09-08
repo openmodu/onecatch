@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { isPinnedToBottom, keyboardInsetFrom } from "./mobileViewport.js";
+import { isPinnedToBottom, viewportFrameFrom } from "./mobileViewport.js";
 
 const css = readFileSync(new URL("../mobile.css", import.meta.url), "utf8");
 const mobileApp = readFileSync(new URL("../../../internal/app/mobile/mobile.go", import.meta.url), "utf8");
@@ -33,18 +33,21 @@ test("the mobile shell locks page scale so a pinch cannot strand it zoomed in", 
   assert.match(css, /\.mobile-app-shell\s*\{[^}]*touch-action:\s*manipulation/s);
 });
 
-test("the shell gives back the space the software keyboard covers", () => {
-  assert.match(css, /\.mobile-app-shell\s*\{[^}]*height:\s*calc\(100dvh - var\(--mobile-keyboard-inset\)\)/s);
-  assert.match(workbench, /useKeyboardInset\(\)/);
-  assert.match(workbench, /"--mobile-keyboard-inset":\s*`\$\{keyboardInset\}px`/);
+test("the shell follows the visible viewport while the keyboard is open", () => {
+  assert.match(css, /\.mobile-app-shell\s*\{[^}]*top:\s*var\(--mobile-viewport-top\)[^}]*height:\s*var\(--mobile-viewport-height\)/s);
+  assert.match(workbench, /useMobileViewportFrame\(shellRef\)/);
+  assert.match(workbench, /className="mobile-app-shell" ref=\{shellRef\}/);
 });
 
-test("keyboardInsetFrom reports only what the keyboard actually covers", () => {
-  assert.equal(keyboardInsetFrom({ height: 844, offsetTop: 0 }, 844), 0);
-  assert.equal(keyboardInsetFrom({ height: 830, offsetTop: 0 }, 844), 0, "rubber-band noise is not a keyboard");
-  assert.equal(keyboardInsetFrom({ height: 508, offsetTop: 0 }, 844), 336);
-  assert.equal(keyboardInsetFrom({ height: 508, offsetTop: 36 }, 844), 300, "a scrolled visual viewport still fits");
-  assert.equal(keyboardInsetFrom(null, 844), 0);
+test("viewportFrameFrom tracks both keyboard shrinkage and WebKit panning", () => {
+  assert.deepEqual(viewportFrameFrom({ height: 844, offsetTop: 0 }, 844), { height: 844, top: 0 });
+  assert.deepEqual(viewportFrameFrom({ height: 508.4, offsetTop: 35.6 }, 844), { height: 508, top: 36 });
+  assert.deepEqual(viewportFrameFrom({ height: 508, offsetTop: -3 }, 844), { height: 508, top: 0 }, "rubber-band offsets stay on-screen");
+  assert.deepEqual(viewportFrameFrom(null, 844), { height: 844, top: 0 });
+});
+
+test("native iOS hides the web form navigation toolbar", () => {
+  assert.match(mobileApp, /DisableInputAccessoryView:\s+true/);
 });
 
 test("streamed output follows the run only while the reader stays at the bottom", () => {

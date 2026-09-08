@@ -5,9 +5,10 @@
    composer — so an affordance never reads as decoration. */
 .mobile-app-shell {
   --mobile-max: 720px;
-  /* Set from the visual viewport (see mobileViewport.js): WKWebView leaves
-     100dvh at full height while the keyboard covers the bottom of the screen. */
-  --mobile-keyboard-inset: 0px;
+  /* Set from the visual viewport (see mobileViewport.js): WKWebView can pan
+     this viewport as well as shrink it while the keyboard is open. */
+  --mobile-viewport-top: 0px;
+  --mobile-viewport-height: 100dvh;
   /* One filled surface for anything the finger lands on, one hairline for
      everything that only separates. */
   --m-field: color-mix(in oklab, var(--muted) 96%, var(--background));
@@ -20,10 +21,13 @@
   --m-gutter: 24px;
   --m-bar-inset: calc(var(--m-gutter) - 16px);
   position: fixed;
-  inset: 0;
+  top: var(--mobile-viewport-top);
+  right: 0;
+  bottom: auto;
+  left: 0;
   width: 100%;
   max-width: 100vw;
-  height: calc(100dvh - var(--mobile-keyboard-inset));
+  height: var(--mobile-viewport-height);
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr);

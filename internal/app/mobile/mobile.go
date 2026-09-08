@@ -48,9 +48,10 @@ func Run() {
 			Handler: application.AssetFileServerFS(desktopassets.Frontend),
 		},
 		IOS: application.IOSOptions{
-			DisableLinkPreview: true,
-			DisableBounce:      true,
-			BackgroundColour:   application.NewRGB(245, 245, 240),
+			DisableInputAccessoryView: true,
+			DisableLinkPreview:        true,
+			DisableBounce:             true,
+			BackgroundColour:          application.NewRGB(245, 245, 240),
 		},
 	})
 	service.SetEmitter(func(frame mobileservice.RunFrame) {

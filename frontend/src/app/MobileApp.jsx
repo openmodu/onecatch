@@ -48,7 +48,7 @@ import { errorMessage, formatDuration, formatTime, formatToolTime, compactTokens
 import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { createFrameBatcher } from "./frameBatcher.js";
 import { useNativeChrome } from "./mobileChrome.js";
-import { isPinnedToBottom, useKeyboardInset } from "./mobileViewport.js";
+import { isPinnedToBottom, useMobileViewportFrame } from "./mobileViewport.js";
 import "../mobile.css";
 
 const RUN_EVENT = "mobile:run";
@@ -620,7 +620,8 @@ export default function MobileWorkbench() {
   const [notice, setNotice] = useState(null);
   const runsRef = useRef([]);
   const liveFramesRef = useRef([]);
-  const keyboardInset = useKeyboardInset();
+  const shellRef = useRef(null);
+  useMobileViewportFrame(shellRef);
   useNativeChrome();
 
   const conversations = useMemo(() => groupMobileConversations(runs), [runs]);
@@ -924,7 +925,7 @@ export default function MobileWorkbench() {
 	const switchWorker = workers.length > 1 ? () => setWorkerSwitchOpen(true) : null;
 	const goBack = view === "conversation" ? () => setView("sessions") : view === "sessions" || view === "workspaces" ? () => setView("projects") : null;
 
-  return <div className="mobile-app-shell" style={{ "--mobile-keyboard-inset": `${keyboardInset}px` }}>
+  return <div className="mobile-app-shell" ref={shellRef}>
     <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} title={view === "conversation" ? selectedConversation?.title || "新建会话" : ""} meta={view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : ""} />
 	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} meta={workerMeta} onMeta={switchWorker} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
