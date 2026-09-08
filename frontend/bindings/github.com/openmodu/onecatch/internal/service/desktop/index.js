@@ -17,6 +17,7 @@ export {
     GitCommitResult,
     InstructionInput,
     ListRunsInput,
+    PastedImageInput,
     PermissionDecisionInput,
     ResumeRunInput,
     RunDetail,

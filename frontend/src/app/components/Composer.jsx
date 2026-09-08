@@ -1,8 +1,7 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { ArrowUp, CornerDownRight, ListEnd, Paperclip, Square, Trash2, Workflow } from "lucide-react";
+import { ArrowUp, CornerDownRight, ListEnd, Paperclip, Square, Trash2, Workflow, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { Action } from "../../ui/primitives.jsx";
 import { preserveComposerFocus } from "../composerInteraction.js";
 import { composerSubmitMode } from "../composerKeyboard.js";
 import { autosizeComposerTextarea, WORKBENCH_TEXTAREA_MIN_HEIGHT } from "../composerTextarea.js";
@@ -27,6 +26,7 @@ export default function Composer({
   attachments,
   pendingInstructions,
   onChooseAttachments,
+  onPasteImages,
   onRemoveAttachment,
   onRemoveInstruction,
   onSteerInstruction,
@@ -95,8 +95,8 @@ export default function Composer({
           </div>
         </div>)}</div>}
         <div className={`workbench-composer-shell ${editable ? "" : "disabled"}`.trim()}>
-        {attachments.length > 0 && <div className="composer-attachments flex flex-wrap gap-1.5">{attachments.map((path) => <span className="attachment-chip inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground" key={path} title={path}>{fileName(path)}<Action size="compact" tone="danger" onClick={() => onRemoveAttachment(path)}>{t("common.remove")}</Action></span>)}</div>}
-        <div className="workbench-composer-input"><div className={`codex-skill-field ${skillHighlight ? "has-skill-highlight" : ""}`.trim()}><SkillTextarea ref={draftRef} highlight={skillHighlight} aria-label={t("composer.aria")} value={draft} disabled={!editable} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }} placeholder={runStatus === "running" ? t("composer.runningPlaceholder") : runStatus === "paused" ? t("composer.pausedPlaceholder") : runStatus === "completed" ? t("composer.continuePlaceholder") : t("composer.finishedPlaceholder")} {...skillPicker.inputProps} />{skillPicker.menu}</div></div>
+        {attachments.length > 0 && <div className="composer-attachments">{attachments.map((path) => <span className="attachment-chip" key={path} title={path}><span>{fileName(path)}</span><button type="button" aria-label={`${t("common.remove")} ${fileName(path)}`} title={t("common.remove")} onClick={() => onRemoveAttachment(path)}><X size={13} aria-hidden="true" /></button></span>)}</div>}
+        <div className="workbench-composer-input"><div className={`codex-skill-field ${skillHighlight ? "has-skill-highlight" : ""}`.trim()}><SkillTextarea ref={draftRef} highlight={skillHighlight} aria-label={t("composer.aria")} value={draft} disabled={!editable} onPaste={onPasteImages} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }} placeholder={runStatus === "running" ? t("composer.runningPlaceholder") : runStatus === "paused" ? t("composer.pausedPlaceholder") : runStatus === "completed" ? t("composer.continuePlaceholder") : t("composer.finishedPlaceholder")} {...skillPicker.inputProps} />{skillPicker.menu}</div></div>
         <div className={`workbench-composer-actions ${showRuntimeProfile ? "profile-visible" : ""}`.trim()}>
           {onChooseAttachments && <Button type="button" variant="ghost" size="icon-sm" className="attachment-action" disabled={!editable} aria-label={t("composer.attachment")} title={t("composer.attachment")} onClick={onChooseAttachments}><Paperclip size={16} aria-hidden="true" /></Button>}
           {runtimeProfile && <div className="workbench-runtime-controls">

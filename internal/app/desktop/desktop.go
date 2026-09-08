@@ -184,6 +184,18 @@ func Run() {
 			Handler: application.AssetFileServerFS(desktopassets.Frontend),
 			Middleware: func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+					if request.URL.Path == "/attachment-preview" && request.Method == http.MethodGet {
+						data, mimeType, previewErr := service.ReadAttachmentPreview(request.Context(), request.URL.Query().Get("path"))
+						if previewErr != nil {
+							http.NotFound(response, request)
+							return
+						}
+						response.Header().Set("Content-Type", mimeType)
+						response.Header().Set("Cache-Control", "private, max-age=31536000, immutable")
+						response.Header().Set("X-Content-Type-Options", "nosniff")
+						_, _ = response.Write(data)
+						return
+					}
 					if request.URL.Path == "/appicon.png" {
 						response.Header().Set("Content-Type", "image/png")
 						response.Header().Set("Cache-Control", "public, max-age=86400")

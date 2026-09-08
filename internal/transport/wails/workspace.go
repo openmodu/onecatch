@@ -41,6 +41,14 @@ func (b *WorkspaceBinding) ChooseAttachments() ([]string, error) {
 		PromptForMultipleSelection()
 }
 
+func (b *WorkspaceBinding) StagePastedImage(input desktopservice.PastedImageInput) (string, error) {
+	return b.service.StagePastedImage(context.Background(), input)
+}
+
+func (b *WorkspaceBinding) DiscardStagedAttachment(path string) error {
+	return b.service.DiscardStagedAttachment(path)
+}
+
 func (b *WorkspaceBinding) AddWorkspace(input desktopservice.AddWorkspaceInput) (domainworkspaces.Workspace, error) {
 	return b.service.AddWorkspace(context.Background(), input)
 }

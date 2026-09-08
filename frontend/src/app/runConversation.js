@@ -277,8 +277,9 @@ function resumedInstructions(events) {
 function appliedInstructions(instructions) {
   return (instructions || []).flatMap((instruction, index) => {
     const text = String(instruction.content || "").trim();
-    if (instruction.status !== "applied" || !text) return [];
-    return [{ type: "user", id: `instruction-${instruction.id || index}`, text, at: instruction.appliedAt || instruction.createdAt || "" }];
+    const attachments = instruction.attachments || [];
+    if (instruction.status !== "applied" || (!text && !attachments.length)) return [];
+    return [{ type: "user", id: `instruction-${instruction.id || index}`, text, attachments, at: instruction.appliedAt || instruction.createdAt || "" }];
   });
 }
 
@@ -336,7 +337,8 @@ export function buildRunConversation(detail, translate = defaultTranslate) {
   }
   const timeline = [];
   const taskText = String(detail?.task?.prompt || "").trim();
-  if (taskText) timeline.push({ type: "user", id: "task", text: taskText, at: detail.task.createdAt || detail.run?.startedAt || detail.task.updatedAt || detail.run?.updatedAt || "", sortRank: 0 });
+  const taskAttachments = detail?.task?.attachments || [];
+  if (taskText || taskAttachments.length) timeline.push({ type: "user", id: "task", text: taskText, attachments: taskAttachments, at: detail.task.createdAt || detail.run?.startedAt || detail.task.updatedAt || detail.run?.updatedAt || "", sortRank: 0 });
   for (const instruction of resumedInstructions(detail?.events)) timeline.push({ ...instruction, sortRank: 0 });
   for (const instruction of appliedInstructions(detail?.instructions)) timeline.push({ ...instruction, sortRank: 0 });
   const liveStepRuns = new Set();

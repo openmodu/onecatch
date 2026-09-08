@@ -40,6 +40,14 @@ export function ChooseDirectory() {
 }
 
 /**
+ * @param {string} path
+ * @returns {$CancellablePromise<void>}
+ */
+export function DiscardStagedAttachment(path) {
+    return $Call.ByID(2006545487, path);
+}
+
+/**
  * @param {string} id
  * @returns {$CancellablePromise<workspaces$0.Workspace>}
  */
@@ -117,6 +125,14 @@ export function SetWorkspacePinned(id, pinned) {
     return $Call.ByID(4111845597, id, pinned).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType0($result);
     }));
+}
+
+/**
+ * @param {desktop$0.PastedImageInput} input
+ * @returns {$CancellablePromise<string>}
+ */
+export function StagePastedImage(input) {
+    return $Call.ByID(680662726, input);
 }
 
 /**

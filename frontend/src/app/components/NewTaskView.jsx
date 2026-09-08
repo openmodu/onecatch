@@ -31,6 +31,8 @@ export default function NewTaskView({
   busy,
   onChange,
   onChooseAttachments,
+  onPasteImages,
+  onRemoveAttachment,
   onSubmit,
   runtimes,
   runtimeConfiguration,
@@ -105,6 +107,7 @@ export default function NewTaskView({
               value={form.prompt}
               aria-label={t("task.goal")}
               placeholder={t("task.goalPlaceholder")}
+              onPaste={onPasteImages}
               onCompositionStart={() => { composing.current = true; }}
               onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }}
               {...skillPicker.inputProps}
@@ -115,7 +118,7 @@ export default function NewTaskView({
           {form.attachmentPaths?.length > 0 && <div className="new-task-attachments">
             {form.attachmentPaths.map((path) => <span className="new-task-attachment" key={path} title={path}>
               <span>{fileName(path)}</span>
-              <button type="button" aria-label={`${t("common.remove")} ${fileName(path)}`} title={t("common.remove")} onClick={() => onChange((current) => ({ ...current, attachmentPaths: current.attachmentPaths.filter((item) => item !== path) }))}><X size={12} aria-hidden="true" /></button>
+              <button type="button" aria-label={`${t("common.remove")} ${fileName(path)}`} title={t("common.remove")} onClick={() => onRemoveAttachment?.(path)}><X size={12} aria-hidden="true" /></button>
             </span>)}
           </div>}
 

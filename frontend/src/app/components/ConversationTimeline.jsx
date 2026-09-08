@@ -1,18 +1,36 @@
 import { lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clipboard } from "@wailsio/runtime";
-import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Copy, FilePenLine, LoaderCircle, Search, Terminal, TriangleAlert, Wrench } from "lucide-react";
+import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Copy, FilePenLine, Image, LoaderCircle, Paperclip, Search, Terminal, TriangleAlert, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { fileName, formatDateTime, formatDuration, formatMessageDateTime, formatTime, formatToolTime } from "../format.js";
 import { groupRoundItems } from "../runConversation.js";
+import { attachmentName, attachmentPreviewURL, isImageAttachment } from "../attachments.js";
 import { Action } from "../../ui/primitives.jsx";
 
 const MarkdownContent = lazy(() => import("./MarkdownContent.jsx"));
 
 function MessageBody({ content, streaming = false }) {
   return <Suspense fallback={<div className="markdown-content markdown-loading">{content}</div>}><MarkdownContent content={content} streaming={streaming} /></Suspense>;
+}
+
+function MessageAttachment({ attachment }) {
+  const [previewFailed, setPreviewFailed] = useState(false);
+  const name = attachmentName(attachment);
+  if (isImageAttachment(attachment) && !previewFailed) {
+    return <figure className="conversation-attachment image" title={name}>
+      <img src={attachmentPreviewURL(attachment)} alt={name} loading="lazy" onError={() => setPreviewFailed(true)} />
+      <figcaption><Image aria-hidden="true" />{name}</figcaption>
+    </figure>;
+  }
+  return <div className="conversation-attachment file" title={name}><Paperclip aria-hidden="true" /><span>{name}</span></div>;
+}
+
+function MessageAttachments({ attachments = [] }) {
+  if (!attachments.length) return null;
+  return <div className="conversation-attachments">{attachments.map((attachment, index) => <MessageAttachment attachment={attachment} key={`${attachmentName(attachment)}-${index}`} />)}</div>;
 }
 
 // Keep timestamps local to the row that displays them. Hiding repeated values
@@ -82,6 +100,7 @@ const UserMessage = memo(function UserMessage({ item }) {
       {overflowing && <Button type="button" variant="ghost" size="sm" className="conversation-user-disclosure" aria-expanded={expanded} aria-controls={contentId} onClick={() => setExpanded((current) => !current)}>
         <span>{t(expanded ? "timeline.showLess" : "timeline.showMore")}</span><ChevronDown className={expanded ? "is-expanded" : ""} aria-hidden="true" />
       </Button>}
+      <MessageAttachments attachments={item.attachments} />
     </div>
     <MessageActions at={item.at} content={item.text} align="end" />
   </div>;

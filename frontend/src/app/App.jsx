@@ -59,6 +59,7 @@ import { newestTaskRun, normalizeTrayNavigation, TRAY_ACTION_EVENT } from "./tra
 import { LANGUAGE_CHANGED_EVENT } from "../i18n.js";
 import { SIDEBAR_DEFAULT_WIDTH } from "./sidebarLayout.js";
 import { createFrameBatcher } from "./frameBatcher.js";
+import { blobBase64, pastedImageFiles, pastedImageName } from "./attachments.js";
 
 const runtimeFrameEvent = "onecatch:runtime-frame";
 const runStateEvent = "onecatch:run-state";
@@ -250,6 +251,8 @@ function App() {
   selectedQueuedTaskIDRef.current = selectedQueuedTaskID;
   const composerAttachmentsRef = useRef([]);
   composerAttachmentsRef.current = composerAttachments;
+  const taskFormRef = useRef(taskForm);
+  taskFormRef.current = taskForm;
   const runNextCursorRef = useRef("");
   runNextCursorRef.current = runNextCursor;
   const remoteWorkspaceHealthRef = useRef({});
@@ -373,6 +376,11 @@ function App() {
     setSelectedQueuedTaskID("");
     setRunDetail(null);
     setResumePendingRunID("");
+    if (mode === "wails") {
+      for (const path of [...(taskFormRef.current.attachmentPaths || []), ...composerAttachmentsRef.current]) {
+        void WorkspaceBinding.DiscardStagedAttachment(path).catch(() => {});
+      }
+    }
     setTaskForm((form) => ({ ...form, attachmentPaths: [] }));
     setComposerAttachments([]);
     setGlobalSearchQuery("");
@@ -1051,7 +1059,7 @@ function App() {
           const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
           setTasks((items) => [...items, queuedTask]); setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(queuedTask.id);
         } else {
-          const demoTask = { ...demo.demoTasks[0], title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, updatedAt: new Date().toISOString() };
+          const demoTask = { ...demo.demoTasks[0], title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), updatedAt: new Date().toISOString() };
           setTasks((items) => items.map((item) => item.id === demoTask.id ? demoTask : item)); setRunItems([{ ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running", task: demoTask }]); setRunTotal(1); setSelectedQueuedTaskID(""); setSelectedRunID("run_demo"); setRunDetail({ ...demo.demoRun, task: demoTask, run: { ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running" }, active: true });
         }
       } else {
@@ -1070,6 +1078,7 @@ function App() {
         }
         await loadTasks(); await loadRunList();
       }
+      await discardStagedAttachments(taskForm.attachmentPaths);
       setTaskForm((form) => ({ ...form, prompt: "", attachmentPaths: [] })); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? t("app.taskQueued") : t("app.runStarted"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
@@ -1082,6 +1091,49 @@ function App() {
       else setComposerAttachments((items) => [...new Set([...items, ...paths])].slice(0, 8));
     } catch (error) { notify("error", errorMessage(error)); }
   }, [mode, notify]);
+
+  const discardStagedAttachments = useCallback(async (paths) => {
+    if (mode !== "wails") return;
+    await Promise.all((paths || []).map((path) => WorkspaceBinding.DiscardStagedAttachment(path).catch(() => {})));
+  }, [mode]);
+
+  const stagePastedImages = useCallback(async (target, files) => {
+    const current = target === "task" ? taskFormRef.current.attachmentPaths || [] : composerAttachmentsRef.current;
+    const accepted = files.slice(0, Math.max(0, 8 - current.length));
+    if (!accepted.length) {
+      notify("error", t("task.attachmentsLimit"));
+      return;
+    }
+    try {
+      let paths = accepted.map((file, index) => `/tmp/${pastedImageName(file, index)}`);
+      if (mode !== "demo") {
+        const staged = await Promise.allSettled(accepted.map(async (file, index) => WorkspaceBinding.StagePastedImage({
+          name: pastedImageName(file, index),
+          mimeType: file.type,
+          dataBase64: await blobBase64(file),
+        })));
+        paths = staged.filter((result) => result.status === "fulfilled").map((result) => result.value);
+        const failed = staged.find((result) => result.status === "rejected");
+        if (failed) {
+          await discardStagedAttachments(paths);
+          throw failed.reason;
+        }
+      }
+      if (target === "task") setTaskForm((form) => ({ ...form, attachmentPaths: [...form.attachmentPaths, ...paths].slice(0, 8) }));
+      else setComposerAttachments((items) => [...items, ...paths].slice(0, 8));
+    } catch (error) {
+      notify("error", errorMessage(error));
+    }
+  }, [discardStagedAttachments, mode, notify, t]);
+
+  const pasteTaskImages = useCallback((event) => {
+    const files = pastedImageFiles(event);
+    if (files.length) void stagePastedImages("task", files);
+  }, [stagePastedImages]);
+  const pasteComposerImages = useCallback((event) => {
+    const files = pastedImageFiles(event);
+    if (files.length) void stagePastedImages("composer", files);
+  }, [stagePastedImages]);
 
   // Returns true when the submit was accepted so the composer can clear its
   // local draft; false keeps whatever the user typed.
@@ -1121,12 +1173,13 @@ function App() {
         }
         setResumePendingRunID(run.id);
       }
+      await discardStagedAttachments(attachments);
       setComposerAttachments([]);
       window.setTimeout(() => loadRun(run.id, true), 180);
       notify("success", modeName === "insert" ? t("app.instructionInserted") : run.status === "running" ? t("app.instructionQueued") : t("app.runResuming"));
       return true;
     } catch (error) { notify("error", errorMessage(error)); return false; } finally { setBusy(""); }
-  }, [loadRun, mode, notify, t]);
+  }, [discardStagedAttachments, loadRun, mode, notify, t]);
 
   const removeQueuedInstruction = useCallback(async (instructionID) => {
     const runID = runDetailRef.current?.run?.id;
@@ -1435,7 +1488,14 @@ function App() {
   const loadMoreRuns = useCallback(() => loadRunList({ cursor: runNextCursorRef.current }), [loadRunList]);
   const chooseTaskAttachments = useCallback(() => chooseAttachments("task"), [chooseAttachments]);
   const chooseComposerAttachments = useCallback(() => chooseAttachments("composer"), [chooseAttachments]);
-  const removeComposerAttachment = useCallback((path) => setComposerAttachments((items) => items.filter((item) => item !== path)), []);
+  const removeTaskAttachment = useCallback((path) => {
+    setTaskForm((form) => ({ ...form, attachmentPaths: form.attachmentPaths.filter((item) => item !== path) }));
+    void discardStagedAttachments([path]);
+  }, [discardStagedAttachments]);
+  const removeComposerAttachment = useCallback((path) => {
+    setComposerAttachments((items) => items.filter((item) => item !== path));
+    void discardStagedAttachments([path]);
+  }, [discardStagedAttachments]);
 
   // Standby lock: one glanceable aggregate over the whole workspace, derived
   // from state that already updates live (tasks poll + run-state push).
@@ -1637,8 +1697,11 @@ function App() {
           onInspectRuntimeConfiguration={inspectRuntimeConfiguration}
           onTaskFormChange={setTaskForm}
           onChooseTaskAttachments={selectedWorkspace?.remoteFs ? null : chooseTaskAttachments}
+          onPasteTaskImages={selectedWorkspace?.remoteFs ? null : pasteTaskImages}
+          onRemoveTaskAttachment={removeTaskAttachment}
           onCreateTask={createTaskAndRun}
           onChooseAttachments={selectedWorkspace?.remoteFs ? null : chooseComposerAttachments}
+          onPasteImages={selectedWorkspace?.remoteFs ? null : pasteComposerImages}
           onRemoveAttachment={removeComposerAttachment}
           onSubmit={submitWorkbenchComposer}
           onInterrupt={interruptRun}

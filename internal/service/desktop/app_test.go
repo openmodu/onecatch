@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -577,6 +578,50 @@ func TestTaskAttachmentsRenameAndSoftDelete(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Dir(task.Attachments[0].StoredPath)); !os.IsNotExist(err) {
 		t.Fatalf("attachment directory still exists: %v", err)
+	}
+}
+
+func TestPastedImageStagingAndPreviewStayInsideManagedDirectories(t *testing.T) {
+	ctx := context.Background()
+	app, _ := newLocalTestApp(t, completingEngine{})
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pngData, err := base64.StdEncoding.DecodeString("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=")
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged, err := app.StagePastedImage(ctx, PastedImageInput{Name: "clipboard", MIMEType: "image/png", DataBase64: base64.StdEncoding.EncodeToString(pngData)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !isStagedAttachment(staged) || filepath.Ext(staged) != ".png" {
+		t.Fatalf("staged path = %q", staged)
+	}
+	preview, mimeType, err := app.ReadAttachmentPreview(ctx, staged)
+	if err != nil || mimeType != "image/png" || !reflect.DeepEqual(preview, pngData) {
+		t.Fatalf("staged preview = %q, %q, %v", preview, mimeType, err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: directAgentWorkflowID, Title: "pasted image", Prompt: "inspect it", AttachmentPaths: []string{staged}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, mimeType, err = app.ReadAttachmentPreview(ctx, task.Attachments[0].StoredPath); err != nil || mimeType != "image/png" {
+		t.Fatalf("persisted preview MIME = %q, %v", mimeType, err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.png")
+	if err := os.WriteFile(outside, pngData, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := app.ReadAttachmentPreview(ctx, outside); errorCode(err) != "attachment_invalid" {
+		t.Fatalf("outside preview error = %v", err)
+	}
+	if err := app.DiscardStagedAttachment(staged); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(staged); !os.IsNotExist(err) {
+		t.Fatalf("staged file still exists: %v", err)
 	}
 }
 

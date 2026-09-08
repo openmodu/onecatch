@@ -42,11 +42,13 @@ function conversationSignature(detail) {
     (detail.stepRuns || []).map((step) => step.status).join(","),
     (detail.events || []).length,
     (detail.instructions || []).map((instruction) => instruction.status).join(","),
+    (detail.instructions || []).map((instruction) => (instruction.attachments || []).join(":")).join(","),
+    (detail.task?.attachments || []).map((attachment) => `${attachment.id}:${attachment.storedPath}:${attachment.mimeType}`).join(","),
     detail.task?.prompt ? 1 : 0,
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, userInputBusy, attachments, inspectorCollapsed, inspectorToggleVersion, inspectorScope = "task", integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, alternateContent = null, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onCreateTask, onChooseAttachments, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onSteerInstruction, onLoadEarlierTranscript, onPermissionDecision, onUserInputResponse, notify }) {
+function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, userInputBusy, attachments, inspectorCollapsed, inspectorToggleVersion, inspectorScope = "task", integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, alternateContent = null, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onPasteTaskImages, onRemoveTaskAttachment, onCreateTask, onChooseAttachments, onPasteImages, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onSteerInstruction, onLoadEarlierTranscript, onPermissionDecision, onUserInputResponse, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
@@ -300,6 +302,8 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
         busy={busy}
         onChange={onTaskFormChange}
         onChooseAttachments={onChooseTaskAttachments}
+        onPasteImages={onPasteTaskImages}
+        onRemoveAttachment={onRemoveTaskAttachment}
         onSubmit={onCreateTask}
         runtimeConfiguration={taskRuntimeConfiguration}
         runtimeSettings={runtimeSettings}
@@ -321,6 +325,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           attachments={attachments}
           pendingInstructions={pendingInstructions}
           onChooseAttachments={onChooseAttachments}
+          onPasteImages={onPasteImages}
           onRemoveAttachment={onRemoveAttachment}
           onRemoveInstruction={onRemoveInstruction}
           onSteerInstruction={onSteerInstruction}

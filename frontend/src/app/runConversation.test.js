@@ -78,6 +78,16 @@ test("shows applied queued instructions as user turns", () => {
   assert.deepEqual(timeline.map((item) => item.text), ["先检查问题", "优先修复测试"]);
 });
 
+test("keeps task and follow-up attachments on their user messages", () => {
+  const timeline = buildRunConversation({
+    task: { prompt: "看这张图", attachments: [{ id: "a1", name: "screen.png", storedPath: "/tmp/screen.png", mimeType: "image/png" }] },
+    run: {}, workflow: { steps: [] }, events: [], stepRuns: [], runtimeEvents: [],
+    instructions: [{ id: "i1", status: "applied", content: "再看一张", attachments: ["/tmp/attachment_1234-next.png"] }],
+  });
+  assert.equal(timeline[0].attachments[0].name, "screen.png");
+  assert.deepEqual(timeline[1].attachments, ["/tmp/attachment_1234-next.png"]);
+});
+
 test("keeps tool calls separate and attaches an adjacent tool result", () => {
   const [round] = buildRunConversation({
     task: {}, run: {}, events: [],

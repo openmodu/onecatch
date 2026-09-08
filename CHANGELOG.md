@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.4
+
+- Show sent image and file attachments in conversation messages, including secure inline previews for supported images.
+- Support pasting PNG, JPEG, GIF, and WebP screenshots into new-task and follow-up composers for every local Agent harness.
+- Replace attachment removal text with a compact × control and safely clean up staged clipboard files.
+
 ## 0.2.3
 
 - Rebuild the desktop installers from the current main branch without product changes.

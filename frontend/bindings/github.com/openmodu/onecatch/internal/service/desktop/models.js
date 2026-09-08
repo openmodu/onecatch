@@ -764,6 +764,48 @@ export class ListRunsInput {
     }
 }
 
+export class PastedImageInput {
+    /**
+     * Creates a new PastedImageInput instance.
+     * @param {Partial<PastedImageInput>} [$$source = {}] - The source object to create the PastedImageInput.
+     */
+    constructor($$source = {}) {
+        if (!("name" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["name"] = "";
+        }
+        if (!("mimeType" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["mimeType"] = "";
+        }
+        if (!("dataBase64" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["dataBase64"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new PastedImageInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {PastedImageInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new PastedImageInput(/** @type {Partial<PastedImageInput>} */($$parsedSource));
+    }
+}
+
 export class PermissionDecisionInput {
     /**
      * Creates a new PermissionDecisionInput instance.

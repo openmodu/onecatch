@@ -2,10 +2,12 @@ package desktop
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"mime"
+	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -21,6 +23,125 @@ const (
 	maxAttachmentSize  = 20 << 20
 	maxAttachmentTotal = 50 << 20
 )
+
+type PastedImageInput struct {
+	Name       string `json:"name"`
+	MIMEType   string `json:"mimeType"`
+	DataBase64 string `json:"dataBase64"`
+}
+
+var pastedImageExtensions = map[string]string{
+	"image/gif":  ".gif",
+	"image/jpeg": ".jpg",
+	"image/png":  ".png",
+	"image/webp": ".webp",
+}
+
+func pastedAttachmentRoot() string {
+	return filepath.Join(os.TempDir(), "onecatch-pasted-attachments")
+}
+
+// StagePastedImage turns a browser clipboard Blob into an ordinary local file.
+// Every runtime receives attachment paths, so keeping pasted screenshots on the
+// same path-based pipeline makes the feature available to all Agent harnesses.
+func (a *Service) StagePastedImage(ctx context.Context, input PastedImageInput) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
+	encoded := strings.TrimSpace(input.DataBase64)
+	if len(encoded) == 0 || len(encoded) > base64.StdEncoding.EncodedLen(maxAttachmentSize)+4 {
+		return "", coded("attachment_invalid", "pasted image data is empty or too large")
+	}
+	data, err := base64.StdEncoding.DecodeString(encoded)
+	if err != nil || len(data) == 0 || len(data) > maxAttachmentSize {
+		return "", coded("attachment_invalid", "pasted image data is invalid")
+	}
+	detected := http.DetectContentType(data)
+	extension, supported := pastedImageExtensions[detected]
+	if !supported {
+		return "", coded("attachment_invalid", "clipboard content is not a supported image")
+	}
+	if requested := strings.TrimSpace(input.MIMEType); requested != "" && requested != detected {
+		return "", coded("attachment_invalid", "clipboard image type does not match its content")
+	}
+	name := safeAttachmentName(strings.TrimSpace(input.Name))
+	if name == "attachment" {
+		name = "screenshot" + extension
+	} else if strings.Split(mime.TypeByExtension(strings.ToLower(filepath.Ext(name))), ";")[0] != detected {
+		name = strings.TrimSuffix(name, filepath.Ext(name)) + extension
+	}
+	directory := filepath.Join(pastedAttachmentRoot(), randomID("paste"))
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return "", fmt.Errorf("create pasted attachment directory: %w", err)
+	}
+	path := filepath.Join(directory, name)
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		_ = os.RemoveAll(directory)
+		return "", fmt.Errorf("write pasted attachment: %w", err)
+	}
+	return path, nil
+}
+
+func (a *Service) DiscardStagedAttachment(path string) error {
+	if !isStagedAttachment(path) {
+		return nil
+	}
+	return os.RemoveAll(filepath.Dir(filepath.Clean(path)))
+}
+
+// ReadAttachmentPreview is intentionally limited to OneCatch-managed task and
+// clipboard directories. The asset handler must never become an arbitrary
+// local-file server just because the frontend supplies an absolute path.
+func (a *Service) ReadAttachmentPreview(ctx context.Context, path string) ([]byte, string, error) {
+	clean := filepath.Clean(strings.TrimSpace(path))
+	allowed := isStagedAttachment(clean) && resolvedPathWithin(clean, pastedAttachmentRoot())
+	if !allowed {
+		workspaces, err := a.store.Repos.Tasks.ListWorkspaces(ctx)
+		if err != nil {
+			return nil, "", err
+		}
+		for _, workspace := range workspaces {
+			if workspace.RemoteFS == nil && resolvedPathWithin(clean, filepath.Join(workspace.Path, ".onecatch", "attachments")) {
+				allowed = true
+				break
+			}
+		}
+	}
+	if !allowed {
+		return nil, "", coded("attachment_invalid", "attachment preview path is not managed by OneCatch")
+	}
+	data, err := os.ReadFile(clean)
+	if err != nil || len(data) == 0 || len(data) > maxAttachmentSize {
+		return nil, "", coded("attachment_invalid", "attachment preview is unavailable")
+	}
+	mimeType := http.DetectContentType(data)
+	if _, supported := pastedImageExtensions[mimeType]; !supported {
+		return nil, "", coded("attachment_invalid", "attachment is not a previewable image")
+	}
+	return data, mimeType, nil
+}
+
+func pathWithin(path, root string) bool {
+	relative, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	return err == nil && relative != "." && relative != ".." && !strings.HasPrefix(relative, ".."+string(os.PathSeparator))
+}
+
+func resolvedPathWithin(path, root string) bool {
+	resolvedPath, err := filepath.EvalSymlinks(filepath.Clean(path))
+	if err != nil {
+		return false
+	}
+	resolvedRoot, err := filepath.EvalSymlinks(filepath.Clean(root))
+	return err == nil && pathWithin(resolvedPath, resolvedRoot)
+}
+
+func isStagedAttachment(path string) bool {
+	if !pathWithin(path, pastedAttachmentRoot()) {
+		return false
+	}
+	relative, err := filepath.Rel(pastedAttachmentRoot(), filepath.Clean(path))
+	return err == nil && len(strings.Split(relative, string(os.PathSeparator))) == 2
+}
 
 func (a *Service) RenameTask(ctx context.Context, taskID, title string) (domaintasks.Task, error) {
 	task, err := a.store.Repos.Tasks.GetTask(ctx, strings.TrimSpace(taskID))
