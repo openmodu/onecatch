@@ -117,7 +117,7 @@ const REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkSkillMenti
 // Agent output is untrusted. Streamdown sanitizes and hardens its generated
 // tree by default; raw HTML stays disabled here, while images remain inert
 // placeholders so the desktop webview never fetches model-provided URLs.
-function MarkdownContent({ content, streaming = false, className = "" }) {
+function MarkdownContent({ content, streaming = false, animateStreaming = true, className = "" }) {
   const text = String(content || "");
   // A trailing newline is meaningful to the accumulated transcript, but while
   // streaming `white-space: pre-wrap` puts Streamdown's caret on a blank line.
@@ -130,7 +130,7 @@ function MarkdownContent({ content, streaming = false, className = "" }) {
     className={`markdown-content ${streaming ? "streaming" : ""} ${className}`.trim()}
     components={MARKDOWN_COMPONENTS}
     controls={false}
-    isAnimating={streaming}
+    isAnimating={streaming && animateStreaming}
     lineNumbers={false}
     linkSafety={LINK_SAFETY}
     mode={streaming ? "streaming" : "static"}

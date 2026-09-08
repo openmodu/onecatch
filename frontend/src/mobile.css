@@ -87,8 +87,8 @@ button, input, textarea, select { font: inherit; }
 
 .mobile-status-dot { width: 5px; height: 5px; display: inline-block; flex: 0 0 auto; border-radius: 50%; background: var(--muted-foreground); }
 .mobile-status-dot.online { background: var(--success); }
-.mobile-status-dot.running { animation: mobile-pulse 1.4s ease-out infinite; }
-@keyframes mobile-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--success) 40%, transparent); } 70% { box-shadow: 0 0 0 6px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.mobile-status-dot.running { animation: mobile-pulse 1.4s ease-in-out infinite; }
+@keyframes mobile-pulse { 50% { opacity: .35; transform: scale(.75); } }
 
 /* A project is a name and when it last moved. The row is the target, so it
    carries no glyph and no chevron. */

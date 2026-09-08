@@ -386,6 +386,33 @@ func (s *Service) ListRuns() []RunView {
 	return items
 }
 
+// ListRunSummaries keeps the periodic phone sync cheap. A full run can carry
+// thousands of transcript events; sending every unchanged transcript through
+// the WKWebView bridge every few seconds makes scrolling hitch. The list and
+// navigation only need run metadata. Conversation bodies are loaded with
+// GetRun when opened.
+func (s *Service) ListRunSummaries() []RunView {
+	s.syncSharedRuns(context.Background())
+	s.mu.RLock()
+	items := make([]RunView, 0, len(s.runs))
+	for _, state := range s.runs {
+		view := state.view
+		view.Events = nil
+		if state.view.Result != nil {
+			result := *state.view.Result
+			view.Result = &result
+		}
+		if state.view.FinishedAt != nil {
+			finishedAt := *state.view.FinishedAt
+			view.FinishedAt = &finishedAt
+		}
+		items = append(items, view)
+	}
+	s.mu.RUnlock()
+	sort.Slice(items, func(i, j int) bool { return items[i].StartedAt.After(items[j].StartedAt) })
+	return items
+}
+
 func (s *Service) runViewsLocked() []RunView {
 	items := make([]RunView, 0, len(s.runs))
 	for _, state := range s.runs {

@@ -14,8 +14,49 @@ export function sortMobileRuns(items = []) {
 
 export function mergeMobileRun(items = [], run) {
   if (!run?.id) return sortMobileRuns(items);
-  const next = [run, ...items.filter((item) => item.id !== run.id)];
-  return sortMobileRuns(next);
+  const previous = items.find((item) => item.id === run.id);
+  const value = previous && mobileRunFingerprint(previous) === mobileRunFingerprint(run) ? previous : run;
+  const next = sortMobileRuns([value, ...items.filter((item) => item.id !== run.id)]);
+  if (next.length === items.length && next.every((item, index) => item === items[index])) return items;
+  return next;
+}
+
+function eventFingerprint(event = {}) {
+  return [event.kind, event.streamId, event.phase, event.revision, event.at, event.failed ? 1 : 0, String(event.text || "")].join("|");
+}
+
+// Run objects returned by Wails are freshly allocated even when a poll found
+// no changes. This compact fingerprint lets React retain the old object and
+// skip rebuilding its Markdown tree.
+export function mobileRunFingerprint(run = {}) {
+  const events = run.events || [];
+  const last = events[events.length - 1];
+  return [
+    run.id, run.conversationId, run.workerId, run.workspaceId, run.runtime,
+    run.prompt, run.title, run.status, run.shared ? 1 : 0, run.error,
+    run.startedAt, run.finishedAt, events.length, eventFingerprint(last),
+    run.result?.sessionId, run.result?.succeeded ? 1 : 0,
+    run.result?.finalMessage, run.result?.usage?.inputTokens,
+    run.result?.usage?.outputTokens,
+  ].join("|");
+}
+
+// Polls use transcript-free summaries. Preserve an already loaded body while
+// adopting current metadata, and return the original array if nothing moved.
+export function mergeMobileRunSummaries(current = [], incoming = []) {
+  const previous = new Map(current.map((run) => [run.id, run]));
+  const merged = sortMobileRuns(incoming.map((summary) => {
+    const existing = previous.get(summary.id);
+    if (!existing) return summary;
+    const next = {
+      ...summary,
+      events: summary.events?.length ? summary.events : existing.events,
+      result: summary.result || existing.result,
+    };
+    return mobileRunFingerprint(existing) === mobileRunFingerprint(next) ? existing : next;
+  }));
+  if (merged.length === current.length && merged.every((run, index) => run === current[index])) return current;
+  return merged;
 }
 
 export function applyMobileRunFrame(run, frame) {
@@ -26,6 +67,25 @@ export function applyMobileRunFrame(run, frame) {
   if (frame.result) next.result = frame.result;
   if (frame.error) next.error = frame.error;
   return next;
+}
+
+export function applyMobileRunFrames(items = [], frames = []) {
+  if (!frames.length) return items;
+  const byRun = new Map();
+  for (const frame of frames) {
+    if (!frame?.runId) continue;
+    const queued = byRun.get(frame.runId) || [];
+    queued.push(frame);
+    byRun.set(frame.runId, queued);
+  }
+  let changed = false;
+  const next = items.map((run) => {
+    const queued = byRun.get(run.id);
+    if (!queued) return run;
+    changed = true;
+    return queued.reduce(applyMobileRunFrame, run);
+  });
+  return changed ? next : items;
 }
 
 // Plumbing the phone has no use for. Connecting to a worker and counting

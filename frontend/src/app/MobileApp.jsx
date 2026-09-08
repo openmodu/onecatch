@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Events } from "@wailsio/runtime";
 import {
   Activity,
@@ -45,7 +45,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import MarkdownContent from "./components/MarkdownContent.jsx";
 import { errorMessage, formatDuration, formatTime, formatToolTime, compactTokens, shortenPath } from "./format.js";
-import { applyMobileRunFrame, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
+import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
+import { createFrameBatcher } from "./frameBatcher.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useKeyboardInset } from "./mobileViewport.js";
 import "../mobile.css";
@@ -316,7 +317,7 @@ function UserMessage({ text }) {
 function AssistantMessage({ text, streaming = false }) {
   if (!text) return null;
   return <article className="mobile-assistant-message" aria-label="助手回复">
-    <MarkdownContent content={text} streaming={streaming} />
+    <MarkdownContent content={text} streaming={streaming} animateStreaming={false} />
   </article>;
 }
 
@@ -328,7 +329,7 @@ function ReasoningEvent({ event }) {
       <span>思考过程</span>
       <ChevronRight aria-hidden="true" />
     </summary>
-    <div className="mobile-reasoning-content"><MarkdownContent content={event.text} streaming={Boolean(event.streaming)} /></div>
+    <div className="mobile-reasoning-content"><MarkdownContent content={event.text} streaming={Boolean(event.streaming)} animateStreaming={false} /></div>
   </details>;
 }
 
@@ -390,6 +391,25 @@ function AgentEvent({ run, event, index, permissionBusy, onRespond }) {
   </details>;
 }
 
+const ConversationTurn = memo(function ConversationTurn({ run, permissionBusy, onRespond }) {
+  const visibleEvents = foldMobileEvents(run.events || []);
+  const blocks = groupMobileTranscriptEvents(visibleEvents);
+  const visibleRun = { ...run, events: visibleEvents };
+  return <section className="mobile-turn">
+    <UserMessage text={run.prompt} />
+    {blocks.map((block, index) => {
+      if (block.type === "tools") return <ToolGroup key={`tools-${block.events[0]?.streamId || index}`} events={block.events} active={run.status === "running" && index === blocks.length - 1} />;
+      const event = block.event;
+      return event.kind === "user_message"
+        ? <UserMessage key={`user-${index}`} text={event.text} />
+        : <AgentEvent key={`${event.at || index}-${index}`} run={visibleRun} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />;
+    })}
+    {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
+    {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
+    {run.result?.finalMessage && !(run.events || []).some((event) => event.kind === "message" && event.text === run.result.finalMessage) && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <AssistantMessage text={run.result.finalMessage} />}
+  </section>;
+});
+
 function ConversationView({ conversation, workspace, snapshot, sharedRuns, prompt, setPrompt, busy, permissionBusy, runtime, onOpenContext, onStart, onInterrupt, onRespond }) {
   const runs = conversation?.runs || [];
   const running = runs.find((item) => item.status === "running");
@@ -398,7 +418,7 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
   const transcriptRef = useRef(null);
   const pinnedRef = useRef(true);
   const promptRef = useRef(null);
-  const transcriptLength = runs.reduce((total, run) => total + (run.events || []).reduce((size, event) => size + 1 + String(event.text || "").length, 0), 0);
+  const transcriptLength = useMemo(() => runs.reduce((total, run) => total + (run.events || []).reduce((size, event) => size + 1 + String(event.text || "").length, 0), 0), [runs]);
 
   // Opening a conversation starts at its newest turn, and streamed events keep
   // it there unless the reader has scrolled away to look at something.
@@ -409,7 +429,9 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
   }, [conversation?.id]);
   useEffect(() => {
     const element = transcriptRef.current;
-    if (element && pinnedRef.current) element.scrollTop = element.scrollHeight;
+    if (!element || !pinnedRef.current) return undefined;
+    const frame = window.requestAnimationFrame(() => { element.scrollTop = element.scrollHeight; });
+    return () => window.cancelAnimationFrame(frame);
   }, [transcriptLength, runs.length, running?.status]);
 
   // Safari only grew `field-sizing: content` in 26, so the composer has to size
@@ -429,23 +451,7 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
       onScroll={() => { pinnedRef.current = isPinnedToBottom(transcriptRef.current); }}
     >
       {!runs.length && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)} · {sharedRuns ? "与桌面共用任务和运行记录" : "Agent 在远端以只读模式运行"}</p></section>}
-      {runs.map((run) => {
-        const visibleEvents = foldMobileEvents(run.events || []);
-        const blocks = groupMobileTranscriptEvents(visibleEvents);
-        return <section className="mobile-turn" key={run.id}>
-        <UserMessage text={run.prompt} />
-        {blocks.map((block, index) => {
-          if (block.type === "tools") return <ToolGroup key={`tools-${block.events[0]?.streamId || index}`} events={block.events} active={run.status === "running" && index === blocks.length - 1} />;
-          const event = block.event;
-          return event.kind === "user_message"
-            ? <UserMessage key={`user-${index}`} text={event.text} />
-            : <AgentEvent key={`${event.at || index}-${index}`} run={{ ...run, events: visibleEvents }} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />;
-        })}
-        {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
-        {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
-        {run.result?.finalMessage && !(run.events || []).some((event) => event.kind === "message" && event.text === run.result.finalMessage) && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <AssistantMessage text={run.result.finalMessage} />}
-      </section>;
-      })}
+      {runs.map((run) => <ConversationTurn key={run.id} run={run} permissionBusy={permissionBusy} onRespond={onRespond} />)}
     </main>
     <footer className="mobile-composer-wrap">
       {Boolean(!sharedRuns && snapshot && (!snapshot.isRepo || snapshot.status || (snapshot.files || []).length)) && <div className="mobile-workspace-alert"><CircleAlert />远端工作区需要保持干净才能开始只读任务</div>}
@@ -612,6 +618,8 @@ export default function MobileWorkbench() {
   const [busy, setBusy] = useState("");
   const [permissionBusy, setPermissionBusy] = useState("");
   const [notice, setNotice] = useState(null);
+  const runsRef = useRef([]);
+  const liveFramesRef = useRef([]);
   const keyboardInset = useKeyboardInset();
   useNativeChrome();
 
@@ -625,6 +633,7 @@ export default function MobileWorkbench() {
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID) || null;
   const selectedHealth = healthByID[selectedWorkerID] || null;
 	const workspaceManagementSupported = selectedHealth ? Boolean(selectedHealth.health?.capabilities?.workspaceManagement) : true;
+	useEffect(() => { runsRef.current = runs; }, [runs]);
 
   const notify = useCallback((type, message) => {
     setNotice({ type, message });
@@ -682,8 +691,8 @@ export default function MobileWorkbench() {
   useEffect(() => {
     void (async () => {
       try {
-        const [items, runItems] = await Promise.all([loadWorkers(), MobileBinding.ListRuns()]);
-        setRuns(runItems || []);
+        const [items, runItems] = await Promise.all([loadWorkers(), MobileBinding.ListRunSummaries()]);
+        setRuns((current) => mergeMobileRunSummaries(current, runItems || []));
         if (items[0]) await refreshWorker(items[0].id, true);
       } catch (error) { notify("error", errorMessage(error)); }
     })();
@@ -715,44 +724,86 @@ export default function MobileWorkbench() {
     if (next) setRuntime(next.id);
   }, [runtime, selectedHealth]);
   useEffect(() => {
+    const flush = () => {
+      const frames = liveFramesRef.current;
+      liveFramesRef.current = [];
+      if (frames.length) setRuns((items) => applyMobileRunFrames(items, frames));
+    };
+    const scheduleFrame = typeof window.requestAnimationFrame === "function"
+      ? window.requestAnimationFrame.bind(window)
+      : (callback) => window.setTimeout(callback, 16);
+    const cancelFrame = typeof window.cancelAnimationFrame === "function"
+      ? window.cancelAnimationFrame.bind(window)
+      : window.clearTimeout.bind(window);
+    const batcher = createFrameBatcher(flush, scheduleFrame, cancelFrame);
     const off = Events.On(RUN_EVENT, (event) => {
       const frame = event.data;
       if (!frame?.runId) return;
-      setRuns((items) => items.map((run) => applyMobileRunFrame(run, frame)));
-      if (frame.status && frame.status !== "running") void MobileBinding.GetRun(frame.runId).then((run) => setRuns((items) => mergeMobileRun(items, run))).catch(() => {});
+      liveFramesRef.current.push(frame);
+      if (frame.status && frame.status !== "running") {
+        // Apply queued transcript frames before replacing the run with its
+        // durable final detail, otherwise a fast final response can append the
+        // same last chunks twice after the detail request resolves.
+        batcher.cancel();
+        flush();
+        void MobileBinding.GetRun(frame.runId).then((run) => setRuns((items) => mergeMobileRun(items, run))).catch(() => {});
+      } else {
+        batcher.schedule();
+      }
     });
-    return () => off();
+    return () => { off(); batcher.cancel(); liveFramesRef.current = []; };
   }, []);
+
+  const selectedConversationRunIDs = selectedConversation?.runs.map((run) => run.id).join("|") || "";
+  useEffect(() => {
+    if (!selectedConversationRunIDs) return undefined;
+    let stopped = false;
+    for (const id of selectedConversationRunIDs.split("|")) {
+      void MobileBinding.GetRun(id)
+        .then((detail) => { if (!stopped) setRuns((items) => mergeMobileRun(items, detail)); })
+        .catch(() => {});
+    }
+    return () => { stopped = true; };
+  }, [selectedConversationRunIDs]);
 
   // Refresh on foreground/reconnect as well as while visible. The host owns
   // execution, so this also discovers turns started on the desktop.
   useEffect(() => {
     let stopped = false;
     let pending = false;
+    let timer = 0;
     const refresh = async () => {
-      if (pending || document.hidden) return;
+      if (pending || document.hidden) return false;
       pending = true;
       try {
-        const items = await MobileBinding.ListRuns();
-        if (stopped) return;
-        setRuns(items || []);
+        const items = await MobileBinding.ListRunSummaries();
+        if (stopped) return false;
+        const before = new Map(runsRef.current.map((run) => [run.id, run]));
+        setRuns((current) => mergeMobileRunSummaries(current, items || []));
         for (const run of items || []) {
-          if (!run.shared || run.conversationId !== selectedConversationID) continue;
+          if (run.conversationId !== selectedConversationID || (!run.shared && run.status === "running")) continue;
+          if (run.status !== "running" && before.get(run.id)?.status === run.status) continue;
           const detail = await MobileBinding.GetRun(run.id);
           if (!stopped) setRuns((current) => mergeMobileRun(current, detail));
         }
+        return (items || []).some((run) => run.status === "running");
       } catch { /* Keep the last successful snapshot while offline. */ }
       finally { pending = false; }
+      return false;
     };
-    void refresh();
-    const timer = window.setInterval(refresh, 2000);
-    window.addEventListener("online", refresh);
-    document.addEventListener("visibilitychange", refresh);
+    const poll = async () => {
+      const running = await refresh();
+      if (!stopped) timer = window.setTimeout(poll, running ? 2000 : 5000);
+    };
+    const wake = () => { if (!document.hidden) void refresh(); };
+    void poll();
+    window.addEventListener("online", wake);
+    document.addEventListener("visibilitychange", wake);
     return () => {
       stopped = true;
-      window.clearInterval(timer);
-      window.removeEventListener("online", refresh);
-      document.removeEventListener("visibilitychange", refresh);
+      window.clearTimeout(timer);
+      window.removeEventListener("online", wake);
+      document.removeEventListener("visibilitychange", wake);
     };
   }, [selectedConversationID, selectedWorkerID]);
 
@@ -797,12 +848,12 @@ export default function MobileWorkbench() {
     finally { setBusy(""); }
   };
 
-  const respondPermission = async (runID, requestID, decision) => {
+  const respondPermission = useCallback(async (runID, requestID, decision) => {
     setPermissionBusy(requestID);
     try { await MobileBinding.RespondPermission({ runId: runID, requestId: requestID, decision }); }
     catch (error) { notify("error", errorMessage(error)); }
     finally { setPermissionBusy(""); }
-  };
+  }, [notify]);
 
   const deleteWorker = (worker) => setConfirmRequest({
     title: `删除 ${workerLabel(worker)}`,

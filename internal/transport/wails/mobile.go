@@ -58,6 +58,10 @@ func (b *MobileBinding) ListRuns() []mobileservice.RunView {
 	return b.service.ListRuns()
 }
 
+func (b *MobileBinding) ListRunSummaries() []mobileservice.RunView {
+	return b.service.ListRunSummaries()
+}
+
 func (b *MobileBinding) InterruptRun(id string) error {
 	return b.service.InterruptRun(context.Background(), id)
 }

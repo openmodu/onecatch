@@ -55,6 +55,15 @@ export function InterruptRun(id) {
 /**
  * @returns {$CancellablePromise<mobile$0.RunView[]>}
  */
+export function ListRunSummaries() {
+    return $Call.ByID(1625646554).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType2($result);
+    }));
+}
+
+/**
+ * @returns {$CancellablePromise<mobile$0.RunView[]>}
+ */
 export function ListRuns() {
     return $Call.ByID(2751141287).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType2($result);

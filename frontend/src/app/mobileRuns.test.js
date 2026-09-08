@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { applyMobileRunFrame, conversationUsage, describeToolArguments, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mobileEventSummary, mobileRunTitle, projectActivity, sortMobileRuns, unwrapShellCommand } from "./mobileRuns.js";
+import { applyMobileRunFrame, applyMobileRunFrames, conversationUsage, describeToolArguments, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity, sortMobileRuns, unwrapShellCommand } from "./mobileRuns.js";
 
 test("mobile task titles use the first compact prompt line", () => {
   assert.equal(mobileRunTitle("  Review the worker API\nthen add tests  "), "Review the worker API");
@@ -23,6 +23,37 @@ test("mobile run frames append events and settle the run", () => {
   const settled = applyMobileRunFrame(withEvent, { runId: "run-1", status: "succeeded", result: { finalMessage: "done" } });
   assert.equal(settled.status, "succeeded");
   assert.equal(settled.result.finalMessage, "done");
+});
+
+test("mobile run frames render a burst in one immutable list update", () => {
+  const idle = { id: "idle", events: [] };
+  const active = { id: "active", status: "running", events: [] };
+  const next = applyMobileRunFrames([idle, active], [
+    { runId: "active", event: { kind: "message", text: "one" } },
+    { runId: "active", event: { kind: "message", text: "two" } },
+  ]);
+  assert.equal(next[0], idle);
+  assert.deepEqual(next[1].events.map((event) => event.text), ["one", "two"]);
+  assert.equal(applyMobileRunFrames(next, []), next);
+});
+
+test("summary polling preserves loaded transcripts and skips unchanged state", () => {
+  const loaded = {
+    id: "run-1", conversationId: "chat-1", status: "succeeded", startedAt: "2026-09-08T01:00:00Z",
+    events: [{ kind: "message", streamId: "answer", revision: 2, text: "loaded reply" }],
+    result: { sessionId: "session-1", finalMessage: "loaded reply", succeeded: true },
+  };
+  const summary = { ...loaded, events: undefined };
+  const current = [loaded];
+  const unchanged = mergeMobileRunSummaries(current, [summary]);
+  assert.equal(unchanged, current);
+  assert.equal(unchanged[0], loaded);
+  assert.equal(unchanged[0].events[0].text, "loaded reply");
+
+  const changed = mergeMobileRunSummaries(unchanged, [{ ...summary, status: "running" }]);
+  assert.notEqual(changed, unchanged);
+  assert.equal(changed[0].events, loaded.events);
+  assert.equal(changed[0].status, "running");
 });
 
 test("mobile conversations group follow-up runs into one workspace session", () => {

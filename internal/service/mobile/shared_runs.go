@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"context"
+	"time"
 
 	"github.com/openmodu/onecatch/internal/service/worker"
 )
@@ -76,6 +77,7 @@ func (s *Service) syncSharedRuns(ctx context.Context) {
 			continue
 		} // An offline host never deletes cached history.
 		s.mu.Lock()
+		changed := false
 		found := make(map[string]bool, len(views))
 		for _, view := range views {
 			view.WorkerID, view.Shared = config.ID, true
@@ -83,15 +85,36 @@ func (s *Service) syncSharedRuns(ctx context.Context) {
 			if previous := s.runs[view.ID]; previous != nil {
 				view.Events = previous.view.Events
 				view.Result = previous.view.Result
+				if sameRunMetadata(previous.view, view) {
+					continue
+				}
 			}
 			s.runs[view.ID] = &runState{config: config, view: view}
+			changed = true
 		}
 		for id, state := range s.runs {
 			if state.view.Shared && state.view.WorkerID == config.ID && !found[id] {
 				delete(s.runs, id)
+				changed = true
 			}
 		}
-		_ = s.persistRunsLocked()
+		if changed {
+			_ = s.persistRunsLocked()
+		}
 		s.mu.Unlock()
 	}
+}
+
+func sameRunMetadata(left, right RunView) bool {
+	return left.ID == right.ID && left.ConversationID == right.ConversationID && left.WorkerID == right.WorkerID &&
+		left.WorkspaceID == right.WorkspaceID && left.Runtime == right.Runtime && left.Prompt == right.Prompt &&
+		left.Title == right.Title && left.Status == right.Status && left.Shared == right.Shared && left.Error == right.Error &&
+		left.StartedAt.Equal(right.StartedAt) && sameOptionalTime(left.FinishedAt, right.FinishedAt)
+}
+
+func sameOptionalTime(left, right *time.Time) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return left.Equal(*right)
 }

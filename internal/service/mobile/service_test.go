@@ -227,6 +227,13 @@ func TestRunHistoryPersistsAcrossServiceRestart(t *testing.T) {
 	if runs[0].ConversationID != runs[0].ID {
 		t.Fatalf("new conversation id = %q, want %q", runs[0].ConversationID, runs[0].ID)
 	}
+	summaries := reopened.ListRunSummaries()
+	if len(summaries) != 1 || len(summaries[0].Events) != 0 {
+		t.Fatalf("summaries carried transcript events: %+v", summaries)
+	}
+	if summaries[0].Result == nil || summaries[0].Result.SessionID != runs[0].Result.SessionID {
+		t.Fatalf("summary lost resumable session metadata: %+v", summaries[0].Result)
+	}
 }
 
 func TestFollowUpKeepsConversationID(t *testing.T) {

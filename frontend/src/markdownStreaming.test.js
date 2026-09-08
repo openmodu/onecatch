@@ -8,7 +8,8 @@ const css = readFileSync(new URL("./index.css", import.meta.url), "utf8");
 test("assistant markdown stays formatted while content is streaming", () => {
   assert.match(markdown, /import \{ Streamdown \} from "streamdown"/);
   assert.match(markdown, /mode=\{streaming \? "streaming" : "static"\}/);
-  assert.match(markdown, /isAnimating=\{streaming\}/);
+  assert.match(markdown, /animateStreaming = true/);
+  assert.match(markdown, /isAnimating=\{streaming && animateStreaming\}/);
   assert.match(markdown, /caret=\{streaming \? "block" : undefined\}/);
   assert.match(markdown, /const renderedText = streaming \? text\.replace\(\/\\s\+\$\/u, ""\) : text/);
   assert.match(markdown, />\{renderedText\}<\/Streamdown>/);
