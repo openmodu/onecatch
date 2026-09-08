@@ -16,8 +16,14 @@ func (s *Service) cacheSharedRun(config worker.Config, view RunView) {
 	s.mu.Unlock()
 }
 
+// syncSharedRuns adopts the host's history. The phone polls it every couple of
+// seconds, so a sync that outlives its interval must not stack: a queue of
+// syncs holding syncMu is what starves GetRun, and a conversation whose body
+// never arrives renders as its prompt and final message alone.
 func (s *Service) syncSharedRuns(ctx context.Context) {
-	s.syncMu.Lock()
+	if !s.syncMu.TryLock() {
+		return
+	}
 	defer s.syncMu.Unlock()
 	workers, err := s.registry.List(ctx)
 	if err != nil {

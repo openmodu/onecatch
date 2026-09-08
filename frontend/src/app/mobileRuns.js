@@ -2,9 +2,41 @@ import { shortenPath } from "./format.js";
 
 const MAX_VISIBLE_EVENTS = 2000;
 
+// A body that comes back empty is indistinguishable from one the host had not
+// finished writing, and a turn without events renders as its prompt and its
+// final message alone -- the head and the tail of a conversation, with every
+// tool call and intermediate reply missing. Ask again a few times before
+// trusting that silence, then stop so a genuinely empty run settles.
+const MAX_EMPTY_DETAIL_ATTEMPTS = 3;
+
 export function needsMobileRunDetail(run, loaded) {
-  // Completion in a list summary says nothing about whether its body arrived.
-  return !loaded || run.status === "running" || loaded.status !== run.status || loaded.finishedAt !== run.finishedAt;
+  if (!loaded) return true;
+  if (run.status === "running") return true;
+  if (loaded.status !== run.status || loaded.finishedAt !== run.finishedAt) return true;
+  return !loaded.events && (loaded.attempts || 0) < MAX_EMPTY_DETAIL_ATTEMPTS;
+}
+
+// The record kept for a run whose detail request just resolved. Attempts only
+// accumulate while the body stays empty, so a transcript that arrives resets
+// the count for the next status change.
+export function mobileRunDetailRecord(detail, previous) {
+  const events = (detail?.events || []).length;
+  return {
+    status: detail?.status,
+    finishedAt: detail?.finishedAt,
+    events,
+    attempts: events ? 0 : (previous?.attempts || 0) + 1,
+  };
+}
+
+// What the transcript says in place of a turn whose body has not arrived.
+// Rendering nothing there is what made a half-loaded session look like a
+// two-message conversation.
+export function mobileTranscriptNotice(run, loaded, failed = false) {
+  if (!run || run.status === "running") return "";
+  if ((run.events || []).length) return "";
+  if (failed) return "会话内容加载失败，正在自动重试…";
+  return needsMobileRunDetail(run, loaded) ? "正在加载会话内容…" : "";
 }
 
 export function mobileRunTitle(prompt, maximum = 48) {

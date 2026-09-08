@@ -1,15 +1,40 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { needsMobileRunDetail } from "./mobileRuns.js";
+import { mobileRunDetailRecord, mobileTranscriptNotice, needsMobileRunDetail } from "./mobileRuns.js";
 
 test("completed summaries keep requesting a body until detail loading succeeds", () => {
   const summary = { status: "succeeded", finishedAt: "2026-09-08T10:00:00Z" };
   assert.equal(needsMobileRunDetail(summary, undefined), true);
   assert.equal(needsMobileRunDetail(summary, undefined), true, "a failed attempt does not count as loaded");
-  assert.equal(needsMobileRunDetail(summary, { ...summary }), false);
+  const loaded = mobileRunDetailRecord({ ...summary, events: [{ kind: "message" }] });
+  assert.equal(needsMobileRunDetail(summary, loaded), false);
   assert.equal(needsMobileRunDetail(summary, { status: "running" }), true);
-  assert.equal(needsMobileRunDetail({ ...summary, finishedAt: "2026-09-08T10:01:00Z" }, summary), true);
+  assert.equal(needsMobileRunDetail({ ...summary, finishedAt: "2026-09-08T10:01:00Z" }, loaded), true);
   assert.equal(needsMobileRunDetail({ status: "running" }, { status: "running" }), true);
+});
+
+test("a detail that came back without a body is asked for again", () => {
+  const summary = { status: "succeeded", finishedAt: "2026-09-08T10:00:00Z" };
+  // A finished turn whose transcript is missing renders as its prompt and its
+  // final message alone, which reads as a two-message conversation.
+  let record = mobileRunDetailRecord({ ...summary, events: [] });
+  assert.equal(needsMobileRunDetail(summary, record), true);
+  record = mobileRunDetailRecord({ ...summary, events: [] }, record);
+  record = mobileRunDetailRecord({ ...summary, events: [] }, record);
+  assert.equal(needsMobileRunDetail(summary, record), false, "a run that really is empty settles");
+  const loaded = mobileRunDetailRecord({ ...summary, events: [{ kind: "message" }] }, record);
+  assert.equal(needsMobileRunDetail(summary, loaded), false);
+  assert.equal(loaded.attempts, 0, "a body that arrives clears the empty-body count");
+});
+
+test("a turn without its body says so instead of showing only head and tail", () => {
+  const run = { id: "run_1", status: "succeeded", finishedAt: "2026-09-08T10:00:00Z", events: [] };
+  assert.match(mobileTranscriptNotice(run, undefined), /加载/);
+  assert.match(mobileTranscriptNotice(run, undefined, true), /失败/);
+  assert.equal(mobileTranscriptNotice({ ...run, events: [{ kind: "message" }] }, undefined), "");
+  assert.equal(mobileTranscriptNotice({ ...run, status: "running" }, undefined), "", "a running turn already has its own indicator");
+  const settled = mobileRunDetailRecord(run, mobileRunDetailRecord(run, mobileRunDetailRecord(run)));
+  assert.equal(mobileTranscriptNotice(run, settled), "", "an empty run stops promising more");
 });
 
 import { applyMobileRunFrame, applyMobileRunFrames, conversationUsage, describeToolArguments, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity, sortMobileRuns, unwrapShellCommand } from "./mobileRuns.js";
