@@ -241,6 +241,13 @@ export class SharedRun {
              */
             this["title"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["turnCount"] = undefined;
+        }
         if (!("status" in $$source)) {
             /**
              * @member
@@ -300,14 +307,14 @@ export class SharedRun {
      * @returns {SharedRun}
      */
     static createFrom($$source = {}) {
-        const $$createField9_0 = $$createType2;
-        const $$createField10_0 = $$createType4;
+        const $$createField10_0 = $$createType2;
+        const $$createField11_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("events" in $$parsedSource) {
-            $$parsedSource["events"] = $$createField9_0($$parsedSource["events"]);
+            $$parsedSource["events"] = $$createField10_0($$parsedSource["events"]);
         }
         if ("result" in $$parsedSource) {
-            $$parsedSource["result"] = $$createField10_0($$parsedSource["result"]);
+            $$parsedSource["result"] = $$createField11_0($$parsedSource["result"]);
         }
         return new SharedRun(/** @type {Partial<SharedRun>} */($$parsedSource));
     }

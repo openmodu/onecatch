@@ -58,6 +58,11 @@ func (h *hostedRuns) List(ctx context.Context, cursor string) (worker.SharedRunP
 	result := worker.SharedRunPage{Items: []worker.SharedRun{}, NextCursor: page.NextCursor}
 	for _, run := range page.Items {
 		view := hostedRunView(run, tasks[run.TaskID], h.app.isActive(run.ID))
+		steps, err := h.app.store.Repos.Workflows.ListStepRuns(ctx, run.ID)
+		if err != nil {
+			return worker.SharedRunPage{}, err
+		}
+		view.TurnCount = len(steps)
 		if view.Runtime == "" {
 			definition, err := h.app.store.Repos.Workflows.GetRunDefinition(ctx, run.ID)
 			if err != nil {
@@ -100,6 +105,7 @@ func (h *hostedRuns) Get(ctx context.Context, id string) (worker.SharedRun, erro
 		return worker.SharedRun{}, err
 	}
 	view := hostedRunView(detail.Run, detail.Task, detail.Active)
+	view.TurnCount = len(detail.StepRuns)
 	if view.Runtime == "" {
 		for _, step := range detail.Workflow.Steps {
 			if step.ID == detail.Run.CurrentStepID {

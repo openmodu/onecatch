@@ -22,6 +22,7 @@ type SharedRun struct {
 	Runtime        agentrun.Runtime `json:"runtime"`
 	Prompt         string           `json:"prompt"`
 	Title          string           `json:"title,omitempty"`
+	TurnCount      int              `json:"turnCount,omitempty"`
 	Status         string           `json:"status"`
 	Shared         bool             `json:"shared,omitempty"`
 	Events         []agentrun.Event `json:"events,omitempty"`

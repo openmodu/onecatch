@@ -37,7 +37,7 @@ export function mobileRunFingerprint(run = {}) {
   const events = run.events || [];
   return [
     run.id, run.conversationId, run.workerId, run.workspaceId, run.runtime,
-    run.prompt, run.title, run.status, run.shared ? 1 : 0, run.error,
+    run.prompt, run.title, run.turnCount, run.status, run.shared ? 1 : 0, run.error,
     run.startedAt, run.finishedAt, events.length, JSON.stringify(events.map(eventFingerprint)),
     run.result?.sessionId, run.result?.succeeded ? 1 : 0,
     run.result?.finalMessage, run.result?.usage?.inputTokens,
@@ -196,6 +196,10 @@ export function groupMobileTranscriptEvents(items = []) {
 
 export function mobileConversationID(run) {
   return String(run?.conversationId || run?.id || "");
+}
+
+export function mobileConversationTurnCount(runs = []) {
+  return runs.reduce((count, run) => count + (run.turnCount ?? (1 + (run.events || []).filter((event) => event.kind === "user_message").length)), 0);
 }
 
 export function groupMobileConversations(items = []) {

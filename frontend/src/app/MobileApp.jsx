@@ -48,7 +48,7 @@ import { errorMessage, formatDuration, formatTime, formatToolTime, compactTokens
 import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { createFrameBatcher } from "./frameBatcher.js";
 import { createWorkspaceLoader } from "./mobileWorkspaceLoader.js";
-import { needsMobileRunDetail } from "./mobileRuns.js";
+import { needsMobileRunDetail, mobileConversationTurnCount } from "./mobileRuns.js";
 import { useMobileBackGesture } from "./mobileBackGesture.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useMobileViewportFrame } from "./mobileViewport.js";
@@ -231,7 +231,7 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
     <PageHead title={<span className="mobile-project-heading">{workspaceLabel(workspace)}<RemoteWorkspaceBadge workspace={workspace} /></span>} meta={[workspace?.remoteHost, shortenPath(workspace?.path)].filter(Boolean).join(" · ")} />
     <div className="mobile-session-list">
       {visible.map((conversation) => <button type="button" className="mobile-session-row" key={conversation.id} onClick={() => onOpen(conversation.id)}>
-        <span className="mobile-session-copy"><strong>{conversation.title}</strong><small>{conversation.runtime} · {conversation.runs.length} 轮 · {relativeTime(conversation.startedAt)}</small></span>
+        <span className="mobile-session-copy"><strong>{conversation.title}</strong><small>{conversation.runtime} · {mobileConversationTurnCount(conversation.runs)} 轮 · {relativeTime(conversation.startedAt)}</small></span>
         <span className={`mobile-session-status ${conversation.status}`}>{runStatusLabel(conversation.status)}</span>
       </button>)}
     </div>
@@ -555,7 +555,7 @@ function WorkersSheet({ open, workers, selectedWorkerID, healthByID, busy, onClo
 // silently did nothing on the phone. Ask in the app's own sheet instead.
 function ConversationMenu({ open, conversation, workspace, health, snapshot, runtime, model, onNew, onSettings, onClose }) {
   if (!open) return null;
-  const turns = conversation?.runs?.length || 0;
+  const turns = mobileConversationTurnCount(conversation?.runs);
   const usage = conversationUsage(conversation?.runs || []);
   const running = conversation?.runs?.some((run) => run.status === "running");
   return <div className="mobile-popover-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
