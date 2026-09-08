@@ -71,6 +71,11 @@ function workspaceLabel(workspace) {
   return pieces.at(-1) || workspace?.id || "Workspace";
 }
 
+function RemoteWorkspaceBadge({ workspace }) {
+  if (!workspace?.remoteHost) return null;
+  return <span className="mobile-remote-badge" title={`远端 · ${workspace.remoteHost}`} aria-label={`远端项目：${workspace.remoteHost}`}><Cloud aria-hidden="true" />远端</span>;
+}
+
 function workspaceGitLabel(snapshot) {
   if (!snapshot) return "尚未检查";
   if (!snapshot.isRepo) return "不是 Git 仓库";
@@ -209,7 +214,7 @@ function ProjectHome({ workspaces, conversations, query, meta, onMeta, onOpenWor
         const { count, latestAt, running } = projectActivity(sessions);
         return <div className="mobile-project-row" key={workspace.id}>
           <button type="button" className="mobile-project-link" onClick={() => onOpenWorkspace(workspace.id)}>
-            <span className="mobile-project-name"><strong>{workspaceLabel(workspace)}</strong>{running && <StatusDot online running />}</span>
+            <span className="mobile-project-name"><strong>{workspaceLabel(workspace)}</strong><RemoteWorkspaceBadge workspace={workspace} />{running && <StatusDot online running />}</span>
             <small>{count ? relativeTime(latestAt) : "—"}</small>
           </button>
         </div>;
@@ -223,7 +228,7 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
   const normalized = query.trim().toLowerCase();
   const visible = conversations.filter((item) => item.workspaceId === workspace?.id && (!normalized || item.title.toLowerCase().includes(normalized)));
   return <div className="mobile-page mobile-session-page">
-    <PageHead title={workspaceLabel(workspace)} meta={shortenPath(workspace?.path)} />
+    <PageHead title={<span className="mobile-workspace-heading">{workspaceLabel(workspace)}<RemoteWorkspaceBadge workspace={workspace} /></span>} meta={[workspace?.remoteHost, shortenPath(workspace?.path)].filter(Boolean).join(" · ")} />
     <div className="mobile-session-list">
       {visible.map((conversation) => <button type="button" className="mobile-session-row" key={conversation.id} onClick={() => onOpen(conversation.id)}>
         <span className="mobile-session-copy"><strong>{conversation.title}</strong><small>{conversation.runtime} · {conversation.runs.length} 轮 · {relativeTime(conversation.startedAt)}</small></span>
@@ -479,7 +484,7 @@ function Sidebar({ open, workspaces, conversations, selectedConversationID, heal
         {workspaces.map((workspace) => {
           const sessions = conversations.filter((item) => item.workspaceId === workspace.id);
           return <section className="mobile-drawer-group" key={workspace.id}>
-            <button type="button" className="mobile-drawer-workspace" onClick={() => { onWorkspace(workspace.id); onClose(); }}><FolderGit2 /><strong>{workspaceLabel(workspace)}</strong><span>{sessions.length}</span></button>
+            <button type="button" className="mobile-drawer-workspace" onClick={() => { onWorkspace(workspace.id); onClose(); }}><FolderGit2 /><strong>{workspaceLabel(workspace)}</strong><RemoteWorkspaceBadge workspace={workspace} /><span>{sessions.length}</span></button>
             {sessions.slice(0, 8).map((conversation) => <button type="button" className={conversation.id === selectedConversationID ? "selected" : ""} key={conversation.id} onClick={() => { onConversation(conversation.id); onClose(); }}><span className="mobile-drawer-session-title">{conversation.title}</span>{conversation.status === "running" && <StatusDot online running />}</button>)}
           </section>;
         })}
