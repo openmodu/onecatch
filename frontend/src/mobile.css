@@ -81,6 +81,8 @@ button, input, textarea, select { font: inherit; }
 .mobile-round-button svg { width: 19px; height: 19px; stroke-width: 2; }
 .mobile-round-button:active { opacity: .5; }
 .mobile-topbar-title { min-width: 0; display: grid; justify-items: center; gap: 2px; text-align: center; }
+.mobile-topbar-heading { min-width: 0; max-width: 100%; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.mobile-topbar-heading > *:not(h1) { flex: 0 0 auto; }
 .mobile-topbar-title h1 { min-width: 0; max-width: 100%; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; font-weight: 600; letter-spacing: -.01em; line-height: 1.3; }
 .mobile-topbar-title > span, .mobile-worker-switch { min-width: 0; display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--muted-foreground); font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; white-space: nowrap; }
 .mobile-worker-switch { max-width: 100%; padding: 0; border: 0; background: transparent; }

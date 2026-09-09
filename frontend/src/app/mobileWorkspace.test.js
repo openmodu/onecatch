@@ -42,10 +42,11 @@ test("project rows carry a name and its recent activity, nothing else", async ()
 test("the paired machine is a switcher in the top bar", async () => {
   const source = await readFile(sourceURL, "utf8");
   assert.match(source, /function WorkerSwitchSheet\(/);
-  // The machine sits on the line under the page's name, where the page says
-  // where it runs — not squeezed into the action bar.
+  // The machine sits on the line under the page's name in the bar, where the
+  // page says where it runs — not squeezed in beside the actions.
   assert.match(source, /const switchWorker = workers\.length > 1 \? \(\) => setWorkerSwitchOpen\(true\) : null;/);
-  assert.match(source, /<PageHead title="项目" meta=\{meta\} onMeta=\{onMeta\} \/>/);
+  assert.match(source, /projects: \{ title: "项目", meta: workerMeta, onMeta: switchWorker \}/);
+  assert.match(source, /onMeta\s*\?\s*<button type="button" className="mobile-worker-switch"/);
   // Switching scope must not double as starting a task.
   const select = source.match(/const selectWorker = \(id\) => \{[\s\S]*?\n  \};/)[0];
   assert.match(select, /setView\("projects"\)/);
@@ -111,13 +112,14 @@ test("the transcript drops plumbing events and names what a tool touched", async
 test("a workspace path is shortened from its middle, not its end", async () => {
   const source = await readFile(sourceURL, "utf8");
   assert.doesNotMatch(source, /mobile-workspace-heading/, "the heading repeated the title bar");
-  // The path sits under the name it describes, where the session count used to
-  // repeat what the list below already shows.
-  // The page states where it lives; the bar carries only actions.
+  // The bar names the open project and says where it lives, on the line under
+  // it — so the page below is nothing but its list.
+  const header = source.match(/const headerIdentity = \{[\s\S]*?\}\[view\]/)[0];
+  assert.match(header, /title: workspaceLabel\(selectedWorkspace\)/);
+  assert.match(header, /shortenPath\(selectedWorkspace\?\.path\)/);
+  assert.match(header, /<RemoteWorkspaceBadge workspace=\{selectedWorkspace\}/);
   const sessionPage = source.slice(source.indexOf("function SessionList("), source.indexOf("function WorkspaceManagerPage("));
-  assert.match(sessionPage, /<PageHead title=/);
-  assert.match(sessionPage, /shortenPath\(workspace\?\.path\)/);
-  assert.match(sessionPage, /<RemoteWorkspaceBadge workspace=\{workspace\}/);
+  assert.doesNotMatch(sessionPage, /<PageHead/, "the page repeated the name the bar already carries");
   assert.doesNotMatch(source, /个会话`;/);
   assert.match(source, /\{shortenPath\(workspace\.path, 3\)\}/, "the manage card has room for one more segment");
 });

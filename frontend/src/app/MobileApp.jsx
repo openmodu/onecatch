@@ -150,11 +150,17 @@ function EmptyConnection({ onPair }) {
   </section>;
 }
 
-// Conversation titles stay visible while the message list scrolls.
-function Header({ onMenu, onBack, onMore, onNew, title, meta }) {
+// Every page names itself in the bar and keeps that name there while the list
+// or the transcript below it scrolls.
+function Header({ onMenu, onBack, onMore, onNew, title, meta, badge, onMeta }) {
   return <header className="mobile-topbar">
     <button type="button" className="mobile-round-button" aria-label={onBack ? "返回" : "打开侧栏"} onClick={onBack || onMenu}>{onBack ? <ArrowLeft /> : <Menu />}</button>
-    {title ? <div className="mobile-topbar-title"><h1 title={title}>{title}</h1>{meta && <span>{meta}</span>}</div> : <span />}
+    {title ? <div className="mobile-topbar-title">
+      <div className="mobile-topbar-heading"><h1 title={title}>{title}</h1>{badge}</div>
+      {meta && (onMeta
+        ? <button type="button" className="mobile-worker-switch" onClick={onMeta}>{meta}<ChevronDown /></button>
+        : <span>{meta}</span>)}
+    </div> : <span />}
     <button type="button" className="mobile-round-button" aria-label={onNew ? "新建会话" : "更多"} onClick={onNew || onMore}>{onNew ? <Plus /> : <MoreHorizontal />}</button>
   </header>;
 }
@@ -200,7 +206,7 @@ function BottomBar({ query, setQuery, onNew }) {
   </footer>;
 }
 
-function ProjectHome({ workspaces, conversations, query, meta, onMeta, onOpenWorkspace, onNew, onManage }) {
+function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew, onManage }) {
   const normalized = query.trim().toLowerCase();
   const visible = workspaces.filter((workspace) => {
     if (!normalized) return true;
@@ -208,7 +214,6 @@ function ProjectHome({ workspaces, conversations, query, meta, onMeta, onOpenWor
     return workspaceLabel(workspace).toLowerCase().includes(normalized) || sessions.some((item) => item.title.toLowerCase().includes(normalized));
   });
   return <div className="mobile-page mobile-project-page">
-    <PageHead title="项目" meta={meta} onMeta={onMeta} />
     <div className="mobile-project-list">
       {visible.map((workspace) => {
         const sessions = conversations.filter((item) => item.workspaceId === workspace.id);
@@ -229,7 +234,6 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
   const normalized = query.trim().toLowerCase();
   const visible = conversations.filter((item) => item.workspaceId === workspace?.id && (!normalized || item.title.toLowerCase().includes(normalized)));
   return <div className="mobile-page mobile-session-page">
-    <PageHead title={<span className="mobile-project-heading">{workspaceLabel(workspace)}<RemoteWorkspaceBadge workspace={workspace} /></span>} meta={[workspace?.remoteHost, shortenPath(workspace?.path)].filter(Boolean).join(" · ")} />
     <div className="mobile-session-list">
       {visible.map((conversation) => <button type="button" className="mobile-session-row" key={conversation.id} onClick={() => onOpen(conversation.id)}>
         <span className="mobile-session-copy"><strong>{conversation.title}</strong><small>{conversation.runtime} · {mobileConversationTurnCount(conversation.runs)} 轮 · {relativeTime(conversation.startedAt)}</small></span>
@@ -1018,14 +1022,26 @@ export default function MobileWorkbench() {
     document.activeElement?.blur?.();
     setView((current) => current === "conversation" ? "sessions" : "projects");
   }, []);
+  // What the page is belongs in the bar on every screen, not only in the
+  // conversation: a list should be nothing but its list.
+  const headerIdentity = {
+    projects: { title: "项目", meta: workerMeta, onMeta: switchWorker },
+    sessions: {
+      title: workspaceLabel(selectedWorkspace),
+      meta: [selectedWorkspace?.remoteHost, shortenPath(selectedWorkspace?.path)].filter(Boolean).join(" · "),
+      badge: <RemoteWorkspaceBadge workspace={selectedWorkspace} />,
+    },
+    conversation: { title: selectedConversation?.title || "新建会话", meta: `${workspaceLabel(selectedWorkspace)} · ${runtime}` },
+  }[view] || { title: "" };
   const goBack = ["conversation", "sessions", "workspaces"].includes(view) ? navigateBack : null;
   const backGestureBlocked = Boolean(drawerOpen || menuOpen || pairTarget !== undefined || contextOpen || workersOpen || workerSwitchOpen || confirmRequest || workspaceEditor !== undefined);
   useMobileBackGesture(shellRef, goBack, backGestureBlocked);
 
   return <div className="mobile-app-shell" ref={shellRef}>
     {goBack && !backGestureBlocked && <div className="mobile-back-gesture-edge" aria-hidden="true" />}
-    <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} title={view === "conversation" ? selectedConversation?.title || "新建会话" : ""} meta={view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : ""} />
-	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} meta={workerMeta} onMeta={switchWorker} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
+    <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null}
+      title={headerIdentity.title} meta={headerIdentity.meta} badge={headerIdentity.badge} onMeta={headerIdentity.onMeta} />
+	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
     <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
 	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
