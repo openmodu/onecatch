@@ -3,6 +3,11 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.7
+
+- Show durable context-compaction markers with before-and-after token counts across Codex, Claude Code, Modu Code, Pi, Grok Build, and DeepSeek Harness conversations.
+- Keep composer text and caret metrics aligned during multiline input so IME candidate windows stay anchored to the active cursor.
+
 ## 0.2.6
 
 - Speed up remote mobile conversations by reusing worker connections, opening at the newest page, and loading older history on demand.
