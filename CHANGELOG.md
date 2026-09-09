@@ -3,6 +3,14 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.8
+
+- Manage conversations from the phone: long-press a session to rename or delete it, and read its token spend and cache hit rate in the session menu.
+- Bring the usage board to the phone with each runtime's quota windows, the year-long activity heatmap, account totals, and a switch between 14 and 30 days of daily usage.
+- Name every mobile screen in its own title bar, fold the drawer's projects, order projects by latest activity, and pull the project and session lists to refresh them.
+- Mark each session with the agent that ran it, offer every runtime the paired worker supports, and stamp each message with the time it happened.
+- Check only the machine in use and answer a pull-to-refresh with summaries, so the phone spends less of its radio and less time waiting.
+
 ## 0.2.7
 
 - Show durable context-compaction markers with before-and-after token counts across Codex, Claude Code, Modu Code, Pi, Grok Build, and DeepSeek Harness conversations.
