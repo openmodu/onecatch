@@ -37,6 +37,31 @@ test("a turn without its body says so instead of showing only head and tail", ()
   assert.equal(mobileTranscriptNotice(run, settled), "", "an empty run stops promising more");
 });
 
+import { mobileEarlierEventCount } from "./mobileRuns.js";
+
+test("a windowed transcript offers the history the phone has not loaded", () => {
+  assert.equal(mobileEarlierEventCount({ eventsOffset: 250, eventsTotal: 450 }), 250);
+  assert.equal(mobileEarlierEventCount({ eventsOffset: 0, eventsTotal: 12 }), 0);
+  assert.equal(mobileEarlierEventCount(undefined), 0);
+});
+
+test("a summary refresh keeps the page the reader has open", () => {
+  const loaded = { id: "run_1", startedAt: "2026-09-08T10:00:00Z", status: "succeeded", events: [{ kind: "message", text: "hi" }], eventsOffset: 250, eventsTotal: 450 };
+  const summary = { id: "run_1", startedAt: "2026-09-08T10:00:00Z", status: "succeeded" };
+  const [merged] = mergeMobileRunSummaries([loaded], [summary]);
+  assert.equal(merged.events.length, 1);
+  assert.equal(merged.eventsOffset, 250, "a listing carries no transcript, so it cannot reset the window");
+  assert.equal(merged.eventsTotal, 450);
+});
+
+test("streamed output extends the newest end of a window", () => {
+  const run = { id: "run_1", events: [{ kind: "message", text: "a" }], eventsOffset: 40, eventsTotal: 41 };
+  const next = applyMobileRunFrame(run, { runId: "run_1", event: { kind: "message", text: "b" } });
+  assert.equal(next.events.length, 2);
+  assert.equal(next.eventsOffset, 40, "nothing was dropped from the front");
+  assert.equal(next.eventsTotal, 42);
+});
+
 import { applyMobileRunFrame, applyMobileRunFrames, conversationUsage, describeToolArguments, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity, sortMobileRuns, unwrapShellCommand } from "./mobileRuns.js";
 
 test("mobile task titles use the first compact prompt line", () => {

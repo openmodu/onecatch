@@ -66,7 +66,17 @@ type runState struct {
 	view   RunView
 	config worker.Config
 	cancel context.CancelFunc
+	// window is the transcript index the page last handed to the UI starts
+	// at. A local run keeps its whole transcript in view; this is what the
+	// phone has actually been given.
+	window int
 }
+
+// transcriptWindow bounds what opening a conversation loads. A long session's
+// transcript is unbounded, and every entry costs a bridge round trip and a
+// mounted component on the phone, so the newest page arrives first and earlier
+// ones are fetched only when the reader asks for them.
+const transcriptWindow = 200
 
 type Service struct {
 	registry *worker.Registry
@@ -360,22 +370,89 @@ func (s *Service) GetRun(id string) (RunView, error) {
 		s.mu.RUnlock()
 		return RunView{}, worker.RemoteError{Code: "mobile_run_not_found", Message: "run was not found on this device"}
 	}
+	view, held := copyRunView(state.view), len(state.view.Events)-state.window
+	s.mu.RUnlock()
+	if !view.Shared {
+		return s.localRunPage(state, len(view.Events)-max(transcriptWindow, held)), nil
+	}
+	config, err := s.enabledWorker(context.Background(), view.WorkerID)
+	if err != nil {
+		return view, err
+	}
+	// Refreshing keeps whatever history the reader has already loaded, so a
+	// poll cannot yank a conversation back to its newest page mid-scroll.
+	limit := max(transcriptWindow, len(view.Events))
+	remote, err := s.client.GetSharedRun(context.Background(), config, view.ID, worker.TranscriptWindow{Limit: limit})
+	if err != nil {
+		return view, err
+	}
+	remote.WorkerID, remote.Shared = config.ID, true
+	remote = mergeTranscriptWindow(view, remote)
+	s.cacheSharedRun(config, remote)
+	return remote, nil
+}
+
+// mergeTranscriptWindow keeps history the reader has already paged back to
+// when a refresh answers with a shorter window than the one on screen — an
+// older host that ignores the page size, or one that caps it. Without this a
+// poll a few seconds later silently throws their scrollback away.
+func mergeTranscriptWindow(cached, fresh RunView) RunView {
+	keep := fresh.EventsOffset - cached.EventsOffset
+	if len(cached.Events) == 0 || keep <= 0 || keep > len(cached.Events) {
+		return fresh
+	}
+	fresh.Events = append(append([]agentrun.Event{}, cached.Events[:keep]...), fresh.Events...)
+	fresh.EventsOffset = cached.EventsOffset
+	return fresh
+}
+
+// LoadEarlierRun extends a conversation one page further back.
+func (s *Service) LoadEarlierRun(id string) (RunView, error) {
+	s.mu.RLock()
+	state := s.runs[strings.TrimSpace(id)]
+	if state == nil {
+		s.mu.RUnlock()
+		return RunView{}, worker.RemoteError{Code: "mobile_run_not_found", Message: "run was not found on this device"}
+	}
 	view := copyRunView(state.view)
 	s.mu.RUnlock()
-	if view.Shared {
-		config, err := s.enabledWorker(context.Background(), view.WorkerID)
-		if err != nil {
-			return view, err
-		}
-		remote, err := s.client.GetSharedRun(context.Background(), config, view.ID)
-		if err != nil {
-			return view, err
-		}
-		remote.WorkerID, remote.Shared = config.ID, true
-		s.cacheSharedRun(config, remote)
-		return remote, nil
+	if !view.Shared {
+		return s.localRunPage(state, state.window-transcriptWindow), nil
 	}
-	return view, nil
+	if view.EventsOffset <= 0 {
+		return view, nil
+	}
+	config, err := s.enabledWorker(context.Background(), view.WorkerID)
+	if err != nil {
+		return view, err
+	}
+	earlier, err := s.client.GetSharedRun(context.Background(), config, view.ID,
+		worker.TranscriptWindow{Limit: transcriptWindow, Before: view.EventsOffset})
+	if err != nil {
+		return view, err
+	}
+	earlier.WorkerID, earlier.Shared = config.ID, true
+	earlier.Events = append(earlier.Events, view.Events...)
+	if earlier.EventsTotal < view.EventsTotal {
+		earlier.EventsTotal = view.EventsTotal
+	}
+	s.cacheSharedRun(config, earlier)
+	return earlier, nil
+}
+
+// localRunPage windows a run this phone executed itself. Its transcript is
+// held whole, so paging back is a slice rather than a request.
+func (s *Service) localRunPage(state *runState, start int) RunView {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	total := len(state.view.Events)
+	start = min(max(start, 0), total)
+	state.window = start
+	view := copyRunView(state.view)
+	view.EventsTotal = total
+	view.EventsOffset = start
+	view.Events = view.Events[start:]
+	return view
 }
 
 func (s *Service) ListRuns() []RunView {
@@ -397,7 +474,7 @@ func (s *Service) ListRunSummaries() []RunView {
 	items := make([]RunView, 0, len(s.runs))
 	for _, state := range s.runs {
 		view := state.view
-		view.Events = nil
+		view.Events, view.EventsOffset, view.EventsTotal = nil, 0, 0
 		if state.view.Result != nil {
 			result := *state.view.Result
 			view.Result = &result

@@ -90,6 +90,17 @@ export function ListWorkspaces(workerID) {
 }
 
 /**
+ * LoadEarlierRun extends an open conversation one transcript page further back.
+ * @param {string} id
+ * @returns {$CancellablePromise<mobile$0.RunView>}
+ */
+export function LoadEarlierRun(id) {
+    return $Call.ByID(913933000, id).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * @param {string} baseURL
  * @param {string} code
  * @returns {$CancellablePromise<worker$0.Info>}

@@ -96,7 +96,7 @@ func hostedRunView(run domainworkflows.Run, task domaintasks.Task, active bool) 
 	return view
 }
 
-func (h *hostedRuns) Get(ctx context.Context, id string) (worker.SharedRun, error) {
+func (h *hostedRuns) Get(ctx context.Context, id string, window worker.TranscriptWindow) (worker.SharedRun, error) {
 	detail, err := h.app.GetRunDetail(ctx, id)
 	if err != nil {
 		return worker.SharedRun{}, err
@@ -176,6 +176,12 @@ func (h *hostedRuns) Get(ctx context.Context, id string) (worker.SharedRun, erro
 		view.Events = append(view.Events, agentrun.Event{Kind: "user_message", Text: item.Content, At: item.CreatedAt})
 	}
 	sort.SliceStable(view.Events, func(i, j int) bool { return view.Events[i].At.Before(view.Events[j].At) })
+	// Opening a conversation on the phone ships the newest page rather than
+	// years of history: every entry costs a JSON round trip through the
+	// WebView bridge and a mounted component. Offsets count from the start of
+	// the transcript, so a page stays addressable while the run appends.
+	view.EventsTotal = len(view.Events)
+	view.Events, view.EventsOffset = window.Apply(view.Events)
 	result := agentrun.Result{Succeeded: view.Status == "succeeded"}
 	for _, step := range detail.StepRuns {
 		result.Usage.InputTokens += step.InputTokens
@@ -220,7 +226,7 @@ func (h *hostedRuns) Start(ctx context.Context, input worker.SharedRunInput) (wo
 		if err != nil {
 			return worker.SharedRun{}, err
 		}
-		return h.Get(ctx, run.ID)
+		return h.Get(ctx, run.ID, worker.TranscriptWindow{})
 	}
 	task, err := h.app.CreateTask(ctx, CreateTaskInput{WorkspaceID: input.WorkspaceID, Title: taskTitleFromPrompt(input.Prompt, "新建任务"), Prompt: input.Prompt,
 		WorkflowID: directAgentWorkflowID, Sandbox: string(agentrun.SandboxWorkspaceWrite), Harness: input.Runtime,
@@ -232,18 +238,18 @@ func (h *hostedRuns) Start(ctx context.Context, input worker.SharedRunInput) (wo
 	if err != nil {
 		return worker.SharedRun{}, err
 	}
-	return h.Get(ctx, run.ID)
+	return h.Get(ctx, run.ID, worker.TranscriptWindow{})
 }
 
 func (h *hostedRuns) Interrupt(ctx context.Context, id string) error {
-	if _, err := h.Get(ctx, id); err != nil {
+	if _, err := h.Get(ctx, id, worker.TranscriptWindow{}); err != nil {
 		return err
 	}
 	_, err := h.app.InterruptRun(ctx, id)
 	return err
 }
 func (h *hostedRuns) RespondPermission(ctx context.Context, id, requestID, decision string) error {
-	if _, err := h.Get(ctx, id); err != nil {
+	if _, err := h.Get(ctx, id, worker.TranscriptWindow{}); err != nil {
 		return err
 	}
 	return h.app.RespondPermission(PermissionDecisionInput{RunID: id, RequestID: requestID, Decision: decision})

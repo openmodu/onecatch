@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"context"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -174,6 +175,38 @@ func TestManageRemoteWorkspaceLifecycle(t *testing.T) {
 	items, err = service.ListWorkspaces(context.Background(), paired.ID)
 	if err != nil || len(items) != 0 {
 		t.Fatalf("workspaces after remove = %+v, %v", items, err)
+	}
+}
+
+func TestRefreshKeepsHistoryTheReaderPagedBackTo(t *testing.T) {
+	events := func(from, count int) []agentrun.Event {
+		items := make([]agentrun.Event, 0, count)
+		for i := range count {
+			items = append(items, agentrun.Event{Kind: agentrun.KindMessage, Text: fmt.Sprintf("entry-%d", from+i)})
+		}
+		return items
+	}
+	// The reader has paged back to 40; a host that answers with a shorter
+	// window must not cost them the scrollback.
+	cached := RunView{Events: events(40, 60), EventsOffset: 40, EventsTotal: 100}
+	fresh := RunView{Events: events(80, 20), EventsOffset: 80, EventsTotal: 100}
+	merged := mergeTranscriptWindow(cached, fresh)
+	if merged.EventsOffset != 40 || len(merged.Events) != 60 {
+		t.Fatalf("merged window = %d events at %d", len(merged.Events), merged.EventsOffset)
+	}
+	for i, event := range merged.Events {
+		if want := fmt.Sprintf("entry-%d", 40+i); event.Text != want {
+			t.Fatalf("entry %d = %q, want %q", i, event.Text, want)
+		}
+	}
+	// A page that already reaches further back wins, and a gap is not bridged.
+	longer := RunView{Events: events(20, 80), EventsOffset: 20, EventsTotal: 100}
+	if merged := mergeTranscriptWindow(cached, longer); merged.EventsOffset != 20 || len(merged.Events) != 80 {
+		t.Fatalf("longer window = %d events at %d", len(merged.Events), merged.EventsOffset)
+	}
+	gapped := RunView{Events: events(160, 20), EventsOffset: 160, EventsTotal: 180}
+	if merged := mergeTranscriptWindow(cached, gapped); merged.EventsOffset != 160 || len(merged.Events) != 20 {
+		t.Fatalf("gapped window = %d events at %d", len(merged.Events), merged.EventsOffset)
 	}
 }
 

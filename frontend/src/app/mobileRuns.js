@@ -70,7 +70,8 @@ export function mobileRunFingerprint(run = {}) {
   return [
     run.id, run.conversationId, run.workerId, run.workspaceId, run.runtime,
     run.prompt, run.title, run.turnCount, run.status, run.shared ? 1 : 0, run.error,
-    run.startedAt, run.finishedAt, events.length, JSON.stringify(events.map(eventFingerprint)),
+    run.startedAt, run.finishedAt, run.eventsOffset, run.eventsTotal,
+    events.length, JSON.stringify(events.map(eventFingerprint)),
     run.result?.sessionId, run.result?.succeeded ? 1 : 0,
     run.result?.finalMessage, run.result?.usage?.inputTokens,
     run.result?.usage?.outputTokens,
@@ -84,9 +85,12 @@ export function mergeMobileRunSummaries(current = [], incoming = []) {
   const merged = sortMobileRuns(incoming.map((summary) => {
     const existing = previous.get(summary.id);
     if (!existing) return summary;
+    const carried = summary.events?.length;
     const next = {
       ...summary,
-      events: summary.events?.length ? summary.events : existing.events,
+      events: carried ? summary.events : existing.events,
+      eventsOffset: carried ? summary.eventsOffset : existing.eventsOffset,
+      eventsTotal: carried ? summary.eventsTotal : existing.eventsTotal,
       result: summary.result || existing.result,
     };
     return mobileRunFingerprint(existing) === mobileRunFingerprint(next) ? existing : next;
@@ -98,7 +102,12 @@ export function mergeMobileRunSummaries(current = [], incoming = []) {
 export function applyMobileRunFrame(run, frame) {
   if (!run || !frame?.runId || run.id !== frame.runId) return run;
   const next = { ...run };
-  if (frame.event) next.events = [...(run.events || []), frame.event].slice(-MAX_VISIBLE_EVENTS);
+  if (frame.event) {
+    const events = [...(run.events || []), frame.event];
+    next.events = events.slice(-MAX_VISIBLE_EVENTS);
+    next.eventsTotal = (run.eventsTotal || run.events?.length || 0) + 1;
+    next.eventsOffset = (run.eventsOffset || 0) + Math.max(0, events.length - next.events.length);
+  }
   if (frame.status) next.status = frame.status;
   if (frame.result) next.result = frame.result;
   if (frame.error) next.error = frame.error;
@@ -228,6 +237,12 @@ export function groupMobileTranscriptEvents(items = []) {
 
 export function mobileConversationID(run) {
   return String(run?.conversationId || run?.id || "");
+}
+
+// Opening a conversation ships the newest page of each turn. What is left on
+// the host is offered rather than silently dropped.
+export function mobileEarlierEventCount(run) {
+  return Math.max(0, Number(run?.eventsOffset) || 0);
 }
 
 export function mobileConversationTurnCount(runs = []) {

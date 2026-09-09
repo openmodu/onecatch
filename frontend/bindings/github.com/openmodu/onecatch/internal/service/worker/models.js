@@ -271,6 +271,23 @@ export class SharedRun {
         }
         if (/** @type {any} */(false)) {
             /**
+             * EventsTotal is the length of the whole transcript and EventsOffset the
+             * index Events starts at, so a phone that was handed the newest page can
+             * tell how much history is still on the host and ask for the page before.
+             * @member
+             * @type {number | undefined}
+             */
+            this["eventsTotal"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["eventsOffset"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * @member
              * @type {agentrun$0.Result | null | undefined}
              */
@@ -308,13 +325,13 @@ export class SharedRun {
      */
     static createFrom($$source = {}) {
         const $$createField10_0 = $$createType2;
-        const $$createField11_0 = $$createType4;
+        const $$createField13_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("events" in $$parsedSource) {
             $$parsedSource["events"] = $$createField10_0($$parsedSource["events"]);
         }
         if ("result" in $$parsedSource) {
-            $$parsedSource["result"] = $$createField11_0($$parsedSource["result"]);
+            $$parsedSource["result"] = $$createField13_0($$parsedSource["result"]);
         }
         return new SharedRun(/** @type {Partial<SharedRun>} */($$parsedSource));
     }

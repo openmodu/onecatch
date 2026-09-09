@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -211,7 +212,7 @@ func TestHostedRunsImportLegacyHistoryOnce(t *testing.T) {
 	if err != nil || len(page.Items) != 0 {
 		t.Fatalf("hidden history = %+v, %v", page, err)
 	}
-	if _, err := host.Get(ctx, input.ID); err == nil {
+	if _, err := host.Get(ctx, input.ID, worker.TranscriptWindow{}); err == nil {
 		t.Fatal("hidden run was exposed")
 	}
 	if _, err := host.Import(ctx, input); err == nil {
@@ -274,5 +275,99 @@ func TestHostedRunsMigratePhoneCacheAndPaginate(t *testing.T) {
 	}
 	if views := phone.ListRuns(); len(views) != 106 {
 		t.Fatalf("reconnect run count = %d", len(views))
+	}
+}
+
+func TestHostedTranscriptArrivesNewestPageFirst(t *testing.T) {
+	ctx := context.Background()
+	app, store := newLocalTestApp(t, completingEngine{})
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := worker.NewServer("test-host", "Desktop", "secret", nil, app.runtimes, 1)
+	server.SetSharedRuns(&hostedRuns{app: app})
+	mappings, err := app.hostedWorkspaces(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.SetSharedWorkspaces(mappings)
+	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+	phone, err := mobile.NewService(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer phone.Close()
+	if _, err := phone.PairWorker(ctx, httpServer.URL, "PAIR1234"); err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: directAgentWorkflowID, Title: "long task", Prompt: "long prompt", Harness: "modu", Sandbox: "workspace-write"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := app.StartRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if views := phone.ListRuns(); len(views) != 1 {
+		t.Fatalf("phone history = %+v", views)
+	}
+	awaitHostedStatus(t, phone, run.ID, "succeeded")
+	detail, err := app.GetRunDetail(ctx, run.ID)
+	if err != nil || len(detail.StepRuns) == 0 {
+		t.Fatalf("run detail = %+v, %v", detail, err)
+	}
+	// A long session: opening it must not ship the whole history at once.
+	const total = 450
+	at := time.Now().UTC()
+	for i := range total {
+		payload := fmt.Sprintf(`{"kind":"message","text":"entry-%d","at":%q}`, i, at.Add(time.Duration(i)*time.Millisecond).Format(time.RFC3339Nano))
+		if _, err := store.Repos.Workflows.AppendRuntimeEvent(ctx, run.ID, detail.StepRuns[0].ID, json.RawMessage(payload)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	view, err := phone.GetRun(run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.EventsTotal < total || len(view.Events) != 200 || view.EventsOffset != view.EventsTotal-200 {
+		t.Fatalf("first page = %d events at %d of %d", len(view.Events), view.EventsOffset, view.EventsTotal)
+	}
+	if last := view.Events[len(view.Events)-1]; last.Text != fmt.Sprintf("entry-%d", total-1) {
+		t.Fatalf("first page ends at %q, want the newest entry", last.Text)
+	}
+	// Paging back grows one page at a time and joins without a gap.
+	for {
+		offset := view.EventsOffset
+		if view, err = phone.LoadEarlierRun(run.ID); err != nil {
+			t.Fatal(err)
+		}
+		if view.EventsOffset+len(view.Events) != view.EventsTotal {
+			t.Fatalf("page %d..%d does not reach the newest entry of %d", view.EventsOffset, view.EventsOffset+len(view.Events), view.EventsTotal)
+		}
+		if view.EventsOffset == 0 {
+			break
+		}
+		if view.EventsOffset != offset-200 {
+			t.Fatalf("earlier page starts at %d, want %d", view.EventsOffset, offset-200)
+		}
+	}
+	if len(view.Events) != view.EventsTotal {
+		t.Fatalf("full transcript = %d entries, want %d", len(view.Events), view.EventsTotal)
+	}
+	for index, event := range view.Events[view.EventsTotal-total:] {
+		if want := fmt.Sprintf("entry-%d", index); event.Text != want {
+			t.Fatalf("entry %d = %q, want %q", index, event.Text, want)
+		}
+	}
+	// Reaching the start is idempotent, and a refresh keeps the loaded history.
+	if again, err := phone.LoadEarlierRun(run.ID); err != nil || len(again.Events) != len(view.Events) {
+		t.Fatalf("re-reading the first page = %d entries, %v", len(again.Events), err)
+	}
+	refreshed, err := phone.GetRun(run.ID)
+	if err != nil || len(refreshed.Events) != len(view.Events) {
+		t.Fatalf("refresh = %d entries, want %d (%v)", len(refreshed.Events), len(view.Events), err)
 	}
 }

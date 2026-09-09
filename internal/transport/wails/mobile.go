@@ -54,6 +54,11 @@ func (b *MobileBinding) GetRun(id string) (mobileservice.RunView, error) {
 	return b.service.GetRun(id)
 }
 
+// LoadEarlierRun extends an open conversation one transcript page further back.
+func (b *MobileBinding) LoadEarlierRun(id string) (mobileservice.RunView, error) {
+	return b.service.LoadEarlierRun(id)
+}
+
 func (b *MobileBinding) ListRuns() []mobileservice.RunView {
 	return b.service.ListRuns()
 }

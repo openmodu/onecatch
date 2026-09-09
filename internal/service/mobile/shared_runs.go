@@ -89,7 +89,10 @@ func (s *Service) syncSharedRuns(ctx context.Context) {
 			view.WorkerID, view.Shared = config.ID, true
 			found[view.ID] = true
 			if previous := s.runs[view.ID]; previous != nil {
+				// A listing carries no transcript, so the page the reader has
+				// open survives the sync that refreshes its metadata.
 				view.Events = previous.view.Events
+				view.EventsOffset, view.EventsTotal = previous.view.EventsOffset, previous.view.EventsTotal
 				view.Result = previous.view.Result
 				if sameRunMetadata(previous.view, view) {
 					continue

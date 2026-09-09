@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,10 +27,15 @@ type SharedRun struct {
 	Status         string           `json:"status"`
 	Shared         bool             `json:"shared,omitempty"`
 	Events         []agentrun.Event `json:"events,omitempty"`
-	Result         *agentrun.Result `json:"result,omitempty"`
-	Error          string           `json:"error,omitempty"`
-	StartedAt      time.Time        `json:"startedAt"`
-	FinishedAt     *time.Time       `json:"finishedAt,omitempty"`
+	// EventsTotal is the length of the whole transcript and EventsOffset the
+	// index Events starts at, so a phone that was handed the newest page can
+	// tell how much history is still on the host and ask for the page before.
+	EventsTotal  int              `json:"eventsTotal,omitempty"`
+	EventsOffset int              `json:"eventsOffset,omitempty"`
+	Result       *agentrun.Result `json:"result,omitempty"`
+	Error        string           `json:"error,omitempty"`
+	StartedAt    time.Time        `json:"startedAt"`
+	FinishedAt   *time.Time       `json:"finishedAt,omitempty"`
 }
 
 type SharedRunInput struct {
@@ -47,9 +53,33 @@ type SharedRunPage struct {
 	NextCursor string      `json:"nextCursor,omitempty"`
 }
 
+// TranscriptWindow asks for one page of a run's transcript, counted from the
+// start of the transcript so offsets stay valid while a run keeps appending.
+type TranscriptWindow struct {
+	// Limit bounds the page; 0 asks for the whole transcript.
+	Limit int
+	// Before is the exclusive end of the page. Zero or less asks for the
+	// newest page, which is what opening a conversation wants.
+	Before int
+}
+
+// Apply slices the assembled transcript to the requested page and reports
+// where that page starts.
+func (w TranscriptWindow) Apply(events []agentrun.Event) ([]agentrun.Event, int) {
+	end := len(events)
+	if w.Before > 0 && w.Before < end {
+		end = w.Before
+	}
+	start := 0
+	if w.Limit > 0 && end-w.Limit > 0 {
+		start = end - w.Limit
+	}
+	return events[start:end], start
+}
+
 type SharedRuns interface {
 	List(context.Context, string) (SharedRunPage, error)
-	Get(context.Context, string) (SharedRun, error)
+	Get(context.Context, string, TranscriptWindow) (SharedRun, error)
 	Start(context.Context, SharedRunInput) (SharedRun, error)
 	Import(context.Context, SharedRun) (SharedRun, error)
 	Interrupt(context.Context, string) error
@@ -75,7 +105,10 @@ func (s *Server) sharedRunsHandler(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodGet && id == "":
 		value, err = s.sharedRuns.List(r.Context(), r.URL.Query().Get("cursor"))
 	case r.Method == http.MethodGet:
-		value, err = s.sharedRuns.Get(r.Context(), id)
+		query := r.URL.Query()
+		limit, _ := strconv.Atoi(query.Get("limit"))
+		before, _ := strconv.Atoi(query.Get("before"))
+		value, err = s.sharedRuns.Get(r.Context(), id, TranscriptWindow{Limit: limit, Before: before})
 	case strings.HasSuffix(r.URL.Path, "/interrupt"):
 		err = s.sharedRuns.Interrupt(r.Context(), id)
 	case strings.Contains(r.URL.Path, "/permissions/"):
@@ -107,9 +140,20 @@ func (c *Client) ListSharedRuns(ctx context.Context, config Config, cursor strin
 	err := c.do(ctx, config, http.MethodGet, "/v1/shared-runs?cursor="+url.QueryEscape(cursor), nil, &page)
 	return page, err
 }
-func (c *Client) GetSharedRun(ctx context.Context, config Config, id string) (SharedRun, error) {
+func (c *Client) GetSharedRun(ctx context.Context, config Config, id string, window TranscriptWindow) (SharedRun, error) {
 	var run SharedRun
-	err := c.do(ctx, config, http.MethodGet, "/v1/shared-runs/"+url.PathEscape(id), nil, &run)
+	path := "/v1/shared-runs/" + url.PathEscape(id)
+	query := url.Values{}
+	if window.Limit > 0 {
+		query.Set("limit", strconv.Itoa(window.Limit))
+	}
+	if window.Before > 0 {
+		query.Set("before", strconv.Itoa(window.Before))
+	}
+	if len(query) > 0 {
+		path += "?" + query.Encode()
+	}
+	err := c.do(ctx, config, http.MethodGet, path, nil, &run)
 	return run, err
 }
 func (c *Client) StartSharedRun(ctx context.Context, config Config, input SharedRunInput) (SharedRun, error) {

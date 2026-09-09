@@ -41,7 +41,7 @@ func (h *hostedRuns) Import(ctx context.Context, input worker.SharedRun) (worker
 		}
 		for _, event := range events {
 			if event.Type == "mobile.imported" {
-				return h.Get(ctx, input.ID)
+				return h.Get(ctx, input.ID, worker.TranscriptWindow{})
 			}
 		}
 	}
@@ -118,5 +118,5 @@ func (h *hostedRuns) Import(ctx context.Context, input worker.SharedRun) (worker
 	if _, err := repo.AppendEvent(ctx, domainworkflows.WorkflowEvent{RunID: input.ID, Type: "mobile.imported", Payload: localEventPayload(map[string]any{"prompt": input.Prompt, "originalSandbox": "read-only", "originalStatus": input.Status}), At: time.Now().UTC()}); err != nil {
 		return worker.SharedRun{}, err
 	}
-	return h.Get(ctx, input.ID)
+	return h.Get(ctx, input.ID, worker.TranscriptWindow{})
 }

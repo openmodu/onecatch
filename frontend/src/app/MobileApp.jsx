@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Events } from "@wailsio/runtime";
 import {
   Activity,
@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  ChevronUp,
   CircleAlert,
   Cloud,
   Cpu,
@@ -48,7 +49,7 @@ import { errorMessage, formatDuration, formatTime, formatToolTime, compactTokens
 import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { createFrameBatcher } from "./frameBatcher.js";
 import { createWorkspaceLoader } from "./mobileWorkspaceLoader.js";
-import { needsMobileRunDetail, mobileConversationTurnCount, mobileRunDetailRecord, mobileTranscriptNotice } from "./mobileRuns.js";
+import { needsMobileRunDetail, mobileConversationTurnCount, mobileEarlierEventCount, mobileRunDetailRecord, mobileTranscriptNotice } from "./mobileRuns.js";
 import { useMobileBackGesture } from "./mobileBackGesture.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useMobileViewportFrame } from "./mobileViewport.js";
@@ -399,12 +400,16 @@ function AgentEvent({ run, event, index, permissionBusy, onRespond }) {
   </details>;
 }
 
-const ConversationTurn = memo(function ConversationTurn({ run, notice = "", permissionBusy, onRespond }) {
+const ConversationTurn = memo(function ConversationTurn({ run, notice = "", earlierBusy = false, permissionBusy, onRespond, onLoadEarlier }) {
   const visibleEvents = foldMobileEvents(run.events || []);
   const blocks = groupMobileTranscriptEvents(visibleEvents);
   const visibleRun = { ...run, events: visibleEvents };
+  const earlier = mobileEarlierEventCount(run);
   return <section className="mobile-turn">
     <UserMessage text={run.prompt} />
+    {earlier > 0 && <button type="button" className="mobile-load-earlier" disabled={earlierBusy} onClick={() => onLoadEarlier?.(run.id)}>
+      {earlierBusy ? <LoaderCircle className="animate-spin" /> : <ChevronUp />}载入更早的 {earlier} 条记录
+    </button>}
     {blocks.map((block, index) => {
       if (block.type === "tools") return <ToolGroup key={`tools-${block.events[0]?.streamId || index}`} events={block.events} active={run.status === "running" && index === blocks.length - 1} />;
       const event = block.event;
@@ -419,13 +424,15 @@ const ConversationTurn = memo(function ConversationTurn({ run, notice = "", perm
   </section>;
 });
 
-function ConversationView({ conversation, workspace, snapshot, sharedRuns, prompt, setPrompt, busy, permissionBusy, runtime, transcriptNotice, onOpenContext, onStart, onInterrupt, onRespond }) {
+function ConversationView({ conversation, workspace, snapshot, sharedRuns, prompt, setPrompt, busy, permissionBusy, runtime, transcriptNotice, onOpenContext, onStart, onInterrupt, onRespond, onLoadEarlier }) {
   const runs = conversation?.runs || [];
   const running = runs.find((item) => item.status === "running");
   const latest = runs.at(-1);
   const canSend = prompt.trim() && !running && !busy && (sharedRuns || (snapshot?.isRepo && !snapshot?.status && !(snapshot?.files || []).length));
   const transcriptRef = useRef(null);
   const pinnedRef = useRef(true);
+  const anchorRef = useRef(0);
+  const [earlierBusy, setEarlierBusy] = useState("");
   const promptRef = useRef(null);
   const transcriptLength = useMemo(() => runs.reduce((total, run) => total + (run.events || []).reduce((size, event) => size + 1 + String(event.text || "").length, 0), 0), [runs]);
 
@@ -436,6 +443,22 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
     const element = transcriptRef.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [conversation?.id]);
+  // Prepending earlier history moves everything the reader is looking at down
+  // the page. Restore the distance to the bottom before the browser paints, so
+  // the entry under their thumb stays put.
+  useLayoutEffect(() => {
+    const element = transcriptRef.current;
+    if (!element || !anchorRef.current) return;
+    element.scrollTop = element.scrollHeight - anchorRef.current;
+    anchorRef.current = 0;
+  }, [transcriptLength]);
+  const loadEarlier = async (runID) => {
+    const element = transcriptRef.current;
+    pinnedRef.current = false;
+    anchorRef.current = element ? element.scrollHeight - element.scrollTop : 0;
+    setEarlierBusy(runID);
+    try { await onLoadEarlier?.(runID); } finally { setEarlierBusy(""); }
+  };
   useEffect(() => {
     const element = transcriptRef.current;
     if (!element || !pinnedRef.current) return undefined;
@@ -460,7 +483,7 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
       onScroll={() => { pinnedRef.current = isPinnedToBottom(transcriptRef.current); }}
     >
       {!runs.length && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)} · {sharedRuns ? "与桌面共用任务和运行记录" : "Agent 在远端以只读模式运行"}</p></section>}
-      {runs.map((run) => <ConversationTurn key={run.id} run={run} notice={transcriptNotice(run)} permissionBusy={permissionBusy} onRespond={onRespond} />)}
+      {runs.map((run) => <ConversationTurn key={run.id} run={run} notice={transcriptNotice(run)} earlierBusy={earlierBusy === run.id} permissionBusy={permissionBusy} onRespond={onRespond} onLoadEarlier={loadEarlier} />)}
     </main>
     <footer className="mobile-composer-wrap">
       {Boolean(!sharedRuns && snapshot && (!snapshot.isRepo || snapshot.status || (snapshot.files || []).length)) && <div className="mobile-workspace-alert"><CircleAlert />远端工作区需要保持干净才能开始只读任务</div>}
@@ -902,6 +925,14 @@ export default function MobileWorkbench() {
     finally { setBusy(""); }
   };
 
+  const loadEarlierRun = async (runID) => {
+    try {
+      const detail = await MobileBinding.LoadEarlierRun(runID);
+      loadedRunDetailsRef.current.set(runID, mobileRunDetailRecord(detail, loadedRunDetailsRef.current.get(runID)));
+      setRuns((items) => mergeMobileRun(items, detail));
+    } catch (error) { notify("error", `载入更早的记录失败：${errorMessage(error)}`); }
+  };
+
   const interruptRun = async (runID) => {
     setBusy("interrupt");
     try { await MobileBinding.InterruptRun(runID); notify("info", "已请求 Worker 停止运行"); }
@@ -994,7 +1025,7 @@ export default function MobileWorkbench() {
   return <div className="mobile-app-shell" ref={shellRef}>
     {goBack && !backGestureBlocked && <div className="mobile-back-gesture-edge" aria-hidden="true" />}
     <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null} title={view === "conversation" ? selectedConversation?.title || "新建会话" : ""} meta={view === "conversation" ? `${workspaceLabel(selectedWorkspace)} · ${runtime}` : ""} />
-	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} meta={workerMeta} onMeta={switchWorker} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} />}
+	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} meta={workerMeta} onMeta={switchWorker} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
     <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
 	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
