@@ -17,18 +17,19 @@ const (
 )
 
 type runtimeEventCollector struct {
-	mu           sync.Mutex
-	runID        string
-	stepRunID    string
-	persist      func(agentrun.Event) (int64, error)
-	publisher    RuntimeEventPublisher
-	liveEvery    time.Duration
-	durableEvery time.Duration
-	streams      map[string]*runtimeStreamState
-	liveTimer    *time.Timer
-	durableTimer *time.Timer
-	closed       bool
-	err          error
+	mu            sync.Mutex
+	runID         string
+	stepRunID     string
+	persist       func(agentrun.Event) (int64, error)
+	publisher     RuntimeEventPublisher
+	liveEvery     time.Duration
+	durableEvery  time.Duration
+	streams       map[string]*runtimeStreamState
+	liveTimer     *time.Timer
+	durableTimer  *time.Timer
+	closed        bool
+	err           error
+	contextTokens int
 }
 
 type runtimeStreamState struct {
@@ -44,12 +45,16 @@ type runtimeStreamState struct {
 	ended       bool
 }
 
-func newRuntimeEventCollector(runID, stepRunID string, persist func(agentrun.Event) (int64, error), publisher RuntimeEventPublisher) *runtimeEventCollector {
-	return &runtimeEventCollector{
+func newRuntimeEventCollector(runID, stepRunID string, persist func(agentrun.Event) (int64, error), publisher RuntimeEventPublisher, initialContextTokens ...int) *runtimeEventCollector {
+	collector := &runtimeEventCollector{
 		runID: runID, stepRunID: stepRunID, persist: persist, publisher: publisher,
 		liveEvery: defaultLiveFlush, durableEvery: defaultDurableFlush,
 		streams: make(map[string]*runtimeStreamState),
 	}
+	if len(initialContextTokens) > 0 {
+		collector.contextTokens = initialContextTokens[0]
+	}
+	return collector
 }
 
 func (c *runtimeEventCollector) Sink() agentrun.Sink { return c.Push }
@@ -59,6 +64,17 @@ func (c *runtimeEventCollector) Push(event agentrun.Event) {
 	defer c.mu.Unlock()
 	if c.closed {
 		return
+	}
+	if event.Kind == agentrun.KindUsage && event.Context != nil && event.Context.Tokens > 0 {
+		before, after := c.contextTokens, event.Context.Tokens
+		if contextWasCompacted(before, after) {
+			c.flushAllLocked()
+			text, _ := json.Marshal(map[string]int{"beforeTokens": before, "afterTokens": after, "contextWindow": event.Context.Window})
+			compaction := agentrun.Event{Kind: agentrun.KindContextCompaction, Text: string(text), At: event.At}
+			seq := c.persistLocked(compaction)
+			c.publishLocked(seq, compaction)
+		}
+		c.contextTokens = after
 	}
 	switch event.Phase {
 	case agentrun.StreamDelta:
@@ -78,6 +94,13 @@ func (c *runtimeEventCollector) Push(event agentrun.Event) {
 		seq := c.persistLocked(event)
 		c.publishLocked(seq, event)
 	}
+}
+
+// Prompt occupancy should grow across calls in one resumed session. Providers
+// occasionally fluctuate by a small amount as cache accounting settles, so a
+// compaction requires both a useful absolute drop and a substantial ratio.
+func contextWasCompacted(before, after int) bool {
+	return before > 0 && after > 0 && before-after >= 4_096 && int64(after)*4 <= int64(before)*3
 }
 
 func (c *runtimeEventCollector) ensureStreamLocked(event agentrun.Event) *runtimeStreamState {
@@ -252,7 +275,7 @@ func retainsRaw(kind agentrun.EventKind) bool {
 	return kind == agentrun.KindUsage || kind == agentrun.KindResult
 }
 
-func (s *Usecase) newRuntimeCollector(runID, stepRunID string) *runtimeEventCollector {
+func (s *Usecase) newRuntimeCollector(runID, stepRunID string, initialContextTokens ...int) *runtimeEventCollector {
 	persist := func(event agentrun.Event) (int64, error) {
 		if !retainsRaw(event.Kind) {
 			event.Raw = ""
@@ -267,7 +290,7 @@ func (s *Usecase) newRuntimeCollector(runID, stepRunID string) *runtimeEventColl
 		}
 		return stored.Seq, nil
 	}
-	return newRuntimeEventCollector(runID, stepRunID, persist, s.runtimePublisher)
+	return newRuntimeEventCollector(runID, stepRunID, persist, s.runtimePublisher, initialContextTokens...)
 }
 
 func collectorError(err error) error {

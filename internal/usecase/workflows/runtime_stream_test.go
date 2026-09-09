@@ -55,6 +55,46 @@ func TestRuntimeEventCollectorKeepsAtomicEvents(t *testing.T) {
 	}
 }
 
+func TestRuntimeEventCollectorPersistsContextCompactionAcrossAttempts(t *testing.T) {
+	var stored []agentrun.Event
+	publisher := &collectingPublisher{}
+	collector := newRuntimeEventCollector("run-1", "step-2", func(event agentrun.Event) (int64, error) {
+		stored = append(stored, event)
+		return int64(len(stored)), nil
+	}, publisher, 180_000)
+	collector.Push(agentrun.Event{
+		Kind:    agentrun.KindUsage,
+		Context: &agentrun.ContextUsage{Window: 200_000, Tokens: 32_000},
+		At:      time.Unix(2, 0),
+	})
+	if err := collector.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(stored) != 2 || stored[0].Kind != agentrun.KindContextCompaction || stored[1].Kind != agentrun.KindUsage {
+		t.Fatalf("stored = %+v", stored)
+	}
+	var details map[string]int
+	if err := json.Unmarshal([]byte(stored[0].Text), &details); err != nil {
+		t.Fatal(err)
+	}
+	if details["beforeTokens"] != 180_000 || details["afterTokens"] != 32_000 || details["contextWindow"] != 200_000 {
+		t.Fatalf("compaction details = %+v", details)
+	}
+	if len(publisher.frames) != 2 || publisher.frames[0].Kind != agentrun.KindContextCompaction {
+		t.Fatalf("published = %+v", publisher.frames)
+	}
+}
+
+func TestContextCompactionDetectionIgnoresSmallAccountingFluctuations(t *testing.T) {
+	if contextWasCompacted(90_000, 87_000) {
+		t.Fatal("a small usage fluctuation was treated as compaction")
+	}
+	if !contextWasCompacted(90_000, 60_000) {
+		t.Fatal("a substantial context drop was not treated as compaction")
+	}
+}
+
 // Raw is the whole JSONL line the provider emitted, so for a tool result or a
 // message it duplicates the payload the event already carries — on a real
 // transcript that was 2.7MB of a 3.3MB file. Nothing reads it back except the
@@ -69,6 +109,7 @@ func TestRetainsRawOnlyForEventsThatCanCarryUsage(t *testing.T) {
 	for _, kind := range []agentrun.EventKind{
 		agentrun.KindMessage, agentrun.KindReasoning, agentrun.KindToolUse,
 		agentrun.KindToolResult, agentrun.KindFileChange, agentrun.KindStarted, agentrun.KindError,
+		agentrun.KindContextCompaction,
 	} {
 		if retainsRaw(kind) {
 			t.Errorf("%s duplicates its own payload in Raw and must not keep it", kind)

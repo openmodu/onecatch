@@ -943,8 +943,14 @@ func TestModuRunnerUsesPrintModeAndParsesStream(t *testing.T) {
 	if result.Usage.InputTokens != 114 || result.Usage.CachedInputTokens != 80 || result.Usage.CacheCreationInputTokens != 2 || result.Usage.OutputTokens != 10 {
 		t.Fatalf("Usage = %+v", result.Usage)
 	}
+	if result.Context.Tokens != 70 {
+		t.Fatalf("Context = %+v", result.Context)
+	}
 	if countKind(events, KindStarted) != 1 || countKind(events, KindMessage) != 5 || countKind(events, KindToolUse) != 1 || countKind(events, KindToolResult) != 1 || countKind(events, KindResult) != 1 {
 		t.Fatalf("events = %+v", events)
+	}
+	if countKind(events, KindUsage) != 2 {
+		t.Fatalf("usage events = %d, want 2", countKind(events, KindUsage))
 	}
 }
 

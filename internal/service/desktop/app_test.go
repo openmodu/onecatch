@@ -74,6 +74,17 @@ func TestFoldRuntimeEventViewsCollapsesDurableStream(t *testing.T) {
 	}
 }
 
+func TestFoldRuntimeEventViewsKeepsContextCompactionDetails(t *testing.T) {
+	at := time.Date(2026, 7, 15, 10, 0, 0, 0, time.UTC)
+	details := `{"beforeTokens":180000,"afterTokens":32000,"contextWindow":200000}`
+	views, _ := foldRuntimeEventViews("step-1", []domainworkflows.RuntimeEvent{
+		runtimeEvent(t, 1, agentrun.Event{Kind: agentrun.KindContextCompaction, Text: details, At: at}),
+	}, false)
+	if len(views) != 1 || views[0].Kind != string(agentrun.KindContextCompaction) || views[0].Text != details {
+		t.Fatalf("views = %+v", views)
+	}
+}
+
 func TestEnrichStepRunUsageRecoversHistoricalProviderDetails(t *testing.T) {
 	tests := []struct {
 		name string

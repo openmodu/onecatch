@@ -1107,6 +1107,13 @@ export const EventKind = {
     KindUsage: "usage",
 
     /**
+     * KindContextCompaction marks a substantial fall in prompt occupancy. It is
+     * synthesized after normalization so every runtime gets the same durable UI
+     * event even when the provider does not expose a named compaction event.
+     */
+    KindContextCompaction: "context_compaction",
+
+    /**
      * KindResult marks the terminal outcome of the run.
      */
     KindResult: "result",

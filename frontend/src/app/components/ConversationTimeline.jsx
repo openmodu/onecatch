@@ -1,11 +1,11 @@
 import { lazy, memo, Suspense, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Clipboard } from "@wailsio/runtime";
-import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Copy, FilePenLine, Image, LoaderCircle, Paperclip, Search, Terminal, TriangleAlert, Wrench } from "lucide-react";
+import { BookOpen, BrainCircuit, Check, ChevronDown, ChevronRight, Clock3, Copy, FilePenLine, Image, LoaderCircle, Minimize2, Paperclip, Search, Terminal, TriangleAlert, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { fileName, formatDateTime, formatDuration, formatMessageDateTime, formatTime, formatToolTime } from "../format.js";
+import { compactTokens, fileName, formatDateTime, formatDuration, formatMessageDateTime, formatTime, formatToolTime } from "../format.js";
 import { groupRoundItems } from "../runConversation.js";
 import { attachmentName, attachmentPreviewURL, isImageAttachment } from "../attachments.js";
 import { Action } from "../../ui/primitives.jsx";
@@ -216,6 +216,14 @@ function FileChangeGroup({ entries, onReview }) {
   </details>{onReview && <Action size="compact" tone="muted" className="conversation-review-action" onClick={onReview}>{t("review.open")}</Action>}</div>;
 }
 
+function ContextCompactionTimelineItem({ entry }) {
+  const { t } = useTranslation();
+  const hasUsage = entry.beforeTokens > 0 && entry.afterTokens > 0;
+  return <div className="conversation-context-compaction" role="status">
+    <span><Minimize2 aria-hidden="true" /><strong>{t("timeline.contextCompacted")}</strong>{hasUsage && <small>{t("timeline.contextCompactionUsage", { before: compactTokens(entry.beforeTokens), after: compactTokens(entry.afterTokens) })}</small>}<time dateTime={entry.at || undefined} title={formatDateTime(entry.at)}>{formatToolTime(entry.at)}</time></span>
+  </div>;
+}
+
 function ProcessGroup({ entries, active, round, permissionBusy, userInputBusy, onPermissionDecision, onUserInputResponse }) {
   const { t } = useTranslation();
   const timeLabel = createTimeLabeler();
@@ -260,6 +268,7 @@ const ConversationRound = memo(function ConversationRound({ round, active, permi
           const entry = block.item;
           return <div className={`conversation-agent-message ${entry.tone}`} key={block.id}><MessageBody content={entry.text} streaming={entry.streaming} /><MessageActions at={entry.at || round.finishedAt || round.startedAt} content={entry.text} /></div>;
         }
+        if (block.type === "compaction") return <ContextCompactionTimelineItem entry={block.item} key={block.id} />;
         if (block.type === "files") return <FileChangeGroup entries={block.items} onReview={onReview} key={block.id} />;
         return <ProcessGroup entries={block.items} active={Boolean(active) && lastItem === block.items[block.items.length - 1]} round={round} permissionBusy={permissionBusy} userInputBusy={userInputBusy} onPermissionDecision={onPermissionDecision} onUserInputResponse={onUserInputResponse} key={block.id} />;
       })}

@@ -396,6 +396,7 @@ type dshParser struct {
 	sessionID    string
 	finalMessage string
 	usage        Usage
+	context      ContextUsage
 	usageSeen    bool
 	succeeded    bool
 	completed    bool
@@ -471,7 +472,9 @@ func (p *dshParser) handleChunk(raw json.RawMessage, line string, at time.Time, 
 		}
 		p.usage = usage
 		p.usageSeen = true
-		sink(Event{Kind: KindUsage, Usage: &usage, Raw: line, At: at})
+		p.context.Tokens = usage.InputTokens
+		context := p.context
+		sink(Event{Kind: KindUsage, Usage: &usage, Context: &context, Raw: line, At: at})
 	case "finish":
 		if data.Chunk.Reason != nil && data.Chunk.Reason.Kind == "error" && data.Chunk.Reason.Failure != nil {
 			sink(Event{Kind: KindError, Text: data.Chunk.Reason.Failure.Message, Raw: line, At: at})
@@ -519,7 +522,9 @@ func (p *dshParser) handleMessage(raw json.RawMessage, line string, at time.Time
 	}
 	p.usage = usage
 	p.usageSeen = true
-	sink(Event{Kind: KindUsage, Usage: &usage, Raw: line, At: at})
+	p.context.Tokens = usage.InputTokens
+	context := p.context
+	sink(Event{Kind: KindUsage, Usage: &usage, Context: &context, Raw: line, At: at})
 }
 
 func (p *dshParser) handleToolCall(raw json.RawMessage, line string, at time.Time, sink Sink) {
@@ -616,6 +621,7 @@ func (p *dshParser) result() Result {
 	return Result{
 		FinalMessage: strings.TrimSpace(p.finalMessage),
 		Usage:        p.usage,
+		Context:      p.context,
 		SessionID:    p.sessionID,
 		Succeeded:    p.started && p.succeeded,
 	}

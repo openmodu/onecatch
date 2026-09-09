@@ -512,9 +512,15 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 		if !ok {
 			return run, fmt.Errorf("workflow step %q not found", run.CurrentStepID)
 		}
-		attempt, err := s.nextAttempt(ctx, run.ID, step.ID)
+		attempt, previousContextTokens, err := s.nextAttempt(ctx, run.ID, step.ID)
 		if err != nil {
 			return run, err
+		}
+		resumeSessionID := run.Sessions[step.ID]
+		if resumeSessionID == "" {
+			// A fresh provider session naturally starts with a smaller prompt. It
+			// is not evidence that the previous session compacted its context.
+			previousContextTokens = 0
 		}
 		stepRun := domainworkflows.StepRun{
 			ID:              s.newID("step"),
@@ -522,7 +528,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			StepID:          step.ID,
 			Attempt:         attempt,
 			Status:          domainworkflows.StepRunRunning,
-			SessionIDBefore: run.Sessions[step.ID],
+			SessionIDBefore: resumeSessionID,
 			StartedAt:       s.now(),
 		}
 		if err := s.workflows.SaveStepRun(ctx, stepRun); err != nil {
@@ -567,7 +573,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			return run, nil
 		}
 
-		collector := s.newRuntimeCollector(run.ID, stepRun.ID)
+		collector := s.newRuntimeCollector(run.ID, stepRun.ID, previousContextTokens)
 		request := agentrun.Request{
 			RunID:                   run.ID,
 			StepRunID:               stepRun.ID,
@@ -579,7 +585,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 			ServiceTier:             resolvedServiceTier(run, step.Runtime),
 			MaxContextWindow:        resolvedMaxContextWindow(run, step.Runtime),
 			Sandbox:                 allowedSandbox(step.Sandbox, workspace.DefaultSandbox),
-			ResumeSessionID:         run.Sessions[step.ID],
+			ResumeSessionID:         resumeSessionID,
 			EnvironmentAllowlist:    resolvedEnvironmentAllowlist(run, step.Runtime),
 			Provider:                resolvedRuntimeProvider(run, step.Runtime),
 			InterruptGrace:          time.Duration(run.InterruptGraceSeconds) * time.Second,
@@ -801,18 +807,19 @@ func (s *Usecase) loadTaskContext(ctx context.Context, taskID string) (domaintas
 	return task, workspace, definition, nil
 }
 
-func (s *Usecase) nextAttempt(ctx context.Context, runID, stepID string) (int, error) {
+func (s *Usecase) nextAttempt(ctx context.Context, runID, stepID string) (int, int, error) {
 	items, err := s.workflows.ListStepRuns(ctx, runID)
 	if err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	maxAttempt := 0
+	maxAttempt, contextTokens := 0, 0
 	for _, item := range items {
 		if item.StepID == stepID && item.Attempt > maxAttempt {
 			maxAttempt = item.Attempt
+			contextTokens = item.ContextTokens
 		}
 	}
-	return maxAttempt + 1, nil
+	return maxAttempt + 1, contextTokens, nil
 }
 
 func (s *Usecase) setTaskStatus(ctx context.Context, task *domaintasks.Task, status domaintasks.Status) error {

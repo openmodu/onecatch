@@ -72,6 +72,9 @@ func TestDshParserNormalizesCompletedRun(t *testing.T) {
 	if result.Usage != want {
 		t.Fatalf("usage = %+v, want %+v", result.Usage, want)
 	}
+	if result.Context.Tokens != want.InputTokens {
+		t.Fatalf("context = %+v, want %d tokens", result.Context, want.InputTokens)
+	}
 
 	var message, reasoning, toolText strings.Builder
 	toolUses, failedResults := 0, 0

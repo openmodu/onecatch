@@ -133,6 +133,23 @@ test("groups only adjacent process rows and preserves text-tool-text order", () 
   assert.deepEqual(blocks[3].items.map((item) => item.id), ["status"]);
 });
 
+test("shows a context compaction between the surrounding agent activity", () => {
+  const [round] = buildRunConversation({
+    task: {}, run: {}, events: [],
+    workflow: { steps: [{ id: "execute", name: "执行", runtime: "codex" }] },
+    stepRuns: [{ id: "step-1", stepId: "execute", status: "succeeded" }],
+    runtimeEvents: [
+      { stepRunId: "step-1", seq: 1, kind: "message", text: "压缩前" },
+      { stepRunId: "step-1", seq: 2, kind: "context_compaction", text: '{"beforeTokens":180000,"afterTokens":32000,"contextWindow":200000}', at: "2026-07-11T10:00:03Z" },
+      { stepRunId: "step-1", seq: 3, kind: "message", text: "继续执行" },
+    ],
+  });
+  assert.deepEqual(round.items.map((item) => item.type), ["message", "compaction", "message"]);
+  assert.equal(round.items[1].beforeTokens, 180000);
+  assert.equal(round.items[1].afterTokens, 32000);
+  assert.deepEqual(groupRoundItems(round.items).map((block) => block.type), ["message", "compaction", "message"]);
+});
+
 test("scopes failure to the tool that failed, not the whole failed step", () => {
   const [round] = buildRunConversation({
     task: {}, run: {}, events: [],

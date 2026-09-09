@@ -190,6 +190,24 @@ function roundItems(events, fallbackText, fallbackError, translate) {
   const pendingToolsById = new Map();
   for (const event of [...events].sort((a, b) => a.seq - b.seq)) {
     if (hiddenKinds.has(event.kind)) continue;
+    if (event.kind === "context_compaction") {
+      let details = {};
+      try {
+        details = JSON.parse(event.text || "{}");
+      } catch {
+        // Historical or third-party events may not carry structured details.
+      }
+      items.push({
+        type: "compaction",
+        id: `context-compaction-${event.seq}`,
+        beforeTokens: Number(details.beforeTokens) || 0,
+        afterTokens: Number(details.afterTokens) || 0,
+        contextWindow: Number(details.contextWindow) || 0,
+        at: event.at,
+      });
+      lastTool = null;
+      continue;
+    }
     if (event.kind === "permission_request" && event.permission?.id) {
       const permission = { type: "permission", id: `permission-${event.permission.id}`, request: event.permission, decision: "", at: event.at };
       permissions.set(event.permission.id, permission);
@@ -290,9 +308,9 @@ function appliedInstructions(instructions) {
 export function groupRoundItems(items = []) {
   const blocks = [];
   for (const item of items) {
-    const type = item.type === "message" ? "message" : item.kind === "file_change" ? "files" : "process";
+    const type = item.type === "message" ? "message" : item.type === "compaction" ? "compaction" : item.kind === "file_change" ? "files" : "process";
     const previous = blocks[blocks.length - 1];
-    if (type === "message") {
+    if (type === "message" || type === "compaction") {
       blocks.push({ type, id: item.id || `message-${blocks.length}`, item });
       continue;
     }

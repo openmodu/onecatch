@@ -74,6 +74,10 @@ const (
 	KindFileChange EventKind = "file_change"
 	// KindUsage carries token/cost accounting for the turn.
 	KindUsage EventKind = "usage"
+	// KindContextCompaction marks a substantial fall in prompt occupancy. It is
+	// synthesized after normalization so every runtime gets the same durable UI
+	// event even when the provider does not expose a named compaction event.
+	KindContextCompaction EventKind = "context_compaction"
 	// KindResult marks the terminal outcome of the run.
 	KindResult EventKind = "result"
 	// KindError carries a runtime or parse error encountered mid-stream.

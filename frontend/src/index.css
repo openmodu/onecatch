@@ -1703,6 +1703,38 @@
     min-width: 0;
   }
 
+  .conversation-context-compaction {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    color: var(--muted-foreground);
+    font-family: var(--font-ui-sans);
+    font-size: 12px;
+    line-height: 18px;
+  }
+
+  .conversation-context-compaction::before,
+  .conversation-context-compaction::after {
+    height: 1px;
+    background: color-mix(in oklab, var(--border) 74%, transparent);
+    content: "";
+  }
+
+  .conversation-context-compaction > span {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  .conversation-context-compaction svg { width: 14px; height: 14px; }
+  .conversation-context-compaction strong { color: var(--foreground); font-weight: 550; }
+  .conversation-context-compaction small,
+  .conversation-context-compaction time { color: var(--muted-foreground); font-size: 11px; font-variant-numeric: tabular-nums; }
+
   .conversation-process > summary {
     min-height: 32px;
     display: flex;

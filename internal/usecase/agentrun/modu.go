@@ -88,6 +88,7 @@ type moduParser struct {
 	final             string
 	sessionID         string
 	usage             Usage
+	context           ContextUsage
 	completed         bool
 	failed            bool
 	messageSeq        int
@@ -244,7 +245,8 @@ func (p *moduParser) handleMessage(raw json.RawMessage, line string, at time.Tim
 
 	// Modu keeps fresh input separate from cache usage. Normalize it to the
 	// same total-input contract used by every OneCatch runtime adapter.
-	p.usage.InputTokens += message.Usage.Input + message.Usage.CacheRead + message.Usage.CacheWrite
+	promptTokens := message.Usage.Input + message.Usage.CacheRead + message.Usage.CacheWrite
+	p.usage.InputTokens += promptTokens
 	p.usage.CachedInputTokens += message.Usage.CacheRead
 	p.usage.CacheCreationInputTokens += message.Usage.CacheWrite
 	p.usage.OutputTokens += message.Usage.Output
@@ -275,6 +277,11 @@ func (p *moduParser) handleMessage(raw json.RawMessage, line string, at time.Tim
 	if strings.TrimSpace(message.ErrorMessage) != "" {
 		p.failed = true
 		sink(Event{Kind: KindError, Text: message.ErrorMessage, Raw: line, At: at})
+	}
+	if promptTokens > 0 {
+		p.context.Tokens = promptTokens
+		usage, context := p.usage, p.context
+		sink(Event{Kind: KindUsage, Usage: &usage, Context: &context, Raw: line, At: at})
 	}
 	p.messageOpen = false
 	p.textStreaming = false
@@ -318,6 +325,7 @@ func (p *moduParser) result() Result {
 	return Result{
 		FinalMessage: p.final,
 		Usage:        p.usage,
+		Context:      p.context,
 		SessionID:    p.sessionID,
 		Succeeded:    p.completed && !p.failed,
 	}

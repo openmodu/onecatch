@@ -176,7 +176,16 @@ func (s *Usecase) driveDAG(ctx context.Context, task domaintasks.Task, workspace
 
 func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, definition domainworkflows.Definition, run domainworkflows.Run, step domainworkflows.Step, instruction string) dagResult {
 	attempt := run.Nodes[step.ID].Attempt
-	stepRun := domainworkflows.StepRun{ID: s.newID("step"), RunID: run.ID, StepID: step.ID, Attempt: attempt, Status: domainworkflows.StepRunRunning, SessionIDBefore: run.Sessions[step.ID], StartedAt: s.now()}
+	resumeSessionID := run.Sessions[step.ID]
+	previousContextTokens := 0
+	if resumeSessionID != "" {
+		var historyErr error
+		_, previousContextTokens, historyErr = s.nextAttempt(ctx, run.ID, step.ID)
+		if historyErr != nil {
+			return dagResult{step: step, err: historyErr}
+		}
+	}
+	stepRun := domainworkflows.StepRun{ID: s.newID("step"), RunID: run.ID, StepID: step.ID, Attempt: attempt, Status: domainworkflows.StepRunRunning, SessionIDBefore: resumeSessionID, StartedAt: s.now()}
 	if err := s.workflows.SaveStepRun(ctx, stepRun); err != nil {
 		return dagResult{step: step, stepRun: stepRun, err: err}
 	}
@@ -193,8 +202,8 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 		}
 		defer release()
 	}
-	request := agentrun.Request{RunID: run.ID, StepRunID: stepRun.ID, Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeDAGPrompt(task, definition, step, run, instruction), Model: step.Model, ReasoningEffort: resolvedReasoningEffort(run, step.Runtime), ServiceTier: resolvedServiceTier(run, step.Runtime), MaxContextWindow: resolvedMaxContextWindow(run, step.Runtime), Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: run.Sessions[step.ID], EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second, RuntimeDefaultsResolved: true, Remote: workspaceRemoteTarget(workspace)}
-	collector := s.newRuntimeCollector(run.ID, stepRun.ID)
+	request := agentrun.Request{RunID: run.ID, StepRunID: stepRun.ID, Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeDAGPrompt(task, definition, step, run, instruction), Model: step.Model, ReasoningEffort: resolvedReasoningEffort(run, step.Runtime), ServiceTier: resolvedServiceTier(run, step.Runtime), MaxContextWindow: resolvedMaxContextWindow(run, step.Runtime), Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: resumeSessionID, EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second, RuntimeDefaultsResolved: true, Remote: workspaceRemoteTarget(workspace)}
+	collector := s.newRuntimeCollector(run.ID, stepRun.ID, previousContextTokens)
 	result, err := s.dispatchStep(ctx, definition, step, workspace.ID, request, collector.Sink())
 	if streamErr := collector.Close(); streamErr != nil && err == nil {
 		err = collectorError(streamErr)
