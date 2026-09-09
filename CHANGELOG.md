@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.6
+
+- Speed up remote mobile conversations by reusing worker connections, opening at the newest page, and loading older history on demand.
+- Preserve workspace and conversation data through refresh failures, retry incomplete session details, and clearly identify content that is still loading.
+- Add iOS left-edge swipe navigation, label remote workspaces, retain embedded chat history updates, and report hosted session turn counts accurately.
+
 ## 0.2.5
 
 - Support pasting images into remote FS tasks while keeping their durable copies in OneCatch's local data directory.
