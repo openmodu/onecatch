@@ -11,9 +11,25 @@ func (s *Service) cacheSharedRun(config worker.Config, view RunView) {
 	view.WorkerID = config.ID
 	view.Shared = true
 	s.mu.Lock()
-	s.runs[view.ID] = &runState{config: config, view: copyRunView(view)}
-	_ = s.persistRunsLocked()
+	previous := s.runs[view.ID]
+	s.runs[view.ID] = &runState{config: config, view: copyRunView(view), window: view.EventsOffset}
+	// Persisting rewrites the whole history file. That is nothing on a laptop
+	// and real work on a phone, so a refresh that changed nothing skips it.
+	if previous == nil || !sameCachedRun(previous.view, view) {
+		_ = s.persistRunsLocked()
+	}
 	s.mu.Unlock()
+}
+
+func sameCachedRun(left, right RunView) bool {
+	if !sameRunMetadata(left, right) || len(left.Events) != len(right.Events) ||
+		left.EventsOffset != right.EventsOffset || left.EventsTotal != right.EventsTotal {
+		return false
+	}
+	if left.Result == nil || right.Result == nil {
+		return left.Result == right.Result
+	}
+	return *left.Result == *right.Result
 }
 
 // syncSharedRuns adopts the host's history. The phone polls it every couple of

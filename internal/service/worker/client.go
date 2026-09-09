@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
@@ -25,7 +26,15 @@ import (
 // persistence cap so a large tool output streamed as one frame is not rejected.
 const maxFrameBytes = 34 * 1024 * 1024
 
-type Client struct{ http *http.Client }
+// Client keeps one HTTP client per worker so its connections are reused. A
+// fresh client per request means a TCP and TLS handshake every time, plus a
+// cold congestion window for the body: unnoticeable between two processes on
+// one machine, seconds per call from a phone over Wi-Fi.
+type Client struct {
+	http   *http.Client
+	mu     sync.Mutex
+	pooled map[string]*http.Client
+}
 
 const (
 	controlRequestTimeout   = 15 * time.Second
@@ -34,7 +43,7 @@ const (
 	defaultRunTimeout       = 35 * time.Minute
 )
 
-func NewClient() *Client { return &Client{http: &http.Client{}} }
+func NewClient() *Client { return &Client{http: &http.Client{}, pooled: map[string]*http.Client{}} }
 
 func (c *Client) Health(ctx context.Context, config Config) (Health, error) {
 	var health Health
@@ -288,6 +297,13 @@ func (c *Client) httpClient(config Config) (*http.Client, error) {
 	if config.CAFile == "" && config.ClientCertFile == "" && config.ServerName == "" && config.ServerCertificateSHA256 == "" {
 		return c.http, nil
 	}
+	key := clientKey(config)
+	c.mu.Lock()
+	existing := c.pooled[key]
+	c.mu.Unlock()
+	if existing != nil {
+		return existing, nil
+	}
 	parsed, err := url.Parse(config.BaseURL)
 	if err != nil || parsed.Scheme != "https" {
 		return nil, errors.New("worker TLS settings require an HTTPS base URL")
@@ -344,8 +360,26 @@ func (c *Client) httpClient(config Config) (*http.Client, error) {
 	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = tlsConfig
-	transport.DisableKeepAlives = true
-	return &http.Client{Transport: transport}, nil
+	transport.MaxIdleConnsPerHost = 4
+	// A worker the phone has stopped talking to should not keep a socket open
+	// on either end, but a conversation's requests must land on one connection.
+	transport.IdleConnTimeout = 60 * time.Second
+	client := &http.Client{Transport: transport}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if existing := c.pooled[key]; existing != nil {
+		return existing, nil
+	}
+	c.pooled[key] = client
+	return client, nil
+}
+
+// clientKey covers every field that changes how the connection is made or
+// authenticated, so re-pairing a worker builds a new client instead of reusing
+// one that trusts the old certificate.
+func clientKey(config Config) string {
+	return strings.Join([]string{config.BaseURL, config.CAFile, config.ClientCertFile,
+		config.ClientKeyFile, config.ServerName, config.ServerCertificateSHA256}, "\x00")
 }
 
 func endpoint(config Config, path string) string {

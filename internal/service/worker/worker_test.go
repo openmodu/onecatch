@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -131,6 +133,43 @@ func TestPinnedTLSAuthenticatesWorkerCertificate(t *testing.T) {
 	config.ServerCertificateSHA256 = strings.Repeat("0", 64)
 	if _, err := NewClient().Health(context.Background(), config); err == nil || !strings.Contains(err.Error(), "paired fingerprint") {
 		t.Fatalf("wrong certificate pin error = %v", err)
+	}
+}
+
+// Every request used to build its own client with keep-alives disabled, so a
+// conversation cost one TCP and TLS handshake per call plus a cold congestion
+// window for the body. Between two processes on one machine that is invisible;
+// from a phone over Wi-Fi it is the difference between instant and seconds.
+func TestClientReusesOneConnectionPerWorker(t *testing.T) {
+	server := httptest.NewUnstartedServer(NewServer("remote-1", "Remote", "secret", nil, fakeEngine{}, 1).Handler())
+	var connections atomic.Int64
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			connections.Add(1)
+		}
+	}
+	server.StartTLS()
+	defer server.Close()
+	sum := sha256.Sum256(server.Certificate().Raw)
+	config := Config{BaseURL: server.URL, Token: "secret", ServerCertificateSHA256: fmt.Sprintf("%x", sum[:])}
+	client := NewClient()
+	for range 8 {
+		if _, err := client.Health(context.Background(), config); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if opened := connections.Load(); opened != 1 {
+		t.Fatalf("8 requests opened %d connections, want 1", opened)
+	}
+	// Re-pairing changes the pin, and a client that trusts the old certificate
+	// must not be reused for it.
+	rotated := config
+	rotated.ServerCertificateSHA256 = strings.Repeat("a", 64)
+	if _, err := client.Health(context.Background(), rotated); err == nil {
+		t.Fatal("a rotated pin must not authenticate against the old certificate")
+	}
+	if opened := connections.Load(); opened != 2 {
+		t.Fatalf("a re-paired worker opened %d connections in total, want 2", opened)
 	}
 }
 

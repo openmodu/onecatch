@@ -361,9 +361,11 @@ func (s *Service) execute(ctx context.Context, state *runState, input StartRunIn
 	s.emit(RunFrame{RunID: state.view.ID, Status: status, Result: &result, Error: errorMessage, At: finishedAt})
 }
 
+// GetRun deliberately does not wait on the history sync: opening a
+// conversation would otherwise queue behind a few network round trips it does
+// not need. A sync that removes this run concurrently is corrected by the next
+// one.
 func (s *Service) GetRun(id string) (RunView, error) {
-	s.syncMu.Lock()
-	defer s.syncMu.Unlock()
 	s.mu.RLock()
 	state := s.runs[strings.TrimSpace(id)]
 	if state == nil {
@@ -469,7 +471,7 @@ func (s *Service) ListRuns() []RunView {
 // navigation only need run metadata. Conversation bodies are loaded with
 // GetRun when opened.
 func (s *Service) ListRunSummaries() []RunView {
-	s.syncSharedRuns(context.Background())
+	s.refreshSharedRuns()
 	s.mu.RLock()
 	items := make([]RunView, 0, len(s.runs))
 	for _, state := range s.runs {
@@ -488,6 +490,20 @@ func (s *Service) ListRunSummaries() []RunView {
 	s.mu.RUnlock()
 	sort.Slice(items, func(i, j int) bool { return items[i].StartedAt.After(items[j].StartedAt) })
 	return items
+}
+
+// refreshSharedRuns keeps the list current without making the phone wait for
+// the network on every poll. Only a cold cache blocks, because it has nothing
+// to show yet.
+func (s *Service) refreshSharedRuns() {
+	s.mu.RLock()
+	cached := len(s.runs)
+	s.mu.RUnlock()
+	if cached == 0 {
+		s.syncSharedRuns(context.Background())
+		return
+	}
+	go s.syncSharedRuns(context.Background())
 }
 
 func (s *Service) runViewsLocked() []RunView {
