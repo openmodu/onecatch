@@ -552,8 +552,8 @@ function Sidebar({ open, workspaces, conversations, selectedConversationID, work
     <aside className="mobile-drawer" aria-label="工作区与会话">
       <header><div><span className="mobile-brand-mark">1</span><strong>OneCatch</strong></div><button type="button" className="mobile-icon-button" aria-label="关闭侧栏" onClick={onClose}><PanelLeftClose /></button></header>
       <button type="button" className="mobile-new-session" onClick={() => { onNew(); onClose(); }}><Plus />新建会话</button>
-      <button type="button" className="mobile-drawer-home" onClick={() => { onHome(); onClose(); }}><Folder />全部项目<ChevronRight /></button>
       <button type="button" className="mobile-drawer-home" onClick={() => { onUsage(); onClose(); }}><Gauge />用量<ChevronRight /></button>
+      <button type="button" className="mobile-drawer-home" onClick={() => { onHome(); onClose(); }}><Folder />全部项目<ChevronRight /></button>
       <div className="mobile-drawer-scroll">
         {workspaces.map((workspace) => {
           const sessions = conversations.filter((item) => item.workspaceId === workspace.id);
