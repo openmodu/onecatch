@@ -749,8 +749,10 @@
     background: transparent !important;
     box-shadow: none !important;
     color: var(--foreground);
-    font-size: 14px;
-    line-height: 1.6;
+    /* The textarea's responsive text utilities also set line-height. Keep
+       its glyph metrics identical to the skill mirror at every breakpoint. */
+    font-size: 14px !important;
+    line-height: 1.6 !important;
   }
 
   .new-task-attachments {
