@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -369,6 +370,66 @@ func TestHostedTranscriptArrivesNewestPageFirst(t *testing.T) {
 	refreshed, err := phone.GetRun(run.ID)
 	if err != nil || len(refreshed.Events) != len(view.Events) {
 		t.Fatalf("refresh = %d entries, want %d (%v)", len(refreshed.Events), len(view.Events), err)
+	}
+}
+
+func TestPhoneReadsTheHostsUsageBoard(t *testing.T) {
+	ctx := context.Background()
+	app, _ := newLocalTestApp(t, completingEngine{})
+	server := worker.NewServer("test-host", "Desktop", "secret", nil, app.runtimes, 1)
+	server.SetSharedRuns(&hostedRuns{app: app})
+	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+	phone, err := mobile.NewService(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer phone.Close()
+	if _, err := phone.PairWorker(ctx, httpServer.URL, "PAIR1234"); err != nil {
+		t.Fatal(err)
+	}
+	// A harness that cannot report usage is left out; the board still answers,
+	// because one unavailable runtime must not empty the whole screen.
+	usage, err := phone.AccountUsage("test-host", false)
+	if err != nil {
+		t.Fatalf("usage = %v", err)
+	}
+	for _, item := range usage {
+		if !item.Runtime.Valid() {
+			t.Fatalf("usage names an unknown runtime: %+v", item)
+		}
+	}
+}
+
+// An older desktop has no usage route at all. That has to read as an old
+// worker, not as a network failure, or the reader goes looking at their Wi-Fi.
+func TestUsageOnAWorkerWithoutTheRouteSaysItIsUnsupported(t *testing.T) {
+	ctx := context.Background()
+	app, _ := newLocalTestApp(t, completingEngine{})
+	server := worker.NewServer("test-host", "Desktop", "secret", nil, app.runtimes, 1)
+	// No SetSharedRuns: this stands in for a worker that predates the route.
+	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
+	httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v1/usage" {
+			http.NotFound(w, r)
+			return
+		}
+		server.Handler().ServeHTTP(w, r)
+	}))
+	defer httpServer.Close()
+	phone, err := mobile.NewService(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer phone.Close()
+	if _, err := phone.PairWorker(ctx, httpServer.URL, "PAIR1234"); err != nil {
+		t.Fatal(err)
+	}
+	_, err = phone.AccountUsage("test-host", false)
+	var remote worker.RemoteError
+	if !errors.As(err, &remote) || remote.Code != "worker_unsupported" {
+		t.Fatalf("usage error = %v", err)
 	}
 }
 

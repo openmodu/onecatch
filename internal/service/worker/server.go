@@ -231,6 +231,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/runs/{runID}/interrupt", s.authorize(s.interrupt))
 	mux.HandleFunc("POST /v1/runs/{runID}/permissions/{requestID}", s.authorize(s.respondPermission))
 	mux.HandleFunc("POST /v1/runs/{runID}/patch/ack", s.authorize(s.ackPatch))
+	mux.HandleFunc("GET /v1/usage", s.authorize(s.usage))
 	mux.HandleFunc("GET /v1/workspaces", s.authorize(s.listWorkspaces))
 	mux.HandleFunc("PUT /v1/workspaces/{workspaceID}", s.authorize(s.prepareWorkspace))
 	mux.HandleFunc("DELETE /v1/workspaces/{workspaceID}", s.authorize(s.removeWorkspace))

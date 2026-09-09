@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	"github.com/openmodu/onecatch/internal/service/worker"
@@ -265,6 +266,25 @@ func (h *hostedRuns) Remove(ctx context.Context, conversationID string) error {
 		return err
 	}
 	return h.app.DeleteTask(ctx, conversationID)
+}
+
+// Usage reports every runtime this desktop can answer for. One harness failing
+// — not signed in, no local sessions — must not empty the phone's board, so
+// its error is left out rather than returned.
+func (h *hostedRuns) Usage(ctx context.Context, refresh bool) ([]agentrun.AccountUsage, error) {
+	items := []agentrun.AccountUsage{}
+	for _, id := range domainharnesses.IDs() {
+		runtime := agentrun.Runtime(id)
+		if !h.app.runtimes.Available(runtime) {
+			continue
+		}
+		usage, err := h.app.getAccountUsage(ctx, id, refresh)
+		if err != nil {
+			continue
+		}
+		items = append(items, usage)
+	}
+	return items, nil
 }
 
 func (h *hostedRuns) conversationWorkspace(ctx context.Context, conversationID string) error {

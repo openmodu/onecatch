@@ -69,6 +69,23 @@
    inside a one-line caption. */
 .mobile-session-copy small .runtime-harness-icon, .mobile-context-button .runtime-harness-icon { display: inline-block; margin-right: 5px; vertical-align: -2px; }
 
+/* The usage board: one card per runtime, its quota bars and the fortnight of
+   daily tokens under them. */
+.mobile-usage-card { margin: 0 0 18px; padding: 16px 0 18px; border-bottom: 1px solid var(--m-line); }
+.mobile-usage-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mobile-usage-name { min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; }
+.mobile-usage-card > header small, .mobile-usage-card > footer { color: var(--muted-foreground); font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mobile-usage-limit { margin-top: 14px; }
+.mobile-usage-limit-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
+.mobile-usage-limit-head b { font-variant-numeric: tabular-nums; font-weight: 500; }
+.mobile-usage-limit small { margin-top: 4px; display: block; color: var(--muted-foreground); font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mobile-usage-bar { height: 6px; margin-top: 6px; overflow: hidden; border-radius: 999px; background: var(--m-field); }
+.mobile-usage-bar span { height: 100%; display: block; border-radius: 999px; background: var(--primary); }
+.mobile-usage-days { height: 44px; margin-top: 16px; display: flex; align-items: flex-end; gap: 4px; }
+.mobile-usage-days span { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; }
+.mobile-usage-days i { width: 100%; border-radius: 2px; background: color-mix(in oklab, var(--primary) 30%, var(--m-field)); }
+.mobile-usage-card > footer { margin-top: 12px; display: flex; justify-content: space-between; gap: 10px; }
+
 /* Pull to refresh. The indicator is revealed behind the list rather than
    inserted above it, so dragging moves one composited layer instead of
    reflowing every row. */

@@ -389,6 +389,12 @@ func endpoint(config Config, path string) string {
 func decodeRemoteError(response *http.Response) error {
 	var remote RemoteError
 	if err := json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&remote); err != nil || remote.Code == "" {
+		// A route this worker has never heard of is an older OneCatch on the
+		// other end, not a network that is down. Saying "unreachable" there
+		// sends the reader to check Wi-Fi for a machine that just answered.
+		if response.StatusCode == http.StatusNotFound {
+			return RemoteError{Code: "worker_unsupported", Message: "this worker is too old for that request"}
+		}
 		return RemoteError{Code: "worker_unavailable", Message: fmt.Sprintf("worker returned HTTP %d", response.StatusCode)}
 	}
 	return remote

@@ -475,6 +475,17 @@ func (s *Service) ListRunSummaries() []RunView {
 	return s.runSummaries()
 }
 
+// AccountUsage reports the selected worker's quota and daily activity, which
+// is the desktop's usage board seen from the phone. It is read on demand, not
+// polled: nobody is watching it most of the time.
+func (s *Service) AccountUsage(workerID string, refresh bool) ([]agentrun.AccountUsage, error) {
+	config, err := s.enabledWorker(context.Background(), workerID)
+	if err != nil {
+		return nil, err
+	}
+	return s.client.SharedUsage(context.Background(), config, refresh)
+}
+
 // RefreshRuns is the pull-to-refresh answer: the reader asked for fresh
 // history and is watching a spinner, so this one waits for the sync instead of
 // letting it land later. It still returns summaries — a pull must not drag

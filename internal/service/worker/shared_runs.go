@@ -88,6 +88,10 @@ type SharedRuns interface {
 	// what a phone shows in its list and what the host stores as a task.
 	Rename(ctx context.Context, conversationID, title string) error
 	Remove(ctx context.Context, conversationID string) error
+	// Usage reports each runtime's account quota and recent daily activity, so
+	// the phone can show the same board the desktop does. A runtime the host
+	// cannot report is left out rather than failing the request.
+	Usage(ctx context.Context, refresh bool) ([]agentrun.AccountUsage, error)
 }
 
 type ConversationTitle struct {
@@ -176,6 +180,35 @@ func (c *Client) StartSharedRun(ctx context.Context, config Config, input Shared
 	err := c.do(ctx, config, http.MethodPost, "/v1/shared-runs", input, &run)
 	return run, err
 }
+
+// usage answers the phone's usage board. A worker that shares no history has
+// nothing to report either, so it answers the same "unavailable" as the rest.
+func (s *Server) usage(w http.ResponseWriter, r *http.Request) {
+	if s.sharedRuns == nil {
+		writeError(w, http.StatusNotImplemented, "shared_runs_unavailable", "this worker does not share task history")
+		return
+	}
+	items, err := s.sharedRuns.Usage(r.Context(), r.URL.Query().Get("refresh") != "")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "usage_failed", err.Error())
+		return
+	}
+	if items == nil {
+		items = []agentrun.AccountUsage{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
+func (c *Client) SharedUsage(ctx context.Context, config Config, refresh bool) ([]agentrun.AccountUsage, error) {
+	var usage []agentrun.AccountUsage
+	path := "/v1/usage"
+	if refresh {
+		path += "?refresh=1"
+	}
+	err := c.do(ctx, config, http.MethodGet, path, nil, &usage)
+	return usage, err
+}
+
 func (c *Client) RenameSharedConversation(ctx context.Context, config Config, id, title string) error {
 	return c.do(ctx, config, http.MethodPost, "/v1/shared-conversations/"+url.PathEscape(id)+"/rename", ConversationTitle{Title: title}, nil)
 }

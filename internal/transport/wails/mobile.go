@@ -6,6 +6,7 @@ import (
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	mobileservice "github.com/openmodu/onecatch/internal/service/mobile"
 	"github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type MobileBinding struct{ service *mobileservice.Service }
@@ -61,6 +62,11 @@ func (b *MobileBinding) LoadEarlierRun(id string) (mobileservice.RunView, error)
 
 func (b *MobileBinding) ListRuns() []mobileservice.RunView {
 	return b.service.ListRuns()
+}
+
+// AccountUsage reports one worker's quota and recent daily token activity.
+func (b *MobileBinding) AccountUsage(workerID string, refresh bool) ([]agentrun.AccountUsage, error) {
+	return b.service.AccountUsage(workerID, refresh)
 }
 
 // RenameConversation retitles a session everywhere it is stored.

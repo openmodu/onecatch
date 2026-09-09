@@ -17,6 +17,16 @@ import * as mobile$0 from "../../service/mobile/models.js";
 import * as worker$0 from "../../service/worker/models.js";
 
 /**
+ * AccountUsage reports one worker's quota and recent daily token activity.
+ * @param {string} workerID
+ * @param {boolean} refresh
+ * @returns {$CancellablePromise<any[]>}
+ */
+export function AccountUsage(workerID, refresh) {
+    return $Call.ByID(2381452179, workerID, refresh);
+}
+
+/**
  * @param {string} id
  * @returns {$CancellablePromise<mobile$0.WorkerStatus>}
  */
