@@ -48,6 +48,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import MarkdownContent from "./components/MarkdownContent.jsx";
 import RuntimeHarnessIcon from "./components/RuntimeHarnessIcon.jsx";
+import MobileUsageBoard from "./MobileUsageBoard.jsx";
 import { runtimeHarnesses } from "./runtimeHarnesses.js";
 import { errorMessage, formatDuration, formatMessageTime, formatTime, formatToolTime, compactTokens, shortenPath } from "./format.js";
 import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
@@ -535,7 +536,7 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
 // Projects fold, the way they do in the desktop sidebar: a drawer that lists
 // every session of every project is a wall of text on a phone. The open
 // project starts expanded, and what the reader folds stays folded.
-function Sidebar({ open, workspaces, conversations, selectedConversationID, workspaceID, health, onClose, onHome, onWorkspace, onConversation, onNew, onWorkers }) {
+function Sidebar({ open, workspaces, conversations, selectedConversationID, workspaceID, health, onClose, onHome, onUsage, onWorkspace, onConversation, onNew, onWorkers }) {
   const [expanded, setExpanded] = useState(() => new Set(workspaceID ? [workspaceID] : []));
   useEffect(() => {
     if (!open || !workspaceID) return;
@@ -552,6 +553,7 @@ function Sidebar({ open, workspaces, conversations, selectedConversationID, work
       <header><div><span className="mobile-brand-mark">1</span><strong>OneCatch</strong></div><button type="button" className="mobile-icon-button" aria-label="关闭侧栏" onClick={onClose}><PanelLeftClose /></button></header>
       <button type="button" className="mobile-new-session" onClick={() => { onNew(); onClose(); }}><Plus />新建会话</button>
       <button type="button" className="mobile-drawer-home" onClick={() => { onHome(); onClose(); }}><Folder />全部项目<ChevronRight /></button>
+      <button type="button" className="mobile-drawer-home" onClick={() => { onUsage(); onClose(); }}><Gauge />用量<ChevronRight /></button>
       <div className="mobile-drawer-scroll">
         {workspaces.map((workspace) => {
           const sessions = conversations.filter((item) => item.workspaceId === workspace.id);
@@ -622,45 +624,6 @@ function WorkersSheet({ open, workers, selectedWorkerID, healthByID, busy, onClo
       })}</div>
 	  <Button className="mobile-main-action" onClick={() => onPair(null)}><Plus />添加 Worker</Button>
     </section>
-  </div>;
-}
-
-// The desktop's usage board, sized for a phone: each runtime's quota bars and
-// the fortnight of daily tokens behind them. The numbers are the host's, read
-// on demand — nobody watches this screen long enough to poll it.
-function UsageBoard({ usage, loading, error, onRefresh }) {
-  const today = new Date();
-  return <div className="mobile-page mobile-usage-page">
-    {error && <div className="mobile-list-empty"><CircleAlert /><p>{error}</p></div>}
-    {!error && !usage.length && <div className="mobile-list-empty"><Gauge /><p>{loading ? "正在读取用量…" : "这台电脑没有可报告用量的运行时"}</p></div>}
-    {usage.map((item) => {
-      const days = recentDailyUsage(item.dailyUsage || [], today, 14);
-      const peak = Math.max(1, ...days.map((day) => day.tokens));
-      return <section className="mobile-usage-card" key={item.runtime}>
-        <header>
-          <span className="mobile-usage-name"><RuntimeHarnessIcon harness={item.runtime} size={16} />{runtimeLabel(item.runtime)}</span>
-          <small>{item.scope === "device" ? "本机会话" : "账号"}</small>
-        </header>
-        {(item.rateLimits || []).flatMap((limit, index) => [limit.primary, limit.secondary].filter(Boolean).map((quota, position) => {
-          const span = usageWindowDuration(quota.windowDurationMins);
-          const percent = clampUsagePercent(quota.usedPercent);
-          return <div className="mobile-usage-limit" key={`${limit.id || index}-${position}`}>
-            <div className="mobile-usage-limit-head">
-              <span>{accountRateLimitName(limit)}{span ? ` · ${span.value} ${WINDOW_UNITS[span.unit]}` : ""}</span>
-              <b>{Math.round(percent)}%</b>
-            </div>
-            <div className="mobile-usage-bar"><span style={{ width: `${percent}%` }} /></div>
-          </div>;
-        }))}
-        <div className="mobile-usage-days" aria-label="最近 14 天用量">
-          {[...days].reverse().map((day) => <span key={day.key} title={`${day.key} · ${compactTokens(day.tokens)}`}>
-            <i style={{ height: `${Math.max(2, Math.round((day.tokens / peak) * 100))}%` }} />
-          </span>)}
-        </div>
-        <footer><span>近 14 天 {compactTokens(days.reduce((total, day) => total + day.tokens, 0))}</span>{item.summary?.lifetimeTokens ? <span>累计 {compactTokens(item.summary.lifetimeTokens)}</span> : null}</footer>
-      </section>;
-    })}
-    <Button className="mobile-main-action" variant="ghost" disabled={loading} onClick={onRefresh}>{loading ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}重新读取</Button>
   </div>;
 }
 
@@ -1229,9 +1192,9 @@ export default function MobileWorkbench() {
     {goBack && !backGestureBlocked && <div className="mobile-back-gesture-edge" aria-hidden="true" />}
     <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null}
       title={headerIdentity.title} meta={headerIdentity.meta} badge={headerIdentity.badge} onMeta={headerIdentity.onMeta} />
-	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "usage" ? <main className="mobile-main"><UsageBoard usage={usage.items} loading={usage.loading} error={usage.error} onRefresh={() => loadUsage(true)} /></main> : view === "sessions" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onActions={setSessionActions} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
+	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "usage" ? <main className="mobile-main"><MobileUsageBoard usage={usage.items} loading={usage.loading} error={usage.error} onRefresh={() => loadUsage(true)} /></main> : view === "sessions" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onActions={setSessionActions} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
-    <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} workspaceID={workspaceID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
+    <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} workspaceID={workspaceID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onUsage={() => setView("usage")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
 	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onRename={setRenameTarget} onDelete={deleteConversation} onClose={() => setMenuOpen(false)} />
 	<SessionActionSheet conversation={sessionActions} onRename={setRenameTarget} onDelete={deleteConversation} onClose={() => setSessionActions(null)} />
 	<RenameSheet conversation={renameTarget} busy={busy === "rename"} onSubmit={renameConversation} onClose={() => setRenameTarget(null)} />

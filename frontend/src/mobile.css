@@ -69,22 +69,54 @@
    inside a one-line caption. */
 .mobile-session-copy small .runtime-harness-icon, .mobile-context-button .runtime-harness-icon { display: inline-block; margin-right: 5px; vertical-align: -2px; }
 
-/* The usage board: one card per runtime, its quota bars and the fortnight of
-   daily tokens under them. */
-.mobile-usage-card { margin: 0 0 18px; padding: 16px 0 18px; border-bottom: 1px solid var(--m-line); }
-.mobile-usage-card > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.mobile-usage-name { min-width: 0; display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 500; }
-.mobile-usage-card > header small, .mobile-usage-card > footer { color: var(--muted-foreground); font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
-.mobile-usage-limit { margin-top: 14px; }
+/* The usage board, the desktop's one sized for a phone: source tabs, the four
+   numbers, quota bars, a year of activity that scrolls, then the daily list. */
+.mobile-usage-sources { margin: 4px 0 18px; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.mobile-usage-sources::-webkit-scrollbar { display: none; }
+.mobile-usage-sources button { min-height: 32px; padding: 0 12px; display: flex; align-items: center; gap: 6px; flex: 0 0 auto; border: 1px solid var(--m-line); border-radius: 999px; background: transparent; color: var(--muted-foreground); font-size: 12px; }
+.mobile-usage-sources button.selected { border-color: transparent; background: color-mix(in oklab, var(--primary) 14%, var(--background)); color: var(--primary); }
+.mobile-usage-sources .runtime-harness-icon { display: inline-block; }
+
+.mobile-usage-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.mobile-usage-metric { padding: 12px 14px; border-radius: var(--m-radius); background: var(--m-field); }
+.mobile-usage-metric span { display: flex; align-items: center; gap: 6px; color: var(--muted-foreground); font-size: 11px; }
+.mobile-usage-metric svg { width: 13px; }
+.mobile-usage-metric strong { margin-top: 6px; display: block; overflow: hidden; font-size: 18px; font-weight: 600; letter-spacing: -.01em; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+.mobile-usage-limit { margin-top: 16px; }
 .mobile-usage-limit-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; font-size: 12px; }
-.mobile-usage-limit-head b { font-variant-numeric: tabular-nums; font-weight: 500; }
-.mobile-usage-limit small { margin-top: 4px; display: block; color: var(--muted-foreground); font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mobile-usage-limit-head span { min-width: 0; display: flex; align-items: center; gap: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-usage-limit-head b { font-weight: 500; font-variant-numeric: tabular-nums; }
 .mobile-usage-bar { height: 6px; margin-top: 6px; overflow: hidden; border-radius: 999px; background: var(--m-field); }
 .mobile-usage-bar span { height: 100%; display: block; border-radius: 999px; background: var(--primary); }
-.mobile-usage-days { height: 44px; margin-top: 16px; display: flex; align-items: flex-end; gap: 4px; }
-.mobile-usage-days span { flex: 1 1 0; height: 100%; display: flex; align-items: flex-end; }
-.mobile-usage-days i { width: 100%; border-radius: 2px; background: color-mix(in oklab, var(--primary) 30%, var(--m-field)); }
-.mobile-usage-card > footer { margin-top: 12px; display: flex; justify-content: space-between; gap: 10px; }
+
+.mobile-usage-heatmap, .mobile-usage-daily { margin-top: 26px; }
+.mobile-usage-heatmap > header, .mobile-usage-daily > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mobile-usage-heatmap h3, .mobile-usage-daily h3 { margin: 0; font-size: 13px; font-weight: 600; }
+.mobile-usage-heatmap small { color: var(--muted-foreground); font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* 53 weeks never fit a phone; the grid scrolls instead of being cropped. */
+.mobile-usage-heatmap-scroll { margin-top: 12px; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none; }
+.mobile-usage-heatmap-scroll::-webkit-scrollbar { display: none; }
+.mobile-usage-heatmap-grid { width: max-content; display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 9px); gap: 3px; }
+.mobile-usage-heatmap-grid i, .mobile-usage-heatmap > footer i { width: 9px; height: 9px; border-radius: 2px; }
+.level-0 { background: var(--m-field); }
+.level-1 { background: color-mix(in oklab, var(--primary) 22%, var(--background)); }
+.level-2 { background: color-mix(in oklab, var(--primary) 42%, var(--background)); }
+.level-3 { background: color-mix(in oklab, var(--primary) 68%, var(--background)); }
+.level-4 { background: var(--primary); }
+.level-future { background: transparent; }
+.mobile-usage-heatmap > footer { margin-top: 8px; display: flex; align-items: center; justify-content: flex-end; gap: 4px; color: var(--muted-foreground); font-size: 10px; }
+
+.mobile-usage-ranges { display: flex; gap: 6px; }
+.mobile-usage-ranges button { min-height: 26px; padding: 0 10px; border: 1px solid var(--m-line); border-radius: 999px; background: transparent; color: var(--muted-foreground); font-size: 11px; }
+.mobile-usage-ranges button.selected { border-color: transparent; background: color-mix(in oklab, var(--primary) 14%, var(--background)); color: var(--primary); }
+.mobile-usage-day { padding: 9px 0; display: grid; grid-template-columns: 42px minmax(0, 1fr) 58px; align-items: center; gap: 10px; border-top: 1px solid var(--m-line); }
+.mobile-usage-day:first-of-type { border-top: 0; }
+.mobile-usage-day time { color: var(--muted-foreground); font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
+.mobile-usage-day > span { height: 6px; overflow: hidden; border-radius: 999px; background: var(--m-field); }
+.mobile-usage-day > span i { height: 100%; display: block; border-radius: 999px; background: color-mix(in oklab, var(--primary) 70%, var(--background)); }
+.mobile-usage-day b { text-align: right; font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 500; }
+.mobile-usage-day b.quiet { color: var(--muted-foreground); font-weight: 400; }
 
 /* Pull to refresh. The indicator is revealed behind the list rather than
    inserted above it, so dragging moves one composited layer instead of
@@ -297,7 +329,7 @@ summary.mobile-tool-row:active { opacity: .65; }
 /* Overlays sit on the page, they do not replace it: the sheet has a hairline
    and a small radius, no shadow, and what is underneath stays visible. */
 .mobile-drawer-backdrop, .mobile-popover-backdrop, .mobile-sheet-backdrop { position: fixed; z-index: 100; inset: 0; background: color-mix(in oklab, var(--foreground) 22%, transparent); }
-.mobile-drawer { width: min(84vw, 340px); height: 100%; padding: calc(16px + env(safe-area-inset-top)) var(--m-gutter) calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto; gap: 10px; background: var(--background); border-right: 1px solid var(--m-line); animation: mobile-drawer-in .2s ease-out; }
+.mobile-drawer { width: min(84vw, 340px); height: 100%; padding: calc(16px + env(safe-area-inset-top)) var(--m-gutter) calc(16px + env(safe-area-inset-bottom)); display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto; gap: 10px; background: var(--background); border-right: 1px solid var(--m-line); animation: mobile-drawer-in .2s ease-out; }
 @keyframes mobile-drawer-in { from { transform: translateX(-100%); } }
 .mobile-drawer > header { min-height: 44px; display: flex; align-items: center; justify-content: space-between; }
 .mobile-drawer > header > div { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 600; }

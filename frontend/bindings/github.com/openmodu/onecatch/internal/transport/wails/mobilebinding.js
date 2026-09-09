@@ -15,15 +15,20 @@ import * as mobile$0 from "../../service/mobile/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as worker$0 from "../../service/worker/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as agentrun$0 from "../../usecase/agentrun/models.js";
 
 /**
  * AccountUsage reports one worker's quota and recent daily token activity.
  * @param {string} workerID
  * @param {boolean} refresh
- * @returns {$CancellablePromise<any[]>}
+ * @returns {$CancellablePromise<agentrun$0.AccountUsage[]>}
  */
 export function AccountUsage(workerID, refresh) {
-    return $Call.ByID(2381452179, workerID, refresh);
+    return $Call.ByID(2381452179, workerID, refresh).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
 }
 
 /**
@@ -32,7 +37,7 @@ export function AccountUsage(workerID, refresh) {
  */
 export function CheckWorker(id) {
     return $Call.ByID(503373925, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType2($result);
     }));
 }
 
@@ -59,7 +64,7 @@ export function DeleteWorker(id) {
  */
 export function GetRun(id) {
     return $Call.ByID(42850800, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType3($result);
     }));
 }
 
@@ -76,7 +81,7 @@ export function InterruptRun(id) {
  */
 export function ListRunSummaries() {
     return $Call.ByID(1625646554).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType4($result);
     }));
 }
 
@@ -85,7 +90,7 @@ export function ListRunSummaries() {
  */
 export function ListRuns() {
     return $Call.ByID(2751141287).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType4($result);
     }));
 }
 
@@ -94,7 +99,7 @@ export function ListRuns() {
  */
 export function ListWorkers() {
     return $Call.ByID(1285524968).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType6($result);
     }));
 }
 
@@ -104,7 +109,7 @@ export function ListWorkers() {
  */
 export function ListWorkspaces(workerID) {
     return $Call.ByID(2565852803, workerID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType8($result);
     }));
 }
 
@@ -115,7 +120,7 @@ export function ListWorkspaces(workerID) {
  */
 export function LoadEarlierRun(id) {
     return $Call.ByID(913933000, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType3($result);
     }));
 }
 
@@ -126,7 +131,7 @@ export function LoadEarlierRun(id) {
  */
 export function PairWorker(baseURL, code) {
     return $Call.ByID(1072201499, baseURL, code).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType5($result);
     }));
 }
 
@@ -138,18 +143,8 @@ export function PairWorker(baseURL, code) {
  */
 export function PrepareWorkspace(workerID, workspaceID, input) {
     return $Call.ByID(1084700857, workerID, workspaceID, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType9($result);
     }));
-}
-
-/**
- * RenameConversation retitles a session everywhere it is stored.
- * @param {string} id
- * @param {string} title
- * @returns {$CancellablePromise<void>}
- */
-export function RenameConversation(id, title) {
-    return $Call.ByID(2548765772, id, title);
 }
 
 /**
@@ -158,7 +153,7 @@ export function RenameConversation(id, title) {
  */
 export function RefreshRuns() {
     return $Call.ByID(3064858598).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType2($result);
+        return $$createType4($result);
     }));
 }
 
@@ -170,6 +165,16 @@ export function RefreshRuns() {
  */
 export function RemoveWorkspace(workerID, workspaceID, deleteFiles) {
     return $Call.ByID(1626531166, workerID, workspaceID, deleteFiles);
+}
+
+/**
+ * RenameConversation retitles a session everywhere it is stored.
+ * @param {string} id
+ * @param {string} title
+ * @returns {$CancellablePromise<void>}
+ */
+export function RenameConversation(id, title) {
+    return $Call.ByID(2548765772, id, title);
 }
 
 /**
@@ -186,7 +191,7 @@ export function RespondPermission(input) {
  */
 export function StartRun(input) {
     return $Call.ByID(2117250808, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType3($result);
     }));
 }
 
@@ -197,17 +202,19 @@ export function StartRun(input) {
  */
 export function WorkspaceGitStatus(workerID, workspaceID) {
     return $Call.ByID(2980083104, workerID, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType10($result);
     }));
 }
 
 // Private type creation functions
-const $$createType0 = mobile$0.WorkerStatus.createFrom;
-const $$createType1 = worker$0.SharedRun.createFrom;
-const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = worker$0.Info.createFrom;
+const $$createType0 = agentrun$0.AccountUsage.createFrom;
+const $$createType1 = $Create.Array($$createType0);
+const $$createType2 = mobile$0.WorkerStatus.createFrom;
+const $$createType3 = worker$0.SharedRun.createFrom;
 const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = worker$0.WorkspaceMapping.createFrom;
+const $$createType5 = worker$0.Info.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = worker$0.WorkspacePrepareResult.createFrom;
-const $$createType8 = workspaces$0.GitSnapshot.createFrom;
+const $$createType7 = worker$0.WorkspaceMapping.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = worker$0.WorkspacePrepareResult.createFrom;
+const $$createType10 = workspaces$0.GitSnapshot.createFrom;
