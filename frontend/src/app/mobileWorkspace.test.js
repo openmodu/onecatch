@@ -177,3 +177,32 @@ test("create actions use a plus, and the pencil stays with editing", async () =>
   assert.match(source, /aria-label="新建会话" onClick=\{onNew\}><Plus \/>/);
   assert.match(source, /<Pencil \/>/, "editing a workspace still edits");
 });
+
+// Which agent ran something is a mark to glance at, and the phone must not
+// keep its own shorter list of the ones that exist.
+test("the phone shows a runtime by its mark, from the desktop's catalog", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  assert.match(source, /import RuntimeHarnessIcon from "\.\/components\/RuntimeHarnessIcon\.jsx";/);
+  assert.match(source, /const RUNTIMES = runtimeHarnesses;/);
+  assert.doesNotMatch(source, /\{ id: "codex", label: "Codex" \}/, "a second catalog hid grok, pi and dsh");
+  // Every place the phone names a runtime carries its mark.
+  assert.match(source, /<small><RuntimeHarnessIcon harness=\{conversation\.runtime\}/);
+  assert.match(source, /<RuntimeHarnessIcon harness=\{item\.id\} size=\{16\} \/>\{item\.label\}/);
+  assert.match(source, /<b><RuntimeHarnessIcon harness=\{runtime\}/);
+});
+
+// A transcript that spans days: the tool rows carried a time all along, the
+// messages around them did not.
+test("every message says when it happened", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  const css = await readFile(new URL("../mobile.css", import.meta.url), "utf8");
+  assert.match(source, /function MessageTime\(\{ at \}\)/);
+  assert.match(source, /<time className="mobile-message-time" dateTime=\{at\}>\{formatMessageTime\(at\)\}<\/time>/);
+  assert.match(source, /<UserMessage text=\{run\.prompt\} at=\{run\.startedAt\} \/>/);
+  assert.match(source, /<AssistantMessage text=\{event\.text\} at=\{event\.at\}/);
+  assert.match(source, /text=\{run\.result\.finalMessage\} at=\{run\.finishedAt\}/);
+  // A stamp under a half-written reply would move with every chunk.
+  assert.match(source, /\{!streaming && <MessageTime at=\{at\} \/>\}/);
+  // The bubble is the body, so the stamp sits under it rather than inside it.
+  assert.match(css, /\.mobile-user-message-body \{[^}]*border-radius[^}]*background: var\(--m-field\)/);
+});

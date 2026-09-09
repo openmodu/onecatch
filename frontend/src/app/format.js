@@ -58,6 +58,16 @@ export function formatMessageDateTime(value) {
 // Tool activity is already nested inside a dated conversation. Keep its
 // always-visible timestamp glanceable; the full date and seconds remain on the
 // time element's title for inspection.
+// A message's stamp: the clock for today, the day in front of it otherwise.
+// Seconds are for how long a tool ran, not for a line of conversation.
+export function formatMessageTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const now = new Date();
+  return sameDay(date, now) ? compactClockOf(date) : `${dayOf(date, now)} ${compactClockOf(date)}`;
+}
+
 export function formatToolTime(value) {
   if (!value) return "—";
   const date = new Date(value);

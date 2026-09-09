@@ -46,7 +46,9 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import MarkdownContent from "./components/MarkdownContent.jsx";
-import { errorMessage, formatDuration, formatTime, formatToolTime, compactTokens, shortenPath } from "./format.js";
+import RuntimeHarnessIcon from "./components/RuntimeHarnessIcon.jsx";
+import { runtimeHarnesses } from "./runtimeHarnesses.js";
+import { errorMessage, formatDuration, formatMessageTime, formatTime, formatToolTime, compactTokens, shortenPath } from "./format.js";
 import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { createFrameBatcher } from "./frameBatcher.js";
 import { createWorkspaceLoader } from "./mobileWorkspaceLoader.js";
@@ -58,11 +60,9 @@ import { useMobilePullToRefresh } from "./mobilePullRefresh.js";
 import "../mobile.css";
 
 const RUN_EVENT = "mobile:run";
-const RUNTIMES = [
-  { id: "codex", label: "Codex" },
-  { id: "claude", label: "Claude Code" },
-  { id: "modu", label: "Modu Code" },
-];
+// The harness catalog is the desktop's. The phone used to carry a shorter copy
+// of it, which hid Grok, Pi and DeepSeek even on a worker that offered them.
+const RUNTIMES = runtimeHarnesses;
 
 function workerLabel(worker) {
   return worker?.name || worker?.id || "远端 Worker";
@@ -246,7 +246,7 @@ function SessionList({ workspace, conversations, query, onOpen, onNew }) {
   return <div className="mobile-page mobile-session-page">
     <div className="mobile-session-list">
       {visible.map((conversation) => <button type="button" className="mobile-session-row" key={conversation.id} onClick={() => onOpen(conversation.id)}>
-        <span className="mobile-session-copy"><strong>{conversation.title}</strong><small>{conversation.runtime} · {mobileConversationTurnCount(conversation.runs)} 轮 · {relativeTime(conversation.startedAt)}</small></span>
+        <span className="mobile-session-copy"><strong>{conversation.title}</strong><small><RuntimeHarnessIcon harness={conversation.runtime} size={13} />{mobileConversationTurnCount(conversation.runs)} 轮 · {relativeTime(conversation.startedAt)}</small></span>
         <span className={`mobile-session-status ${conversation.status}`}>{runStatusLabel(conversation.status)}</span>
       </button>)}
     </div>
@@ -330,17 +330,24 @@ function PermissionCard({ runID, event, busy, onRespond }) {
   </article>;
 }
 
-function UserMessage({ text }) {
+function MessageTime({ at }) {
+  if (!at) return null;
+  return <time className="mobile-message-time" dateTime={at}>{formatMessageTime(at)}</time>;
+}
+
+function UserMessage({ text, at }) {
   if (!text) return null;
   return <article className="mobile-user-message" aria-label="你的消息">
     <div className="mobile-user-message-body">{text}</div>
+    <MessageTime at={at} />
   </article>;
 }
 
-function AssistantMessage({ text, streaming = false }) {
+function AssistantMessage({ text, streaming = false, at }) {
   if (!text) return null;
   return <article className="mobile-assistant-message" aria-label="助手回复">
     <MarkdownContent content={text} streaming={streaming} animateStreaming={false} />
+    {!streaming && <MessageTime at={at} />}
   </article>;
 }
 
@@ -400,7 +407,7 @@ function ToolGroup({ events, active = false }) {
 
 function AgentEvent({ run, event, index, permissionBusy, onRespond }) {
   if (event.kind === "permission_request") return <PermissionCard runID={run.id} event={event} busy={permissionBusy === event.permission?.id} onRespond={onRespond} />;
-  if (event.kind === "message") return <AssistantMessage text={event.text} streaming={Boolean(event.streaming || (run.status === "running" && index === run.events.length - 1))} />;
+  if (event.kind === "message") return <AssistantMessage text={event.text} at={event.at} streaming={Boolean(event.streaming || (run.status === "running" && index === run.events.length - 1))} />;
   if (event.kind === "reasoning") return <ReasoningEvent event={event} />;
   if (!event.text && !event.kind) return null;
   const summary = mobileEventSummary(event, eventLabel(event.kind));
@@ -420,7 +427,7 @@ const ConversationTurn = memo(function ConversationTurn({ run, notice = "", earl
   const visibleRun = { ...run, events: visibleEvents };
   const earlier = mobileEarlierEventCount(run);
   return <section className="mobile-turn">
-    <UserMessage text={run.prompt} />
+    <UserMessage text={run.prompt} at={run.startedAt} />
     {earlier > 0 && <button type="button" className="mobile-load-earlier" disabled={earlierBusy} onClick={() => onLoadEarlier?.(run.id)}>
       {earlierBusy ? <LoaderCircle className="animate-spin" /> : <ChevronUp />}载入更早的 {earlier} 条记录
     </button>}
@@ -428,13 +435,13 @@ const ConversationTurn = memo(function ConversationTurn({ run, notice = "", earl
       if (block.type === "tools") return <ToolGroup key={`tools-${block.events[0]?.streamId || index}`} events={block.events} active={run.status === "running" && index === blocks.length - 1} />;
       const event = block.event;
       return event.kind === "user_message"
-        ? <UserMessage key={`user-${index}`} text={event.text} />
+        ? <UserMessage key={`user-${index}`} text={event.text} at={event.at} />
         : <AgentEvent key={`${event.at || index}-${index}`} run={visibleRun} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />;
     })}
     {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
     {notice && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />{notice}</div>}
     {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
-    {run.result?.finalMessage && !(run.events || []).some((event) => event.kind === "message" && event.text === run.result.finalMessage) && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <AssistantMessage text={run.result.finalMessage} />}
+    {run.result?.finalMessage && !(run.events || []).some((event) => event.kind === "message" && event.text === run.result.finalMessage) && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <AssistantMessage text={run.result.finalMessage} at={run.finishedAt} />}
   </section>;
 });
 
@@ -503,7 +510,7 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
       {Boolean(!sharedRuns && snapshot && (!snapshot.isRepo || snapshot.status || (snapshot.files || []).length)) && <div className="mobile-workspace-alert"><CircleAlert />远端工作区需要保持干净才能开始只读任务</div>}
       <div className="mobile-composer">
         <Textarea ref={promptRef} value={prompt} rows={1} placeholder={runs.length ? "继续追问…" : "给 Agent 发送任务"} onChange={(event) => setPrompt(event.target.value)} />
-        <div className="mobile-composer-footer"><button type="button" className="mobile-context-button" onClick={onOpenContext}><Plus /><span>{workspaceLabel(workspace)}</span><b>{runtime}</b></button>
+        <div className="mobile-composer-footer"><button type="button" className="mobile-context-button" onClick={onOpenContext}><Plus /><span>{workspaceLabel(workspace)}</span><b><RuntimeHarnessIcon harness={runtime} size={13} />{runtime}</b></button>
           {running ? <button type="button" className="mobile-send-button stop" aria-label="停止" disabled={busy} onClick={() => onInterrupt(running.id)}><Square /></button> : <button type="button" className="mobile-send-button" aria-label="发送" disabled={!canSend} onClick={() => onStart({ resumeSessionId: latest?.result?.sessionId || "" })}>{busy ? <LoaderCircle className="animate-spin" /> : <Send />}</button>}
         </div>
       </div>
@@ -575,7 +582,7 @@ function ContextSheet({ open, workers, selectedWorkerID, workspaces, workspaceID
       <header><div><small>会话上下文</small><h2>远端运行设置</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" onClick={onClose}><X /></button></header>
       <label><span>Worker</span><select value={selectedWorkerID} onChange={(event) => onSelectWorker(event.target.value)}>{workers.map((worker) => <option key={worker.id} value={worker.id}>{workerLabel(worker)}</option>)}</select></label>
       <label><span>工作区</span><select value={workspaceID} onChange={(event) => onSelectWorkspace(event.target.value)}>{workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspaceLabel(workspace)}</option>)}</select></label>
-      <div className="mobile-runtime-picker">{RUNTIMES.map((item) => <button type="button" className={runtime === item.id ? "selected" : ""} disabled={!available[item.id] || (runtimeLocked && runtime !== item.id)} key={item.id} onClick={() => onRuntime(item.id)}><Bot />{item.label}{runtime === item.id && <Check />}</button>)}</div>
+      <div className="mobile-runtime-picker">{RUNTIMES.map((item) => <button type="button" className={runtime === item.id ? "selected" : ""} disabled={!available[item.id] || (runtimeLocked && runtime !== item.id)} key={item.id} onClick={() => onRuntime(item.id)}><RuntimeHarnessIcon harness={item.id} size={16} />{item.label}{runtime === item.id && <Check />}</button>)}</div>
       {runtimeLocked && <p className="mobile-context-note">已有 session 会保持原运行时；切换工作区或新建会话后可以重新选择。</p>}
       <label><span>模型（可选）</span><Input value={model} placeholder="跟随 Worker 默认" autoCapitalize="none" onChange={(event) => onModel(event.target.value)} /></label>
       <label><span>推理强度（可选）</span><Input value={reasoningEffort} placeholder="medium / high" autoCapitalize="none" onChange={(event) => onReasoning(event.target.value)} /></label>

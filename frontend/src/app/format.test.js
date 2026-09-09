@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { compactTokens, errorMessage, formatDateTime, formatMessageDateTime, formatTime, formatToolTime, shortenPath, taskTitleFromPrompt } from "./format.js";
+import { compactTokens, errorMessage, formatDateTime, formatMessageDateTime, formatMessageTime, formatTime, formatToolTime, shortenPath, taskTitleFromPrompt } from "./format.js";
 
 test("worker protocol errors become actionable UI copy", () => {
   const message = errorMessage("worker_workspace_revision_missing: requested revision is unavailable");
@@ -87,4 +87,16 @@ test("compactTokens keeps a count glanceable on a phone row", () => {
   assert.equal(compactTokens(258400), "258k", "past a hundred the decimal is noise");
   assert.equal(compactTokens(1000000), "1M");
   assert.equal(compactTokens(0), "0");
+});
+
+// A chat line says when, not when to the second.
+test("a message stamp is the clock today and carries the day before that", () => {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 9, 5);
+  assert.equal(formatMessageTime(today.toISOString()), "09:05");
+  const earlier = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3, 21, 40);
+  assert.match(formatMessageTime(earlier.toISOString()), /21:40$/);
+  assert.notEqual(formatMessageTime(earlier.toISOString()), "21:40", "another day has to say which");
+  assert.equal(formatMessageTime(""), "");
+  assert.equal(formatMessageTime("not a date"), "");
 });

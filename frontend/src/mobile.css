@@ -63,6 +63,12 @@
 }
 
 .mobile-main { min-width: 0; min-height: 0; position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+/* A runtime's mark, wherever the phone says which agent ran something. */
+.runtime-harness-icon { flex: 0 0 auto; border-radius: 3px; object-fit: contain; }
+/* Preflight makes images block-level, which would give the mark its own line
+   inside a one-line caption. */
+.mobile-session-copy small .runtime-harness-icon, .mobile-context-button .runtime-harness-icon { display: inline-block; margin-right: 5px; vertical-align: -2px; }
+
 /* Pull to refresh. The indicator is revealed behind the list rather than
    inserted above it, so dragging moves one composited layer instead of
    reflowing every row. */
@@ -178,8 +184,10 @@ button, input, textarea, select { font: inherit; }
 .mobile-turn { width: 100%; max-width: 100%; min-width: 0; overflow: hidden; }
 .mobile-turn + .mobile-turn { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--m-line); }
 /* User prompts sit in right-aligned bubbles; assistant replies use plain text. */
-.mobile-user-message { width: fit-content; max-width: 88%; margin: 22px 0 20px auto; padding: 12px 16px; border-radius: 16px 16px 4px 16px; background: var(--m-field); font-size: 16px; font-weight: 400; line-height: 1.6; }
-.mobile-user-message-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.mobile-user-message { width: fit-content; max-width: 88%; margin: 22px 0 20px auto; display: grid; justify-items: end; font-size: 16px; font-weight: 400; line-height: 1.6; }
+.mobile-user-message-body { padding: 12px 16px; border-radius: 16px 16px 4px 16px; background: var(--m-field); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* When a turn happened, said once per message and never louder than it. */
+.mobile-message-time { margin-top: 6px; display: block; color: var(--muted-foreground); font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mobile-assistant-message { width: 100%; max-width: 100%; min-width: 0; margin-top: 16px; font-size: var(--chat-font-size); line-height: 1.72; }
 .mobile-assistant-message .markdown-content { font-size: inherit; }
 .mobile-assistant-message + .mobile-assistant-message { margin-top: 12px; }
