@@ -76,8 +76,13 @@ test("the paired machine is a switcher in the top bar", async () => {
   const select = source.match(/const selectWorker = \(id\) => \{[\s\S]*?\n  \};/)[0];
   assert.match(select, /setView\("projects"\)/);
   assert.doesNotMatch(select, /setView\("conversation"\)/);
-  // Dots only mean something if every machine is polled.
-  assert.match(source, /if \(!workers\.length\) return undefined;/);
+  // A machine's dot means something only while it is on screen: the selected
+  // one always, the rest while the switcher has them open. Polling every
+  // paired machine forever is a phone's radio spent on nothing.
+  assert.match(source, /const pollEveryWorker = workerSwitchOpen \|\| workersOpen;/);
+  const poll = source.match(/const poll = \(\) => \{\s*\n\s*void refreshWorker\(selectedWorkerID[\s\S]*?\n  \};/)[0];
+  assert.match(poll, /if \(!pollEveryWorker\) return;/);
+  assert.match(poll, /worker\.id !== selectedWorkerID/);
 });
 
 // `files.length && <div/>` renders the number 0 when the list is empty, which

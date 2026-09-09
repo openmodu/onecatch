@@ -36,5 +36,7 @@ test("both lists refresh by pulling, and a refresh re-reads what a poll would", 
   const refresh = source.match(/const refreshLists = useCallback\([\s\S]*?\}, \[loadWorkspaces, refreshWorker, selectedWorkerID\]\);/)[0];
   assert.match(refresh, /refreshWorker\(selectedWorkerID, true\)/);
   assert.match(refresh, /loadWorkspaces\(selectedWorkerID, true\)/);
-  assert.match(refresh, /ListRuns\(\)/);
+  // A pull must not drag every cached transcript back over the bridge.
+  assert.match(refresh, /RefreshRuns\(\)/);
+  assert.doesNotMatch(refresh, /ListRuns\(\)/);
 });

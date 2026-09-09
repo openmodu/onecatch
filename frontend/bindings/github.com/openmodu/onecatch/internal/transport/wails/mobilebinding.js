@@ -124,6 +124,16 @@ export function PrepareWorkspace(workerID, workspaceID, input) {
 }
 
 /**
+ * RefreshRuns re-reads the host's history and waits for it, for pull to refresh.
+ * @returns {$CancellablePromise<mobile$0.RunView[]>}
+ */
+export function RefreshRuns() {
+    return $Call.ByID(3064858598).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType2($result);
+    }));
+}
+
+/**
  * @param {string} workerID
  * @param {string} workspaceID
  * @param {boolean} deleteFiles

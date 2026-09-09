@@ -210,6 +210,31 @@ func TestRefreshKeepsHistoryTheReaderPagedBackTo(t *testing.T) {
 	}
 }
 
+// Pull to refresh waits for the sync — the reader is watching a spinner — but
+// still answers with summaries, because dragging every cached transcript back
+// through the WebView bridge is what made the phone hitch.
+func TestRefreshRunsWaitsForTheSyncAndReturnsSummaries(t *testing.T) {
+	service, err := NewService(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	at := time.Now().UTC()
+	service.runs["run_1"] = &runState{view: RunView{ID: "run_1", Status: "succeeded", StartedAt: at,
+		Events:       []agentrun.Event{{Kind: agentrun.KindMessage, Text: "body"}},
+		EventsOffset: 5, EventsTotal: 6, Result: &agentrun.Result{FinalMessage: "done"}}}
+	items := service.RefreshRuns()
+	if len(items) != 1 {
+		t.Fatalf("refresh returned %d runs", len(items))
+	}
+	if len(items[0].Events) != 0 || items[0].EventsOffset != 0 || items[0].EventsTotal != 0 {
+		t.Fatalf("refresh carried a transcript: %d events at %d/%d", len(items[0].Events), items[0].EventsOffset, items[0].EventsTotal)
+	}
+	if items[0].Result == nil || items[0].Result.FinalMessage != "done" {
+		t.Fatalf("refresh dropped the result: %+v", items[0].Result)
+	}
+}
+
 func TestRunHistoryPersistsAcrossServiceRestart(t *testing.T) {
 	workspace := initMobileTestRepo(t)
 	server := worker.NewServer("history-worker", "History Worker", "secret", map[string]string{"onecatch": workspace}, &mobileTestEngine{}, 1)

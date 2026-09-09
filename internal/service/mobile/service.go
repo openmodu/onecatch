@@ -472,6 +472,19 @@ func (s *Service) ListRuns() []RunView {
 // GetRun when opened.
 func (s *Service) ListRunSummaries() []RunView {
 	s.refreshSharedRuns()
+	return s.runSummaries()
+}
+
+// RefreshRuns is the pull-to-refresh answer: the reader asked for fresh
+// history and is watching a spinner, so this one waits for the sync instead of
+// letting it land later. It still returns summaries — a pull must not drag
+// every cached transcript back through the WebView bridge.
+func (s *Service) RefreshRuns() []RunView {
+	s.syncSharedRuns(context.Background())
+	return s.runSummaries()
+}
+
+func (s *Service) runSummaries() []RunView {
 	s.mu.RLock()
 	items := make([]RunView, 0, len(s.runs))
 	for _, state := range s.runs {

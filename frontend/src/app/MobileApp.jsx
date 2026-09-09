@@ -786,7 +786,7 @@ export default function MobileWorkbench() {
     await Promise.all([
       refreshWorker(selectedWorkerID, true),
       loadWorkspaces(selectedWorkerID, true),
-      MobileBinding.ListRuns().then((items) => setRuns((current) => mergeMobileRunSummaries(current, items || []))).catch(() => {}),
+      MobileBinding.RefreshRuns().then((items) => setRuns((current) => mergeMobileRunSummaries(current, items || []))).catch(() => {}),
     ]);
   }, [loadWorkspaces, refreshWorker, selectedWorkerID]);
 
@@ -816,15 +816,21 @@ export default function MobileWorkbench() {
       window.removeEventListener("online", refresh);
     };
   }, [loadWorkspaces, selectedWorkerID]);
-  // The switcher shows every machine's state, so health cannot be polled for
-  // the selected one alone.
+  // Health belongs to the machine being used. Polling every paired one every
+  // 20 seconds spends a phone's radio on screens nobody is looking at, so the
+  // others are only checked while a switcher has them on screen.
+  const pollEveryWorker = workerSwitchOpen || workersOpen;
   useEffect(() => {
-    if (!workers.length) return undefined;
-    const poll = () => { for (const worker of workers) void refreshWorker(worker.id, true); };
+    if (!selectedWorkerID) return undefined;
+    const poll = () => {
+      void refreshWorker(selectedWorkerID, true);
+      if (!pollEveryWorker) return;
+      for (const worker of workers) if (worker.id !== selectedWorkerID) void refreshWorker(worker.id, true);
+    };
     poll();
     const timer = window.setInterval(poll, 20000);
     return () => window.clearInterval(timer);
-  }, [refreshWorker, workers]);
+  }, [pollEveryWorker, refreshWorker, selectedWorkerID, workers]);
 	useEffect(() => {
 	  if (view !== "workspaces") return;
 	  for (const workspace of workspaces) void refreshWorkspace(workspace);

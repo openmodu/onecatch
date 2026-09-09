@@ -63,6 +63,11 @@ func (b *MobileBinding) ListRuns() []mobileservice.RunView {
 	return b.service.ListRuns()
 }
 
+// RefreshRuns re-reads the host's history and waits for it, for pull to refresh.
+func (b *MobileBinding) RefreshRuns() []mobileservice.RunView {
+	return b.service.RefreshRuns()
+}
+
 func (b *MobileBinding) ListRunSummaries() []mobileservice.RunView {
 	return b.service.ListRunSummaries()
 }
