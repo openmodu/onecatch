@@ -62,7 +62,14 @@
   user-select: text;
 }
 
-.mobile-main { min-width: 0; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+.mobile-main { min-width: 0; min-height: 0; position: relative; overflow-x: hidden; overflow-y: auto; overscroll-behavior: none; touch-action: pan-y; -webkit-overflow-scrolling: touch; }
+/* Pull to refresh. The indicator is revealed behind the list rather than
+   inserted above it, so dragging moves one composited layer instead of
+   reflowing every row. */
+.mobile-main > .mobile-page { transform: translateY(var(--mobile-pull, 0px)); transition: transform .18s ease-out; }
+.mobile-main.pulling > .mobile-page { transition: none; }
+.mobile-pull-indicator { position: absolute; top: 0; left: 0; right: 0; height: var(--mobile-pull, 0px); display: flex; align-items: center; justify-content: center; gap: 6px; overflow: hidden; color: var(--muted-foreground); font-size: 11.5px; }
+.mobile-pull-indicator svg { width: 15px; }
 .mobile-page { width: min(100%, var(--mobile-max)); min-height: 100%; margin: 0 auto; padding: 12px var(--m-gutter) 24px; }
 button, input, textarea, select { font: inherit; }
 .mobile-app-shell input, .mobile-app-shell textarea, .mobile-app-shell select { font-size: 16px; }
@@ -282,6 +289,10 @@ summary.mobile-tool-row:active { opacity: .65; }
 .mobile-drawer-group > button.selected { background: var(--m-field); color: var(--foreground); }
 .mobile-drawer-group .mobile-drawer-workspace { padding-left: 10px; color: var(--foreground); font-size: 14px; font-weight: 500; }
 .mobile-drawer-workspace svg { width: 16px; color: var(--muted-foreground); }
+.mobile-drawer-caret { width: 14px; flex: 0 0 auto; transition: transform .15s ease-out; }
+.mobile-drawer-workspace.open .mobile-drawer-caret { transform: rotate(90deg); }
+.mobile-drawer-more { width: 100%; min-height: 36px; padding: 0 10px 0 22px; display: flex; align-items: center; gap: 6px; border: 0; border-radius: 8px; background: transparent; color: var(--muted-foreground); font-size: 12px; text-align: left; }
+.mobile-drawer-more svg { width: 13px; margin-left: auto; }
 .mobile-drawer-workspace strong { min-width: 0; margin-right: auto; overflow: hidden; font-size: 14px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
 .mobile-drawer-workspace > span { font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted-foreground); }
 .mobile-drawer-session-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

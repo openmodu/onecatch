@@ -3,6 +3,7 @@ import { Events } from "@wailsio/runtime";
 import {
   Activity,
   ArrowDownUp,
+  ArrowDown,
   ArrowLeft,
   Bot,
   Brain,
@@ -53,6 +54,7 @@ import { needsMobileRunDetail, mobileConversationTurnCount, mobileEarlierEventCo
 import { useMobileBackGesture } from "./mobileBackGesture.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useMobileViewportFrame } from "./mobileViewport.js";
+import { useMobilePullToRefresh } from "./mobilePullRefresh.js";
 import "../mobile.css";
 
 const RUN_EVENT = "mobile:run";
@@ -148,6 +150,14 @@ function EmptyConnection({ onPair }) {
     <p>iPhone 只作为工作台。代码、Git 和 Agent 都在远端 Worker 上运行。</p>
 	<Button className="mobile-main-action" onClick={onPair}><Link2 />连接 Worker</Button>
   </section>;
+}
+
+// The pull's own header: it lives above the list and is only as tall as the
+// finger has dragged.
+function PullIndicator({ refreshing }) {
+  return <div className="mobile-pull-indicator" aria-hidden={!refreshing}>
+    {refreshing ? <><LoaderCircle className="animate-spin" />正在刷新…</> : <ArrowDown />}
+  </div>;
 }
 
 // Every page names itself in the bar and keeps that name there while the list
@@ -501,7 +511,20 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
   </div>;
 }
 
-function Sidebar({ open, workspaces, conversations, selectedConversationID, health, onClose, onHome, onWorkspace, onConversation, onNew, onWorkers }) {
+// Projects fold, the way they do in the desktop sidebar: a drawer that lists
+// every session of every project is a wall of text on a phone. The open
+// project starts expanded, and what the reader folds stays folded.
+function Sidebar({ open, workspaces, conversations, selectedConversationID, workspaceID, health, onClose, onHome, onWorkspace, onConversation, onNew, onWorkers }) {
+  const [expanded, setExpanded] = useState(() => new Set(workspaceID ? [workspaceID] : []));
+  useEffect(() => {
+    if (!open || !workspaceID) return;
+    setExpanded((current) => current.has(workspaceID) ? current : new Set(current).add(workspaceID));
+  }, [open, workspaceID]);
+  const toggle = (id) => setExpanded((current) => {
+    const next = new Set(current);
+    if (!next.delete(id)) next.add(id);
+    return next;
+  });
   if (!open) return null;
   return <div className="mobile-drawer-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
     <aside className="mobile-drawer" aria-label="工作区与会话">
@@ -511,9 +534,11 @@ function Sidebar({ open, workspaces, conversations, selectedConversationID, heal
       <div className="mobile-drawer-scroll">
         {workspaces.map((workspace) => {
           const sessions = conversations.filter((item) => item.workspaceId === workspace.id);
+          const isOpen = expanded.has(workspace.id);
           return <section className="mobile-drawer-group" key={workspace.id}>
-            <button type="button" className="mobile-drawer-workspace" onClick={() => { onWorkspace(workspace.id); onClose(); }}><FolderGit2 /><strong>{workspaceLabel(workspace)}</strong><RemoteWorkspaceBadge workspace={workspace} /><span>{sessions.length}</span></button>
-            {sessions.slice(0, 8).map((conversation) => <button type="button" className={conversation.id === selectedConversationID ? "selected" : ""} key={conversation.id} onClick={() => { onConversation(conversation.id); onClose(); }}><span className="mobile-drawer-session-title">{conversation.title}</span>{conversation.status === "running" && <StatusDot online running />}</button>)}
+            <button type="button" className={`mobile-drawer-workspace ${isOpen ? "open" : ""}`} aria-expanded={isOpen} onClick={() => toggle(workspace.id)}><ChevronRight className="mobile-drawer-caret" /><strong>{workspaceLabel(workspace)}</strong><RemoteWorkspaceBadge workspace={workspace} /><span>{sessions.length}</span></button>
+            {isOpen && sessions.slice(0, 8).map((conversation) => <button type="button" className={conversation.id === selectedConversationID ? "selected" : ""} key={conversation.id} onClick={() => { onConversation(conversation.id); onClose(); }}><span className="mobile-drawer-session-title">{conversation.title}</span>{conversation.status === "running" && <StatusDot online running />}</button>)}
+            {isOpen && sessions.length > 8 && <button type="button" className="mobile-drawer-more" onClick={() => { onWorkspace(workspace.id); onClose(); }}>查看全部 {sessions.length} 个会话<ChevronRight /></button>}
           </section>;
         })}
       </div>
@@ -644,7 +669,9 @@ export default function MobileWorkbench() {
   const [model, setModel] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState("");
   const [query, setQuery] = useState("");
-  const [sortMode, setSortMode] = useState("project");
+  // A phone opens on what was touched last, so the projects lead with their
+  // latest activity. Alphabetical stays available for a long list.
+  const [sortMode, setSortMode] = useState("recent");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pairTarget, setPairTarget] = useState(undefined);
@@ -666,7 +693,7 @@ export default function MobileWorkbench() {
   const conversations = useMemo(() => groupMobileConversations(runs), [runs]);
   const orderedWorkspaces = useMemo(() => {
     if (sortMode === "project") return [...workspaces].sort((left, right) => workspaceLabel(left).localeCompare(workspaceLabel(right), "zh-CN"));
-    const latest = (id) => conversations.find((item) => item.workspaceId === id)?.startedAt || "";
+    const latest = (id) => projectActivity(conversations.filter((item) => item.workspaceId === id)).latestAt;
     return [...workspaces].sort((left, right) => String(latest(right.id)).localeCompare(String(latest(left.id))));
   }, [conversations, sortMode, workspaces]);
   const selectedConversation = conversations.find((item) => item.id === selectedConversationID) || null;
@@ -744,6 +771,17 @@ export default function MobileWorkbench() {
 	    return null;
 	  }
 	}, [selectedWorkerID, workspaceID]);
+
+  // What a pull asks for: the machine, its projects and the run history, all
+  // re-read at once instead of waiting for the next poll.
+  const refreshLists = useCallback(async () => {
+    if (!selectedWorkerID) return;
+    await Promise.all([
+      refreshWorker(selectedWorkerID, true),
+      loadWorkspaces(selectedWorkerID, true),
+      MobileBinding.ListRuns().then((items) => setRuns((current) => mergeMobileRunSummaries(current, items || []))).catch(() => {}),
+    ]);
+  }, [loadWorkspaces, refreshWorker, selectedWorkerID]);
 
   useEffect(() => {
     void (async () => {
@@ -1033,6 +1071,8 @@ export default function MobileWorkbench() {
     },
     conversation: { title: selectedConversation?.title || "新建会话", meta: `${workspaceLabel(selectedWorkspace)} · ${runtime}` },
   }[view] || { title: "" };
+  const listRef = useRef(null);
+  const listRefreshing = useMobilePullToRefresh(listRef, refreshLists, view === "projects" || view === "sessions");
   const goBack = ["conversation", "sessions", "workspaces"].includes(view) ? navigateBack : null;
   const backGestureBlocked = Boolean(drawerOpen || menuOpen || pairTarget !== undefined || contextOpen || workersOpen || workerSwitchOpen || confirmRequest || workspaceEditor !== undefined);
   useMobileBackGesture(shellRef, goBack, backGestureBlocked);
@@ -1041,9 +1081,9 @@ export default function MobileWorkbench() {
     {goBack && !backGestureBlocked && <div className="mobile-back-gesture-edge" aria-hidden="true" />}
     <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null}
       title={headerIdentity.title} meta={headerIdentity.meta} badge={headerIdentity.badge} onMeta={headerIdentity.onMeta} />
-	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main"><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main"><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
+	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
-    <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
+    <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} workspaceID={workspaceID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
 	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
 	<MoreMenu open={menuOpen && view !== "conversation"} sortMode={sortMode} health={selectedHealth} onSort={setSortMode} onWorkspaces={openWorkspaceManager} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
     <ContextSheet open={contextOpen} workers={workers} selectedWorkerID={selectedWorkerID} workspaces={workspaces} workspaceID={workspaceID} health={selectedHealth} runtime={runtime} runtimeLocked={Boolean(selectedConversationID)} model={model} reasoningEffort={reasoningEffort} onClose={() => setContextOpen(false)} onSelectWorker={(id) => { setSelectedWorkerID(id); setSelectedConversationID(""); setView("conversation"); void refreshWorker(id, true); }} onSelectWorkspace={(id) => selectWorkspace(id, "conversation")} onRuntime={setRuntime} onModel={setModel} onReasoning={setReasoningEffort} />

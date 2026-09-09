@@ -37,6 +37,31 @@ test("project rows carry a name and its recent activity, nothing else", async ()
   assert.doesNotMatch(row, /<ChevronRight \/>/, "a chevron adds nothing when the row itself is the target");
 });
 
+// A drawer that lists every session of every project is a wall of text on a
+// phone, and the desktop sidebar has folded its projects all along.
+test("the drawer's projects fold, starting with the open one expanded", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  const drawer = source.slice(source.indexOf("function Sidebar("), source.indexOf("function MoreMenu("));
+  assert.match(drawer, /useState\(\(\) => new Set\(workspaceID \? \[workspaceID\] : \[\]\)\)/);
+  assert.match(drawer, /aria-expanded=\{isOpen\}/);
+  assert.match(drawer, /onClick=\{\(\) => toggle\(workspace\.id\)\}/);
+  assert.match(drawer, /\{isOpen && sessions\.slice\(0, 8\)/, "a folded project hides its sessions");
+  // Folding must not hide sessions with no way back to them.
+  assert.match(drawer, /sessions\.length > 8 && <button type="button" className="mobile-drawer-more"/);
+});
+
+// The phone opens on what was touched last. Sorting projects by name buried the
+// one worked on minutes ago under one last used in August.
+test("projects lead with their latest activity", async () => {
+  const source = await readFile(sourceURL, "utf8");
+  assert.match(source, /const \[sortMode, setSortMode\] = useState\("recent"\);/);
+  const ordering = source.match(/const orderedWorkspaces = useMemo\(\(\) => \{[\s\S]*?\}, \[conversations, sortMode, workspaces\]\);/)[0];
+  // The order has to follow the timestamp each row displays, not a different
+  // one that happens to be nearby.
+  assert.match(ordering, /projectActivity\(conversations\.filter\(\(item\) => item\.workspaceId === id\)\)\.latestAt/);
+  assert.match(ordering, /latest\(right\.id\)\)\.localeCompare\(String\(latest\(left\.id\)\)\)/, "newest first");
+});
+
 // With more than one computer paired, switching machines belongs on the screen
 // the projects are listed on, not buried in the run-settings sheet.
 test("the paired machine is a switcher in the top bar", async () => {
