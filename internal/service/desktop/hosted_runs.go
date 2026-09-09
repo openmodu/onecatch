@@ -248,6 +248,33 @@ func (h *hostedRuns) Interrupt(ctx context.Context, id string) error {
 	_, err := h.app.InterruptRun(ctx, id)
 	return err
 }
+
+// Rename and Remove take a conversation id, which on this side is the task the
+// phone's session maps onto. Both check the task belongs to a shared workspace
+// first, so a phone cannot reach a project the desktop does not share.
+func (h *hostedRuns) Rename(ctx context.Context, conversationID, title string) error {
+	if err := h.conversationWorkspace(ctx, conversationID); err != nil {
+		return err
+	}
+	_, err := h.app.RenameTask(ctx, conversationID, title)
+	return err
+}
+
+func (h *hostedRuns) Remove(ctx context.Context, conversationID string) error {
+	if err := h.conversationWorkspace(ctx, conversationID); err != nil {
+		return err
+	}
+	return h.app.DeleteTask(ctx, conversationID)
+}
+
+func (h *hostedRuns) conversationWorkspace(ctx context.Context, conversationID string) error {
+	task, err := h.app.store.Repos.Tasks.GetTask(ctx, strings.TrimSpace(conversationID))
+	if err != nil {
+		return coded("task_not_found", "conversation was not found")
+	}
+	return h.workspace(ctx, task.WorkspaceID)
+}
+
 func (h *hostedRuns) RespondPermission(ctx context.Context, id, requestID, decision string) error {
 	if _, err := h.Get(ctx, id, worker.TranscriptWindow{}); err != nil {
 		return err

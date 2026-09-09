@@ -371,3 +371,73 @@ func TestHostedTranscriptArrivesNewestPageFirst(t *testing.T) {
 		t.Fatalf("refresh = %d entries, want %d (%v)", len(refreshed.Events), len(view.Events), err)
 	}
 }
+
+func TestPhoneRenamesAndDeletesAHostedConversation(t *testing.T) {
+	ctx := context.Background()
+	app, _ := newLocalTestApp(t, completingEngine{})
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := worker.NewServer("test-host", "Desktop", "secret", nil, app.runtimes, 1)
+	server.SetSharedRuns(&hostedRuns{app: app})
+	mappings, err := app.hostedWorkspaces(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.SetSharedWorkspaces(mappings)
+	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+	phone, err := mobile.NewService(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer phone.Close()
+	if _, err := phone.PairWorker(ctx, httpServer.URL, "PAIR1234"); err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: directAgentWorkflowID, Title: "desktop title", Prompt: "a prompt", Harness: "modu", Sandbox: "workspace-write"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := app.StartRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if views := phone.ListRuns(); len(views) != 1 {
+		t.Fatalf("phone history = %+v", views)
+	}
+	awaitHostedStatus(t, phone, run.ID, "succeeded")
+
+	// Renaming from the phone is the host's record that changes, not a label
+	// the phone keeps to itself.
+	if err := phone.RenameConversation(ctx, task.ID, "renamed on the phone"); err != nil {
+		t.Fatal(err)
+	}
+	renamed, err := app.store.Repos.Tasks.GetTask(ctx, task.ID)
+	if err != nil || renamed.Title != "renamed on the phone" {
+		t.Fatalf("desktop task title = %q, %v", renamed.Title, err)
+	}
+	if views := phone.ListRuns(); len(views) != 1 || views[0].Title != "renamed on the phone" {
+		t.Fatalf("phone title = %+v", views)
+	}
+	if err := phone.RenameConversation(ctx, task.ID, "   "); err == nil {
+		t.Fatal("an empty title must be refused")
+	}
+
+	// Deleting takes the conversation off both sides.
+	if err := phone.DeleteConversation(ctx, task.ID); err != nil {
+		t.Fatal(err)
+	}
+	remaining, err := app.ListTasks(ctx, workspace.ID)
+	if err != nil || len(remaining) != 0 {
+		t.Fatalf("desktop tasks after the phone deleted one = %+v, %v", remaining, err)
+	}
+	if views := phone.ListRuns(); len(views) != 0 {
+		t.Fatalf("phone still lists %+v", views)
+	}
+	if err := phone.DeleteConversation(ctx, task.ID); err == nil {
+		t.Fatal("deleting a conversation that is gone must say so")
+	}
+}

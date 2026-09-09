@@ -84,6 +84,14 @@ type SharedRuns interface {
 	Import(context.Context, SharedRun) (SharedRun, error)
 	Interrupt(context.Context, string) error
 	RespondPermission(context.Context, string, string, string) error
+	// Rename and Remove act on a conversation, not one of its runs: that is
+	// what a phone shows in its list and what the host stores as a task.
+	Rename(ctx context.Context, conversationID, title string) error
+	Remove(ctx context.Context, conversationID string) error
+}
+
+type ConversationTitle struct {
+	Title string `json:"title"`
 }
 
 func (s *Server) SetSharedRuns(runs SharedRuns) { s.sharedRuns = runs }
@@ -109,6 +117,13 @@ func (s *Server) sharedRunsHandler(w http.ResponseWriter, r *http.Request) {
 		limit, _ := strconv.Atoi(query.Get("limit"))
 		before, _ := strconv.Atoi(query.Get("before"))
 		value, err = s.sharedRuns.Get(r.Context(), id, TranscriptWindow{Limit: limit, Before: before})
+	case r.Method == http.MethodDelete:
+		err = s.sharedRuns.Remove(r.Context(), r.PathValue("conversationID"))
+	case strings.HasSuffix(r.URL.Path, "/rename"):
+		var input ConversationTitle
+		if err = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err == nil {
+			err = s.sharedRuns.Rename(r.Context(), r.PathValue("conversationID"), input.Title)
+		}
 	case strings.HasSuffix(r.URL.Path, "/interrupt"):
 		err = s.sharedRuns.Interrupt(r.Context(), id)
 	case strings.Contains(r.URL.Path, "/permissions/"):
@@ -161,6 +176,14 @@ func (c *Client) StartSharedRun(ctx context.Context, config Config, input Shared
 	err := c.do(ctx, config, http.MethodPost, "/v1/shared-runs", input, &run)
 	return run, err
 }
+func (c *Client) RenameSharedConversation(ctx context.Context, config Config, id, title string) error {
+	return c.do(ctx, config, http.MethodPost, "/v1/shared-conversations/"+url.PathEscape(id)+"/rename", ConversationTitle{Title: title}, nil)
+}
+
+func (c *Client) RemoveSharedConversation(ctx context.Context, config Config, id string) error {
+	return c.do(ctx, config, http.MethodDelete, "/v1/shared-conversations/"+url.PathEscape(id), nil, nil)
+}
+
 func (c *Client) InterruptSharedRun(ctx context.Context, config Config, id string) error {
 	return c.do(ctx, config, http.MethodPost, "/v1/shared-runs/"+url.PathEscape(id)+"/interrupt", nil, nil)
 }

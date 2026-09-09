@@ -27,6 +27,15 @@ export function CheckWorker(id) {
 }
 
 /**
+ * DeleteConversation removes a session and every run in it.
+ * @param {string} id
+ * @returns {$CancellablePromise<void>}
+ */
+export function DeleteConversation(id) {
+    return $Call.ByID(1273782921, id);
+}
+
+/**
  * @param {string} id
  * @returns {$CancellablePromise<void>}
  */
@@ -121,6 +130,16 @@ export function PrepareWorkspace(workerID, workspaceID, input) {
     return $Call.ByID(1084700857, workerID, workspaceID, input).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType7($result);
     }));
+}
+
+/**
+ * RenameConversation retitles a session everywhere it is stored.
+ * @param {string} id
+ * @param {string} title
+ * @returns {$CancellablePromise<void>}
+ */
+export function RenameConversation(id, title) {
+    return $Call.ByID(2548765772, id, title);
 }
 
 /**

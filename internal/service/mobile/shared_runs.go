@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/openmodu/onecatch/internal/service/worker"
@@ -19,6 +20,82 @@ func (s *Service) cacheSharedRun(config worker.Config, view RunView) {
 		_ = s.persistRunsLocked()
 	}
 	s.mu.Unlock()
+}
+
+// RenameConversation and DeleteConversation act on every run of a session at
+// once, because a conversation is what the phone lists. A shared one is the
+// host's record, so the host decides; a phone-only one lives here alone.
+func (s *Service) RenameConversation(ctx context.Context, conversationID, title string) error {
+	title = strings.TrimSpace(title)
+	if title == "" || len([]rune(title)) > 160 {
+		return worker.RemoteError{Code: "mobile_title_invalid", Message: "title must contain 1 to 160 characters"}
+	}
+	config, runs, shared := s.conversationRuns(conversationID)
+	if len(runs) == 0 {
+		return worker.RemoteError{Code: "mobile_run_not_found", Message: "conversation was not found on this device"}
+	}
+	if shared {
+		if err := s.client.RenameSharedConversation(ctx, config, conversationID, title); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
+	for _, id := range runs {
+		if state := s.runs[id]; state != nil {
+			state.view.Title = title
+		}
+	}
+	_ = s.persistRunsLocked()
+	s.mu.Unlock()
+	return nil
+}
+
+func (s *Service) DeleteConversation(ctx context.Context, conversationID string) error {
+	config, runs, shared := s.conversationRuns(conversationID)
+	if len(runs) == 0 {
+		return worker.RemoteError{Code: "mobile_run_not_found", Message: "conversation was not found on this device"}
+	}
+	for _, id := range runs {
+		s.mu.RLock()
+		running := s.runs[id] != nil && s.runs[id].view.Status == "running"
+		s.mu.RUnlock()
+		if running {
+			return worker.RemoteError{Code: "mobile_run_active", Message: "stop the running turn before deleting this conversation"}
+		}
+	}
+	if shared {
+		if err := s.client.RemoveSharedConversation(ctx, config, conversationID); err != nil {
+			return err
+		}
+	}
+	s.mu.Lock()
+	for _, id := range runs {
+		delete(s.runs, id)
+	}
+	_ = s.persistRunsLocked()
+	s.mu.Unlock()
+	return nil
+}
+
+// conversationRuns collects a session's runs, the worker that owns them and
+// whether the host is the one holding the record.
+func (s *Service) conversationRuns(conversationID string) (worker.Config, []string, bool) {
+	conversationID = strings.TrimSpace(conversationID)
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var config worker.Config
+	ids := []string{}
+	shared := false
+	for id, state := range s.runs {
+		if state.view.ConversationID != conversationID && state.view.ID != conversationID {
+			continue
+		}
+		ids = append(ids, id)
+		if state.view.Shared {
+			config, shared = state.config, true
+		}
+	}
+	return config, ids, shared
 }
 
 func sameCachedRun(left, right RunView) bool {

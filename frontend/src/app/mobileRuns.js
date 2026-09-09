@@ -424,5 +424,8 @@ export function conversationUsage(runs = []) {
     output += usage.outputTokens || 0;
     cached += usage.cachedInputTokens || 0;
   }
-  return { input, output, cached, total: input + output, context };
+  // The cache hit rate is against the input, because that is the half a cache
+  // can serve: reporting it against the total would flatter a long answer.
+  const hitRate = input > 0 ? Math.min(1, cached / input) : 0;
+  return { input, output, cached, hitRate, total: input + output, context };
 }

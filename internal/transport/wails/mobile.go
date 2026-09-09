@@ -63,6 +63,16 @@ func (b *MobileBinding) ListRuns() []mobileservice.RunView {
 	return b.service.ListRuns()
 }
 
+// RenameConversation retitles a session everywhere it is stored.
+func (b *MobileBinding) RenameConversation(id, title string) error {
+	return b.service.RenameConversation(context.Background(), id, title)
+}
+
+// DeleteConversation removes a session and every run in it.
+func (b *MobileBinding) DeleteConversation(id string) error {
+	return b.service.DeleteConversation(context.Background(), id)
+}
+
 // RefreshRuns re-reads the host's history and waits for it, for pull to refresh.
 func (b *MobileBinding) RefreshRuns() []mobileservice.RunView {
 	return b.service.RefreshRuns()

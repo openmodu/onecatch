@@ -302,7 +302,18 @@ test("a run still in flight counts from its latest reading", () => {
     ] },
   ]);
   assert.equal(usage.total, 940, "a run with no result yet still reports what it has spent");
-  assert.deepEqual(conversationUsage([]), { input: 0, output: 0, cached: 0, total: 0, context: null });
+  assert.deepEqual(conversationUsage([]), { input: 0, output: 0, cached: 0, hitRate: 0, total: 0, context: null });
+});
+
+// A cache serves the input half of a turn, so that is what the rate is against.
+test("the cache hit rate is measured against the input it could serve", () => {
+  const usage = conversationUsage([
+    { result: { usage: { inputTokens: 1000, cachedInputTokens: 750, outputTokens: 4000 } } },
+  ]);
+  assert.equal(usage.hitRate, 0.75, "4000 output tokens must not dilute the rate");
+  assert.equal(conversationUsage([{ result: { usage: { outputTokens: 10 } } }]).hitRate, 0, "no input, no rate");
+  const overreported = conversationUsage([{ result: { usage: { inputTokens: 10, cachedInputTokens: 40 } } }]);
+  assert.equal(overreported.hitRate, 1, "a harness that counts cached reads outside the input cannot exceed 100%");
 });
 
 test("shared history keeps more than one page and desktop titles", () => {

@@ -52,11 +52,12 @@ import { errorMessage, formatDuration, formatMessageTime, formatTime, formatTool
 import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { createFrameBatcher } from "./frameBatcher.js";
 import { createWorkspaceLoader } from "./mobileWorkspaceLoader.js";
-import { needsMobileRunDetail, mobileConversationTurnCount, mobileEarlierEventCount, mobileRunDetailRecord, mobileTranscriptNotice } from "./mobileRuns.js";
+import { needsMobileRunDetail, mobileConversationID, mobileConversationTurnCount, mobileEarlierEventCount, mobileRunDetailRecord, mobileTranscriptNotice } from "./mobileRuns.js";
 import { useMobileBackGesture } from "./mobileBackGesture.js";
 import { useNativeChrome } from "./mobileChrome.js";
 import { isPinnedToBottom, useMobileViewportFrame } from "./mobileViewport.js";
 import { useMobilePullToRefresh } from "./mobilePullRefresh.js";
+import { useMobileLongPress } from "./mobileLongPress.js";
 import "../mobile.css";
 
 const RUN_EVENT = "mobile:run";
@@ -240,15 +241,20 @@ function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew,
   </div>;
 }
 
-function SessionList({ workspace, conversations, query, onOpen, onNew }) {
+function SessionRow({ conversation, onOpen, onActions }) {
+  const press = useMobileLongPress(() => onActions(conversation));
+  return <button type="button" className="mobile-session-row" {...press.handlers} onClick={() => { if (!press.consume()) onOpen(conversation.id); }}>
+    <span className="mobile-session-copy"><strong>{conversation.title}</strong><small><RuntimeHarnessIcon harness={conversation.runtime} size={13} />{mobileConversationTurnCount(conversation.runs)} 轮 · {relativeTime(conversation.startedAt)}</small></span>
+    <span className={`mobile-session-status ${conversation.status}`}>{runStatusLabel(conversation.status)}</span>
+  </button>;
+}
+
+function SessionList({ workspace, conversations, query, onOpen, onActions, onNew }) {
   const normalized = query.trim().toLowerCase();
   const visible = conversations.filter((item) => item.workspaceId === workspace?.id && (!normalized || item.title.toLowerCase().includes(normalized)));
   return <div className="mobile-page mobile-session-page">
     <div className="mobile-session-list">
-      {visible.map((conversation) => <button type="button" className="mobile-session-row" key={conversation.id} onClick={() => onOpen(conversation.id)}>
-        <span className="mobile-session-copy"><strong>{conversation.title}</strong><small><RuntimeHarnessIcon harness={conversation.runtime} size={13} />{mobileConversationTurnCount(conversation.runs)} 轮 · {relativeTime(conversation.startedAt)}</small></span>
-        <span className={`mobile-session-status ${conversation.status}`}>{runStatusLabel(conversation.status)}</span>
-      </button>)}
+      {visible.map((conversation) => <SessionRow key={conversation.id} conversation={conversation} onOpen={onOpen} onActions={onActions} />)}
     </div>
 	{!visible.length && <section className="mobile-list-empty"><MessageCircle /><h2>还没有会话</h2><p>从一个明确的问题开始，后续可以在同一 session 里继续追问。</p><Button className="mobile-main-action" onClick={onNew}><Plus />新建会话</Button></section>}
   </div>;
@@ -567,6 +573,8 @@ function MoreMenu({ open, sortMode, health, onSort, onWorkspaces, onWorkers, onP
       <button type="button" onClick={() => { onWorkers(); onClose(); }}><span /><Cloud />Worker 管理</button>
       <button type="button" onClick={() => { onPair(); onClose(); }}><span /><Link2 />添加连接</button>
       <button type="button" onClick={() => { onSettings(); onClose(); }}><span /><Settings2 />运行设置</button>
+      {conversation && <button type="button" onClick={() => { onRename(conversation); onClose(); }}><span /><Pencil />重命名</button>}
+      {conversation && <button type="button" className="destructive" onClick={() => { onDelete(conversation); onClose(); }}><span /><Trash2 />删除会话</button>}
       <hr />
       <div className="mobile-menu-status"><small>当前连接</small><strong><StatusDot online={Boolean(health)} />{health?.worker?.name || "远端 Worker"}</strong><span>{health ? `${health.latencyMilliseconds}ms · ${RUNTIMES.filter((item) => health.health?.runtimes?.[item.id]).map((item) => item.label).join(" · ") || "无可用运行时"}` : "离线"}</span></div>
     </section>
@@ -610,10 +618,39 @@ function WorkersSheet({ open, workers, selectedWorkerID, healthByID, busy, onClo
   </div>;
 }
 
+// A list this quiet has nowhere to put a row's own actions, so a long press
+// opens them.
+function SessionActionSheet({ conversation, onRename, onDelete, onClose }) {
+  if (!conversation) return null;
+  return <div className="mobile-popover-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section className="mobile-more-menu">
+      <div className="mobile-menu-status"><small>会话</small><strong>{conversation.title}</strong></div>
+      <hr />
+      <button type="button" onClick={() => { onRename(conversation); onClose(); }}><span /><Pencil />重命名</button>
+      <button type="button" className="destructive" onClick={() => { onDelete(conversation); onClose(); }}><span /><Trash2 />删除会话</button>
+    </section>
+  </div>;
+}
+
+function RenameSheet({ conversation, busy, onSubmit, onClose }) {
+  const [title, setTitle] = useState(conversation?.title || "");
+  useEffect(() => { setTitle(conversation?.title || ""); }, [conversation]);
+  if (!conversation) return null;
+  const trimmed = title.trim();
+  return <div className="mobile-sheet-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
+    <section className="mobile-sheet">
+      <div className="mobile-sheet-handle" />
+      <header><div><small>会话</small><h2>重命名</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" onClick={onClose}><X /></button></header>
+      <label><span>标题</span><Input value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} /></label>
+      <Button className="mobile-main-action" disabled={!trimmed || busy} onClick={() => onSubmit(conversation, trimmed)}>保存</Button>
+    </section>
+  </div>;
+}
+
 // Wails' iOS webview installs no WKUIDelegate, so window.confirm() resolves to
 // false without ever showing anything — every destructive action behind one
 // silently did nothing on the phone. Ask in the app's own sheet instead.
-function ConversationMenu({ open, conversation, workspace, health, snapshot, runtime, model, onNew, onSettings, onClose }) {
+function ConversationMenu({ open, conversation, workspace, health, snapshot, runtime, model, onNew, onSettings, onRename, onDelete, onClose }) {
   if (!open) return null;
   const turns = mobileConversationTurnCount(conversation?.runs);
   const usage = conversationUsage(conversation?.runs || []);
@@ -633,7 +670,8 @@ function ConversationMenu({ open, conversation, workspace, health, snapshot, run
       <div className="mobile-menu-status">
         <small>本次会话</small>
         <span>{turns ? `${turns} 轮${running ? " · 进行中" : ""} · ${compactTokens(usage.total)} tokens` : "还没有开始"}</span>
-        {usage.cached > 0 && <span>其中缓存命中 {compactTokens(usage.cached)}，输出 {compactTokens(usage.output)}</span>}
+        {usage.total > 0 && <span>输入 {compactTokens(usage.input)} · 输出 {compactTokens(usage.output)}</span>}
+        {usage.cached > 0 && <span>缓存命中 {compactTokens(usage.cached)} · 命中率 {Math.round(usage.hitRate * 100)}%</span>}
         {usage.context?.tokens > 0 && <span>上下文 {compactTokens(usage.context.tokens)}{usage.context.window ? ` / ${compactTokens(usage.context.window)}` : ""}</span>}
       </div>
       <hr />
@@ -692,6 +730,8 @@ export default function MobileWorkbench() {
   const runsRef = useRef([]);
   const loadedRunDetailsRef = useRef(new Map());
   const [detailFailures, setDetailFailures] = useState({});
+  const [sessionActions, setSessionActions] = useState(null);
+  const [renameTarget, setRenameTarget] = useState(null);
   const liveFramesRef = useRef([]);
   const shellRef = useRef(null);
   useMobileViewportFrame(shellRef);
@@ -988,6 +1028,37 @@ export default function MobileWorkbench() {
     } catch (error) { notify("error", `载入更早的记录失败：${errorMessage(error)}`); }
   };
 
+  const renameConversation = async (conversation, title) => {
+    setBusy("rename");
+    try {
+      await MobileBinding.RenameConversation(conversation.id, title);
+      setRuns((items) => items.map((run) => (mobileConversationID(run) === conversation.id ? { ...run, title } : run)));
+      setRenameTarget(null);
+    } catch (error) { notify("error", errorMessage(error)); }
+    finally { setBusy(""); }
+  };
+
+  // Deleting the open conversation leaves the transcript with nothing to show,
+  // so the list it came from is where this lands.
+  const performDeleteConversation = async (conversation) => {
+    setBusy("delete");
+    try {
+      await MobileBinding.DeleteConversation(conversation.id);
+      setRuns((items) => items.filter((run) => mobileConversationID(run) !== conversation.id));
+      if (selectedConversationID === conversation.id) { setSelectedConversationID(""); setView("sessions"); }
+      notify("success", "已删除会话");
+    } catch (error) { notify("error", errorMessage(error)); }
+    finally { setBusy(""); }
+  };
+
+  const deleteConversation = (conversation) => setConfirmRequest({
+    title: `删除「${conversation.title}」`,
+    body: "会话和它的全部运行记录都会从这台电脑上删除，无法撤销。",
+    confirmLabel: "删除",
+    destructive: true,
+    onConfirm: () => performDeleteConversation(conversation),
+  });
+
   const interruptRun = async (runID) => {
     setBusy("interrupt");
     try { await MobileBinding.InterruptRun(runID); notify("info", "已请求 Worker 停止运行"); }
@@ -1094,10 +1165,12 @@ export default function MobileWorkbench() {
     {goBack && !backGestureBlocked && <div className="mobile-back-gesture-edge" aria-hidden="true" />}
     <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null}
       title={headerIdentity.title} meta={headerIdentity.meta} badge={headerIdentity.badge} onMeta={headerIdentity.onMeta} />
-	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
+	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "sessions" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onActions={setSessionActions} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
     <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} workspaceID={workspaceID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
-	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
+	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onRename={setRenameTarget} onDelete={deleteConversation} onClose={() => setMenuOpen(false)} />
+	<SessionActionSheet conversation={sessionActions} onRename={setRenameTarget} onDelete={deleteConversation} onClose={() => setSessionActions(null)} />
+	<RenameSheet conversation={renameTarget} busy={busy === "rename"} onSubmit={renameConversation} onClose={() => setRenameTarget(null)} />
 	<MoreMenu open={menuOpen && view !== "conversation"} sortMode={sortMode} health={selectedHealth} onSort={setSortMode} onWorkspaces={openWorkspaceManager} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
     <ContextSheet open={contextOpen} workers={workers} selectedWorkerID={selectedWorkerID} workspaces={workspaces} workspaceID={workspaceID} health={selectedHealth} runtime={runtime} runtimeLocked={Boolean(selectedConversationID)} model={model} reasoningEffort={reasoningEffort} onClose={() => setContextOpen(false)} onSelectWorker={(id) => { setSelectedWorkerID(id); setSelectedConversationID(""); setView("conversation"); void refreshWorker(id, true); }} onSelectWorkspace={(id) => selectWorkspace(id, "conversation")} onRuntime={setRuntime} onModel={setModel} onReasoning={setReasoningEffort} />
     <WorkersSheet open={workersOpen} workers={workers} selectedWorkerID={selectedWorkerID} onSelect={selectWorker} healthByID={healthByID} busy={Boolean(busy)} onClose={() => setWorkersOpen(false)} onPair={(worker) => { setWorkersOpen(false); setPairTarget(worker || null); }} onRefresh={refreshWorker} onDelete={deleteWorker} />
