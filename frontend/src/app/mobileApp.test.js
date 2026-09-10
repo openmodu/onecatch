@@ -89,3 +89,17 @@ test("a sent prompt renders before the host answers", async () => {
   assert.ok(start.indexOf("setPendingPrompt({") < start.indexOf("await MobileBinding.StartRun"), "the pending bubble waits for the host");
   assert.match(start, /setPrompt\(\(current\) => current \|\| text\)/, "a failed send has to hand the text back");
 });
+
+// A message typed while the agent is working goes to the host's queue instead
+// of finding a dead send button.
+test("a message sent mid-turn is queued on the host", async () => {
+  const source = await readFile(new URL("./MobileApp.jsx", import.meta.url), "utf8");
+  const view = source.slice(source.indexOf("function ConversationView("), source.indexOf("// Projects fold"));
+  assert.match(view, /const queueable = Boolean\(running && sharedRuns\)/, "only a host-run turn can hold a queue");
+  assert.match(view, /onQueue\(running\.id\)/);
+  assert.match(view, /onDequeue\(running\.id, item\.id\)/, "a queued message has to be withdrawable");
+  assert.match(view, /className="mobile-queued"/);
+  const workbench = source.slice(source.indexOf("const queueFollowUp"), source.indexOf("const loadEarlierRun"));
+  assert.match(workbench, /MobileBinding\.QueueFollowUp\(runID, text\)/);
+  assert.match(workbench, /MobileBinding\.DequeueFollowUp\(runID, instructionID\)/);
+});

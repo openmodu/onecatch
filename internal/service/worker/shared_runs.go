@@ -34,9 +34,25 @@ type SharedRun struct {
 	EventsTotal  int              `json:"eventsTotal,omitempty"`
 	EventsOffset int              `json:"eventsOffset,omitempty"`
 	Result       *agentrun.Result `json:"result,omitempty"`
-	Error        string           `json:"error,omitempty"`
-	StartedAt    time.Time        `json:"startedAt"`
-	FinishedAt   *time.Time       `json:"finishedAt,omitempty"`
+	// Queued is what the reader sent while this turn was still running, in the
+	// order the host will hand it to the agent.
+	Queued     []QueuedInstruction `json:"queued,omitempty"`
+	Error      string              `json:"error,omitempty"`
+	StartedAt  time.Time           `json:"startedAt"`
+	FinishedAt *time.Time          `json:"finishedAt,omitempty"`
+}
+
+// QueuedInstruction is a message waiting for the current turn to end. The
+// host owns the queue — the phone may be closed before the agent gets to it.
+type QueuedInstruction struct {
+	ID        string    `json:"id"`
+	Text      string    `json:"text"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+// QueuedPrompt is the body of a queue request.
+type QueuedPrompt struct {
+	Prompt string `json:"prompt"`
 }
 
 type SharedRunInput struct {
@@ -126,6 +142,11 @@ type SharedRuns interface {
 	// what a phone shows in its list and what the host stores as a task.
 	Rename(ctx context.Context, conversationID, title string) error
 	Remove(ctx context.Context, conversationID string) error
+	// Queue holds a message until the running turn ends, the way the desktop
+	// composer does; Dequeue takes one back out. Both answer with the queue as
+	// it now stands, so a caller never has to ask again to redraw it.
+	Queue(ctx context.Context, runID, prompt string) ([]QueuedInstruction, error)
+	Dequeue(ctx context.Context, runID, instructionID string) ([]QueuedInstruction, error)
 	// Usage reports each runtime's account quota and recent daily activity, so
 	// the phone can show the same board the desktop does. A runtime the host
 	// cannot report is left out rather than failing the request.
@@ -159,6 +180,13 @@ func (s *Server) sharedRunsHandler(w http.ResponseWriter, r *http.Request) {
 		limit, _ := strconv.Atoi(query.Get("limit"))
 		before, _ := strconv.Atoi(query.Get("before"))
 		value, err = s.sharedRuns.Get(r.Context(), id, TranscriptWindow{Limit: limit, Before: before})
+	case strings.HasSuffix(r.URL.Path, "/queue"):
+		var input QueuedPrompt
+		if err = json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&input); err == nil {
+			value, err = s.sharedRuns.Queue(r.Context(), id, input.Prompt)
+		}
+	case strings.Contains(r.URL.Path, "/queue/"):
+		value, err = s.sharedRuns.Dequeue(r.Context(), id, r.PathValue("instructionID"))
 	case r.Method == http.MethodDelete:
 		err = s.sharedRuns.Remove(r.Context(), r.PathValue("conversationID"))
 	case strings.HasSuffix(r.URL.Path, "/rename"):
@@ -253,6 +281,20 @@ func (c *Client) RenameSharedConversation(ctx context.Context, config Config, id
 
 func (c *Client) RemoveSharedConversation(ctx context.Context, config Config, id string) error {
 	return c.do(ctx, config, http.MethodDelete, "/v1/shared-conversations/"+url.PathEscape(id), nil, nil)
+}
+
+// QueueSharedFollowUp holds a message for the turn that is still running, and
+// RemoveSharedQueued takes one back out. Both answer with the whole queue.
+func (c *Client) QueueSharedFollowUp(ctx context.Context, config Config, id, prompt string) ([]QueuedInstruction, error) {
+	queued := []QueuedInstruction{}
+	err := c.do(ctx, config, http.MethodPost, "/v1/shared-runs/"+url.PathEscape(id)+"/queue", QueuedPrompt{Prompt: prompt}, &queued)
+	return queued, err
+}
+
+func (c *Client) RemoveSharedQueued(ctx context.Context, config Config, id, instructionID string) ([]QueuedInstruction, error) {
+	queued := []QueuedInstruction{}
+	err := c.do(ctx, config, http.MethodDelete, "/v1/shared-runs/"+url.PathEscape(id)+"/queue/"+url.PathEscape(instructionID), nil, &queued)
+	return queued, err
 }
 
 func (c *Client) InterruptSharedRun(ctx context.Context, config Config, id string) error {

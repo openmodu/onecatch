@@ -75,6 +75,9 @@ export function mobileRunFingerprint(run = {}) {
     run.result?.sessionId, run.result?.succeeded ? 1 : 0,
     run.result?.finalMessage, run.result?.usage?.inputTokens,
     run.result?.usage?.outputTokens,
+    // A message queued or withdrawn changes nothing else about the run, so
+    // without this the poll that reports it hands React the old object.
+    (run.queued || []).map((item) => item.id).join(","),
   ].join("|");
 }
 

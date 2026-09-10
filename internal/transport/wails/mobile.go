@@ -79,6 +79,16 @@ func (b *MobileBinding) DeleteConversation(id string) error {
 	return b.service.DeleteConversation(context.Background(), id)
 }
 
+// QueueFollowUp holds a message for a turn that is still running.
+func (b *MobileBinding) QueueFollowUp(runID, prompt string) ([]worker.QueuedInstruction, error) {
+	return b.service.QueueFollowUp(runID, prompt)
+}
+
+// DequeueFollowUp takes a queued message back out before the agent reaches it.
+func (b *MobileBinding) DequeueFollowUp(runID, instructionID string) ([]worker.QueuedInstruction, error) {
+	return b.service.DequeueFollowUp(runID, instructionID)
+}
+
 // RefreshRuns re-reads the host's history and waits for it, for pull to refresh.
 func (b *MobileBinding) RefreshRuns() []mobileservice.RunView {
 	return b.service.RefreshRuns()

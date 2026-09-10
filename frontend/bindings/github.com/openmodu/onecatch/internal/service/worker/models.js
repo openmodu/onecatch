@@ -183,6 +183,52 @@ export class Info {
 }
 
 /**
+ * QueuedInstruction is a message waiting for the current turn to end. The
+ * host owns the queue — the phone may be closed before the agent gets to it.
+ */
+export class QueuedInstruction {
+    /**
+     * Creates a new QueuedInstruction instance.
+     * @param {Partial<QueuedInstruction>} [$$source = {}] - The source object to create the QueuedInstruction.
+     */
+    constructor($$source = {}) {
+        if (!("id" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["id"] = "";
+        }
+        if (!("text" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["text"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["createdAt"] = "0001-01-01T00:00:00.000Z";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new QueuedInstruction instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {QueuedInstruction}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new QueuedInstruction(/** @type {Partial<QueuedInstruction>} */($$parsedSource));
+    }
+}
+
+/**
  * SharedRun is a projection of the host's durable task record. Clients cache
  * it for offline viewing; only the host owns execution and history.
  */
@@ -295,6 +341,15 @@ export class SharedRun {
         }
         if (/** @type {any} */(false)) {
             /**
+             * Queued is what the reader sent while this turn was still running, in the
+             * order the host will hand it to the agent.
+             * @member
+             * @type {QueuedInstruction[] | undefined}
+             */
+            this["queued"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
              * @member
              * @type {string | undefined}
              */
@@ -326,12 +381,16 @@ export class SharedRun {
     static createFrom($$source = {}) {
         const $$createField10_0 = $$createType2;
         const $$createField13_0 = $$createType4;
+        const $$createField14_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("events" in $$parsedSource) {
             $$parsedSource["events"] = $$createField10_0($$parsedSource["events"]);
         }
         if ("result" in $$parsedSource) {
             $$parsedSource["result"] = $$createField13_0($$parsedSource["result"]);
+        }
+        if ("queued" in $$parsedSource) {
+            $$parsedSource["queued"] = $$createField14_0($$parsedSource["queued"]);
         }
         return new SharedRun(/** @type {Partial<SharedRun>} */($$parsedSource));
     }
@@ -597,8 +656,8 @@ export class WorkspacePrepareResult {
      * @returns {WorkspacePrepareResult}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType5;
-        const $$createField1_0 = $$createType6;
+        const $$createField0_0 = $$createType7;
+        const $$createField1_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("mapping" in $$parsedSource) {
             $$parsedSource["mapping"] = $$createField0_0($$parsedSource["mapping"]);
@@ -616,5 +675,7 @@ const $$createType1 = agentrun$0.Event.createFrom;
 const $$createType2 = $Create.Array($$createType1);
 const $$createType3 = agentrun$0.Result.createFrom;
 const $$createType4 = $Create.Nullable($$createType3);
-const $$createType5 = WorkspaceMapping.createFrom;
-const $$createType6 = workspaces$0.GitSnapshot.createFrom;
+const $$createType5 = QueuedInstruction.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = WorkspaceMapping.createFrom;
+const $$createType8 = workspaces$0.GitSnapshot.createFrom;

@@ -323,6 +323,17 @@ summary.mobile-tool-row:active { opacity: .65; }
 .mobile-composer textarea { width: 100%; max-width: 100%; min-width: 0; min-height: 24px; max-height: 130px; display: block; padding: 0; resize: none; overflow-x: hidden; border: 0; outline: 0; box-shadow: none; background: transparent; color: var(--foreground); font-size: 16px; line-height: 1.45; }
 .mobile-composer textarea:focus-visible { box-shadow: none; }
 .mobile-composer-footer { width: 100%; max-width: 100%; min-width: 0; margin-top: 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mobile-composer-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+/* What was sent while the agent was still working: the host holds it, and
+   it stays visible above the composer until the turn ends and picks it up. */
+.mobile-queued { margin-bottom: 10px; padding: 10px 12px; display: grid; gap: 7px; border-radius: 12px; background: var(--m-field); }
+.mobile-queued small { display: flex; align-items: center; gap: 5px; color: var(--muted-foreground); font-size: 11.5px; }
+.mobile-queued small svg { width: 12px; height: 12px; }
+.mobile-queued-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; line-height: 1.5; }
+.mobile-queued-item span { flex: 1; min-width: 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.mobile-queued-item button { flex: 0 0 auto; width: 26px; height: 26px; margin: -3px -4px 0 0; display: grid; place-items: center; border: 0; border-radius: 7px; background: transparent; color: var(--muted-foreground); -webkit-tap-highlight-color: transparent; }
+.mobile-queued-item button:active { opacity: .6; }
+.mobile-queued-item button svg, .mobile-queued-item > svg { width: 14px; height: 14px; }
 .mobile-context-button { min-width: 0; height: 32px; padding: 0 11px; display: flex; align-items: center; gap: 7px; border: 1px solid var(--m-line); border-radius: 8px; background: transparent; color: var(--foreground); font-size: 12px; }
 .mobile-context-button svg { width: 14px; color: var(--muted-foreground); }
 .mobile-context-button span { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

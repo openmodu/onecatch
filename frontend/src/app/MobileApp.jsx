@@ -20,6 +20,7 @@ import {
   Gauge,
 	GitBranch,
   Globe,
+  Hourglass,
 	HardDrive,
   Link2,
   LoaderCircle,
@@ -480,11 +481,16 @@ const ConversationTurn = memo(function ConversationTurn({ run, notice = "", earl
   </section>;
 });
 
-function ConversationView({ conversation, workspace, snapshot, sharedRuns, prompt, setPrompt, pending, busy, permissionBusy, runtime, transcriptNotice, onOpenContext, onStart, onInterrupt, onRespond, onLoadEarlier }) {
+function ConversationView({ conversation, workspace, snapshot, sharedRuns, prompt, setPrompt, pending, queuing, busy, permissionBusy, runtime, transcriptNotice, onOpenContext, onStart, onQueue, onDequeue, onInterrupt, onRespond, onLoadEarlier }) {
   const runs = conversation?.runs || [];
   const running = runs.find((item) => item.status === "running");
   const latest = runs.at(-1);
-  const canSend = prompt.trim() && !running && !busy && (sharedRuns || (snapshot?.isRepo && !snapshot?.status && !(snapshot?.files || []).length));
+  // A turn the host is running holds a queue, the way the desktop composer
+  // does. A turn this phone is running has nowhere to keep one.
+  const queueable = Boolean(running && sharedRuns);
+  const queued = [...(running?.queued || []), ...queuing];
+  const canSend = Boolean(prompt.trim()) && !busy
+    && (running ? queueable : (sharedRuns || (snapshot?.isRepo && !snapshot?.status && !(snapshot?.files || []).length)));
   const transcriptRef = useRef(null);
   const pinnedRef = useRef(true);
   const anchorRef = useRef(0);
@@ -551,10 +557,22 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
     </main>
     <footer className="mobile-composer-wrap">
       {Boolean(!sharedRuns && snapshot && (!snapshot.isRepo || snapshot.status || (snapshot.files || []).length)) && <div className="mobile-workspace-alert"><CircleAlert />远端工作区需要保持干净才能开始只读任务</div>}
+      {queued.length > 0 && <div className="mobile-queued">
+        <small><Hourglass />已排队 {queued.length} 条 · 本轮结束后依次发送</small>
+        {queued.map((item) => <div className="mobile-queued-item" key={item.id}>
+          <span>{item.text}</span>
+          {item.pending
+            ? <LoaderCircle className="animate-spin" aria-label="正在排队" />
+            : <button type="button" aria-label="取消这条" onClick={() => onDequeue(running.id, item.id)}><X /></button>}
+        </div>)}
+      </div>}
       <div className="mobile-composer">
-        <Textarea ref={promptRef} value={prompt} rows={1} placeholder={runs.length || pending ? "继续追问…" : "给 Agent 发送任务"} onChange={(event) => setPrompt(event.target.value)} />
+        <Textarea ref={promptRef} value={prompt} rows={1} placeholder={queueable ? "排队，本轮结束后发送…" : runs.length || pending ? "继续追问…" : "给 Agent 发送任务"} onChange={(event) => setPrompt(event.target.value)} />
         <div className="mobile-composer-footer"><button type="button" className="mobile-context-button" onClick={onOpenContext}><Plus /><span>{workspaceLabel(workspace)}</span><b><RuntimeHarnessIcon harness={runtime} size={13} />{runtime}</b></button>
-          {running ? <button type="button" className="mobile-send-button stop" aria-label="停止" disabled={busy} onClick={() => onInterrupt(running.id)}><Square /></button> : <button type="button" className="mobile-send-button" aria-label="发送" disabled={!canSend} onClick={() => onStart({ resumeSessionId: latest?.result?.sessionId || "" })}>{busy ? <LoaderCircle className="animate-spin" /> : <Send />}</button>}
+          <div className="mobile-composer-actions">
+            {running && <button type="button" className="mobile-send-button stop" aria-label="停止" disabled={busy} onClick={() => onInterrupt(running.id)}><Square /></button>}
+            {(!running || queueable) && <button type="button" className="mobile-send-button" aria-label={queueable ? "排队发送" : "发送"} disabled={!canSend} onClick={() => (queueable ? onQueue(running.id) : onStart({ resumeSessionId: latest?.result?.sessionId || "" }))}>{busy ? <LoaderCircle className="animate-spin" /> : <Send />}</button>}
+          </div>
         </div>
       </div>
     </footer>
@@ -749,6 +767,7 @@ export default function MobileWorkbench() {
   const [selectedConversationID, setSelectedConversationID] = useState("");
   const [prompt, setPrompt] = useState("");
   const [pendingPrompt, setPendingPrompt] = useState(null);
+  const [queuingPrompts, setQueuingPrompts] = useState([]);
   const [runtime, setRuntime] = useState("codex");
   const [model, setModel] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState("");
@@ -1087,6 +1106,37 @@ export default function MobileWorkbench() {
     finally { setBusy(""); }
   };
 
+  // Queueing is the host's job — it holds the message and hands it to the agent
+  // when the turn ends — so the phone can be locked and put away meanwhile. The
+  // row appears the moment it is sent and is replaced by the host's own copy.
+  const queueFollowUp = async (runID) => {
+    const text = prompt.trim();
+    if (!text || !runID) return false;
+    const local = { id: `queuing-${Date.now()}`, text, pending: true };
+    setQueuingPrompts((items) => [...items, local]);
+    setPrompt("");
+    setBusy("queue");
+    try {
+      const queued = await MobileBinding.QueueFollowUp(runID, text);
+      setRuns((items) => items.map((item) => (item.id === runID ? { ...item, queued } : item)));
+      return true;
+    } catch (error) {
+      setPrompt((current) => current || text);
+      notify("error", errorMessage(error));
+      return false;
+    } finally {
+      setQueuingPrompts((items) => items.filter((item) => item.id !== local.id));
+      setBusy("");
+    }
+  };
+
+  const dequeueFollowUp = async (runID, instructionID) => {
+    try {
+      const queued = await MobileBinding.DequeueFollowUp(runID, instructionID);
+      setRuns((items) => items.map((item) => (item.id === runID ? { ...item, queued } : item)));
+    } catch (error) { notify("error", errorMessage(error)); }
+  };
+
   const loadEarlierRun = useCallback(async (runID) => {
     try {
       const detail = await MobileBinding.LoadEarlierRun(runID);
@@ -1233,7 +1283,7 @@ export default function MobileWorkbench() {
     {goBack && !backGestureBlocked && <div className="mobile-back-gesture-edge" aria-hidden="true" />}
     <Header onMenu={() => setDrawerOpen(true)} onBack={goBack} onMore={() => setMenuOpen(true)} onNew={null}
       title={headerIdentity.title} meta={headerIdentity.meta} badge={headerIdentity.badge} onMeta={headerIdentity.onMeta} />
-	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "usage" ? <main className="mobile-main"><MobileUsageBoard usage={usage.items} loading={usage.loading} error={usage.error} onRefresh={() => loadUsage(true)} /></main> : view === "sessions" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onActions={setSessionActions} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} pending={pendingPrompt && pendingPrompt.conversationID === selectedConversationID ? pendingPrompt : null} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
+	{!workers.length ? <main className="mobile-main"><EmptyConnection onPair={() => setPairTarget(null)} /></main> : view === "projects" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><ProjectHome workspaces={orderedWorkspaces} conversations={conversations} query={query} onOpenWorkspace={selectWorkspace} onNew={newConversation} onManage={() => { setView("workspaces"); setWorkspaceEditor(null); }} /></main> : view === "workspaces" ? <main className="mobile-main"><WorkspaceManagerPage workspaces={orderedWorkspaces} statusByID={workspaceStatusByID} managementSupported={workspaceManagementSupported} busy={busy} onOpen={selectWorkspace} onCreate={() => setWorkspaceEditor(null)} onEdit={setWorkspaceEditor} onRefresh={refreshWorkspace} /></main> : view === "usage" ? <main className="mobile-main"><MobileUsageBoard usage={usage.items} loading={usage.loading} error={usage.error} onRefresh={() => loadUsage(true)} /></main> : view === "sessions" ? <main className="mobile-main" ref={listRef}><PullIndicator refreshing={listRefreshing} /><SessionList workspace={selectedWorkspace} conversations={conversations} query={query} onOpen={openConversation} onActions={setSessionActions} onNew={() => newConversation()} /></main> : <ConversationView sharedRuns={Boolean(selectedHealth?.health?.capabilities?.sharedRuns && selectedWorkspace?.shared)} transcriptNotice={transcriptNotice} conversation={selectedConversation} workspace={selectedWorkspace} snapshot={snapshot} prompt={prompt} setPrompt={setPrompt} pending={pendingPrompt && pendingPrompt.conversationID === selectedConversationID ? pendingPrompt : null} queuing={queuingPrompts} busy={busy} permissionBusy={permissionBusy} runtime={runtime} onOpenContext={() => setContextOpen(true)} onStart={startRun} onQueue={queueFollowUp} onDequeue={dequeueFollowUp} onInterrupt={interruptRun} onRespond={respondPermission} onLoadEarlier={loadEarlierRun} />}
 	{workers.length > 0 && view !== "conversation" && view !== "workspaces" && <BottomBar query={query} setQuery={setQuery} onNew={() => newConversation()} />}
     <Sidebar open={drawerOpen} workspaces={orderedWorkspaces} conversations={conversations} selectedConversationID={selectedConversationID} workspaceID={workspaceID} health={selectedHealth} onClose={() => setDrawerOpen(false)} onHome={() => setView("projects")} onUsage={() => setView("usage")} onWorkspace={selectWorkspace} onConversation={openConversation} onNew={() => newConversation()} onWorkers={() => setWorkersOpen(true)} />
 	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onRename={setRenameTarget} onDelete={deleteConversation} onClose={() => setMenuOpen(false)} />

@@ -5,6 +5,7 @@
 export {
     Health,
     Info,
+    QueuedInstruction,
     SharedRun,
     UpdateInput,
     WorkspaceMapping,

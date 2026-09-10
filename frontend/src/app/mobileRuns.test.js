@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mobileRunDetailRecord, mobileTranscriptNotice, needsMobileRunDetail } from "./mobileRuns.js";
+import { mobileRunDetailRecord, mobileRunFingerprint, mobileTranscriptNotice, needsMobileRunDetail } from "./mobileRuns.js";
 
 test("completed summaries keep requesting a body until detail loading succeeds", () => {
   const summary = { status: "succeeded", finishedAt: "2026-09-08T10:00:00Z" };
@@ -343,4 +343,17 @@ test("a permission answered on either device no longer asks again", () => {
     { kind: "permission_resolved", permission: { id: "permission-1" }, permissionDecision: "allow" },
   ]);
   assert.deepEqual(events.map((event) => event.permission.id), ["permission-2"]);
+});
+
+// Queueing a message changes nothing else about the run, so a poll that
+// reported it used to hand React the identical object it already had — and the
+// 待发区 only appeared when something else happened to change too.
+test("a queued message is part of what makes a run look different", () => {
+  const run = { id: "run_1", status: "running", queued: [{ id: "i1", text: "and then this" }] };
+  const empty = { ...run, queued: [] };
+  assert.notEqual(mobileRunFingerprint(run), mobileRunFingerprint(empty));
+  const merged = mergeMobileRunSummaries([empty], [run]);
+  assert.notEqual(merged[0], empty, "the poll that reported the queue has to replace the old object");
+  assert.deepEqual(merged[0].queued, run.queued);
+  assert.equal(mergeMobileRunSummaries([run], [{ ...run }])[0], run, "an unchanged queue keeps the old object");
 });

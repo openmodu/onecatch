@@ -107,6 +107,7 @@ func (h *hostedRuns) Get(ctx context.Context, id string, window worker.Transcrip
 	}
 	view := hostedRunView(detail.Run, detail.Task, detail.Active)
 	view.TurnCount = len(detail.StepRuns)
+	view.Queued = pendingInstructions(detail.Instructions)
 	if view.Runtime == "" {
 		for _, step := range detail.Workflow.Steps {
 			if step.ID == detail.Run.CurrentStepID {
@@ -302,6 +303,54 @@ func (h *hostedRuns) RespondPermission(ctx context.Context, id, requestID, decis
 		return err
 	}
 	return h.app.RespondPermission(PermissionDecisionInput{RunID: id, RequestID: requestID, Decision: decision})
+}
+
+// Queue holds a message until the running turn ends, the same 待发区 the
+// desktop composer writes to. The host owns the queue, so the phone can go back
+// in a pocket while the agent works through it.
+func (h *hostedRuns) Queue(ctx context.Context, runID, prompt string) ([]worker.QueuedInstruction, error) {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return nil, coded("instruction_empty", "a queued message needs text")
+	}
+	if err := h.runWorkspace(ctx, runID); err != nil {
+		return nil, err
+	}
+	if _, err := h.app.QueueFollowUp(ctx, strings.TrimSpace(runID), InstructionInput{Content: prompt}); err != nil {
+		return nil, err
+	}
+	return h.queued(ctx, runID)
+}
+
+func (h *hostedRuns) Dequeue(ctx context.Context, runID, instructionID string) ([]worker.QueuedInstruction, error) {
+	if err := h.runWorkspace(ctx, runID); err != nil {
+		return nil, err
+	}
+	if err := h.app.RemoveInstruction(ctx, strings.TrimSpace(runID), strings.TrimSpace(instructionID)); err != nil {
+		return nil, err
+	}
+	return h.queued(ctx, runID)
+}
+
+func (h *hostedRuns) queued(ctx context.Context, runID string) ([]worker.QueuedInstruction, error) {
+	instructions, err := h.app.store.Repos.Workflows.ListInstructions(ctx, strings.TrimSpace(runID))
+	if err != nil {
+		return nil, err
+	}
+	return pendingInstructions(instructions), nil
+}
+
+// pendingInstructions is what the queue looks like to a remote reader: the
+// messages still waiting, in the order the agent will be handed them.
+func pendingInstructions(items []domainworkflows.Instruction) []worker.QueuedInstruction {
+	queued := []worker.QueuedInstruction{}
+	for _, item := range items {
+		if item.Status != domainworkflows.InstructionPending {
+			continue
+		}
+		queued = append(queued, worker.QueuedInstruction{ID: item.ID, Text: item.Content, CreatedAt: item.CreatedAt})
+	}
+	return queued
 }
 
 // runWorkspace is the cheap guard: it answers whether this run belongs to a

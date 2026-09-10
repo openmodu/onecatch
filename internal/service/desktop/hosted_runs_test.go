@@ -502,3 +502,87 @@ func TestPhoneRenamesAndDeletesAHostedConversation(t *testing.T) {
 		t.Fatal("deleting a conversation that is gone must say so")
 	}
 }
+
+// The phone used to have nowhere to put a message typed while the agent was
+// working: the send button was simply dead until the turn ended. The queue is
+// the host's, so a phone that goes back in a pocket still has its message
+// delivered.
+func TestPhoneQueuesAFollowUpWhileTheTurnRuns(t *testing.T) {
+	ctx := context.Background()
+	engine := &fifoEngine{started: make(chan agentrun.Request, 4), release: make(chan struct{}, 4)}
+	app, _ := newLocalTestApp(t, engine)
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := worker.NewServer("test-host", "Desktop", "secret", nil, app.runtimes, 1)
+	server.SetSharedRuns(&hostedRuns{app: app})
+	mappings, err := app.hostedWorkspaces(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.SetSharedWorkspaces(mappings)
+	server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+	phone, err := mobile.NewService(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer phone.Close()
+	if _, err := phone.PairWorker(ctx, httpServer.URL, "PAIR1234"); err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: directAgentWorkflowID, Title: "queue me", Prompt: "first", Harness: "modu", Sandbox: "workspace-write"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := app.StartRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	awaitHostedRequest(t, engine)
+	if views := phone.RefreshRuns(); len(views) != 1 {
+		t.Fatalf("phone history = %+v", views)
+	}
+
+	queued, err := phone.QueueFollowUp(run.ID, "and then this")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(queued) != 1 || queued[0].Text != "and then this" || queued[0].ID == "" {
+		t.Fatalf("queue = %+v", queued)
+	}
+	// The reader must see it without asking again, and after a poll as well.
+	view, err := phone.GetRun(run.ID)
+	if err != nil || len(view.Queued) != 1 || view.Queued[0].Text != "and then this" {
+		t.Fatalf("run view queue = %+v, %v", view.Queued, err)
+	}
+	for _, summary := range phone.ListRuns() {
+		if summary.ID == run.ID && len(summary.Queued) != 1 {
+			t.Fatalf("summary dropped the queue: %+v", summary)
+		}
+	}
+
+	// A message can be taken back while the agent has not reached it.
+	second, err := phone.QueueFollowUp(run.ID, "on second thought")
+	if err != nil || len(second) != 2 {
+		t.Fatalf("second queue = %+v, %v", second, err)
+	}
+	left, err := phone.DequeueFollowUp(run.ID, second[1].ID)
+	if err != nil || len(left) != 1 || left[0].Text != "and then this" {
+		t.Fatalf("after withdrawing = %+v, %v", left, err)
+	}
+
+	// When the turn ends the host hands the queued message to the agent.
+	engine.release <- struct{}{}
+	next := awaitHostedRequest(t, engine)
+	if next.Prompt != "and then this" {
+		t.Fatalf("agent received %q", next.Prompt)
+	}
+	engine.release <- struct{}{}
+	awaitHostedStatus(t, phone, run.ID, "succeeded")
+	if _, err := phone.QueueFollowUp(run.ID, "   "); err == nil {
+		t.Fatal("an empty queued message must be refused")
+	}
+}

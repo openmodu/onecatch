@@ -59,12 +59,24 @@ export function DeleteWorker(id) {
 }
 
 /**
+ * DequeueFollowUp takes a queued message back out before the agent reaches it.
+ * @param {string} runID
+ * @param {string} instructionID
+ * @returns {$CancellablePromise<worker$0.QueuedInstruction[]>}
+ */
+export function DequeueFollowUp(runID, instructionID) {
+    return $Call.ByID(116216541, runID, instructionID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
+    }));
+}
+
+/**
  * @param {string} id
  * @returns {$CancellablePromise<mobile$0.RunView>}
  */
 export function GetRun(id) {
     return $Call.ByID(42850800, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType5($result);
     }));
 }
 
@@ -81,7 +93,7 @@ export function InterruptRun(id) {
  */
 export function ListRunSummaries() {
     return $Call.ByID(1625646554).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType6($result);
     }));
 }
 
@@ -90,7 +102,7 @@ export function ListRunSummaries() {
  */
 export function ListRuns() {
     return $Call.ByID(2751141287).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType6($result);
     }));
 }
 
@@ -99,7 +111,7 @@ export function ListRuns() {
  */
 export function ListWorkers() {
     return $Call.ByID(1285524968).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType8($result);
     }));
 }
 
@@ -109,7 +121,7 @@ export function ListWorkers() {
  */
 export function ListWorkspaces(workerID) {
     return $Call.ByID(2565852803, workerID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType10($result);
     }));
 }
 
@@ -120,7 +132,7 @@ export function ListWorkspaces(workerID) {
  */
 export function LoadEarlierRun(id) {
     return $Call.ByID(913933000, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType5($result);
     }));
 }
 
@@ -131,7 +143,7 @@ export function LoadEarlierRun(id) {
  */
 export function PairWorker(baseURL, code) {
     return $Call.ByID(1072201499, baseURL, code).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType7($result);
     }));
 }
 
@@ -143,7 +155,19 @@ export function PairWorker(baseURL, code) {
  */
 export function PrepareWorkspace(workerID, workspaceID, input) {
     return $Call.ByID(1084700857, workerID, workspaceID, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType9($result);
+        return $$createType11($result);
+    }));
+}
+
+/**
+ * QueueFollowUp holds a message for a turn that is still running.
+ * @param {string} runID
+ * @param {string} prompt
+ * @returns {$CancellablePromise<worker$0.QueuedInstruction[]>}
+ */
+export function QueueFollowUp(runID, prompt) {
+    return $Call.ByID(1293369296, runID, prompt).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType4($result);
     }));
 }
 
@@ -153,7 +177,7 @@ export function PrepareWorkspace(workerID, workspaceID, input) {
  */
 export function RefreshRuns() {
     return $Call.ByID(3064858598).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType6($result);
     }));
 }
 
@@ -191,7 +215,7 @@ export function RespondPermission(input) {
  */
 export function StartRun(input) {
     return $Call.ByID(2117250808, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType3($result);
+        return $$createType5($result);
     }));
 }
 
@@ -202,7 +226,7 @@ export function StartRun(input) {
  */
 export function WorkspaceGitStatus(workerID, workspaceID) {
     return $Call.ByID(2980083104, workerID, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType10($result);
+        return $$createType12($result);
     }));
 }
 
@@ -210,11 +234,13 @@ export function WorkspaceGitStatus(workerID, workspaceID) {
 const $$createType0 = agentrun$0.AccountUsage.createFrom;
 const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = mobile$0.WorkerStatus.createFrom;
-const $$createType3 = worker$0.SharedRun.createFrom;
+const $$createType3 = worker$0.QueuedInstruction.createFrom;
 const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = worker$0.Info.createFrom;
+const $$createType5 = worker$0.SharedRun.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = worker$0.WorkspaceMapping.createFrom;
+const $$createType7 = worker$0.Info.createFrom;
 const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = worker$0.WorkspacePrepareResult.createFrom;
-const $$createType10 = workspaces$0.GitSnapshot.createFrom;
+const $$createType9 = worker$0.WorkspaceMapping.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = worker$0.WorkspacePrepareResult.createFrom;
+const $$createType12 = workspaces$0.GitSnapshot.createFrom;

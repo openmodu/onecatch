@@ -414,6 +414,62 @@ func mergeTranscriptWindow(cached, fresh RunView) RunView {
 	return fresh
 }
 
+// QueueFollowUp holds a message until the running turn ends, the way the
+// desktop composer does. The host owns the queue — a phone that goes back in a
+// pocket still has its message delivered — so this is for shared runs only.
+func (s *Service) QueueFollowUp(runID, prompt string) ([]worker.QueuedInstruction, error) {
+	config, view, err := s.sharedRunConfig(runID)
+	if err != nil {
+		return nil, err
+	}
+	queued, err := s.client.QueueSharedFollowUp(context.Background(), config, view.ID, prompt)
+	if err != nil {
+		return nil, err
+	}
+	s.cacheQueued(view.ID, queued)
+	return queued, nil
+}
+
+// DequeueFollowUp takes a message back out of the queue before the agent
+// reaches it.
+func (s *Service) DequeueFollowUp(runID, instructionID string) ([]worker.QueuedInstruction, error) {
+	config, view, err := s.sharedRunConfig(runID)
+	if err != nil {
+		return nil, err
+	}
+	queued, err := s.client.RemoveSharedQueued(context.Background(), config, view.ID, instructionID)
+	if err != nil {
+		return nil, err
+	}
+	s.cacheQueued(view.ID, queued)
+	return queued, nil
+}
+
+func (s *Service) sharedRunConfig(runID string) (worker.Config, RunView, error) {
+	s.mu.RLock()
+	state := s.runs[strings.TrimSpace(runID)]
+	s.mu.RUnlock()
+	if state == nil {
+		return worker.Config{}, RunView{}, worker.RemoteError{Code: "mobile_run_not_found", Message: "run was not found on this device"}
+	}
+	view := copyRunView(state.view)
+	if !view.Shared {
+		return worker.Config{}, view, worker.RemoteError{Code: "mobile_run_not_shared", Message: "only a turn the desktop is running can hold a queue"}
+	}
+	config, err := s.enabledWorker(context.Background(), view.WorkerID)
+	return config, view, err
+}
+
+// cacheQueued keeps the phone's copy of a run in step with the host's queue, so
+// the list the reader is looking at survives a poll that answers from cache.
+func (s *Service) cacheQueued(runID string, queued []worker.QueuedInstruction) {
+	s.mu.Lock()
+	if state := s.runs[runID]; state != nil {
+		state.view.Queued = queued
+	}
+	s.mu.Unlock()
+}
+
 // LoadEarlierRun extends a conversation one page further back.
 func (s *Service) LoadEarlierRun(id string) (RunView, error) {
 	s.mu.RLock()
