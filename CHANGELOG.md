@@ -3,6 +3,14 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.9
+
+- Queue a message on the phone while the agent is still working: the host holds it, the send button no longer goes dead mid-turn, and each queued message can be withdrawn until the agent reaches it.
+- Open a mobile conversation in a fraction of the time by cutting oversized tool output — a page that measured 2.4 MB now measures 355 KB — and answer permission prompts without reading the whole transcript first.
+- Show a sent prompt the moment it is sent instead of after the host answers, and stop a send from queueing behind the background history sync.
+- Fold a long prompt behind 显示更多 on the phone, the way the desktop folds one.
+- Keep a keystroke or a poll from re-rendering every message in an open conversation.
+
 ## 0.2.8
 
 - Manage conversations from the phone: long-press a session to rename or delete it, and read its token spend and cache hit rate in the session menu.
