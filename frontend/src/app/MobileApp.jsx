@@ -590,7 +590,7 @@ function Sidebar({ open, workspaces, conversations, selectedConversationID, work
   </div>;
 }
 
-function MoreMenu({ open, sortMode, health, onSort, onWorkspaces, onUsage, onWorkers, onPair, onSettings, onClose }) {
+function MoreMenu({ open, sortMode, health, onSort, onWorkspaces, onWorkers, onPair, onSettings, onClose }) {
   if (!open) return null;
   return <div className="mobile-popover-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="mobile-more-menu">
@@ -601,7 +601,6 @@ function MoreMenu({ open, sortMode, health, onSort, onWorkspaces, onUsage, onWor
       <small>管理</small>
 	  <button type="button" onClick={() => { onWorkspaces(); onClose(); }}><span /><FolderGit2 />Workspace 管理</button>
       <button type="button" onClick={() => { onWorkers(); onClose(); }}><span /><Cloud />Worker 管理</button>
-      <button type="button" onClick={() => { onUsage(); onClose(); }}><span /><Gauge />用量</button>
       <button type="button" onClick={() => { onPair(); onClose(); }}><span /><Link2 />添加连接</button>
       <button type="button" onClick={() => { onSettings(); onClose(); }}><span /><Settings2 />运行设置</button>
       <hr />
@@ -1218,7 +1217,7 @@ export default function MobileWorkbench() {
 	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onRename={setRenameTarget} onDelete={deleteConversation} onClose={() => setMenuOpen(false)} />
 	<SessionActionSheet conversation={sessionActions} onRename={setRenameTarget} onDelete={deleteConversation} onClose={() => setSessionActions(null)} />
 	<RenameSheet conversation={renameTarget} busy={busy === "rename"} onSubmit={renameConversation} onClose={() => setRenameTarget(null)} />
-	<MoreMenu open={menuOpen && view !== "conversation"} sortMode={sortMode} health={selectedHealth} onSort={setSortMode} onWorkspaces={openWorkspaceManager} onUsage={() => setView("usage")} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
+	<MoreMenu open={menuOpen && view !== "conversation"} sortMode={sortMode} health={selectedHealth} onSort={setSortMode} onWorkspaces={openWorkspaceManager} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
     <ContextSheet open={contextOpen} workers={workers} selectedWorkerID={selectedWorkerID} workspaces={workspaces} workspaceID={workspaceID} health={selectedHealth} runtime={runtime} runtimeLocked={Boolean(selectedConversationID)} model={model} reasoningEffort={reasoningEffort} onClose={() => setContextOpen(false)} onSelectWorker={(id) => { setSelectedWorkerID(id); setSelectedConversationID(""); setView("conversation"); void refreshWorker(id, true); }} onSelectWorkspace={(id) => selectWorkspace(id, "conversation")} onRuntime={setRuntime} onModel={setModel} onReasoning={setReasoningEffort} />
     <WorkersSheet open={workersOpen} workers={workers} selectedWorkerID={selectedWorkerID} onSelect={selectWorker} healthByID={healthByID} busy={Boolean(busy)} onClose={() => setWorkersOpen(false)} onPair={(worker) => { setWorkersOpen(false); setPairTarget(worker || null); }} onRefresh={refreshWorker} onDelete={deleteWorker} />
 	<PairSheet open={pairTarget !== undefined} busy={busy === "pair"} initialURL={pairTarget?.baseUrl || "https://"} onClose={() => setPairTarget(undefined)} onPair={pairWorker} />
