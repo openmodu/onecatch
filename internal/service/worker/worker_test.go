@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
@@ -511,4 +512,45 @@ func containsEnvironment(environment []string, value string) bool {
 		}
 	}
 	return false
+}
+
+// A page of a coding session is mostly tool output, and one file edit's result
+// can be 150 KB of echoed file. Two hundred of those is megabytes a phone
+// spends seconds receiving and laying out to draw a row it keeps collapsed.
+func TestTranscriptWindowTrimsOversizedToolOutput(t *testing.T) {
+	huge := strings.Repeat("中", MaxSharedEventText)
+	events := []agentrun.Event{
+		{Kind: agentrun.EventKind("user_message"), Text: huge},
+		{Kind: agentrun.KindToolResult, Text: huge},
+		{Kind: agentrun.KindMessage, Text: huge},
+		{Kind: agentrun.KindToolUse, Text: "go test ./..."},
+	}
+	original := append([]agentrun.Event{}, events...)
+
+	page, offset := TranscriptWindow{Limit: 4}.Apply(events)
+	if offset != 0 || len(page) != 4 {
+		t.Fatalf("page = %d events at %d", len(page), offset)
+	}
+	if page[1].Text == huge || len(page[1].Text) > MaxSharedEventText+64 {
+		t.Fatalf("tool result was not trimmed: %d bytes", len(page[1].Text))
+	}
+	if !strings.HasSuffix(page[1].Text, "（输出过长，完整内容在桌面端）") {
+		t.Fatal("a trimmed body has to say that it was trimmed")
+	}
+	if !utf8.ValidString(page[1].Text) {
+		t.Fatal("the cut landed inside a rune")
+	}
+	// Prose is what the reader opened the conversation for.
+	if page[0].Text != huge || page[2].Text != huge {
+		t.Fatal("the prompt or the reply was trimmed")
+	}
+	if page[3].Text != "go test ./..." {
+		t.Fatal("a small tool event was rewritten")
+	}
+	// The host's own copy of the transcript must not be edited in place.
+	for i, event := range events {
+		if event.Text != original[i].Text {
+			t.Fatalf("event %d was trimmed in the caller's slice", i)
+		}
+	}
 }

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
@@ -63,8 +64,14 @@ type TranscriptWindow struct {
 	Before int
 }
 
-// Apply slices the assembled transcript to the requested page and reports
-// where that page starts.
+// MaxSharedEventText caps one tool event's text on its way to a remote client.
+// A file edit's result can be 150 KB — the whole file, echoed back — and a page
+// of two hundred of those is megabytes that a phone spends seconds receiving,
+// decoding and laying out, to draw a line it keeps collapsed anyway.
+const MaxSharedEventText = 4096
+
+// Apply slices the assembled transcript to the requested page, trims tool
+// output no remote client will read in full, and reports where the page starts.
 func (w TranscriptWindow) Apply(events []agentrun.Event) ([]agentrun.Event, int) {
 	end := len(events)
 	if w.Before > 0 && w.Before < end {
@@ -74,7 +81,38 @@ func (w TranscriptWindow) Apply(events []agentrun.Event) ([]agentrun.Event, int)
 	if w.Limit > 0 && end-w.Limit > 0 {
 		start = end - w.Limit
 	}
-	return events[start:end], start
+	return trimSharedEvents(events[start:end]), start
+}
+
+// trimSharedEvents shortens oversized tool bodies. Prose — the prompt, the
+// reply, the reasoning — is what the reader opened the conversation for and is
+// never cut. The page is copied only when something actually needs trimming, so
+// an ordinary one is passed through untouched.
+func trimSharedEvents(events []agentrun.Event) []agentrun.Event {
+	trimmed := events
+	for i, event := range events {
+		if event.Kind != agentrun.KindToolUse && event.Kind != agentrun.KindToolResult {
+			continue
+		}
+		if len(event.Text) <= MaxSharedEventText {
+			continue
+		}
+		if &trimmed[0] == &events[0] {
+			trimmed = append([]agentrun.Event{}, events...)
+		}
+		trimmed[i].Text = truncateEventText(event.Text)
+	}
+	return trimmed
+}
+
+// truncateEventText cuts on a rune boundary and says so, so the reader can tell
+// a trimmed tool result from one that really ended there.
+func truncateEventText(text string) string {
+	cut := MaxSharedEventText
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return text[:cut] + "\n…（输出过长，完整内容在桌面端）"
 }
 
 type SharedRuns interface {

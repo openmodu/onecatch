@@ -296,8 +296,24 @@ func (h *hostedRuns) conversationWorkspace(ctx context.Context, conversationID s
 }
 
 func (h *hostedRuns) RespondPermission(ctx context.Context, id, requestID, decision string) error {
-	if _, err := h.Get(ctx, id, worker.TranscriptWindow{}); err != nil {
+	// This used to guard itself with Get, which reads the run's whole
+	// transcript — megabytes — to answer one yes or no.
+	if err := h.runWorkspace(ctx, id); err != nil {
 		return err
 	}
 	return h.app.RespondPermission(PermissionDecisionInput{RunID: id, RequestID: requestID, Decision: decision})
+}
+
+// runWorkspace is the cheap guard: it answers whether this run belongs to a
+// workspace this desktop shares, without reading a line of its transcript.
+func (h *hostedRuns) runWorkspace(ctx context.Context, runID string) error {
+	run, err := h.app.store.Repos.Workflows.GetRun(ctx, strings.TrimSpace(runID))
+	if err != nil {
+		return coded("run_not_found", "run was not found")
+	}
+	task, err := h.app.store.Repos.Tasks.GetTask(ctx, run.TaskID)
+	if err != nil {
+		return coded("task_not_found", "conversation was not found")
+	}
+	return h.workspace(ctx, task.WorkspaceID)
 }
