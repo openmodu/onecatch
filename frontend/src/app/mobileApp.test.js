@@ -55,3 +55,17 @@ test("the drawer lists the usage board next to the projects", async () => {
   assert.match(drawer, /onUsage\(\); onClose\(\);/);
   assert.match(drawer, /<Gauge \/>用量/);
 });
+
+// A long prompt folds the way the desktop's does: measured, faded, and opened
+// by a button that says which way it goes.
+test("a long user message folds behind a disclosure", async () => {
+  const source = await readFile(new URL("./MobileApp.jsx", import.meta.url), "utf8");
+  const message = source.slice(source.indexOf("function UserMessage("), source.indexOf("function AssistantMessage("));
+  assert.match(message, /body\.scrollHeight > body\.clientHeight \+ 1/, "the fold is measured, not guessed from the text length");
+  assert.match(message, /is-collapsed/);
+  assert.match(message, /显示更多/);
+  assert.match(message, /收起/);
+  const css = await readFile(new URL("../mobile.css", import.meta.url), "utf8");
+  assert.match(css, /\.mobile-user-message-body\.is-collapsed \{[^}]*max-height/, "nothing caps the bubble, so nothing ever overflows to measure");
+  assert.match(css, /\.mobile-message-disclosure \{/);
+});

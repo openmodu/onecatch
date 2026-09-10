@@ -234,7 +234,15 @@ button, input, textarea, select { font: inherit; }
 .mobile-turn + .mobile-turn { margin-top: 26px; padding-top: 24px; border-top: 1px solid var(--m-line); }
 /* User prompts sit in right-aligned bubbles; assistant replies use plain text. */
 .mobile-user-message { width: fit-content; max-width: 88%; margin: 22px 0 20px auto; display: grid; justify-items: end; font-size: 16px; font-weight: 400; line-height: 1.6; }
-.mobile-user-message-body { padding: 12px 16px; border-radius: 16px 16px 4px 16px; background: var(--m-field); white-space: pre-wrap; overflow-wrap: anywhere; }
+.mobile-user-message-body { position: relative; padding: 12px 16px; border-radius: 16px 16px 4px 16px; background: var(--m-field); white-space: pre-wrap; overflow-wrap: anywhere; }
+/* A long prompt is folded to about half a screen, faded at the cut so the
+   fold reads as a fold rather than as the end of the message. */
+.mobile-user-message-body.is-collapsed { max-height: min(300px, 42vh); overflow: hidden; }
+.mobile-user-message-body.is-collapsed.has-overflow::after { position: absolute; right: 0; bottom: 0; left: 0; height: 56px; background: linear-gradient(to bottom, transparent, var(--m-field) 88%); content: ""; pointer-events: none; }
+.mobile-message-disclosure { min-height: 32px; margin-top: 4px; padding: 0 4px; display: flex; align-items: center; gap: 4px; border: 0; border-radius: 7px; background: transparent; color: var(--muted-foreground); font-size: 12.5px; font-weight: 550; -webkit-tap-highlight-color: transparent; }
+.mobile-message-disclosure:active { opacity: .6; }
+.mobile-message-disclosure svg { width: 13px; height: 13px; transition: transform .15s ease; }
+.mobile-message-disclosure svg.is-expanded { transform: rotate(180deg); }
 /* When a turn happened, said once per message and never louder than it. */
 .mobile-message-time { margin-top: 6px; display: block; color: var(--muted-foreground); font: 10.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .mobile-assistant-message { width: 100%; max-width: 100%; min-width: 0; margin-top: 16px; font-size: var(--chat-font-size); line-height: 1.72; }

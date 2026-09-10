@@ -350,10 +350,30 @@ function MessageTime({ at }) {
   return <time className="mobile-message-time" dateTime={at}>{formatMessageTime(at)}</time>;
 }
 
+// A pasted log or a long brief should not push the reply it belongs to off the
+// screen. The desktop folds a tall prompt behind 显示更多; the phone, with far
+// less screen to give away, does the same.
 function UserMessage({ text, at }) {
+  const bodyRef = useRef(null);
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!body || expanded) return undefined;
+    const measure = () => setOverflowing(body.scrollHeight > body.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === "undefined") return undefined;
+    // A rotation or a keyboard reflows the bubble; the fold has to follow.
+    const observer = new ResizeObserver(measure);
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [expanded, text]);
   if (!text) return null;
   return <article className="mobile-user-message" aria-label="你的消息">
-    <div className="mobile-user-message-body">{text}</div>
+    <div ref={bodyRef} className={`mobile-user-message-body ${expanded ? "is-expanded" : "is-collapsed"} ${overflowing ? "has-overflow" : ""}`}>{text}</div>
+    {overflowing && <button type="button" className="mobile-message-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
+      <span>{expanded ? "收起" : "显示更多"}</span><ChevronDown className={expanded ? "is-expanded" : ""} aria-hidden="true" />
+    </button>}
     <MessageTime at={at} />
   </article>;
 }
