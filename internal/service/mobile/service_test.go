@@ -357,3 +357,36 @@ func runMobileGit(t *testing.T, dir string, args ...string) {
 		t.Fatalf("git %v: %v: %s", args, err, output)
 	}
 }
+
+// Starting a turn no longer waits for the background sync, so the sync has to
+// tell the host's deletions apart from a run this device cached while the
+// listing was in flight. Sweeping that one away is what used to force the send
+// to queue behind a full history listing — the pause the phone showed as a
+// frozen send button.
+func TestSyncKeepsARunStartedWhileItWasListing(t *testing.T) {
+	service, err := NewService(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	listedAt := time.Now()
+	service.runs["run_started"] = &runState{cachedAt: listedAt.Add(time.Millisecond),
+		view: RunView{ID: "run_started", WorkerID: "worker", Shared: true, Status: "running"}}
+	service.runs["run_deleted"] = &runState{cachedAt: listedAt.Add(-time.Minute),
+		view: RunView{ID: "run_deleted", WorkerID: "worker", Shared: true, Status: "succeeded"}}
+	service.runs["run_elsewhere"] = &runState{cachedAt: listedAt.Add(-time.Minute),
+		view: RunView{ID: "run_elsewhere", WorkerID: "other", Shared: true, Status: "succeeded"}}
+
+	if !service.sweepStaleRunsLocked("worker", map[string]bool{}, listedAt) {
+		t.Fatal("sweep reported no change after deleting a run")
+	}
+	if service.runs["run_started"] == nil {
+		t.Fatal("the sweep deleted the turn that was started while it listed")
+	}
+	if service.runs["run_deleted"] != nil {
+		t.Fatal("the sweep kept a run the host no longer has")
+	}
+	if service.runs["run_elsewhere"] == nil {
+		t.Fatal("the sweep deleted another worker's run")
+	}
+}

@@ -13,7 +13,7 @@ func (s *Service) cacheSharedRun(config worker.Config, view RunView) {
 	view.Shared = true
 	s.mu.Lock()
 	previous := s.runs[view.ID]
-	s.runs[view.ID] = &runState{config: config, view: copyRunView(view), window: view.EventsOffset}
+	s.runs[view.ID] = &runState{config: config, view: copyRunView(view), window: view.EventsOffset, cachedAt: time.Now()}
 	// Persisting rewrites the whole history file. That is nothing on a laptop
 	// and real work on a phone, so a refresh that changed nothing skips it.
 	if previous == nil || !sameCachedRun(previous.view, view) {
@@ -154,6 +154,9 @@ func (s *Service) syncSharedRuns(ctx context.Context) {
 				s.cacheSharedRun(config, imported)
 			}
 		}
+		// Anything this device caches from here on — a turn the reader just
+		// started — is newer than the listing below and survives the sweep.
+		listedAt := time.Now()
 		views := []RunView{}
 		cursor := ""
 		complete := false
@@ -181,30 +184,45 @@ func (s *Service) syncSharedRuns(ctx context.Context) {
 		for _, view := range views {
 			view.WorkerID, view.Shared = config.ID, true
 			found[view.ID] = true
+			state := &runState{config: config, view: view}
 			if previous := s.runs[view.ID]; previous != nil {
 				// A listing carries no transcript, so the page the reader has
 				// open survives the sync that refreshes its metadata.
 				view.Events = previous.view.Events
 				view.EventsOffset, view.EventsTotal = previous.view.EventsOffset, previous.view.EventsTotal
 				view.Result = previous.view.Result
+				state.view = view
+				state.window, state.cachedAt = previous.window, previous.cachedAt
 				if sameRunMetadata(previous.view, view) {
 					continue
 				}
 			}
-			s.runs[view.ID] = &runState{config: config, view: view}
+			s.runs[view.ID] = state
 			changed = true
 		}
-		for id, state := range s.runs {
-			if state.view.Shared && state.view.WorkerID == config.ID && !found[id] {
-				delete(s.runs, id)
-				changed = true
-			}
+		if s.sweepStaleRunsLocked(config.ID, found, listedAt) {
+			changed = true
 		}
 		if changed {
 			_ = s.persistRunsLocked()
 		}
 		s.mu.Unlock()
 	}
+}
+
+// sweepStaleRunsLocked adopts the host's deletions. A run this device cached
+// after the listing was taken — the turn the reader just sent — was never in
+// it and stays, which is what lets a send skip the sync's lock entirely.
+func (s *Service) sweepStaleRunsLocked(workerID string, found map[string]bool, listedAt time.Time) bool {
+	changed := false
+	for id, state := range s.runs {
+		if state.cachedAt.After(listedAt) || !state.view.Shared || state.view.WorkerID != workerID || found[id] {
+			continue
+		}
+		delete(s.runs, id)
+		changed = true
+	}
+	return changed
 }
 
 func sameRunMetadata(left, right RunView) bool {

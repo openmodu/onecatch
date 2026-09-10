@@ -70,6 +70,9 @@ type runState struct {
 	// at. A local run keeps its whole transcript in view; this is what the
 	// phone has actually been given.
 	window int
+	// cachedAt is when this device last wrote the run down. A sync that began
+	// before that saw a listing without it, so its sweep must not delete it.
+	cachedAt time.Time
 }
 
 // transcriptWindow bounds what opening a conversation loads. A long session's
@@ -266,8 +269,11 @@ func (s *Service) StartRun(ctx context.Context, input StartRunInput) (RunView, e
 		}
 	}
 	if sharedWorkspace {
-		s.syncMu.Lock()
-		defer s.syncMu.Unlock()
+		// Starting a turn used to queue behind the background history sync,
+		// which is a full listing of every conversation: the phone sat on the
+		// send button for as long as that took. The sync's own sweep is what
+		// needed the lock, and it now leaves runs cached after its listing
+		// alone, so a send goes straight out.
 		view, err := s.client.StartSharedRun(ctx, config, worker.SharedRunInput{WorkspaceID: input.WorkspaceID,
 			ConversationID: input.ConversationID, Runtime: input.Runtime, Prompt: input.Prompt,
 			Model: input.Model, ReasoningEffort: input.ReasoningEffort, ServiceTier: input.ServiceTier})

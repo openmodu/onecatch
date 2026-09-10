@@ -69,3 +69,23 @@ test("a long user message folds behind a disclosure", async () => {
   assert.match(css, /\.mobile-user-message-body\.is-collapsed \{[^}]*max-height/, "nothing caps the bubble, so nothing ever overflows to measure");
   assert.match(css, /\.mobile-message-disclosure \{/);
 });
+
+// ConversationTurn is memoised so a poll or a keystroke re-renders only what
+// changed. A callback rebuilt on every render silently defeats that and takes
+// every Markdown tree in the conversation down with it.
+test("the transcript's callbacks survive a re-render", async () => {
+  const source = await readFile(new URL("./MobileApp.jsx", import.meta.url), "utf8");
+  assert.match(source, /const loadEarlier = useCallback\(/, "ConversationView rebuilt onLoadEarlier on every render");
+  assert.match(source, /const loadEarlierRun = useCallback\(/, "the workbench rebuilt onLoadEarlier on every render");
+  assert.match(source, /const respondPermission = useCallback\(/);
+  assert.match(source, /const transcriptNotice = useCallback\(/);
+});
+
+// The send has to show up before the host answers: the round trip is seconds.
+test("a sent prompt renders before the host answers", async () => {
+  const source = await readFile(new URL("./MobileApp.jsx", import.meta.url), "utf8");
+  const start = source.slice(source.indexOf("const startRun = async"), source.indexOf("const loadEarlierRun"));
+  assert.match(start, /setPendingPrompt\(\{[^}]*text[^}]*\}\);\n\s*setPrompt\(""\);/, "the bubble and the empty composer come before the await");
+  assert.ok(start.indexOf("setPendingPrompt({") < start.indexOf("await MobileBinding.StartRun"), "the pending bubble waits for the host");
+  assert.match(start, /setPrompt\(\(current\) => current \|\| text\)/, "a failed send has to hand the text back");
+});
