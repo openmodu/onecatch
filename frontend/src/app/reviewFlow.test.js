@@ -32,6 +32,13 @@ test("review stays focused on the diff without Agent review controls", () => {
   assert.doesNotMatch(css, /review-agent|review-finding|has-agent-review/);
 });
 
+test("changed files keep filename, directory, and stats readable in one row", () => {
+  assert.match(review, /className="review-file-copy"><strong>\{fileName\(file\.path\)\}<\/strong><small>\{directoryLabel\(file\.path, t\)\}<\/small>/);
+  assert.doesNotMatch(review, /const groups|review-directory/);
+  assert.match(css, /\.review-file-tree button\s*\{[^}]*grid-template-columns:\s*16px minmax\(0, 1fr\) auto;/s);
+  assert.match(css, /\.review-file-copy strong,[\s\S]*?text-overflow:\s*ellipsis;/);
+});
+
 test("long diff lines carry their background through horizontal overflow", () => {
   assert.match(review, /className="review-diff-canvas"/);
   assert.match(css, /\.review-diff-canvas\s*\{[^}]*width:\s*max-content;[^}]*min-width:\s*100%;/s);

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { FileDiff, FilePlus2, Folder, LoaderCircle, RefreshCw, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FileDiff, FilePlus2, LoaderCircle, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { GitBinding, WorkspaceBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Button } from "@/components/ui/button";
@@ -31,6 +31,7 @@ index 88231a0..1be5412 100644
 const statusCode = (file) => `${file?.status?.index || " "}${file?.status?.worktree || " "}`;
 const fileName = (path = "") => path.split("/").pop() || path;
 const directoryName = (path = "") => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : ".";
+const directoryLabel = (path, t) => directoryName(path) === "." ? t("review.projectRoot") : directoryName(path);
 
 function scopeLabel(scope, t) {
   if (scope === "staged") return t("review.staged");
@@ -105,15 +106,6 @@ export default function ReviewPanel({ mode, workspaceID, active, onClose, notify
 
   useEffect(() => { void load(); }, [load]);
 
-  const groups = useMemo(() => {
-    const value = new Map();
-    review.files.forEach((file) => {
-      const directory = directoryName(file.path);
-      value.set(directory, [...(value.get(directory) || []), file]);
-    });
-    return [...value.entries()];
-  }, [review.files]);
-
   const selectFile = (path) => {
     setSelectedPath(path);
     const node = fileRefs.current.get(path);
@@ -152,14 +144,11 @@ export default function ReviewPanel({ mode, workspaceID, active, onClose, notify
       </div>
       <aside className="review-files" aria-label={t("review.changedFiles")}>
         <div className="review-files-heading"><span>{t("review.changedFiles")}</span><strong>{review.files.length}</strong></div>
-        <div className="review-file-tree">{groups.map(([directory, files]) => <section key={directory}>
-          <div className="review-directory"><Folder size={14} aria-hidden="true" /><span title={directory}>{directory}</span></div>
-          {files.map((file) => <button type="button" className={selectedPath === file.path ? "active" : ""} title={file.path} onClick={() => selectFile(file.path)} key={file.path}>
+        <div className="review-file-tree">{review.files.map((file) => <button type="button" className={selectedPath === file.path ? "active" : ""} title={file.path} onClick={() => selectFile(file.path)} key={file.path}>
             {statusCode(file).includes("?") ? <FilePlus2 size={14} aria-hidden="true" /> : <FileDiff size={14} aria-hidden="true" />}
-            <span>{fileName(file.path)}</span>
-            <b>+{file.additions}</b><em>−{file.deletions}</em>
-          </button>)}
-        </section>)}</div>
+            <span className="review-file-copy"><strong>{fileName(file.path)}</strong><small>{directoryLabel(file.path, t)}</small></span>
+            <span className="review-file-stats" aria-label={`+${file.additions} −${file.deletions}`}><b>+{file.additions}</b><em>−{file.deletions}</em></span>
+          </button>)}</div>
       </aside>
     </div>
   </section>;

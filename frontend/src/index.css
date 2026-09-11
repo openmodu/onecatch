@@ -2304,32 +2304,17 @@
   }
 
   .review-files-heading strong { color: var(--foreground); font-size: 11px; }
-  .review-file-tree { height: calc(100% - 36px); overflow: auto; padding: 7px; }
-  .review-file-tree section + section { margin-top: 7px; }
-
-  .review-directory {
-    min-width: 0;
-    display: grid;
-    grid-template-columns: 16px minmax(0, 1fr);
-    align-items: center;
-    gap: 5px;
-    height: 24px;
-    padding: 0 6px;
-    color: var(--muted-foreground);
-    font: 10px/1 var(--font-ui-mono);
-  }
-
-  .review-directory span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .review-file-tree { min-height: 0; overflow: auto; padding: 6px; }
 
   .review-file-tree button {
     width: 100%;
     min-width: 0;
     display: grid;
-    grid-template-columns: 16px minmax(0, 1fr) auto auto;
+    grid-template-columns: 16px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 5px;
-    height: 28px;
-    padding: 0 6px 0 15px;
+    gap: 7px;
+    min-height: 42px;
+    padding: 5px 7px;
     border: 0;
     border-radius: 6px;
     background: transparent;
@@ -2341,9 +2326,27 @@
 
   .review-file-tree button:hover,
   .review-file-tree button.active { background: var(--accent); color: var(--foreground); }
-  .review-file-tree button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .review-file-tree button b,
-  .review-file-tree button em { font-size: 9px; }
+  .review-file-tree button.active { box-shadow: inset 2px 0 0 color-mix(in oklab, var(--primary) 72%, transparent); }
+  .review-file-tree button > svg { color: var(--muted-foreground); }
+  .review-file-tree button.active > svg { color: var(--foreground); }
+
+  .review-file-copy {
+    min-width: 0;
+    display: grid;
+    gap: 3px;
+  }
+
+  .review-file-copy strong,
+  .review-file-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .review-file-copy strong { color: var(--foreground); font-size: 11px; font-weight: 600; line-height: 1.1; }
+  .review-file-copy small { color: var(--muted-foreground); font-size: 9px; line-height: 1.1; }
+  .review-file-tree button > .review-file-stats {
+    display: grid;
+    grid-template-columns: minmax(20px, auto) minmax(18px, auto);
+    justify-items: end;
+    gap: 4px;
+    font-size: 9px;
+  }
 
   .review-empty {
     height: 100%;
