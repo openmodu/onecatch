@@ -101,7 +101,7 @@ export default function InspectorPanel({ className = "", scope = "task", mode, w
       <div className="workbench-inspector-window-actions">{actions}</div>
     </div>
     <div className={`workbench-inspector-body min-h-0 ${tab === "files" || tab === "review" ? "overflow-hidden" : "overflow-y-auto"}`} id="workbench-inspector-content">
-      {fileInspectorMounted && <div className={tab === "files" ? "h-full" : "hidden"}><FileInspector mode={mode} workspaceID={workspaceID} active={tab === "files"} notify={notify} onDirtyChange={onDirtyChange} /></div>}
+      {fileInspectorMounted && <div className={tab === "files" ? "h-full" : "hidden"}><FileInspector mode={mode} workspaceID={workspaceID} remoteFS={remoteFS} active={tab === "files"} notify={notify} onDirtyChange={onDirtyChange} /></div>}
       {tab === "status" ? <StatusInspector detail={draft ? null : detail} queuedTask={draft ? null : queuedTask} queuePosition={draft ? 0 : queuePosition} draft={draft} notify={notify} onOpenTerminal={onOpenTerminal} />
         : tab === "git" ? <GitInspector mode={mode} workspaceID={workspaceID} remoteFS={remoteFS} runWorkerID={draft ? "" : runWorkerID} notify={notify} />
           : tab === "review" ? <ReviewPanel mode={mode} workspaceID={workspaceID} active notify={notify} onClose={() => setTab("status")} />

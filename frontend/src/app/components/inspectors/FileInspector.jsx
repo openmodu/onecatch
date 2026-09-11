@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, File, FileBraces, FileCode, FileCog, FileText, FileTerminal, Folder, FolderOpen, RefreshCw, Save, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { WorkspaceBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
+import { LSPBinding, WorkspaceBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Action, Kicker } from "../../../ui/primitives.jsx";
 import { errorMessage } from "../../format.js";
 import {
@@ -15,7 +15,8 @@ import {
   writeFileTreeRatio,
 } from "../../fileTreeLayout.js";
 import { primaryShortcutLabel } from "../../platform.js";
-import { highlightSource } from "../../syntaxHighlight.js";
+import { syntaxLanguageForPath } from "../../syntaxHighlight.js";
+import CodeEditor from "../CodeEditor.jsx";
 
 const DEMO_TREE = {
   "": [
@@ -78,7 +79,7 @@ function FileTreeRows({ directory = "", depth = 0, entriesByDirectory, expanded,
   });
 }
 
-function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange }) {
+function FileInspector({ mode, workspaceID, remoteFS = null, active = true, notify, onDirtyChange }) {
   const { t } = useTranslation();
   const [entriesByDirectory, setEntriesByDirectory] = useState({});
   const [expanded, setExpanded] = useState(() => new Set());
@@ -89,6 +90,9 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
   const [loadingFile, setLoadingFile] = useState(false);
   const [fileError, setFileError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [definitionLoading, setDefinitionLoading] = useState(false);
+  const [lspCapability, setLspCapability] = useState(null);
+  const [navigation, setNavigation] = useState(null);
   const [currentLine, setCurrentLine] = useState(1);
   const initialTreeRatio = useRef(readFileTreeRatio());
   const [treeWidth, setTreeWidth] = useState(() => Math.round(960 * initialTreeRatio.current));
@@ -96,15 +100,16 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
   const [inspectorWidth, setInspectorWidth] = useState(0);
   const workspaceRef = useRef(workspaceID);
   const openRequestRef = useRef(0);
+  const definitionRequestRef = useRef(0);
   const inspectorRef = useRef(null);
   const editorRef = useRef(null);
-  const lineNumbersRef = useRef(null);
-  const highlightedCodeRef = useRef(null);
+  const openFilesRef = useRef(openFiles);
   const fileViewStateRef = useRef(new Map());
   const treeWidthRef = useRef(treeWidth);
   const treeRatioRef = useRef(initialTreeRatio.current);
   const treeResizeRef = useRef(null);
   workspaceRef.current = workspaceID;
+  openFilesRef.current = openFiles;
   const document = useMemo(() => openFiles.find((file) => file.path === activePath) || null, [activePath, openFiles]);
   const draft = document?.draft || "";
   const dirty = Boolean(document && draft !== document.content);
@@ -134,16 +139,24 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
   }, [mode, workspaceID]);
 
   useEffect(() => {
+    const currentWorkspaceID = workspaceID;
     setEntriesByDirectory({});
     setExpanded(new Set());
     setOpenFiles([]);
     setActivePath("");
     setCurrentLine(1);
+    setNavigation(null);
+    setDefinitionLoading(false);
+    setLspCapability(null);
     setFileError("");
     setTreeError("");
     openRequestRef.current += 1;
+    definitionRequestRef.current += 1;
     fileViewStateRef.current.clear();
     if (workspaceID) void listDirectory("");
+    return () => {
+      if (mode !== "demo" && currentWorkspaceID) void LSPBinding.CloseWorkspace({ workspaceId: currentWorkspaceID }).catch(() => {});
+    };
   }, [listDirectory, workspaceID]);
 
   const refreshTree = () => {
@@ -165,28 +178,15 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
     if (!Object.hasOwn(entriesByDirectory, path)) await listDirectory(path);
   };
 
-  const restoreFileView = useCallback((path) => {
-    requestAnimationFrame(() => {
-      const view = fileViewStateRef.current.get(path) || { line: 1, scrollTop: 0, scrollLeft: 0 };
-      setCurrentLine(view.line);
-      if (editorRef.current) {
-        editorRef.current.scrollTop = view.scrollTop;
-        editorRef.current.scrollLeft = view.scrollLeft;
-      }
-      if (lineNumbersRef.current) lineNumbersRef.current.style.transform = `translateY(${-view.scrollTop}px)`;
-      if (highlightedCodeRef.current) highlightedCodeRef.current.style.transform = `translate(${-view.scrollLeft}px, ${-view.scrollTop}px)`;
-    });
-  }, []);
-
   const activateFile = useCallback((path) => {
+    if (activePath && editorRef.current) fileViewStateRef.current.set(activePath, editorRef.current.getViewState());
     setActivePath(path);
     setFileError("");
-    restoreFileView(path);
-  }, [restoreFileView]);
+  }, [activePath]);
 
   const readFile = useCallback(async (path, { discard = false } = {}) => {
     if (!path || !workspaceID) return;
-    const existing = openFiles.find((file) => file.path === path);
+    const existing = openFilesRef.current.find((file) => file.path === path);
     if (existing && !discard) {
       activateFile(path);
       return;
@@ -206,14 +206,14 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
       setOpenFiles((current) => current.some((file) => file.path === path)
         ? current.map((file) => file.path === path ? opened : file)
         : [...current, opened]);
-      fileViewStateRef.current.set(path, { line: 1, scrollTop: 0, scrollLeft: 0 });
+      fileViewStateRef.current.set(path, { anchor: 0, scrollTop: 0, scrollLeft: 0 });
       if (openRequestRef.current === requestID) activateFile(path);
     } catch (error) {
       if (workspaceRef.current === requestWorkspaceID && openRequestRef.current === requestID) setFileError(errorMessage(error));
     } finally {
       if (workspaceRef.current === requestWorkspaceID && openRequestRef.current === requestID) setLoadingFile(false);
     }
-  }, [activateFile, mode, openFiles, t, workspaceID]);
+  }, [activateFile, mode, t, workspaceID]);
 
   const closeFile = (event, path) => {
     event.stopPropagation();
@@ -227,8 +227,10 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
     if (activePath === path) {
       const next = nextFiles[Math.min(closingIndex, nextFiles.length - 1)];
       setActivePath(next?.path || "");
-      if (next) restoreFileView(next.path);
-      else setCurrentLine(1);
+      if (!next) setCurrentLine(1);
+    }
+    if (mode !== "demo" && !remoteFS) {
+      void LSPBinding.CloseDocument({ workspaceId: workspaceID, path }).catch(() => {});
     }
   };
 
@@ -271,6 +273,69 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [active, saveFile]);
+
+  useEffect(() => {
+    const path = document?.path;
+    setLspCapability(null);
+    if (!path || mode === "demo" || remoteFS) return undefined;
+    let cancelled = false;
+    void LSPBinding.Detect({ workspaceId: workspaceID, path })
+      .then((capability) => {
+        if (!cancelled) setLspCapability({ ...capability, path });
+      })
+      .catch((error) => {
+        if (!cancelled) setLspCapability({ path, recognized: false, available: false, error: errorMessage(error) });
+      });
+    return () => { cancelled = true; };
+  }, [document?.path, mode, remoteFS, workspaceID]);
+
+  const goToDefinition = useCallback(async (position) => {
+    if (!document?.path || definitionLoading) return;
+    if (mode === "demo") {
+      notify?.("info", t("files.definitionDemo"));
+      return;
+    }
+    if (remoteFS) {
+      notify?.("info", t("files.definitionRemoteUnsupported"));
+      return;
+    }
+    const requestID = definitionRequestRef.current + 1;
+    definitionRequestRef.current = requestID;
+    setDefinitionLoading(true);
+    try {
+      let capability = lspCapability?.path === document.path && lspCapability.available ? lspCapability : null;
+      if (!capability) {
+        capability = { ...await LSPBinding.Detect({ workspaceId: workspaceID, path: document.path }), path: document.path };
+        if (definitionRequestRef.current !== requestID) return;
+        setLspCapability(capability);
+      }
+      if (!capability.available) {
+        if (capability.error) notify?.("error", capability.error);
+        else if (capability.recognized) notify?.("info", t("files.definitionServerMissing", { server: capability.serverName, hint: capability.installHint }));
+        else notify?.("info", t("files.definitionUnsupported"));
+        return;
+      }
+      const locations = await LSPBinding.Definition({
+        workspaceId: workspaceID,
+        path: document.path,
+        content: draft,
+        position,
+      });
+      if (definitionRequestRef.current !== requestID) return;
+      if (!locations?.length) {
+        notify?.("info", t("files.definitionNotFound"));
+        return;
+      }
+      const target = locations[0];
+      setNavigation({ path: target.path, range: target.range, requestID });
+      await readFile(target.path);
+      if (locations.length > 1) notify?.("info", t("files.definitionMultiple", { count: locations.length }));
+    } catch (error) {
+      if (definitionRequestRef.current === requestID) notify?.("error", errorMessage(error));
+    } finally {
+      if (definitionRequestRef.current === requestID) setDefinitionLoading(false);
+    }
+  }, [definitionLoading, document, draft, lspCapability, mode, notify, readFile, remoteFS, t, workspaceID]);
 
   useEffect(() => {
     const inspector = inspectorRef.current;
@@ -341,20 +406,8 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
   };
 
   const rootEntries = useMemo(() => entriesByDirectory[""] || [], [entriesByDirectory]);
-  const lineNumbers = useMemo(() => Array.from({ length: draft.split("\n").length }, (_, index) => index + 1), [draft]);
-  const highlighted = useMemo(() => highlightSource(draft, document?.path), [document?.path, draft]);
+  const language = useMemo(() => syntaxLanguageForPath(document?.path), [document?.path]);
   const updateDraft = (value) => setOpenFiles((current) => current.map((file) => file.path === activePath ? { ...file, draft: value } : file));
-  const updateCurrentLine = (element) => {
-    const line = element.value.slice(0, element.selectionStart).split("\n").length;
-    setCurrentLine(line);
-    if (activePath) fileViewStateRef.current.set(activePath, { ...fileViewStateRef.current.get(activePath), line });
-  };
-  const syncEditorScroll = (event) => {
-    const { scrollLeft, scrollTop } = event.currentTarget;
-    if (lineNumbersRef.current) lineNumbersRef.current.style.transform = `translateY(${-scrollTop}px)`;
-    if (highlightedCodeRef.current) highlightedCodeRef.current.style.transform = `translate(${-scrollLeft}px, ${-scrollTop}px)`;
-    if (activePath) fileViewStateRef.current.set(activePath, { ...fileViewStateRef.current.get(activePath), line: currentLine, scrollLeft, scrollTop });
-  };
   if (!workspaceID) return <p className="m-0 px-4 py-5 text-xs leading-relaxed text-muted-foreground">{t("files.selectWorkspace")}</p>;
 
   return <div
@@ -386,28 +439,21 @@ function FileInspector({ mode, workspaceID, active = true, notify, onDirtyChange
         </div>
       </div>
       {loadingFile && !document ? <p className="m-0 px-3 py-4 text-xs text-muted-foreground">{t("common.loading")}</p> : document ? <>
-        <div className="grid min-h-0 flex-1 grid-cols-[42px_minmax(0,1fr)] overflow-hidden bg-background/65">
-          <div className="relative min-h-0 overflow-hidden bg-muted/35 text-right font-mono text-[12px] leading-5 text-muted-foreground/75" aria-hidden="true">
-            <div ref={lineNumbersRef} className="py-3 pr-2 will-change-transform">{lineNumbers.map((line) => <span className={`block h-5 tabular-nums ${line === currentLine ? "font-semibold text-primary" : ""}`} key={line}>{line}</span>)}</div>
-          </div>
-          <div className="file-editor-stage relative min-h-0 min-w-0 overflow-hidden">
-            <pre className="file-editor-highlight pointer-events-none absolute inset-0 m-0 overflow-hidden bg-transparent" aria-hidden="true"><code ref={highlightedCodeRef} className={`language-${highlighted.language}`} dangerouslySetInnerHTML={{ __html: `${highlighted.html}${draft.endsWith("\n") ? " " : ""}` }} /></pre>
-            <textarea
-              ref={editorRef}
-              className="file-editor-textarea absolute inset-0 h-full min-h-0 w-full resize-none overflow-auto rounded-none border-0 bg-transparent px-3 py-3 font-mono text-[12px] leading-5 whitespace-pre outline-none"
-              aria-label={t("files.editor", { path: document.path })}
-              spellCheck="false"
-              wrap="off"
-              value={draft}
-              onChange={(event) => { updateDraft(event.target.value); updateCurrentLine(event.target); }}
-              onClick={(event) => updateCurrentLine(event.currentTarget)}
-              onKeyUp={(event) => updateCurrentLine(event.currentTarget)}
-              onSelect={(event) => updateCurrentLine(event.currentTarget)}
-              onScroll={syncEditorScroll}
-            />
-          </div>
+        <div className="min-h-0 flex-1 overflow-hidden bg-background/65">
+          <CodeEditor
+            ref={editorRef}
+            path={document.path}
+            value={draft}
+            ariaLabel={t("files.editor", { path: document.path })}
+            initialViewState={fileViewStateRef.current.get(document.path)}
+            navigation={navigation}
+            onChange={updateDraft}
+            onCursorLineChange={setCurrentLine}
+            onDefinition={goToDefinition}
+            onViewStateChange={(viewPath, viewState) => fileViewStateRef.current.set(viewPath, viewState)}
+          />
         </div>
-        <div className="flex shrink-0 items-center justify-between px-2.5 py-1.5 text-[10px] text-muted-foreground"><span>{highlighted.language === "plain" ? t("files.plainText") : highlighted.language}</span><span>{t("files.saveHint", { shortcut: primaryShortcutLabel("S") })}</span></div>
+        <div className="flex shrink-0 items-center justify-between px-2.5 py-1.5 text-[10px] text-muted-foreground"><span>{language === "plain" ? t("files.plainText") : language} · Ln {currentLine}</span><span>{definitionLoading ? t("files.definitionLoading") : lspCapability?.path === document.path && lspCapability.available ? `${lspCapability.serverName} · ${t("files.definitionHint")} · ${t("files.saveHint", { shortcut: primaryShortcutLabel("S") })}` : t("files.saveHint", { shortcut: primaryShortcutLabel("S") })}</span></div>
       </> : <p className="m-0 px-3 py-4 text-xs leading-relaxed text-muted-foreground">{t("files.openHint")}</p>}
       {fileError && <p className="m-0 shrink-0 bg-destructive/8 px-2.5 py-2 text-[11px] leading-relaxed text-destructive">{fileError}</p>}
     </section>

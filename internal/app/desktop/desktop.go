@@ -24,6 +24,7 @@ import (
 	"github.com/openmodu/onecatch/internal/service/desktop/listchange"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
+	lspservice "github.com/openmodu/onecatch/internal/service/lsp"
 	terminalservice "github.com/openmodu/onecatch/internal/service/terminal"
 	"github.com/openmodu/onecatch/internal/transport/wails"
 	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
@@ -90,6 +91,8 @@ func Run() {
 	git := gitrepo.New("")
 	orchestrator := workflowuc.NewUsecase(store.Repos.Tasks, store.Repos.Workflows, runtimes, workspacelock.New(store.Data.Paths.Locks), git)
 	service := desktopservice.NewService(store, orchestrator, runtimes, git)
+	languageService := lspservice.NewService(service.GetWorkspace)
+	defer languageService.Close()
 	streamHub := runstream.NewHub()
 	service.SetRunStreamHub(streamHub)
 	service.SetRunStateHub(runStateHub)
@@ -145,6 +148,7 @@ func Run() {
 	// binding) only then; a raw dev binary keeps a nil notifier that no-ops.
 	services := []application.Service{
 		application.NewService(wailstransport.NewGitBinding(service)),
+		application.NewService(wailstransport.NewLSPBinding(languageService)),
 		application.NewService(wailstransport.NewRuntimeBinding(service)),
 		application.NewService(wailstransport.NewSettingsBinding(service)),
 		application.NewService(wailstransport.NewSkillBinding(service)),
