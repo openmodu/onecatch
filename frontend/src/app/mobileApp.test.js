@@ -86,7 +86,7 @@ test("a sent prompt renders before the host answers", async () => {
   const source = await readFile(new URL("./MobileApp.jsx", import.meta.url), "utf8");
   const start = source.slice(source.indexOf("const startRun = async"), source.indexOf("const loadEarlierRun"));
   assert.match(start, /setPendingPrompt\(\{[^}]*text[^}]*\}\);\n\s*setPrompt\(""\);/, "the bubble and the empty composer come before the await");
-  assert.ok(start.indexOf("setPendingPrompt({") < start.indexOf("await MobileBinding.StartRun"), "the pending bubble waits for the host");
+  assert.ok(start.indexOf("setPendingPrompt({") < start.indexOf("MobileBinding.StartRun"), "the pending bubble waits for the host");
   assert.match(start, /setPrompt\(\(current\) => current \|\| text\)/, "a failed send has to hand the text back");
 });
 
@@ -95,11 +95,20 @@ test("a sent prompt renders before the host answers", async () => {
 test("a message sent mid-turn is queued on the host", async () => {
   const source = await readFile(new URL("./MobileApp.jsx", import.meta.url), "utf8");
   const view = source.slice(source.indexOf("function ConversationView("), source.indexOf("// Projects fold"));
-  assert.match(view, /const queueable = Boolean\(running && sharedRuns\)/, "only a host-run turn can hold a queue");
-  assert.match(view, /onQueue\(running\.id\)/);
+  assert.match(view, /const queueable = Boolean\(\(running \|\| pending\) && sharedRuns\)/, "only a host-run turn can hold a queue");
+  assert.match(view, /onQueue\(running\?\.id\)/);
   assert.match(view, /onDequeue\(running\.id, item\.id\)/, "a queued message has to be withdrawable");
   assert.match(view, /className="mobile-queued"/);
   const workbench = source.slice(source.indexOf("const queueFollowUp"), source.indexOf("const loadEarlierRun"));
-  assert.match(workbench, /MobileBinding\.QueueFollowUp\(runID, text\)/);
+  assert.match(workbench, /MobileBinding\.QueueFollowUp\(id, message\)/);
   assert.match(workbench, /MobileBinding\.DequeueFollowUp\(runID, instructionID\)/);
+});
+
+// There is a single control, including while a prompt waits for its run ID.
+test("the composer renders one action with a running label", async () => {
+  const source = await readFile(new URL("./MobileApp.jsx", import.meta.url), "utf8");
+  const actions = source.slice(source.indexOf('<div className="mobile-composer-actions">'), source.indexOf('// Projects fold'));
+  assert.equal((actions.match(/<button /g) || []).length, 1);
+  assert.match(actions, /<span>运行中<\/span>/);
+  assert.match(actions, /action.interruptible/);
 });
