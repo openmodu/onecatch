@@ -3,6 +3,13 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.11
+
+- Complete a remote workspace root as you type: matching directories are listed over SFTP with Tab to complete, arrows to select, Enter to descend, and Escape to dismiss.
+- Reach hosts without a working SSH sftp subsystem by starting the SFTP server over a remote command, and report an actionable error when the host has no SFTP server at all.
+- Merge the phone's stop and send buttons into one control that switches between send, running, and queue, so stopping and queueing are no longer separate taps.
+- Send a message while the host is still starting a run: the prompt queues against the pending run instead of waiting for its run ID, and rapid follow-ups keep their order.
+
 ## 0.2.10
 
 - Ship one OneCatch executable for the desktop, standalone Worker, remote shell, SSH password helper, and updater.
