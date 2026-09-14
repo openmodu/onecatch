@@ -848,6 +848,62 @@ export class PermissionDecisionInput {
     }
 }
 
+export class RemoteDirectoryCompletionInput {
+    /**
+     * Creates a new RemoteDirectoryCompletionInput instance.
+     * @param {Partial<RemoteDirectoryCompletionInput>} [$$source = {}] - The source object to create the RemoteDirectoryCompletionInput.
+     */
+    constructor($$source = {}) {
+        if (!("host" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["host"] = "";
+        }
+        if (!("username" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["username"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["password"] = undefined;
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["workspaceId"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RemoteDirectoryCompletionInput instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {RemoteDirectoryCompletionInput}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RemoteDirectoryCompletionInput(/** @type {Partial<RemoteDirectoryCompletionInput>} */($$parsedSource));
+    }
+}
+
 export class ResumeRunInput {
     /**
      * Creates a new ResumeRunInput instance.

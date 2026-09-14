@@ -358,3 +358,110 @@ func startLocalSFTPServer(t *testing.T) (*sftp.Client, func()) {
 	}
 	return client, shutdown
 }
+
+func TestSFTPSubsystemFallback(t *testing.T) {
+	for _, diagnostic := range []string{
+		"ash: /usr/libexec/sftp-server: not found",
+		"subsystem request failed on channel 0",
+	} {
+		t.Run(diagnostic, func(t *testing.T) {
+			executable, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("ONESHOT_SFTP_TEST_HELPER", "1")
+			t.Setenv("ONESHOT_SFTP_TEST_BINARY", executable)
+			t.Setenv("ONESHOT_SFTP_DIAGNOSTIC", diagnostic)
+			stub := filepath.Join(t.TempDir(), "ssh")
+			script := `#!/bin/sh
+for arg do
+  if [ "$arg" = '-s' ]; then
+    printf '%s\n' "$ONESHOT_SFTP_DIAGNOSTIC" >&2
+    exit 127
+  fi
+done
+port_seen=no
+command_seen=no
+previous=
+for arg do
+  if [ "$previous" = '-p' ] && [ "$arg" = '2222' ]; then port_seen=yes; fi
+  if [ "$previous" = '-T' ] && [ "$arg" = 'devbox' ]; then command_seen=yes; fi
+  previous=$arg
+done
+[ "$port_seen" = yes ] && [ "$command_seen" = yes ] || exit 2
+printf '%s' "$previous" | /bin/sh -n || exit 3
+exec "$ONESHOT_SFTP_TEST_BINARY" -test.run='^TestSFTPProcessHelper$'
+`
+			if err := os.WriteFile(stub, []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			root := t.TempDir()
+			if err := os.WriteFile(filepath.Join(root, "hello.txt"), []byte("fallback works"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			backend, err := NewSFTPBackend(ctx, SFTPConfig{Host: "devbox:2222", Root: root, SSHBinary: stub})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer backend.Close()
+			file, err := backend.OpenFile("hello.txt", os.O_RDONLY, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer file.Close()
+			data := make([]byte, 14)
+			if _, err := file.ReadAt(data, 0); err != nil || string(data) != "fallback works" {
+				t.Fatalf("read = %q, err = %v", data, err)
+			}
+		})
+	}
+}
+
+func TestSFTPProcessHelper(t *testing.T) {
+	if os.Getenv("ONESHOT_SFTP_TEST_HELPER") != "1" {
+		return
+	}
+	server, err := sftp.NewServer(struct {
+		io.Reader
+		io.WriteCloser
+	}{os.Stdin, os.Stdout})
+	if err != nil {
+		os.Exit(1)
+	}
+	err = server.Serve()
+	if err != nil && !errors.Is(err, io.EOF) {
+		os.Exit(1)
+	}
+	os.Exit(0)
+}
+
+func TestSFTPDoesNotRetryAuthenticationFailure(t *testing.T) {
+	root := t.TempDir()
+	calls := filepath.Join(root, "calls")
+	t.Setenv("ONESHOT_SFTP_CALLS", calls)
+	stub := filepath.Join(root, "ssh")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\necho call >> \"$ONESHOT_SFTP_CALLS\"\necho 'Permission denied (publickey).' >&2\nexit 255\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewSFTPBackend(context.Background(), SFTPConfig{Host: "devbox", Root: root, SSHBinary: stub})
+	if err == nil || !strings.Contains(err.Error(), "Permission denied") {
+		t.Fatalf("error = %v", err)
+	}
+	data, err := os.ReadFile(calls)
+	if err != nil || string(data) != "call\n" {
+		t.Fatalf("calls = %q, err = %v", data, err)
+	}
+}
+
+func TestSFTPMissingServerExplainsRemediation(t *testing.T) {
+	stub := filepath.Join(t.TempDir(), "ssh")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\necho 'ash: /usr/libexec/sftp-server: not found' >&2\nexit 127\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	_, err := NewSFTPBackend(context.Background(), SFTPConfig{Host: "devbox", Root: "/srv/project", SSHBinary: stub})
+	if err == nil || !strings.Contains(err.Error(), "install an SFTP server") || !strings.Contains(err.Error(), "sftp-server: not found") {
+		t.Fatalf("error = %v", err)
+	}
+}

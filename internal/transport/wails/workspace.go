@@ -82,3 +82,7 @@ func (b *WorkspaceBinding) ReadWorkspaceFile(workspaceID, path string) (desktops
 func (b *WorkspaceBinding) WriteWorkspaceFile(input desktopservice.WriteWorkspaceFileInput) (desktopservice.WorkspaceFileDocument, error) {
 	return b.service.WriteWorkspaceFile(context.Background(), input)
 }
+
+func (b *WorkspaceBinding) CompleteRemoteDirectories(input desktopservice.RemoteDirectoryCompletionInput) ([]string, error) {
+	return b.service.CompleteRemoteDirectories(context.Background(), input)
+}

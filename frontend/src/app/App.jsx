@@ -29,6 +29,7 @@ import { loopTemplate } from "./templates.js";
 // workbench's first load. Every reader below is behind `mode === "demo"`, which
 // is only set once this holder is populated.
 let demo = null;
+import RemoteDirectoryInput from "./components/RemoteDirectoryInput.jsx";
 import Sidebar from "./components/Sidebar.jsx";
 import TaskWorkbench from "./components/TaskWorkbench.jsx";
 import StatusPill from "./components/StatusPill.jsx";
@@ -1731,7 +1732,7 @@ function App() {
           </div>
           <div className="grid gap-1.5">
             <Label htmlFor="workspace-create-remote-root">{t("workspace.remoteRoot")}</Label>
-            <Input id="workspace-create-remote-root" className="font-mono text-[13px]" autoCapitalize="none" autoCorrect="off" spellCheck="false" value={workspaceForm.remoteRoot} onChange={(event) => setWorkspaceForm((form) => ({ ...form, remoteRoot: event.target.value }))} placeholder="/srv/project" />
+            <RemoteDirectoryInput form={workspaceForm} workspaceID={workspaceEditingID} onChange={(remoteRoot) => setWorkspaceForm((form) => ({ ...form, remoteRoot }))} />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="grid min-w-0 gap-1.5">

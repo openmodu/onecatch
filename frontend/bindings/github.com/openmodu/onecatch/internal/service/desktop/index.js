@@ -19,6 +19,7 @@ export {
     ListRunsInput,
     PastedImageInput,
     PermissionDecisionInput,
+    RemoteDirectoryCompletionInput,
     ResumeRunInput,
     RunDetail,
     RunListItem,

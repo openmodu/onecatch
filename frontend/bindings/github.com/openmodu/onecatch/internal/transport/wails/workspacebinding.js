@@ -40,6 +40,16 @@ export function ChooseDirectory() {
 }
 
 /**
+ * @param {desktop$0.RemoteDirectoryCompletionInput} input
+ * @returns {$CancellablePromise<string[]>}
+ */
+export function CompleteRemoteDirectories(input) {
+    return $Call.ByID(4259755694, input).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType1($result);
+    }));
+}
+
+/**
  * @param {string} path
  * @returns {$CancellablePromise<void>}
  */

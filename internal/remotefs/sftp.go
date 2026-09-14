@@ -96,6 +96,44 @@ func NewSFTPBackend(ctx context.Context, config SFTPConfig) (*SFTPBackend, error
 	if err != nil {
 		return nil, err
 	}
+	backend, err := startSFTPBackend(ctx, config, binary, args)
+	var unavailable *sftpSubsystemUnavailable
+	if err == nil || !errors.As(err, &unavailable) || ctx.Err() != nil {
+		return backend, err
+	}
+	// Retry only subsystem failures, preserving OpenSSH authentication and
+	// routing options. A remote command bypasses a broken Subsystem path.
+	fallbackArgs := append([]string(nil), args[:len(args)-3]...)
+	fallbackArgs = append(fallbackArgs, "-T", args[len(args)-2], "exec /bin/sh -c '"+strings.ReplaceAll(sftpServerCommand, "'", `'"'"'`)+"'")
+	backend, fallbackErr := startSFTPBackend(ctx, config, binary, fallbackArgs)
+	if fallbackErr == nil {
+		return backend, nil
+	}
+	return nil, fmt.Errorf("remote SFTP unavailable: enable the SSH sftp subsystem or install an SFTP server on the remote host; subsystem: %v; fallback: %w", err, fallbackErr)
+}
+
+// Use POSIX shell syntax for minimal systems, including BusyBox ash. Keep
+// stdout exclusively for SFTP packets and never install or change remote files.
+const sftpServerCommand = `for server in /usr/libexec/sftp-server /usr/lib/openssh/sftp-server /usr/lib/ssh/sftp-server /usr/libexec/openssh/sftp-server /usr/lib/sftp-server /usr/local/libexec/sftp-server; do
+  if [ -x "$server" ]; then exec "$server"; fi
+done
+if command -v sftp-server >/dev/null 2>&1; then exec sftp-server; fi
+printf '%s\n' 'No SFTP server found on the remote host. Install an SFTP server package or enable the SSH sftp subsystem.' >&2
+exit 127`
+
+type sftpSubsystemUnavailable struct{ cause error }
+
+func (e *sftpSubsystemUnavailable) Error() string { return e.cause.Error() }
+func (e *sftpSubsystemUnavailable) Unwrap() error { return e.cause }
+
+func missingSFTPSubsystem(diagnostic string) bool {
+	message := strings.ToLower(diagnostic)
+	return strings.Contains(message, "subsystem request failed") ||
+		(strings.Contains(message, "sftp-server") &&
+			(strings.Contains(message, "not found") || strings.Contains(message, "no such file or directory")))
+}
+
+func startSFTPBackend(ctx context.Context, config SFTPConfig, binary string, args []string) (*SFTPBackend, error) {
 	cmd := exec.CommandContext(ctx, binary, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -103,6 +141,7 @@ func NewSFTPBackend(ctx context.Context, config SFTPConfig) (*SFTPBackend, error
 	}
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		_ = stdout.Close()
 		return nil, fmt.Errorf("open SSH stdin: %w", err)
 	}
 	var sshStderr boundedTailBuffer
@@ -117,6 +156,8 @@ func NewSFTPBackend(ctx context.Context, config SFTPConfig) (*SFTPBackend, error
 		return nil, fmt.Errorf("configure SSH password authentication: %w", err)
 	}
 	if err := cmd.Start(); err != nil {
+		_ = stdout.Close()
+		_ = stdin.Close()
 		return nil, fmt.Errorf("start SSH SFTP subsystem: %w", err)
 	}
 	wait := make(chan error, 1)
@@ -137,7 +178,11 @@ func NewSFTPBackend(ctx context.Context, config SFTPConfig) (*SFTPBackend, error
 		_ = cmd.Process.Kill()
 		<-wait
 		if diagnostic := strings.TrimSpace(sshStderr.String()); diagnostic != "" {
-			return nil, fmt.Errorf("start SFTP client: %w; ssh: %s", err, diagnostic)
+			failure := fmt.Errorf("start SFTP client: %w; ssh: %s", err, diagnostic)
+			if missingSFTPSubsystem(diagnostic) {
+				return nil, &sftpSubsystemUnavailable{cause: failure}
+			}
+			return nil, failure
 		}
 		return nil, fmt.Errorf("start SFTP client: %w", err)
 	}
