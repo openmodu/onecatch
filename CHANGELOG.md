@@ -3,6 +3,15 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.10
+
+- Ship one OneCatch executable for the desktop, standalone Worker, remote shell, SSH password helper, and updater.
+- Start a standalone Worker with `onecatch worker`; offer an optional headless build for servers without desktop libraries.
+- Reuse the executable for remote command and password requests, and run updates from a temporary copy with the existing readiness and rollback checks.
+- Remove separate helpers from desktop packages and clean up legacy helper files during Windows installation.
+- Add automatic LSP definition navigation in the editor and improve the readability of the changed-file list.
+- Migration: reinstall existing Worker services with `onecatch worker --install-service` and their original options. Worker data and pairing identities are preserved.
+
 ## 0.2.9
 
 - Queue a message on the phone while the agent is still working: the host holds it, the send button no longer goes dead mid-turn, and each queued message can be withdrawn until the agent reaches it.
