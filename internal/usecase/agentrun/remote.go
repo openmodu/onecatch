@@ -12,11 +12,11 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/openmodu/onecatch/internal/processmode"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
-// ShellBinaryEnv points at the onecatchsh binary, for development builds where
-// it does not sit beside the running executable.
+// ShellBinaryEnv overrides the executable used for the internal shell role.
 const ShellBinaryEnv = "ONECATCH_SHELL_BINARY"
 
 var remoteClaudeSearchTools = []string{"Grep", "Glob"}
@@ -126,6 +126,7 @@ func setupRemoteClaude(req Request) (*remoteSetup, error) {
 	return &remoteSetup{
 		env: []string{
 			seam.SessionEnv + "=" + name,
+			processmode.Env + "=shell",
 			"CLAUDE_CODE_SHELL_PREFIX=" + shell,
 		},
 		args: []string{
@@ -184,6 +185,7 @@ func setupRemoteCodex(req Request) (*remoteSetup, error) {
 		env: []string{
 			"CODEX_HOME=" + codexHome,
 			seam.SessionEnv + "=" + name,
+			processmode.Env + "=shell",
 			"ONECATCH_EXEC_WORKSPACE=" + req.Workspace,
 		},
 		// Remote commands are outside the local Codex sandbox. Keeping network
@@ -388,14 +390,17 @@ func mergeEnvironment(base, overrides []string) []string {
 	return append(result, overrides...)
 }
 
-// shellBinaryPath locates onecatchsh, which must be a real path on disk
-// because the harness stats it rather than running it through a shell.
+// shellBinaryPath returns the unified entry point or an explicit override.
+// The harness requires a real path rather than a command with arguments.
 func shellBinaryPath() (string, error) {
 	if p := strings.TrimSpace(os.Getenv(ShellBinaryEnv)); p != "" {
 		if _, err := os.Stat(p); err != nil {
 			return "", fmt.Errorf("%s=%s: %w", ShellBinaryEnv, p, err)
 		}
 		return p, nil
+	}
+	if self := processmode.Executable(); self != "" {
+		return self, nil
 	}
 	self, err := os.Executable()
 	if err != nil {
@@ -409,8 +414,7 @@ func shellBinaryPath() (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("onecatchsh was not found for %s; build it with "+
-		"`go tool wails3 task build:shell`, or set %s", self, ShellBinaryEnv)
+	return "", fmt.Errorf("shell role is not registered for %s; run the unified onecatch executable or set %s", self, ShellBinaryEnv)
 }
 
 func shellBinaryCandidates(executable string) []string {
@@ -420,9 +424,8 @@ func shellBinaryCandidates(executable string) []string {
 		// Packaged macOS builds keep helper executables under Resources/bin.
 		filepath.Clean(filepath.Join(dir, "..", "Resources", "bin", "onecatchsh")),
 	}
-	// Wails places development executables under
-	// bin/OneCatch.dev.app/Contents/MacOS while task build:shell writes the
-	// helper directly to bin. Keep this package-external fallback dev-only.
+	// Compatibility for unregistered callers using older development bundles.
+	// Keep this package-external legacy fallback dev-only.
 	if strings.HasSuffix(filepath.ToSlash(dir), ".dev.app/Contents/MacOS") {
 		candidates = append(candidates, filepath.Clean(filepath.Join(dir, "..", "..", "..", "onecatchsh")))
 	}

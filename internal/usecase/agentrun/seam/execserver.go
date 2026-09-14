@@ -24,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openmodu/onecatch/internal/processmode"
 	"github.com/openmodu/onecatch/internal/remotefs"
 )
 
@@ -443,7 +444,7 @@ func EnvironmentsTOML(program, sessionName string) string {
 		"id = \"onecatch\"\n" +
 		"program = " + tomlString(program) + "\n" +
 		"args = [\"exec-server\"]\n" +
-		"env = { " + SessionEnv + " = " + tomlString(sessionName) + " }\n"
+		"env = { " + SessionEnv + " = " + tomlString(sessionName) + ", " + processmode.Env + " = \"shell\" }\n"
 }
 
 func tomlString(value string) string {

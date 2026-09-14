@@ -50,11 +50,10 @@ AppImage；每个产物同时生成 `.sha256` 校验文件。Windows 打包前�
 winget install NSIS.NSIS
 ```
 
-Linux 打包机需要 `libgtk-4-dev` 和 `libwebkitgtk-6.0-dev`；打包脚本会把
-worker、shell 和 askpass 一起写入 `.deb` 和 AppImage。
+Linux 打包机需要 `libgtk-4-dev` 和 `libwebkitgtk-6.0-dev`。所有业务进程角色已集成到 `onecatch`；安装包不再附带独立 helper。
 
-macOS 应用内同时包含 `Contents/Resources/bin/onecatch-worker`，可以复制到另一台
-同架构 Mac 上运行。默认使用 ad-hoc 签名，适合内部测试；没有 Apple 开发者证书时，
+macOS 使用 `Contents/MacOS/onecatch worker --pair` 启动独立 Worker。
+默认使用 ad-hoc 签名，适合内部测试；没有 Apple 开发者证书时，
 首次启动仍需在 Finder 中右键选择“打开”。
 
 使用 Developer ID 证书签名：

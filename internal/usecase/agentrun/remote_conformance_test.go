@@ -254,7 +254,7 @@ func TestRemoteSetupRejectsReadOnly(t *testing.T) {
 func buildShellBinary(t *testing.T, dir string) string {
 	t.Helper()
 	out := filepath.Join(dir, "onecatchsh")
-	cmd := exec.Command("go", "build", "-o", out, "github.com/openmodu/onecatch/cmd/onecatchsh")
+	cmd := exec.Command("go", "build", "-tags", "onecatch_headless", "-o", out, "github.com/openmodu/onecatch/cmd/app")
 	if combined, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build onecatchsh: %v\n%s", err, combined)
 	}

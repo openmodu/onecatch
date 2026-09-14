@@ -70,7 +70,7 @@ go tool wails3 task deps              # Install Go and frontend dependencies
 go tool wails3 task dev:desktop       # Start the desktop development environment
 go tool wails3 task build:desktop     # Build the desktop app with development settings
 go tool wails3 task package:desktop   # Package the desktop app for the current OS
-go tool wails3 task build:worker      # Build bin/onecatch-worker
+go tool wails3 task build:headless      # Build bin/headless/onecatch
 go tool wails3 task test              # Run Go and frontend tests
 ```
 
@@ -116,11 +116,11 @@ A Remote Worker runs harnesses on another machine and sends `workspace-write` ch
 Build a development Worker and start it on the loopback interface:
 
 ```bash
-go tool wails3 task build:worker
-./bin/onecatch-worker --pair
+go tool wails3 task build:headless
+./bin/headless/onecatch worker --pair
 ```
 
-A non-loopback listener requires TLS through `--tls-cert` and `--tls-key`; add `--client-ca` for mTLS. Use `--allow-insecure-http` only when a trusted tunnel already provides transport security. Install a per-user background service with `--install-service`. Run `./bin/onecatch-worker --help` for the complete option list. See [`cmd/worker/README.md`](cmd/worker/README.md) for the Worker entry point and [`deploy/onecatch-worker/`](deploy/onecatch-worker/) for launchd and systemd templates.
+A non-loopback listener requires TLS through `--tls-cert` and `--tls-key`; add `--client-ca` for mTLS. Use `--allow-insecure-http` only when a trusted tunnel already provides transport security. Install a per-user background service with `--install-service`. Run `./bin/headless/onecatch worker --help` for the complete option list. See [`internal/app/worker/README.md`](internal/app/worker/README.md) for the Worker entry point and [`deploy/onecatch-worker/`](deploy/onecatch-worker/) for launchd and systemd templates.
 
 ## Desktop packaging and releases
 
@@ -136,7 +136,7 @@ Windows packaging requires [NSIS](https://nsis.sourceforge.io/):
 winget install NSIS.NSIS
 ```
 
-Linux packaging uses GTK4 and WebKitGTK 6.0. The `.deb` and AppImage include the worker, shell, SSH askpass, and update helpers used by the desktop app.
+Linux packaging uses GTK4 and WebKitGTK 6.0. All process roles are linked into one `onecatch`. Use `onecatch worker` for a server, or `build:headless` for a build without GUI dependencies. See [the design](docs/unified-binary.md).
 
 The desktop checks for updates every six hours and also exposes a manual check under **Settings → Appearance → Software update**. Feeds are platform/architecture-specific Sparkle AppCasts, and every downloaded artifact must pass Ed25519 verification against the public key pinned at build time. Verified updates are persisted under `~/.onecatch/updates/ready/` with an integrity manifest, so quitting before restart does not require another download; the cache is validated again on the next launch and immediately before installation. macOS swaps the complete `.app`, Windows runs the complete Setup package silently, and Linux swaps the AppImage in place. Windows and AppImage installs roll back when the new process does not become ready within 45 seconds. A `.deb` remains under the system package manager and therefore offers a manual update. This is a rollback-aware seamless restart, not in-process code replacement.
 
@@ -169,10 +169,7 @@ NOTARY_PROFILE="onecatch-notary" \
 
 ```text
 cmd/
-├── app/                Shared Wails entry point for desktop and mobile
-├── worker/             Remote execution service entry point
-├── onecatchsh/         Remote FS command proxy
-└── onecatch-askpass/   SSH password helper
+└── app/                Unified desktop, worker, helper, and mobile entry point
 frontend/               React, Vite, tests, and generated Wails bindings
 internal/
 ├── app/                Desktop, Mobile, and Worker assembly

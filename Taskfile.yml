@@ -78,21 +78,13 @@ tasks:
       - go build {{.BUILD_FLAGS}} -o '{{.OUTPUT}}' ./cmd/app
       - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File ./build/desktop/windows/resources.ps1 -Clean
         platforms: [windows]
-      - cmd: go build {{.BUILD_FLAGS}} -o '{{.BIN_DIR}}/onecatchsh' ./cmd/onecatchsh
-        platforms: [darwin, linux]
-      - go build {{.BUILD_FLAGS}} -o '{{.BIN_DIR}}/onecatch-askpass{{.EXE_EXT}}' ./cmd/onecatch-askpass
     vars:
       BUILD_FLAGS: '{{if eq .DEV "true"}}-buildvcs=false -gcflags=all="-l" -ldflags="{{if eq OS "darwin"}}-extldflags=-mmacosx-version-min=12.0 {{end}}-X github.com/openmodu/onecatch/internal/buildinfo.Version={{.APP_VERSION}}"{{else}}-tags production -trimpath -buildvcs=false -ldflags="{{if eq OS "darwin"}}-extldflags=-mmacosx-version-min=12.0 {{end}}{{if eq OS "windows"}}-H=windowsgui {{end}}-X github.com/openmodu/onecatch/internal/buildinfo.Version={{.APP_VERSION}} -X github.com/openmodu/onecatch/internal/buildinfo.UpdatePublicKey={{.UPDATE_PUBLIC_KEY}} -w -s"{{end}}'
       OUTPUT: '{{.OUTPUT | default (printf "%s/%s%s" .BIN_DIR .APP_NAME .EXE_EXT)}}'
 
   dev:desktop:
     desc: Start the Wails desktop app and Vite dev server
-    env:
-      ONECATCH_SSH_ASKPASS: '{{.ROOT_DIR}}/{{.BIN_DIR}}/onecatch-askpass{{.EXE_EXT}}'
-      ONECATCH_SHELL_BINARY: '{{.ROOT_DIR}}/{{.BIN_DIR}}/onecatchsh'
     cmds:
-      - task: build:shell
-      - task: build:askpass
       - cmd: ./build/desktop/dev-session.sh go tool wails3 dev -config ./build/desktop/config.yml -port {{.VITE_PORT}}
         platforms: [darwin, linux]
       - cmd: go tool wails3 dev -config ./build/desktop/config.windows.yml -port {{.VITE_PORT}}
@@ -109,8 +101,6 @@ tasks:
       - task: build
         vars:
           DEV: 'false'
-      - task: build:worker:package
-      - task: build:updater:package
       - cmd: ./build/desktop/darwin/package.sh
         platforms: [darwin]
       - cmd: ./build/desktop/linux/package.sh
@@ -148,46 +138,10 @@ tasks:
     cmds:
       - task: android:package
 
-  build:worker:
-    desc: Build the remote worker service
+  build:headless:
+    desc: Build the unified command without desktop dependencies
     cmds:
-      - cmd: mkdir -p '{{.BIN_DIR}}'
-        platforms: [darwin, linux]
-      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BIN_DIR}}' | Out-Null"
-        platforms: [windows]
-      - go build -tags onecatch_worker -o '{{.BIN_DIR}}/onecatch-worker{{.EXE_EXT}}' ./cmd/worker
-
-  build:shell:
-    desc: Build the agent shell used by remote runs
-    platforms: [darwin, linux]
-    cmds:
-      - mkdir -p '{{.BIN_DIR}}'
-      - go build -o '{{.BIN_DIR}}/onecatchsh' ./cmd/onecatchsh
-
-  build:askpass:
-    desc: Build the SSH password helper used by Remote FS workspaces
-    cmds:
-      - cmd: mkdir -p '{{.BIN_DIR}}'
-        platforms: [darwin, linux]
-      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BIN_DIR}}' | Out-Null"
-        platforms: [windows]
-      - go build -o '{{.BIN_DIR}}/onecatch-askpass{{.EXE_EXT}}' ./cmd/onecatch-askpass
-
-  build:worker:package:
-    internal: true
-    cmds:
-      - cmd: mkdir -p '{{.BIN_DIR}}'
-        platforms: [darwin, linux]
-      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BIN_DIR}}' | Out-Null"
-        platforms: [windows]
-      - go build -tags production,onecatch_worker -trimpath -buildvcs=false -ldflags="-w -s" -o '{{.BIN_DIR}}/onecatch-worker{{.EXE_EXT}}' ./cmd/worker
-
-  build:updater:package:
-    internal: true
-    env:
-      CGO_ENABLED: '0'
-    cmds:
-      - go build -trimpath -buildvcs=false -ldflags='{{if eq OS "windows"}}-H=windowsgui {{end}}-w -s' -o '{{.BIN_DIR}}/onecatch-updater{{.EXE_EXT}}' ./cmd/onecatch-updater
+      - go build -tags production,onecatch_headless,onecatch_worker -trimpath -buildvcs=false -ldflags="-w -s" -o '{{.BIN_DIR}}/headless/onecatch{{.EXE_EXT}}' ./cmd/app
 
   dev:frontend:
     internal: true

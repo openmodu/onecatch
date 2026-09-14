@@ -78,9 +78,9 @@ accept a custom answer for each question, or be dismissed so Modu can continue
 with its best judgment. CLI print mode remains headless and cannot host these
 blocking questions.
 
-The bundled remote worker is built with the `onecatch_worker` build tag and uses
-the Modu CLI adapter. This prevents the SDK graph from being duplicated into both
-the desktop executable and its packaged worker.
+The unified executable's `worker` command uses the Modu CLI adapter. The optional
+`build:headless` task also sets `onecatch_worker` to omit the native Modu SDK,
+along with `onecatch_headless` to omit desktop dependencies.
 
 ## Agent Client Protocol
 

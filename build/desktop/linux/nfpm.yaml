@@ -14,14 +14,6 @@ license: MIT
 contents:
   - src: ./bin/onecatch
     dst: /usr/bin/onecatch
-  - src: ./bin/onecatch-worker
-    dst: /usr/bin/onecatch-worker
-  - src: ./bin/onecatchsh
-    dst: /usr/bin/onecatchsh
-  - src: ./bin/onecatch-askpass
-    dst: /usr/bin/onecatch-askpass
-  - src: ./bin/onecatch-updater
-    dst: /usr/bin/onecatch-updater
   - src: ./internal/app/desktop/assets/appicon.png
     dst: /usr/share/icons/hicolor/1024x1024/apps/onecatch.png
   - src: ./build/desktop/linux/onecatch.desktop

@@ -13,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/openmodu/onecatch/internal/processmode"
 	keyring "github.com/zalando/go-keyring"
 )
 
@@ -114,6 +115,7 @@ func ConfigureCommand(cmd *exec.Cmd, credentialID, askPassOverride string) error
 	}
 	cmd.Env = mergeEnvironment(cmd.Env, []string{
 		"SSH_ASKPASS=" + askPass,
+		processmode.Env + "=askpass",
 		"SSH_ASKPASS_REQUIRE=force",
 		"DISPLAY=onecatch",
 		"LC_ALL=C",
@@ -125,6 +127,9 @@ func ConfigureCommand(cmd *exec.Cmd, credentialID, askPassOverride string) error
 func AskPassPath() (string, error) {
 	if configured := strings.TrimSpace(os.Getenv(AskPassBinaryEnv)); configured != "" {
 		return configured, nil
+	}
+	if self := processmode.Executable(); self != "" {
+		return self, nil
 	}
 	self, err := os.Executable()
 	if err != nil {
@@ -143,7 +148,7 @@ func AskPassPath() (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("onecatch-askpass was not found for %s; build it with `go tool wails3 task build:askpass`, or set %s", self, AskPassBinaryEnv)
+	return "", fmt.Errorf("askpass role is not registered for %s; run the unified onecatch executable or set %s", self, AskPassBinaryEnv)
 }
 
 func askPassCandidates(executable, name string) []string {
@@ -152,10 +157,9 @@ func askPassCandidates(executable, name string) []string {
 		filepath.Join(dir, name),
 		filepath.Clean(filepath.Join(dir, "..", "Resources", "bin", name)),
 	}
-	// Wails places the development executable under
-	// bin/OneCatch.dev.app/Contents/MacOS while task build:askpass writes the
-	// helper directly to bin. Restrict this fallback to .dev.app bundles so a
-	// production app never searches an unrelated parent directory.
+	// Compatibility for unregistered callers using older development bundles.
+	// Restrict the legacy bin fallback to .dev.app bundles so production never
+	// searches an unrelated parent directory.
 	if strings.HasSuffix(filepath.ToSlash(dir), ".dev.app/Contents/MacOS") {
 		candidates = append(candidates, filepath.Clean(filepath.Join(dir, "..", "..", "..", name)))
 	}

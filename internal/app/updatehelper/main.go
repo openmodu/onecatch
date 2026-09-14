@@ -1,8 +1,6 @@
-// onecatch-updater is deliberately a small, UI-free process. The desktop app
-// copies it to a temporary path before exiting, so it can replace the complete
-// installed unit without trying to overwrite the updater that is doing the
-// work.
-package main
+// Package updatehelper runs updates in a temporary copy of OneCatch, selected
+// before desktop startup. It survives replacement of the installed application.
+package updatehelper
 
 import (
 	"errors"
@@ -20,7 +18,7 @@ import (
 
 const readyEnvironment = "ONECATCH_UPDATE_READY_FILE"
 
-func main() {
+func Run() {
 	mode := flag.String("mode", "", "installer or replace-file")
 	parentPID := flag.Int("parent-pid", 0, "desktop process to wait for")
 	payload := flag.String("payload", "", "verified update artifact")

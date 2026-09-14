@@ -143,7 +143,7 @@ function PairSheet({ open, busy, initialURL = "https://", onClose, onPair }) {
     <section className="mobile-sheet" role="dialog" aria-modal="true" aria-labelledby="pair-title">
       <div className="mobile-sheet-handle" />
       <header><div><small>安全配对</small><h2 id="pair-title">连接远端 Worker</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" disabled={busy} onClick={onClose}><X /></button></header>
-      <p className="mobile-sheet-copy">在电脑的 OneCatch 里打开「设置 › 手机连接」，开启后生成配对码；独立部署的 Worker 则执行 <code>onecatch-worker --pair</code>。配对码 10 分钟内有效且只能用一次。</p>
+      <p className="mobile-sheet-copy">在电脑的 OneCatch 里打开「设置 › 手机连接」，开启后生成配对码；独立部署的 Worker 则执行 <code>onecatch worker --pair</code>。配对码 10 分钟内有效且只能用一次。</p>
       <form onSubmit={(event) => { event.preventDefault(); void onPair({ baseURL, code }).then((ok) => { if (ok) { setCode(""); onClose(); } }); }}>
         <label><span>Worker 地址</span><Input value={baseURL} inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="https://192.168.1.20:9231" onChange={(event) => setBaseURL(event.target.value)} /></label>
         <label><span>一次性配对码</span><Input value={code} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="例如 ABCD-EFGH" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>

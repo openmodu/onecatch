@@ -70,7 +70,7 @@ go tool wails3 task deps              # 安装 Go 和前端依赖
 go tool wails3 task dev:desktop       # 启动桌面开发环境
 go tool wails3 task build:desktop     # 构建桌面开发版本
 go tool wails3 task package:desktop   # 生成当前系统的桌面安装包
-go tool wails3 task build:worker      # 输出 bin/onecatch-worker
+go tool wails3 task build:headless      # 输出 bin/headless/onecatch
 go tool wails3 task test              # 运行 Go 和前端测试
 ```
 
@@ -116,11 +116,11 @@ OneCatch 的主要持久化数据默认写入 `~/.onecatch/`：
 构建并在回环地址启动开发 Worker：
 
 ```bash
-go tool wails3 task build:worker
-./bin/onecatch-worker --pair
+go tool wails3 task build:headless
+./bin/headless/onecatch worker --pair
 ```
 
-监听非回环地址时必须通过 `--tls-cert` 和 `--tls-key` 配置 TLS；mTLS 再增加 `--client-ca`。只有传输安全已由受信任隧道承担时，才应显式使用 `--allow-insecure-http`。当前用户的常驻服务可用 `--install-service` 安装，所有参数以 `./bin/onecatch-worker --help` 为准。Worker 入口说明见 [`cmd/worker/README.md`](cmd/worker/README.md)，部署模板位于 [`deploy/onecatch-worker/`](deploy/onecatch-worker/)。
+监听非回环地址时必须通过 `--tls-cert` 和 `--tls-key` 配置 TLS；mTLS 再增加 `--client-ca`。只有传输安全已由受信任隧道承担时，才应显式使用 `--allow-insecure-http`。当前用户的常驻服务可用 `--install-service` 安装，所有参数以 `./bin/headless/onecatch worker --help` 为准。Worker 入口说明见 [`internal/app/worker/README.md`](internal/app/worker/README.md)，部署模板位于 [`deploy/onecatch-worker/`](deploy/onecatch-worker/)。
 
 ## 桌面打包与发布
 
@@ -136,7 +136,7 @@ Windows 打包前需要安装 [NSIS](https://nsis.sourceforge.io/)：
 winget install NSIS.NSIS
 ```
 
-Linux 使用 GTK4 和 WebKitGTK 6.0；`.deb` 与 AppImage 都包含桌面端调用的 worker、shell、SSH askpass 和更新 helper。
+桌面安装包只包含一个业务可执行文件 `onecatch`，集成 Worker、shell、SSH askpass 和更新角色。`onecatch worker` 启动独立服务；无桌面服务器可用 `build:headless` 构建无界面版本。Linux 桌面版本依赖 GTK4 和 WebKitGTK 6.0。[设计说明](docs/unified-binary.md)。
 
 桌面端每 6 小时自动检查一次更新，也可在“设置 → 外观 → 软件更新”手动检查。更新清单按平台和架构拆分为 Sparkle AppCast；下载包必须通过构建时固定的 Ed25519 公钥验签。macOS 替换完整 `.app`，Windows 静默运行完整 Setup，Linux AppImage 原位切换；新进程未能在 45 秒内启动时，Windows 和 AppImage 会恢复旧安装。`.deb` 安装由系统包管理器管理，因此只提示手动更新。这是带回滚的无感重启，不是在运行中的进程内替换代码。
 
@@ -169,10 +169,7 @@ NOTARY_PROFILE="onecatch-notary" \
 
 ```text
 cmd/
-├── app/                Wails 桌面与移动端统一入口
-├── worker/             远端执行服务入口
-├── onecatchsh/         Remote FS 命令代理
-└── onecatch-askpass/   SSH 密码辅助进程
+└── app/                桌面、Worker、内部辅助进程与移动端统一入口
 frontend/               React、Vite、测试和生成的 Wails bindings
 internal/
 ├── app/                Desktop、Mobile 和 Worker 启动装配

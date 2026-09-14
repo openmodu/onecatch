@@ -7,10 +7,6 @@ REPO_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)
 BIN_ROOT="$REPO_ROOT/bin"
 RELEASE_INFO="$REPO_ROOT/build/scripts/release-info.mjs"
 APP_BINARY="$BIN_ROOT/onecatch"
-WORKER_BINARY="$BIN_ROOT/onecatch-worker"
-SHELL_BINARY="$BIN_ROOT/onecatchsh"
-ASKPASS_BINARY="$BIN_ROOT/onecatch-askpass"
-UPDATER_BINARY="$BIN_ROOT/onecatch-updater"
 ICON_FILE="$REPO_ROOT/internal/app/desktop/assets/appicon.png"
 DESKTOP_FILE="$SCRIPT_DIR/onecatch.desktop"
 NFPM_CONFIG="$SCRIPT_DIR/nfpm.yaml"
@@ -26,10 +22,6 @@ for input in \
     "$RELEASE_INFO" \
     "$REPO_ROOT/CHANGELOG.md" \
     "$APP_BINARY" \
-    "$WORKER_BINARY" \
-    "$SHELL_BINARY" \
-    "$ASKPASS_BINARY" \
-    "$UPDATER_BINARY" \
     "$ICON_FILE" \
     "$DESKTOP_FILE" \
     "$NFPM_CONFIG"; do
@@ -39,7 +31,7 @@ for input in \
     fi
 done
 
-for executable in "$APP_BINARY" "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY" "$UPDATER_BINARY"; do
+for executable in "$APP_BINARY"; do
     if [ ! -x "$executable" ]; then
         echo "error: built binary is not executable: $executable" >&2
         exit 1
@@ -106,27 +98,8 @@ if [ ! -f "$BASE_APPIMAGE" ]; then
     exit 1
 fi
 
-# Wails bundles the main GUI and GTK runtime. Extract that image, add the three
-# helper executables that OneCatch resolves next to itself, then repack it.
-EXTRACT_ROOT="$STAGING_ROOT/extract"
-mkdir -p "$EXTRACT_ROOT"
-(
-    cd "$EXTRACT_ROOT"
-    "$BASE_APPIMAGE" --appimage-extract >/dev/null
-)
-APP_DIR="$EXTRACT_ROOT/squashfs-root"
-for helper in "$WORKER_BINARY" "$SHELL_BINARY" "$ASKPASS_BINARY" "$UPDATER_BINARY"; do
-    install -m 0755 "$helper" "$APP_DIR/usr/bin/$(basename -- "$helper")"
-done
-
-APPIMAGE_TOOL="$STAGING_ROOT/appimagetool-$APPIMAGE_ARCH.AppImage"
-curl --fail --location --retry 3 \
-    --output "$APPIMAGE_TOOL" \
-    "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-$APPIMAGE_ARCH.AppImage"
-chmod 0755 "$APPIMAGE_TOOL"
-REPACKED_APPIMAGE="$STAGING_ROOT/OneCatch.AppImage"
-ARCH="$APPIMAGE_ARCH" "$APPIMAGE_TOOL" --appimage-extract-and-run "$APP_DIR" "$REPACKED_APPIMAGE"
-mv -f "$REPACKED_APPIMAGE" "$OUTPUT_APPIMAGE"
+# All process roles are linked into the main executable.
+mv -f "$BASE_APPIMAGE" "$OUTPUT_APPIMAGE"
 
 DEB_NAME=$(basename -- "$OUTPUT_DEB" .deb)
 VERSION="$VERSION" GOARCH="$GO_ARCH" \

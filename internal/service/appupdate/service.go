@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/openmodu/onecatch/internal/buildinfo"
+	"github.com/openmodu/onecatch/internal/processmode"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/appcast"
@@ -320,6 +321,10 @@ func (s *Service) startUpdaterHelper(staged string) error {
 		"--ready-file", readyFile,
 	)
 	command.Stdin, command.Stdout, command.Stderr = nil, nil, nil
+	command.Env = append(os.Environ(), processmode.Env+"=updater")
+	if runtime.GOOS == "linux" {
+		command.Env = append(command.Env, "APPIMAGE_EXTRACT_AND_RUN=1")
+	}
 	if err := command.Start(); err != nil {
 		_ = os.Remove(helper)
 		return fmt.Errorf("app update: start updater helper: %w", err)
@@ -416,29 +421,38 @@ func copyUpdaterHelper() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("app update: resolve executable: %w", err)
 	}
-	name := "onecatch-updater"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
-	}
-	source := filepath.Join(filepath.Dir(executable), name)
-	if runtime.GOOS == "darwin" {
-		source = filepath.Join(filepath.Dir(filepath.Dir(executable)), "Resources", "bin", name)
+	source := executable
+	// The raw ELF inside an AppImage needs libraries in its mount. Copy the
+	// entire image so the updater owns a separate runtime after the desktop exits.
+	if runtime.GOOS == "linux" && strings.TrimSpace(os.Getenv("APPIMAGE")) != "" {
+		source = os.Getenv("APPIMAGE")
 	}
 	in, err := os.Open(source)
 	if err != nil {
 		return "", fmt.Errorf("app update: open updater helper: %w", err)
 	}
 	defer in.Close()
-	destination := filepath.Join(os.TempDir(), fmt.Sprintf("onecatch-updater-%d%s", os.Getpid(), filepath.Ext(name)))
-	out, err := os.OpenFile(destination, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o700)
+	suffix := ""
+	if runtime.GOOS == "windows" {
+		suffix = ".exe"
+	}
+	out, err := os.CreateTemp("", "onecatch-updater-*"+suffix)
 	if err != nil {
 		return "", fmt.Errorf("app update: create temporary helper: %w", err)
 	}
+	destination := out.Name()
+	if err := out.Chmod(0o700); err != nil {
+		_ = out.Close()
+		_ = os.Remove(destination)
+		return "", err
+	}
 	if _, err := io.Copy(out, in); err != nil {
 		_ = out.Close()
+		_ = os.Remove(destination)
 		return "", fmt.Errorf("app update: copy updater helper: %w", err)
 	}
 	if err := out.Close(); err != nil {
+		_ = os.Remove(destination)
 		return "", err
 	}
 	return destination, nil

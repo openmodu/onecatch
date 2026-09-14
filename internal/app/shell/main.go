@@ -7,11 +7,9 @@
 // forwards shell commands, mirrors native file operations, and reproduces
 // locally the bookkeeping the harness expects to find on this machine.
 //
-// It is not a program anyone runs by hand. It exists as a separate binary
-// because harnesses want a *program path* for their shell hook, not a command
-// line: Claude Code stats the value of CLAUDE_CODE_SHELL_PREFIX directly, so
-// anything with arguments in it is looked up as one filename and fails.
-package main
+// Shell mode is selected by the unified executable before desktop startup.
+// Harnesses receive its plain program path, with the role carried in the environment.
+package shell
 
 import (
 	"context"
@@ -23,7 +21,7 @@ import (
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
-func main() {
+func Run() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	os.Exit(run(ctx))

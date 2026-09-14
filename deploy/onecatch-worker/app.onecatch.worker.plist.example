@@ -6,7 +6,8 @@
   <string>app.onecatch.worker</string>
   <key>ProgramArguments</key>
   <array>
-    <string>/usr/local/bin/onecatch-worker</string>
+    <string>/usr/local/bin/onecatch</string>
+    <string>worker</string>
     <string>--listen</string>
     <string>0.0.0.0:9231</string>
     <string>--id</string>

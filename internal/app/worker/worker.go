@@ -25,6 +25,7 @@ import (
 )
 
 func Run() {
+	flag.CommandLine = flag.NewFlagSet(os.Args[0]+" worker", flag.ExitOnError)
 	listen := flag.String("listen", "127.0.0.1:9231", "listen address")
 	id := flag.String("id", "worker", "stable worker ID")
 	name := flag.String("name", "OneCatch Worker", "worker display name")
@@ -74,7 +75,7 @@ func Run() {
 			log.Fatalf("resolve worker binary: %v", err)
 		}
 		result, err := workerdaemon.Install(context.Background(), workerdaemon.Config{
-			Binary: binary, Listen: *listen, ID: *id, Name: *name, DataDir: stateRoot,
+			Binary: binary, PrefixArgs: []string{"worker"}, Listen: *listen, ID: *id, Name: *name, DataDir: stateRoot,
 			TLSCert: *tlsCert, TLSKey: *tlsKey, ClientCA: *clientCA,
 			Binaries:       configuredBinaries(binaryFlags),
 			MaxConcurrency: *maxConcurrency, AllowInsecureHTTP: *allowInsecureHTTP,
@@ -96,7 +97,8 @@ func Run() {
 		log.Fatalf("load service pairing request: %v", err)
 	}
 	engine := agentrun.NewEngine(agentrun.Config{
-		Binaries: configuredBinaries(binaryFlags),
+		ModuIntegration: "cli",
+		Binaries:        configuredBinaries(binaryFlags),
 		// DeepSeek Harness recovers its event stream by reading its own session
 		// log, so it needs a directory this worker owns.
 		DshSessionRoot: filepath.Join(stateRoot, "harnesses", "dsh", "sessions"),

@@ -16,6 +16,7 @@ test("worker workspace preflight requires clean clones at the same revision", ()
 
 test("worker command enables one-time pairing without exposing a token", () => {
   const command = buildWorkerCommand({ workerID: "build-mac" });
+  assert.match(command, /^onecatch worker /);
   assert.match(command, /--id 'build-mac'/);
   assert.match(command, /--install-service/);
   assert.match(command, /--pair/);

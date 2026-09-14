@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=onecatch
 Group=onecatch
-ExecStart=/usr/local/bin/onecatch-worker \
+ExecStart=/usr/local/bin/onecatch worker \
   --listen 0.0.0.0:9231 \
   --id linux-builder \
   --name "Linux builder" \

@@ -22,14 +22,15 @@ const (
 )
 
 type Config struct {
-	Binary   string
-	Listen   string
-	ID       string
-	Name     string
-	DataDir  string
-	TLSCert  string
-	TLSKey   string
-	ClientCA string
+	Binary     string
+	PrefixArgs []string
+	Listen     string
+	ID         string
+	Name       string
+	DataDir    string
+	TLSCert    string
+	TLSKey     string
+	ClientCA   string
 	// Binaries holds each harness's executable override by runtime id, and is
 	// forwarded as one --<id>-binary flag per entry.
 	Binaries          map[string]string
@@ -136,14 +137,14 @@ func RenderSystemd(config Config) []byte {
 }
 
 func arguments(config Config) []string {
-	arguments := []string{
-		config.Binary,
+	arguments := append([]string{config.Binary}, config.PrefixArgs...)
+	arguments = append(arguments, []string{
 		"--listen", config.Listen,
 		"--id", config.ID,
 		"--name", config.Name,
 		"--data-dir", config.DataDir,
 		"--max-concurrency", strconv.Itoa(config.MaxConcurrency),
-	}
+	}...)
 	appendPair := func(flag, value string) {
 		if strings.TrimSpace(value) != "" {
 			arguments = append(arguments, flag, value)

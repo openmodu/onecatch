@@ -7,7 +7,7 @@ import (
 
 func testConfig() Config {
 	return Config{
-		Binary: "/Applications/OneCatch.app/Contents/Resources/bin/onecatch-worker",
+		Binary: "/Applications/OneCatch.app/Contents/MacOS/onecatch", PrefixArgs: []string{"worker"},
 		Listen: "0.0.0.0:9231", ID: "build-mac", Name: "Build & Test Mac",
 		DataDir: "/Users/worker/.onecatch-worker", TLSCert: "/Users/worker/certs/server.pem",
 		TLSKey: "/Users/worker/certs/server-key.pem", MaxConcurrency: 4,
@@ -22,6 +22,7 @@ func TestRenderLaunchdEscapesValuesAndNeverEmbedsToken(t *testing.T) {
 	}
 	value := string(payload)
 	for _, expected := range []string{
+		"<string>/Applications/OneCatch.app/Contents/MacOS/onecatch</string>\n    <string>worker</string>",
 		"<string>Build &amp; Test Mac</string>",
 		"<string>--data-dir</string>",
 		"<string>/Users/worker/.onecatch-worker</string>",
@@ -39,7 +40,7 @@ func TestRenderLaunchdEscapesValuesAndNeverEmbedsToken(t *testing.T) {
 func TestRenderSystemdQuotesArgumentsAndRestarts(t *testing.T) {
 	value := string(RenderSystemd(testConfig()))
 	for _, expected := range []string{
-		`ExecStart="/Applications/OneCatch.app/Contents/Resources/bin/onecatch-worker"`,
+		`ExecStart="/Applications/OneCatch.app/Contents/MacOS/onecatch" "worker"`,
 		`"--name" "Build & Test Mac"`,
 		`"--data-dir" "/Users/worker/.onecatch-worker"`,
 		"Restart=on-failure",

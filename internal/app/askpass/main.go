@@ -2,7 +2,7 @@
 // uses password authentication. It prints exactly one password retrieved from
 // the operating system credential store. The password is never accepted in
 // argv or the environment.
-package main
+package askpass
 
 import (
 	"fmt"
@@ -13,7 +13,7 @@ import (
 	"github.com/openmodu/onecatch/internal/sshcredentials"
 )
 
-func main() {
+func Run() {
 	prompt := ""
 	if len(os.Args) > 1 {
 		prompt = os.Args[1]

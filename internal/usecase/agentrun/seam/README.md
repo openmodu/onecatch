@@ -41,8 +41,8 @@ go test ./internal/usecase/agentrun/...    # 离线单测，快，不碰 harness
 task test:conformance                      # 加上真实 harness 验证
 ```
 
-远端运行需要 `bin/onecatchsh`：`task build:shell`。开发时也可以用
-`ONECATCH_SHELL_BINARY` 指向别处。conformance 套件自己编译它，不依赖先 build。
+远端运行复用当前 `onecatch`，通过 `ONECATCH_INTERNAL_MODE=shell` 选择 shell 角色，无需单独构建。
+`ONECATCH_SHELL_BINARY` 可覆盖测试程序路径，conformance 套件自行构建统一入口。
 
 conformance 套件**不花任何 API 额度**：内嵌一个 mock model server，脚本化地让
 harness 发起工具调用。也**不需要远端机器**：recorder 拿到命令后在本地执行——
