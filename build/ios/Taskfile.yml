@@ -290,6 +290,7 @@ tasks:
       - build/ios/Taskfile.yml
       - CHANGELOG.md
       - build/appicon.png
+      - build/ios/main.m
       - build/ios/scripts/build_xcode_archive.sh
       - build/ios/scripts/patch_xcode_project.go
     generates:
@@ -298,6 +299,7 @@ tasks:
       - build/ios/xcode/main.xcodeproj/project.pbxproj
     cmds:
       - go tool wails3 ios xcode:gen -outdir build/ios/xcode -config build/desktop/config.yml
+      - cp build/ios/main.m build/ios/xcode/main/main.m
       - go run build/ios/scripts/patch_xcode_project.go build/ios/xcode/main.xcodeproj/project.pbxproj
       - /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable $(EXECUTABLE_NAME)' build/ios/xcode/main/Info.plist
       - /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString {{.APP_VERSION}}' build/ios/xcode/main/Info.plist

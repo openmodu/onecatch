@@ -57,5 +57,22 @@
     <key>CFBundleGetInfoString</key>
     <string>Remote worker client for iOS and Android</string>
 
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>OneCatch</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>OneCatchSceneDelegate</string>
+                </dict>
+            </array>
+        </dict>
+    </dict>
 </dict>
 </plist>
