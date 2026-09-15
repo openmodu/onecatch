@@ -3,6 +3,14 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.12
+
+- Reopen the phone on the computer you last used instead of the first paired one, and keep an offline computer selected without probing it on startup.
+- Keep the transcript following to the bottom through layout changes, such as the keyboard or a new message changing the page height.
+- Adopt the iOS UIScene lifecycle for the Wails webview so the phone app survives scene-based startup.
+- Prepare the iOS Info.plist and entrypoint from one place and stamp the release version into the iOS binary, so Xcode Run matches the task build.
+- Sort the projects and conversations lists by latest activity.
+
 ## 0.2.11
 
 - Complete a remote workspace root as you type: matching directories are listed over SFTP with Tab to complete, arrows to select, Enter to descend, and Escape to dismiss.
