@@ -144,6 +144,16 @@ export function applyMobileRunFrames(items = [], frames = []) {
 // as the last reply, so leaving it in printed the answer twice.
 const TRANSCRIPT_NOISE = new Set(["started", "usage", "permission_resolved", "result"]);
 
+// Older hosts include pending instructions in both Events and Queued. Match
+// the message and creation time, so a repeated but already applied prompt is
+// never hidden just because another copy is waiting.
+export function mobileTranscriptEvents(run) {
+  const pending = new Set((run.queued || []).filter((item) => item.createdAt).map((item) =>
+    JSON.stringify([item.text, Date.parse(item.createdAt)])));
+  return (run.events || []).filter((event) => event.kind !== "user_message" ||
+    !pending.has(JSON.stringify([event.text, Date.parse(event.at)])));
+}
+
 export function foldMobileEvents(items = []) {
   const events = [];
   const streamIndexes = new Map();

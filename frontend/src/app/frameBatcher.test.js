@@ -48,3 +48,26 @@ test("frame batcher cancels pending work during cleanup", () => {
   batcher.cancel();
   assert.equal(callbacks.size, 0);
 });
+
+test("a stalled animation frame still flushes once via the mobile timer", () => {
+  const frames = new Map();
+  const timers = new Map();
+  let count = 0;
+  const batcher = createFrameBatcher(() => count++, (fn) => { frames.set(1, fn); return 1; }, (id) => frames.delete(id), {
+    schedule: (fn) => { timers.set(2, fn); return 2; }, cancel: (id) => timers.delete(id),
+  });
+  batcher.schedule();
+  batcher.schedule();
+  const lateFrame = frames.get(1);
+  timers.get(2)();
+  lateFrame();
+  assert.equal(count, 1);
+  assert.equal(frames.size + timers.size, 0);
+  batcher.schedule();
+  frames.get(1)();
+  assert.equal(count, 2);
+  assert.equal(timers.size, 0);
+  batcher.schedule();
+  batcher.cancel();
+  assert.equal(frames.size + timers.size, 0);
+});

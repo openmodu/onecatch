@@ -558,6 +558,11 @@ func TestPhoneQueuesAFollowUpWhileTheTurnRuns(t *testing.T) {
 	if err != nil || len(view.Queued) != 1 || view.Queued[0].Text != "and then this" {
 		t.Fatalf("run view queue = %+v, %v", view.Queued, err)
 	}
+	for _, event := range view.Events {
+		if event.Kind == "user_message" && event.Text == "and then this" {
+			t.Fatal("pending follow-up appeared in the transcript before the agent received it")
+		}
+	}
 	for _, summary := range phone.ListRuns() {
 		if summary.ID == run.ID && len(summary.Queued) != 1 {
 			t.Fatalf("summary dropped the queue: %+v", summary)

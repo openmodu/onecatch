@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useLayoutEffect } from "react";
 
 // WKWebView keeps the layout viewport at full-screen size while the keyboard
 // shrinks and can pan the visual viewport. A bottom inset alone only fixes the
@@ -16,27 +16,21 @@ export function viewportFrameFrom(viewport, innerHeight) {
 }
 
 export function useMobileViewportFrame(elementRef) {
-  useEffect(() => {
+  useLayoutEffect(() => {
     const viewport = globalThis.visualViewport;
     const element = elementRef.current;
     if (!element) return undefined;
-    let frame = 0;
     const apply = () => {
-      frame = 0;
       const visible = viewportFrameFrom(viewport, window.innerHeight);
       element.style.setProperty("--mobile-viewport-top", `${visible.top}px`);
       element.style.setProperty("--mobile-viewport-height", `${visible.height}px`);
     };
-    const sync = () => {
-      if (frame) window.cancelAnimationFrame(frame);
-      frame = window.requestAnimationFrame(apply);
-    };
+    const sync = apply;
     sync();
     viewport?.addEventListener("resize", sync);
     viewport?.addEventListener("scroll", sync);
     window.addEventListener("resize", sync);
     return () => {
-      if (frame) window.cancelAnimationFrame(frame);
       viewport?.removeEventListener("resize", sync);
       viewport?.removeEventListener("scroll", sync);
       window.removeEventListener("resize", sync);

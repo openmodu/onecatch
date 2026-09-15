@@ -172,10 +172,14 @@ func (h *hostedRuns) Get(ctx context.Context, id string, window worker.Transcrip
 		}
 	}
 	for _, item := range detail.Instructions {
-		if item.Status == domainworkflows.InstructionRemoved {
+		if item.Status != domainworkflows.InstructionApplied {
 			continue
 		}
-		view.Events = append(view.Events, agentrun.Event{Kind: "user_message", Text: item.Content, At: item.CreatedAt})
+		at := item.CreatedAt
+		if !item.AppliedAt.IsZero() {
+			at = item.AppliedAt
+		}
+		view.Events = append(view.Events, agentrun.Event{Kind: "user_message", Text: item.Content, At: at})
 	}
 	sort.SliceStable(view.Events, func(i, j int) bool { return view.Events[i].At.Before(view.Events[j].At) })
 	// Opening a conversation on the phone ships the newest page rather than

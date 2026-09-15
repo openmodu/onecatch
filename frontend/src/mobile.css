@@ -225,6 +225,7 @@ button, input, textarea, select { font: inherit; }
 .mobile-conversation-shell { width: 100%; max-width: 100%; min-width: 0; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; overflow: hidden; overscroll-behavior: none; }
 .mobile-transcript { width: 100%; max-width: 100%; min-width: 0; min-height: 0; overflow: hidden; overscroll-behavior: none; }
 .mobile-transcript.has-messages { padding: 4px max(var(--m-gutter), calc((100% - var(--mobile-max)) / 2 + var(--m-gutter))) 34px; overflow-x: hidden; overflow-y: auto; touch-action: pan-y; }
+.mobile-transcript-content { min-width: 0; display: flow-root; }
 .mobile-transcript.empty { display: grid; place-items: center; padding: 28px; touch-action: none; }
 .mobile-chat-empty { width: 100%; max-width: 100%; min-width: 0; text-align: center; transform: translateY(-4vh); }
 .mobile-chat-mark { display: none; }

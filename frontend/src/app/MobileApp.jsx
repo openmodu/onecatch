@@ -1,3 +1,4 @@
+import { createTranscriptFollower } from "./transcriptFollow.js";
 import { withWorkspaceActivity } from "./activityOrder.js";
 import { sortWorkspaces } from "./listNavigation.js";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -53,13 +54,13 @@ import RuntimeHarnessIcon from "./components/RuntimeHarnessIcon.jsx";
 import MobileUsageBoard from "./MobileUsageBoard.jsx";
 import { runtimeHarnesses } from "./runtimeHarnesses.js";
 import { errorMessage, formatDuration, formatMessageTime, formatTime, formatToolTime, compactTokens, shortenPath } from "./format.js";
-import { applyMobileRunFrames, conversationUsage, foldMobileEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
+import { applyMobileRunFrames, conversationUsage, foldMobileEvents, mobileTranscriptEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { createFrameBatcher } from "./frameBatcher.js";
 import { createWorkspaceLoader } from "./mobileWorkspaceLoader.js";
 import { needsMobileRunDetail, mobileConversationID, mobileConversationTurnCount, mobileEarlierEventCount, mobileRunDetailRecord, mobileTranscriptNotice } from "./mobileRuns.js";
 import { useMobileBackGesture } from "./mobileBackGesture.js";
 import { useNativeChrome } from "./mobileChrome.js";
-import { isPinnedToBottom, useMobileViewportFrame } from "./mobileViewport.js";
+import { useMobileViewportFrame } from "./mobileViewport.js";
 import { useMobilePullToRefresh } from "./mobilePullRefresh.js";
 import { useMobileLongPress } from "./mobileLongPress.js";
 import { accountRateLimitName, clampUsagePercent, recentDailyUsage, usageWindowDuration } from "./accountUsage.js";
@@ -460,7 +461,7 @@ function AgentEvent({ run, event, index, permissionBusy, onRespond }) {
 }
 
 const ConversationTurn = memo(function ConversationTurn({ run, notice = "", earlierBusy = false, permissionBusy, onRespond, onLoadEarlier }) {
-  const visibleEvents = foldMobileEvents(run.events || []);
+  const visibleEvents = foldMobileEvents(mobileTranscriptEvents(run));
   const blocks = groupMobileTranscriptEvents(visibleEvents);
   const visibleRun = { ...run, events: visibleEvents };
   const earlier = mobileEarlierEventCount(run);
@@ -495,18 +496,23 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
     ready: sharedRuns || (snapshot?.isRepo && !snapshot?.status && !(snapshot?.files || []).length),
   });
   const transcriptRef = useRef(null);
-  const pinnedRef = useRef(true);
+  const followerRef = useRef(null);
+  const transcriptContentRef = useRef(null);
   const anchorRef = useRef(0);
   const [earlierBusy, setEarlierBusy] = useState("");
   const promptRef = useRef(null);
   const transcriptLength = useMemo(() => runs.reduce((total, run) => total + (run.events || []).reduce((size, event) => size + 1 + String(event.text || "").length, 0), 0), [runs]);
 
-  // Opening a conversation starts at its newest turn, and streamed events keep
-  // it there unless the reader has scrolled away to look at something.
-  useEffect(() => {
-    pinnedRef.current = true;
+  useLayoutEffect(() => {
     const element = transcriptRef.current;
-    if (element) element.scrollTop = element.scrollHeight;
+    if (!element) return undefined;
+    const follower = createTranscriptFollower(element);
+    followerRef.current = follower;
+    follower.sync(true);
+    const observer = new ResizeObserver(() => follower.sync());
+    observer.observe(element);
+    if (transcriptContentRef.current) observer.observe(transcriptContentRef.current);
+    return () => { observer.disconnect(); followerRef.current = null; };
   }, [conversation?.id]);
   // Prepending earlier history moves everything the reader is looking at down
   // the page. Restore the distance to the bottom before the browser paints, so
@@ -523,40 +529,36 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
   // changed the draft touches nothing above it.
   const loadEarlier = useCallback(async (runID) => {
     const element = transcriptRef.current;
-    pinnedRef.current = false;
+    followerRef.current?.pause();
     anchorRef.current = element ? element.scrollHeight - element.scrollTop : 0;
     setEarlierBusy(runID);
     try { await onLoadEarlier?.(runID); } finally { setEarlierBusy(""); }
   }, [onLoadEarlier]);
-  useEffect(() => {
-    const element = transcriptRef.current;
-    if (!element || !pinnedRef.current) return undefined;
-    const frame = window.requestAnimationFrame(() => { element.scrollTop = element.scrollHeight; });
-    return () => window.cancelAnimationFrame(frame);
-  }, [transcriptLength, runs.length, running?.status, pending]);
-
-  // Safari only grew `field-sizing: content` in 26, so the composer has to size
-  // itself for every iOS version this app still supports. The CSS max-height
-  // turns the overflow into an internal scroll.
-  useEffect(() => {
+  // Size the composer and follow the transcript before paint. ResizeObserver
+  // also covers keyboard animations, expanded messages and async Markdown.
+  useLayoutEffect(() => {
     const element = promptRef.current;
-    if (!element) return;
-    element.style.height = "auto";
-    element.style.height = `${element.scrollHeight}px`;
-  }, [prompt]);
+    if (element) {
+      element.style.height = "auto";
+      element.style.height = `${element.scrollHeight}px`;
+    }
+    followerRef.current?.sync();
+  }, [prompt, transcriptLength, runs.length, running?.status, pending, queued.length]);
 
   return <div className="mobile-conversation-shell">
     <main
       className={`mobile-transcript ${runs.length || pending ? "has-messages" : "empty"}`}
       ref={transcriptRef}
-      onScroll={() => { pinnedRef.current = isPinnedToBottom(transcriptRef.current); }}
+      onScroll={() => followerRef.current?.scroll()}
     >
+      <div ref={transcriptContentRef} className="mobile-transcript-content">
       {!runs.length && !pending && <section className="mobile-chat-empty"><span className="mobile-chat-mark">1</span><h1>想让远端 Agent 做什么？</h1><p>当前工作区：{workspaceLabel(workspace)} · {sharedRuns ? "与桌面共用任务和运行记录" : "Agent 在远端以只读模式运行"}</p></section>}
       {runs.map((run) => <ConversationTurn key={run.id} run={run} notice={transcriptNotice(run)} earlierBusy={earlierBusy === run.id} permissionBusy={permissionBusy} onRespond={onRespond} onLoadEarlier={loadEarlier} />)}
       {pending && <section className="mobile-turn">
         <UserMessage text={pending.text} at={pending.at} />
         <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在发送…</div>
       </section>}
+      </div>
     </main>
     <footer className="mobile-composer-wrap">
       {Boolean(!sharedRuns && snapshot && (!snapshot.isRepo || snapshot.status || (snapshot.files || []).length)) && <div className="mobile-workspace-alert"><CircleAlert />远端工作区需要保持干净才能开始只读任务</div>}
@@ -579,8 +581,11 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
               disabled={action.disabled}
               onClick={() => {
                 if (action.mode === "running") { if (action.interruptible) onInterrupt(running.id); }
-                else if (action.mode === "queue") onQueue(running?.id);
-                else onStart({ resumeSessionId: latest?.result?.sessionId || "" });
+                else {
+                  followerRef.current?.sync(true);
+                  if (action.mode === "queue") onQueue(running?.id);
+                  else onStart({ resumeSessionId: latest?.result?.sessionId || "" });
+                }
               }}>
               {action.mode === "running" ? <><Square /><span>运行中</span></> : <Send />}
             </button>
@@ -979,7 +984,10 @@ export default function MobileWorkbench() {
     const cancelFrame = typeof window.cancelAnimationFrame === "function"
       ? window.cancelAnimationFrame.bind(window)
       : window.clearTimeout.bind(window);
-    const batcher = createFrameBatcher(flush, scheduleFrame, cancelFrame);
+    const batcher = createFrameBatcher(flush, scheduleFrame, cancelFrame, {
+      schedule: (callback) => window.setTimeout(callback, 50),
+      cancel: (handle) => window.clearTimeout(handle),
+    });
     const off = Events.On(RUN_EVENT, (event) => {
       const frame = event.data;
       if (!frame?.runId) return;

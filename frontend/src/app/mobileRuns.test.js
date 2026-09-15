@@ -357,3 +357,13 @@ test("a queued message is part of what makes a run look different", () => {
   assert.deepEqual(merged[0].queued, run.queued);
   assert.equal(mergeMobileRunSummaries([run], [{ ...run }])[0], run, "an unchanged queue keeps the old object");
 });
+
+test("pending instructions from older hosts stay in the queue until applied", async () => {
+  const { mobileTranscriptEvents } = await import("./mobileRuns.js");
+  const at = "2026-09-15T15:00:00Z";
+  const earlier = { kind: "user_message", text: "same prompt", at: "2026-09-15T14:00:00Z" };
+  const pending = { kind: "user_message", text: "same prompt", at };
+  const run = { queued: [{ id: "q1", text: "same prompt", createdAt: at }], events: [earlier, pending] };
+  assert.deepEqual(mobileTranscriptEvents(run), [earlier]);
+  assert.deepEqual(mobileTranscriptEvents({ ...run, queued: [] }), [earlier, pending]);
+});
