@@ -1,3 +1,4 @@
+import { readSelectedWorker, saveSelectedWorker, resolveSelectedWorker } from "./mobileWorkerSelection.js";
 import { createTranscriptFollower } from "./transcriptFollow.js";
 import { withWorkspaceActivity } from "./activityOrder.js";
 import { sortWorkspaces } from "./listNavigation.js";
@@ -770,7 +771,8 @@ function ConfirmSheet({ request, onClose }) {
 export default function MobileWorkbench() {
   const [view, setView] = useState("projects");
   const [workers, setWorkers] = useState([]);
-  const [selectedWorkerID, setSelectedWorkerID] = useState("");
+  const [selectedWorkerID, setSelectedWorkerID] = useState(() => readSelectedWorker());
+  useLayoutEffect(() => { saveSelectedWorker(selectedWorkerID); }, [selectedWorkerID]);
   const [healthByID, setHealthByID] = useState({});
   const [workspacesByWorker, setWorkspacesByWorker] = useState({});
   const workspaces = useMemo(() => workspacesByWorker[selectedWorkerID] || [], [workspacesByWorker, selectedWorkerID]);
@@ -851,7 +853,7 @@ export default function MobileWorkbench() {
   const loadWorkers = useCallback(async () => {
     const items = await MobileBinding.ListWorkers();
     setWorkers(items || []);
-    setSelectedWorkerID((current) => items?.some((item) => item.id === current) ? current : items?.[0]?.id || "");
+    setSelectedWorkerID((current) => resolveSelectedWorker(items || [], current));
     return items || [];
   }, []);
 
@@ -916,12 +918,11 @@ export default function MobileWorkbench() {
   useEffect(() => {
     void (async () => {
       try {
-        const [items, runItems] = await Promise.all([loadWorkers(), MobileBinding.ListRunSummaries()]);
+        const [, runItems] = await Promise.all([loadWorkers(), MobileBinding.ListRunSummaries()]);
         setRuns((current) => mergeMobileRunSummaries(current, runItems || []));
-        if (items[0]) await refreshWorker(items[0].id, true);
       } catch (error) { notify("error", errorMessage(error)); }
     })();
-  }, [loadWorkers, notify, refreshWorker]);
+  }, [loadWorkers, notify]);
 
   useEffect(() => {
     if (!selectedWorkerID) return undefined;
