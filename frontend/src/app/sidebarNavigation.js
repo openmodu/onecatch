@@ -1,3 +1,4 @@
+import { compareActivity } from "./activityOrder.js";
 export const SIDEBAR_TASK_PREVIEW_LIMIT = 3;
 
 function searchText(value) {
@@ -22,7 +23,7 @@ export function buildSidebarTaskEntries(tasks = [], runs = [], { query = "", sta
     .filter((task) => matchesQuery([task.id, task.title, task.prompt], query))
     .map((task) => ({ kind: "queued", key: `task:${task.id}`, item: task, queuePosition: queued.findIndex((candidate) => candidate.id === task.id) + 1 }));
   const seenPinnedRunTasks = new Set();
-  const runEntries = (status === "queued" ? [] : runs)
+  const runEntries = (status === "queued" ? [] : [...runs].sort(compareActivity))
     .filter((run) => (!status || run.status === status) && matchesQuery([run.id, run.task?.title, ...Object.values(run.sessions || {})], query))
     .map((run) => {
       const taskID = run.task?.id;
@@ -48,7 +49,7 @@ export function buildSidebarTaskEntries(tasks = [], runs = [], { query = "", sta
     const leftTask = entryTask(left);
     const rightTask = entryTask(right);
     if (Boolean(leftTask?.pinned) !== Boolean(rightTask?.pinned)) return leftTask?.pinned ? -1 : 1;
-    return 0;
+    return compareActivity(left.item, right.item);
   });
 }
 

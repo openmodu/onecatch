@@ -1,3 +1,4 @@
+import { activityTime, compareActivity } from "./activityOrder.js";
 import { shortenPath } from "./format.js";
 
 const MAX_VISIBLE_EVENTS = 2000;
@@ -70,7 +71,7 @@ export function mobileRunFingerprint(run = {}) {
   return [
     run.id, run.conversationId, run.workerId, run.workspaceId, run.runtime,
     run.prompt, run.title, run.turnCount, run.status, run.shared ? 1 : 0, run.error,
-    run.startedAt, run.finishedAt, run.eventsOffset, run.eventsTotal,
+    run.startedAt, run.updatedAt, run.finishedAt, run.eventsOffset, run.eventsTotal,
     events.length, JSON.stringify(events.map(eventFingerprint)),
     run.result?.sessionId, run.result?.succeeded ? 1 : 0,
     run.result?.finalMessage, run.result?.usage?.inputTokens,
@@ -276,8 +277,8 @@ export function groupMobileConversations(items = []) {
   }
   return [...groups.values()].map((conversation) => {
     const runs = [...conversation.runs].sort((left, right) => String(left.startedAt || "").localeCompare(String(right.startedAt || "")));
-    return { ...conversation, title: runs[0]?.title || mobileRunTitle(runs[0]?.prompt), runs };
-  });
+    return { ...conversation, lastActiveAt: new Date(Math.max(0, ...runs.map(activityTime))).toISOString(), title: runs[0]?.title || mobileRunTitle(runs[0]?.prompt), runs };
+  }).sort(compareActivity);
 }
 
 // projectActivity condenses a project's sessions into the one line the list
@@ -287,7 +288,8 @@ export function projectActivity(sessions = []) {
   let running = false;
   for (const session of sessions) {
     if (session.status === "running") running = true;
-    const at = String(session.startedAt || "");
+    const time = activityTime(session);
+    const at = time ? new Date(time).toISOString() : "";
     if (at > latestAt) latestAt = at;
   }
   return { count: sessions.length, latestAt, running };

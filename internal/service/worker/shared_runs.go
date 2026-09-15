@@ -38,6 +38,7 @@ type SharedRun struct {
 	// order the host will hand it to the agent.
 	Queued     []QueuedInstruction `json:"queued,omitempty"`
 	Error      string              `json:"error,omitempty"`
+	UpdatedAt  time.Time           `json:"updatedAt"`
 	StartedAt  time.Time           `json:"startedAt"`
 	FinishedAt *time.Time          `json:"finishedAt,omitempty"`
 }

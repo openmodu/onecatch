@@ -1,3 +1,4 @@
+import { withWorkspaceActivity } from "./activityOrder.js";
 import { hasRemoteFSHarness, hydrateRuntimeHarnesses, supportsRuntimeProfile } from "./runtimeHarnesses.js";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -679,6 +680,7 @@ function App() {
       ]);
       setTasks(workspaceTasks || []);
       setPinnedTasks((allTasks || []).filter((task) => task.pinned));
+      setWorkspaces((items) => withWorkspaceActivity(items, allTasks || []));
     } catch (error) {
       notify("error", errorMessage(error));
     }
@@ -1381,7 +1383,11 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
-  const sidebarWorkspaces = useMemo(() => workspaceResults(workspaces, { query: "", expanded: workspaceExpanded }), [workspaceExpanded, workspaces]);
+  useEffect(() => {
+    setWorkspaces((items) => withWorkspaceActivity(items, runItems));
+  }, [runItems]);
+
+  const sidebarWorkspaces = useMemo(() => workspaceResults(workspaces, { query: "", expanded: workspaceExpanded, activities: runItems }), [workspaceExpanded, workspaces, runItems]);
   const goView = useCallback((next) => {
     if (next !== "tasks") setTaskModal(false);
     if (next === "settings" || next === "workflows") {

@@ -1,8 +1,9 @@
+import { withWorkspaceActivity } from "./activityOrder.js";
+import { sortWorkspaces } from "./listNavigation.js";
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Events } from "@wailsio/runtime";
 import {
   Activity,
-  ArrowDownUp,
   ArrowDown,
   ArrowLeft,
   Bot,
@@ -255,7 +256,7 @@ function ProjectHome({ workspaces, conversations, query, onOpenWorkspace, onNew,
 function SessionRow({ conversation, onOpen, onActions }) {
   const press = useMobileLongPress(() => onActions(conversation));
   return <button type="button" className="mobile-session-row" {...press.handlers} onClick={() => { if (!press.consume()) onOpen(conversation.id); }}>
-    <span className="mobile-session-copy"><strong>{conversation.title}</strong><small><RuntimeHarnessIcon harness={conversation.runtime} size={13} />{mobileConversationTurnCount(conversation.runs)} 轮 · {relativeTime(conversation.startedAt)}</small></span>
+    <span className="mobile-session-copy"><strong>{conversation.title}</strong><small><RuntimeHarnessIcon harness={conversation.runtime} size={13} />{mobileConversationTurnCount(conversation.runs)} 轮 · {relativeTime(conversation.lastActiveAt || conversation.startedAt)}</small></span>
     <span className={`mobile-session-status ${conversation.status}`}>{runStatusLabel(conversation.status)}</span>
   </button>;
 }
@@ -627,13 +628,11 @@ function Sidebar({ open, workspaces, conversations, selectedConversationID, work
   </div>;
 }
 
-function MoreMenu({ open, sortMode, health, onSort, onWorkspaces, onWorkers, onPair, onSettings, onClose }) {
+function MoreMenu({ open, health, onWorkspaces, onWorkers, onPair, onSettings, onClose }) {
   if (!open) return null;
   return <div className="mobile-popover-backdrop" onPointerDown={(event) => event.target === event.currentTarget && onClose()}>
     <section className="mobile-more-menu">
       <small>整理</small>
-      <button type="button" onClick={() => { onSort("project"); onClose(); }}>{sortMode === "project" ? <Check /> : <span />}<Folder />按项目</button>
-      <button type="button" onClick={() => { onSort("recent"); onClose(); }}>{sortMode === "recent" ? <Check /> : <span />}<ArrowDownUp />按时间倒序排列</button>
       <hr />
       <small>管理</small>
 	  <button type="button" onClick={() => { onWorkspaces(); onClose(); }}><span /><FolderGit2 />Workspace 管理</button>
@@ -787,8 +786,7 @@ export default function MobileWorkbench() {
   const [reasoningEffort, setReasoningEffort] = useState("");
   const [query, setQuery] = useState("");
   // A phone opens on what was touched last, so the projects lead with their
-  // latest activity. Alphabetical stays available for a long list.
-  const [sortMode, setSortMode] = useState("recent");
+  // latest activity.
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pairTarget, setPairTarget] = useState(undefined);
@@ -811,11 +809,7 @@ export default function MobileWorkbench() {
   useNativeChrome();
 
   const conversations = useMemo(() => groupMobileConversations(runs), [runs]);
-  const orderedWorkspaces = useMemo(() => {
-    if (sortMode === "project") return [...workspaces].sort((left, right) => workspaceLabel(left).localeCompare(workspaceLabel(right), "zh-CN"));
-    const latest = (id) => projectActivity(conversations.filter((item) => item.workspaceId === id)).latestAt;
-    return [...workspaces].sort((left, right) => String(latest(right.id)).localeCompare(String(latest(left.id))));
-  }, [conversations, sortMode, workspaces]);
+  const orderedWorkspaces = useMemo(() => sortWorkspaces(withWorkspaceActivity(workspaces, conversations)), [conversations, workspaces]);
   const selectedConversation = conversations.find((item) => item.id === selectedConversationID) || null;
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID) || null;
   const selectedHealth = healthByID[selectedWorkerID] || null;
@@ -1314,7 +1308,7 @@ export default function MobileWorkbench() {
 	<ConversationMenu open={menuOpen && view === "conversation"} conversation={selectedConversation} workspace={selectedWorkspace} health={selectedHealth} snapshot={snapshot} runtime={runtime} model={model} onNew={() => newConversation()} onSettings={() => setContextOpen(true)} onRename={setRenameTarget} onDelete={deleteConversation} onClose={() => setMenuOpen(false)} />
 	<SessionActionSheet conversation={sessionActions} onRename={setRenameTarget} onDelete={deleteConversation} onClose={() => setSessionActions(null)} />
 	<RenameSheet conversation={renameTarget} busy={busy === "rename"} onSubmit={renameConversation} onClose={() => setRenameTarget(null)} />
-	<MoreMenu open={menuOpen && view !== "conversation"} sortMode={sortMode} health={selectedHealth} onSort={setSortMode} onWorkspaces={openWorkspaceManager} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
+	<MoreMenu open={menuOpen && view !== "conversation"} health={selectedHealth} onWorkspaces={openWorkspaceManager} onWorkers={() => setWorkersOpen(true)} onPair={() => setPairTarget(null)} onSettings={() => setContextOpen(true)} onClose={() => setMenuOpen(false)} />
     <ContextSheet open={contextOpen} workers={workers} selectedWorkerID={selectedWorkerID} workspaces={workspaces} workspaceID={workspaceID} health={selectedHealth} runtime={runtime} runtimeLocked={Boolean(selectedConversationID)} model={model} reasoningEffort={reasoningEffort} onClose={() => setContextOpen(false)} onSelectWorker={(id) => { setSelectedWorkerID(id); setSelectedConversationID(""); setView("conversation"); void refreshWorker(id, true); }} onSelectWorkspace={(id) => selectWorkspace(id, "conversation")} onRuntime={setRuntime} onModel={setModel} onReasoning={setReasoningEffort} />
     <WorkersSheet open={workersOpen} workers={workers} selectedWorkerID={selectedWorkerID} onSelect={selectWorker} healthByID={healthByID} busy={Boolean(busy)} onClose={() => setWorkersOpen(false)} onPair={(worker) => { setWorkersOpen(false); setPairTarget(worker || null); }} onRefresh={refreshWorker} onDelete={deleteWorker} />
 	<PairSheet open={pairTarget !== undefined} busy={busy === "pair"} initialURL={pairTarget?.baseUrl || "https://"} onClose={() => setPairTarget(undefined)} onPair={pairWorker} />

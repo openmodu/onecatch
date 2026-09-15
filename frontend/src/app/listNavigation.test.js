@@ -2,15 +2,15 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { mergeRunItems, preserveByFingerprint, preserveEqualValue, runDetailFingerprint, runItemFingerprint, sortWorkspaces, workspaceResults, workspaceSections } from "./listNavigation.js";
 
-test("compact workspaces preserve their loaded order across navigation", () => {
+test("compact workspaces follow latest activity across navigation", () => {
   const items = Array.from({ length: 10 }, (_, index) => ({ id: `ws-${index}`, name: `Workspace ${index}`, path: `/tmp/${index}`, pinned: index === 3, lastOpenedAt: new Date(2026, 0, index + 1).toISOString() }));
   const original = structuredClone(items);
   const compact = workspaceResults(items, { limit: 4 });
-  assert.deepEqual(compact.map((item) => item.id), ["ws-0", "ws-1", "ws-2", "ws-3"]);
-  const opened = items.map((item) => item.id === "ws-9" ? { ...item, lastOpenedAt: "2026-09-03T00:00:00Z" } : item);
-  assert.deepEqual(workspaceResults(opened, { limit: 4 }).map((item) => item.id), compact.map((item) => item.id), "opening a project must not reshuffle the compact list");
+  assert.deepEqual(compact.map((item) => item.id), ["ws-9", "ws-8", "ws-7", "ws-6"]);
+  const opened = items.map((item) => item.id === "ws-0" ? { ...item, lastOpenedAt: "2026-09-03T00:00:00Z" } : item);
+  assert.deepEqual(workspaceResults(opened, { limit: 4 }).map((item) => item.id), ["ws-0", "ws-9", "ws-8", "ws-7"], "the latest active project moves to the front");
   assert.deepEqual(workspaceResults(items, { query: "/tmp/8" }).map((item) => item.id), ["ws-8"]);
-  assert.deepEqual(workspaceResults(items, { expanded: true }), items);
+  assert.deepEqual(workspaceResults(items, { expanded: true }).map((item) => item.id), sortWorkspaces(items).map((item) => item.id));
   assert.deepEqual(items, original, "navigation must not mutate workspace records or their order");
 });
 

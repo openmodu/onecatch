@@ -156,7 +156,7 @@ test("projectActivity summarises a project's sessions for the list row", () => {
     { startedAt: "2026-09-06T04:30:00Z", status: "running" },
     { startedAt: "2026-09-05T22:00:00Z", status: "failed" },
   ]);
-  assert.deepEqual(activity, { count: 3, latestAt: "2026-09-06T04:30:00Z", running: true });
+  assert.deepEqual(activity, { count: 3, latestAt: "2026-09-06T04:30:00.000Z", running: true });
   assert.deepEqual(projectActivity([]), { count: 0, latestAt: "", running: false });
   assert.deepEqual(projectActivity(), { count: 0, latestAt: "", running: false });
 });

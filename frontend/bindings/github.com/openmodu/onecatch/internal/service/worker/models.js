@@ -355,6 +355,13 @@ export class SharedRun {
              */
             this["error"] = undefined;
         }
+        if (!("updatedAt" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["updatedAt"] = "0001-01-01T00:00:00.000Z";
+        }
         if (!("startedAt" in $$source)) {
             /**
              * @member

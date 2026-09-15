@@ -1,21 +1,15 @@
+import { activityTime, withWorkspaceActivity } from "./activityOrder.js";
 export const COMPACT_WORKSPACE_LIMIT = 8;
-
-function timestamp(value) {
-  const parsed = new Date(value || 0).getTime();
-  return Number.isNaN(parsed) ? 0 : parsed;
-}
 
 export function sortWorkspaces(items = []) {
   return [...items].sort((a, b) => {
-    const recent = timestamp(b.lastOpenedAt) - timestamp(a.lastOpenedAt);
+    const recent = activityTime(b) - activityTime(a);
     return recent || String(a.name || "").localeCompare(String(b.name || ""));
   });
 }
 
-export function workspaceResults(items = [], { query = "", expanded = false, limit = COMPACT_WORKSPACE_LIMIT } = {}) {
-  // Keep the order established when the sidebar was loaded. Opening a
-  // workspace updates lastOpenedAt, but navigation must not make its row jump.
-  const sorted = [...items];
+export function workspaceResults(items = [], { query = "", expanded = false, limit = COMPACT_WORKSPACE_LIMIT, activities = [] } = {}) {
+  const sorted = sortWorkspaces(withWorkspaceActivity(items, activities));
   const needle = query.trim().toLocaleLowerCase();
   if (needle) return sorted.filter((item) => `${item.name || ""}\n${item.path || ""}\n${item.remoteFs?.username || ""}\n${item.remoteFs?.host || ""}`.toLocaleLowerCase().includes(needle));
   if (expanded || sorted.length <= limit) return sorted;

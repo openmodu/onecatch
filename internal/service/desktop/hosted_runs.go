@@ -89,7 +89,7 @@ func hostedRunView(run domainworkflows.Run, task domaintasks.Task, active bool) 
 	}
 	view := worker.SharedRun{ID: run.ID, ConversationID: task.ID, WorkerID: hostWorkerID(), WorkspaceID: task.WorkspaceID,
 		Runtime: agentrun.Runtime(task.Harness), Prompt: task.Prompt, Title: task.Title,
-		Status: status, Shared: true, StartedAt: run.StartedAt, Error: run.LastError}
+		Status: status, Shared: true, UpdatedAt: run.UpdatedAt, StartedAt: run.StartedAt, Error: run.LastError}
 	if !active && !run.CompletedAt.IsZero() {
 		at := run.CompletedAt
 		view.FinishedAt = &at

@@ -54,12 +54,9 @@ test("the drawer's projects fold, starting with the open one expanded", async ()
 // one worked on minutes ago under one last used in August.
 test("projects lead with their latest activity", async () => {
   const source = await readFile(sourceURL, "utf8");
-  assert.match(source, /const \[sortMode, setSortMode\] = useState\("recent"\);/);
-  const ordering = source.match(/const orderedWorkspaces = useMemo\(\(\) => \{[\s\S]*?\}, \[conversations, sortMode, workspaces\]\);/)[0];
-  // The order has to follow the timestamp each row displays, not a different
-  // one that happens to be nearby.
-  assert.match(ordering, /projectActivity\(conversations\.filter\(\(item\) => item\.workspaceId === id\)\)\.latestAt/);
-  assert.match(ordering, /latest\(right\.id\)\)\.localeCompare\(String\(latest\(left\.id\)\)\)/, "newest first");
+  assert.match(source, /sortWorkspaces\(withWorkspaceActivity\(workspaces, conversations\)\)/);
+  assert.doesNotMatch(source, /onSort\("project"\)/);
+
 });
 
 // With more than one computer paired, switching machines belongs on the screen
