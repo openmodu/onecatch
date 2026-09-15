@@ -587,7 +587,7 @@ function ConversationView({ conversation, workspace, snapshot, sharedRuns, promp
                   else onStart({ resumeSessionId: latest?.result?.sessionId || "" });
                 }
               }}>
-              {action.mode === "running" ? <><Square /><span>运行中</span></> : <Send />}
+              {action.mode === "running" ? <Square /> : <Send />}
             </button>
           </div>
         </div>

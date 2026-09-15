@@ -105,10 +105,11 @@ test("a message sent mid-turn is queued on the host", async () => {
 });
 
 // There is a single control, including while a prompt waits for its run ID.
-test("the composer renders one action with a running label", async () => {
+test("the composer renders one icon-only action with an accessible running label", async () => {
   const source = await readFile(new URL("./MobileApp.jsx", import.meta.url), "utf8");
   const actions = source.slice(source.indexOf('<div className="mobile-composer-actions">'), source.indexOf('// Projects fold'));
   assert.equal((actions.match(/<button /g) || []).length, 1);
-  assert.match(actions, /<span>运行中<\/span>/);
+  assert.doesNotMatch(actions, /<span>运行中<\/span>/);
+  assert.match(actions, /运行中，点击停止/);
   assert.match(actions, /action.interruptible/);
 });

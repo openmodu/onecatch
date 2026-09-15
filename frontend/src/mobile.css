@@ -341,7 +341,6 @@ summary.mobile-tool-row:active { opacity: .65; }
 .mobile-context-button b { color: var(--muted-foreground); font-weight: 400; }
 .mobile-send-button { width: 40px; height: 40px; display: grid; flex: 0 0 auto; place-items: center; border: 0; border-radius: 11px; background: color-mix(in oklab, var(--primary) 14%, var(--background)); color: var(--primary); }
 .mobile-send-button:disabled { opacity: .3; }
-.mobile-send-button.running { width: auto; min-width: 40px; padding: 0 12px; display: flex; align-items: center; justify-content: center; gap: 7px; font-size: 12px; white-space: nowrap; }
 .mobile-send-button svg { width: 17px; stroke-width: 1.9; }
 .mobile-workspace-alert { margin: 0 0 8px; display: flex; align-items: center; gap: 6px; color: var(--destructive); font-size: 11px; }
 .mobile-workspace-alert svg { width: 13px; }
