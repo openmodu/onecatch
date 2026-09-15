@@ -101,10 +101,7 @@ tasks:
         sh: xcrun --sdk {{.IOS_SDK}} --show-sdk-path
     cmds:
       - |
-        MAIN_M=build/ios/xcode/main/main.m
-        if [ ! -f "$MAIN_M" ]; then
-          MAIN_M=build/ios/main.m
-        fi
+        MAIN_M=build/ios/main.m
         xcrun -sdk {{.IOS_SDK}} clang \
           -target {{.IOS_TARGET}} \
           -isysroot {{.SDK_PATH}} \
@@ -291,6 +288,8 @@ tasks:
       - CHANGELOG.md
       - build/appicon.png
       - build/ios/main.m
+      - build/ios/Info.plist
+      - build/ios/scripts/prepare_xcode_plist.sh
       - build/ios/scripts/build_xcode_archive.sh
       - build/ios/scripts/patch_xcode_project.go
     generates:
@@ -301,10 +300,7 @@ tasks:
       - go tool wails3 ios xcode:gen -outdir build/ios/xcode -config build/desktop/config.yml
       - cp build/ios/main.m build/ios/xcode/main/main.m
       - go run build/ios/scripts/patch_xcode_project.go build/ios/xcode/main.xcodeproj/project.pbxproj
-      - /usr/libexec/PlistBuddy -c 'Set :CFBundleExecutable $(EXECUTABLE_NAME)' build/ios/xcode/main/Info.plist
-      - /usr/libexec/PlistBuddy -c 'Set :CFBundleShortVersionString {{.APP_VERSION}}' build/ios/xcode/main/Info.plist
-      - /usr/libexec/PlistBuddy -c 'Set :CFBundleVersion {{.APP_VERSION}}' build/ios/xcode/main/Info.plist
-      - /usr/libexec/PlistBuddy -c 'Add :NSLocalNetworkUsageDescription string "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c 'Set :NSLocalNetworkUsageDescription "OneCatch connects to Worker machines on your local network."' build/ios/xcode/main/Info.plist
+      - sh build/ios/scripts/prepare_xcode_plist.sh
 
   run:
     summary: Run the application in iOS Simulator

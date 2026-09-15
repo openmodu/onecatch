@@ -10,6 +10,7 @@ func TestPatchProjectAddsAppIconResources(t *testing.T) {
 /* Begin PBXBuildFile section */
 /* End PBXBuildFile section */
 /* Begin PBXFileReference section */
+main = {isa = PBXFileReference; path = main.m; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 				C0DEBEEF0000000000000003 /* Info.plist */,
 			buildPhases = (
@@ -30,6 +31,7 @@ shellScript = "go build -buildmode=c-archive -overlay build/ios/xcode/overlay.js
 	}
 	text := string(patched)
 	for _, expected := range []string{
+		"path = ../../main.m;",
 		"Assets.xcassets in Resources", "PBXResourcesBuildPhase", "ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;",
 		"/bin/sh build/ios/scripts/build_xcode_archive.sh", "CODE_SIGN_STYLE = Automatic;",
 	} {

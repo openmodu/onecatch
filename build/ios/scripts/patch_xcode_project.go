@@ -56,6 +56,15 @@ func main() {
 
 func patchProject(content []byte) ([]byte, bool, error) {
 	changed := false
+	// Reference the maintained scene-aware entrypoint, never Wails' generated copy.
+	oldMain := []byte("path = main.m;")
+	newMain := []byte("path = ../../main.m;")
+	if bytes.Contains(content, oldMain) {
+		content = bytes.ReplaceAll(content, oldMain, newMain)
+		changed = true
+	} else if !bytes.Contains(content, newMain) {
+		return nil, false, errors.New("generated Xcode project has an unknown main.m reference")
+	}
 	if !bytes.Contains(content, fixedBuild) {
 		if !bytes.Contains(content, generatedBuild) {
 			return nil, false, errors.New("generated Xcode build phase has an unknown Go command")

@@ -11,6 +11,8 @@ if ! command -v node >/dev/null 2>&1 || ! command -v npm >/dev/null 2>&1; then
   echo "Node.js and npm are required to build the iOS frontend. Make them available to Xcode." >&2
   exit 1
 fi
+sh build/ios/scripts/prepare_xcode_plist.sh
+app_version=$(node build/scripts/release-info.mjs --version)
 if [ "${CONFIGURATION:-Debug}" = "Release" ]; then
   npm --prefix frontend run build
 else
@@ -50,6 +52,7 @@ fi
 if [ "${CONFIGURATION:-Debug}" = "Release" ]; then
   "$go_bin" build \
     -tags production,ios \
+    -ldflags="-X github.com/openmodu/onecatch/internal/buildinfo.Version=$app_version" \
     -trimpath \
     -buildvcs=false \
     -buildmode=c-archive \
@@ -59,6 +62,7 @@ if [ "${CONFIGURATION:-Debug}" = "Release" ]; then
 else
   "$go_bin" build \
     -tags ios,debug \
+    -ldflags="-X github.com/openmodu/onecatch/internal/buildinfo.Version=$app_version" \
     -buildvcs=false \
     -gcflags=all=-l \
     -buildmode=c-archive \
