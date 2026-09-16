@@ -3,6 +3,13 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.13
+
+- Rediscover paired computers on the local network when their IP address changes, verify the saved certificate and Worker identity, and update the phone's saved address without pairing again.
+- Advertise desktop phone connections through Bonjour/mDNS; standalone Workers advertise when TLS is enabled and the listener uses a wildcard address.
+- Add iOS Bonjour declarations and foreground Android Wi-Fi multicast reception. Both the computer and phone must be updated, with local-network access allowed; isolated or multicast-blocked networks still require manual pairing at the new address.
+- Preserve pairing credentials and concurrent settings changes during reconnection, and never automatically replay a write operation whose response was lost.
+
 ## 0.2.12
 
 - Reopen the phone on the computer you last used instead of the first paired one, and keep an offline computer selected without probing it on startup.
