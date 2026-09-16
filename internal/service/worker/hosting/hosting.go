@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openmodu/onecatch/internal/landiscovery"
 	"github.com/openmodu/onecatch/internal/service/worker"
 )
 
@@ -62,13 +63,14 @@ type Status struct {
 type Host struct {
 	options Options
 
-	mu       sync.Mutex
-	server   *http.Server
-	service  *worker.Server
-	listener net.Listener
-	identity identity
-	token    string
-	pairing  *Pairing
+	mu            sync.Mutex
+	server        *http.Server
+	service       *worker.Server
+	listener      net.Listener
+	identity      identity
+	stopDiscovery func()
+	token         string
+	pairing       *Pairing
 }
 
 func New(options Options) *Host {
@@ -125,6 +127,8 @@ func (h *Host) Start(ctx context.Context) (Status, error) {
 		IdleTimeout:       60 * time.Second,
 	}
 	h.server, h.service, h.listener, h.identity, h.token = server, service, listener, identity, token
+	// Discovery is optional: manual addresses still work on restricted networks.
+	h.stopDiscovery, _ = landiscovery.Advertise(identity.fingerprint, h.options.Port)
 	h.publishLocked(ctx)
 	go func() {
 		// The certificate and key already live in TLSConfig.
@@ -160,6 +164,7 @@ func (h *Host) publishLocked(ctx context.Context) {
 func (h *Host) Stop(ctx context.Context) error {
 	h.mu.Lock()
 	server := h.server
+	h.stopDiscoveryLocked()
 	h.server, h.service, h.listener, h.pairing = nil, nil, nil, nil
 	h.mu.Unlock()
 	if server == nil {
@@ -219,7 +224,15 @@ func (h *Host) recordStopped(server *http.Server) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.server == server {
+		h.stopDiscoveryLocked()
 		h.server, h.service, h.listener, h.pairing = nil, nil, nil, nil
+	}
+}
+
+func (h *Host) stopDiscoveryLocked() {
+	if h.stopDiscovery != nil {
+		h.stopDiscovery()
+		h.stopDiscovery = nil
 	}
 }
 

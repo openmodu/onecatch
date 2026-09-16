@@ -25,5 +25,9 @@
             <string>true</string>
         <key>NSHumanReadableCopyright</key>
             <string>(c) 2026, OpenModu</string>
+        <key>NSLocalNetworkUsageDescription</key>
+            <string>OneCatch lets paired phones find and connect to this computer on your local network.</string>
+        <key>NSBonjourServices</key>
+            <array><string>_onecatch._tcp</string></array>
     </dict>
 </plist>

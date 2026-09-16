@@ -125,6 +125,43 @@ func (r *Registry) Update(ctx context.Context, input UpdateInput) (Info, error) 
 	})
 }
 
+// Relocate changes only the endpoint, provided pairing and user settings have
+// not changed during discovery. It never recreates a deleted worker.
+func (r *Registry) Relocate(ctx context.Context, expected Config, baseURL string) (Config, error) {
+	parsed, err := url.Parse(baseURL)
+	if err != nil || parsed.Scheme != "https" || parsed.Host == "" || parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" || (parsed.Path != "" && parsed.Path != "/") {
+		return Config{}, errors.New("discovered worker must have an HTTPS origin")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return Config{}, err
+	}
+	configs, err := r.loadLocked()
+	if err != nil {
+		return Config{}, err
+	}
+	for i, current := range configs {
+		if current.ID != expected.ID {
+			continue
+		}
+		if current != expected {
+			return Config{}, errors.New("worker settings changed during discovery; retry")
+		}
+		if !current.Enabled || !validFingerprint(current.ServerCertificateSHA256) {
+			return Config{}, errors.New("discovery requires a paired worker")
+		}
+		current.BaseURL = strings.TrimRight(baseURL, "/")
+		current.UpdatedAt = time.Now().UTC()
+		configs[i] = current
+		if err := localfile.WriteJSONAtomic(r.path, configs); err != nil {
+			return Config{}, err
+		}
+		return current, nil
+	}
+	return Config{}, ErrNotFound
+}
+
 func (r *Registry) Delete(ctx context.Context, id string) error {
 	if err := ctx.Err(); err != nil {
 		return err

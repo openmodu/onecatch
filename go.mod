@@ -7,6 +7,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/wire v0.7.0
+	github.com/libp2p/zeroconf/v2 v2.2.0
 	github.com/openmodu/modu v0.0.9-0.20260903100137-cc1462c00ba7
 	github.com/pkg/sftp v1.13.11
 	github.com/wailsapp/wails/v3 v3.0.0-beta.16
@@ -120,6 +121,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.23 // indirect
 	github.com/mattn/go-zglob v0.0.6 // indirect
 	github.com/microcosm-cc/bluemonday v1.0.27 // indirect
+	github.com/miekg/dns v1.1.73 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect

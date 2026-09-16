@@ -11,6 +11,7 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -61,6 +62,7 @@ public class MainActivity extends AppCompatActivity {
     // in the foreground (onStart) and torn down in onStop, so background battery/
     // network/screen broadcasts don't wake the app.
     private boolean systemReceiversRegistered = false;
+    private WifiManager.MulticastLock discoveryMulticastLock;
     private WebViewAssetLoader assetLoader;
 
     // The Go-side dialog ID of the in-flight file picker (-1 when idle)
@@ -752,6 +754,20 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStart() {
         super.onStart();
+        // DNS-SD replies use Wi-Fi multicast; keep reception enabled only
+        // while the phone UI is active. Manual connections need no lock.
+        try {
+            WifiManager wifi = (WifiManager) getApplicationContext().getSystemService(Context.WIFI_SERVICE);
+            if (wifi != null) {
+                if (discoveryMulticastLock == null) {
+                    discoveryMulticastLock = wifi.createMulticastLock("onecatch-discovery");
+                    discoveryMulticastLock.setReferenceCounted(false);
+                }
+                discoveryMulticastLock.acquire();
+            }
+        } catch (SecurityException error) {
+            Log.w(TAG, "Local discovery unavailable", error);
+        }
         // Battery: only monitor system events while the app is visible.
         if (!systemReceiversRegistered) {
             registerSystemEventReceivers();
@@ -781,6 +797,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onStop() {
         super.onStop();
+        if (discoveryMulticastLock != null && discoveryMulticastLock.isHeld()) {
+            discoveryMulticastLock.release();
+        }
         if (systemReceiversRegistered) {
             unregisterSystemEventReceivers();
             systemReceiversRegistered = false;

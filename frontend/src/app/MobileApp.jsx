@@ -153,7 +153,7 @@ function PairSheet({ open, busy, initialURL = "https://", onClose, onPair }) {
         <label><span>一次性配对码</span><Input value={code} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="例如 ABCD-EFGH" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
 		<Button className="mobile-main-action" type="submit" disabled={busy || !baseURL.trim() || !code.trim()}>{busy ? <><LoaderCircle className="animate-spin" />正在连接</> : <><Link2 />连接 Worker</>}</Button>
       </form>
-      <p className="mobile-security-note">首次 HTTPS 配对会固定服务器证书指纹，之后会拒绝证书变化。</p>
+      <p className="mobile-security-note">首次 HTTPS 配对会固定电脑证书。配对后，同一局域网内 IP 变化会自动查找新地址，无需重复配对；请允许本地网络访问。</p>
     </section>
   </div>;
 }
@@ -861,6 +861,7 @@ export default function MobileWorkbench() {
     if (!id) return null;
     try {
       const value = await MobileBinding.CheckWorker(id);
+      if (value?.worker) setWorkers((current) => current.map((item) => item.id === id ? value.worker : item));
       setHealthByID((current) => ({ ...current, [id]: value }));
       return value;
     } catch (error) {

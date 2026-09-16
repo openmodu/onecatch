@@ -13,11 +13,13 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
 
 	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
+	"github.com/openmodu/onecatch/internal/landiscovery"
 	"github.com/openmodu/onecatch/internal/repo/git"
 	"github.com/openmodu/onecatch/internal/service/worker"
 	"github.com/openmodu/onecatch/internal/service/worker/daemon"
@@ -147,6 +149,17 @@ func Run() {
 			log.Fatalf("load TLS certificate: %v", err)
 		}
 		log.Printf("server certificate SHA-256: %s", fingerprint)
+		// Wildcard listeners survive DHCP address changes. Loopback and
+		// interface-bound listeners are intentionally not advertised.
+		host, portText, _ := net.SplitHostPort(*listen)
+		if host == "" || host == "0.0.0.0" || host == "::" {
+			port, _ := strconv.Atoi(portText)
+			if stop, err := landiscovery.Advertise(fingerprint, port); err == nil {
+				defer stop()
+			} else {
+				log.Printf("LAN discovery unavailable: %v", err)
+			}
+		}
 	}
 	log.Printf("onecatch worker %s listening on %s://%s", *id, scheme, *listen)
 	serveErrors := make(chan error, 1)

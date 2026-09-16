@@ -82,9 +82,11 @@ type runState struct {
 const transcriptWindow = 200
 
 type Service struct {
-	registry *worker.Registry
-	client   *worker.Client
-	runsPath string
+	registry      *worker.Registry
+	client        *worker.Client
+	reconnects    sync.Map
+	resolveWorker func(context.Context, string) ([]string, error)
+	runsPath      string
 
 	syncMu  sync.Mutex
 	mu      sync.RWMutex
@@ -666,7 +668,7 @@ func (s *Service) enabledWorker(ctx context.Context, id string) (worker.Config, 
 	if err != nil || !config.Enabled {
 		return worker.Config{}, worker.RemoteError{Code: "worker_not_found", Message: "worker is missing or disabled"}
 	}
-	return config, nil
+	return s.reconnectWorker(ctx, config)
 }
 
 func (s *Service) emit(frame RunFrame) {
