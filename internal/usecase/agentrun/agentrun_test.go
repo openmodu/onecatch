@@ -472,7 +472,9 @@ while IFS= read -r line; do
       printf '%s\n' '{"method":"item/started","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"command-1","type":"commandExecution","command":"go test ./...","status":"inProgress"}}}'
       printf '%s\n' '{"method":"item/commandExecution/outputDelta","params":{"threadId":"thread-live","turnId":"turn-live","itemId":"command-1","delta":"ok\n"}}'
       printf '%s\n' '{"method":"item/completed","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"command-1","type":"commandExecution","command":"go test ./...","status":"completed","aggregatedOutput":"ok\n","exitCode":0}}}'
-      printf '%s\n' '{"method":"thread/tokenUsage/updated","params":{"threadId":"thread-live","turnId":"turn-live","tokenUsage":{"modelContextWindow":272000,"last":{"inputTokens":3,"cachedInputTokens":2,"outputTokens":1,"reasoningOutputTokens":0},"total":{"inputTokens":17,"cachedInputTokens":11,"outputTokens":5,"reasoningOutputTokens":2}}}}'
+      printf '%s\n' '{"method":"item/started","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"compact-1","type":"contextCompaction"}}}'
+      printf '%s\n' '{"method":"item/completed","params":{"threadId":"thread-live","turnId":"turn-live","item":{"id":"compact-1","type":"contextCompaction"}}}'
+      printf '%s\n' '{"method":"thread/tokenUsage/updated","params":{"threadId":"thread-live","turnId":"turn-live","tokenUsage":{"modelContextWindow":272000,"last":{"inputTokens":3,"cachedInputTokens":2,"outputTokens":1,"reasoningOutputTokens":0,"totalTokens":4},"total":{"inputTokens":17,"cachedInputTokens":11,"outputTokens":5,"reasoningOutputTokens":2,"totalTokens":22}}}}'
       printf '%s\n' '{"method":"turn/completed","params":{"threadId":"thread-live","turn":{"id":"turn-live","status":"completed"}}}'
       ;;
   esac
@@ -667,8 +669,9 @@ func TestClaudeRunnerEmitsTextDeltasWithAuthoritativeEnd(t *testing.T) {
 }
 
 // Occupancy and cost come from different halves of the same notification:
-// `total` is every call in the turn, `last` is the one prompt the window held.
-// Reading `total` into the gauge would show 17 of a window that held 3.
+// `total` is every call in the turn, while Codex defines `last.totalTokens` as
+// the latest active context size. Reading cumulative `total` into the gauge
+// would show 22 for a context that held 4.
 func TestCodexRunnerSeparatesContextOccupancyFromCumulativeUsage(t *testing.T) {
 	runner := NewCodexRunner(stubCodexAppServerBinary(t))
 	runner.now = fixedClock()
@@ -681,19 +684,26 @@ func TestCodexRunnerSeparatesContextOccupancyFromCumulativeUsage(t *testing.T) {
 	if result.Usage.InputTokens != 17 {
 		t.Fatalf("cumulative usage must stay the turn total: %+v", result.Usage)
 	}
-	if result.Context.Window != 272000 || result.Context.Tokens != 3 {
+	if result.Context.Window != 272000 || result.Context.Tokens != 4 {
 		t.Fatalf("context = %+v", result.Context)
 	}
 	if !result.Context.Known() {
 		t.Fatal("context should be reportable")
 	}
+	compactions := 0
 	for _, event := range events {
+		if event.Kind == KindContextCompaction {
+			compactions++
+		}
 		if event.Kind != KindUsage {
 			continue
 		}
-		if event.Context == nil || event.Context.Window != 272000 || event.Context.Tokens != 3 {
+		if event.Context == nil || event.Context.Window != 272000 || event.Context.Tokens != 4 {
 			t.Fatalf("live context event = %+v", event.Context)
 		}
+	}
+	if compactions != 1 {
+		t.Fatalf("native context compactions = %d, want 1", compactions)
 	}
 }
 

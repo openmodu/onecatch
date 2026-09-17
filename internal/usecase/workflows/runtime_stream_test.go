@@ -86,6 +86,27 @@ func TestRuntimeEventCollectorPersistsContextCompactionAcrossAttempts(t *testing
 	}
 }
 
+func TestRuntimeEventCollectorDoesNotDuplicateNativeContextCompaction(t *testing.T) {
+	var stored []agentrun.Event
+	collector := newRuntimeEventCollector("run-1", "step-2", func(event agentrun.Event) (int64, error) {
+		stored = append(stored, event)
+		return int64(len(stored)), nil
+	}, &collectingPublisher{}, 180_000)
+	collector.Push(agentrun.Event{Kind: agentrun.KindContextCompaction, At: time.Unix(2, 0)})
+	collector.Push(agentrun.Event{
+		Kind:    agentrun.KindUsage,
+		Context: &agentrun.ContextUsage{Window: 200_000, Tokens: 32_000},
+		At:      time.Unix(3, 0),
+	})
+	if err := collector.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(stored) != 2 || stored[0].Kind != agentrun.KindContextCompaction || stored[1].Kind != agentrun.KindUsage {
+		t.Fatalf("stored = %+v", stored)
+	}
+}
+
 func TestContextCompactionDetectionIgnoresSmallAccountingFluctuations(t *testing.T) {
 	if contextWasCompacted(90_000, 87_000) {
 		t.Fatal("a small usage fluctuation was treated as compaction")

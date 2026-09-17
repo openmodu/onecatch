@@ -29,13 +29,13 @@ function Ring({ arc, dash }) {
    tooltip whose title changes under the cursor and will not show it again
    until the pointer leaves and returns, which made the reading unavailable
    exactly while the run was spending the context it reports. */
-export default function ContextGauge({ window: contextWindow = 0, tokens = 0, known = false, ratio = 0 }) {
+export default function ContextGauge({ window: contextWindow = 0, tokens = 0, known = false, remaining = false, ratio = 0 }) {
   const { t } = useTranslation();
   const percent = Math.round(ratio * 100);
-  const { arc, label } = gaugeTone(ratio);
+  const { arc, label } = gaugeTone(remaining ? 1 - ratio : ratio);
   const dash = gaugeDash(ratio, known, gaugeGeometry.circumference);
   const title = known
-    ? t("inspector.contextGaugeLabel", { percent, tokens: formatTokens(tokens), window: formatTokens(contextWindow) })
+    ? t(remaining ? "inspector.contextRemainingGaugeLabel" : "inspector.contextGaugeLabel", { percent, tokens: formatTokens(tokens), window: formatTokens(contextWindow) })
     : t("inspector.contextUnknown");
 
   return <Tooltip>

@@ -318,7 +318,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
           {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} hiddenCount={hiddenTranscriptCount} onLoadEarlier={() => onLoadEarlierTranscript?.(runDetail?.run?.id)} permissionBusy={permissionBusy} userInputBusy={userInputBusy} onPermissionDecision={onPermissionDecision} onUserInputResponse={onUserInputResponse} onReview={openReview} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
         {runDetail && <Composer
-          contextWindow={summarizeContextWindow(runDetail.stepRuns)}
+          contextWindow={summarizeContextWindow(runDetail.stepRuns, (activeRuntimeProfile || continuationRuntimeProfile)?.harness)}
           runStatus={runStatus}
           active={runDetail.active}
           busy={busy}

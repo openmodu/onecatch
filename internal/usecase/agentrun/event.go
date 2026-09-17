@@ -74,9 +74,9 @@ const (
 	KindFileChange EventKind = "file_change"
 	// KindUsage carries token/cost accounting for the turn.
 	KindUsage EventKind = "usage"
-	// KindContextCompaction marks a substantial fall in prompt occupancy. It is
-	// synthesized after normalization so every runtime gets the same durable UI
-	// event even when the provider does not expose a named compaction event.
+	// KindContextCompaction marks a context compaction. It is forwarded directly
+	// when the runtime exposes one and inferred from a substantial occupancy drop
+	// for runtimes and older protocol versions that do not.
 	KindContextCompaction EventKind = "context_compaction"
 	// KindResult marks the terminal outcome of the run.
 	KindResult EventKind = "result"
@@ -213,16 +213,16 @@ type Event struct {
 // different quantity from [Usage] and the two must not be substituted for one
 // another: Usage accumulates every model call in a step, so it only ever grows
 // and routinely exceeds the window a tool-heavy step never came close to
-// filling. Occupancy is the size of a single prompt, and it *falls* whenever
+// filling. Occupancy is the latest active context size, and it *falls* whenever
 // the harness compacts. Charting the cumulative total against the window shows
 // a step at 300% of a context it never overflowed.
 type ContextUsage struct {
 	// Window is the model's context window in tokens. Zero means the runtime
 	// did not report one — render that as unknown rather than as a full bar.
 	Window int `json:"window,omitempty"`
-	// Tokens is the prompt size of the most recent model call: everything the
-	// model read this turn, cached prefix included, because a cache hit still
-	// occupies the window. May decrease after a compaction.
+	// Tokens is the active context size reported by the most recent model call.
+	// For Codex this is last.totalTokens, matching Codex's own context indicator;
+	// cached input still occupies the window. May decrease after a compaction.
 	Tokens int `json:"tokens,omitempty"`
 }
 

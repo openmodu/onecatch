@@ -193,8 +193,8 @@ type StepRun struct {
 	ReasoningOutputTokens    int           `json:"reasoningOutputTokens,omitempty"`
 	// ContextWindow and ContextTokens describe how full the model's context
 	// was, which the token counters above cannot express: those accumulate
-	// across every model call in the step, while the window only ever held one
-	// prompt. ContextTokens may fall between attempts when the harness compacts.
+	// across every model call in the step, while the window only held the latest
+	// active context. ContextTokens may fall when the harness compacts.
 	ContextWindow int    `json:"contextWindow,omitempty"`
 	ContextTokens int    `json:"contextTokens,omitempty"`
 	DurationMS    int64  `json:"durationMs,omitempty"`

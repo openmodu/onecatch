@@ -65,6 +65,12 @@ func (c *runtimeEventCollector) Push(event agentrun.Event) {
 	if c.closed {
 		return
 	}
+	if event.Kind == agentrun.KindContextCompaction {
+		// A native runtime event is authoritative and arrives before the first
+		// post-compaction usage sample. Forget the old baseline so that lower
+		// sample does not produce a duplicate inferred event.
+		c.contextTokens = 0
+	}
 	if event.Kind == agentrun.KindUsage && event.Context != nil && event.Context.Tokens > 0 {
 		before, after := c.contextTokens, event.Context.Tokens
 		if contextWasCompacted(before, after) {

@@ -84,3 +84,12 @@ test("steps that report no context leave the previous reading standing", () => {
   assert.equal(summary.window, 200000);
   assert.equal(summary.tokens, 90000);
 });
+
+test("Codex context uses the same 12k-normalized remaining percentage as Codex", () => {
+  const summary = summarizeContextWindow([
+    { contextWindow: 258400, contextTokens: 180000 },
+  ], "codex");
+  assert.equal(summary.remaining, true);
+  assert.equal(summary.tokens, 180000);
+  assert.equal(Math.round(summary.ratio * 100), 32);
+});

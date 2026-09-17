@@ -471,10 +471,11 @@ type codexTokenUsageBreakdown struct {
 	CachedInputTokens     int `json:"cachedInputTokens"`
 	OutputTokens          int `json:"outputTokens"`
 	ReasoningOutputTokens int `json:"reasoningOutputTokens"`
+	TotalTokens           int `json:"totalTokens"`
 }
 
 func (u codexTokenUsageBreakdown) empty() bool {
-	return u.InputTokens == 0 && u.CachedInputTokens == 0 && u.OutputTokens == 0 && u.ReasoningOutputTokens == 0
+	return u.InputTokens == 0 && u.CachedInputTokens == 0 && u.OutputTokens == 0 && u.ReasoningOutputTokens == 0 && u.TotalTokens == 0
 }
 
 func (u codexTokenUsageBreakdown) usage() Usage {
@@ -1052,6 +1053,10 @@ func (s *codexAppState) handleNotification(method string, raw json.RawMessage, l
 		}
 	case "item/completed":
 		s.handleItemCompleted(params.Item, line, at, sink)
+	case "thread/compacted":
+		// Deprecated app-server versions emitted a notification instead of the
+		// canonical contextCompaction item used by current v2 clients.
+		sink(Event{Kind: KindContextCompaction, Raw: line, At: at})
 	case "thread/tokenUsage/updated":
 		// `total` accumulates every model call in the agent turn. `last` is only
 		// one sampling call and would severely undercount tool-heavy steps.
@@ -1060,15 +1065,19 @@ func (s *codexAppState) handleNotification(method string, raw json.RawMessage, l
 			breakdown = params.TokenUsage.Last
 		}
 		s.usage = breakdown.usage()
-		// Occupancy is a different question from cost and takes a different
-		// number. `total` is every call in the turn added up; the window only
-		// ever held the newest prompt, so `last.InputTokens` — which already
-		// includes the cached prefix — is what actually sits in the window.
+		// Match Codex's own context indicator. `total` accumulates usage across
+		// model calls, while `last.totalTokens` is the latest active context size
+		// used by Codex's percent-of-context-window calculation.
 		if params.TokenUsage.ModelContextWindow != nil {
 			s.context.Window = *params.TokenUsage.ModelContextWindow
 		}
 		if !params.TokenUsage.Last.empty() {
-			s.context.Tokens = params.TokenUsage.Last.InputTokens
+			s.context.Tokens = params.TokenUsage.Last.TotalTokens
+			// totalTokens is required by the current app-server protocol. Keep the
+			// input-only fallback for older Codex builds that did not send it.
+			if s.context.Tokens == 0 {
+				s.context.Tokens = params.TokenUsage.Last.InputTokens
+			}
 		}
 		usage := s.usage
 		context := s.context
@@ -1148,6 +1157,8 @@ func (s *codexAppState) handleItemCompleted(item codexAppItem, line string, at t
 			}
 		}
 		sink(Event{Kind: KindFileChange, Text: strings.Join(paths, "\n"), Failed: item.Status == "failed", Raw: line, At: at})
+	case "contextCompaction":
+		sink(Event{Kind: KindContextCompaction, Raw: line, At: at})
 	case "mcpToolCall", "dynamicToolCall":
 		text := codexRawText(item.Result)
 		if text == "" {
