@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.14
+
+- Simplify file editing with automatic saves, remove redundant save and refresh actions, and add IDE-style tab menus for closing the current, other, right-side, or all files.
+- Restyle the editor's find-and-replace controls so search results and actions match the rest of the desktop interface.
+- Match Codex context reporting with the latest active `totalTokens`, its normalized remaining percentage, and native compaction events, while retaining a compatibility fallback for older Codex versions.
+
 ## 0.2.13
 
 - Rediscover paired computers on the local network when their IP address changes, verify the saved certificate and Worker identity, and update the phone's saved address without pairing again.
