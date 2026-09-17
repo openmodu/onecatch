@@ -1,7 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, File, FileBraces, FileCode, FileCog, FileText, FileTerminal, Folder, FolderOpen, RefreshCw, Save, X } from "lucide-react";
+import { ChevronDown, ChevronRight, File, FileBraces, FileCode, FileCog, FileText, FileTerminal, Folder, FolderOpen, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LSPBinding, WorkspaceBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { Action, Kicker } from "../../../ui/primitives.jsx";
 import { errorMessage } from "../../format.js";
 import {
@@ -14,9 +15,11 @@ import {
   readFileTreeRatio,
   writeFileTreeRatio,
 } from "../../fileTreeLayout.js";
-import { primaryShortcutLabel } from "../../platform.js";
 import { syntaxLanguageForPath } from "../../syntaxHighlight.js";
 import CodeEditor from "../CodeEditor.jsx";
+
+const AUTO_SAVE_DELAY_MS = 650;
+const AUTO_REFRESH_INTERVAL_MS = 5000;
 
 const DEMO_TREE = {
   "": [
@@ -89,7 +92,7 @@ function FileInspector({ mode, workspaceID, remoteFS = null, active = true, noti
   const [activePath, setActivePath] = useState("");
   const [loadingFile, setLoadingFile] = useState(false);
   const [fileError, setFileError] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [savingPaths, setSavingPaths] = useState(() => new Set());
   const [definitionLoading, setDefinitionLoading] = useState(false);
   const [lspCapability, setLspCapability] = useState(null);
   const [navigation, setNavigation] = useState(null);
@@ -104,12 +107,16 @@ function FileInspector({ mode, workspaceID, remoteFS = null, active = true, noti
   const inspectorRef = useRef(null);
   const editorRef = useRef(null);
   const openFilesRef = useRef(openFiles);
+  const entriesByDirectoryRef = useRef(entriesByDirectory);
+  const autoSaveTimersRef = useRef(new Map());
+  const saveQueuesRef = useRef(new Map());
   const fileViewStateRef = useRef(new Map());
   const treeWidthRef = useRef(treeWidth);
   const treeRatioRef = useRef(initialTreeRatio.current);
   const treeResizeRef = useRef(null);
   workspaceRef.current = workspaceID;
   openFilesRef.current = openFiles;
+  entriesByDirectoryRef.current = entriesByDirectory;
   const document = useMemo(() => openFiles.find((file) => file.path === activePath) || null, [activePath, openFiles]);
   const draft = document?.draft || "";
   const dirty = Boolean(document && draft !== document.content);
@@ -118,19 +125,21 @@ function FileInspector({ mode, workspaceID, remoteFS = null, active = true, noti
   useEffect(() => onDirtyChange?.(hasDirtyFiles), [hasDirtyFiles, onDirtyChange]);
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
-  const listDirectory = useCallback(async (directory = "") => {
+  const listDirectory = useCallback(async (directory = "", { silent = false } = {}) => {
     if (!workspaceID) return;
     const requestWorkspaceID = workspaceID;
-    setLoadingDirectories((current) => new Set(current).add(directory));
-    setTreeError("");
+    if (!silent) {
+      setLoadingDirectories((current) => new Set(current).add(directory));
+      setTreeError("");
+    }
     try {
       const entries = mode === "demo" ? (DEMO_TREE[directory] || []) : await WorkspaceBinding.ListWorkspaceFiles(workspaceID, directory);
       if (workspaceRef.current !== requestWorkspaceID) return;
       setEntriesByDirectory((current) => ({ ...current, [directory]: entries || [] }));
     } catch (error) {
-      if (workspaceRef.current === requestWorkspaceID) setTreeError(errorMessage(error));
+      if (!silent && workspaceRef.current === requestWorkspaceID) setTreeError(errorMessage(error));
     } finally {
-      if (workspaceRef.current === requestWorkspaceID) setLoadingDirectories((current) => {
+      if (!silent && workspaceRef.current === requestWorkspaceID) setLoadingDirectories((current) => {
         const next = new Set(current);
         next.delete(directory);
         return next;
@@ -148,22 +157,43 @@ function FileInspector({ mode, workspaceID, remoteFS = null, active = true, noti
     setNavigation(null);
     setDefinitionLoading(false);
     setLspCapability(null);
+    setSavingPaths(new Set());
     setFileError("");
     setTreeError("");
     openRequestRef.current += 1;
     definitionRequestRef.current += 1;
+    for (const timer of autoSaveTimersRef.current.values()) clearTimeout(timer);
+    autoSaveTimersRef.current.clear();
+    saveQueuesRef.current.clear();
     fileViewStateRef.current.clear();
     if (workspaceID) void listDirectory("");
     return () => {
+      for (const timer of autoSaveTimersRef.current.values()) clearTimeout(timer);
+      autoSaveTimersRef.current.clear();
       if (mode !== "demo" && currentWorkspaceID) void LSPBinding.CloseWorkspace({ workspaceId: currentWorkspaceID }).catch(() => {});
     };
   }, [listDirectory, workspaceID]);
 
-  const refreshTree = () => {
-    setEntriesByDirectory({});
-    setExpanded(new Set());
-    void listDirectory("");
-  };
+  const refreshTree = useCallback(() => {
+    const directories = Object.keys(entriesByDirectoryRef.current);
+    if (!directories.includes("")) directories.unshift("");
+    for (const directory of directories) void listDirectory(directory);
+  }, [listDirectory]);
+
+  useEffect(() => {
+    if (!active || !workspaceID) return undefined;
+    const refreshSilently = () => {
+      const directories = Object.keys(entriesByDirectoryRef.current);
+      if (!directories.includes("")) directories.unshift("");
+      for (const directory of directories) void listDirectory(directory, { silent: true });
+    };
+    const interval = window.setInterval(refreshSilently, AUTO_REFRESH_INTERVAL_MS);
+    window.addEventListener("focus", refreshSilently);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refreshSilently);
+    };
+  }, [active, listDirectory, workspaceID]);
 
   const toggleDirectory = async (path) => {
     if (expanded.has(path)) {
@@ -215,60 +245,113 @@ function FileInspector({ mode, workspaceID, remoteFS = null, active = true, noti
     }
   }, [activateFile, mode, t, workspaceID]);
 
-  const closeFile = (event, path) => {
-    event.stopPropagation();
-    const closingIndex = openFiles.findIndex((file) => file.path === path);
-    if (closingIndex < 0) return;
-    const closing = openFiles[closingIndex];
-    if (closing.draft !== closing.content && !globalThis.confirm(t("files.closeUnsavedConfirm", { name: path.slice(path.lastIndexOf("/") + 1) }))) return;
-    const nextFiles = openFiles.filter((file) => file.path !== path);
-    setOpenFiles(nextFiles);
-    fileViewStateRef.current.delete(path);
-    if (activePath === path) {
-      const next = nextFiles[Math.min(closingIndex, nextFiles.length - 1)];
-      setActivePath(next?.path || "");
-      if (!next) setCurrentLine(1);
-    }
-    if (mode !== "demo" && !remoteFS) {
-      void LSPBinding.CloseDocument({ workspaceId: workspaceID, path }).catch(() => {});
-    }
-  };
-
-  const reloadFile = () => {
-    if (!document?.path) return;
-    void readFile(document.path, { discard: true });
-  };
-
-  const saveFile = useCallback(async () => {
-    if (!document || !dirty || saving) return;
-    setSaving(true);
+  const saveSnapshot = useCallback(async (path, nextContent, expectedHash) => {
+    if (!path) return;
+    const requestWorkspaceID = workspaceID;
+    setSavingPaths((current) => new Set(current).add(path));
     setFileError("");
     try {
       const saved = mode === "demo"
-        ? { ...document, content: draft, hash: `demo-${Date.now()}`, size: new Blob([draft]).size, modifiedAt: new Date().toISOString() }
-        : await WorkspaceBinding.WriteWorkspaceFile({ workspaceId: workspaceID, path: document.path, content: draft, expectedHash: document.hash });
-      setOpenFiles((current) => current.map((file) => file.path === saved.path ? { ...saved, draft: saved.content } : file));
+        ? { path, content: nextContent, hash: `demo-${Date.now()}`, size: new Blob([nextContent]).size, modifiedAt: new Date().toISOString() }
+        : await WorkspaceBinding.WriteWorkspaceFile({ workspaceId: workspaceID, path, content: nextContent, expectedHash });
+      if (workspaceRef.current !== requestWorkspaceID) return;
+      setOpenFiles((current) => {
+        const next = current.map((file) => file.path === saved.path
+          ? { ...file, ...saved, draft: file.draft === nextContent ? saved.content : file.draft }
+          : file);
+        openFilesRef.current = next;
+        return next;
+      });
       setEntriesByDirectory((current) => {
         const parent = saved.path.includes("/") ? saved.path.slice(0, saved.path.lastIndexOf("/")) : "";
         if (!current[parent]) return current;
         return { ...current, [parent]: current[parent].map((entry) => entry.path === saved.path ? { ...entry, size: saved.size, modifiedAt: saved.modifiedAt } : entry) };
       });
-      notify?.("success", t("files.saved"));
     } catch (error) {
+      if (workspaceRef.current !== requestWorkspaceID) return;
       const message = errorMessage(error);
       setFileError(message);
       notify?.("error", message);
+      throw error;
     } finally {
-      setSaving(false);
+      if (workspaceRef.current === requestWorkspaceID) {
+        setSavingPaths((current) => {
+          const next = new Set(current);
+          next.delete(path);
+          return next;
+        });
+      }
     }
-  }, [dirty, document, draft, mode, notify, saving, t, workspaceID]);
+  }, [mode, notify, workspaceID]);
+
+  const saveFile = useCallback((path = activePath) => {
+    if (!path) return Promise.resolve();
+    const timer = autoSaveTimersRef.current.get(path);
+    if (timer) clearTimeout(timer);
+    autoSaveTimersRef.current.delete(path);
+    const previous = saveQueuesRef.current.get(path) || Promise.resolve();
+    let queued;
+    queued = previous.catch(() => {}).then(async () => {
+      const current = openFilesRef.current.find((file) => file.path === path);
+      if (!current || current.draft === current.content) return;
+      await saveSnapshot(path, current.draft, current.hash);
+    }).finally(() => {
+      if (saveQueuesRef.current.get(path) === queued) saveQueuesRef.current.delete(path);
+    });
+    saveQueuesRef.current.set(path, queued);
+    return queued;
+  }, [activePath, saveSnapshot]);
+
+  const scheduleAutoSave = useCallback((path) => {
+    const currentTimer = autoSaveTimersRef.current.get(path);
+    if (currentTimer) clearTimeout(currentTimer);
+    const timer = window.setTimeout(() => {
+      autoSaveTimersRef.current.delete(path);
+      void saveFile(path).catch(() => {});
+    }, AUTO_SAVE_DELAY_MS);
+    autoSaveTimersRef.current.set(path, timer);
+  }, [saveFile]);
+
+  const closeFiles = useCallback(async (paths, preferredPath = "") => {
+    const requested = new Set(paths);
+    const currentFiles = openFilesRef.current;
+    const targets = currentFiles.filter((file) => requested.has(file.path));
+    if (!targets.length) return;
+    const results = await Promise.allSettled(targets.map((file) => saveFile(file.path)));
+    const closed = new Set(targets.filter((_, index) => results[index].status === "fulfilled").map((file) => file.path));
+    if (!closed.size) return;
+    const nextFiles = openFilesRef.current.filter((file) => !closed.has(file.path));
+    openFilesRef.current = nextFiles;
+    setOpenFiles(nextFiles);
+    for (const path of closed) {
+      const timer = autoSaveTimersRef.current.get(path);
+      if (timer) clearTimeout(timer);
+      autoSaveTimersRef.current.delete(path);
+      fileViewStateRef.current.delete(path);
+      if (mode !== "demo" && !remoteFS) void LSPBinding.CloseDocument({ workspaceId: workspaceID, path }).catch(() => {});
+    }
+    if (closed.has(activePath)) {
+      const preferred = nextFiles.find((file) => file.path === preferredPath);
+      const closingIndex = currentFiles.findIndex((file) => file.path === activePath);
+      const next = preferred || nextFiles[Math.min(Math.max(closingIndex, 0), nextFiles.length - 1)];
+      setActivePath(next?.path || "");
+      if (!next) setCurrentLine(1);
+    } else if (preferredPath && nextFiles.some((file) => file.path === preferredPath)) {
+      activateFile(preferredPath);
+    }
+  }, [activateFile, activePath, mode, remoteFS, saveFile, workspaceID]);
+
+  const closeFile = (event, path) => {
+    event.stopPropagation();
+    void closeFiles([path]);
+  };
 
   useEffect(() => {
     if (!active) return undefined;
     const onKeyDown = (event) => {
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "s") return;
       event.preventDefault();
-      void saveFile();
+      void saveFile().catch(() => {});
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -407,7 +490,14 @@ function FileInspector({ mode, workspaceID, remoteFS = null, active = true, noti
 
   const rootEntries = useMemo(() => entriesByDirectory[""] || [], [entriesByDirectory]);
   const language = useMemo(() => syntaxLanguageForPath(document?.path), [document?.path]);
-  const updateDraft = (value) => setOpenFiles((current) => current.map((file) => file.path === activePath ? { ...file, draft: value } : file));
+  const updateDraft = (value) => {
+    setOpenFiles((current) => {
+      const next = current.map((file) => file.path === activePath ? { ...file, draft: value } : file);
+      openFilesRef.current = next;
+      return next;
+    });
+    scheduleAutoSave(activePath);
+  };
   if (!workspaceID) return <p className="m-0 px-4 py-5 text-xs leading-relaxed text-muted-foreground">{t("files.selectWorkspace")}</p>;
 
   return <div
@@ -418,24 +508,31 @@ function FileInspector({ mode, workspaceID, remoteFS = null, active = true, noti
     <section className="flex min-h-0 min-w-0 flex-col overflow-hidden">
       <div className="flex min-h-9 shrink-0 items-stretch overflow-hidden bg-muted/20">
         <div className="flex min-w-0 flex-1 items-stretch overflow-x-auto" role="tablist" aria-label={t("files.openFiles")}>
-          {openFiles.map((file) => {
+          {openFiles.map((file, index) => {
             const visual = fileVisual(file.path);
             const name = file.path.slice(file.path.lastIndexOf("/") + 1);
             const fileDirty = file.draft !== file.content;
-            return <div className={`group flex min-w-0 max-w-48 shrink-0 items-center rounded-t-md px-1 ${file.path === activePath ? "bg-background text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`} key={file.path}>
-              <button type="button" role="tab" aria-selected={file.path === activePath} title={file.path} className="flex h-full min-w-0 items-center gap-1.5 bg-transparent px-1.5 text-[11px] outline-none" onClick={() => activateFile(file.path)}>
-                <visual.Icon size={12} className={`shrink-0 ${visual.tone}`} aria-hidden="true" />
-                <span className="truncate">{name}</span>
-                {fileDirty && <span className="size-1.5 shrink-0 rounded-full bg-warning" title={t("files.unsaved")} aria-label={t("files.unsaved")} />}
-              </button>
-              <button type="button" className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground opacity-60 outline-none hover:bg-accent hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100" aria-label={t("files.closeFile", { name })} title={t("files.closeFile", { name })} onClick={(event) => closeFile(event, file.path)}><X size={11} aria-hidden="true" /></button>
-            </div>;
+            return <ContextMenu key={file.path}>
+              <ContextMenuTrigger asChild>
+                <div className={`group flex min-w-0 max-w-48 shrink-0 items-center rounded-t-md px-1 ${file.path === activePath ? "bg-background text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}>
+                  <button type="button" role="tab" aria-selected={file.path === activePath} title={file.path} className="flex h-full min-w-0 items-center gap-1.5 bg-transparent px-1.5 text-[11px] outline-none" onClick={() => activateFile(file.path)}>
+                    <visual.Icon size={12} className={`shrink-0 ${visual.tone}`} aria-hidden="true" />
+                    <span className="truncate">{name}</span>
+                    {fileDirty && <span className="size-1.5 shrink-0 rounded-full bg-warning" title={t("files.autoSavePending")} aria-label={t("files.autoSavePending")} />}
+                  </button>
+                  <button type="button" className="grid size-5 shrink-0 place-items-center rounded text-muted-foreground opacity-60 outline-none hover:bg-accent hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100" aria-label={t("files.closeFile", { name })} title={t("files.closeFile", { name })} onClick={(event) => closeFile(event, file.path)}><X size={11} aria-hidden="true" /></button>
+                </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent className="w-44 text-xs">
+                <ContextMenuItem onSelect={() => void closeFiles([file.path])}>{t("files.close")}</ContextMenuItem>
+                <ContextMenuItem disabled={openFiles.length <= 1} onSelect={() => void closeFiles(openFiles.filter((item) => item.path !== file.path).map((item) => item.path), file.path)}>{t("files.closeOthers")}</ContextMenuItem>
+                <ContextMenuItem disabled={index === openFiles.length - 1} onSelect={() => void closeFiles(openFiles.slice(index + 1).map((item) => item.path), file.path)}>{t("files.closeRight")}</ContextMenuItem>
+                <ContextMenuSeparator />
+                <ContextMenuItem onSelect={() => void closeFiles(openFiles.map((item) => item.path))}>{t("files.closeAll")}</ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>;
           })}
           {!openFiles.length && <span className="self-center px-2.5 text-[11px] text-muted-foreground">{t("files.noFile")}</span>}
-        </div>
-        <div className="flex shrink-0 items-center gap-1 px-1.5">
-          {document && <Action size="compact" tone="muted" disabled={loadingFile || saving} onClick={reloadFile}>{t("common.refresh")}</Action>}
-          {document && <Action size="compact" tone="primary" disabled={!dirty || saving} onClick={() => void saveFile()}><Save size={12} aria-hidden="true" />{saving ? t("common.saving") : t("common.save")}</Action>}
         </div>
       </div>
       {loadingFile && !document ? <p className="m-0 px-3 py-4 text-xs text-muted-foreground">{t("common.loading")}</p> : document ? <>
@@ -453,7 +550,7 @@ function FileInspector({ mode, workspaceID, remoteFS = null, active = true, noti
             onViewStateChange={(viewPath, viewState) => fileViewStateRef.current.set(viewPath, viewState)}
           />
         </div>
-        <div className="flex shrink-0 items-center justify-between px-2.5 py-1.5 text-[10px] text-muted-foreground"><span>{language === "plain" ? t("files.plainText") : language} · Ln {currentLine}</span><span>{definitionLoading ? t("files.definitionLoading") : lspCapability?.path === document.path && lspCapability.available ? `${lspCapability.serverName} · ${t("files.definitionHint")} · ${t("files.saveHint", { shortcut: primaryShortcutLabel("S") })}` : t("files.saveHint", { shortcut: primaryShortcutLabel("S") })}</span></div>
+        <div className="flex shrink-0 items-center justify-between px-2.5 py-1.5 text-[10px] text-muted-foreground"><span>{language === "plain" ? t("files.plainText") : language} · Ln {currentLine}</span><span>{definitionLoading ? t("files.definitionLoading") : lspCapability?.path === document.path && lspCapability.available ? `${lspCapability.serverName} · ${t("files.definitionHint")} · ${savingPaths.has(document.path) ? t("common.saving") : dirty ? t("files.autoSavePending") : t("files.autoSaved")}` : savingPaths.has(document.path) ? t("common.saving") : dirty ? t("files.autoSavePending") : t("files.autoSaved")}</span></div>
       </> : <p className="m-0 px-3 py-4 text-xs leading-relaxed text-muted-foreground">{t("files.openHint")}</p>}
       {fileError && <p className="m-0 shrink-0 bg-destructive/8 px-2.5 py-2 text-[11px] leading-relaxed text-destructive">{fileError}</p>}
     </section>
