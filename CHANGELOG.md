@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.15
+
+- Read Claude model options from the installed CLI without adding a fixed model catalog or assigning hardcoded versions to model aliases.
+- Preserve configured custom model names in the composer across Codex, Pi, and other supported runtimes instead of displaying a different catalog entry.
+- Show the runtime default when no default model is reported, rather than assuming Opus or the first model in the list, and allow Claude conversations to return to the runtime default.
+
 ## 0.2.14
 
 - Simplify file editing with automatic saves, remove redundant save and refresh actions, and add IDE-style tab menus for closing the current, other, right-side, or all files.
