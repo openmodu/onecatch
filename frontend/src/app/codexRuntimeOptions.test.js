@@ -66,10 +66,38 @@ test("Claude models follow the reference hierarchy without inventing unavailable
     { model: "sonnet", displayName: "Sonnet", alias: true },
     { model: "claude-opus-4-8", displayName: "claude-opus-4-8", alias: false },
   ];
-  assert.equal(defaultClaudeModel(models), "opus");
-  assert.equal(claudeModelDisplayLabel(models[0]), "Fable 5");
+  assert.equal(defaultClaudeModel(models), "");
+  assert.equal(defaultClaudeModel(models, "sonnet"), "sonnet");
+  assert.equal(defaultClaudeModel([{ model: "detected", isDefault: true }]), "detected");
+  assert.equal(claudeModelDisplayLabel(models[0]), "Fable");
   assert.equal(claudeModelDisplayLabel(models[3]), "Opus 4.8");
   assert.deepEqual(groupedClaudeModels(models).primary.map((model) => model.model), ["fable", "opus", "sonnet"]);
   assert.deepEqual(groupedClaudeModels(models).more.map((model) => model.model), ["claude-opus-4-8"]);
   assert.deepEqual(groupedClaudeModels([...models, { model: "claude-fable-5", displayName: "claude-fable-5", alias: false }]).more.map((model) => model.model), ["claude-opus-4-8", "claude-fable-5"]);
+});
+
+test("model labels follow runtime metadata without pinning alias versions", () => {
+  assert.equal(claudeModelDisplayLabel({ model: "opus", alias: true, displayName: "Opus 6" }), "Opus 6");
+  assert.equal(claudeModelDisplayLabel({ model: "opus", alias: true }), "opus");
+  assert.equal(claudeModelDisplayLabel({ model: "claude-opus-6", displayName: "Provider model" }), "Provider model");
+});
+
+test("models absent from the catalog retain the configured identity", () => {
+  assert.equal(selectedCodexModel(configuration, "custom-model").model, "custom-model");
+  assert.equal(selectedCodexModel({ ...configuration, model: "configured-model" }).model, "configured-model");
+  assert.equal(selectedCodexModel(undefined, "saved-model").model, "saved-model");
+  assert.equal(selectedCodexModel({ models: configuration.models }).model, "gpt-sol");
+  assert.equal(selectedCodexModel(undefined), null);
+});
+
+test("Pi model lists do not imply a selected default model", () => {
+  const pi = {
+    models: [
+      { model: "provider/first", displayName: "First" },
+      { model: "provider/selected", displayName: "Selected" },
+    ],
+  };
+  assert.equal(selectedCodexModel(pi), null);
+  assert.equal(selectedCodexModel(pi, "provider/selected").displayName, "Selected");
+  assert.equal(selectedCodexModel(pi, "provider/custom").model, "provider/custom");
 });

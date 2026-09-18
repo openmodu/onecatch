@@ -37,17 +37,9 @@ export const demoClaudeConfiguration = {
   ],
 };
 
-const claudeAliasLabels = {
-  fable: "Fable 5",
-  opus: "Opus 5",
-  sonnet: "Sonnet 5",
-  haiku: "Haiku 4.5",
-};
-
 export function claudeModelDisplayLabel(model = {}) {
   const value = String(model.model || model.id || "");
-  const aliasLabel = claudeAliasLabels[value.toLowerCase()];
-  if (model.alias && aliasLabel) return aliasLabel;
+  if (model.displayName && model.displayName !== value) return model.displayName;
   const versioned = value.toLowerCase().match(/^claude-([a-z]+)-(\d+)(?:[-.](\d+))?/);
   if (versioned) {
     const family = `${versioned[1][0].toUpperCase()}${versioned[1].slice(1)}`;
@@ -65,18 +57,18 @@ export function groupedClaudeModels(models = []) {
 
 export function defaultClaudeModel(models = [], configured = "") {
   return configured
-    || models.find((model) => model.alias && model.model === "opus")?.model
-    || models.find((model) => model.alias)?.model
-    || models[0]?.model
+    || models.find((model) => model.isDefault)?.model
     || "";
 }
 
 export function selectedCodexModel(configuration, selected = "") {
   const models = configuration?.models || [];
   const target = selected || configuration?.model || "";
-  return models.find((model) => model.model === target || model.id === target)
-    || models.find((model) => model.isDefault)
-    || models[0]
+  if (target) {
+    return models.find((model) => model.model === target || model.id === target)
+      || { model: target, displayName: target };
+  }
+  return models.find((model) => model.isDefault)
     || null;
 }
 

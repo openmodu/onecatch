@@ -131,7 +131,7 @@ export default function RuntimeProfileMenu({
     ? runtimeEffortValues(configuration, value?.model || runtimeSettings?.defaultModel, value?.reasoningEffort || runtimeSettings?.reasoningEffort)
     : [];
   const tiers = capability.supportsSpeed ? codexServiceTierValues(configuration, value?.model || runtimeSettings?.defaultModel, value?.serviceTier || runtimeSettings?.serviceTier) : [];
-  const displayModelLabel = profile.harness === "codex" ? compactRuntimeModelLabel(profile.modelLabel) : profile.modelLabel;
+  const displayModelLabel = !profile.model ? t("settings.runtimeDefault") : profile.harness === "codex" ? compactRuntimeModelLabel(profile.modelLabel) : profile.modelLabel;
   const selectedModelLabel = modelLabel(configuration, value?.model, runtimeSettings?.defaultModel) || profile.modelLabel;
   const displaySelectedModelLabel = profile.harness === "codex" ? compactRuntimeModelLabel(selectedModelLabel) : selectedModelLabel;
   const summary = profile.harness === "claude" ? displayModelLabel : [
@@ -177,7 +177,8 @@ export default function RuntimeProfileMenu({
         <DropdownMenuLabel className="runtime-profile-submenu-heading">{t("task.models")}</DropdownMenuLabel>
         {readOnly
           ? <ReadOnlyRow label={t("task.model")} value={displayModelLabel} />
-          : <DropdownMenuRadioGroup value={claudeModelValue} onValueChange={selectClaudeModel}>
+          : <DropdownMenuRadioGroup value={optionValue(claudeModelValue)} onValueChange={(next) => selectClaudeModel(storedValue(next))}>
+            {!inheritedClaudeModel && <DropdownMenuRadioItem value={DEFAULT_VALUE}>{t("settings.useClaudeConfig")}</DropdownMenuRadioItem>}
             {claudeModels.primary.map((model) => <ClaudeModelOption
               model={model}
               selected={(model.model || model.id) === claudeModelValue}
