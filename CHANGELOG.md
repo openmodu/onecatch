@@ -3,6 +3,13 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.3.0
+
+- Keep composer drafts and attachments per workspace and run session, so unfinished text and pending files are restored when you navigate between projects or sessions.
+- Route asynchronous file picker and paste results to the session that started them, preventing late completions from landing on a different conversation.
+- Reset the new-task prompt and composer attachments when starting a task, and scope the new-task form to the current project.
+- Preserve any text typed while a send was in flight instead of clearing it on submit.
+
 ## 0.2.16
 
 - Discover Claude Code third-party model IDs and defaults from user settings, local project settings, and the environment passed to the runtime, including custom Claude configuration directories.
