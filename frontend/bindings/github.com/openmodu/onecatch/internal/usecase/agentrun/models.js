@@ -576,6 +576,13 @@ export class ClaudeConfiguration {
      * @param {Partial<ClaudeConfiguration>} [$$source = {}] - The source object to create the ClaudeConfiguration.
      */
     constructor($$source = {}) {
+        if (!("model" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["model"] = "";
+        }
         if (!("models" in $$source)) {
             /**
              * @member
@@ -600,14 +607,14 @@ export class ClaudeConfiguration {
      * @returns {ClaudeConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType16;
-        const $$createField1_0 = $$createType17;
+        const $$createField1_0 = $$createType16;
+        const $$createField2_0 = $$createType17;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
-            $$parsedSource["models"] = $$createField0_0($$parsedSource["models"]);
+            $$parsedSource["models"] = $$createField1_0($$parsedSource["models"]);
         }
         if ("efforts" in $$parsedSource) {
-            $$parsedSource["efforts"] = $$createField1_0($$parsedSource["efforts"]);
+            $$parsedSource["efforts"] = $$createField2_0($$parsedSource["efforts"]);
         }
         return new ClaudeConfiguration(/** @type {Partial<ClaudeConfiguration>} */($$parsedSource));
     }

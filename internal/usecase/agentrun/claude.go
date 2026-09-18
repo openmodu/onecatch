@@ -47,13 +47,14 @@ type ClaudeModelInfo struct {
 }
 
 type ClaudeConfiguration struct {
+	Model   string            `json:"model"`
 	Models  []ClaudeModelInfo `json:"models"`
 	Efforts []string          `json:"efforts"`
 }
 
 // InspectConfiguration discovers the model aliases advertised by the installed
 // Claude Code CLI. Claude Code does not expose a model-list command, so this
-// reads --help without starting a session or consuming model quota.
+// merges --help with configured model IDs without starting a model session.
 func (r *ClaudeRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (ClaudeConfiguration, error) {
 	cmd := exec.CommandContext(ctx, r.binary, "--help")
 	if cwd != "" {
@@ -64,11 +65,15 @@ func (r *ClaudeRunner) InspectConfiguration(ctx context.Context, cwd string, env
 	if err != nil {
 		return ClaudeConfiguration{}, fmt.Errorf("read Claude Code model options: %w: %s", err, strings.TrimSpace(string(output)))
 	}
-	models := parseClaudeModelOptions(string(output))
-	if len(models) == 0 {
+	configuration, err := readClaudeModelConfiguration(cwd, environment, parseClaudeModelOptions(string(output)))
+	if err != nil {
+		return ClaudeConfiguration{}, err
+	}
+	if len(configuration.Models) == 0 {
 		return ClaudeConfiguration{}, fmt.Errorf("Claude Code did not advertise any model aliases")
 	}
-	return ClaudeConfiguration{Models: models, Efforts: parseClaudeEffortOptions(string(output))}, nil
+	configuration.Efforts = parseClaudeEffortOptions(string(output))
+	return configuration, nil
 }
 
 var claudeQuotedModel = regexp.MustCompile(`'([A-Za-z0-9][A-Za-z0-9._:-]*)'`)

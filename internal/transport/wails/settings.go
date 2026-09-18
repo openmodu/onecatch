@@ -43,8 +43,8 @@ func (b *SettingsBinding) CheckRuntimeDraft(input desktopservice.RuntimeDraftInp
 func (b *SettingsBinding) InspectCodexConfiguration(input domainsettings.RuntimeSettings) (agentrun.CodexConfiguration, error) {
 	return b.service.InspectCodexConfiguration(context.Background(), input)
 }
-func (b *SettingsBinding) InspectClaudeConfiguration(input domainsettings.RuntimeSettings) (agentrun.ClaudeConfiguration, error) {
-	return b.service.InspectClaudeConfiguration(context.Background(), input)
+func (b *SettingsBinding) InspectClaudeConfiguration(input domainsettings.RuntimeSettings, workspacePath string) (agentrun.ClaudeConfiguration, error) {
+	return b.service.InspectClaudeConfiguration(context.Background(), input, workspacePath)
 }
 
 // InspectHarnessConfiguration serves every harness that reports through the

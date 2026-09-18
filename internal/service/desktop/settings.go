@@ -143,7 +143,7 @@ func (a *Service) InspectCodexConfiguration(ctx context.Context, input domainset
 	return agentrun.NewCodexRunner(input.Binary).InspectConfiguration(inspectCtx, home, allowedEnvironment(input.EnvironmentAllowlist))
 }
 
-func (a *Service) InspectClaudeConfiguration(ctx context.Context, input domainsettings.RuntimeSettings) (agentrun.ClaudeConfiguration, error) {
+func (a *Service) InspectClaudeConfiguration(ctx context.Context, input domainsettings.RuntimeSettings, workspacePath string) (agentrun.ClaudeConfiguration, error) {
 	settings := domainsettings.Defaults()
 	settings.Runtimes["claude"] = input
 	normalized, err := domainsettings.Normalize(settings)
@@ -161,6 +161,9 @@ func (a *Service) InspectClaudeConfiguration(ctx context.Context, input domainse
 	home, _ := os.UserHomeDir()
 	inspectCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+	if strings.TrimSpace(workspacePath) != "" {
+		home = workspacePath
+	}
 	return agentrun.NewClaudeRunner(input.Binary).InspectConfiguration(inspectCtx, home, allowedEnvironment(input.EnvironmentAllowlist))
 }
 

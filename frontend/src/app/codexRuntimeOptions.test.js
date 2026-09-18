@@ -101,3 +101,14 @@ test("Pi model lists do not imply a selected default model", () => {
   assert.equal(selectedCodexModel(pi, "provider/selected").displayName, "Selected");
   assert.equal(selectedCodexModel(pi, "provider/custom").model, "provider/custom");
 });
+
+test("Claude third-party defaults and mapped aliases use discovered metadata", () => {
+  const models = [
+    { model: "opus", displayName: "Opus · provider/reasoner", alias: true },
+    { model: "provider/reasoner", displayName: "Gateway Reasoner", alias: false },
+  ];
+  assert.equal(defaultClaudeModel(models, "provider/reasoner"), "provider/reasoner");
+  assert.equal(claudeModelDisplayLabel(models[0]), "Opus · provider/reasoner");
+  assert.equal(claudeModelDisplayLabel(models[1]), "Gateway Reasoner");
+  assert.deepEqual(groupedClaudeModels(models).more, [models[1]]);
+});

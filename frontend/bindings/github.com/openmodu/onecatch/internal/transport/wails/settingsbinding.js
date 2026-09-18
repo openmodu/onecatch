@@ -66,10 +66,11 @@ export function GetStorageUsage() {
 
 /**
  * @param {settings$0.RuntimeSettings} input
+ * @param {string} workspacePath
  * @returns {$CancellablePromise<agentrun$0.ClaudeConfiguration>}
  */
-export function InspectClaudeConfiguration(input) {
-    return $Call.ByID(2020904538, input).then(/** @type {($result: any) => any} */(($result) => {
+export function InspectClaudeConfiguration(input, workspacePath) {
+    return $Call.ByID(2020904538, input, workspacePath).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType5($result);
     }));
 }

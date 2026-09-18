@@ -153,7 +153,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
     if (id === "claude") {
       setClaudeConfiguration((current) => ({ ...current, loading: true, error: "" }));
       try {
-        const data = mode === "demo" ? demoClaudeConfiguration : await SettingsBinding.InspectClaudeConfiguration(draft.runtimes.claude);
+        const data = mode === "demo" ? demoClaudeConfiguration : await SettingsBinding.InspectClaudeConfiguration(draft.runtimes.claude, "");
         setClaudeConfiguration({ loading: false, data, error: "" });
       } catch (error) {
         setClaudeConfiguration((current) => ({ ...current, loading: false, error: message(error, t) }));
@@ -512,7 +512,7 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
       const effortValues = id === "codex" ? codexEffortValues(codexData, value.codex?.defaultModel, value.codex?.reasoningEffort) : [];
       const claudeEffortValues = id === "claude" ? [...new Set([...(claudeData?.efforts?.length ? claudeData.efforts : ["low", "medium", "high", "xhigh", "max"]), value.claude?.reasoningEffort].filter(Boolean))] : [];
       const serviceTierValues = id === "codex" ? codexServiceTierValues(codexData, value.codex?.defaultModel, value.codex?.serviceTier) : [];
-      let modelOptions = id === "codex" ? [{ value: "", label: t("settings.useCodexConfig"), meta: codexData?.model || t("settings.runtimeDefault") }, ...(codexData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.model }))] : id === "claude" ? [{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...(claudeData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.alias ? t("settings.claudeModelAlias") : model.model }))] : [];
+      let modelOptions = id === "codex" ? [{ value: "", label: t("settings.useCodexConfig"), meta: codexData?.model || t("settings.runtimeDefault") }, ...(codexData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.model }))] : id === "claude" ? [{ value: "", label: t("settings.useClaudeConfig"), meta: claudeData?.model || t("settings.runtimeDefault") }, ...(claudeData?.models || []).map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.alias ? t("settings.claudeModelAlias") : model.model }))] : [];
       if (!modelOptions.length && (reportedData?.models || []).length) {
         modelOptions = [{ value: "", label: t("settings.runtimeDefault"), meta: reportedData.model || t("settings.runtimeDefault") },
           ...reportedData.models.map((model) => ({ value: model.model, label: model.displayName || model.model, meta: model.description || model.model }))];

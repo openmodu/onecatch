@@ -500,9 +500,9 @@ function App() {
     }
     const runtimeSettings = settings.runtimes?.[harness] || {};
     if (harness === "codex") return SettingsBinding.InspectCodexConfiguration(runtimeSettings);
-    if (harness === "claude") return SettingsBinding.InspectClaudeConfiguration(runtimeSettings);
+    if (harness === "claude") return SettingsBinding.InspectClaudeConfiguration(runtimeSettings, selectedWorkspace?.remoteFs ? "" : selectedWorkspace?.path || "");
     return SettingsBinding.InspectHarnessConfiguration(harness, runtimeSettings);
-  }, [mode, settings.runtimes]);
+  }, [mode, settings.runtimes, selectedWorkspace?.path, selectedWorkspace?.remoteFs]);
 
   useEffect(() => {
     if (!taskModal || mode === "loading") return undefined;
