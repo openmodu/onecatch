@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.2.16
+
+- Discover Claude Code third-party model IDs and defaults from user settings, local project settings, and the environment passed to the runtime, including custom Claude configuration directories.
+- Show configured model aliases and custom model labels in the composer, and display the detected Claude default model in Settings.
+- Refresh Claude model configuration when switching local workspaces and keep credentials out of configuration responses.
+
 ## 0.2.15
 
 - Read Claude model options from the installed CLI without adding a fixed model catalog or assigning hardcoded versions to model aliases.
