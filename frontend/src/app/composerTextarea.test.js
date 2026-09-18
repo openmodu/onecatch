@@ -19,13 +19,13 @@ test("composer textareas grow with content up to three times their resting heigh
 });
 
 test("composer textareas scroll after three heights and shrink back to rest", () => {
-  const element = textarea(220);
+  const element = textarea(260);
   autosizeComposerTextarea(element, NEW_TASK_TEXTAREA_MIN_HEIGHT);
-  assert.equal(element.style.height, "168px");
+  assert.equal(element.style.height, "228px");
   assert.equal(element.style.overflowY, "auto");
 
   element.scrollHeight = 20;
   autosizeComposerTextarea(element, NEW_TASK_TEXTAREA_MIN_HEIGHT);
-  assert.equal(element.style.height, "56px");
+  assert.equal(element.style.height, "76px");
   assert.equal(element.style.overflowY, "hidden");
 });

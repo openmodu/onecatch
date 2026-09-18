@@ -1,5 +1,5 @@
-export const NEW_TASK_TEXTAREA_MIN_HEIGHT = 56;
 export const WORKBENCH_TEXTAREA_MIN_HEIGHT = 76;
+export const NEW_TASK_TEXTAREA_MIN_HEIGHT = WORKBENCH_TEXTAREA_MIN_HEIGHT;
 
 export function autosizeComposerTextarea(element, minHeight) {
   if (!element) return;

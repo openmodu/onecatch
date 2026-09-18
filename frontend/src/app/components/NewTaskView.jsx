@@ -100,7 +100,7 @@ export default function NewTaskView({
             {form.attachmentPaths.map((path) => <ComposerAttachmentPreview path={path} onRemove={onRemoveAttachment} chipClassName="new-task-attachment" removeIconSize={12} key={path} />)}
           </div>}
 
-          <div className={`codex-skill-field ${skillRuntime ? "has-skill-highlight" : ""}`.trim()}>
+          <div className="new-task-input"><div className={`codex-skill-field ${skillRuntime ? "has-skill-highlight" : ""}`.trim()}>
             <SkillTextarea
               ref={promptRef}
               textareaComponent={Textarea}
@@ -117,7 +117,7 @@ export default function NewTaskView({
               {...skillPicker.inputProps}
             />
             {skillPicker.menu}
-          </div>
+          </div></div>
 
           <div className={`new-task-toolbar ${directAgent ? "agent-mode" : "workflow-mode"} ${showRuntimeProfile ? "has-runtime-profile" : "no-runtime-profile"}`}>
             <DropdownMenu>

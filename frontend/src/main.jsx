@@ -8,6 +8,9 @@ import { desktopPlatform } from "./app/platform.js";
 // so Tailwind utilities outrank them during the migration.
 import "./index.css";
 
+// Suppress the webview/browser menu while allowing app context-menu handlers.
+document.addEventListener("contextmenu", (event) => event.preventDefault());
+
 applyAppearance(readAppearance());
 const launchParameters = new URLSearchParams(window.location.search);
 const windowKind = launchParameters.get("window");

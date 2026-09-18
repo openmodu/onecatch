@@ -244,6 +244,8 @@ function App() {
   const runDetailRef = useRef(null);
   runDetailRef.current = runDetail;
   selectedRunIDRef.current = selectedRunID;
+  const composerScopeRef = useRef("");
+  composerScopeRef.current = `${workspaceID}:${selectedRunID}`;
   const tasksRef = useRef([]);
   tasksRef.current = tasks;
   // Handlers passed down to memoized children read these instead of closing over
@@ -383,7 +385,7 @@ function App() {
         void WorkspaceBinding.DiscardStagedAttachment(path).catch(() => {});
       }
     }
-    setTaskForm((form) => ({ ...form, attachmentPaths: [] }));
+    setTaskForm((form) => ({ ...form, prompt: "", attachmentPaths: [] }));
     setComposerAttachments([]);
     setGlobalSearchQuery("");
     setWorkspaceSearchOpen(false);
@@ -776,6 +778,10 @@ function App() {
   useEffect(() => { if (selectedRunID) loadRun(selectedRunID, true); }, [loadRun, selectedRunID]);
 
   useEffect(() => {
+    setComposerAttachments([]);
+  }, [workspaceID, selectedRunID]);
+
+  useEffect(() => {
     if (mode !== "wails") return undefined;
     const flush = () => {
       const frames = liveFramesRef.current;
@@ -1087,9 +1093,10 @@ function App() {
   };
 
   const chooseAttachments = useCallback(async (target) => {
+    const scope = composerScopeRef.current;
     try {
       const paths = mode === "demo" ? ["/Users/demo/Desktop/reference.png"] : await WorkspaceBinding.ChooseAttachments();
-      if (!paths?.length) return;
+      if (!paths?.length || scope !== composerScopeRef.current) return;
       if (target === "task") setTaskForm((form) => ({ ...form, attachmentPaths: [...new Set([...(form.attachmentPaths || []), ...paths])].slice(0, 8) }));
       else setComposerAttachments((items) => [...new Set([...items, ...paths])].slice(0, 8));
     } catch (error) { notify("error", errorMessage(error)); }
@@ -1101,6 +1108,7 @@ function App() {
   }, [mode]);
 
   const stagePastedImages = useCallback(async (target, files) => {
+    const scope = composerScopeRef.current;
     const current = target === "task" ? taskFormRef.current.attachmentPaths || [] : composerAttachmentsRef.current;
     const accepted = files.slice(0, Math.max(0, 8 - current.length));
     if (!accepted.length) {
@@ -1121,6 +1129,10 @@ function App() {
           await discardStagedAttachments(paths);
           throw failed.reason;
         }
+      }
+      if (scope !== composerScopeRef.current) {
+        await discardStagedAttachments(paths);
+        return;
       }
       if (target === "task") setTaskForm((form) => ({ ...form, attachmentPaths: [...form.attachmentPaths, ...paths].slice(0, 8) }));
       else setComposerAttachments((items) => [...items, ...paths].slice(0, 8));
@@ -1177,7 +1189,7 @@ function App() {
         setResumePendingRunID(run.id);
       }
       await discardStagedAttachments(attachments);
-      setComposerAttachments([]);
+      if (selectedRunIDRef.current === run.id) setComposerAttachments([]);
       window.setTimeout(() => loadRun(run.id, true), 180);
       notify("success", modeName === "insert" ? t("app.instructionInserted") : run.status === "running" ? t("app.instructionQueued") : t("app.runResuming"));
       return true;

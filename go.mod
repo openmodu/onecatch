@@ -8,7 +8,7 @@ require (
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/google/wire v0.7.0
 	github.com/libp2p/zeroconf/v2 v2.2.0
-	github.com/openmodu/modu v0.0.9-0.20260903100137-cc1462c00ba7
+	github.com/openmodu/modu v0.0.9-0.20260918064809-0f6a71287626
 	github.com/pkg/sftp v1.13.11
 	github.com/wailsapp/wails/v3 v3.0.0-beta.16
 	github.com/zalando/go-keyring v0.2.6

@@ -1,5 +1,5 @@
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Maximize2, Minimize2, PanelRightClose, SquareArrowOutUpRight, SquareTerminal, X } from "lucide-react";
+import { ArrowDown, Maximize2, Minimize2, PanelRightClose, SquareArrowOutUpRight, SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { buildRunConversation } from "../runConversation.js";
 import { summarizeContextWindow } from "../tokenUsage.js";
@@ -60,6 +60,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   const [reviewRequest, setReviewRequest] = useState(0);
   const scrollRef = useRef(null);
   const pinnedRef = useRef(true);
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const inspectorResizeRef = useRef(null);
   const inspectorRestoreWidthRef = useRef(DEFAULT_INSPECTOR_WIDTH);
   const workbenchRef = useRef(null);
@@ -168,6 +169,7 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
 
   useEffect(() => {
     pinnedRef.current = true;
+    setShowScrollToBottom(false);
     const element = scrollRef.current;
     if (element) element.scrollTop = element.scrollHeight;
   }, [selectedRunID, selectedQueuedTaskID]);
@@ -177,7 +179,10 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
   }, [attachments.length, conversationSize, pendingInstructions.length, runDetail?.run?.status]);
   const handleConversationScroll = () => {
     const element = scrollRef.current;
-    if (element) pinnedRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 90;
+    if (element) {
+      pinnedRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 90;
+      setShowScrollToBottom(!pinnedRef.current);
+    }
   };
   const runStatus = runDetail?.run?.status;
   const runWorkerID = useMemo(() => activeWorkerID(runDetail), [runDetail]);
@@ -317,7 +322,16 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
         <div className="conversation-scroll min-h-0 min-w-0 flex-1 select-text overflow-x-hidden overflow-y-auto overscroll-contain" ref={scrollRef} onScroll={handleConversationScroll}>
           {selectedQueuedTask ? <QueuedTaskView task={selectedQueuedTask} position={queueTasks.findIndex((task) => task.id === selectedQueuedTask.id) + 1} /> : <><ConversationTimeline items={conversation} active={runDetail?.active} hiddenCount={hiddenTranscriptCount} onLoadEarlier={() => onLoadEarlierTranscript?.(runDetail?.run?.id)} permissionBusy={permissionBusy} userInputBusy={userInputBusy} onPermissionDecision={onPermissionDecision} onUserInputResponse={onUserInputResponse} onReview={openReview} />{!conversation.length && <div className="workbench-empty select-none p-8 text-center text-sm text-muted-foreground"><p>{t("task.noMessages")}</p></div>}</>}
         </div>
+        {runDetail && showScrollToBottom && <div className="conversation-jump-anchor">
+          <button type="button" className="conversation-jump-bottom" aria-label={t("composer.scrollToBottom")} title={t("composer.scrollToBottom")} onClick={() => {
+            pinnedRef.current = true;
+            setShowScrollToBottom(false);
+            const element = scrollRef.current;
+            if (element) element.scrollTop = element.scrollHeight;
+          }}><ArrowDown size={20} aria-hidden="true" /></button>
+        </div>}
         {runDetail && <Composer
+          key={`${workspaceID}:${selectedRunID}`}
           contextWindow={summarizeContextWindow(runDetail.stepRuns, (activeRuntimeProfile || continuationRuntimeProfile)?.harness)}
           runStatus={runStatus}
           active={runDetail.active}
