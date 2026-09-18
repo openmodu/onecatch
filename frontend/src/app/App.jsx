@@ -1,3 +1,5 @@
+import { createComposerDrafts, draftKey } from "./composerDrafts.js";
+import { useComposerDraft } from "./useComposerDraft.js";
 import { withWorkspaceActivity } from "./activityOrder.js";
 import { hasRemoteFSHarness, hydrateRuntimeHarnesses, supportsRuntimeProfile } from "./runtimeHarnesses.js";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -203,9 +205,14 @@ function App() {
   const [taskModal, setTaskModal] = useState(true);
   const [renameForm, setRenameForm] = useState(null);
   const [workspaceForm, setWorkspaceForm] = useState(emptyWorkspaceForm);
-  const [taskForm, setTaskForm] = useState({ prompt: "", workflowId: directAgentWorkflowID, executionMode: "immediate", attachmentPaths: [], harness: "codex", model: "", reasoningEffort: "", serviceTier: "", sandbox: "workspace-write" });
+  const [composerDrafts] = useState(createComposerDrafts);
+  const [emptyTaskForm] = useState({ prompt: "", workflowId: directAgentWorkflowID, executionMode: "immediate", attachmentPaths: [], harness: "codex", model: "", reasoningEffort: "", serviceTier: "", sandbox: "workspace-write" });
+  const [emptyAttachments] = useState([]);
+  const taskDraftKey = draftKey(workspaceID, "", "new-task");
+  const attachmentsDraftKey = draftKey(workspaceID, selectedRunID, "attachments");
+  const [taskForm, setTaskForm] = useComposerDraft(composerDrafts, taskDraftKey, emptyTaskForm);
   const [taskRuntimeConfiguration, setTaskRuntimeConfiguration] = useState({ loading: false, data: null, error: "" });
-  const [composerAttachments, setComposerAttachments] = useState([]);
+  const [composerAttachments, setComposerAttachments] = useComposerDraft(composerDrafts, attachmentsDraftKey, emptyAttachments);
   const [resumePendingRunID, setResumePendingRunID] = useState("");
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState("");
@@ -245,7 +252,9 @@ function App() {
   runDetailRef.current = runDetail;
   selectedRunIDRef.current = selectedRunID;
   const composerScopeRef = useRef("");
-  composerScopeRef.current = `${workspaceID}:${selectedRunID}`;
+  composerScopeRef.current = attachmentsDraftKey;
+  const taskDraftKeyRef = useRef(taskDraftKey);
+  taskDraftKeyRef.current = taskDraftKey;
   const tasksRef = useRef([]);
   tasksRef.current = tasks;
   // Handlers passed down to memoized children read these instead of closing over
@@ -380,13 +389,6 @@ function App() {
     setSelectedQueuedTaskID("");
     setRunDetail(null);
     setResumePendingRunID("");
-    if (mode === "wails") {
-      for (const path of [...(taskFormRef.current.attachmentPaths || []), ...composerAttachmentsRef.current]) {
-        void WorkspaceBinding.DiscardStagedAttachment(path).catch(() => {});
-      }
-    }
-    setTaskForm((form) => ({ ...form, prompt: "", attachmentPaths: [] }));
-    setComposerAttachments([]);
     setGlobalSearchQuery("");
     setWorkspaceSearchOpen(false);
     if (mode === "wails") WorkspaceBinding.OpenWorkspace(nextWorkspaceID).then((opened) => setWorkspaces((items) => items.map((item) => item.id === opened.id ? opened : item))).catch((error) => notify("error", errorMessage(error)));
@@ -778,10 +780,6 @@ function App() {
   useEffect(() => { if (selectedRunID) loadRun(selectedRunID, true); }, [loadRun, selectedRunID]);
 
   useEffect(() => {
-    setComposerAttachments([]);
-  }, [workspaceID, selectedRunID]);
-
-  useEffect(() => {
     if (mode !== "wails") return undefined;
     const flush = () => {
       const frames = liveFramesRef.current;
@@ -1088,17 +1086,17 @@ function App() {
         await loadTasks(); await loadRunList();
       }
       await discardStagedAttachments(taskForm.attachmentPaths);
-      setTaskForm((form) => ({ ...form, prompt: "", attachmentPaths: [] })); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? t("app.taskQueued") : t("app.runStarted"));
+      composerDrafts.set(taskDraftKey, (form) => ({ ...form, prompt: form.prompt === taskForm.prompt ? "" : form.prompt, attachmentPaths: form.attachmentPaths.filter((path) => !taskForm.attachmentPaths.includes(path)) }), emptyTaskForm); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? t("app.taskQueued") : t("app.runStarted"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
   const chooseAttachments = useCallback(async (target) => {
-    const scope = composerScopeRef.current;
+    const scope = target === "task" ? taskDraftKeyRef.current : composerScopeRef.current;
     try {
       const paths = mode === "demo" ? ["/Users/demo/Desktop/reference.png"] : await WorkspaceBinding.ChooseAttachments();
-      if (!paths?.length || scope !== composerScopeRef.current) return;
-      if (target === "task") setTaskForm((form) => ({ ...form, attachmentPaths: [...new Set([...(form.attachmentPaths || []), ...paths])].slice(0, 8) }));
-      else setComposerAttachments((items) => [...new Set([...items, ...paths])].slice(0, 8));
+      if (!paths?.length) return;
+      if (target === "task") composerDrafts.set(scope, (form) => ({ ...form, attachmentPaths: [...new Set([...(form.attachmentPaths || []), ...paths])].slice(0, 8) }), emptyTaskForm);
+      else composerDrafts.set(scope, (items) => [...new Set([...items, ...paths])].slice(0, 8), emptyAttachments);
     } catch (error) { notify("error", errorMessage(error)); }
   }, [mode, notify]);
 
@@ -1108,7 +1106,7 @@ function App() {
   }, [mode]);
 
   const stagePastedImages = useCallback(async (target, files) => {
-    const scope = composerScopeRef.current;
+    const scope = target === "task" ? taskDraftKeyRef.current : composerScopeRef.current;
     const current = target === "task" ? taskFormRef.current.attachmentPaths || [] : composerAttachmentsRef.current;
     const accepted = files.slice(0, Math.max(0, 8 - current.length));
     if (!accepted.length) {
@@ -1130,12 +1128,8 @@ function App() {
           throw failed.reason;
         }
       }
-      if (scope !== composerScopeRef.current) {
-        await discardStagedAttachments(paths);
-        return;
-      }
-      if (target === "task") setTaskForm((form) => ({ ...form, attachmentPaths: [...form.attachmentPaths, ...paths].slice(0, 8) }));
-      else setComposerAttachments((items) => [...items, ...paths].slice(0, 8));
+      if (target === "task") composerDrafts.set(scope, (form) => ({ ...form, attachmentPaths: [...form.attachmentPaths, ...paths].slice(0, 8) }), emptyTaskForm);
+      else composerDrafts.set(scope, (items) => [...items, ...paths].slice(0, 8), emptyAttachments);
     } catch (error) {
       notify("error", errorMessage(error));
     }
@@ -1150,12 +1144,13 @@ function App() {
     if (files.length) void stagePastedImages("composer", files);
   }, [stagePastedImages]);
 
-  // Returns true when the submit was accepted so the composer can clear its
-  // local draft; false keeps whatever the user typed.
+  // Accepted sends clear only the originating draft; failures keep the input.
   const submitWorkbenchComposer = useCallback(async (modeName = "queue", content = "", runtimeProfile = null) => {
     const runDetailNow = runDetailRef.current;
     if (!runDetailNow?.run?.id) { setTaskModal(true); return false; }
     const run = runDetailNow.run;
+    if (run.id !== selectedRunIDRef.current) return false;
+    const scope = composerScopeRef.current;
     const attachments = composerAttachmentsRef.current;
     if (!content && !attachments.length && run.status !== "paused") return false;
     setBusy(modeName);
@@ -1189,7 +1184,7 @@ function App() {
         setResumePendingRunID(run.id);
       }
       await discardStagedAttachments(attachments);
-      if (selectedRunIDRef.current === run.id) setComposerAttachments([]);
+      composerDrafts.set(scope, (items) => items.filter((path) => !attachments.includes(path)), emptyAttachments);
       window.setTimeout(() => loadRun(run.id, true), 180);
       notify("success", modeName === "insert" ? t("app.instructionInserted") : run.status === "running" ? t("app.instructionQueued") : t("app.runResuming"));
       return true;
@@ -1696,6 +1691,7 @@ function App() {
           busy={busy}
           permissionBusy={permissionBusy}
           userInputBusy={userInputBusy}
+          composerDrafts={composerDrafts}
           attachments={composerAttachments}
           inspectorCollapsed={activeInspectorCollapsed}
           inspectorToggleVersion={inspectorToggleVersion}

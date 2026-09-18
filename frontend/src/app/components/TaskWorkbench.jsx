@@ -48,7 +48,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, userInputBusy, attachments, inspectorCollapsed, inspectorToggleVersion, inspectorScope = "task", integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, alternateContent = null, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onPasteTaskImages, onRemoveTaskAttachment, onCreateTask, onChooseAttachments, onPasteImages, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onSteerInstruction, onLoadEarlierTranscript, onPermissionDecision, onUserInputResponse, notify }) {
+function TaskWorkbench({ composerDrafts, mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, userInputBusy, attachments, inspectorCollapsed, inspectorToggleVersion, inspectorScope = "task", integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, alternateContent = null, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onPasteTaskImages, onRemoveTaskAttachment, onCreateTask, onChooseAttachments, onPasteImages, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onSteerInstruction, onLoadEarlierTranscript, onPermissionDecision, onUserInputResponse, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
@@ -332,6 +332,9 @@ function TaskWorkbench({ mode, workspace, workspaceID, terminalPreferences, term
         </div>}
         {runDetail && <Composer
           key={`${workspaceID}:${selectedRunID}`}
+          composerDrafts={composerDrafts}
+          workspaceID={workspaceID}
+          sessionID={selectedRunID}
           contextWindow={summarizeContextWindow(runDetail.stepRuns, (activeRuntimeProfile || continuationRuntimeProfile)?.harness)}
           runStatus={runStatus}
           active={runDetail.active}

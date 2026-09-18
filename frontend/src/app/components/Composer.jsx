@@ -1,4 +1,6 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { draftKey } from "../composerDrafts.js";
+import { useComposerDraft } from "../useComposerDraft.js";
+import { useLayoutEffect, useRef } from "react";
 import { ArrowUp, CornerDownRight, ListEnd, Paperclip, Square, Trash2, Workflow } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -16,10 +18,13 @@ import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
 import WorkspaceComposerMeta from "./WorkspaceComposerMeta.jsx";
 import ComposerAttachmentPreview from "./AttachmentPreview.jsx";
 
-// Draft text is intentionally local state: keystrokes re-render only this
-// subtree instead of the whole workbench + polling tree, which is what made
-// typing feel laggy. The parent still owns attachments and the async submit.
+// Draft subscriptions are scoped to this composer: keystrokes re-render only this
+// subtree instead of the whole workbench + polling tree. The store survives
+// unmounts when navigating between projects and sessions.
 export default function Composer({
+  composerDrafts,
+  workspaceID,
+  sessionID,
   runStatus,
   active,
   busy,
@@ -46,7 +51,8 @@ export default function Composer({
   onEditWorkspace,
 }) {
   const { t } = useTranslation();
-  const [draft, setDraft] = useState("");
+  const textDraftKey = draftKey(workspaceID, sessionID, "text");
+  const [draft, setDraft] = useComposerDraft(composerDrafts, textDraftKey, "");
   const composing = useRef(false);
   const draftRef = useRef(null);
   const editable = ["running", "paused", "completed"].includes(runStatus);
@@ -62,7 +68,7 @@ export default function Composer({
 
   const send = async (modeName) => {
     const accepted = await onSubmit(modeName, draft.trim(), runtimeProfile);
-    if (accepted) setDraft("");
+    if (accepted) composerDrafts.set(textDraftKey, (current) => current === draft ? "" : current, "");
   };
   const submitFromComposer = (event) => {
     const submitMode = composerSubmitMode(event, { running: runStatus === "running" }, composing.current);
