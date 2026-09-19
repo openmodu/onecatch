@@ -129,7 +129,7 @@ export default function CommandPalette({
     <section className="command-palette" id="global-command-palette" role="dialog" aria-modal="true" aria-busy={loading} aria-label={t("sidebar.commandPalette")} onKeyDown={handleKeyDown}>
       <label className="command-palette__search">
         <span className="command-palette__search-icon" aria-hidden="true"><Search size={16} /></span>
-        <input ref={inputRef} autoFocus value={query} aria-label={t("sidebar.searchTasksCommands")} placeholder={t("sidebar.searchTasksCommands")} onChange={(event) => onQueryChange(event.target.value)} />
+        <input spellCheck={false} autoCorrect="off" autoCapitalize="none" ref={inputRef} autoFocus value={query} aria-label={t("sidebar.searchTasksCommands")} placeholder={t("sidebar.searchTasksCommands")} onChange={(event) => onQueryChange(event.target.value)} />
         <kbd>Esc</kbd>
       </label>
       <div className="command-palette__body">

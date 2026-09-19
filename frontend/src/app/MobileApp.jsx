@@ -226,7 +226,7 @@ function WorkerSwitchSheet({ open, workers, selectedWorkerID, healthByID, onSele
 // hierarchy made none of them read as the thing to press.
 function BottomBar({ query, setQuery, onNew }) {
   return <footer className="mobile-bottom-bar">
-    <label className="mobile-search-pill"><Search /><input value={query} placeholder="搜索聊天记录" aria-label="搜索聊天记录" onChange={(event) => setQuery(event.target.value)} /></label>
+    <label className="mobile-search-pill"><Search /><input spellCheck={false} autoCorrect="off" autoCapitalize="none" value={query} placeholder="搜索聊天记录" aria-label="搜索聊天记录" onChange={(event) => setQuery(event.target.value)} /></label>
     <button type="button" className="mobile-primary-square" aria-label="新建会话" onClick={onNew}><Plus /></button>
   </footer>;
 }

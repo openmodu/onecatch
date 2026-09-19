@@ -241,7 +241,9 @@ function SkillFilesInspector({ mode, notify, onDirtyChange }) {
             fills, so it carries no box of its own. */}
         <textarea
           className="min-h-0 flex-1 resize-none border-0 bg-transparent px-3 pt-1 pb-2 font-mono text-[11.5px] leading-[1.7] text-foreground shadow-none outline-none focus:ring-0"
-          spellCheck="false"
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="none"
           aria-label={file.path}
           value={draft}
           onChange={(event) => editDraft(event.target.value)}

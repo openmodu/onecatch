@@ -9,6 +9,9 @@ function Input({
 }) {
   return (
     <input
+      spellCheck={false}
+      autoCorrect="off"
+      autoCapitalize="none"
       type={type}
       data-slot="input"
       className={cn(

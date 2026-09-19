@@ -42,6 +42,9 @@ const SkillTextarea = forwardRef(function SkillTextarea({
       {String(value).endsWith("\n") && <span>{"\u200b"}</span>}
     </div>}
     <TextareaComponent
+      spellCheck={false}
+      autoCorrect="off"
+      autoCapitalize="none"
       {...props}
       ref={setTextareaRef}
       className={`${className} ${highlight ? "codex-skill-textarea" : ""}`.trim()}
