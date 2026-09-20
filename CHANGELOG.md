@@ -3,6 +3,14 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.3.1
+
+- Display uploaded images and follow-up attachments in mobile conversations, with thumbnails, tap-to-enlarge previews, and retry controls for failed loads.
+- Render images in mobile assistant replies, including web URLs and files in the conversation's workspace. Read local images through the paired Worker with authentication and path checks.
+- Automatically search for nearby computers when opening mobile pairing. Select a discovered computer and enter its one-time pairing code, or use the manual address fallback.
+- Add pairing instructions to the desktop's Phone Connection settings and disable spellcheck, automatic correction, and automatic capitalization in text inputs.
+- Update both the desktop host and mobile client to use image previews. Local discovery requires both devices on the same network with local-network access allowed.
+
 ## 0.3.0
 
 - Keep composer drafts and attachments per workspace and run session, so unfinished text and pending files are restored when you navigate between projects or sessions.
