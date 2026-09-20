@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -682,7 +683,11 @@ func (s *Service) emit(frame RunFrame) {
 
 func copyRunView(value RunView) RunView {
 	copyValue := value
+	copyValue.Attachments = slices.Clone(value.Attachments)
 	copyValue.Events = append([]agentrun.Event{}, value.Events...)
+	for i := range copyValue.Events {
+		copyValue.Events[i].Attachments = slices.Clone(value.Events[i].Attachments)
+	}
 	if value.Result != nil {
 		result := *value.Result
 		copyValue.Result = &result

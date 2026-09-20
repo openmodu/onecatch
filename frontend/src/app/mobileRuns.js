@@ -60,7 +60,7 @@ export function mergeMobileRun(items = [], run) {
 }
 
 function eventFingerprint(event = {}) {
-  return [event.kind, event.streamId, event.phase, event.revision, event.at, event.failed ? 1 : 0, String(event.text || "")].join("|");
+  return [event.kind, event.streamId, event.phase, event.revision, event.at, event.failed ? 1 : 0, String(event.text || ""), JSON.stringify(event.attachments || [])].join("|");
 }
 
 // Run objects returned by Wails are freshly allocated even when a poll found
@@ -70,7 +70,7 @@ export function mobileRunFingerprint(run = {}) {
   const events = run.events || [];
   return [
     run.id, run.conversationId, run.workerId, run.workspaceId, run.runtime,
-    run.prompt, run.title, run.turnCount, run.status, run.shared ? 1 : 0, run.error,
+    run.prompt, JSON.stringify(run.attachments || []), run.title, run.turnCount, run.status, run.shared ? 1 : 0, run.error,
     run.startedAt, run.updatedAt, run.finishedAt, run.eventsOffset, run.eventsTotal,
     events.length, JSON.stringify(events.map(eventFingerprint)),
     run.result?.sessionId, run.result?.succeeded ? 1 : 0,

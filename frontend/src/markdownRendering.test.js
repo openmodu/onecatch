@@ -13,6 +13,11 @@ const result = await build({
       import { renderToStaticMarkup } from "react-dom/server";
       import MarkdownContent from "./app/components/MarkdownContent.jsx";
       import i18n from "./i18n.js";
+      import { ConversationImageContext, MobileMessageAttachments } from "./app/components/ConversationImage.jsx";
+      export function renderMobile(content, attachments = []) {
+        return renderToStaticMarkup(React.createElement(ConversationImageContext.Provider, { value: "run-1" },
+          React.createElement(MarkdownContent, { content }), React.createElement(MobileMessageAttachments, { attachments })));
+      }
       export function render(content, streaming = false) {
         return renderToStaticMarkup(React.createElement(MarkdownContent, { content, streaming }));
       }
@@ -36,7 +41,7 @@ const result = await build({
 });
 const module = { exports: {} };
 new Function("require", "module", "exports", result.outputFiles[0].text)(createRequire(import.meta.url), module, module.exports);
-const { render } = module.exports;
+const { render, renderMobile } = module.exports;
 
 function codeText(html) {
   const code = /<pre\b[^>]*><code\b[^>]*>([\s\S]*?)<\/code><\/pre>/.exec(html)?.[1];
@@ -75,4 +80,21 @@ test("unknown-language and indented blocks remain copyable plain text", () => {
   const indented = render("    first\n    second\n");
   assert.equal(codeText(indented), "first\nsecond\n");
   assert.match(indented, /markdown-code-toolbar/);
+});
+
+
+test("mobile renders remote and workspace Markdown images through the appropriate source", () => {
+  const local = renderMobile("![Screenshot](/workspace/screenshot.png)");
+  assert.match(local, /<img[^>]+src="\/conversation-image\?run=run-1&amp;path=%2Fworkspace%2Fscreenshot.png"/);
+  assert.match(renderMobile("![Chart](chart.png)"), /path=chart.png/);
+  assert.match(renderMobile("![Photo](https://example.com/photo.png)"), /src="https:\/\/example.com\/photo.png"/);
+  assert.match(renderMobile("![Local](file:///workspace/photo.png)"), /path=file%3A%2F%2F%2Fworkspace%2Fphoto.png/);
+  assert.doesNotMatch(renderMobile("![bad](javascript:alert)"), /<img/);
+});
+
+test("mobile displays images in attachment-only messages and names other files", () => {
+  const html = renderMobile("", [{ name: "photo.png", storedPath: "/managed/photo.png", mimeType: "image/png" }, "/managed/notes.txt"]);
+  assert.match(html, /path=%2Fmanaged%2Fphoto.png/);
+  assert.match(html, /notes.txt/);
+  assert.match(html, /referrerPolicy="no-referrer"/i);
 });

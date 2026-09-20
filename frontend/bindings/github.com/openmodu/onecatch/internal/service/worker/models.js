@@ -8,6 +8,9 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as tasks$0 from "../../domain/tasks/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as workspaces$0 from "../../domain/workspaces/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -238,6 +241,13 @@ export class SharedRun {
      * @param {Partial<SharedRun>} [$$source = {}] - The source object to create the SharedRun.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {tasks$0.Attachment[] | undefined}
+             */
+            this["attachments"] = undefined;
+        }
         if (!("id" in $$source)) {
             /**
              * @member
@@ -386,18 +396,22 @@ export class SharedRun {
      * @returns {SharedRun}
      */
     static createFrom($$source = {}) {
-        const $$createField10_0 = $$createType2;
-        const $$createField13_0 = $$createType4;
+        const $$createField0_0 = $$createType2;
+        const $$createField11_0 = $$createType4;
         const $$createField14_0 = $$createType6;
+        const $$createField15_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("attachments" in $$parsedSource) {
+            $$parsedSource["attachments"] = $$createField0_0($$parsedSource["attachments"]);
+        }
         if ("events" in $$parsedSource) {
-            $$parsedSource["events"] = $$createField10_0($$parsedSource["events"]);
+            $$parsedSource["events"] = $$createField11_0($$parsedSource["events"]);
         }
         if ("result" in $$parsedSource) {
-            $$parsedSource["result"] = $$createField13_0($$parsedSource["result"]);
+            $$parsedSource["result"] = $$createField14_0($$parsedSource["result"]);
         }
         if ("queued" in $$parsedSource) {
-            $$parsedSource["queued"] = $$createField14_0($$parsedSource["queued"]);
+            $$parsedSource["queued"] = $$createField15_0($$parsedSource["queued"]);
         }
         return new SharedRun(/** @type {Partial<SharedRun>} */($$parsedSource));
     }
@@ -663,8 +677,8 @@ export class WorkspacePrepareResult {
      * @returns {WorkspacePrepareResult}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType7;
-        const $$createField1_0 = $$createType8;
+        const $$createField0_0 = $$createType9;
+        const $$createField1_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("mapping" in $$parsedSource) {
             $$parsedSource["mapping"] = $$createField0_0($$parsedSource["mapping"]);
@@ -678,11 +692,13 @@ export class WorkspacePrepareResult {
 
 // Private type creation functions
 const $$createType0 = $Create.Map($Create.Any, $Create.Any);
-const $$createType1 = agentrun$0.Event.createFrom;
+const $$createType1 = tasks$0.Attachment.createFrom;
 const $$createType2 = $Create.Array($$createType1);
-const $$createType3 = agentrun$0.Result.createFrom;
-const $$createType4 = $Create.Nullable($$createType3);
-const $$createType5 = QueuedInstruction.createFrom;
-const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = WorkspaceMapping.createFrom;
-const $$createType8 = workspaces$0.GitSnapshot.createFrom;
+const $$createType3 = agentrun$0.Event.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = agentrun$0.Result.createFrom;
+const $$createType6 = $Create.Nullable($$createType5);
+const $$createType7 = QueuedInstruction.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = WorkspaceMapping.createFrom;
+const $$createType10 = workspaces$0.GitSnapshot.createFrom;

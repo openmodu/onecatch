@@ -909,6 +909,14 @@ export class Event {
      * @param {Partial<Event>} [$$source = {}] - The source object to create the Event.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * Attachments holds managed file paths on a user follow-up.
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["attachments"] = undefined;
+        }
         if (!("kind" in $$source)) {
             /**
              * @member
@@ -1040,26 +1048,30 @@ export class Event {
      * @returns {Event}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType23;
-        const $$createField8_0 = $$createType25;
-        const $$createField9_0 = $$createType27;
-        const $$createField11_0 = $$createType29;
-        const $$createField12_0 = $$createType31;
+        const $$createField0_0 = $$createType17;
+        const $$createField2_0 = $$createType23;
+        const $$createField9_0 = $$createType25;
+        const $$createField10_0 = $$createType27;
+        const $$createField12_0 = $$createType29;
+        const $$createField13_0 = $$createType31;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("attachments" in $$parsedSource) {
+            $$parsedSource["attachments"] = $$createField0_0($$parsedSource["attachments"]);
+        }
         if ("usage" in $$parsedSource) {
-            $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
+            $$parsedSource["usage"] = $$createField2_0($$parsedSource["usage"]);
         }
         if ("context" in $$parsedSource) {
-            $$parsedSource["context"] = $$createField8_0($$parsedSource["context"]);
+            $$parsedSource["context"] = $$createField9_0($$parsedSource["context"]);
         }
         if ("permission" in $$parsedSource) {
-            $$parsedSource["permission"] = $$createField9_0($$parsedSource["permission"]);
+            $$parsedSource["permission"] = $$createField10_0($$parsedSource["permission"]);
         }
         if ("userInput" in $$parsedSource) {
-            $$parsedSource["userInput"] = $$createField11_0($$parsedSource["userInput"]);
+            $$parsedSource["userInput"] = $$createField12_0($$parsedSource["userInput"]);
         }
         if ("userInputResponse" in $$parsedSource) {
-            $$parsedSource["userInputResponse"] = $$createField12_0($$parsedSource["userInputResponse"]);
+            $$parsedSource["userInputResponse"] = $$createField13_0($$parsedSource["userInputResponse"]);
         }
         return new Event(/** @type {Partial<Event>} */($$parsedSource));
     }

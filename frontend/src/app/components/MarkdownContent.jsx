@@ -1,4 +1,4 @@
-import { cloneElement, isValidElement, memo, useEffect, useMemo, useRef, useState } from "react";
+import { cloneElement, isValidElement, memo, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Browser, Clipboard } from "@wailsio/runtime";
 import { useTranslation } from "react-i18next";
 import { Check, CodeXml, Copy, TriangleAlert, WrapText } from "lucide-react";
@@ -7,6 +7,8 @@ import { defaultRemarkPlugins } from "streamdown";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { remarkSkillMentions } from "../skillMention.js";
+import { ConversationImage, ConversationImageContext } from "./ConversationImage.jsx";
+import { remarkConversationImages } from "../conversationImages.js";
 import { codeLanguageFromClassName, highlightCode } from "../syntaxHighlight.js";
 
 function SafeLink({ href = "", children, node: _node, ...props }) {
@@ -20,8 +22,10 @@ function SafeLink({ href = "", children, node: _node, ...props }) {
   return <a {...props} href={href} onClick={openExternal} target={external ? "_blank" : undefined} rel={external ? "noreferrer noopener" : undefined}>{children}</a>;
 }
 
-function ImagePlaceholder({ alt = "" }) {
+function ImagePlaceholder({ src = "", alt = "" }) {
   const { t } = useTranslation();
+  const runID = useContext(ConversationImageContext);
+  if (runID) return <ConversationImage key={src} src={src} alt={alt || "图片"} />;
   return <span className="markdown-image-placeholder">{t("markdown.image", { alt: alt ? `: ${alt}` : "" })}</span>;
 }
 
@@ -115,9 +119,11 @@ const LINK_SAFETY = { enabled: false };
 const REMARK_PLUGINS = [...Object.values(defaultRemarkPlugins), remarkSkillMentions];
 
 // Agent output is untrusted. Streamdown sanitizes and hardens its generated
-// tree by default; raw HTML stays disabled here, while images remain inert
-// placeholders so the desktop webview never fetches model-provided URLs.
+// tree by default; raw HTML stays disabled. Mobile conversations resolve images
+// before URL hardening; desktop images retain their existing placeholders.
 function MarkdownContent({ content, streaming = false, animateStreaming = true, className = "" }) {
+  const runID = useContext(ConversationImageContext);
+  const remarkPlugins = useMemo(() => runID ? [...REMARK_PLUGINS, [remarkConversationImages, { runID }]] : REMARK_PLUGINS, [runID]);
   const text = String(content || "");
   // A trailing newline is meaningful to the accumulated transcript, but while
   // streaming `white-space: pre-wrap` puts Streamdown's caret on a blank line.
@@ -134,7 +140,7 @@ function MarkdownContent({ content, streaming = false, animateStreaming = true, 
     lineNumbers={false}
     linkSafety={LINK_SAFETY}
     mode={streaming ? "streaming" : "static"}
-    remarkPlugins={REMARK_PLUGINS}
+    remarkPlugins={remarkPlugins}
     skipHtml
   >{renderedText}</Streamdown>;
 }

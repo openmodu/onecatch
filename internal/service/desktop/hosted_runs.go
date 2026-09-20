@@ -88,7 +88,7 @@ func hostedRunView(run domainworkflows.Run, task domaintasks.Task, active bool) 
 		status = "succeeded"
 	}
 	view := worker.SharedRun{ID: run.ID, ConversationID: task.ID, WorkerID: hostWorkerID(), WorkspaceID: task.WorkspaceID,
-		Runtime: agentrun.Runtime(task.Harness), Prompt: task.Prompt, Title: task.Title,
+		Runtime: agentrun.Runtime(task.Harness), Prompt: task.Prompt, Title: task.Title, Attachments: task.Attachments,
 		Status: status, Shared: true, UpdatedAt: run.UpdatedAt, StartedAt: run.StartedAt, Error: run.LastError}
 	if !active && !run.CompletedAt.IsZero() {
 		at := run.CompletedAt
@@ -179,7 +179,7 @@ func (h *hostedRuns) Get(ctx context.Context, id string, window worker.Transcrip
 		if !item.AppliedAt.IsZero() {
 			at = item.AppliedAt
 		}
-		view.Events = append(view.Events, agentrun.Event{Kind: "user_message", Text: item.Content, At: at})
+		view.Events = append(view.Events, agentrun.Event{Kind: "user_message", Text: item.Content, Attachments: item.Attachments, At: at})
 	}
 	sort.SliceStable(view.Events, func(i, j int) bool { return view.Events[i].At.Before(view.Events[j].At) })
 	// Opening a conversation on the phone ships the newest page rather than

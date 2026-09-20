@@ -224,6 +224,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/pair", s.pair)
 	mux.HandleFunc("GET /v1/health", s.authorize(s.health))
 	mux.HandleFunc("POST /v1/execute", s.authorize(s.execute))
+	mux.HandleFunc("GET /v1/shared-runs/{runID}/image", s.authorize(s.sharedImage))
 	for _, route := range []string{"GET /v1/shared-runs", "GET /v1/shared-runs/{runID}", "POST /v1/shared-runs", "POST /v1/shared-runs/import", "POST /v1/shared-runs/{runID}/interrupt", "POST /v1/shared-runs/{runID}/permissions/{requestID}",
 		"POST /v1/shared-runs/{runID}/queue", "DELETE /v1/shared-runs/{runID}/queue/{instructionID}",
 		"POST /v1/shared-conversations/{conversationID}/rename", "DELETE /v1/shared-conversations/{conversationID}"} {

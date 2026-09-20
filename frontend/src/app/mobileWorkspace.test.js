@@ -200,7 +200,7 @@ test("every message says when it happened", async () => {
   const css = await readFile(new URL("../mobile.css", import.meta.url), "utf8");
   assert.match(source, /function MessageTime\(\{ at \}\)/);
   assert.match(source, /<time className="mobile-message-time" dateTime=\{at\}>\{formatMessageTime\(at\)\}<\/time>/);
-  assert.match(source, /<UserMessage text=\{run\.prompt\} at=\{run\.startedAt\} \/>/);
+  assert.match(source, /<UserMessage text=\{run\.prompt\} at=\{run\.startedAt\}[^>]*\/>/);
   assert.match(source, /<AssistantMessage text=\{event\.text\} at=\{event\.at\}/);
   assert.match(source, /text=\{run\.result\.finalMessage\} at=\{run\.finishedAt\}/);
   // A stamp under a half-written reply would move with every chunk.

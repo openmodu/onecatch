@@ -11,23 +11,25 @@ import (
 	"time"
 	"unicode/utf8"
 
+	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 // SharedRun is a projection of the host's durable task record. Clients cache
 // it for offline viewing; only the host owns execution and history.
 type SharedRun struct {
-	ID             string           `json:"id"`
-	ConversationID string           `json:"conversationId"`
-	WorkerID       string           `json:"workerId"`
-	WorkspaceID    string           `json:"workspaceId"`
-	Runtime        agentrun.Runtime `json:"runtime"`
-	Prompt         string           `json:"prompt"`
-	Title          string           `json:"title,omitempty"`
-	TurnCount      int              `json:"turnCount,omitempty"`
-	Status         string           `json:"status"`
-	Shared         bool             `json:"shared,omitempty"`
-	Events         []agentrun.Event `json:"events,omitempty"`
+	Attachments    []domaintasks.Attachment `json:"attachments,omitempty"`
+	ID             string                   `json:"id"`
+	ConversationID string                   `json:"conversationId"`
+	WorkerID       string                   `json:"workerId"`
+	WorkspaceID    string                   `json:"workspaceId"`
+	Runtime        agentrun.Runtime         `json:"runtime"`
+	Prompt         string                   `json:"prompt"`
+	Title          string                   `json:"title,omitempty"`
+	TurnCount      int                      `json:"turnCount,omitempty"`
+	Status         string                   `json:"status"`
+	Shared         bool                     `json:"shared,omitempty"`
+	Events         []agentrun.Event         `json:"events,omitempty"`
 	// EventsTotal is the length of the whole transcript and EventsOffset the
 	// index Events starts at, so a phone that was handed the newest page can
 	// tell how much history is still on the host and ask for the page before.

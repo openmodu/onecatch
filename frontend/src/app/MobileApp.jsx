@@ -50,6 +50,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
+import { ConversationImageContext, MobileMessageAttachments } from "./components/ConversationImage.jsx";
 import MarkdownContent from "./components/MarkdownContent.jsx";
 import RuntimeHarnessIcon from "./components/RuntimeHarnessIcon.jsx";
 import MobileUsageBoard from "./MobileUsageBoard.jsx";
@@ -358,7 +359,7 @@ function MessageTime({ at }) {
 // A pasted log or a long brief should not push the reply it belongs to off the
 // screen. The desktop folds a tall prompt behind 显示更多; the phone, with far
 // less screen to give away, does the same.
-function UserMessage({ text, at }) {
+function UserMessage({ text, at, attachments = [] }) {
   const bodyRef = useRef(null);
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
@@ -373,12 +374,13 @@ function UserMessage({ text, at }) {
     observer.observe(body);
     return () => observer.disconnect();
   }, [expanded, text]);
-  if (!text) return null;
+  if (!text && !attachments.length) return null;
   return <article className="mobile-user-message" aria-label="你的消息">
     <div ref={bodyRef} className={`mobile-user-message-body ${expanded ? "is-expanded" : "is-collapsed"} ${overflowing ? "has-overflow" : ""}`}>{text}</div>
     {overflowing && <button type="button" className="mobile-message-disclosure" aria-expanded={expanded} onClick={() => setExpanded((value) => !value)}>
       <span>{expanded ? "收起" : "显示更多"}</span><ChevronDown className={expanded ? "is-expanded" : ""} aria-hidden="true" />
     </button>}
+    <MobileMessageAttachments attachments={attachments} />
     <MessageTime at={at} />
   </article>;
 }
@@ -466,8 +468,8 @@ const ConversationTurn = memo(function ConversationTurn({ run, notice = "", earl
   const blocks = groupMobileTranscriptEvents(visibleEvents);
   const visibleRun = { ...run, events: visibleEvents };
   const earlier = mobileEarlierEventCount(run);
-  return <section className="mobile-turn">
-    <UserMessage text={run.prompt} at={run.startedAt} />
+  return <ConversationImageContext.Provider value={run.id}><section className="mobile-turn">
+    <UserMessage text={run.prompt} at={run.startedAt} attachments={run.attachments} />
     {earlier > 0 && <button type="button" className="mobile-load-earlier" disabled={earlierBusy} onClick={() => onLoadEarlier?.(run.id)}>
       {earlierBusy ? <LoaderCircle className="animate-spin" /> : <ChevronUp />}载入更早的 {earlier} 条记录
     </button>}
@@ -475,14 +477,14 @@ const ConversationTurn = memo(function ConversationTurn({ run, notice = "", earl
       if (block.type === "tools") return <ToolGroup key={`tools-${block.events[0]?.streamId || index}`} events={block.events} active={run.status === "running" && index === blocks.length - 1} />;
       const event = block.event;
       return event.kind === "user_message"
-        ? <UserMessage key={`user-${index}`} text={event.text} at={event.at} />
+        ? <UserMessage key={`user-${index}`} text={event.text} at={event.at} attachments={event.attachments} />
         : <AgentEvent key={`${event.at || index}-${index}`} run={visibleRun} event={event} index={index} permissionBusy={permissionBusy} onRespond={onRespond} />;
     })}
     {run.status === "running" && !visibleEvents.some((event) => event.text) && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />正在连接远端 Agent…</div>}
     {notice && <div className="mobile-thinking"><LoaderCircle className="animate-spin" />{notice}</div>}
     {run.error && <div className="mobile-run-error"><CircleAlert />{run.error}</div>}
     {run.result?.finalMessage && !(run.events || []).some((event) => event.kind === "message" && event.text === run.result.finalMessage) && !visibleEvents.some((event) => event.kind === "message" && event.text === run.result.finalMessage) && <AssistantMessage text={run.result.finalMessage} at={run.finishedAt} />}
-  </section>;
+  </section></ConversationImageContext.Provider>;
 });
 
 function ConversationView({ conversation, workspace, snapshot, sharedRuns, prompt, setPrompt, pending, queuing, busy, permissionBusy, runtime, transcriptNotice, onOpenContext, onStart, onQueue, onDequeue, onInterrupt, onRespond, onLoadEarlier }) {

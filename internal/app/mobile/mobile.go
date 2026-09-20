@@ -1,6 +1,7 @@
 package mobile
 
 import (
+	"net/http"
 	"os"
 	"path/filepath"
 
@@ -46,6 +47,27 @@ func Run() {
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(desktopassets.Frontend),
+			Middleware: func(next http.Handler) http.Handler {
+				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if r.URL.Path != "/conversation-image" {
+						next.ServeHTTP(w, r)
+						return
+					}
+					if r.Method != http.MethodGet {
+						w.WriteHeader(http.StatusMethodNotAllowed)
+						return
+					}
+					data, mimeType, err := service.ReadConversationImage(r.Context(), r.URL.Query().Get("run"), r.URL.Query().Get("path"))
+					if err != nil {
+						http.NotFound(w, r)
+						return
+					}
+					w.Header().Set("Content-Type", mimeType)
+					w.Header().Set("Cache-Control", "private, no-cache")
+					w.Header().Set("X-Content-Type-Options", "nosniff")
+					_, _ = w.Write(data)
+				})
+			},
 		},
 		IOS: application.IOSOptions{
 			DisableInputAccessoryView: true,

@@ -2,6 +2,7 @@ package mobile
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"time"
 
@@ -227,7 +228,7 @@ func (s *Service) sweepStaleRunsLocked(workerID string, found map[string]bool, l
 
 func sameRunMetadata(left, right RunView) bool {
 	return left.ID == right.ID && left.ConversationID == right.ConversationID && left.WorkerID == right.WorkerID &&
-		left.WorkspaceID == right.WorkspaceID && left.Runtime == right.Runtime && left.Prompt == right.Prompt &&
+		slices.Equal(left.Attachments, right.Attachments) && left.WorkspaceID == right.WorkspaceID && left.Runtime == right.Runtime && left.Prompt == right.Prompt &&
 		left.Title == right.Title && left.TurnCount == right.TurnCount && left.Status == right.Status && left.Shared == right.Shared && left.Error == right.Error &&
 		left.StartedAt.Equal(right.StartedAt) && sameOptionalTime(left.FinishedAt, right.FinishedAt)
 }

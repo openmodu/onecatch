@@ -502,3 +502,14 @@ summary.mobile-tool-row:active { opacity: .65; }
   .mobile-status-dot.running { animation: none; }
   .mobile-drawer { animation: none; }
 }
+
+/* Photos stay within the message width; the dialog fits a phone in either orientation. */
+.mobile-message-attachments { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.conversation-inline-image { display: inline-block; max-width: 100%; padding: 0; border: 0; border-radius: 12px; overflow: hidden; background: transparent; cursor: zoom-in; vertical-align: middle; }
+.conversation-inline-image img { display: block; width: auto; max-width: 100%; max-height: 320px; object-fit: contain; }
+.mobile-message-attachments .conversation-inline-image { max-width: min(100%, 260px); }
+.conversation-image-error { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; overflow-wrap: anywhere; }
+.mobile-message-file { font-size: 12px; overflow-wrap: anywhere; }
+.conversation-image-dialog { max-width: min(95vw, 900px); }
+.conversation-image-dialog img { display: block; max-width: 100%; max-height: 75dvh; margin: auto; object-fit: contain; }
+.conversation-image-dialog p { overflow-wrap: anywhere; }

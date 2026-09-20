@@ -41,6 +41,14 @@ export class RuntimeEventFrame {
              */
             this["seq"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * Attachments holds managed file paths on a user follow-up.
+             * @member
+             * @type {string[] | undefined}
+             */
+            this["attachments"] = undefined;
+        }
         if (!("kind" in $$source)) {
             /**
              * @member
@@ -172,39 +180,44 @@ export class RuntimeEventFrame {
      * @returns {RuntimeEventFrame}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType1;
-        const $$createField11_0 = $$createType3;
-        const $$createField12_0 = $$createType5;
-        const $$createField14_0 = $$createType7;
-        const $$createField15_0 = $$createType9;
+        const $$createField3_0 = $$createType0;
+        const $$createField5_0 = $$createType2;
+        const $$createField12_0 = $$createType4;
+        const $$createField13_0 = $$createType6;
+        const $$createField15_0 = $$createType8;
+        const $$createField16_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("attachments" in $$parsedSource) {
+            $$parsedSource["attachments"] = $$createField3_0($$parsedSource["attachments"]);
+        }
         if ("usage" in $$parsedSource) {
-            $$parsedSource["usage"] = $$createField4_0($$parsedSource["usage"]);
+            $$parsedSource["usage"] = $$createField5_0($$parsedSource["usage"]);
         }
         if ("context" in $$parsedSource) {
-            $$parsedSource["context"] = $$createField11_0($$parsedSource["context"]);
+            $$parsedSource["context"] = $$createField12_0($$parsedSource["context"]);
         }
         if ("permission" in $$parsedSource) {
-            $$parsedSource["permission"] = $$createField12_0($$parsedSource["permission"]);
+            $$parsedSource["permission"] = $$createField13_0($$parsedSource["permission"]);
         }
         if ("userInput" in $$parsedSource) {
-            $$parsedSource["userInput"] = $$createField14_0($$parsedSource["userInput"]);
+            $$parsedSource["userInput"] = $$createField15_0($$parsedSource["userInput"]);
         }
         if ("userInputResponse" in $$parsedSource) {
-            $$parsedSource["userInputResponse"] = $$createField15_0($$parsedSource["userInputResponse"]);
+            $$parsedSource["userInputResponse"] = $$createField16_0($$parsedSource["userInputResponse"]);
         }
         return new RuntimeEventFrame(/** @type {Partial<RuntimeEventFrame>} */($$parsedSource));
     }
 }
 
 // Private type creation functions
-const $$createType0 = agentrun$0.Usage.createFrom;
-const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = agentrun$0.ContextUsage.createFrom;
-const $$createType3 = $Create.Nullable($$createType2);
-const $$createType4 = agentrun$0.PermissionRequest.createFrom;
-const $$createType5 = $Create.Nullable($$createType4);
-const $$createType6 = agentrun$0.UserInputRequest.createFrom;
-const $$createType7 = $Create.Nullable($$createType6);
-const $$createType8 = agentrun$0.UserInputResponse.createFrom;
-const $$createType9 = $Create.Nullable($$createType8);
+const $$createType0 = $Create.Array($Create.Any);
+const $$createType1 = agentrun$0.Usage.createFrom;
+const $$createType2 = $Create.Nullable($$createType1);
+const $$createType3 = agentrun$0.ContextUsage.createFrom;
+const $$createType4 = $Create.Nullable($$createType3);
+const $$createType5 = agentrun$0.PermissionRequest.createFrom;
+const $$createType6 = $Create.Nullable($$createType5);
+const $$createType7 = agentrun$0.UserInputRequest.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);
+const $$createType9 = agentrun$0.UserInputResponse.createFrom;
+const $$createType10 = $Create.Nullable($$createType9);

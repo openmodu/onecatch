@@ -170,7 +170,9 @@ const (
 // the original JSON line so nothing is lost, while Kind/Text give callers a
 // runtime-agnostic view suitable for display and persistence.
 type Event struct {
-	Kind EventKind `json:"kind"`
+	// Attachments holds managed file paths on a user follow-up.
+	Attachments []string  `json:"attachments,omitempty"`
+	Kind        EventKind `json:"kind"`
 	// Usage is the latest cumulative token accounting for this step. Runtimes
 	// that report usage before completion attach it to KindUsage so the desktop
 	// can update its metrics while the agent is still running.
