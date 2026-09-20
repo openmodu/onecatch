@@ -77,9 +77,13 @@ test("the paired machine is a switcher in the top bar", async () => {
   // one always, the rest while the switcher has them open. Polling every
   // paired machine forever is a phone's radio spent on nothing.
   assert.match(source, /const pollEveryWorker = workerSwitchOpen \|\| workersOpen;/);
-  const poll = source.match(/const poll = \(\) => \{\s*\n\s*void refreshWorker\(selectedWorkerID[\s\S]*?\n  \};/)[0];
-  assert.match(poll, /if \(!pollEveryWorker\) return;/);
-  assert.match(poll, /worker\.id !== selectedWorkerID/);
+  assert.match(source, /workerHealthPollKey\(workers, selectedWorkerID, pollEveryWorker\)/);
+  // A health response replaces worker objects; that must not restart the
+  // effect and immediately launch another request.
+  const poll = source.match(/useEffect\(\(\) => \{\s*const workerIDs = JSON\.parse\(healthPollKey\);[\s\S]*?\n  \}, \[healthPollKey, refreshWorker\]\);/)[0];
+  assert.match(poll, /document\.visibilityState === "hidden"/);
+  assert.match(poll, /for \(const id of workerIDs\) void refreshWorker\(id, true\)/);
+  assert.match(poll, /setInterval\(poll, 20000\)/);
 });
 
 // `files.length && <div/>` renders the number 0 when the list is empty, which

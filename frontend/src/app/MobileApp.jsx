@@ -60,6 +60,7 @@ import { errorMessage, formatDuration, formatMessageTime, formatTime, formatTool
 import { applyMobileRunFrames, conversationUsage, foldMobileEvents, mobileTranscriptEvents, groupMobileConversations, groupMobileTranscriptEvents, mergeMobileRun, mergeMobileRunSummaries, mobileEventSummary, mobileRunTitle, projectActivity } from "./mobileRuns.js";
 import { createFrameBatcher } from "./frameBatcher.js";
 import { createWorkspaceLoader } from "./mobileWorkspaceLoader.js";
+import { createWorkerHealthLoader, workerHealthPollKey } from "./mobileWorkerHealth.js";
 import { needsMobileRunDetail, mobileConversationID, mobileConversationTurnCount, mobileEarlierEventCount, mobileRunDetailRecord, mobileTranscriptNotice } from "./mobileRuns.js";
 import { useMobileBackGesture } from "./mobileBackGesture.js";
 import { useNativeChrome } from "./mobileChrome.js";
@@ -841,19 +842,23 @@ export default function MobileWorkbench() {
     return items || [];
   }, []);
 
+  const loadWorkerHealth = useMemo(() => createWorkerHealthLoader(
+    (id) => MobileBinding.CheckWorker(id),
+    (id, value) => {
+      if (value?.worker) setWorkers((current) => current.map((item) => item.id === id ? value.worker : item));
+      setHealthByID((current) => ({ ...current, [id]: value }));
+    },
+  ), []);
   const refreshWorker = useCallback(async (id, silent = false) => {
     if (!id) return null;
     try {
-      const value = await MobileBinding.CheckWorker(id);
-      if (value?.worker) setWorkers((current) => current.map((item) => item.id === id ? value.worker : item));
-      setHealthByID((current) => ({ ...current, [id]: value }));
-      return value;
+      return await loadWorkerHealth(id);
     } catch (error) {
       setHealthByID((current) => { const next = { ...current }; delete next[id]; return next; });
       if (!silent) notify("error", errorMessage(error));
       return null;
     }
-  }, [notify]);
+  }, [loadWorkerHealth, notify]);
 
   const fetchWorkspaces = useMemo(() => createWorkspaceLoader(
     (id) => MobileBinding.ListWorkspaces(id),
@@ -929,17 +934,24 @@ export default function MobileWorkbench() {
   // 20 seconds spends a phone's radio on screens nobody is looking at, so the
   // others are only checked while a switcher has them on screen.
   const pollEveryWorker = workerSwitchOpen || workersOpen;
+  const healthPollKey = workerHealthPollKey(workers, selectedWorkerID, pollEveryWorker);
   useEffect(() => {
-    if (!selectedWorkerID) return undefined;
+    const workerIDs = JSON.parse(healthPollKey);
+    if (!workerIDs.length) return undefined;
     const poll = () => {
-      void refreshWorker(selectedWorkerID, true);
-      if (!pollEveryWorker) return;
-      for (const worker of workers) if (worker.id !== selectedWorkerID) void refreshWorker(worker.id, true);
+      if (document.visibilityState === "hidden") return;
+      for (const id of workerIDs) void refreshWorker(id, true);
     };
     poll();
     const timer = window.setInterval(poll, 20000);
-    return () => window.clearInterval(timer);
-  }, [pollEveryWorker, refreshWorker, selectedWorkerID, workers]);
+    document.addEventListener("visibilitychange", poll);
+    window.addEventListener("online", poll);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", poll);
+      window.removeEventListener("online", poll);
+    };
+  }, [healthPollKey, refreshWorker]);
   useEffect(() => {
     if (view === "usage") void loadUsage(false);
   }, [loadUsage, view]);
