@@ -23,7 +23,7 @@ test("workspaces shared by the desktop are read-only on the phone", async () => 
   assert.match(source, /workspace\.shared && <p className="mobile-workspace-shared"/);
   assert.match(source, /\{!workspace\.shared && <Button[^>]*aria-label=\{`编辑/);
   // Pairing no longer starts with a terminal command on the remote machine.
-  assert.match(source, /设置 › 手机连接/);
+  assert.match(await readFile(new URL("./components/MobilePairSheet.jsx", import.meta.url), "utf8"), /设置 › 手机连接/);
 });
 
 // The project list is the first screen after connecting, so it stays a name

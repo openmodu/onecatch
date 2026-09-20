@@ -105,3 +105,52 @@ func resolveLAN(ctx context.Context, fingerprint string) ([]string, error) {
 		}
 	}
 }
+
+func browseLAN(parent context.Context) ([]Candidate, error) {
+	if err := parent.Err(); err != nil {
+		return nil, err
+	}
+	ctx, cancel := context.WithTimeout(parent, 4*time.Second)
+	defer cancel()
+	_, ifaces := lanInterfaces()
+	if len(ifaces) == 0 {
+		return nil, fmt.Errorf("no active LAN interface")
+	}
+	entries := make(chan *zeroconf.ServiceEntry, 32)
+	finished := make(chan error, 1)
+	go func() { finished <- zeroconf.Browse(ctx, Service, "local.", entries, zeroconf.SelectIfaces(ifaces)) }()
+	items := make(map[string]Candidate)
+	for {
+		select {
+		case <-ctx.Done():
+			if err := parent.Err(); err != nil {
+				return nil, err
+			}
+			return sortedCandidates(items), nil
+		case err := <-finished:
+			if err != nil && ctx.Err() == nil {
+				return nil, err
+			}
+			return sortedCandidates(items), parent.Err()
+		case entry, ok := <-entries:
+			if !ok {
+				return sortedCandidates(items), parent.Err()
+			}
+			if len(items) >= 32 {
+				continue
+			}
+			addresses := []string{}
+			for _, ip := range append(entry.AddrIPv4, entry.AddrIPv6...) {
+				if ip.IsLinkLocalUnicast() {
+					continue
+				}
+				if address := endpoint(ip.String(), entry.Port); address != "" {
+					addresses = append(addresses, address)
+				}
+			}
+			if len(addresses) > 0 {
+				items[entry.Instance] = candidate(entry.Instance, entry.HostName, addresses)
+			}
+		}
+	}
+}

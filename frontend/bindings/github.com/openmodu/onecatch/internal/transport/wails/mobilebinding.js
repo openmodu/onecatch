@@ -11,6 +11,9 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as workspaces$0 from "../../domain/workspaces/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as landiscovery$0 from "../../landiscovery/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as mobile$0 from "../../service/mobile/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -71,12 +74,22 @@ export function DequeueFollowUp(runID, instructionID) {
 }
 
 /**
+ * DiscoverWorkers lists nearby computers without pairing or saving credentials.
+ * @returns {$CancellablePromise<landiscovery$0.Candidate[]>}
+ */
+export function DiscoverWorkers() {
+    return $Call.ByID(2019708921).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType6($result);
+    }));
+}
+
+/**
  * @param {string} id
  * @returns {$CancellablePromise<mobile$0.RunView>}
  */
 export function GetRun(id) {
     return $Call.ByID(42850800, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType7($result);
     }));
 }
 
@@ -93,7 +106,7 @@ export function InterruptRun(id) {
  */
 export function ListRunSummaries() {
     return $Call.ByID(1625646554).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType8($result);
     }));
 }
 
@@ -102,7 +115,7 @@ export function ListRunSummaries() {
  */
 export function ListRuns() {
     return $Call.ByID(2751141287).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType8($result);
     }));
 }
 
@@ -111,7 +124,7 @@ export function ListRuns() {
  */
 export function ListWorkers() {
     return $Call.ByID(1285524968).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType8($result);
+        return $$createType10($result);
     }));
 }
 
@@ -121,7 +134,7 @@ export function ListWorkers() {
  */
 export function ListWorkspaces(workerID) {
     return $Call.ByID(2565852803, workerID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType10($result);
+        return $$createType12($result);
     }));
 }
 
@@ -132,7 +145,7 @@ export function ListWorkspaces(workerID) {
  */
 export function LoadEarlierRun(id) {
     return $Call.ByID(913933000, id).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType7($result);
     }));
 }
 
@@ -143,7 +156,7 @@ export function LoadEarlierRun(id) {
  */
 export function PairWorker(baseURL, code) {
     return $Call.ByID(1072201499, baseURL, code).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType7($result);
+        return $$createType9($result);
     }));
 }
 
@@ -155,7 +168,7 @@ export function PairWorker(baseURL, code) {
  */
 export function PrepareWorkspace(workerID, workspaceID, input) {
     return $Call.ByID(1084700857, workerID, workspaceID, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType11($result);
+        return $$createType13($result);
     }));
 }
 
@@ -177,7 +190,7 @@ export function QueueFollowUp(runID, prompt) {
  */
 export function RefreshRuns() {
     return $Call.ByID(3064858598).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType6($result);
+        return $$createType8($result);
     }));
 }
 
@@ -215,7 +228,7 @@ export function RespondPermission(input) {
  */
 export function StartRun(input) {
     return $Call.ByID(2117250808, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType5($result);
+        return $$createType7($result);
     }));
 }
 
@@ -226,7 +239,7 @@ export function StartRun(input) {
  */
 export function WorkspaceGitStatus(workerID, workspaceID) {
     return $Call.ByID(2980083104, workerID, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType12($result);
+        return $$createType14($result);
     }));
 }
 
@@ -236,11 +249,13 @@ const $$createType1 = $Create.Array($$createType0);
 const $$createType2 = mobile$0.WorkerStatus.createFrom;
 const $$createType3 = worker$0.QueuedInstruction.createFrom;
 const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = worker$0.SharedRun.createFrom;
+const $$createType5 = landiscovery$0.Candidate.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = worker$0.Info.createFrom;
+const $$createType7 = worker$0.SharedRun.createFrom;
 const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = worker$0.WorkspaceMapping.createFrom;
+const $$createType9 = worker$0.Info.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = worker$0.WorkspacePrepareResult.createFrom;
-const $$createType12 = workspaces$0.GitSnapshot.createFrom;
+const $$createType11 = worker$0.WorkspaceMapping.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = worker$0.WorkspacePrepareResult.createFrom;
+const $$createType14 = workspaces$0.GitSnapshot.createFrom;

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	"github.com/openmodu/onecatch/internal/landiscovery"
 	mobileservice "github.com/openmodu/onecatch/internal/service/mobile"
 	"github.com/openmodu/onecatch/internal/service/worker"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
@@ -104,4 +105,9 @@ func (b *MobileBinding) InterruptRun(id string) error {
 
 func (b *MobileBinding) RespondPermission(input mobileservice.PermissionDecisionInput) error {
 	return b.service.RespondPermission(context.Background(), input)
+}
+
+// DiscoverWorkers lists nearby computers without pairing or saving credentials.
+func (b *MobileBinding) DiscoverWorkers() ([]landiscovery.Candidate, error) {
+	return landiscovery.Browse(context.Background())
 }

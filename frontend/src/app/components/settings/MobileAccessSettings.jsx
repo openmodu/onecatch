@@ -89,6 +89,7 @@ export default function MobileAccessSettings({ mode, notify }) {
 
     {running && <SettingsSection title={t("settings.mobileAccessPairTitle")} description={t("settings.mobileAccessPairDescription")} contentClassName="p-4">
       <div className="grid gap-5">
+        <p className="m-0 text-sm leading-relaxed text-muted-foreground">{t("settings.mobileAccessDiscoveryHint")}</p>
         <div className="grid gap-2">
           <SettingsKicker>{t("settings.mobileAccessAddress")}</SettingsKicker>
           {addresses.length ? <div className="divide-y divide-border/65 overflow-hidden rounded-lg border border-border/70 bg-background/55">

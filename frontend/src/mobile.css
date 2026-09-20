@@ -513,3 +513,16 @@ summary.mobile-tool-row:active { opacity: .65; }
 .conversation-image-dialog { max-width: min(95vw, 900px); }
 .conversation-image-dialog img { display: block; max-width: 100%; max-height: 75dvh; margin: auto; object-fit: contain; }
 .conversation-image-dialog p { overflow-wrap: anywhere; }
+
+.mobile-discovery-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 13px; }
+.mobile-discovery-results { margin: 6px 0 16px; border: 1px solid var(--m-line); border-radius: 12px; overflow: hidden; }
+.mobile-discovery-results > p { display: flex; align-items: center; gap: 8px; margin: 0; padding: 14px; color: var(--muted-foreground); font-size: 12px; line-height: 1.7; }
+.mobile-discovery-results > p svg { flex-shrink: 0; }
+.mobile-discovered-worker { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px; border: 0; background: transparent; text-align: left; }
+.mobile-discovered-worker + .mobile-discovered-worker { border-top: 1px solid var(--m-line); }
+.mobile-discovered-worker[aria-pressed="true"] { background: var(--m-field); }
+.mobile-discovered-worker > svg { width: 18px; height: 18px; flex-shrink: 0; }
+.mobile-discovered-worker > span { display: grid; gap: 4px; min-width: 0; flex: 1; }
+.mobile-discovered-worker strong { font-size: 13px; overflow-wrap: anywhere; }
+.mobile-discovered-worker small { font-size: 11px; color: var(--muted-foreground); overflow-wrap: anywhere; }
+.mobile-pair-manual-toggle { justify-self: start; padding: 0; border: 0; background: transparent; color: var(--muted-foreground); font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }

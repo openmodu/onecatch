@@ -51,6 +51,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { MobileBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { ConversationImageContext, MobileMessageAttachments } from "./components/ConversationImage.jsx";
+import PairSheet from "./components/MobilePairSheet.jsx";
 import MarkdownContent from "./components/MarkdownContent.jsx";
 import RuntimeHarnessIcon from "./components/RuntimeHarnessIcon.jsx";
 import MobileUsageBoard from "./MobileUsageBoard.jsx";
@@ -139,32 +140,13 @@ function StatusDot({ online, running = false }) {
   return <span className={`mobile-status-dot ${online ? "online" : ""} ${running ? "running" : ""}`} aria-hidden="true" />;
 }
 
-function PairSheet({ open, busy, initialURL = "https://", onClose, onPair }) {
-  const [baseURL, setBaseURL] = useState(initialURL || "https://");
-  const [code, setCode] = useState("");
-  useEffect(() => { if (open) setBaseURL(initialURL || "https://"); }, [initialURL, open]);
-  if (!open) return null;
-  return <div className="mobile-sheet-backdrop" role="presentation" onPointerDown={(event) => event.target === event.currentTarget && !busy && onClose()}>
-    <section className="mobile-sheet" role="dialog" aria-modal="true" aria-labelledby="pair-title">
-      <div className="mobile-sheet-handle" />
-      <header><div><small>安全配对</small><h2 id="pair-title">连接远端 Worker</h2></div><button type="button" className="mobile-icon-button" aria-label="关闭" disabled={busy} onClick={onClose}><X /></button></header>
-      <p className="mobile-sheet-copy">在电脑的 OneCatch 里打开「设置 › 手机连接」，开启后生成配对码；独立部署的 Worker 则执行 <code>onecatch worker --pair</code>。配对码 10 分钟内有效且只能用一次。</p>
-      <form onSubmit={(event) => { event.preventDefault(); void onPair({ baseURL, code }).then((ok) => { if (ok) { setCode(""); onClose(); } }); }}>
-        <label><span>Worker 地址</span><Input value={baseURL} inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="https://192.168.1.20:9231" onChange={(event) => setBaseURL(event.target.value)} /></label>
-        <label><span>一次性配对码</span><Input value={code} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="例如 ABCD-EFGH" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
-		<Button className="mobile-main-action" type="submit" disabled={busy || !baseURL.trim() || !code.trim()}>{busy ? <><LoaderCircle className="animate-spin" />正在连接</> : <><Link2 />连接 Worker</>}</Button>
-      </form>
-      <p className="mobile-security-note">首次 HTTPS 配对会固定电脑证书。配对后，同一局域网内 IP 变化会自动查找新地址，无需重复配对；请允许本地网络访问。</p>
-    </section>
-  </div>;
-}
 
 function EmptyConnection({ onPair }) {
   return <section className="mobile-empty-state">
     <span className="mobile-empty-symbol"><Cloud /></span>
     <h2>连接你的开发机</h2>
     <p>iPhone 只作为工作台。代码、Git 和 Agent 都在远端 Worker 上运行。</p>
-	<Button className="mobile-main-action" onClick={onPair}><Link2 />连接 Worker</Button>
+	<Button className="mobile-main-action" onClick={onPair}><Link2 />连接电脑</Button>
   </section>;
 }
 
@@ -645,7 +627,7 @@ function MoreMenu({ open, health, onWorkspaces, onWorkers, onPair, onSettings, o
       <small>管理</small>
 	  <button type="button" onClick={() => { onWorkspaces(); onClose(); }}><span /><FolderGit2 />Workspace 管理</button>
       <button type="button" onClick={() => { onWorkers(); onClose(); }}><span /><Cloud />Worker 管理</button>
-      <button type="button" onClick={() => { onPair(); onClose(); }}><span /><Link2 />添加连接</button>
+      <button type="button" onClick={() => { onPair(); onClose(); }}><span /><Link2 />添加电脑</button>
       <button type="button" onClick={() => { onSettings(); onClose(); }}><span /><Settings2 />运行设置</button>
       <hr />
       <div className="mobile-menu-status"><small>当前连接</small><strong><StatusDot online={Boolean(health)} />{health?.worker?.name || "远端 Worker"}</strong><span>{health ? `${health.latencyMilliseconds}ms · ${RUNTIMES.filter((item) => health.health?.runtimes?.[item.id]).map((item) => item.label).join(" · ") || "无可用运行时"}` : "离线"}</span></div>
@@ -685,7 +667,7 @@ function WorkersSheet({ open, workers, selectedWorkerID, healthByID, busy, onClo
           <footer>{worker.id === selectedWorkerID ? <Button className="mobile-row-action" variant="ghost" size="sm" disabled><Check />当前</Button> : <Button className="mobile-row-action" variant="ghost" size="sm" disabled={busy} onClick={() => { onSelect(worker.id); onClose(); }}>切换到这台</Button>}<Button className="mobile-row-action" variant="ghost" size="sm" disabled={busy} onClick={() => onRefresh(worker.id)}><RefreshCw />检查</Button><Button className="mobile-row-action" variant="ghost" size="sm" disabled={busy} onClick={() => onPair(worker)}><Link2 />重新配对</Button><Button className="mobile-row-action" variant="ghost" size="icon-sm" aria-label={`删除 ${workerLabel(worker)}`} disabled={busy} onClick={() => onDelete(worker)}><Trash2 /></Button></footer>
         </article>;
       })}</div>
-	  <Button className="mobile-main-action" onClick={() => onPair(null)}><Plus />添加 Worker</Button>
+	  <Button className="mobile-main-action" onClick={() => onPair(null)}><Plus />添加电脑</Button>
     </section>
   </div>;
 }

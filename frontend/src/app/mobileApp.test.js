@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const sources = [new URL("./MobileApp.jsx", import.meta.url), new URL("./MobileUsageBoard.jsx", import.meta.url)];
+const sources = [new URL("./MobileApp.jsx", import.meta.url), new URL("./MobileUsageBoard.jsx", import.meta.url), new URL("./components/MobilePairSheet.jsx", import.meta.url)];
 
 // A component or hook that is used but never imported compiles cleanly and
 // blanks the whole app at runtime — twice now. The suite cannot mount the

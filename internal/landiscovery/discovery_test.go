@@ -80,3 +80,34 @@ func randomFingerprint(t *testing.T) string {
 	}
 	return hex.EncodeToString(raw[:])
 }
+
+func TestBrowseCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := Browse(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("got %v", err)
+	}
+}
+
+func TestBrowseLAN(t *testing.T) {
+	if os.Getenv("ONECATCH_TEST_MDNS") != "1" {
+		t.Skip("requires LAN multicast")
+	}
+	pin := randomFingerprint(t)
+	stop, err := Advertise(pin, 19233)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer stop()
+	items, err := Browse(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance, _ := Instance(pin)
+	for _, item := range items {
+		if item.ID == instance && item.Name != "" && len(item.Addresses) > 0 {
+			return
+		}
+	}
+	t.Fatalf("advertised service was not discovered: %+v", items)
+}
