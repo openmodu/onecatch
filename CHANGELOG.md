@@ -3,6 +3,13 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.3.2
+
+- Keep mobile project lists responsive when a workspace is busy or its Git metadata cannot be read. Limit metadata lookup time and preserve plain directories and projects on computers without Git.
+- Defer automatic Git status checks until a conversation opens, ignore results after navigating away, and show project refresh errors when pulling to refresh.
+- Prevent continuous mobile connection-latency polling.
+- Update both the desktop host and mobile client to receive all fixes.
+
 ## 0.3.1
 
 - Display uploaded images and follow-up attachments in mobile conversations, with thumbnails, tap-to-enlarge previews, and retry controls for failed loads.

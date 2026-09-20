@@ -390,3 +390,39 @@ func TestSyncKeepsARunStartedWhileItWasListing(t *testing.T) {
 		t.Fatal("the sweep deleted another worker's run")
 	}
 }
+
+func TestListSharedNonGitWorkspace(t *testing.T) {
+	for _, missingGit := range []bool{false, true} {
+		t.Run(fmt.Sprintf("missingGit=%v", missingGit), func(t *testing.T) {
+			if missingGit {
+				t.Setenv("PATH", t.TempDir())
+			}
+			project := t.TempDir()
+			server := worker.NewServer("desktop", "Desktop", "secret", nil, &mobileTestEngine{}, 1)
+			server.SetSharedWorkspaces([]worker.SharedWorkspace{{Mapping: worker.WorkspaceMapping{ID: "plain", Name: "Plain directory", Path: project}}})
+			server.SetGitInspector(gitrepo.New(""))
+			server.EnablePairing("PAIR1234", time.Now().Add(time.Minute), true)
+			httpServer := httptest.NewServer(server.Handler())
+			defer httpServer.Close()
+			service, err := NewService(t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer service.Close()
+			paired, err := service.PairWorker(context.Background(), httpServer.URL, "PAIR1234")
+			if err != nil {
+				t.Fatal(err)
+			}
+			items, err := service.ListWorkspaces(context.Background(), paired.ID)
+			if err != nil || len(items) != 1 || items[0].ID != "plain" || !items[0].Shared {
+				t.Fatalf("non-Git project must remain visible: items=%+v, err=%v", items, err)
+			}
+			if !missingGit {
+				snapshot, err := service.WorkspaceGitStatus(context.Background(), paired.ID, "plain")
+				if err != nil || snapshot.IsRepo {
+					t.Fatalf("non-Git status=%+v, err=%v", snapshot, err)
+				}
+			}
+		})
+	}
+}

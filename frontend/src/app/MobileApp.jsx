@@ -900,7 +900,7 @@ export default function MobileWorkbench() {
     if (!selectedWorkerID) return;
     await Promise.all([
       refreshWorker(selectedWorkerID, true),
-      loadWorkspaces(selectedWorkerID, true),
+      loadWorkspaces(selectedWorkerID),
       MobileBinding.RefreshRuns().then((items) => setRuns((current) => mergeMobileRunSummaries(current, items || []))).catch(() => {}),
     ]);
   }, [loadWorkspaces, refreshWorker, selectedWorkerID]);
@@ -960,10 +960,16 @@ export default function MobileWorkbench() {
 	  for (const workspace of workspaces) void refreshWorkspace(workspace);
 	}, [refreshWorkspace, view, workspaces]);
   useEffect(() => {
-    if (!selectedWorkerID || !workspaceID) { setSnapshot(null); return; }
     setSnapshot(null);
-    void MobileBinding.WorkspaceGitStatus(selectedWorkerID, workspaceID).then(setSnapshot).catch((error) => { setSnapshot(null); notify("error", errorMessage(error)); });
-  }, [notify, selectedWorkerID, workspaceID]);
+    if (view !== "conversation" || !selectedWorkerID || !workspaceID) return;
+    let active = true;
+    void MobileBinding.WorkspaceGitStatus(selectedWorkerID, workspaceID).then((value) => {
+      if (active) setSnapshot(value);
+    }).catch((error) => {
+      if (active) notify("error", errorMessage(error));
+    });
+    return () => { active = false; };
+  }, [notify, selectedWorkerID, view, workspaceID]);
   useEffect(() => {
     const available = selectedHealth?.health?.runtimes || {};
     if (available[runtime]) return;

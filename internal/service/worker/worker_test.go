@@ -554,3 +554,42 @@ func TestTranscriptWindowTrimsOversizedToolOutput(t *testing.T) {
 		}
 	}
 }
+
+// A disconnected SSH project must not hide every other project on the phone.
+type stalledWorkspaceGit struct{}
+
+func (stalledWorkspaceGit) Output(ctx context.Context, _ string, _ ...string) ([]byte, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestListWorkspacesSurvivesUnavailableMetadata(t *testing.T) {
+	server := NewServer("desktop", "Desktop", "secret", nil, fakeEngine{}, 1)
+	server.SetSharedWorkspaces([]SharedWorkspace{
+		{Mapping: WorkspaceMapping{ID: "unreachable", Path: t.TempDir()}, Git: stalledWorkspaceGit{}},
+		{Mapping: WorkspaceMapping{ID: "available", Path: t.TempDir(), RemoteURL: "https://example.com/repo", Revision: "abc"}},
+	})
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	items, err := NewClient().ListWorkspaces(ctx, Config{BaseURL: httpServer.URL, Token: "secret"})
+	if err != nil || len(items) != 2 {
+		t.Fatalf("list must survive stalled metadata: items=%+v, err=%v", items, err)
+	}
+}
+
+func TestListWorkspacesSkipsBusyWorkspaceMetadata(t *testing.T) {
+	server := NewServer("desktop", "Desktop", "secret", map[string]string{"busy": t.TempDir()}, fakeEngine{}, 1)
+	_, lock, _ := server.workspaceState("busy")
+	lock.Lock()
+	defer lock.Unlock()
+	httpServer := httptest.NewServer(server.Handler())
+	defer httpServer.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	items, err := NewClient().ListWorkspaces(ctx, Config{BaseURL: httpServer.URL, Token: "secret"})
+	if err != nil || len(items) != 1 || items[0].ID != "busy" {
+		t.Fatalf("list must survive busy workspace: items=%+v, err=%v", items, err)
+	}
+}

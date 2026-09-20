@@ -318,7 +318,14 @@ func (s *Server) listWorkspaces(writer http.ResponseWriter, request *http.Reques
 		items = append(items, mapping)
 	}
 	s.workspacesMu.RUnlock()
+	// Git metadata is optional: a busy or unreachable project must not block
+	// the entire list. Share one budget across all projects.
+	metadataCtx, cancelMetadata := context.WithTimeout(request.Context(), 2*time.Second)
+	defer cancelMetadata()
 	for index := range items {
+		if metadataCtx.Err() != nil {
+			break
+		}
 		if items[index].RemoteURL != "" && items[index].Revision != "" {
 			continue
 		}
@@ -326,8 +333,10 @@ func (s *Server) listWorkspaces(writer http.ResponseWriter, request *http.Reques
 		if !ok {
 			continue
 		}
-		workspaceLock.RLock()
-		remoteURL, revision := workspaceIdentity(request.Context(), s.workspaceGitRunner(items[index].ID), items[index].Path)
+		if !workspaceLock.TryRLock() {
+			continue
+		}
+		remoteURL, revision := workspaceIdentity(metadataCtx, s.workspaceGitRunner(items[index].ID), items[index].Path)
 		workspaceLock.RUnlock()
 		if items[index].RemoteURL == "" {
 			items[index].RemoteURL = remoteURL
