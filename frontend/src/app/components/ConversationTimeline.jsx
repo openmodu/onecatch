@@ -129,23 +129,30 @@ function toolIcon(entry) {
   return Wrench;
 }
 
-function toolDuration(entry, running) {
+function toolDuration(entry, running, now) {
   if (entry.kind !== "tool_use" || !entry.at) return "";
   const startedAt = new Date(entry.at).getTime();
   const finishedAt = new Date(entry.finishedAt || 0).getTime();
   if (!Number.isFinite(startedAt)) return "";
-  const end = Number.isFinite(finishedAt) && finishedAt ? finishedAt : running ? Date.now() : 0;
+  const end = Number.isFinite(finishedAt) && finishedAt ? finishedAt : running ? now : 0;
   return end ? formatDuration(Math.max(0, end - startedAt)) : "";
 }
 
 function ToolTimelineItem({ entry, running, stalled }) {
   const { t } = useTranslation();
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!running) return undefined;
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
   const labels = { tool_use: t("timeline.toolUse"), tool_result: t("timeline.result"), file_change: t("timeline.fileChange") };
   const failed = Boolean(entry.failed);
   const state = failed ? t("timeline.failed") : running ? t("timeline.executing") : stalled ? t("timeline.incomplete") : t("timeline.done");
   const ToolIcon = toolIcon(entry);
   const StateIcon = failed ? TriangleAlert : running ? LoaderCircle : stalled ? Clock3 : Check;
-  const duration = toolDuration(entry, running);
+  const duration = toolDuration(entry, running, now);
   return <details className={`conversation-tool kind-${entry.kind} ${running ? "running" : ""} ${failed ? "failed" : ""} ${stalled ? "stalled" : ""}`}>
     <summary aria-label={`${labels[entry.kind] || entry.kind}: ${entry.title}`}><span className="conversation-tool-summary"><span className="conversation-tool-icon"><ToolIcon aria-hidden="true" /></span><span className="conversation-tool-heading"><strong title={entry.title}>{entry.title}</strong><span className="conversation-tool-meta"><time dateTime={entry.at || undefined} title={formatDateTime(entry.at)}>{formatToolTime(entry.at)}</time>{duration && <><span aria-hidden="true">·</span><span title={t("timeline.toolDuration", { duration })}>{duration}</span></>}</span></span><span className="conversation-tool-state" title={state} role="status" aria-label={state}><StateIcon className={running ? "conversation-tool-state-icon spinning" : "conversation-tool-state-icon"} aria-hidden="true" /></span><span className="conversation-tool-caret"><ChevronRight className="closed" strokeWidth={2.25} /><ChevronDown className="opened" strokeWidth={2.25} /></span></span></summary>
     <div className="conversation-tool-body"><div><span>{entry.kind === "file_change" ? t("timeline.path") : t("timeline.command")}</span><pre>{entry.text}</pre></div>{entry.details.map((detail, index) => <div key={`${detail.kind}-${index}`}><span>{labels[detail.kind] || detail.kind}</span><pre>{detail.text}</pre></div>)}</div>
@@ -246,7 +253,7 @@ function ProcessGroup({ entries, active, round, permissionBusy, userInputBusy, o
         return <UserInputTimelineItem key={entry.id} entry={entry} busy={userInputBusy === entry.request?.id} onRespond={onUserInputResponse} time={timeLabel(entry.at)} />;
       }
       if (entry.kind === "reasoning") return <ThoughtTimelineItem key={entry.id || `thought-${index}`} entry={entry} />;
-      const running = Boolean(active) && entry === lastEntry && entry.kind === "tool_use";
+      const running = Boolean(active) && entry === lastEntry && entry.kind === "tool_use" && !entry.settled && !entry.failed;
       const stalled = !entry.settled && !running && round.status !== "succeeded";
       return <ToolTimelineItem key={entry.id || `tool-${index}`} entry={entry} running={running} stalled={stalled} />;
     })}</div>
