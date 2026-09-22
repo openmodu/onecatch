@@ -301,6 +301,7 @@ function TaskWorkbench({ composerDrafts, mode, workspace, workspaceID, terminalP
     <section className="conversation-workspace flex min-h-0 min-w-0 flex-col bg-background">
       {alternateContent || (newTaskOpen ? <NewTaskView
         workspaceID={workspaceID}
+        getActionSelection={() => terminalDockRef.current?.getSelection() || ""}
         workflows={workflows}
         runtimes={runtimes}
         form={taskForm}
@@ -335,6 +336,8 @@ function TaskWorkbench({ composerDrafts, mode, workspace, workspaceID, terminalP
           composerDrafts={composerDrafts}
           workspaceID={workspaceID}
           sessionID={selectedRunID}
+          taskTitle={selectedTask?.title || ""}
+          getActionSelection={() => terminalDockRef.current?.getSelection() || ""}
           contextWindow={summarizeContextWindow(runDetail.stepRuns, (activeRuntimeProfile || continuationRuntimeProfile)?.harness)}
           runStatus={runStatus}
           active={runDetail.active}

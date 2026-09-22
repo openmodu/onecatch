@@ -1,3 +1,5 @@
+import PromptActions from "./PromptQuickPicker.jsx";
+import { appendPrompt } from "../promptActions.js";
 import { draftKey } from "../composerDrafts.js";
 import { useComposerDraft } from "../useComposerDraft.js";
 import { useLayoutEffect, useRef } from "react";
@@ -24,6 +26,8 @@ import ComposerAttachmentPreview from "./AttachmentPreview.jsx";
 export default function Composer({
   composerDrafts,
   workspaceID,
+  getActionSelection,
+  taskTitle,
   sessionID,
   runStatus,
   active,
@@ -105,6 +109,7 @@ export default function Composer({
         <div className="workbench-composer-input"><div className={`codex-skill-field ${skillHighlight ? "has-skill-highlight" : ""}`.trim()}><SkillTextarea ref={draftRef} highlight={skillHighlight} aria-label={t("composer.aria")} value={draft} disabled={!editable} onPaste={onPasteImages} onCompositionStart={() => { composing.current = true; }} onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }} placeholder={runStatus === "running" ? t("composer.runningPlaceholder") : runStatus === "paused" ? t("composer.pausedPlaceholder") : runStatus === "completed" ? t("composer.continuePlaceholder") : t("composer.finishedPlaceholder")} {...skillPicker.inputProps} />{skillPicker.menu}</div></div>
         <div className={`workbench-composer-actions ${showRuntimeProfile ? "profile-visible" : ""}`.trim()}>
           {onChooseAttachments && <Button type="button" variant="ghost" size="icon-sm" className="attachment-action" disabled={!editable} aria-label={t("composer.attachment")} title={t("composer.attachment")} onClick={onChooseAttachments}><Paperclip size={16} aria-hidden="true" /></Button>}
+          <PromptActions workspace={workspace} taskTitle={taskTitle} getSelection={getActionSelection} disabled={!editable} onInsert={(prompt) => { setDraft((current) => appendPrompt(current, prompt)); requestAnimationFrame(() => draftRef.current?.focus()); }} />
           {runtimeProfile && <div className="workbench-runtime-controls">
             {directAgent ? <HarnessSelector value={runtimeProfile} runtimes={runtimes} readOnly agentLabel /> : <span className="new-task-select executor is-read-only" aria-label={t("task.workflowTargetLabel", { name: workflowLabel })}><Workflow size={14} aria-hidden="true" /><span>{workflowLabel}</span></span>}
             <TaskPermissionSelector value={permission} readOnly />

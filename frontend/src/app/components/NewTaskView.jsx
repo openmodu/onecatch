@@ -1,3 +1,5 @@
+import PromptActions from "./PromptQuickPicker.jsx";
+import { appendPrompt } from "../promptActions.js";
 import { useLayoutEffect, useRef } from "react";
 import { ArrowUp, ListPlus, Paperclip, Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -26,6 +28,7 @@ import WorkspaceComposerMeta from "./WorkspaceComposerMeta.jsx";
 
 export default function NewTaskView({
   workspaceID,
+  getActionSelection,
   workflows,
   form,
   busy,
@@ -133,6 +136,7 @@ export default function NewTaskView({
                 </DropdownMenuRadioGroup>
               </DropdownMenuContent>
             </DropdownMenu>
+            <PromptActions key={workspaceID} workspace={workspace} getSelection={getActionSelection} disabled={busy === "run"} onInsert={(prompt) => { onChange((current) => ({ ...current, prompt: appendPrompt(current.prompt, prompt) })); requestAnimationFrame(() => promptRef.current?.focus()); }} />
             <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} runtimeSettings={runtimeSettingsByHarness} remoteFS={remoteFS} onChange={onChange} />
             <TaskPermissionSelector value={form.sandbox} allowFull={allowFullSandbox} onChange={onChange} />
             {showRuntimeProfile && <RuntimeProfileMenu

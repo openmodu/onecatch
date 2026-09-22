@@ -125,7 +125,7 @@ const TerminalDock = forwardRef(function TerminalDock({ mode, workspace, prefere
     void createTab();
   }, [createTab, focusActive, open]);
 
-  useImperativeHandle(ref, () => ({ open: createTab, newTab: createTab, toggle: toggleDock }), [createTab, toggleDock]);
+  useImperativeHandle(ref, () => ({ open: createTab, newTab: createTab, toggle: toggleDock, getSelection: () => open ? runtimeRef.current.get(focusedRef.current || activeRef.current)?.terminal.getSelection() || "" : "" }), [createTab, toggleDock, open]);
 
   useEffect(() => { onVisibilityChange?.(open); }, [onVisibilityChange, open]);
   useEffect(() => () => onVisibilityChange?.(false), [onVisibilityChange]);

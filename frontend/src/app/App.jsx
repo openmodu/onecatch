@@ -1,3 +1,4 @@
+import { appendPrompt, capturePromptSelection } from "./promptActions.js";
 import { createComposerDrafts, draftKey } from "./composerDrafts.js";
 import { useComposerDraft } from "./useComposerDraft.js";
 import { withWorkspaceActivity } from "./activityOrder.js";
@@ -43,6 +44,7 @@ import Modal from "./components/Modal.jsx";
 // workflow editor into the first load the user waits through.
 const SettingsPage = lazy(() => import("./SettingsPage.jsx"));
 const SkillManagerPage = lazy(() => import("./SkillManagerPage.jsx"));
+const TemplateManagerPage = lazy(() => import("./TemplateManagerPage.jsx"));
 const UsagePage = lazy(() => import("./UsagePage.jsx"));
 const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary.jsx"));
 const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
@@ -168,6 +170,7 @@ function App() {
   const { t, i18n } = useTranslation();
   const [mode, setMode] = useState("loading");
   const [view, setView] = useState("tasks");
+  const [templateContext, setTemplateContext] = useState({ selection: "", date: "" });
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [terminalVisible, setTerminalVisible] = useState(false);
@@ -1396,7 +1399,8 @@ function App() {
 
   const sidebarWorkspaces = useMemo(() => workspaceResults(workspaces, { query: "", expanded: workspaceExpanded, activities: runItems }), [workspaceExpanded, workspaces, runItems]);
   const goView = useCallback((next) => {
-    if (next !== "tasks") setTaskModal(false);
+    if (next === "templates") setTemplateContext({ selection: capturePromptSelection(document), date: new Date().toLocaleDateString() });
+    if (next !== "tasks" && next !== "templates") setTaskModal(false);
     if (next === "settings" || next === "workflows") {
       if (mode === "wails") {
         const open = next === "settings" ? WindowBinding.OpenSettings() : WindowBinding.OpenWorkflows();
@@ -1477,6 +1481,8 @@ function App() {
   // real filesystem path and keeps the mono face.
   const location = view === "settings"
     ? { label: t("sidebar.settings"), path: "~/.onecatch" }
+    : view === "templates"
+      ? { label: t("sidebar.templates"), path: "" }
     : view === "usage"
       ? { label: t("usage.title"), path: "" }
     : view === "skills"
@@ -1487,6 +1493,18 @@ function App() {
   const commandText = location.path ? `${location.label} · ${location.path}` : location.label;
   const selectedTask = runDetail?.task || tasks.find((task) => task.id === selectedQueuedTaskID);
   const selectedTaskStatus = runDetail?.run?.status || selectedTask?.status;
+  const templateUsesConversation = !taskModal && Boolean(selectedRunID && runDetail) && ["running", "paused", "completed"].includes(runDetail?.run?.status);
+  const insertTemplatePrompt = (prompt) => {
+    if (!workspaceID) return;
+    if (templateUsesConversation) {
+      composerDrafts.set(draftKey(workspaceID, selectedRunID, "text"), (current) => appendPrompt(current, prompt), "");
+      setTaskModal(false);
+    } else {
+      setTaskForm((current) => ({ ...current, prompt: appendPrompt(current.prompt, prompt) }));
+      setTaskModal(true);
+    }
+    setView("tasks");
+  };
   const taskCreateVisible = view === "tasks" && !editor && (taskModal || !selectedTask);
   const taskTitleVisible = view === "tasks" && !editor && !taskModal && selectedTask;
 
@@ -1583,7 +1601,7 @@ function App() {
       taskStatus={selectedTaskStatus}
       taskActive={runDetail?.active}
       showTaskStatus={Boolean(taskTitleVisible && selectedTask.workflowId && selectedTask.workflowId !== directAgentWorkflowID)}
-      showLock={view !== "skills" && view !== "usage"}
+      showLock={view !== "skills" && view !== "usage" && view !== "templates"}
       showWorkbenchControls={!editor && (view === "tasks" || view === "skills")}
       terminalVisible={terminalVisible}
       inspectorCollapsed={activeInspectorCollapsed}
@@ -1661,7 +1679,7 @@ function App() {
             <strong className="shrink-0 text-[13px] font-semibold text-foreground">{location.label}</strong>
             {location.path && <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">{location.path}</span>}
           </span>}
-          {view !== "skills" && view !== "usage" && <button type="button" className="no-drag relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
+          {view !== "skills" && view !== "usage" && view !== "templates" && <button type="button" className="no-drag relative inline-flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground" aria-label={t("lock.enter")} title={`${t("lock.enter")} · ⌘L`} onClick={enterLock}>
             <Lock size={13} strokeWidth={2.5} aria-hidden="true" />
             {lockSignal.active > 0 && <em className="absolute -top-0.5 -right-0.5 grid h-3.5 min-w-3.5 place-items-center rounded-full bg-primary px-1 text-[10px] font-bold not-italic text-primary-foreground">{lockSignal.active}</em>}
           </button>}
@@ -1726,7 +1744,13 @@ function App() {
           onPermissionDecision={respondPermission}
           onUserInputResponse={respondUserInput}
           notify={notify}
-        /> : view === "usage" ? <Suspense fallback={<ViewLoading />}><UsagePage mode={mode} runtimes={runtimes} /></Suspense> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
+        /> : view === "templates" ? <Suspense fallback={<ViewLoading />}><TemplateManagerPage
+          key={`${workspaceID}:${templateUsesConversation ? selectedRunID : "new"}`}
+          context={{ ...templateContext, project: selectedWorkspace?.name || "", path: selectedWorkspace?.remoteFs?.root || selectedWorkspace?.path || "", task: templateUsesConversation ? selectedTask?.title || "" : "" }}
+          canInsert={Boolean(selectedWorkspace)}
+          targetLabel={templateUsesConversation ? selectedTask?.title || "" : t("task.createTitle")}
+          onInsert={insertTemplatePrompt}
+        /></Suspense> : view === "usage" ? <Suspense fallback={<ViewLoading />}><UsagePage mode={mode} runtimes={runtimes} /></Suspense> : view === "workflows" ? <Suspense fallback={<ViewLoading />}><WorkflowLibrary workflows={workflows} runtimes={runtimes} openEditor={openEditor} deleteWorkflow={deleteWorkflow} busy={busy} /></Suspense> : <Suspense fallback={<ViewLoading />}><SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={setSettings} notify={notify} /></Suspense>}
       </main>
     </div>
     {workspaceModal && <Modal className="workspace-create-dialog max-h-[calc(100vh-2rem)] gap-0 overflow-y-auto p-0 sm:max-w-[480px]" title={t(workspaceEditingID ? "workspace.editTitle" : "workspace.addTitle")} subtitle={t(workspaceEditingID ? "workspace.editSubtitle" : "workspace.addSubtitle")} onClose={() => { if (busy !== "workspace") { setWorkspaceForm((form) => ({ ...form, remotePassword: "" })); setWorkspaceEditingID(""); setWorkspaceModal(false); } }}>
