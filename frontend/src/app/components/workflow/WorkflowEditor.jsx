@@ -14,13 +14,18 @@ import { assignWorkflowWorker, isRemoteWorker } from "../../workflowWorker.js";
 import { enabledRuntimeInfos } from "../../runtimeHarnesses.js";
 import { SettingsField, SettingsSelect } from "../settings/SettingsControls.jsx";
 import DAGWorkflowEditor from "./DAGWorkflowEditor.jsx";
+import { simpleReviewWorkflow } from "../../simpleWorkflow.js";
+import SimpleWorkflowEditor from "./SimpleWorkflowEditor.jsx";
 import WorkflowIdentityFields from "./WorkflowIdentityFields.jsx";
 
 export default function WorkflowEditor({ editor, setEditor, validation, validateEditor, saveWorkflow, busy, updateStep, updateTransition, removeTransition, runtimes, workers, defaultSandbox, allowFullSandbox, onClose, showBack = false }) {
   const { t } = useTranslation();
+  const [advanced, setAdvanced] = useState(false);
+  const simple = simpleReviewWorkflow(editor);
   const [previewOpen, setPreviewOpen] = useState(false);
   const runtimeOptions = enabledRuntimeInfos(runtimes, {}, editor.steps.map((step) => step.runtime));
   const defaultRuntime = runtimeOptions.find((runtime) => !runtime.disabled)?.id || "";
+  if (simple && !advanced) return <SimpleWorkflowEditor {...{ editor, setEditor, simple, runtimeOptions, updateStep, validation, saveWorkflow, busy, onClose, showBack }} onAdvanced={() => setAdvanced(true)} />;
   if (editor.mode === "dag") return <DAGWorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} runtimes={runtimes} workers={workers} defaultSandbox={defaultSandbox} allowFullSandbox={allowFullSandbox} onClose={onClose} embedded={!showBack} />;
   const workerOptions = [{ value: "local", label: t("common.local") }, ...workers.filter((worker) => worker.enabled).map((worker) => ({ value: worker.id, label: worker.name }))];
   const updateWorker = (stepIndex, workerId) => setEditor((current) => ({ ...current, steps: current.steps.map((step, index) => index === stepIndex ? assignWorkflowWorker(step, workerId) : step) }));
@@ -33,7 +38,7 @@ export default function WorkflowEditor({ editor, setEditor, validation, validate
   return <section className="workflow-editor-surface select-none bg-background">
     <header className="shrink-0 border-b border-border/80 bg-background/95 px-5 py-4">
       <div className="mb-4 flex items-center justify-between gap-4">
-        <div>{showBack && <Button variant="ghost" size="sm" onClick={onClose}><ArrowLeft aria-hidden="true" />{t("common.back")}</Button>}</div>
+        <div className="flex items-center gap-2">{simple && <Button variant="outline" size="sm" onClick={() => setAdvanced(false)}>{t("workflow.simple.back")}</Button>}{showBack && <Button variant="ghost" size="sm" onClick={onClose}><ArrowLeft aria-hidden="true" />{t("common.back")}</Button>}</div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <Button variant="outline" size="sm" onClick={() => setPreviewOpen(true)}><Eye aria-hidden="true" />{t("workflow.preview")}</Button>
           <Button variant="outline" size="sm" onClick={validateEditor}><CheckCircle2 aria-hidden="true" />{t("workflow.validate")}</Button>
