@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { Circle, Folder, FolderPlus, GitBranch, Search, Settings, SquarePen } from "lucide-react";
+import { BookOpen, ChartNoAxesCombined, Circle, FileText, Folder, FolderPlus, GitBranch, Search, Settings, SquarePen } from "lucide-react";
 import { commandPaletteShortcutIndex, commandPaletteWorkspaceResults, moveCommandPaletteIndex } from "../commandPaletteNavigation.js";
+import { paletteCommandResults, readCommandHistory, rememberCommand } from "../paletteCommands.js";
 import { primaryShortcutLabel } from "../platform.js";
 
 function PaletteRow({ item, active, onActivate, onActive }) {
   const Icon = item.icon;
-  return <button type="button" role="option" aria-selected={active} tabIndex={-1} className={`command-palette__item ${active ? "active" : ""}`} onPointerMove={onActive} onClick={onActivate}>
+  return <button type="button" id={`palette-${item.key}`} role="option" aria-selected={active} tabIndex={-1} className={`command-palette__item ${active ? "active" : ""}`} onPointerMove={onActive} onClick={onActivate}>
     <span className="command-palette__icon" aria-hidden="true"><Icon size={15} strokeWidth={item.iconStrokeWidth || 2} /></span>
     <span className="command-palette__copy"><strong>{item.label}</strong>{item.description && <small>{item.description}</small>}</span>
     {item.meta && <span className="command-palette__meta" title={item.meta}>{item.meta}</span>}
@@ -28,9 +29,12 @@ export default function CommandPalette({
   onNewTask,
   onAddWorkspace,
   onOpenSettings,
+  onOpenView,
 }) {
   const { t } = useTranslation();
   const inputRef = useRef(null);
+  const bodyRef = useRef(null);
+  const [history] = useState(() => { try { return readCommandHistory(window.localStorage); } catch { return []; } });
   const [activeIndex, setActiveIndex] = useState(0);
   const normalizedQuery = query.trim().toLocaleLowerCase();
 
@@ -57,13 +61,19 @@ export default function CommandPalette({
       shortcutKey: "",
     })), [normalizedQuery, taskItems.length, workspaces]);
 
-  const commandItems = [
-    { key: "command:new-task", kind: "command", command: "new-task", icon: SquarePen, label: t("task.newTask"), shortcutLabel: primaryShortcutLabel("N"), shortcutKey: "n" },
-    { key: "command:add-workspace", kind: "command", command: "add-workspace", icon: FolderPlus, label: t("sidebar.openFolder"), shortcutLabel: primaryShortcutLabel("O"), shortcutKey: "o" },
-    { key: "command:settings", kind: "command", command: "settings", icon: Settings, label: t("sidebar.settings"), shortcutLabel: primaryShortcutLabel(","), shortcutKey: "," },
-  ];
-  const items = [...taskItems, ...projectItems, ...commandItems];
-  const resultCount = taskItems.length + projectItems.length;
+  const icons = { "new-task": SquarePen, "add-workspace": FolderPlus, templates: FileText, skills: BookOpen, usage: ChartNoAxesCombined, settings: Settings };
+  const commandItems = paletteCommandResults(t, normalizedQuery, history).map((command) => ({
+    key: `command:${command.id}`, kind: "command", command: command.id, icon: icons[command.id], label: command.label,
+    meta: !normalizedQuery && command.recentIndex >= 0 ? t("palette.recent") : "",
+    shortcutLabel: command.shortcut ? primaryShortcutLabel(command.shortcut) : "",
+    shortcutKey: command.shortcut?.toLowerCase() || "",
+  }));
+  const items = normalizedQuery ? [...commandItems, ...taskItems, ...projectItems] : [...taskItems, ...projectItems, ...commandItems];
+  const resultCount = items.length;
+
+  useEffect(() => {
+    bodyRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex]);
 
   useEffect(() => {
     if (!open) return undefined;
@@ -91,11 +101,15 @@ export default function CommandPalette({
     else if (item.command === "new-task") onNewTask();
     else if (item.command === "add-workspace") onAddWorkspace();
     else if (item.command === "settings") onOpenSettings();
+    else if (item.kind === "command") onOpenView(item.command);
+    if (item.kind === "command") { try { rememberCommand(window.localStorage, item.command); } catch { /* Storage may be unavailable. */ } }
     onClose({ restoreFocus: false });
   };
   const handleKeyDown = (event) => {
+    event.stopPropagation();
     if (event.nativeEvent?.isComposing) return;
-    if (event.key === "Escape") {
+    if (event.key === "Tab") { event.preventDefault(); inputRef.current?.focus(); return; }
+    if (event.key === "Escape" || ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k")) {
       event.preventDefault();
       onClose();
       return;
@@ -120,7 +134,7 @@ export default function CommandPalette({
   };
   const renderGroup = (label, groupItems, offset) => groupItems.length ? <section className="command-palette__group" aria-label={label}>
     <div className="command-palette__group-title">{label}</div>
-    <div role="listbox" aria-label={label}>
+    <div role="group" aria-label={label}>
       {groupItems.map((item, index) => <PaletteRow key={item.key} item={item} active={activeIndex === offset + index} onActive={() => setActiveIndex(offset + index)} onActivate={() => activate(item)} />)}
     </div>
   </section> : null;
@@ -129,15 +143,16 @@ export default function CommandPalette({
     <section className="command-palette" id="global-command-palette" role="dialog" aria-modal="true" aria-busy={loading} aria-label={t("sidebar.commandPalette")} onKeyDown={handleKeyDown}>
       <label className="command-palette__search">
         <span className="command-palette__search-icon" aria-hidden="true"><Search size={16} /></span>
-        <input spellCheck={false} autoCorrect="off" autoCapitalize="none" ref={inputRef} autoFocus value={query} aria-label={t("sidebar.searchTasksCommands")} placeholder={t("sidebar.searchTasksCommands")} onChange={(event) => onQueryChange(event.target.value)} />
+        <input spellCheck={false} autoCorrect="off" autoCapitalize="none" ref={inputRef} autoFocus value={query} role="combobox" aria-expanded="true" aria-controls="command-palette-results" aria-activedescendant={items[activeIndex] ? `palette-${items[activeIndex].key}` : undefined} aria-autocomplete="list" aria-label={t("sidebar.searchTasksCommands")} placeholder={t("sidebar.searchTasksCommands")} onChange={(event) => onQueryChange(event.target.value)} />
         <kbd>Esc</kbd>
       </label>
-      <div className="command-palette__body">
+      <div ref={bodyRef} className="command-palette__body" id="command-palette-results" role="listbox" aria-label={t("sidebar.commandPalette")}>
+        {normalizedQuery && renderGroup(t("palette.commands"), commandItems, 0)}
         {loading && !taskItems.length && <div className="command-palette__empty">{t("common.loading")}</div>}
-        {renderGroup(t("task.tasks"), taskItems, 0)}
-        {renderGroup(t("sidebar.projects"), projectItems, taskItems.length)}
+        {renderGroup(t("task.tasks"), taskItems, normalizedQuery ? commandItems.length : 0)}
+        {renderGroup(t("sidebar.projects"), projectItems, taskItems.length + (normalizedQuery ? commandItems.length : 0))}
         {!loading && normalizedQuery && resultCount === 0 && <div className="command-palette__empty">{t("sidebar.noSearchResults")}</div>}
-        {renderGroup(t("sidebar.recommended"), commandItems, resultCount)}
+        {!normalizedQuery && renderGroup(t("palette.commands"), commandItems, taskItems.length + projectItems.length)}
       </div>
     </section>
   </div>, document.body);

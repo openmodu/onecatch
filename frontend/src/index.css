@@ -2896,7 +2896,7 @@
     text-transform: uppercase;
   }
 
-  .command-palette__group [role="listbox"] { display: grid; gap: 2px; }
+  .command-palette__group [role="group"] { display: grid; gap: 2px; }
 
   .command-palette__item {
     width: 100%;
