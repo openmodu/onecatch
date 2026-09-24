@@ -3,6 +3,16 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.3.3
+
+- Bind a task to a Git worktree: the composer shows the branch and changed-file count, and a new task can use the project directory, an existing worktree, or a new one, including a project option that creates one per session.
+- Run worktree tasks in their own checkout with locks keyed on the physical directory, so different worktrees write in parallel while the same directory stays exclusive.
+- Refuse to run when a bound directory is missing or its Git identity changed, and keep a failed checkout in place with its location rather than falling back to the project directory.
+- Label sessions with a category, resolved locally from a commit prefix or keyword rule, choosable when renaming, or named by the session's own agent in a separate read-only pass.
+- Add a guided editor for the implement-then-review workflow: pick each agent and instruction, choose whether a failed review retries or pauses, and set the review round limit.
+- Search commands from the palette alongside tasks and projects, covering Templates, Skills and Usage with Chinese and English keywords and recent-command ordering.
+- Add the prompt library with a quick composer picker.
+
 ## 0.3.2
 
 - Keep mobile project lists responsive when a workspace is busy or its Git metadata cannot be read. Limit metadata lookup time and preserve plain directories and projects on computers without Git.
