@@ -87,6 +87,8 @@ export function inspectorContextSignature(context) {
     detail?.active ? 1 : 0,
     detail?.task?.id || "",
     detail?.task?.title || "",
+    detail?.task?.category || "",
+    detail?.task?.categorySource || "",
     detail?.workflow?.id || "",
     stepRuns.length,
     stepRuns.map((step) => [step.stepId, step.attempt || 0, step.status, step.startedAt || "", step.finishedAt || "", step.inputTokens || 0, step.cachedInputTokens || 0, step.cacheCreationInputTokens || 0, step.outputTokens || 0, step.reasoningOutputTokens || 0].join(":")).join(","),

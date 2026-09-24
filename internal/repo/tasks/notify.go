@@ -73,3 +73,19 @@ func (r *notifyingRepo) SaveWorkspace(ctx context.Context, workspace domainworks
 	r.notify.MarkDirty()
 	return nil
 }
+
+func (r *notifyingRepo) UpdateTaskDetails(ctx context.Context, id, title, category string, at time.Time) (domaintasks.Task, error) {
+	task, err := r.TasksRepo.UpdateTaskDetails(ctx, id, title, category, at)
+	if err == nil {
+		r.notify.MarkDirty()
+	}
+	return task, err
+}
+
+func (r *notifyingRepo) UpdateAnalyzedTaskDetails(ctx context.Context, original domaintasks.Task, title, category string, at time.Time) (domaintasks.Task, error) {
+	task, err := r.TasksRepo.UpdateAnalyzedTaskDetails(ctx, original, title, category, at)
+	if err == nil {
+		r.notify.MarkDirty()
+	}
+	return task, err
+}

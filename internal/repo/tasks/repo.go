@@ -20,6 +20,8 @@ import (
 var ErrWorkspacePathExists = errors.New("workspace path already exists")
 
 type TasksRepo interface {
+	UpdateAnalyzedTaskDetails(context.Context, domaintasks.Task, string, string, time.Time) (domaintasks.Task, error)
+	UpdateTaskDetails(context.Context, string, string, string, time.Time) (domaintasks.Task, error)
 	SaveWorkspace(context.Context, domainworkspaces.Workspace) error
 	GetWorkspace(context.Context, string) (domainworkspaces.Workspace, error)
 	ListWorkspaces(context.Context) ([]domainworkspaces.Workspace, error)
@@ -302,4 +304,48 @@ func (r *tasksImpl) workspacePath(id string) string {
 
 func (r *tasksImpl) taskPath(id string) string {
 	return filepath.Join(r.tasksRoot, id+".json")
+}
+
+// UpdateTaskDetails changes only user-editable metadata, retaining the latest
+// execution state and directory binding under the same repository lock.
+func (r *tasksImpl) UpdateTaskDetails(ctx context.Context, id, title, category string, at time.Time) (domaintasks.Task, error) {
+	return r.updateTaskDetails(ctx, id, title, category, at, nil)
+}
+
+func (r *tasksImpl) UpdateAnalyzedTaskDetails(ctx context.Context, original domaintasks.Task, title, category string, at time.Time) (domaintasks.Task, error) {
+	return r.updateTaskDetails(ctx, original.ID, title, category, at, &original)
+}
+
+func (r *tasksImpl) updateTaskDetails(ctx context.Context, id, title, category string, at time.Time, original *domaintasks.Task) (domaintasks.Task, error) {
+	if err := ctx.Err(); err != nil {
+		return domaintasks.Task{}, err
+	}
+	if !localfile.ValidID(id) {
+		return domaintasks.Task{}, domaintasks.ErrNotFound
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	task, err := r.getTaskLocked(id)
+	if err != nil {
+		return task, err
+	}
+	title = strings.TrimSpace(title)
+	if title == "" || len([]rune(title)) > 160 || !domaintasks.ValidCategory(category) {
+		return task, domaintasks.ErrInvalid
+	}
+	if !task.DeletedAt.IsZero() {
+		return task, domaintasks.ErrNotFound
+	}
+	if original != nil && (task.Title != original.Title || task.Category != original.Category || task.CategorySource != original.CategorySource) {
+		return task, errors.New("session title or category changed during AI analysis; please retry")
+	}
+	task.CategorySource = ""
+	if original != nil {
+		task.CategorySource = "ai"
+	}
+	task.Title, task.Category, task.UpdatedAt = title, category, at
+	if err := localfile.WriteJSONAtomic(r.taskPath(id), task); err != nil {
+		return task, err
+	}
+	return task, nil
 }

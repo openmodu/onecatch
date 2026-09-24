@@ -62,7 +62,7 @@ export function preserveByFingerprint(current, next, fingerprint) {
 export function runItemFingerprint(item = {}) {
   return [
     item.id, item.revision, item.status, item.updatedAt, item.finishedAt,
-    item.task?.title, item.task?.status, item.task?.updatedAt, item.task?.pinned,
+    item.task?.title, item.task?.category, item.task?.categorySource, item.task?.status, item.task?.updatedAt, item.task?.pinned,
   ].join("|");
 }
 
@@ -76,6 +76,7 @@ export function runDetailFingerprint(detail = {}) {
   return [
     detail.run?.id, detail.run?.revision, detail.run?.status,
     detail.active ? 1 : 0, detail.lastError || "",
+    detail.task?.title, detail.task?.category, detail.task?.categorySource, detail.task?.updatedAt,
     steps.length, steps[steps.length - 1]?.status, steps[steps.length - 1]?.finishedAt,
     events.length, detail.runtimeEventsTotal,
     last?.seq, last?.revision, last?.text?.length, last?.streaming ? 1 : 0,

@@ -1,7 +1,8 @@
+import TaskCategoryBadge from "./TaskCategoryBadge.jsx";
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
-import { Ellipsis, Folder, FolderOpen, GitFork, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, RefreshCw, Search, Settings2, SunMoon, Trash2, Workflow } from "lucide-react";
+import { Ellipsis, Folder, FolderOpen, GitFork, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, RefreshCw, Search, Settings2, Sparkles, SunMoon, Trash2, Workflow } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -99,6 +100,8 @@ function Sidebar({
   onToggleTaskPinned,
   onDeleteTask,
   onRenameTask,
+  onAnalyzeTask,
+  analyzingTaskIDs,
   onRemoveWorkspace,
   onToggleExpanded,
   onAddWorkspace,
@@ -397,16 +400,33 @@ function Sidebar({
     commitWidth(next);
   };
 
-  const renderTaskActions = (task) => <div className="task-row-actions pointer-events-none absolute top-1 right-1 z-20 flex h-6 items-center gap-0.5 bg-gradient-to-l from-sidebar/95 via-sidebar/80 to-transparent pl-3 opacity-0 transition-opacity group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100">
-    <Action size="compact" tone="muted" className={`size-6 border-0 bg-transparent p-0 shadow-none hover:bg-background/70 ${task.pinned ? "text-foreground" : "text-muted-foreground"}`} aria-label={t(task.pinned ? "common.unpin" : "common.pin")} title={t(task.pinned ? "common.unpin" : "common.pin")} onClick={() => onToggleTaskPinned(task)}><Pin size={13} className={task.pinned ? "fill-current" : ""} aria-hidden="true" /></Action>
-    <Action size="compact" tone="muted" className="size-6 border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-background/70 hover:text-foreground" aria-label={t("task.rename")} title={t("task.rename")} onClick={() => onRenameTask(task)}><Pencil size={13} strokeWidth={2} aria-hidden="true" /></Action>
-    <Action size="compact" tone="muted" className="size-6 border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-destructive/10 hover:text-destructive" aria-label={t("app.deleteTask")} title={t("app.deleteTask")} onClick={() => onDeleteTask(task)}><Trash2 size={13} aria-hidden="true" /></Action>
+  const renderTaskActions = (task) => <div data-analyzing={analyzingTaskIDs?.has(task.id) || undefined} className="task-row-actions pointer-events-none absolute top-1 right-1 z-20 flex h-6 items-center bg-gradient-to-l from-sidebar/95 via-sidebar/80 to-transparent pl-3 opacity-0 transition-opacity data-[analyzing=true]:pointer-events-auto data-[analyzing=true]:opacity-100 group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100">
+    <DropdownMenu onOpenChange={(open) => { sidebarMenuOpen.current = open; if (open) revealSidebar(); else scheduleSidebarHide(); }}>
+      <DropdownMenuTrigger asChild>
+        <Action size="compact" tone="muted" className="size-6 border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-background/70 hover:text-foreground" aria-label={t("sidebar.sessionMenu", { name: task.title })} title={t("sidebar.sessionMenu", { name: task.title })}>{analyzingTaskIDs?.has(task.id) ? <RefreshCw size={14} className="animate-spin" aria-hidden="true" /> : <Ellipsis size={14} aria-hidden="true" />}</Action>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="right" className="w-56">
+        <DropdownMenuItem disabled={analyzingTaskIDs?.has(task.id)} onSelect={() => onAnalyzeTask(task)}>
+          <Sparkles size={15} aria-hidden="true" />{t(analyzingTaskIDs?.has(task.id) ? "task.analyzing" : "task.analyze")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onRenameTask(task)}>
+          <Pencil size={15} aria-hidden="true" />{t("task.rename")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onToggleTaskPinned(task)}>
+          <Pin size={15} className={task.pinned ? "fill-current" : ""} aria-hidden="true" />{t(task.pinned ? "common.unpin" : "common.pin")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={() => onDeleteTask(task)}>
+          <Trash2 size={15} aria-hidden="true" />{t("app.deleteTask")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   </div>;
 
   const renderPinnedTask = (task) => {
     const selectedRun = runs.find((run) => run.id === selectedRunID);
     const selected = selectedQueuedTaskID === task.id || selectedRun?.task?.id === task.id;
-    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
+    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><TaskCategoryBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
   };
 
   const renderWorkspace = (workspace) => {
@@ -486,13 +506,13 @@ function Sidebar({
             if (entry.kind === "queued" || entry.kind === "pinned") {
               const task = entry.item;
               const selected = active && selectedQueuedTaskID === task.id;
-              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{active && renderTaskActions(task)}</div>;
+              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><TaskCategoryBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{active && renderTaskActions(task)}</div>;
             }
             const run = entry.item;
             const task = run.task;
             const title = run.task?.title || run.id;
             const selected = active && selectedRunID === run.id;
-            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}>{task && <TaskExecutionIcon task={task} workflowID={run.workflowId} />}<TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{title}</span></button>{active && task && renderTaskActions(task)}</div>;
+            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}>{task && <TaskExecutionIcon task={task} workflowID={run.workflowId} />}<TaskWorktreeBadge task={task} /><TaskCategoryBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{title}</span></button>{active && task && renderTaskActions(task)}</div>;
           })}
           {!workspaceEntries.length && !(active && runLoading) && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
           {active && runLoading && !workspaceEntries.length && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{t("task.loading")}</div>}

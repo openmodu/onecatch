@@ -60,6 +60,8 @@ type Attachment struct {
 }
 
 type Task struct {
+	CategorySource  string                     `json:"categorySource,omitempty"`
+	Category        string                     `json:"category,omitempty"`
 	Worktree        *domainworkspaces.Worktree `json:"worktree,omitempty"`
 	ID              string                     `json:"id"`
 	WorkspaceID     string                     `json:"workspaceId"`
@@ -82,6 +84,9 @@ type Task struct {
 }
 
 func Validate(task Task) error {
+	if !ValidCategory(task.Category) {
+		return ErrInvalid
+	}
 	if strings.TrimSpace(task.ID) == "" || strings.TrimSpace(task.WorkspaceID) == "" || strings.TrimSpace(task.Title) == "" || strings.TrimSpace(task.Prompt) == "" || strings.TrimSpace(task.WorkflowID) == "" {
 		return ErrInvalid
 	}
@@ -109,4 +114,13 @@ func Validate(task Task) error {
 	default:
 		return ErrInvalid
 	}
+}
+
+// Empty means automatic display classification; explicit values are durable overrides.
+func ValidCategory(category string) bool {
+	switch category {
+	case "", "feat", "fix", "refactor", "perf", "docs", "test", "chore", "research", "other":
+		return true
+	}
+	return false
 }

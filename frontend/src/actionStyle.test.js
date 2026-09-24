@@ -72,7 +72,7 @@ test("workspace actions use a compact project menu and tasks stay visually light
   assert.match(sidebar, /<DropdownMenuTrigger asChild>\s*<Action\b[^>]*className="workspace-menu-trigger(?:\s[^"]*)?"[^>]*><Ellipsis\b/, "the ellipsis button must be the menu trigger");
   // Pinning moved from projects to tasks; task rows own the pin/unpin action.
   assert.doesNotMatch(sidebar, /\bonTogglePinned\b/);
-  assert.match(sidebar, /onClick=\{\(\) => onToggleTaskPinned\(task\)\}/);
+  assert.match(sidebar, /onSelect=\{\(\) => onToggleTaskPinned\(task\)\}/);
   assert.match(sidebar, /<DropdownMenuItem variant="destructive" onSelect=\{\(\) => onRemoveWorkspace\(workspace\)\}/, "remove must read as destructive");
   assert.match(sidebar, /className="workspace-new-task(?:\s[^"]*)?"[^>]*aria-label=\{t\("sidebar\.newTaskInProject"/);
   assert.match(sidebar, /className="add-workspace(?:\s[^"]*)?"[^>]*aria-label=\{t\("sidebar\.addProject"\)\}[^>]*onClick=\{onAddWorkspace\}/);
@@ -471,15 +471,17 @@ test("every new task chooses either an Agent or a workflow plus an explicit perm
   assert.match(app, /SettingsBinding\.InspectClaudeConfiguration/);
 });
 
-test("task editing joins the existing sidebar row hover actions", async () => {
+test("task editing and AI analysis are available in the session menu", async () => {
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
   assert.doesNotMatch(app, /app-titlebar-task-actions|deleteSelectedTask/, "the titlebar must not carry task edit or delete actions");
   assert.match(app, /onRenameTask=\{openRenameTask\}/);
+  assert.match(app, /onAnalyzeTask=\{analyzeTask\}/);
+  assert.match(sidebar, /onSelect=\{\(\) => onAnalyzeTask\(task\)\}/);
   assert.match(sidebar, /className="task-row-actions[^\"]*"/);
-  assert.match(sidebar, /onClick=\{\(\) => onRenameTask\(task\)\}><Pencil/);
-  assert.match(sidebar, /onClick=\{\(\) => onToggleTaskPinned\(task\)\}><Pin/);
-  assert.match(sidebar, /onClick=\{\(\) => onDeleteTask\(task\)\}><Trash2/);
+  assert.match(sidebar, /onSelect=\{\(\) => onRenameTask\(task\)\}>\s*<Pencil/);
+  assert.match(sidebar, /onSelect=\{\(\) => onToggleTaskPinned\(task\)\}>\s*<Pin/);
+  assert.match(sidebar, /onSelect=\{\(\) => onDeleteTask\(task\)\}>\s*<Trash2/);
 });
 
 test("the transcript follows Codex's user, process, and answer rhythm", async () => {

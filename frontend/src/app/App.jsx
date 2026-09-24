@@ -1,3 +1,5 @@
+import TaskCategoryBadge from "./components/TaskCategoryBadge.jsx";
+import { TASK_CATEGORIES } from "./taskCategory.js";
 import { executionWorkspace, demoTaskWorktree } from "./worktreeContext.js";
 import { appendPrompt, capturePromptSelection } from "./promptActions.js";
 import { createComposerDrafts, draftKey } from "./composerDrafts.js";
@@ -208,6 +210,8 @@ function App() {
   // workspace's task history is loaded; selecting any history row closes it.
   const [taskModal, setTaskModal] = useState(true);
   const [renameForm, setRenameForm] = useState(null);
+  const [analyzingTaskIDs, setAnalyzingTaskIDs] = useState(new Set());
+  const analyzingTaskIDsRef = useRef(new Set());
   const [workspaceForm, setWorkspaceForm] = useState(emptyWorkspaceForm);
   const [composerDrafts] = useState(createComposerDrafts);
   const [emptyTaskForm] = useState({ prompt: "", workflowId: directAgentWorkflowID, executionMode: "immediate", attachmentPaths: [], harness: "codex", model: "", reasoningEffort: "", serviceTier: "", sandbox: "workspace-write" });
@@ -1260,21 +1264,42 @@ function App() {
 
   const openRenameTask = useCallback((requestedTask) => {
     const task = requestedTask || runDetailRef.current?.task || tasksRef.current.find((item) => item.id === selectedQueuedTaskIDRef.current);
-    if (task) setRenameForm({ taskId: task.id, title: task.title, originalTitle: task.title });
+    if (task) setRenameForm({ taskId: task.id, title: task.title, originalTitle: task.title, category: task.category || "", originalCategory: task.category || "" });
   }, []);
+
+  const analyzeTask = async (task) => {
+    if (analyzingTaskIDsRef.current.has(task.id)) return;
+    if (mode === "demo") { notify("error", t("task.analyzeDemo")); return; }
+    analyzingTaskIDsRef.current.add(task.id);
+    setAnalyzingTaskIDs(new Set(analyzingTaskIDsRef.current));
+    try {
+      const updated = await TaskRunBinding.AnalyzeTaskDetails(task.id);
+      const metadata = { title: updated.title, category: updated.category, categorySource: updated.categorySource, updatedAt: updated.updatedAt };
+      setTasks((items) => items.map((item) => item.id === task.id ? { ...item, ...metadata } : item));
+      setPinnedTasks((items) => items.map((item) => item.id === task.id ? { ...item, ...metadata } : item));
+      setRunItems((items) => items.map((run) => run.task?.id === task.id ? { ...run, task: { ...run.task, ...metadata } } : run));
+      setRunDetail((detail) => detail?.task?.id === task.id ? { ...detail, task: { ...detail.task, ...metadata } } : detail);
+      notify("success", t("task.analyzed"));
+    } catch (error) { notify("error", errorMessage(error)); }
+    finally {
+      analyzingTaskIDsRef.current.delete(task.id);
+      setAnalyzingTaskIDs(new Set(analyzingTaskIDsRef.current));
+    }
+  };
 
   const renameSelectedTask = async () => {
     const title = renameForm?.title.trim();
     if (!renameForm || !title) { notify("error", t("task.nameRequired")); return; }
-    if (title === renameForm.originalTitle) { setRenameForm(null); return; }
+    if (title === renameForm.originalTitle && renameForm.category === renameForm.originalCategory) { setRenameForm(null); return; }
     setBusy("rename");
     try {
       if (mode === "demo") {
-        setTasks((items) => items.map((task) => task.id === renameForm.taskId ? { ...task, title, updatedAt: new Date().toISOString() } : task));
-        setRunItems((items) => items.map((run) => run.task?.id === renameForm.taskId ? { ...run, task: { ...run.task, title } } : run));
-        setRunDetail((detail) => detail?.task?.id === renameForm.taskId ? { ...detail, task: { ...detail.task, title } } : detail);
+        setPinnedTasks((items) => items.map((task) => task.id === renameForm.taskId ? { ...task, title, category: renameForm.category, categorySource: "" } : task));
+        setTasks((items) => items.map((task) => task.id === renameForm.taskId ? { ...task, title, category: renameForm.category, categorySource: "", updatedAt: new Date().toISOString() } : task));
+        setRunItems((items) => items.map((run) => run.task?.id === renameForm.taskId ? { ...run, task: { ...run.task, title, category: renameForm.category, categorySource: "" } } : run));
+        setRunDetail((detail) => detail?.task?.id === renameForm.taskId ? { ...detail, task: { ...detail.task, title, category: renameForm.category, categorySource: "" } } : detail);
       } else {
-        await TaskRunBinding.RenameTask(renameForm.taskId, title);
+        await TaskRunBinding.UpdateTaskDetails(renameForm.taskId, title, renameForm.category);
         await loadTasks();
         await loadRunList();
         if (selectedRunID) await loadRun(selectedRunID, true);
@@ -1650,6 +1675,8 @@ function App() {
         onToggleTaskPinned={toggleTaskPinned}
         onDeleteTask={deleteTask}
         onRenameTask={openRenameTask}
+        onAnalyzeTask={analyzeTask}
+        analyzingTaskIDs={analyzingTaskIDs}
         onRemoveWorkspace={removeWorkspace}
         onToggleExpanded={toggleWorkspaceExpanded}
         onAddWorkspace={chooseWorkspace}
@@ -1678,7 +1705,7 @@ function App() {
           {taskCreateVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={t("task.createTitle")}>
             <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{t("task.createTitle")}</strong>
           </span> : taskTitleVisible ? <span className="app-titlebar-task flex min-w-0 items-center gap-2" title={selectedTask.title}>
-            <strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{selectedTask.title}</strong>
+            <TaskCategoryBadge task={selectedTask} /><strong className="min-w-0 truncate text-[13px] font-semibold text-foreground">{selectedTask.title}</strong>
             {selectedTask.workflowId && selectedTask.workflowId !== directAgentWorkflowID && <StatusPill status={selectedTaskStatus} active={runDetail?.active} />}
           </span> : view === "tasks" ? <span className="min-w-0 flex-1" /> : <span className="flex min-w-0 items-baseline gap-2" title={commandText}>
             <strong className="shrink-0 text-[13px] font-semibold text-foreground">{location.label}</strong>
@@ -1808,7 +1835,7 @@ function App() {
         </DialogFooter>
       </form>
     </Modal>}
-    {renameForm && <Modal className="gap-5 p-5 sm:max-w-md" title={t("task.renameTitle")} subtitle={t("task.renameSubtitle")} onClose={() => busy !== "rename" && setRenameForm(null)}><form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "rename") void renameSelectedTask(); }}><div className="grid gap-2"><Label htmlFor="rename-task-title">{t("task.name")}</Label><Input id="rename-task-title" autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} /></div><DialogFooter className="pt-1"><Button type="button" variant="outline" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>{t("common.cancel")}</Button><Button type="submit" disabled={busy === "rename" || !renameForm.title.trim()}>{busy === "rename" ? t("common.saving") : t("task.saveName")}</Button></DialogFooter></form></Modal>}
+    {renameForm && <Modal className="gap-5 p-5 sm:max-w-md" title={t("task.renameTitle")} subtitle={t("task.renameSubtitle")} onClose={() => busy !== "rename" && setRenameForm(null)}><form className="grid gap-5" onSubmit={(event) => { event.preventDefault(); if (!event.nativeEvent.isComposing && busy !== "rename") void renameSelectedTask(); }}><div className="grid gap-2"><Label htmlFor="rename-task-title">{t("task.name")}</Label><Input id="rename-task-title" autoFocus maxLength={160} value={renameForm.title} onChange={(event) => setRenameForm((form) => ({ ...form, title: event.target.value }))} /></div><div className="grid gap-2"><Label>{t("taskCategory.label")}</Label><TUISelect ariaLabel={t("taskCategory.label")} value={renameForm.category} onChange={(category) => setRenameForm((form) => ({ ...form, category }))} options={[{ value: "", label: t("taskCategory.auto") }, ...TASK_CATEGORIES.map((value) => ({ value, label: `${value} · ${t(`taskCategory.${value}`)}` }))]} /><p className="text-xs leading-relaxed text-muted-foreground">{t("taskCategory.hint")}</p></div><DialogFooter className="pt-1"><Button type="button" variant="outline" disabled={busy === "rename"} onClick={() => setRenameForm(null)}>{t("common.cancel")}</Button><Button type="submit" disabled={busy === "rename" || !renameForm.title.trim()}>{busy === "rename" ? t("common.saving") : t("task.saveName")}</Button></DialogFooter></form></Modal>}
     {workerModal && <Suspense fallback={null}><WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} /></Suspense>}
     <ConfirmDialog dialog={appDialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}

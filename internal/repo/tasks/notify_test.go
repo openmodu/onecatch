@@ -151,3 +151,38 @@ func TestWithNotifierWithoutANotifierReturnsTheRepositoryUntouched(t *testing.T)
 		t.Fatal("a nil notifier must not wrap the repository")
 	}
 }
+
+func TestTaskDetailsPersistCategoryWithoutChangingExecutionState(t *testing.T) {
+	ctx := context.Background()
+	repo, notifier, workspace := notifyingFixture(t)
+	task := sampleTask(workspace.ID, "task_category")
+	task.Status = domaintasks.StatusRunning
+	if err := repo.SaveTask(ctx, task); err != nil {
+		t.Fatal(err)
+	}
+	before := notifier.marks
+	updated, err := repo.UpdateTaskDetails(ctx, task.ID, "fix login", "fix", time.Now().UTC())
+	if err != nil || updated.Status != task.Status || updated.Category != "fix" {
+		t.Fatalf("details: %+v %v", updated, err)
+	}
+	if notifier.marks != before+1 {
+		t.Fatal("category change did not refresh the sidebar")
+	}
+	if _, err := repo.UpdateTaskStatus(ctx, task.ID, domaintasks.StatusCompleted, time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := repo.UpdateTaskTitle(ctx, task.ID, "fix login", "refined title", time.Now().UTC()); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := repo.GetTask(ctx, task.ID)
+	if err != nil || stored.Category != "fix" || stored.Status != domaintasks.StatusCompleted {
+		t.Fatalf("run/title update lost user choice: %+v %v", stored, err)
+	}
+	if _, err := repo.UpdateTaskDetails(ctx, task.ID, stored.Title, "invalid", time.Now().UTC()); err == nil {
+		t.Fatal("invalid category accepted")
+	}
+	restored, err := repo.UpdateTaskDetails(ctx, task.ID, stored.Title, "", time.Now().UTC())
+	if err != nil || restored.Category != "" {
+		t.Fatalf("restore automatic classification: %+v %v", restored, err)
+	}
+}

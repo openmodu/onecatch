@@ -23,12 +23,22 @@ import * as runstream$0 from "../../service/desktop/runstream/models.js";
 import * as workflows$1 from "../../usecase/workflows/models.js";
 
 /**
+ * @param {string} taskID
+ * @returns {$CancellablePromise<tasks$0.Task>}
+ */
+export function AnalyzeTaskDetails(taskID) {
+    return $Call.ByID(3052678716, taskID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
+/**
  * @param {string} runID
  * @returns {$CancellablePromise<workflows$0.Run>}
  */
 export function CancelRun(runID) {
     return $Call.ByID(1714304680, runID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -38,7 +48,7 @@ export function CancelRun(runID) {
  */
 export function CreateTask(input) {
     return $Call.ByID(2719115984, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType0($result);
     }));
 }
 
@@ -68,7 +78,7 @@ export function EnqueueInstruction(runID, input) {
  */
 export function EnqueueTask(taskID, confirmationToken) {
     return $Call.ByID(730833856, taskID, confirmationToken).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType0($result);
     }));
 }
 
@@ -119,7 +129,7 @@ export function InterruptAndInsert(runID, input) {
  */
 export function InterruptRun(runID) {
     return $Call.ByID(292099625, runID).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -211,7 +221,7 @@ export function RemoveInstruction(runID, instructionID) {
  */
 export function RenameTask(taskID, title) {
     return $Call.ByID(4111900838, taskID, title).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType0($result);
     }));
 }
 
@@ -238,7 +248,7 @@ export function RespondUserInput(input) {
  */
 export function ResumeRun(runID, instruction) {
     return $Call.ByID(1628819071, runID, instruction).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -249,7 +259,7 @@ export function ResumeRun(runID, instruction) {
  */
 export function ResumeRunConfigured(runID, input) {
     return $Call.ByID(1746256047, runID, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -270,7 +280,7 @@ export function SearchTasks(input) {
  */
 export function SetTaskPinned(taskID, pinned) {
     return $Call.ByID(1072326008, taskID, pinned).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType1($result);
+        return $$createType0($result);
     }));
 }
 
@@ -281,7 +291,7 @@ export function SetTaskPinned(taskID, pinned) {
  */
 export function StartRun(taskID, confirmationToken) {
     return $Call.ByID(2093366980, taskID, confirmationToken).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType0($result);
+        return $$createType1($result);
     }));
 }
 
@@ -296,9 +306,21 @@ export function SteerInstruction(runID, instructionID) {
     }));
 }
 
+/**
+ * @param {string} taskID
+ * @param {string} title
+ * @param {string} category
+ * @returns {$CancellablePromise<tasks$0.Task>}
+ */
+export function UpdateTaskDetails(taskID, title, category) {
+    return $Call.ByID(3224549061, taskID, title, category).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType0($result);
+    }));
+}
+
 // Private type creation functions
-const $$createType0 = workflows$0.Run.createFrom;
-const $$createType1 = tasks$0.Task.createFrom;
+const $$createType0 = tasks$0.Task.createFrom;
+const $$createType1 = workflows$0.Run.createFrom;
 const $$createType2 = workflows$0.Instruction.createFrom;
 const $$createType3 = desktop$0.RunDetail.createFrom;
 const $$createType4 = workflows$1.RuntimeEventFrame.createFrom;
@@ -308,7 +330,7 @@ const $$createType7 = $Create.Array($$createType6);
 const $$createType8 = desktop$0.WorkflowEventView.createFrom;
 const $$createType9 = $Create.Array($$createType8);
 const $$createType10 = desktop$0.RunListPage.createFrom;
-const $$createType11 = $Create.Array($$createType0);
-const $$createType12 = $Create.Array($$createType1);
+const $$createType11 = $Create.Array($$createType1);
+const $$createType12 = $Create.Array($$createType0);
 const $$createType13 = desktop$0.RunStartPreview.createFrom;
 const $$createType14 = desktop$0.TaskSearchPage.createFrom;

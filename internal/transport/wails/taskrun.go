@@ -96,3 +96,11 @@ func (b *TaskRunBinding) SteerInstruction(runID, instructionID string) (domainwo
 func (b *TaskRunBinding) InterruptAndInsert(runID string, input desktopservice.InstructionInput) (domainworkflows.Instruction, error) {
 	return b.service.InterruptAndInsert(context.Background(), runID, input)
 }
+
+func (b *TaskRunBinding) UpdateTaskDetails(taskID, title, category string) (domaintasks.Task, error) {
+	return b.service.UpdateTaskDetails(context.Background(), taskID, title, category)
+}
+
+func (b *TaskRunBinding) AnalyzeTaskDetails(taskID string) (domaintasks.Task, error) {
+	return b.service.AnalyzeTaskDetails(context.Background(), taskID)
+}

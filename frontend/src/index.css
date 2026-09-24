@@ -3838,3 +3838,9 @@
 .worktree-menu-copy small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted-foreground); font-size: 10px; }
 .worktree-menu-copy em { color: var(--muted-foreground); font-size: 9px; font-style: normal; font-weight: normal; border: 1px solid var(--border); border-radius: 4px; padding: 1px 4px; }
 .worktree-menu-message { display: flex; align-items: center; gap: 8px; padding: 12px 8px; font-size: 12px; color: var(--muted-foreground); }
+
+.session-category-badge { display: inline-flex; align-items: center; flex-shrink: 0; margin-right: 5px; padding: 1px 4px; border-radius: 4px; font: 500 9px/1.4 ui-monospace, SFMono-Regular, monospace; background: color-mix(in oklab, var(--muted-foreground) 10%, transparent); color: var(--muted-foreground); }
+.session-category-badge[data-category="feat"] { color: var(--success); background: color-mix(in oklab, var(--success) 12%, transparent); }
+.session-category-badge[data-category="fix"] { color: var(--warning); background: color-mix(in oklab, var(--warning) 12%, transparent); }
+.session-category-badge[data-category="refactor"], .session-category-badge[data-category="perf"] { color: var(--info); background: color-mix(in oklab, var(--info) 12%, transparent); }
+.session-category-badge[data-category="docs"], .session-category-badge[data-category="research"], .session-category-badge[data-category="test"] { color: var(--info); background: color-mix(in oklab, var(--info) 8%, transparent); }

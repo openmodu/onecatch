@@ -193,6 +193,20 @@ export class Task {
         if (/** @type {any} */(false)) {
             /**
              * @member
+             * @type {string | undefined}
+             */
+            this["categorySource"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["category"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
              * @type {workspaces$0.Worktree | null | undefined}
              */
             this["worktree"] = undefined;
@@ -333,18 +347,18 @@ export class Task {
      * @returns {Task}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType1;
-        const $$createField14_0 = $$createType3;
-        const $$createField15_0 = $$createType5;
+        const $$createField2_0 = $$createType1;
+        const $$createField16_0 = $$createType3;
+        const $$createField17_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("worktree" in $$parsedSource) {
-            $$parsedSource["worktree"] = $$createField0_0($$parsedSource["worktree"]);
+            $$parsedSource["worktree"] = $$createField2_0($$parsedSource["worktree"]);
         }
         if ("queue" in $$parsedSource) {
-            $$parsedSource["queue"] = $$createField14_0($$parsedSource["queue"]);
+            $$parsedSource["queue"] = $$createField16_0($$parsedSource["queue"]);
         }
         if ("attachments" in $$parsedSource) {
-            $$parsedSource["attachments"] = $$createField15_0($$parsedSource["attachments"]);
+            $$parsedSource["attachments"] = $$createField17_0($$parsedSource["attachments"]);
         }
         return new Task(/** @type {Partial<Task>} */($$parsedSource));
     }

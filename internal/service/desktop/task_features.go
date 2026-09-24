@@ -509,3 +509,16 @@ func localEventPayload(value any) json.RawMessage {
 	}
 	return payload
 }
+
+func (a *Service) UpdateTaskDetails(ctx context.Context, taskID, title, category string) (domaintasks.Task, error) {
+	title, category = strings.TrimSpace(title), strings.TrimSpace(category)
+	if title == "" || len([]rune(title)) > 160 || !domaintasks.ValidCategory(category) {
+		return domaintasks.Task{}, coded("task_invalid", "invalid task title or category")
+	}
+	task, err := a.store.Repos.Tasks.UpdateTaskDetails(ctx, strings.TrimSpace(taskID), title, category, time.Now().UTC())
+	if err != nil {
+		return task, err
+	}
+	a.cancelTaskTitleRefinement(task.ID)
+	return task, nil
+}
