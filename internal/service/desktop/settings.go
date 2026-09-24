@@ -348,7 +348,7 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 	if err != nil {
 		return domainworkflows.Definition{}, workflowuc.RunResolution{}, mapError(err)
 	}
-	workspace, err := a.store.Repos.Tasks.GetWorkspace(ctx, task.WorkspaceID)
+	workspace, err := a.resolveTaskWorkspace(ctx, task)
 	if err != nil {
 		return domainworkflows.Definition{}, workflowuc.RunResolution{}, mapError(err)
 	}

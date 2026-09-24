@@ -196,7 +196,7 @@ func (s *Usecase) executeDAGStep(ctx context.Context, task domaintasks.Task, wor
 	var release func() error
 	var err error
 	if step.Sandbox != "read-only" {
-		release, err = s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
+		release, err = s.locker.Acquire(ctx, workspaceLockID(workspace), workspace.Path, run.ID)
 		if err != nil {
 			return dagResult{step: step, stepRun: stepRun, err: err}
 		}

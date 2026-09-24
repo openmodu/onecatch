@@ -63,12 +63,22 @@ export function ListBranches(workspaceID) {
 }
 
 /**
+ * @param {string} workspaceID
+ * @returns {$CancellablePromise<workspaces$0.Worktree[]>}
+ */
+export function ListWorktrees(workspaceID) {
+    return $Call.ByID(925811007, workspaceID).then(/** @type {($result: any) => any} */(($result) => {
+        return $$createType5($result);
+    }));
+}
+
+/**
  * @param {desktop$0.CodeReviewInput} input
  * @returns {$CancellablePromise<desktop$0.CodeReviewResult>}
  */
 export function ReviewChanges(input) {
     return $Call.ByID(2934302008, input).then(/** @type {($result: any) => any} */(($result) => {
-        return $$createType4($result);
+        return $$createType6($result);
     }));
 }
 
@@ -106,4 +116,6 @@ const $$createType0 = desktop$0.GitCommitResult.createFrom;
 const $$createType1 = workspaces$0.GitSnapshot.createFrom;
 const $$createType2 = workspaces$0.GitBranch.createFrom;
 const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = desktop$0.CodeReviewResult.createFrom;
+const $$createType4 = workspaces$0.Worktree.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = desktop$0.CodeReviewResult.createFrom;

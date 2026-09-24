@@ -46,3 +46,7 @@ func (b *GitBinding) GenerateCommitMessage(workspaceID, runtime string) (string,
 func (b *GitBinding) CommitAndPush(input desktopservice.GitCommitInput) (desktopservice.GitCommitResult, error) {
 	return b.service.GitCommitAndPush(context.Background(), input)
 }
+
+func (b *GitBinding) ListWorktrees(workspaceID string) ([]domainworkspaces.Worktree, error) {
+	return b.service.GitListWorktrees(context.Background(), workspaceID)
+}

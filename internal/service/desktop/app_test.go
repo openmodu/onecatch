@@ -549,9 +549,7 @@ func TestTaskAttachmentsRenameAndSoftDelete(t *testing.T) {
 	ctx := context.Background()
 	app, _ := newLocalTestApp(t, completingEngine{})
 	workspacePath := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(workspacePath, ".git", "info"), 0o700); err != nil {
-		t.Fatal(err)
-	}
+	worktreeGit(t, workspacePath, "init")
 	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: workspacePath})
 	if err != nil {
 		t.Fatal(err)

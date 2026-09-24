@@ -31,6 +31,13 @@ export class AddWorkspaceInput {
      * @param {Partial<AddWorkspaceInput>} [$$source = {}] - The source object to create the AddWorkspaceInput.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | null | undefined}
+             */
+            this["autoWorktree"] = undefined;
+        }
         if (!("path" in $$source)) {
             /**
              * @member
@@ -76,10 +83,10 @@ export class AddWorkspaceInput {
      * @returns {AddWorkspaceInput}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType1;
+        const $$createField4_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("remoteFs" in $$parsedSource) {
-            $$parsedSource["remoteFs"] = $$createField3_0($$parsedSource["remoteFs"]);
+            $$parsedSource["remoteFs"] = $$createField4_0($$parsedSource["remoteFs"]);
         }
         return new AddWorkspaceInput(/** @type {Partial<AddWorkspaceInput>} */($$parsedSource));
     }
@@ -401,6 +408,20 @@ export class CreateTaskInput {
      * @param {Partial<CreateTaskInput>} [$$source = {}] - The source object to create the CreateTaskInput.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["worktreeMode"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["worktreeId"] = undefined;
+        }
         if (!("workspaceId" in $$source)) {
             /**
              * @member
@@ -481,10 +502,10 @@ export class CreateTaskInput {
      * @returns {CreateTaskInput}
      */
     static createFrom($$source = {}) {
-        const $$createField9_0 = $$createType2;
+        const $$createField11_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("attachmentPaths" in $$parsedSource) {
-            $$parsedSource["attachmentPaths"] = $$createField9_0($$parsedSource["attachmentPaths"]);
+            $$parsedSource["attachmentPaths"] = $$createField11_0($$parsedSource["attachmentPaths"]);
         }
         return new CreateTaskInput(/** @type {Partial<CreateTaskInput>} */($$parsedSource));
     }
@@ -2062,6 +2083,13 @@ export class UpdateWorkspaceInput {
      * @param {Partial<UpdateWorkspaceInput>} [$$source = {}] - The source object to create the UpdateWorkspaceInput.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | null | undefined}
+             */
+            this["autoWorktree"] = undefined;
+        }
         if (!("id" in $$source)) {
             /**
              * @member
@@ -2114,10 +2142,10 @@ export class UpdateWorkspaceInput {
      * @returns {UpdateWorkspaceInput}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType1;
+        const $$createField5_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("remoteFs" in $$parsedSource) {
-            $$parsedSource["remoteFs"] = $$createField4_0($$parsedSource["remoteFs"]);
+            $$parsedSource["remoteFs"] = $$createField5_0($$parsedSource["remoteFs"]);
         }
         return new UpdateWorkspaceInput(/** @type {Partial<UpdateWorkspaceInput>} */($$parsedSource));
     }

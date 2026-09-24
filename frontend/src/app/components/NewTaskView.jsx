@@ -155,7 +155,7 @@ export default function NewTaskView({
             </div>
           </div>
         </div>
-        <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} />
+        <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} selection={form.worktree} onSelectWorktree={(worktree) => onChange((current) => ({ ...current, worktree }))} disabled={busy === "run"} />
       </div>
     </form>
   </div>;

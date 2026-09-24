@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { GitBinding, WorkerBinding } from "../../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
 import { Action, Kicker, TUISelect } from "../../../ui/primitives.jsx";
@@ -24,6 +24,8 @@ function fileState(file, t) {
 // Remote FS workspace. Worker clones are operational views and remain read-only.
 function GitInspector({ mode, workspaceID, remoteFS = null, runWorkerID = "", notify }) {
   const { t } = useTranslation();
+  const worktreeBound = workspaceID?.startsWith("task:") || workspaceID?.startsWith("worktree:");
+  const requestVersion = useRef(0);
   const [snapshot, setSnapshot] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [workers, setWorkers] = useState([]);
@@ -34,14 +36,14 @@ function GitInspector({ mode, workspaceID, remoteFS = null, runWorkerID = "", no
   const [source, setSource] = useState("local");
 
   useEffect(() => {
-    if (mode !== "wails" || remoteFS) {
+    if (mode !== "wails" || remoteFS || worktreeBound) {
       setWorkers([]);
       return;
     }
     WorkerBinding.ListWorkers()
       .then((list) => setWorkers((list || []).filter((entry) => entry.enabled)))
       .catch(() => setWorkers([]));
-  }, [mode, remoteFS]);
+  }, [mode, remoteFS, worktreeBound]);
 
   // Follow the run: default to the worker its latest step ran on, but only when
   // that worker is registered here (so we never query one we cannot reach) and
@@ -53,6 +55,7 @@ function GitInspector({ mode, workspaceID, remoteFS = null, runWorkerID = "", no
   useEffect(() => { setNewBranch(""); }, [source, workspaceID]);
 
   const load = useCallback(async () => {
+    const version = ++requestVersion.current;
     if (!workspaceID) {
       setSnapshot(null);
       return;
@@ -77,16 +80,18 @@ function GitInspector({ mode, workspaceID, remoteFS = null, runWorkerID = "", no
       const nextSnapshot = source === "local"
         ? await GitBinding.Status(workspaceID)
         : await WorkerBinding.WorkerGitStatus(source, workspaceID);
+      const nextBranches = source === "local" && nextSnapshot?.isRepo ? (await GitBinding.ListBranches(workspaceID) || []) : [];
+      if (version !== requestVersion.current) return;
       setSnapshot(nextSnapshot);
-      setBranches(source === "local" && nextSnapshot?.isRepo ? (await GitBinding.ListBranches(workspaceID) || []) : []);
+      setBranches(nextBranches);
     } catch (error) {
-      notify("error", errorMessage(error));
+      if (version === requestVersion.current) notify("error", errorMessage(error));
     } finally {
-      setRefreshing(false);
+      if (version === requestVersion.current) setRefreshing(false);
     }
   }, [mode, notify, source, workspaceID]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { setSnapshot(null); setBranches([]); void load(); return () => { requestVersion.current++; }; }, [load]);
 
   const sourceOptions = useMemo(
     () => [{ value: "local", label: t("inspector.sourceLocal") }, ...workers.map((entry) => ({ value: entry.id, label: entry.name }))],
@@ -170,7 +175,7 @@ function GitInspector({ mode, workspaceID, remoteFS = null, runWorkerID = "", no
       <span className="tabular-nums text-muted-foreground">↓ {snapshot?.behind || 0}</span>
       <strong className={`ml-auto font-medium ${files.length ? "text-warning" : "text-success"}`}>{files.length ? t("inspector.changesCount", { count: files.length }) : t("inspector.clean")}</strong>
     </div>
-    {source === "local" && snapshot?.isRepo && <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
+    {source === "local" && snapshot?.isRepo && !worktreeBound && <section className="grid grid-cols-[minmax(0,1fr)] gap-2">
       <Kicker>{t("inspector.branches")}</Kicker>
       <TUISelect ariaLabel={t("inspector.branchSelect")} value={snapshot?.branch || ""} onChange={switchBranch} options={branchOptions} disabled={branchBusy || !branchOptions.length} />
       <form className="flex gap-1.5" onSubmit={createBranch}>

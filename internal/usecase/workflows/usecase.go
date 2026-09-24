@@ -99,6 +99,7 @@ type ResumeProfile struct {
 }
 
 type Usecase struct {
+	resolveWorkspace  func(context.Context, domaintasks.Task) (domainworkspaces.Workspace, error)
 	tasks             TaskRepository
 	workflows         WorkflowRepository
 	engine            Engine
@@ -128,6 +129,9 @@ func (s *Usecase) dispatchStep(ctx context.Context, definition domainworkflows.D
 	stepCtx, cancel := context.WithTimeout(ctx, time.Duration(definition.Policy.StepTimeoutSeconds)*time.Second)
 	defer cancel()
 	if !localStep(step) {
+		if strings.HasPrefix(workspaceID, "worktree:") || strings.HasPrefix(workspaceID, "task:") {
+			return agentrun.Result{}, fmt.Errorf("worktree_local_only: remote worker execution is not supported")
+		}
 		if request.Remote != nil {
 			return agentrun.Result{}, fmt.Errorf("remote_fs_local_agent_required: remote FS workspaces require a local workflow node")
 		}
@@ -242,14 +246,14 @@ func (s *Usecase) ExecuteRun(ctx context.Context, runID string) (domainworkflows
 	if err != nil {
 		return run, err
 	}
-	workspace, err := s.tasks.GetWorkspace(ctx, task.WorkspaceID)
+	workspace, err := s.taskWorkspace(ctx, task)
 	if err != nil {
 		return run, err
 	}
 	if definition.Mode == domainworkflows.ModeDAG {
 		return s.driveDAG(ctx, task, workspace, definition, run, "")
 	}
-	release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
+	release, err := s.locker.Acquire(ctx, workspaceLockID(workspace), workspace.Path, run.ID)
 	if err != nil {
 		paused, pauseErr := domainworkflows.Pause(definition, run, PauseReasonWorkspaceLocked, err.Error(), s.now())
 		if pauseErr != nil {
@@ -286,12 +290,12 @@ func (s *Usecase) RecoverRun(ctx context.Context, runID string) (domainworkflows
 	if err != nil {
 		return run, err
 	}
-	workspace, err := s.tasks.GetWorkspace(ctx, task.WorkspaceID)
+	workspace, err := s.taskWorkspace(ctx, task)
 	if err != nil {
 		return run, err
 	}
 	if definition.Mode != domainworkflows.ModeDAG {
-		release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
+		release, err := s.locker.Acquire(ctx, workspaceLockID(workspace), workspace.Path, run.ID)
 		if err != nil {
 			return run, err
 		}
@@ -352,7 +356,7 @@ func (s *Usecase) ResumeRunWithProfile(ctx context.Context, runID, instruction s
 	if err != nil {
 		return run, err
 	}
-	workspace, err := s.tasks.GetWorkspace(ctx, task.WorkspaceID)
+	workspace, err := s.taskWorkspace(ctx, task)
 	if err != nil {
 		return run, err
 	}
@@ -374,7 +378,7 @@ func (s *Usecase) ResumeRunWithProfile(ctx context.Context, runID, instruction s
 		}
 		return s.driveDAG(ctx, task, workspace, definition, resumed, instruction)
 	}
-	release, err := s.locker.Acquire(ctx, workspace.ID, workspace.Path, run.ID)
+	release, err := s.locker.Acquire(ctx, workspaceLockID(workspace), workspace.Path, run.ID)
 	if err != nil {
 		return run, err
 	}
@@ -796,7 +800,7 @@ func (s *Usecase) loadTaskContext(ctx context.Context, taskID string) (domaintas
 	if err != nil {
 		return domaintasks.Task{}, domainworkspaces.Workspace{}, domainworkflows.Definition{}, err
 	}
-	workspace, err := s.tasks.GetWorkspace(ctx, task.WorkspaceID)
+	workspace, err := s.taskWorkspace(ctx, task)
 	if err != nil {
 		return domaintasks.Task{}, domainworkspaces.Workspace{}, domainworkflows.Definition{}, err
 	}
@@ -1071,4 +1075,26 @@ func randomID(prefix string) string {
 		return fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano())
 	}
 	return prefix + "_" + hex.EncodeToString(bytes)
+}
+
+// SetWorkspaceResolver supplies the same task directory resolution used by UI
+// operations. It must be configured before any runs start.
+func (s *Usecase) SetWorkspaceResolver(resolve func(context.Context, domaintasks.Task) (domainworkspaces.Workspace, error)) {
+	s.resolveWorkspace = resolve
+}
+func (s *Usecase) taskWorkspace(ctx context.Context, task domaintasks.Task) (domainworkspaces.Workspace, error) {
+	if s.resolveWorkspace != nil {
+		return s.resolveWorkspace(ctx, task)
+	}
+	if task.Worktree != nil {
+		return domainworkspaces.Workspace{}, fmt.Errorf("worktree resolver is unavailable")
+	}
+	return s.tasks.GetWorkspace(ctx, task.WorkspaceID)
+}
+
+func workspaceLockID(workspace domainworkspaces.Workspace) string {
+	if workspace.LockID != "" {
+		return workspace.LockID
+	}
+	return workspace.ID
 }

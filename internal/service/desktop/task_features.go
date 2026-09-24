@@ -9,6 +9,7 @@ import (
 	"mime"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -115,6 +116,26 @@ func (a *Service) ReadAttachmentPreview(ctx context.Context, path string) ([]byt
 		}
 	}
 	if !allowed {
+		tasks, err := a.store.Repos.Tasks.ListTasks(ctx, "")
+		if err != nil {
+			return nil, "", err
+		}
+		for _, task := range tasks {
+			if task.Worktree == nil {
+				continue
+			}
+			for _, attachment := range task.Attachments {
+				if filepath.Clean(attachment.StoredPath) == clean && resolvedPathWithin(clean, filepath.Join(task.Worktree.Path, ".onecatch", "attachments", task.ID)) {
+					allowed = true
+					break
+				}
+			}
+			if allowed {
+				break
+			}
+		}
+	}
+	if !allowed {
 		return nil, "", coded("attachment_invalid", "attachment preview path is not managed by OneCatch")
 	}
 	data, err := os.ReadFile(clean)
@@ -194,7 +215,7 @@ func (a *Service) DeleteTask(ctx context.Context, taskID string) error {
 			return coded("task_active", "interrupt the active run before deleting this task")
 		}
 	}
-	workspace, _ := a.store.Repos.Tasks.GetWorkspace(ctx, task.WorkspaceID)
+	workspace, _ := a.resolveTaskWorkspace(ctx, task)
 	if err := a.store.Repos.Tasks.DeleteTask(ctx, task.ID); err != nil {
 		return err
 	}
@@ -376,7 +397,7 @@ func (a *Service) persistAttachments(ctx context.Context, task domaintasks.Task,
 	if len(paths) > maxAttachmentCount {
 		return nil, coded("attachment_limit", fmt.Sprintf("a maximum of %d attachments is allowed", maxAttachmentCount))
 	}
-	workspace, err := a.store.Repos.Tasks.GetWorkspace(ctx, task.WorkspaceID)
+	workspace, err := a.resolveTaskWorkspace(ctx, task)
 	if err != nil {
 		return nil, err
 	}
@@ -458,11 +479,13 @@ func copyFileAtomic(source, destination string) error {
 }
 
 func excludeLocalOneCatch(workspace string) error {
-	gitDir := filepath.Join(workspace, ".git")
-	if info, err := os.Stat(gitDir); err != nil || !info.IsDir() {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	output, err := exec.CommandContext(ctx, "git", "-C", workspace, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude").Output()
+	if err != nil {
 		return nil
-	}
-	path := filepath.Join(gitDir, "info", "exclude")
+	} // ordinary non-Git workspace
+	path := strings.TrimSuffix(string(output), "\n")
 	content, _ := os.ReadFile(path)
 	if strings.Contains(string(content), "\n.onecatch/\n") || strings.HasPrefix(string(content), ".onecatch/\n") {
 		return nil

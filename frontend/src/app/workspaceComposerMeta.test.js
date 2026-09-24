@@ -10,7 +10,7 @@ const styles = readFileSync(new URL("../index.css", import.meta.url), "utf8");
 
 test("project identity and filesystem type live below both task composers", () => {
   assert.match(composer, /<\/div>\s*<WorkspaceComposerMeta mode=\{mode\} workspace=\{workspace\} onEdit=\{onEditWorkspace\} \/>\s*<\/div>/, "session metadata belongs outside the composer card");
-  assert.match(newTask, /<\/div>\s*<WorkspaceComposerMeta mode=\{mode\} workspace=\{workspace\} onEdit=\{onEditWorkspace\} \/>\s*<\/div>/, "new-task metadata belongs outside the composer card");
+  assert.match(newTask, /<\/div>\s*<WorkspaceComposerMeta mode=\{mode\} workspace=\{workspace\} onEdit=\{onEditWorkspace\}[^\n]*\/>\s*<\/div>/, "new-task metadata belongs outside the composer card");
   assert.match(meta, /className="composer-workspace-button"/);
   assert.match(meta, /workspace\.remoteFs \? "workspace\.remoteFS" : "common\.local"/);
 });

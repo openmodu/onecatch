@@ -249,6 +249,13 @@ export class Workspace {
      * @param {Partial<Workspace>} [$$source = {}] - The source object to create the Workspace.
      */
     constructor($$source = {}) {
+        if (!("autoWorktree" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["autoWorktree"] = false;
+        }
         if (!("id" in $$source)) {
             /**
              * @member
@@ -322,12 +329,121 @@ export class Workspace {
      * @returns {Workspace}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType4;
+        const $$createField4_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("remoteFs" in $$parsedSource) {
-            $$parsedSource["remoteFs"] = $$createField3_0($$parsedSource["remoteFs"]);
+            $$parsedSource["remoteFs"] = $$createField4_0($$parsedSource["remoteFs"]);
         }
         return new Workspace(/** @type {Partial<Workspace>} */($$parsedSource));
+    }
+}
+
+/**
+ * Worktree is a discovered checkout. ContextID is scoped to its parent project;
+ * Path preserves the project's relative working directory inside Root.
+ */
+export class Worktree {
+    /**
+     * Creates a new Worktree instance.
+     * @param {Partial<Worktree>} [$$source = {}] - The source object to create the Worktree.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {boolean | undefined}
+             */
+            this["managed"] = undefined;
+        }
+        if (!("contextId" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["contextId"] = "";
+        }
+        if (!("path" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["path"] = "";
+        }
+        if (!("root" in $$source)) {
+            /**
+             * @member
+             * @type {string}
+             */
+            this["root"] = "";
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["gitDir"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["commonDir"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["branch"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["head"] = undefined;
+        }
+        if (!("main" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["main"] = false;
+        }
+        if (!("current" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["current"] = false;
+        }
+        if (!("unavailable" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["unavailable"] = false;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["reason"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Worktree instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {Worktree}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Worktree(/** @type {Partial<Worktree>} */($$parsedSource));
     }
 }
 

@@ -53,6 +53,7 @@ func (e Error) Error() string { return e.Code + ": " + e.Message }
 func coded(code, message string) error { return Error{Code: code, Message: message} }
 
 type AddWorkspaceInput struct {
+	AutoWorktree   *bool                      `json:"autoWorktree,omitempty"`
 	Path           string                     `json:"path"`
 	Name           string                     `json:"name,omitempty"`
 	DefaultSandbox string                     `json:"defaultSandbox,omitempty"`
@@ -61,6 +62,7 @@ type AddWorkspaceInput struct {
 }
 
 type UpdateWorkspaceInput struct {
+	AutoWorktree   *bool                      `json:"autoWorktree,omitempty"`
 	ID             string                     `json:"id"`
 	Path           string                     `json:"path"`
 	Name           string                     `json:"name,omitempty"`
@@ -75,6 +77,8 @@ type WorkspaceStatus struct {
 }
 
 type CreateTaskInput struct {
+	WorktreeMode    string   `json:"worktreeMode,omitempty"`
+	WorktreeID      string   `json:"worktreeId,omitempty"`
 	WorkspaceID     string   `json:"workspaceId"`
 	Title           string   `json:"title"`
 	Prompt          string   `json:"prompt"`
@@ -252,6 +256,7 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 		remoteGitExecutor: newRemoteGitExecutor,
 		accountUsageCache: newAccountUsageCache(store.Data.Paths.Root),
 	}
+	orchestrator.SetWorkspaceResolver(app.resolveTaskWorkspace)
 	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
 	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, preparations: newRemotePreparationRegistry()})
 	app.accountUsageWG.Add(1)
@@ -447,7 +452,7 @@ func (a *Service) UpdateWorkspace(ctx context.Context, input UpdateWorkspaceInpu
 	}
 	return a.saveWorkspace(ctx, AddWorkspaceInput{
 		Path: input.Path, Name: input.Name, DefaultSandbox: input.DefaultSandbox,
-		RemoteFS: input.RemoteFS, Password: input.Password,
+		RemoteFS: input.RemoteFS, Password: input.Password, AutoWorktree: input.AutoWorktree,
 	}, id)
 }
 
@@ -595,8 +600,23 @@ func (a *Service) saveWorkspace(ctx context.Context, input AddWorkspaceInput, up
 		workspace.CreatedAt = current.CreatedAt
 		workspace.LastOpenedAt = current.LastOpenedAt
 		workspace.Pinned = current.Pinned
+		workspace.AutoWorktree = current.AutoWorktree
 		if current.RemoteFS != nil {
 			oldCredentialID = current.RemoteFS.CredentialID
+		}
+	}
+	if input.AutoWorktree != nil {
+		workspace.AutoWorktree = *input.AutoWorktree
+	}
+	if workspace.AutoWorktree {
+		if workspace.RemoteFS != nil {
+			return domainworkspaces.Workspace{}, coded("worktree_local_only", "automatic worktrees require a local Git project")
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		_, checkErr := a.git.WorktreeIdentity(checkCtx, workspace.Path)
+		cancel()
+		if checkErr != nil {
+			return domainworkspaces.Workspace{}, coded("worktree_git_required", "automatic worktrees require a Git working directory")
 		}
 	}
 	if err := a.store.Repos.Tasks.SaveWorkspace(ctx, workspace); err != nil {
@@ -668,6 +688,16 @@ func (a *Service) RemoveWorkspace(ctx context.Context, id string) error {
 }
 
 func (a *Service) GetWorkspace(ctx context.Context, id string) (domainworkspaces.Workspace, error) {
+	if strings.HasPrefix(id, "worktree:") {
+		return a.resolveWorktreeContext(ctx, id)
+	}
+	if strings.HasPrefix(id, "task:") {
+		task, err := a.store.Repos.Tasks.GetTask(ctx, strings.TrimPrefix(id, "task:"))
+		if err != nil {
+			return domainworkspaces.Workspace{}, err
+		}
+		return a.resolveTaskWorkspace(ctx, task)
+	}
 	workspace, err := a.store.Repos.Tasks.GetWorkspace(ctx, id)
 	if err != nil {
 		return workspace, coded("workspace_not_found", "workspace was not found")
@@ -937,13 +967,62 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 	}
 	now := time.Now().UTC()
 	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: title, Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Sandbox: strings.TrimSpace(input.Sandbox), Harness: strings.TrimSpace(input.Harness), Model: strings.TrimSpace(input.Model), ReasoningEffort: strings.TrimSpace(input.ReasoningEffort), ServiceTier: strings.TrimSpace(input.ServiceTier), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
-	attachments, err := a.persistAttachments(ctx, task, input.AttachmentPaths)
+	mode, err := resolveWorktreeMode(workspace.AutoWorktree, input.WorktreeMode, input.WorktreeID)
 	if err != nil {
 		return domaintasks.Task{}, err
 	}
+	// Validate before allocating a checkout, including local-only execution.
+	if err := domaintasks.Validate(task); err != nil {
+		return domaintasks.Task{}, coded("task_invalid", err.Error())
+	}
+	if mode != "project" {
+		for _, step := range definition.Steps {
+			if step.WorkerID != "" && step.WorkerID != "local" {
+				return domaintasks.Task{}, coded("worktree_local_only", "worktree tasks currently require local workflow nodes")
+			}
+		}
+	}
+	if mode == "new" {
+		binding, err := a.createTaskWorktree(ctx, workspace, task.ID)
+		if err != nil {
+			return domaintasks.Task{}, err
+		}
+		task.Worktree = &binding
+		// If a later attachment or persistence operation fails, preserve the new
+		// checkout and return its location so the user can recover it from the picker.
+	}
+	if mode == "existing" {
+		if !strings.HasPrefix(input.WorktreeID, "worktree:"+workspace.ID+":") {
+			return domaintasks.Task{}, coded("worktree_invalid", "worktree does not belong to this project")
+		}
+		items, err := a.GitListWorktrees(ctx, workspace.ID)
+		if err != nil {
+			return domaintasks.Task{}, err
+		}
+		for _, item := range items {
+			if item.ContextID == input.WorktreeID && !item.Unavailable {
+				copy := item
+				task.Worktree = &copy
+				break
+			}
+		}
+		if task.Worktree == nil {
+			return domaintasks.Task{}, coded("worktree_unavailable", "worktree is no longer available")
+		}
+	}
+	if task.Worktree != nil {
+		workspace, err = a.resolveTaskWorkspace(ctx, task)
+		if err != nil {
+			return domaintasks.Task{}, worktreeTaskError(task, err)
+		}
+	}
+	attachments, err := a.persistAttachments(ctx, task, input.AttachmentPaths)
+	if err != nil {
+		return domaintasks.Task{}, worktreeTaskError(task, err)
+	}
 	task.Attachments = attachments
 	if err := a.store.Repos.Tasks.SaveTask(ctx, task); err != nil {
-		return domaintasks.Task{}, coded("task_invalid", err.Error())
+		return domaintasks.Task{}, worktreeTaskError(task, coded("task_invalid", err.Error()))
 	}
 	if refineTitle {
 		titleWorkspace := workspace.Path
@@ -1239,6 +1318,11 @@ func (a *Service) GetRunDetail(ctx context.Context, runID string) (RunDetail, er
 	instructions, err := a.store.Repos.Workflows.ListInstructions(ctx, runID)
 	if err != nil {
 		return RunDetail{}, err
+	}
+	// History remains readable even if its checkout has since been removed.
+	if task.Worktree != nil {
+		workspace.Path = task.Worktree.Path
+		workspace.ID = "task:" + task.ID
 	}
 	detail := RunDetail{Run: run, Task: task, Workspace: workspace, Workflow: workflow, StepRuns: stepRuns, Events: make([]WorkflowEventView, 0, len(events)), RuntimeEvents: []RuntimeEventView{}, Instructions: instructions, Active: a.isActive(runID), LastError: a.lastError(runID)}
 	for _, event := range events {

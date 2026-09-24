@@ -385,11 +385,11 @@ function TaskWorkbench({ composerDrafts, mode, workspace, workspaceID, terminalP
       onKeyDown={resizeInspectorWithKeyboard}
     />}
 
-    {!inspectorCollapsed && <InspectorPanel
+    {!inspectorCollapsed && <InspectorPanel key={workspace?.id || workspaceID}
       className="workbench-inspector open min-h-0 min-w-0"
       scope={inspectorScope}
       mode={mode}
-      workspaceID={workspaceID}
+      workspaceID={workspace?.id || workspaceID}
       remoteFS={workspace?.remoteFs}
       detail={runDetail}
       queuedTask={selectedQueuedTask}

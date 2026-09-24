@@ -16,6 +16,8 @@ var (
 )
 
 type Workspace struct {
+	AutoWorktree   bool      `json:"autoWorktree"`
+	LockID         string    `json:"-"`
 	ID             string    `json:"id"`
 	Name           string    `json:"name"`
 	Path           string    `json:"path"`
@@ -87,4 +89,21 @@ func Validate(workspace Workspace) error {
 	default:
 		return ErrInvalid
 	}
+}
+
+// Worktree is a discovered checkout. ContextID is scoped to its parent project;
+// Path preserves the project's relative working directory inside Root.
+type Worktree struct {
+	Managed     bool   `json:"managed,omitempty"`
+	ContextID   string `json:"contextId"`
+	Path        string `json:"path"`
+	Root        string `json:"root"`
+	GitDir      string `json:"gitDir,omitempty"`
+	CommonDir   string `json:"commonDir,omitempty"`
+	Branch      string `json:"branch,omitempty"`
+	Head        string `json:"head,omitempty"`
+	Main        bool   `json:"main"`
+	Current     bool   `json:"current"`
+	Unavailable bool   `json:"unavailable"`
+	Reason      string `json:"reason,omitempty"`
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
+	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 )
 
 var (
@@ -59,24 +60,25 @@ type Attachment struct {
 }
 
 type Task struct {
-	ID              string        `json:"id"`
-	WorkspaceID     string        `json:"workspaceId"`
-	Title           string        `json:"title"`
-	Prompt          string        `json:"prompt"`
-	WorkflowID      string        `json:"workflowId"`
-	Sandbox         string        `json:"sandbox,omitempty"`
-	Harness         string        `json:"harness,omitempty"`
-	Model           string        `json:"model,omitempty"`
-	ReasoningEffort string        `json:"reasoningEffort,omitempty"`
-	ServiceTier     string        `json:"serviceTier,omitempty"`
-	Status          Status        `json:"status"`
-	Pinned          bool          `json:"pinned,omitempty"`
-	ExecutionMode   ExecutionMode `json:"executionMode,omitempty"`
-	Queue           *QueueInfo    `json:"queue,omitempty"`
-	Attachments     []Attachment  `json:"attachments,omitempty"`
-	DeletedAt       time.Time     `json:"deletedAt,omitempty"`
-	CreatedAt       time.Time     `json:"createdAt"`
-	UpdatedAt       time.Time     `json:"updatedAt"`
+	Worktree        *domainworkspaces.Worktree `json:"worktree,omitempty"`
+	ID              string                     `json:"id"`
+	WorkspaceID     string                     `json:"workspaceId"`
+	Title           string                     `json:"title"`
+	Prompt          string                     `json:"prompt"`
+	WorkflowID      string                     `json:"workflowId"`
+	Sandbox         string                     `json:"sandbox,omitempty"`
+	Harness         string                     `json:"harness,omitempty"`
+	Model           string                     `json:"model,omitempty"`
+	ReasoningEffort string                     `json:"reasoningEffort,omitempty"`
+	ServiceTier     string                     `json:"serviceTier,omitempty"`
+	Status          Status                     `json:"status"`
+	Pinned          bool                       `json:"pinned,omitempty"`
+	ExecutionMode   ExecutionMode              `json:"executionMode,omitempty"`
+	Queue           *QueueInfo                 `json:"queue,omitempty"`
+	Attachments     []Attachment               `json:"attachments,omitempty"`
+	DeletedAt       time.Time                  `json:"deletedAt,omitempty"`
+	CreatedAt       time.Time                  `json:"createdAt"`
+	UpdatedAt       time.Time                  `json:"updatedAt"`
 }
 
 func Validate(task Task) error {

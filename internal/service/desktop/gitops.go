@@ -163,6 +163,9 @@ func (a *Service) GitListBranches(ctx context.Context, workspaceID string) ([]do
 }
 
 func (a *Service) GitSwitchBranch(ctx context.Context, workspaceID, name string) (domainworkspaces.GitSnapshot, error) {
+	if strings.HasPrefix(workspaceID, "task:") || strings.HasPrefix(workspaceID, "worktree:") {
+		return domainworkspaces.GitSnapshot{}, coded("worktree_branch_fixed", "create a new task to use another worktree branch")
+	}
 	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
 	if err != nil {
 		return domainworkspaces.GitSnapshot{}, err
@@ -175,6 +178,9 @@ func (a *Service) GitSwitchBranch(ctx context.Context, workspaceID, name string)
 }
 
 func (a *Service) GitCreateBranch(ctx context.Context, workspaceID, name string) (domainworkspaces.GitSnapshot, error) {
+	if strings.HasPrefix(workspaceID, "task:") || strings.HasPrefix(workspaceID, "worktree:") {
+		return domainworkspaces.GitSnapshot{}, coded("worktree_branch_fixed", "create a new task to use another worktree branch")
+	}
 	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
 	if err != nil {
 		return domainworkspaces.GitSnapshot{}, err

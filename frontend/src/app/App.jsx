@@ -1,3 +1,4 @@
+import { executionWorkspace, demoTaskWorktree } from "./worktreeContext.js";
 import { appendPrompt, capturePromptSelection } from "./promptActions.js";
 import { createComposerDrafts, draftKey } from "./composerDrafts.js";
 import { useComposerDraft } from "./useComposerDraft.js";
@@ -75,7 +76,7 @@ const listsChangedEvent = "onecatch:lists-changed";
 const LIST_HEARTBEAT_MS = 30_000;
 const directAgentWorkflowID = "single_agent";
 
-const emptyWorkspaceForm = () => ({ source: "local", path: "", remoteHost: "", remoteRoot: "", remoteUsername: "", remotePassword: "", name: "", defaultSandbox: "" });
+const emptyWorkspaceForm = () => ({ autoWorktree: false, source: "local", path: "", remoteHost: "", remoteRoot: "", remoteUsername: "", remotePassword: "", name: "", defaultSandbox: "" });
 
 function workspaceLocation(workspace) {
   return workspace?.remoteFs ? `${workspace.remoteFs.username ? `${workspace.remoteFs.username}@` : ""}${workspace.remoteFs.host}:${workspace.remoteFs.root}` : workspace?.path || "";
@@ -278,6 +279,9 @@ function App() {
   remoteWorkspacesRef.current = workspaces.filter((workspace) => workspace.remoteFs);
 
   const selectedWorkspace = workspaces.find((item) => item.id === workspaceID);
+  const contextTask = taskModal ? null : runDetail?.task || tasks.find((task) => task.id === selectedQueuedTaskID);
+  const activeWorkspace = executionWorkspace(selectedWorkspace, contextTask, taskForm.worktree);
+  const executionWorkspaceID = activeWorkspace?.id || workspaceID;
   const remoteFSHarnessAvailable = hasRemoteFSHarness(runtimes, settings.runtimes);
   const remoteWorkspaceSignature = useMemo(() => workspaces
     .filter((workspace) => workspace.remoteFs)
@@ -578,8 +582,8 @@ function App() {
   }, [mode]);
 
   const inspectorContext = useMemo(
-    () => buildInspectorContext({ mode, workspaceID, remoteFS: selectedWorkspace?.remoteFs || null, runDetail, tasks, selectedQueuedTaskID, draft: taskModal }),
-    [mode, runDetail, selectedQueuedTaskID, selectedWorkspace?.remoteFs, taskModal, tasks, workspaceID],
+    () => buildInspectorContext({ mode, workspaceID: executionWorkspaceID, remoteFS: selectedWorkspace?.remoteFs || null, runDetail, tasks, selectedQueuedTaskID, draft: taskModal }),
+    [mode, runDetail, selectedQueuedTaskID, selectedWorkspace?.remoteFs, taskModal, tasks, executionWorkspaceID],
   );
   const inspectorContextRef = useRef(inspectorContext);
   inspectorContextRef.current = inspectorContext;
@@ -918,6 +922,7 @@ function App() {
     setWorkspaceEditingID(selectedWorkspace.id);
     setWorkspaceForm({
       source: selectedWorkspace.remoteFs ? "remote" : "local",
+      autoWorktree: Boolean(selectedWorkspace.autoWorktree),
       path: selectedWorkspace.remoteFs ? "" : selectedWorkspace.path,
       remoteHost: selectedWorkspace.remoteFs?.host || "",
       remoteRoot: selectedWorkspace.remoteFs?.root || "",
@@ -947,8 +952,8 @@ function App() {
     setBusy("workspace");
     try {
       const payload = remote
-        ? { path: workspaceForm.remoteRoot.trim(), name: workspaceForm.name, defaultSandbox: workspaceForm.defaultSandbox || "workspace-write", remoteFs: { host: workspaceForm.remoteHost.trim(), root: workspaceForm.remoteRoot.trim(), username: workspaceForm.remoteUsername.trim() }, ...(workspaceForm.remotePassword ? { password: workspaceForm.remotePassword } : {}) }
-        : { path: workspaceForm.path.trim(), name: workspaceForm.name, defaultSandbox: workspaceForm.defaultSandbox };
+        ? { autoWorktree: false, path: workspaceForm.remoteRoot.trim(), name: workspaceForm.name, defaultSandbox: workspaceForm.defaultSandbox || "workspace-write", remoteFs: { host: workspaceForm.remoteHost.trim(), root: workspaceForm.remoteRoot.trim(), username: workspaceForm.remoteUsername.trim() }, ...(workspaceForm.remotePassword ? { password: workspaceForm.remotePassword } : {}) }
+        : { path: workspaceForm.path.trim(), name: workspaceForm.name, defaultSandbox: workspaceForm.defaultSandbox, autoWorktree: Boolean(workspaceForm.autoWorktree) };
       if (mode === "demo") {
         const { password: _password, ...safePayload } = payload;
         const item = { ...safePayload, id: workspaceEditingID || `workspace-${Date.now()}`, name: payload.name || payload.path.split("/").pop(), lastOpenedAt: new Date().toISOString() };
@@ -1066,14 +1071,14 @@ function App() {
     try {
       if (mode === "demo") {
         if (taskForm.executionMode === "queued") {
-          const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+          const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, worktree: demoTaskWorktree(selectedWorkspace, taskForm.worktree, `session-${Date.now()}`), title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
           setTasks((items) => [...items, queuedTask]); setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(queuedTask.id);
         } else {
-          const demoTask = { ...demo.demoTasks[0], title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), updatedAt: new Date().toISOString() };
+          const demoTask = { ...demo.demoTasks[0], worktree: demoTaskWorktree(selectedWorkspace, taskForm.worktree, `session-${Date.now()}`), title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), updatedAt: new Date().toISOString() };
           setTasks((items) => items.map((item) => item.id === demoTask.id ? demoTask : item)); setRunItems([{ ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running", task: demoTask }]); setRunTotal(1); setSelectedQueuedTaskID(""); setSelectedRunID("run_demo"); setRunDetail({ ...demo.demoRun, task: demoTask, run: { ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running" }, active: true });
         }
       } else {
-        const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, title: "", prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachmentPaths: taskForm.attachmentPaths });
+        const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, worktreeId: taskForm.worktree?.contextId || "", worktreeMode: taskForm.worktree?.mode || "", title: "", prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachmentPaths: taskForm.attachmentPaths });
         const preview = await TaskRunBinding.PreviewRun(task.id);
         if (taskForm.executionMode === "queued") {
           const queued = await TaskRunBinding.EnqueueTask(task.id, preview.confirmationToken || "");
@@ -1089,7 +1094,7 @@ function App() {
         await loadTasks(); await loadRunList();
       }
       await discardStagedAttachments(taskForm.attachmentPaths);
-      composerDrafts.set(taskDraftKey, (form) => ({ ...form, prompt: form.prompt === taskForm.prompt ? "" : form.prompt, attachmentPaths: form.attachmentPaths.filter((path) => !taskForm.attachmentPaths.includes(path)) }), emptyTaskForm); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? t("app.taskQueued") : t("app.runStarted"));
+      composerDrafts.set(taskDraftKey, (form) => ({ ...form, worktree: null, prompt: form.prompt === taskForm.prompt ? "" : form.prompt, attachmentPaths: form.attachmentPaths.filter((path) => !taskForm.attachmentPaths.includes(path)) }), emptyTaskForm); setTaskModal(false); notify("success", taskForm.executionMode === "queued" ? t("app.taskQueued") : t("app.runStarted"));
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
@@ -1695,7 +1700,7 @@ function App() {
         </div>}
         {editor ? <Suspense fallback={<ViewLoading />}><WorkflowEditor editor={editor} setEditor={setEditor} validation={validation} validateEditor={validateEditor} saveWorkflow={saveWorkflow} busy={busy} updateStep={updateStep} updateTransition={updateTransition} removeTransition={removeTransition} runtimes={runtimes} workers={settings.experimental?.remoteWorkersEnabled ? workers : []} defaultSandbox={settings.execution.defaultSandbox} allowFullSandbox={settings.security.allowFullSandbox} onClose={() => { setEditor(null); setEditorSourceID(""); }} showBack /></Suspense> : view === "tasks" || view === "skills" ? <TaskWorkbench
           mode={mode}
-          workspace={selectedWorkspace}
+          workspace={activeWorkspace}
           terminalPreferences={settings.terminal}
           terminalVisible={terminalVisible}
           terminalToggleVersion={terminalToggleVersion}
@@ -1785,6 +1790,10 @@ function App() {
           <p className="-mt-1 m-0 text-[11px] leading-relaxed text-muted-foreground">{t("workspace.sshPasswordHint")}</p>
           <p className="-mt-1 m-0 rounded-md border bg-muted/40 px-3 py-2 text-[11px] leading-relaxed text-muted-foreground">{t("workspace.remoteFSDescription")}</p>
         </>}
+        {workspaceForm.source === "local" && <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3" htmlFor="workspace-auto-worktree">
+          <input id="workspace-auto-worktree" type="checkbox" className="mt-1 size-4 shrink-0 accent-primary" checked={Boolean(workspaceForm.autoWorktree)} onChange={(event) => setWorkspaceForm((form) => ({ ...form, autoWorktree: event.target.checked }))} disabled={busy === "workspace"} />
+          <span className="grid gap-1"><strong className="text-sm font-medium">{t("worktree.autoTitle")}</strong><span className="text-xs leading-relaxed text-muted-foreground">{t("worktree.autoDescription")}</span></span>
+        </label>}
         <div className="grid gap-1.5">
           <Label htmlFor="workspace-create-name">{t("workspace.displayName")}</Label>
           <Input id="workspace-create-name" value={workspaceForm.name} onChange={(event) => setWorkspaceForm((form) => ({ ...form, name: event.target.value }))} placeholder={t("workspace.defaultName")} />

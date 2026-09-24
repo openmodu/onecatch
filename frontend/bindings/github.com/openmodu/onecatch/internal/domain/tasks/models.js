@@ -6,6 +6,10 @@
 // @ts-ignore: Unused imports
 import { Create as $Create } from "@wailsio/runtime";
 
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as workspaces$0 from "../workspaces/models.js";
+
 export class Attachment {
     /**
      * Creates a new Attachment instance.
@@ -186,6 +190,13 @@ export class Task {
      * @param {Partial<Task>} [$$source = {}] - The source object to create the Task.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {workspaces$0.Worktree | null | undefined}
+             */
+            this["worktree"] = undefined;
+        }
         if (!("id" in $$source)) {
             /**
              * @member
@@ -322,21 +333,27 @@ export class Task {
      * @returns {Task}
      */
     static createFrom($$source = {}) {
-        const $$createField13_0 = $$createType1;
+        const $$createField0_0 = $$createType1;
         const $$createField14_0 = $$createType3;
+        const $$createField15_0 = $$createType5;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("worktree" in $$parsedSource) {
+            $$parsedSource["worktree"] = $$createField0_0($$parsedSource["worktree"]);
+        }
         if ("queue" in $$parsedSource) {
-            $$parsedSource["queue"] = $$createField13_0($$parsedSource["queue"]);
+            $$parsedSource["queue"] = $$createField14_0($$parsedSource["queue"]);
         }
         if ("attachments" in $$parsedSource) {
-            $$parsedSource["attachments"] = $$createField14_0($$parsedSource["attachments"]);
+            $$parsedSource["attachments"] = $$createField15_0($$parsedSource["attachments"]);
         }
         return new Task(/** @type {Partial<Task>} */($$parsedSource));
     }
 }
 
 // Private type creation functions
-const $$createType0 = QueueInfo.createFrom;
+const $$createType0 = workspaces$0.Worktree.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = Attachment.createFrom;
-const $$createType3 = $Create.Array($$createType2);
+const $$createType2 = QueueInfo.createFrom;
+const $$createType3 = $Create.Nullable($$createType2);
+const $$createType4 = Attachment.createFrom;
+const $$createType5 = $Create.Array($$createType4);
