@@ -93,7 +93,9 @@ func TestInteractivePermissionCapability(t *testing.T) {
 		// Neither harness has a channel to ask through.
 		{RuntimePi, SandboxWorkspaceWrite, false, "pi"},
 		{RuntimeDsh, SandboxWorkspaceWrite, false, "dsh"},
-		{RuntimeCodex, SandboxReadOnly, false, "codex"},
+		{RuntimeCodex, SandboxReadOnly, true, "codex read-only"},
+		{RuntimeCodex, SandboxWorkspaceWrite, true, "codex workspace-write"},
+		{RuntimeCodex, SandboxFull, false, "codex full"},
 	} {
 		if got := engine.SupportsInteractivePermissions(testCase.runtime, testCase.sandbox); got != testCase.want {
 			t.Fatalf("%s: interactive permissions = %v, want %v", testCase.why, got, testCase.want)

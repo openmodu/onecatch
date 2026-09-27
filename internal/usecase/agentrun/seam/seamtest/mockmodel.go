@@ -439,6 +439,10 @@ func (m *Mock) pickCodexTool(tools []struct {
 	Type string `json:"type"`
 	Name string `json:"name"`
 }) (name, arguments string) {
+	if len(m.toolScript) > 0 {
+		data, _ := json.Marshal(m.toolScript[0].Input)
+		return m.toolScript[0].Name, string(data)
+	}
 	advertised := map[string]bool{}
 	var firstFunction string
 	for _, t := range tools {

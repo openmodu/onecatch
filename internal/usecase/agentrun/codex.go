@@ -700,7 +700,9 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 			continue
 		}
 		if envelope.Method != "" && len(envelope.ID) > 0 {
-			_ = respondUnsupportedCodexRequest(process.encoder, envelope)
+			if err := r.handleCodexApproval(ctx, process.encoder, envelope, req, state.sessionID, activeTurnID, line, sink); err != nil {
+				return state.result(), err
+			}
 			continue
 		}
 		if responseID(envelope.ID) == 1 {
@@ -803,7 +805,7 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 
 func sendCodexThreadStart(encoder *json.Encoder, req Request) error {
 	method := "thread/start"
-	params := map[string]any{"cwd": req.Workspace, "approvalPolicy": "never", "sandbox": codexSandbox(req.Sandbox)}
+	params := map[string]any{"cwd": req.Workspace, "approvalPolicy": codexApprovalPolicy(req), "sandbox": codexSandbox(req.Sandbox)}
 	if req.Remote != nil {
 		params["developerInstructions"] = remoteCodexGuidance
 	}
@@ -863,9 +865,12 @@ func codexNotificationMatches(raw json.RawMessage, threadID, turnID string) bool
 func codexAppProcessKey(req Request, args, environment []string) string {
 	hash := sha256.New()
 	values := append(append([]string{req.Workspace}, args...), environment...)
+	// Warm turns skip thread/resume, where the sandbox and approval policy are
+	// set. A changed permission level must therefore reopen the durable thread.
+	values = append(values, "sandbox:"+codexSandbox(req.Sandbox), "approval:"+codexApprovalPolicy(req))
 	if req.Remote != nil {
 		remote, _ := json.Marshal(req.Remote)
-		values = append(values, "remote:"+string(remote), "sandbox:"+string(req.Sandbox))
+		values = append(values, "remote:"+string(remote))
 	}
 	for _, value := range values {
 		_, _ = io.WriteString(hash, value)
@@ -1019,7 +1024,7 @@ func responseID(raw json.RawMessage) int {
 func respondUnsupportedCodexRequest(encoder *json.Encoder, envelope codexAppEnvelope) error {
 	return encoder.Encode(map[string]any{
 		"id":    envelope.ID,
-		"error": map[string]any{"code": -32601, "message": "OneCatch does not handle interactive app-server requests"},
+		"error": map[string]any{"code": -32601, "message": "Unsupported Codex app-server request: " + envelope.Method},
 	})
 }
 

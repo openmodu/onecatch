@@ -216,6 +216,27 @@ done
 	if !strings.Contains(string(payload), `"method":"thread/resume"`) {
 		t.Fatalf("fresh app-server did not resume the durable thread: %s", payload)
 	}
+	// Local permission changes must also reopen the thread. Otherwise a warm
+	// turn silently inherits the previous sandbox or the old never policy.
+	for i, sandbox := range []Sandbox{SandboxReadOnly, SandboxWorkspaceWrite, SandboxWorkspaceWrite} {
+		request.Sandbox = sandbox
+		if i == 2 {
+			request.PermissionHandler = func(context.Context, PermissionRequest) (PermissionDecision, error) {
+				return PermissionDecision{Behavior: "deny"}, nil
+			}
+		}
+		result, err := runner.Run(context.Background(), request, nil)
+		if err != nil || result.FinalMessage != "Hello 1" {
+			t.Fatalf("permission change reused old process: %+v, %v", result, err)
+		}
+	}
+	payload, err = os.ReadFile(requests)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Count(string(payload), `"method":"thread/resume"`) != 4 || !strings.Contains(string(payload), `"approvalPolicy":"on-request"`) {
+		t.Fatalf("permission changes did not reach resumed thread: %s", payload)
+	}
 }
 
 func TestCodexRunnerReusesAppServerForRemoteConversationFollowUp(t *testing.T) {
