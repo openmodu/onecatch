@@ -54,7 +54,7 @@ export default function PairSheet({ open, busy, initialURL = "https://", onClose
       <form onSubmit={(event) => { event.preventDefault(); if (validAddress) void onPair({ baseURL, code }).then((ok) => { if (ok) { setCode(""); onClose(); } }); }}>
         <button type="button" className="mobile-pair-manual-toggle" aria-expanded={manual} disabled={busy} onClick={() => setManual((value) => !value)}>{manual ? "收起手动地址" : "手动输入地址"}</button>
         {manual && <label><span>Worker 地址</span><Input value={baseURL} disabled={busy} inputMode="url" autoCapitalize="none" autoCorrect="off" placeholder="https://192.168.1.20:9232" onChange={(event) => setBaseURL(event.target.value)} /></label>}
-        <label><span>一次性配对码</span><Input value={code} disabled={busy} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="例如 ABCD-EFGH" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
+        <label><span>一次性配对码</span><Input value={code} disabled={busy} autoCapitalize="characters" autoCorrect="off" maxLength={16} placeholder="例如 ABCDEFGH" onChange={(event) => setCode(event.target.value.toUpperCase())} /></label>
         <Button className="mobile-main-action" type="submit" disabled={busy || !validAddress || !code.trim()}>{busy ? <><LoaderCircle className="animate-spin" />正在连接</> : <><Link2 />{selected ? `连接 ${selected.name}` : "连接电脑"}</>}</Button>
       </form>
       <p className="mobile-security-note">配对码 10 分钟内有效且只能用一次。发现电脑后仍需输入配对码；配对后 IP 变化会自动重连。独立 Worker 可执行 <code>onecatch worker --pair</code> 生成配对码。</p>

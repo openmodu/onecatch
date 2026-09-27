@@ -26,7 +26,7 @@ type pairingState struct {
 
 func newPairingState(code string, expiresAt time.Time, allowInsecure bool) *pairingState {
 	return &pairingState{
-		code:          strings.TrimSpace(code),
+		code:          normalizePairingCode(code),
 		expiresAt:     expiresAt,
 		attemptsLeft:  maxPairingAttempts,
 		allowInsecure: allowInsecure,
@@ -40,7 +40,7 @@ func (p *pairingState) consume(code string, now time.Time) bool {
 		return false
 	}
 	p.attemptsLeft--
-	provided := strings.TrimSpace(code)
+	provided := normalizePairingCode(code)
 	if len(provided) != len(p.code) || subtle.ConstantTimeCompare([]byte(provided), []byte(p.code)) != 1 {
 		return false
 	}
@@ -48,7 +48,11 @@ func (p *pairingState) consume(code string, now time.Time) bool {
 	return true
 }
 
-// NewPairingCode returns a one-time code in XXXX-XXXX form. The alphabet drops
+func normalizePairingCode(code string) string {
+	return strings.ReplaceAll(strings.ToUpper(strings.TrimSpace(code)), "-", "")
+}
+
+// NewPairingCode returns an eight-character one-time code. The alphabet drops
 // the characters people misread when copying a code off one screen onto
 // another phone keyboard.
 func NewPairingCode() (string, error) {
@@ -60,7 +64,7 @@ func NewPairingCode() (string, error) {
 	for index := range buffer {
 		buffer[index] = alphabet[int(buffer[index])%len(alphabet)]
 	}
-	return string(buffer[:4]) + "-" + string(buffer[4:]), nil
+	return string(buffer), nil
 }
 
 // LoadOrCreateToken reads the worker's persistent bearer token from root,

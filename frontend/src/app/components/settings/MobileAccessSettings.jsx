@@ -51,6 +51,7 @@ export default function MobileAccessSettings({ mode, notify }) {
   // A code is only usable while it lasts, so the panel counts it down rather
   // than leaving a dead code on screen.
   const pairing = status?.pairing;
+  const displayCode = pairing?.code?.replaceAll("-", "") || "";
   useEffect(() => {
     if (!pairing) return undefined;
     const timer = window.setInterval(() => setTick((value) => value + 1), 1000);
@@ -106,9 +107,9 @@ export default function MobileAccessSettings({ mode, notify }) {
           </div>
           {pairing && countdown
             ? <div className="flex min-h-14 items-center gap-3 rounded-lg border border-border/70 bg-muted/30 px-3.5 py-3">
-                <code className="flex-1 select-text font-mono text-xl font-semibold tracking-[0.18em] text-foreground">{pairing.code}</code>
+                <code className="flex-1 select-text font-mono text-xl font-semibold tracking-[0.18em] text-foreground">{displayCode}</code>
                 <span className="text-xs tabular-nums text-muted-foreground">{t("settings.mobileAccessExpiresIn", { countdown })}</span>
-                <SettingsButton tone="ghost" compact className="size-7 p-0 text-muted-foreground" aria-label={t("settings.mobileAccessCopyCode")} onClick={() => { void copyText(pairing.code); }}><ClipboardIcon /></SettingsButton>
+                <SettingsButton tone="ghost" compact className="size-7 p-0 text-muted-foreground" aria-label={t("settings.mobileAccessCopyCode")} onClick={() => { void copyText(displayCode); }}><ClipboardIcon /></SettingsButton>
               </div>
             : <p className="m-0 text-xs text-muted-foreground">{t("settings.mobileAccessCodeHint")}</p>}
         </div>

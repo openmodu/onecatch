@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"testing"
+	"time"
 )
 
 func TestWorkerTokenIsCreatedPrivatelyAndReused(t *testing.T) {
@@ -25,7 +26,24 @@ func TestWorkerTokenIsCreatedPrivatelyAndReused(t *testing.T) {
 
 func TestPairingCodeUsesReadableFixedShape(t *testing.T) {
 	code, err := NewPairingCode()
-	if err != nil || !regexp.MustCompile(`^[23456789A-HJ-NP-Z]{4}-[23456789A-HJ-NP-Z]{4}$`).MatchString(code) {
+	if err != nil || !regexp.MustCompile(`^[23456789A-HJ-NP-Z]{8}$`).MatchString(code) {
 		t.Fatalf("pairing code = %q, err=%v", code, err)
+	}
+}
+
+func TestPairingAcceptsCodesWithOrWithoutLegacySeparator(t *testing.T) {
+	for _, issued := range []string{"ABCD2345", "ABCD-2345"} {
+		for _, entered := range []string{"ABCD2345", "ABCD-2345", " abcd2345 "} {
+			state := newPairingState(issued, time.Now().Add(time.Minute), false)
+			if state.consume("ABCD2346", time.Now()) {
+				t.Fatal("accepted a different code")
+			}
+			if !state.consume(entered, time.Now()) {
+				t.Fatalf("issued %q rejected %q", issued, entered)
+			}
+			if state.consume(entered, time.Now()) {
+				t.Fatal("accepted a reused code")
+			}
+		}
 	}
 }

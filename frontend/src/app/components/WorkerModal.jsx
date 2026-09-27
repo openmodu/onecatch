@@ -35,7 +35,7 @@ export default function WorkerModal({ form, setForm, busy, onClose, onUpdate, on
               <SettingsField label={t(sandbox ? "worker.sandboxUrl" : "worker.baseUrl")} hint={sandbox ? t("worker.sandboxUrlHint") : undefined}>
                 <Input autoFocus value={form.baseUrl} disabled={submitting} onChange={(event) => { update("baseUrl", event.target.value); if (isVolcengineSandboxURL(event.target.value)) setConnectionType("sandbox"); }} placeholder={sandbox ? "https://…volceapi.com/?faasInstanceName=…&Authorization=…" : "https://192.168.1.20:9231"} autoComplete="off" spellCheck={false} />
               </SettingsField>
-              {sandbox ? <SettingsField label={t("worker.sandboxPath")} hint={t("worker.sandboxPathHint")}><Input value={remotePath} disabled={submitting} onChange={(event) => setRemotePath(event.target.value)} placeholder="/home/gem" /></SettingsField> : <SettingsField label={t("worker.pairingCode")} hint={t("worker.pairingSectionDescription")}><Input value={pairingCode} disabled={submitting} onChange={(event) => setPairingCode(event.target.value.toUpperCase())} placeholder="ABCD-2345" /></SettingsField>}
+              {sandbox ? <SettingsField label={t("worker.sandboxPath")} hint={t("worker.sandboxPathHint")}><Input value={remotePath} disabled={submitting} onChange={(event) => setRemotePath(event.target.value)} placeholder="/home/gem" /></SettingsField> : <SettingsField label={t("worker.pairingCode")} hint={t("worker.pairingSectionDescription")}><Input value={pairingCode} disabled={submitting} onChange={(event) => setPairingCode(event.target.value.toUpperCase())} placeholder="ABCD2345" /></SettingsField>}
             </div>}
 
             {!creating && <>
