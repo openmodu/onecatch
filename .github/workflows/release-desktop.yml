@@ -1,4 +1,4 @@
-name: Release desktop installers
+name: Release desktop and Android installers
 
 on:
   push:
@@ -157,8 +157,85 @@ jobs:
             bin/*.deb.sha256
           if-no-files-found: error
 
+  android:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: gradle
+          cache-dependency-path: |
+            build/android/**/*.gradle
+            build/android/gradle/wrapper/gradle-wrapper.properties
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;34.0.0 ndk;27.0.12077973'
+      - name: Install host build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+      - name: Verify release version
+        run: |
+          version="$(node build/scripts/release-info.mjs --version)"
+          test "v$version" = "$GITHUB_REF_NAME"
+          go tool wails3 task release:check
+      - name: Build and verify Android APK
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
+          keystore="$RUNNER_TEMP/onecatch-android-release.keystore"
+          trap 'rm -f "$keystore"' EXIT
+          suffix=""
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            : "${ANDROID_KEYSTORE_PASSWORD:?Missing ANDROID_KEYSTORE_PASSWORD}"
+            : "${ANDROID_KEY_ALIAS:?Missing ANDROID_KEY_ALIAS}"
+            : "${ANDROID_KEY_PASSWORD:?Missing ANDROID_KEY_PASSWORD}"
+            umask 077
+            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+            export ANDROID_KEYSTORE_FILE="$keystore"
+          else
+            if [ -n "$ANDROID_KEYSTORE_PASSWORD$ANDROID_KEY_ALIAS$ANDROID_KEY_PASSWORD" ]; then
+              echo '::error::Android signing secrets are incomplete: ANDROID_KEYSTORE_BASE64 is missing.'
+              exit 1
+            fi
+            suffix="-test-signed"
+            echo '::warning::No Android signing key configured. This APK is for testing; its signing key changes between CI runs.'
+          fi
+          go tool wails3 task package:android ARCH=arm64
+          version="$(node build/scripts/release-info.mjs --version)"
+          artifact="OneCatch-${version}-Android-arm64${suffix}.apk"
+          cp bin/onecatch-mobile.apk "bin/$artifact"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "bin/$artifact"
+          unzip -l "bin/$artifact" | grep 'lib/arm64-v8a/libwails.so'
+          (cd bin && sha256sum "$artifact" > "$artifact.sha256")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobile-android
+          path: |
+            bin/OneCatch-*-Android-arm64*.apk
+            bin/OneCatch-*-Android-arm64*.apk.sha256
+          if-no-files-found: error
+
   github-release:
-    needs: [macos, windows, linux]
+    needs: [macos, windows, linux, android]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -170,6 +247,10 @@ jobs:
           pattern: desktop-*
           path: dist
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: mobile-android
+          path: dist
       - name: Generate signed update feeds
         env:
           ONECATCH_UPDATE_PRIVATE_KEY: ${{ secrets.ONECATCH_UPDATE_PRIVATE_KEY }}

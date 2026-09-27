@@ -132,7 +132,20 @@ go tool wails3 task build:headless
 
 监听非回环地址时必须通过 `--tls-cert` 和 `--tls-key` 配置 TLS；mTLS 再增加 `--client-ca`。只有传输安全已由受信任隧道承担时，才应显式使用 `--allow-insecure-http`。当前用户的常驻服务可用 `--install-service` 安装，所有参数以 `./bin/headless/onecatch worker --help` 为准。Worker 入口说明见 [`internal/app/worker/README.md`](internal/app/worker/README.md)，部署模板位于 [`deploy/onecatch-worker/`](deploy/onecatch-worker/)。
 
-## 桌面打包与发布
+## 桌面与 Android 打包发布
+
+Android CI 随版本标签生成 ARM64 APK 和 `.sha256` 校验文件，并上传到同一个 GitHub Release。构建使用 JDK 21、SDK 35、Build Tools 34.0.0 和 NDK 27.0.12077973。
+
+正式签名需要在仓库的 GitHub Actions Secrets 中配置以下四项：
+
+- `ANDROID_KEYSTORE_BASE64`：keystore 文件的 Base64 编码。
+- `ANDROID_KEYSTORE_PASSWORD`：keystore 密码。
+- `ANDROID_KEY_ALIAS`：签名密钥别名。
+- `ANDROID_KEY_PASSWORD`：签名密钥密码。
+
+配置齐全后，产物名为 `OneCatch-X.Y.Z-Android-arm64.apk`。四项均未配置时，CI 使用临时调试密钥，产物名带 `-test-signed.apk`。测试包的密钥会随 CI 运行变化，无法保证覆盖升级；卸载旧包会清除应用数据和 Worker 配对。配置不完整或密钥无效会让构建失败。正式发布后应保留同一签名密钥，以支持后续升级。CI 解码的 keystore 仅保存在临时目录，构建结束后删除，不会上传。
+
+本地运行 `go tool wails3 task package:android`，产物为 `bin/onecatch-mobile.apk`。本地正式签名使用 `ANDROID_KEYSTORE_FILE` 指定 keystore 的绝对路径，并配置上述密码和别名变量。
 
 根目录 [`CHANGELOG.md`](CHANGELOG.md) 中第一个 `## X.Y.Z` 小节是桌面、iOS、Android、安装包和更新程序的统一版本来源，小节正文也会作为 GitHub Release 和应用更新说明。构建模板固定使用中性的 `0.0.0`，打包时再注入当前版本，不会改写受版本控制的文件。可运行 `go tool wails3 task release:check` 校验发布信息。
 
@@ -165,7 +178,7 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-标签必须等于 `v` 加 `CHANGELOG.md` 中第一个版本号。GitHub Actions 会构建 macOS DMG 和完整 `.app` 更新 ZIP、Windows Setup、Linux `.deb` 和 AppImage，再生成签名 AppCast 与 SHA-256 文件，并用同一段修改说明发布对应的 GitHub Release。
+标签必须等于 `v` 加 `CHANGELOG.md` 中第一个版本号。GitHub Actions 会构建 macOS DMG 和完整 `.app` 更新 ZIP、Windows Setup、Linux `.deb` 和 AppImage、ARM64 Android APK，再生成签名 AppCast 与 SHA-256 文件，并用同一段修改说明发布对应的 GitHub Release。
 
 macOS 使用 Developer ID 签名时设置 `SIGN_IDENTITY`；已经通过 `notarytool store-credentials` 保存公证凭据时，再设置 `NOTARY_PROFILE`：
 

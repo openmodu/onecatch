@@ -122,7 +122,7 @@ go tool wails3 task build:headless
 
 A non-loopback listener requires TLS through `--tls-cert` and `--tls-key`; add `--client-ca` for mTLS. Use `--allow-insecure-http` only when a trusted tunnel already provides transport security. Install a per-user background service with `--install-service`. Run `./bin/headless/onecatch worker --help` for the complete option list. See [`internal/app/worker/README.md`](internal/app/worker/README.md) for the Worker entry point and [`deploy/onecatch-worker/`](deploy/onecatch-worker/) for launchd and systemd templates.
 
-## Desktop packaging and releases
+## Desktop and Android packaging and releases
 
 The first `## X.Y.Z` section in [`CHANGELOG.md`](CHANGELOG.md) is the single source for desktop, iOS, Android, installer, and updater versions. Its body is also published as the GitHub Release and updater notes. Build templates intentionally keep a neutral `0.0.0`; packaging injects the current release version without rewriting tracked files. Run `go tool wails3 task release:check` to validate the entry.
 
@@ -155,7 +155,18 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The tag must equal `v` followed by the first version in `CHANGELOG.md`. GitHub Actions builds the macOS DMG and complete `.app` update ZIP, Windows Setup package, Linux `.deb`, and Linux AppImage, then generates signed AppCasts and SHA-256 files and publishes everything with the same release notes to the matching GitHub Release.
+The tag must equal `v` followed by the first version in `CHANGELOG.md`. GitHub Actions builds the macOS DMG and complete `.app` update ZIP, Windows Setup package, Linux `.deb`, Linux AppImage, and an ARM64 Android APK, then generates signed AppCasts and SHA-256 files and publishes everything with the same release notes to the matching GitHub Release.
+
+Android CI uses JDK 21, SDK 35, Build Tools 34.0.0, and NDK 27.0.12077973. It uploads `OneCatch-X.Y.Z-Android-arm64.apk` and its `.sha256` file to the same release. To use a stable release signing key, configure all four GitHub Actions repository secrets:
+
+- `ANDROID_KEYSTORE_BASE64`: the Base64-encoded keystore file.
+- `ANDROID_KEYSTORE_PASSWORD`: keystore password.
+- `ANDROID_KEY_ALIAS`: signing key alias.
+- `ANDROID_KEY_PASSWORD`: signing key password.
+
+If none are configured, CI produces `OneCatch-X.Y.Z-Android-arm64-test-signed.apk` using the runner's debug key. These APKs are for testing; the key changes between runs, so they cannot reliably upgrade an existing installation. Uninstalling the old app clears its data and Worker pairing. Partially configured or invalid signing credentials fail the build. Keep the same release key for future upgrades; the decoded keystore is temporary and is never uploaded as an artifact.
+
+For a local Android package, run `go tool wails3 task package:android`. The output is `bin/onecatch-mobile.apk`. Local release signing uses `ANDROID_KEYSTORE_FILE` (an absolute file path), plus the three password/alias variables above.
 
 To sign the macOS package with a Developer ID, set `SIGN_IDENTITY`. If notarization credentials have already been saved with `notarytool store-credentials`, also set `NOTARY_PROFILE`:
 
