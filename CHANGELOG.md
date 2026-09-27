@@ -3,6 +3,17 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.3.4
+
+- Run Codex conversations in Volcengine sandboxes over WebSocket, with remote agent selection and locally persisted conversation records.
+- Add opt-in local project synchronization before each sandbox turn and return remote changes afterward, with conflict backups and recovery after interrupted connections.
+- Support interactive Codex approvals for Git writes and other sandboxed operations; apply changed permission settings when resuming a conversation.
+- Upgrade Wails v3 and its frontend runtime to beta.26.
+- Fix Android native compilation and open the mobile workbench on launch.
+- Keep Android headers, controls, and input fields clear of system bars, camera cutouts, and the keyboard; match system bar colours to the app theme.
+- Simplify pairing codes to eight characters without a separator, while accepting the previous hyphenated format.
+- Publish an ARM64 Android APK and SHA-256 checksum alongside desktop installers. Without configured Android release signing secrets, the APK is marked test-signed; its key changes between CI runs, so upgrading may require uninstalling the old app and pairing again.
+
 ## 0.3.3
 
 - Bind a task to a Git worktree: the composer shows the branch and changed-file count, and a new task can use the project directory, an existing worktree, or a new one, including a project option that creates one per session.
