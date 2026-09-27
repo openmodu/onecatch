@@ -28,6 +28,11 @@ vars:
     sh: 'command -v avdmanager || ls "${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$([ -d "$HOME/Library/Android/sdk" ] && echo "$HOME/Library/Android/sdk" || echo "$HOME/Android/Sdk")}}"/cmdline-tools/*/bin/avdmanager 2>/dev/null | sort -V | tail -1 || true'
 
 tasks:
+  icons:
+    summary: Generate Android launcher icons from the OneCatch artwork
+    cmds:
+      - go run ./build/android/scripts/icons
+
   install:deps:
     summary: Check and install Android development dependencies
     cmds:
@@ -180,6 +185,7 @@ tasks:
 
   assemble:apk:
     summary: Assembles a debug APK using Gradle
+    deps: [icons]
     preconditions:
       - sh: 'command -v java >/dev/null || [ -n "$JAVA_HOME" ]'
         msg: "Java not found. Install a JDK (e.g. brew install openjdk@21) and/or set JAVA_HOME"
@@ -195,6 +201,7 @@ tasks:
 
   assemble:apk:release:
     summary: Assembles a release APK using Gradle (signed with the debug keystore unless ANDROID_KEYSTORE_FILE is set)
+    deps: [icons]
     preconditions:
       - sh: 'command -v java >/dev/null || [ -n "$JAVA_HOME" ]'
         msg: "Java not found. Install a JDK (e.g. brew install openjdk@21) and/or set JAVA_HOME"
@@ -210,6 +217,7 @@ tasks:
 
   assemble:aab:
     summary: Assembles a debug AAB (Android App Bundle) using Gradle
+    deps: [icons]
     preconditions:
       - sh: 'command -v java >/dev/null || [ -n "$JAVA_HOME" ]'
         msg: "Java not found. Install a JDK (e.g. brew install openjdk@21) and/or set JAVA_HOME"
@@ -225,6 +233,7 @@ tasks:
 
   assemble:aab:release:
     summary: Assembles a release AAB for Play Store upload (signed with the debug keystore unless ANDROID_KEYSTORE_FILE is set)
+    deps: [icons]
     preconditions:
       - sh: 'command -v java >/dev/null || [ -n "$JAVA_HOME" ]'
         msg: "Java not found. Install a JDK (e.g. brew install openjdk@21) and/or set JAVA_HOME"
