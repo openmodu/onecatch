@@ -11,7 +11,7 @@ import {
 import { runtimeHarness, runtimeHarnessOptions, selectRuntimeHarness } from "../runtimeHarnesses.js";
 import RuntimeHarnessIcon from "./RuntimeHarnessIcon.jsx";
 
-export default function HarnessSelector({ value, onChange, runtimes = [], runtimeSettings = {}, remoteFS = false, readOnly = false, agentLabel = false, labelOverride = "", className = "", menuSide = "top" }) {
+export default function HarnessSelector({ value, onChange, runtimes = [], runtimeSettings = {}, remoteFS = false, readOnly = false, agentLabel = false, labelOverride = "", suffix = "", displayName = "", className = "", menuSide = "top" }) {
   const { t } = useTranslation();
   const harness = runtimeHarness(value?.harness);
   // Callers outside the task composer say what the choice is for. Without it
@@ -21,7 +21,8 @@ export default function HarnessSelector({ value, onChange, runtimes = [], runtim
   const controlClass = agentLabel ? "new-task-select executor" : "new-task-select harness";
 
   if (readOnly) {
-    return <span className={`${controlClass} is-read-only harness-profile-read-only ${className}`.trim()} aria-label={`${controlLabel}: ${harness.label}`} title={`${controlLabel}: ${harness.label}`}>{agentLabel && <RuntimeHarnessIcon harness={harness.id} size={14} aria-hidden="true" />}<span>{harness.label}</span></span>;
+    const displayLabel = displayName || (suffix ? `${harness.label} · ${suffix}` : harness.label);
+    return <span className={`${controlClass} is-read-only harness-profile-read-only ${className}`.trim()} aria-label={`${controlLabel}: ${displayLabel}`} title={`${controlLabel}: ${displayLabel}`}>{agentLabel && <RuntimeHarnessIcon harness={harness.id} size={14} aria-hidden="true" />}<span>{displayLabel}</span></span>;
   }
 
   const options = runtimeHarnessOptions(runtimes, t("task.harnessUnavailable"), runtimeSettings, remoteFS);

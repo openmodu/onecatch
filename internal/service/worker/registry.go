@@ -62,6 +62,9 @@ func (r *Registry) Save(ctx context.Context, input Input) (Info, error) {
 	if input.ID == "" || input.ID == "local" || input.Name == "" || !localfile.ValidID(input.ID) || !workerIDPattern.MatchString(input.ID) {
 		return Info{}, errors.New("worker id and name are invalid")
 	}
+	if err := normalizeSandboxInput(&input); err != nil {
+		return Info{}, err
+	}
 	parsed, err := url.Parse(input.BaseURL)
 	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
 		return Info{}, errors.New("worker base URL must be an absolute HTTP URL")
@@ -86,6 +89,7 @@ func (r *Registry) Save(ctx context.Context, input Input) (Info, error) {
 	}
 	now := time.Now().UTC()
 	config := Config{
+		Provider: input.Provider, RemotePath: input.RemotePath,
 		ID: input.ID, Name: input.Name, BaseURL: input.BaseURL, Token: strings.TrimSpace(input.Token),
 		CAFile: input.CAFile, ClientCertFile: input.ClientCertFile, ClientKeyFile: input.ClientKeyFile,
 		ServerName: input.ServerName, ServerCertificateSHA256: input.ServerCertificateSHA256,
@@ -95,6 +99,9 @@ func (r *Registry) Save(ctx context.Context, input Input) (Info, error) {
 	for index, current := range configs {
 		if current.ID != input.ID {
 			continue
+		}
+		if config.Provider != current.Provider {
+			return Info{}, errors.New("worker provider cannot be changed; register a new worker")
 		}
 		config.CreatedAt = current.CreatedAt
 		if config.Token == "" {
@@ -118,6 +125,7 @@ func (r *Registry) Save(ctx context.Context, input Input) (Info, error) {
 
 func (r *Registry) Update(ctx context.Context, input UpdateInput) (Info, error) {
 	return r.Save(ctx, Input{
+		Provider: input.Provider, RemotePath: input.RemotePath,
 		ID: input.ID, Name: input.Name, BaseURL: input.BaseURL,
 		CAFile: input.CAFile, ClientCertFile: input.ClientCertFile, ClientKeyFile: input.ClientKeyFile,
 		ServerName: input.ServerName, ServerCertificateSHA256: input.ServerCertificateSHA256,
@@ -208,6 +216,7 @@ func (r *Registry) loadLocked() ([]Config, error) {
 
 func publicInfo(config Config) Info {
 	return Info{
+		Provider: config.Provider, RemotePath: config.RemotePath,
 		ID: config.ID, Name: config.Name, BaseURL: config.BaseURL,
 		CAFile: config.CAFile, ClientCertFile: config.ClientCertFile, ClientKeyFile: config.ClientKeyFile,
 		ServerName: config.ServerName, ServerCertificateSHA256: config.ServerCertificateSHA256,

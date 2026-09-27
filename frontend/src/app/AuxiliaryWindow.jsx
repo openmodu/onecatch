@@ -20,10 +20,11 @@ import { demoRuntimes, demoWorkers, demoWorkflows, demoWorkspaces } from "./demo
 
 const WorkflowLibrary = lazy(() => import("./components/workflow/WorkflowLibrary.jsx"));
 const WorkflowEditor = lazy(() => import("./components/workflow/WorkflowEditor.jsx"));
+const WorkerPage = lazy(() => import("./components/WorkerPage.jsx"));
 const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
 
 const emptyWorkerForm = () => ({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
-const editWorkerForm = (worker) => ({ id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled });
+const editWorkerForm = (worker) => ({ provider: worker.provider || "", remotePath: worker.remotePath || "", id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled });
 const loadingRuntimes = [
   { id: "codex", name: "Codex", checking: true },
   { id: "claude", name: "Claude Code", checking: true },
@@ -181,6 +182,7 @@ export function SettingsWindow() {
       else {
         await WorkerBinding.UpdateWorker(workerForm);
         setWorkers(await WorkerBinding.ListWorkers());
+        void Events.Emit(settingsChangedEvent, {});
       }
       setWorkerModal(false);
       notify("success", t("app.workerSaved"));
@@ -202,6 +204,7 @@ export function SettingsWindow() {
       else {
         await WorkerBinding.PairWorker(baseURL, code);
         setWorkers(await WorkerBinding.ListWorkers());
+        void Events.Emit(settingsChangedEvent, {});
       }
       setWorkerModal(false);
       notify("success", t("app.workerPaired"));
@@ -230,6 +233,7 @@ export function SettingsWindow() {
       else {
         await WorkerBinding.DeleteWorker(id);
         setWorkers(await WorkerBinding.ListWorkers());
+        void Events.Emit(settingsChangedEvent, {});
       }
     } catch (error) {
       notify("error", errorMessage(error));
@@ -238,7 +242,7 @@ export function SettingsWindow() {
 
   if (mode === "loading") return <LoadingWindow />;
   return <div className="flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-foreground">
-    <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={updateSettings} notify={notify} />
+    <SettingsPage mode={mode} value={settings} runtimes={runtimes} onChange={updateSettings} notify={notify} remoteWorkersPanel={<Suspense fallback={<LoadingWindow />}><WorkerPage mode={mode} workers={workers} health={workerHealth} checkWorker={checkWorker} deleteWorker={deleteWorker} openWorker={openWorker} notify={notify} /></Suspense>} />
     {workerModal && <Suspense fallback={null}><WorkerModal form={workerForm} setForm={setWorkerForm} busy={busy} onClose={() => setWorkerModal(false)} onUpdate={updateWorker} onPair={pairWorker} /></Suspense>}
     <ConfirmDialog dialog={dialog} onCancel={() => resolveConfirm(false)} onConfirm={() => resolveConfirm(true)} />
     {notice && <div className={`toast ${notice.type}`}><span>{notice.text}</span></div>}

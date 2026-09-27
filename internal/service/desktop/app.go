@@ -77,6 +77,7 @@ type WorkspaceStatus struct {
 }
 
 type CreateTaskInput struct {
+	WorkerID        string   `json:"workerId,omitempty"`
 	WorktreeMode    string   `json:"worktreeMode,omitempty"`
 	WorktreeID      string   `json:"worktreeId,omitempty"`
 	WorkspaceID     string   `json:"workspaceId"`
@@ -957,6 +958,36 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 	if strings.TrimSpace(input.Harness) != "" && validationDefinition.ID == directAgentWorkflowID && len(validationDefinition.Steps) == 1 {
 		validationDefinition.Steps[0].Runtime = strings.TrimSpace(input.Harness)
 	}
+	workerID := strings.TrimSpace(input.WorkerID)
+	if workerID == "local" {
+		workerID = ""
+	}
+	if workerID != "" {
+		if definition.ID != directAgentWorkflowID || len(definition.Steps) != 1 {
+			return domaintasks.Task{}, coded("worker_direct_agent_only", "choose workers on workflow nodes for orchestrated tasks")
+		}
+		if !settings.Experimental.RemoteWorkersEnabled {
+			return domaintasks.Task{}, coded("experimental_remote_workers_disabled", "remote workers are disabled in Settings")
+		}
+		if workspace.RemoteFS != nil {
+			return domaintasks.Task{}, coded("remote_fs_local_agent_required", "remote FS workspaces cannot use a remote worker")
+		}
+		config, err := a.workers.Get(ctx, workerID)
+		if err != nil || !config.Enabled {
+			return domaintasks.Task{}, coded("worker_not_found", "worker is missing or disabled")
+		}
+		if config.Provider == worker.ProviderVolcengineSandbox && validationDefinition.Steps[0].Runtime != "codex" {
+			return domaintasks.Task{}, coded("sandbox_codex_required", "Volcengine sandbox requires Codex")
+		}
+		if len(input.AttachmentPaths) > 0 {
+			return domaintasks.Task{}, coded("worker_attachments_unsupported", "remote conversations cannot access local attachments")
+		}
+		if input.WorktreeID != "" || (input.WorktreeMode != "" && input.WorktreeMode != "project") {
+			return domaintasks.Task{}, coded("worktree_local_only", "remote conversations cannot use local worktrees")
+		}
+		input.WorktreeMode = "project"
+		input.Harness = validationDefinition.Steps[0].Runtime
+	}
 	if err := validateHarnessSettings(validationDefinition, settings, workspace.RemoteFS != nil); err != nil {
 		return domaintasks.Task{}, err
 	}
@@ -966,7 +997,7 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 		title = taskTitleFromPrompt(input.Prompt, "新建任务")
 	}
 	now := time.Now().UTC()
-	task := domaintasks.Task{ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: title, Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Sandbox: strings.TrimSpace(input.Sandbox), Harness: strings.TrimSpace(input.Harness), Model: strings.TrimSpace(input.Model), ReasoningEffort: strings.TrimSpace(input.ReasoningEffort), ServiceTier: strings.TrimSpace(input.ServiceTier), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
+	task := domaintasks.Task{WorkerID: workerID, ID: randomID("task"), WorkspaceID: strings.TrimSpace(input.WorkspaceID), Title: title, Prompt: strings.TrimSpace(input.Prompt), WorkflowID: strings.TrimSpace(input.WorkflowID), Sandbox: strings.TrimSpace(input.Sandbox), Harness: strings.TrimSpace(input.Harness), Model: strings.TrimSpace(input.Model), ReasoningEffort: strings.TrimSpace(input.ReasoningEffort), ServiceTier: strings.TrimSpace(input.ServiceTier), Status: domaintasks.StatusReady, ExecutionMode: domaintasks.ExecutionImmediate, CreatedAt: now, UpdatedAt: now}
 	mode, err := resolveWorktreeMode(workspace.AutoWorktree, input.WorktreeMode, input.WorktreeID)
 	if err != nil {
 		return domaintasks.Task{}, err
@@ -1024,7 +1055,7 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 	if err := a.store.Repos.Tasks.SaveTask(ctx, task); err != nil {
 		return domaintasks.Task{}, worktreeTaskError(task, coded("task_invalid", err.Error()))
 	}
-	if refineTitle {
+	if refineTitle && workerID == "" {
 		titleWorkspace := workspace.Path
 		if workspace.RemoteFS != nil {
 			// Title generation is explicitly tool-free. It still needs a valid
@@ -1171,7 +1202,7 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 		if !runtime.Valid() {
 			return run, coded("runtime_unknown", "selected runtime is unknown")
 		}
-		if !a.runtimes.Available(runtime) {
+		if resumeUsesLocalHarness(definition, strings.TrimSpace(input.StepID), harness) && !a.runtimes.Available(runtime) {
 			return run, coded("runtime_unavailable", "selected runtime is unavailable")
 		}
 		resolved := resolvedRuntimeSetting(harness, settings.Runtimes[harness])

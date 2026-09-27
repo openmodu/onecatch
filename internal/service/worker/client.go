@@ -46,6 +46,9 @@ const (
 func NewClient() *Client { return &Client{http: &http.Client{}, pooled: map[string]*http.Client{}} }
 
 func (c *Client) Health(ctx context.Context, config Config) (Health, error) {
+	if config.Provider == ProviderVolcengineSandbox {
+		return c.sandboxHealth(ctx, config)
+	}
 	var health Health
 	if err := c.do(ctx, config, http.MethodGet, "/v1/health", nil, &health); err != nil {
 		return Health{}, err

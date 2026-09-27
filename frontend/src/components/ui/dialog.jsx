@@ -46,6 +46,21 @@ function DialogOverlay({
   );
 }
 
+// AppKit draws the sidebar hairline above WebKit. Occlude that decoration
+// while a modal is mounted so it cannot cut through the dialog or its overlay.
+let mountedDialogs = 0;
+function NativeDialogOcclusion() {
+  React.useEffect(() => {
+    mountedDialogs += 1;
+    globalThis.webkit?.messageHandlers?.onecatchSidebar?.postMessage({ borderOccluded: true });
+    return () => {
+      mountedDialogs -= 1;
+      globalThis.webkit?.messageHandlers?.onecatchSidebar?.postMessage({ borderOccluded: mountedDialogs > 0 });
+    };
+  }, []);
+  return null;
+}
+
 function DialogContent({
   className,
   children,
@@ -62,6 +77,7 @@ function DialogContent({
           className
         )}
         {...props}>
+        <NativeDialogOcclusion />
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close

@@ -95,6 +95,7 @@ static WKWebView *onecatchFindWebView(NSView *view) {
 @property(nonatomic, assign) NSVisualEffectView *effectView;
 @property(nonatomic, assign) NSView *canvasView;
 @property(nonatomic, assign) NSView *borderView;
+@property(nonatomic, assign) BOOL borderOccluded;
 @end
 
 @implementation OneCatchSidebarBridge
@@ -110,6 +111,10 @@ static WKWebView *onecatchFindWebView(NSView *view) {
 	NSNumber *compact = nil;
 	NSString *theme = nil;
 	if ([body isKindOfClass:[NSDictionary class]]) {
+		id candidateOcclusion = [(NSDictionary *)body objectForKey:@"borderOccluded"];
+		if ([candidateOcclusion isKindOfClass:[NSNumber class]]) {
+			self.borderOccluded = [candidateOcclusion boolValue];
+		}
 		id candidateWidth = [(NSDictionary *)body objectForKey:@"width"];
 		if ([candidateWidth isKindOfClass:[NSNumber class]]) {
 			width = candidateWidth;
@@ -155,8 +160,9 @@ static WKWebView *onecatchFindWebView(NSView *view) {
 	}
 	if (hidden != nil) {
 		self.effectView.hidden = hidden.boolValue;
-		self.borderView.hidden = hidden.boolValue;
 	}
+
+	self.borderView.hidden = self.effectView.hidden || self.borderOccluded;
 
 	// A pinned web theme must also pin AppKit; otherwise a dark sidebar
 	// material can sit beside a light CSS canvas (or vice versa). nil restores
@@ -236,6 +242,7 @@ static void onecatchInstallSidebarMaterial(NSWindow *window) {
 		 "var sidebar=document.querySelector('.sidebar');"
 		 "window.webkit.messageHandlers.onecatchSidebar.postMessage({"
 		 "width:sidebar?.dataset.visible==='false'?0:(sidebar?.getBoundingClientRect().width||216),"
+			 "borderOccluded:!!document.querySelector('[data-slot=dialog-content][data-state=open]'),"
 			 "theme:document.documentElement.dataset.theme||'system'"
 			 "});";
 	[webView evaluateJavaScript:script completionHandler:nil];

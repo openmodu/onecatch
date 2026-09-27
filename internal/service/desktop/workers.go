@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	"github.com/openmodu/onecatch/internal/service/worker"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
@@ -34,6 +35,13 @@ func (a *Service) DeleteWorker(ctx context.Context, id string) error {
 	return a.workers.Delete(ctx, id)
 }
 func (a *Service) PairWorker(ctx context.Context, baseURL, code string) (worker.Info, error) {
+	if worker.IsVolcengineSandboxURL(baseURL) {
+		input, err := a.workerClient.ConnectSandbox(ctx, baseURL, code)
+		if err != nil {
+			return worker.Info{}, err
+		}
+		return a.workers.Save(ctx, input)
+	}
 	paired, err := a.workerClient.Pair(ctx, baseURL, code)
 	if err != nil {
 		return worker.Info{}, err
@@ -54,6 +62,7 @@ func (a *Service) CheckWorker(ctx context.Context, id string) (WorkerStatus, err
 		return WorkerStatus{}, err
 	}
 	return WorkerStatus{Worker: worker.Info{
+		Provider: config.Provider, RemotePath: config.RemotePath,
 		ID: config.ID, Name: config.Name, BaseURL: config.BaseURL,
 		CAFile: config.CAFile, ClientCertFile: config.ClientCertFile, ClientKeyFile: config.ClientKeyFile,
 		ServerName: config.ServerName, ServerCertificateSHA256: config.ServerCertificateSHA256,
@@ -68,6 +77,9 @@ func (a *Service) WorkerGitStatus(ctx context.Context, workerID, workspaceID str
 	if err != nil {
 		return domainworkspaces.GitSnapshot{}, coded("worker_not_found", "worker was not found")
 	}
+	if config.Provider == worker.ProviderVolcengineSandbox {
+		return domainworkspaces.GitSnapshot{}, coded("sandbox_no_sync", "sandbox files stay remote; Git synchronization is unavailable")
+	}
 	return a.workerClient.GitStatus(ctx, config, workspaceID)
 }
 
@@ -75,6 +87,9 @@ func (a *Service) PrepareWorkerWorkspace(ctx context.Context, workerID, workspac
 	config, err := a.workers.Get(ctx, workerID)
 	if err != nil || !config.Enabled {
 		return WorkerWorkspaceSetup{}, coded("worker_not_found", "worker was not found or is disabled")
+	}
+	if config.Provider == worker.ProviderVolcengineSandbox {
+		return WorkerWorkspaceSetup{}, coded("sandbox_no_sync", "sandbox files stay remote; workspace cloning is unavailable")
 	}
 	workspace, err := a.GetWorkspace(ctx, workspaceID)
 	if err != nil {
@@ -162,6 +177,9 @@ func (e *remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID st
 	config, err := e.registry.Get(ctx, workerID)
 	if err != nil || !config.Enabled {
 		return agentrun.Result{}, worker.RemoteError{Code: "worker_not_found", Message: "worker is missing or disabled"}
+	}
+	if config.Provider == worker.ProviderVolcengineSandbox {
+		return e.client.RunSandbox(ctx, config, request, sink)
 	}
 	baseRevision, err := worker.WorkspaceBaseline(ctx, request.Workspace)
 	if err != nil {
@@ -300,4 +318,15 @@ func newRunID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buffer), nil
+}
+
+// Only local resume targets require a locally installed harness. The saved
+// definition remains authoritative for the worker throughout the conversation.
+func resumeUsesLocalHarness(definition domainworkflows.Definition, stepID, harness string) bool {
+	for _, step := range definition.Steps {
+		if (stepID == "" || step.ID == stepID) && step.Runtime == harness && (step.WorkerID == "" || step.WorkerID == "local") {
+			return true
+		}
+	}
+	return false
 }

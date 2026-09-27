@@ -1,3 +1,4 @@
+import { isRemoteWorker } from "./taskWorkers.js";
 import TaskCategoryBadge from "./components/TaskCategoryBadge.jsx";
 import { TASK_CATEGORIES } from "./taskCategory.js";
 import { executionWorkspace, demoTaskWorktree } from "./worktreeContext.js";
@@ -96,6 +97,7 @@ function selectedTaskExecution(form) {
   const directAgent = form.workflowId === directAgentWorkflowID;
   return {
     directAgent,
+    workerId: directAgent ? form.workerId || "" : "",
     workflowId: form.workflowId,
     harness: directAgent ? form.harness || "codex" : "",
     model: directAgent ? form.model : "",
@@ -214,7 +216,7 @@ function App() {
   const analyzingTaskIDsRef = useRef(new Set());
   const [workspaceForm, setWorkspaceForm] = useState(emptyWorkspaceForm);
   const [composerDrafts] = useState(createComposerDrafts);
-  const [emptyTaskForm] = useState({ prompt: "", workflowId: directAgentWorkflowID, executionMode: "immediate", attachmentPaths: [], harness: "codex", model: "", reasoningEffort: "", serviceTier: "", sandbox: "workspace-write" });
+  const [emptyTaskForm] = useState({ workerId: "", prompt: "", workflowId: directAgentWorkflowID, executionMode: "immediate", attachmentPaths: [], harness: "codex", model: "", reasoningEffort: "", serviceTier: "", sandbox: "workspace-write" });
   const [emptyAttachments] = useState([]);
   const taskDraftKey = draftKey(workspaceID, "", "new-task");
   const attachmentsDraftKey = draftKey(workspaceID, selectedRunID, "attachments");
@@ -521,7 +523,7 @@ function App() {
 
   useEffect(() => {
     if (!taskModal || mode === "loading") return undefined;
-    if (taskForm.workflowId !== directAgentWorkflowID) {
+    if (taskForm.workflowId !== directAgentWorkflowID || isRemoteWorker(taskForm.workerId)) {
       setTaskRuntimeConfiguration({ loading: false, data: null, error: "" });
       return undefined;
     }
@@ -536,7 +538,7 @@ function App() {
       .then((data) => { if (!cancelled) setTaskRuntimeConfiguration({ loading: false, data, error: "" }); })
       .catch((error) => { if (!cancelled) setTaskRuntimeConfiguration((current) => ({ ...current, loading: false, error: errorMessage(error) })); });
     return () => { cancelled = true; };
-  }, [inspectRuntimeConfiguration, mode, taskForm.harness, taskForm.workflowId, taskModal]);
+  }, [inspectRuntimeConfiguration, mode, taskForm.harness, taskForm.workflowId, taskForm.workerId, taskModal]);
 
   // Settings and workflow definitions are edited in their own WebViews. Wails
   // custom events are application-wide, so the main task window can refresh
@@ -1075,14 +1077,14 @@ function App() {
     try {
       if (mode === "demo") {
         if (taskForm.executionMode === "queued") {
-          const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, worktree: demoTaskWorktree(selectedWorkspace, taskForm.worktree, `session-${Date.now()}`), title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+          const queuedTask = { id: `task_${Date.now()}`, workspaceId: workspaceID, worktree: demoTaskWorktree(selectedWorkspace, taskForm.worktree, `session-${Date.now()}`), title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, workerId: execution.workerId, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, status: "queued", executionMode: "queued", queue: { state: "waiting", enqueuedAt: new Date().toISOString(), authorized: true }, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
           setTasks((items) => [...items, queuedTask]); setSelectedRunID(""); setRunDetail(null); setSelectedQueuedTaskID(queuedTask.id);
         } else {
-          const demoTask = { ...demo.demoTasks[0], worktree: demoTaskWorktree(selectedWorkspace, taskForm.worktree, `session-${Date.now()}`), title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), updatedAt: new Date().toISOString() };
-          setTasks((items) => items.map((item) => item.id === demoTask.id ? demoTask : item)); setRunItems([{ ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running", task: demoTask }]); setRunTotal(1); setSelectedQueuedTaskID(""); setSelectedRunID("run_demo"); setRunDetail({ ...demo.demoRun, task: demoTask, run: { ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running" }, active: true });
+          const demoTask = { ...demo.demoTasks[0], worktree: demoTaskWorktree(selectedWorkspace, taskForm.worktree, `session-${Date.now()}`), title: taskTitle, prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, workerId: execution.workerId, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachments: taskForm.attachmentPaths.map((path) => ({ id: path, name: fileName(path), storedPath: path })), updatedAt: new Date().toISOString() };
+          setTasks((items) => items.map((item) => item.id === demoTask.id ? demoTask : item)); setRunItems([{ ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running", task: demoTask }]); setRunTotal(1); setSelectedQueuedTaskID(""); setSelectedRunID("run_demo"); setRunDetail({ ...demo.demoRun, task: demoTask, run: { ...demo.demoRun.run, workflowId: demoTask.workflowId, status: "running" }, ...(execution.workerId ? { workflow: { ...selectedWorkflow, steps: selectedWorkflow.steps.map((step) => ({ ...step, runtime: execution.harness, workerId: execution.workerId })) }, stepRuns: [], events: [], runtimeEvents: [], instructions: [] } : {}), active: true });
         }
       } else {
-        const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, worktreeId: taskForm.worktree?.contextId || "", worktreeMode: taskForm.worktree?.mode || "", title: "", prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachmentPaths: taskForm.attachmentPaths });
+        const task = await TaskRunBinding.CreateTask({ workspaceId: workspaceID, worktreeId: taskForm.worktree?.contextId || "", worktreeMode: taskForm.worktree?.mode || "", title: "", prompt: taskForm.prompt, workflowId: execution.workflowId, harness: execution.harness, workerId: execution.workerId, model: execution.model, reasoningEffort: execution.reasoningEffort, serviceTier: execution.serviceTier, sandbox: execution.sandbox, attachmentPaths: taskForm.attachmentPaths });
         const preview = await TaskRunBinding.PreviewRun(task.id);
         if (taskForm.executionMode === "queued") {
           const queued = await TaskRunBinding.EnqueueTask(task.id, preview.confirmationToken || "");
@@ -1753,6 +1755,8 @@ function App() {
           newTaskOpen={view === "tasks" && taskCreateVisible}
           alternateContent={view === "skills" ? <Suspense fallback={<ViewLoading />}><SkillManagerPage mode={mode} notify={notify} onOpenInspector={openInspector} /></Suspense> : null}
           taskForm={taskForm}
+          workers={workers}
+          remoteWorkersEnabled={Boolean(settings.experimental?.remoteWorkersEnabled)}
           workflows={workflows}
           runtimes={runtimes}
           taskRuntimeConfiguration={taskRuntimeConfiguration}

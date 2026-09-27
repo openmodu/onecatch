@@ -1,3 +1,4 @@
+import { isRemoteWorker } from "../taskWorkers.js";
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, Maximize2, Minimize2, PanelRightClose, SquareArrowOutUpRight, SquareTerminal, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
@@ -48,7 +49,7 @@ function conversationSignature(detail) {
   ].join("|");
 }
 
-function TaskWorkbench({ composerDrafts, mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, userInputBusy, attachments, inspectorCollapsed, inspectorToggleVersion, inspectorScope = "task", integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, alternateContent = null, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onPasteTaskImages, onRemoveTaskAttachment, onCreateTask, onChooseAttachments, onPasteImages, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onSteerInstruction, onLoadEarlierTranscript, onPermissionDecision, onUserInputResponse, notify }) {
+function TaskWorkbench({ workers, remoteWorkersEnabled, composerDrafts, mode, workspace, workspaceID, terminalPreferences, terminalVisible, terminalToggleVersion, terminalCommand, onTerminalVisibilityChange, tasks, runDetail, selectedRunID, selectedQueuedTaskID, busy, permissionBusy, userInputBusy, attachments, inspectorCollapsed, inspectorToggleVersion, inspectorScope = "task", integratedDesktopTitlebar = false, onToggleInspector, onDetachInspector, onEditWorkspace, newTaskOpen, alternateContent = null, taskForm, workflows, runtimes, taskRuntimeConfiguration, runtimeSettings, runtimeSettingsByHarness, allowFullSandbox, onInspectRuntimeConfiguration, onTaskFormChange, onChooseTaskAttachments, onPasteTaskImages, onRemoveTaskAttachment, onCreateTask, onChooseAttachments, onPasteImages, onRemoveAttachment, onSubmit, onInterrupt, onRemoveInstruction, onSteerInstruction, onLoadEarlierTranscript, onPermissionDecision, onUserInputResponse, notify }) {
   const { t, i18n } = useTranslation();
   const [inspectorWidth, setInspectorWidth] = useState(DEFAULT_INSPECTOR_WIDTH);
   const [inspectorResizing, setInspectorResizing] = useState(false);
@@ -123,7 +124,7 @@ function TaskWorkbench({ composerDrafts, mode, workspace, workspaceID, terminalP
 
   useEffect(() => {
     const harness = continuationRuntimeProfile?.harness;
-    if (!harness || !supportsRuntimeProfile(harness) || !onInspectRuntimeConfiguration) {
+    if (isRemoteWorker(selectedTask?.workerId) || !harness || !supportsRuntimeProfile(harness) || !onInspectRuntimeConfiguration) {
       setContinuationRuntimeConfiguration({ loading: false, data: null, error: "" });
       return undefined;
     }
@@ -133,7 +134,7 @@ function TaskWorkbench({ composerDrafts, mode, workspace, workspaceID, terminalP
       .then((data) => { if (!cancelled) setContinuationRuntimeConfiguration({ loading: false, data, error: "" }); })
       .catch((error) => { if (!cancelled) setContinuationRuntimeConfiguration({ loading: false, data: null, error: errorMessage(error) }); });
     return () => { cancelled = true; };
-  }, [continuationRuntimeProfile?.harness, onInspectRuntimeConfiguration]);
+  }, [continuationRuntimeProfile?.harness, selectedTask?.workerId, onInspectRuntimeConfiguration]);
 
   useEffect(() => {
     if (terminalToggleVersion === terminalToggleVersionRef.current) return;
@@ -305,6 +306,8 @@ function TaskWorkbench({ composerDrafts, mode, workspace, workspaceID, terminalP
         workflows={workflows}
         runtimes={runtimes}
         form={taskForm}
+        workers={workers}
+        remoteWorkersEnabled={remoteWorkersEnabled}
         busy={busy}
         onChange={onTaskFormChange}
         onChooseAttachments={onChooseTaskAttachments}
@@ -337,6 +340,9 @@ function TaskWorkbench({ composerDrafts, mode, workspace, workspaceID, terminalP
           workspaceID={workspaceID}
           sessionID={selectedRunID}
           taskTitle={selectedTask?.title || ""}
+          workerId={selectedTask?.workerId}
+          workers={workers}
+          remoteWorkersEnabled={remoteWorkersEnabled}
           getActionSelection={() => terminalDockRef.current?.getSelection() || ""}
           contextWindow={summarizeContextWindow(runDetail.stepRuns, (activeRuntimeProfile || continuationRuntimeProfile)?.harness)}
           runStatus={runStatus}

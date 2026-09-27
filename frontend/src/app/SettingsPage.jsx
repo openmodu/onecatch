@@ -48,9 +48,21 @@ const resetRuntimeFields = (current, defaults, fields) => Object.fromEntries(Obj
   return [id, next];
 }));
 
-export default function SettingsPage({ mode, value, runtimes, onChange, notify }) {
+export default function SettingsPage({ mode, value, runtimes, onChange, notify, remoteWorkersPanel }) {
   const { t, i18n } = useTranslation();
   const [section, setSection] = useState("runtime");
+  const [sandboxUnlocked, setSandboxUnlocked] = useState(false);
+  useEffect(() => {
+    if (section !== "experimental") return undefined;
+    const reveal = (event) => {
+      if (event.ctrlKey && event.altKey && event.code === "KeyS") {
+        event.preventDefault();
+        setSandboxUnlocked(true);
+      }
+    };
+    window.addEventListener("keydown", reveal);
+    return () => window.removeEventListener("keydown", reveal);
+  }, [section]);
   const [draft, setDraft] = useState(() => clone(value || demoSettings));
   const [saving, setSaving] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState({});
@@ -72,7 +84,8 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
   const dirty = useMemo(() => JSON.stringify(draft?.[key]) !== JSON.stringify(value?.[key]), [draft, key, value]);
   const validationErrors = useMemo(() => validateSection(section, draft, t), [draft, section, t]);
   const errorsByField = useMemo(() => Object.fromEntries(validationErrors.map((error) => [error.field, error.message])), [validationErrors]);
-  const sections = sectionMeta(t);
+  const remoteWorkersVisible = sandboxUnlocked || Boolean(value?.experimental?.remoteWorkersEnabled);
+  const sections = sectionMeta(t).map((item) => item.id === "experimental" && remoteWorkersVisible ? { ...item, description: t("worker.settingsSummary") } : item);
   const activeMeta = sections.find((item) => item.id === section);
   const compactAuxiliaryChrome = usesCompactAuxiliaryChrome();
 
@@ -225,12 +238,12 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
     <ScrollArea className="sidebar settings-sidebar relative z-30 min-h-0 select-none text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]">
       <aside className="flex min-h-full flex-col gap-1 px-3 pt-[60px] pb-4" aria-label={t("settings.sectionsAria")}>
         {sections.map((item) => <Button key={item.id} variant="ghost" className={`h-auto w-full justify-start rounded-lg px-3 py-2.5 text-left ${section === item.id ? "bg-accent text-accent-foreground hover:bg-accent" : "text-muted-foreground hover:bg-background/45"}`} aria-current={section === item.id ? "page" : undefined} onClick={() => switchSection(item.id)}>
-          <span className="min-w-0"><strong className="flex items-center gap-2 text-[13px] font-medium text-foreground">{item.label}{section === item.id && dirty && <i className="size-1.5 rounded-full bg-primary" aria-label={t("settings.unsaved")} />}</strong><small className="mt-0.5 block whitespace-normal text-[11px] font-normal leading-snug text-muted-foreground">{item.description}</small></span>
+          <span className="min-w-0"><strong className="flex items-center gap-2 text-[13px] font-medium text-foreground">{item.label}{section === item.id && dirty && <i className="size-1.5 rounded-full bg-primary" aria-label={t("settings.unsaved")} />}</strong>{item.id !== "experimental" && <small className="mt-0.5 block whitespace-normal text-[11px] font-normal leading-snug text-muted-foreground">{item.description}</small>}</span>
         </Button>)}
       </aside>
     </ScrollArea>
 
-    <ScrollArea className="settings-content min-h-0 min-w-0 bg-background">
+    <ScrollArea className="settings-content min-h-0 min-w-0 bg-background [&_[data-slot=scroll-area-viewport]>div]:block!">
       <section className="px-7 pt-[64px] pb-10">
         <header className="drag-region mb-6 flex items-start justify-between gap-4">
           <div className="min-w-0"><SettingsKicker>{t("settings.localSettings")}</SettingsKicker><h1 className="mt-1 mb-1 text-xl font-semibold text-foreground">{activeMeta.label}</h1><p className="m-0 text-sm text-muted-foreground">{activeMeta.description}</p></div>
@@ -248,7 +261,12 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify }
         {section === "execution" && <ExecutionSettings value={draft.execution} setValue={(next) => setSectionValue("execution", next)} errors={errorsByField} />}
         {section === "security" && <SecuritySettings value={draft.security} setValue={(next) => setSectionValue("security", next)} confirmFullAccess={confirmFullAccess} />}
         {section === "storage" && <StorageSettings value={draft.storage} setValue={(next) => setSectionValue("storage", next)} errors={errorsByField} security={draft.security} diagnosticOptions={diagnosticOptions} setDiagnosticOptions={setDiagnosticOptions} usage={usage} usageLoading={usageLoading} refreshUsage={refreshUsage} preview={preview} previewCleanup={previewCleanup} executeCleanup={executeCleanup} reveal={() => mode === "wails" && SettingsBinding.RevealDataRoot()} diagnosticPath={diagnosticPath} setDiagnosticPath={setDiagnosticPath} exportDiagnostics={exportDiagnostics} />}
-        {section === "experimental" && <ExperimentalSettings enabled={Boolean(draft.experimental?.remoteWorkersEnabled)} />}
+        {section === "experimental" && (remoteWorkersVisible ? <>
+          <SettingsSection title={t("worker.executionSettings")} contentClassName="p-4">
+            <SettingsSwitchRow checked={Boolean(draft.experimental?.remoteWorkersEnabled)} onChange={(remoteWorkersEnabled) => setSectionValue("experimental", { ...draft.experimental, remoteWorkersEnabled })} label={t("settings.enableRemoteWorker")} description={t("worker.executionHint")} />
+          </SettingsSection>
+          {remoteWorkersPanel}
+        </> : <ExperimentalSettings enabled={Boolean(draft.experimental?.remoteWorkersEnabled)} />)}
         {dirty && <div className="sticky bottom-0 mt-6 flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3 shadow-lg" role="region" aria-label={t("settings.unsavedSettings")}><div className="min-w-0"><strong className="block text-sm font-semibold text-foreground">{t("settings.unsavedTitle")}</strong><span className="mt-0.5 block text-xs text-muted-foreground">{t("settings.unsavedDescription")}</span></div><div className="flex shrink-0 items-center gap-2"><SettingsButton tone="muted" disabled={saving} onClick={discard}>{t("settings.discard")}</SettingsButton><SettingsButton tone="primary" disabled={saving || validationErrors.length > 0} onClick={save}>{saving ? t("common.saving") : t("settings.save")}</SettingsButton></div></div>}
       </section>
     </ScrollArea>

@@ -18,7 +18,10 @@ export const demoWorkflows = [
   { ...dagTemplate, id: "parallel_review", name: "并行审查 DAG" },
 ];
 
-export const demoWorkers = [{ id: "mac-mini", name: "Mac mini", baseUrl: "http://192.168.1.20:9231", enabled: true, hasToken: true }];
+export const demoWorkers = [
+  { id: "mac-mini", name: "Mac mini", baseUrl: "http://192.168.1.20:9231", enabled: true, hasToken: true },
+  { id: "sandbox-demo", name: "Volcengine Sandbox · gem", provider: "volcengine-sandbox", remotePath: "/home/gem", baseUrl: "https://sandbox-demo.apigateway-cn-beijing.example.invalid/?faasInstanceName=vefaas-sandbox-preview-long-instance-name-12345678901234567890", enabled: true, hasToken: true },
+];
 
 export const demoTasks = [
   { id: "task_demo", workspaceId: "onecatch-demo", title: "优化本地 Agent 调度流程", prompt: "梳理并改进工作流执行、暂停与恢复体验。", workflowId: "implement_review", status: "paused", createdAt: demoNow, updatedAt: demoNow },

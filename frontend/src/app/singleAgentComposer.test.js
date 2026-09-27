@@ -32,7 +32,7 @@ test("single-Agent composer supports queued follow-ups and interruptive steering
   assert.match(composer, /composer\.sendMessage/);
   assert.doesNotMatch(composer, /CircleStop|onCancel|composer\.(?:runningActions|terminate)/);
   assert.doesNotMatch(app, /TaskRunBinding\.CancelRun|onCancel=\{cancelRun\}/);
-  assert.match(composer, /onPaste=\{onPasteImages\}/);
+  assert.match(composer, /onPaste=\{remoteWorker \? undefined : onPasteImages\}/);
   assert.match(composer, /<ComposerAttachmentPreview path=\{path\} onRemove=\{onRemoveAttachment\}/);
   assert.match(attachmentPreview, /chipClassName = "attachment-chip"[\s\S]{0,800}<X/);
   assert.doesNotMatch(attachmentPreview, /attachment-chip[\s\S]{0,300}t\("common\.remove"\)<\/Action>/);

@@ -13,6 +13,8 @@ import (
 const MaxRunDuration = 24 * time.Hour
 
 type Config struct {
+	Provider                string    `json:"provider,omitempty"`
+	RemotePath              string    `json:"remotePath,omitempty"`
 	ID                      string    `json:"id"`
 	Name                    string    `json:"name"`
 	BaseURL                 string    `json:"baseUrl"`
@@ -28,6 +30,8 @@ type Config struct {
 }
 
 type Input struct {
+	Provider                string `json:"provider,omitempty"`
+	RemotePath              string `json:"remotePath,omitempty"`
 	ID                      string `json:"id"`
 	Name                    string `json:"name"`
 	BaseURL                 string `json:"baseUrl"`
@@ -41,6 +45,8 @@ type Input struct {
 }
 
 type UpdateInput struct {
+	Provider                string `json:"provider,omitempty"`
+	RemotePath              string `json:"remotePath,omitempty"`
 	ID                      string `json:"id"`
 	Name                    string `json:"name"`
 	BaseURL                 string `json:"baseUrl"`
@@ -53,6 +59,8 @@ type UpdateInput struct {
 }
 
 type Info struct {
+	Provider                string    `json:"provider,omitempty"`
+	RemotePath              string    `json:"remotePath,omitempty"`
 	ID                      string    `json:"id"`
 	Name                    string    `json:"name"`
 	BaseURL                 string    `json:"baseUrl"`

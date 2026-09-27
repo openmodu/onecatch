@@ -108,6 +108,7 @@ export function selectTaskExecutionTarget(current, target) {
   return {
     ...current,
     workflowId: target.slice("workflow:".length),
+    workerId: "",
     harness: "",
     model: "",
     reasoningEffort: "",

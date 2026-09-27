@@ -394,6 +394,9 @@ func (a *Service) persistAttachments(ctx context.Context, task domaintasks.Task,
 	if len(paths) == 0 {
 		return nil, nil
 	}
+	if task.WorkerID != "" && task.WorkerID != "local" {
+		return nil, coded("worker_attachments_unsupported", "remote conversations cannot access local attachments")
+	}
 	if len(paths) > maxAttachmentCount {
 		return nil, coded("attachment_limit", fmt.Sprintf("a maximum of %d attachments is allowed", maxAttachmentCount))
 	}

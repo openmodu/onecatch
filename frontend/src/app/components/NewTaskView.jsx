@@ -1,3 +1,4 @@
+import { isRemoteWorker, workerSupportsHarness } from "../taskWorkers.js";
 import PromptActions from "./PromptQuickPicker.jsx";
 import { appendPrompt } from "../promptActions.js";
 import { useLayoutEffect, useRef } from "react";
@@ -27,6 +28,8 @@ import TaskPermissionSelector from "./TaskPermissionSelector.jsx";
 import WorkspaceComposerMeta from "./WorkspaceComposerMeta.jsx";
 
 export default function NewTaskView({
+  workers = [],
+  remoteWorkersEnabled = false,
   workspaceID,
   getActionSelection,
   workflows,
@@ -51,11 +54,14 @@ export default function NewTaskView({
   const composing = useRef(false);
   const promptRef = useRef(null);
   const directAgent = form.workflowId === "single_agent";
-  const showRuntimeProfile = directAgent && supportsRuntimeProfile(form.harness);
+  const remoteWorker = directAgent && isRemoteWorker(form.workerId);
+  const selectedWorker = workers.find((item) => item.id === form.workerId);
+  const workerReady = !remoteWorker || (remoteWorkersEnabled && !remoteFS && workerSupportsHarness(selectedWorker, form.harness) && !form.attachmentPaths?.length);
+  const showRuntimeProfile = !remoteWorker && directAgent && supportsRuntimeProfile(form.harness);
   const targetEnabled = directAgent
     ? runtimeHarnessEnabled(form.harness, runtimes, runtimeSettingsByHarness, remoteFS)
     : workflowHarnessesEnabled(workflows.find((workflow) => workflow.id === form.workflowId), runtimes, runtimeSettingsByHarness, remoteFS);
-  const ready = Boolean(workspaceID && form.prompt.trim() && form.workflowId && form.sandbox && (!directAgent || form.harness) && targetEnabled);
+  const ready = Boolean(workspaceID && form.prompt.trim() && form.workflowId && form.sandbox && (!directAgent || form.harness) && targetEnabled && workerReady);
   const executionMode = form.executionMode === "queued" ? "queued" : "immediate";
   const executionLabel = executionMode === "queued" ? t("task.joinQueue") : t("task.runNow");
   const submitLabel = busy === "run"
@@ -68,7 +74,7 @@ export default function NewTaskView({
 
   const submit = (event) => {
     event.preventDefault();
-    if (!event.nativeEvent.isComposing && busy !== "run") void onSubmit();
+    if (ready && !event.nativeEvent.isComposing && busy !== "run") void onSubmit();
   };
   const submitFromComposer = (event) => {
     if (shouldSubmitComposer(event, composing.current) && ready && busy !== "run") {
@@ -76,7 +82,7 @@ export default function NewTaskView({
       void onSubmit();
     }
   };
-  const skillRuntime = directAgent && supportsRuntimeSkills(form.harness) ? form.harness : "";
+  const skillRuntime = !remoteWorker && directAgent && supportsRuntimeSkills(form.harness) ? form.harness : "";
   const skillPicker = useSkillPicker({
     enabled: Boolean(skillRuntime),
     mode,
@@ -114,7 +120,7 @@ export default function NewTaskView({
               value={form.prompt}
               aria-label={t("task.goal")}
               placeholder={t("task.goalPlaceholder")}
-              onPaste={onPasteImages}
+              onPaste={remoteWorker ? undefined : onPasteImages}
               onCompositionStart={() => { composing.current = true; }}
               onCompositionEnd={() => { window.setTimeout(() => { composing.current = false; }, 100); }}
               {...skillPicker.inputProps}
@@ -128,7 +134,7 @@ export default function NewTaskView({
                 <Button type="button" variant="ghost" size="icon-sm" className="new-task-add" aria-label={t("task.addAndConfigure")} title={t("task.addAndConfigure")}><Plus size={18} aria-hidden="true" /></Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent className="task-executor-menu new-task-add-menu" side="top" align="start" sideOffset={8}>
-                {onChooseAttachments && <><DropdownMenuItem onSelect={() => onChooseAttachments()}><Paperclip size={14} aria-hidden="true" /><span>{t("task.chooseFiles")}</span></DropdownMenuItem><DropdownMenuSeparator /></>}
+                {!remoteWorker && onChooseAttachments && <><DropdownMenuItem onSelect={() => onChooseAttachments()}><Paperclip size={14} aria-hidden="true" /><span>{t("task.chooseFiles")}</span></DropdownMenuItem><DropdownMenuSeparator /></>}
                 <DropdownMenuLabel className="task-executor-section">{t("task.executionMode")}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={executionMode} onValueChange={(nextMode) => onChange((current) => ({ ...current, executionMode: nextMode }))}>
                   <DropdownMenuRadioItem className="task-executor-option agent" value="immediate"><ArrowUp size={14} aria-hidden="true" /><span><strong>{t("task.runNow")}</strong></span></DropdownMenuRadioItem>
@@ -137,7 +143,7 @@ export default function NewTaskView({
               </DropdownMenuContent>
             </DropdownMenu>
             <PromptActions key={workspaceID} workspace={workspace} getSelection={getActionSelection} disabled={busy === "run"} onInsert={(prompt) => { onChange((current) => ({ ...current, prompt: appendPrompt(current.prompt, prompt) })); requestAnimationFrame(() => promptRef.current?.focus()); }} />
-            <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} runtimeSettings={runtimeSettingsByHarness} remoteFS={remoteFS} onChange={onChange} />
+            <TaskExecutorSelector form={form} workflows={workflows} runtimes={runtimes} runtimeSettings={runtimeSettingsByHarness} remoteFS={remoteFS} workers={workers} remoteWorkersEnabled={remoteWorkersEnabled} onChange={onChange} />
             <TaskPermissionSelector value={form.sandbox} allowFull={allowFullSandbox} onChange={onChange} />
             {showRuntimeProfile && <RuntimeProfileMenu
               className="new-task-runtime"
@@ -155,7 +161,8 @@ export default function NewTaskView({
             </div>
           </div>
         </div>
-        <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} selection={form.worktree} onSelectWorktree={(worktree) => onChange((current) => ({ ...current, worktree }))} disabled={busy === "run"} />
+        {!workerReady && <p role="alert" className="text-xs text-destructive">{t("worker.executionUnavailable")}</p>}
+        {!remoteWorker && <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} selection={form.worktree} onSelectWorktree={remoteWorker ? undefined : (worktree) => onChange((current) => ({ ...current, worktree }))} disabled={busy === "run"} />}
       </div>
     </form>
   </div>;

@@ -60,6 +60,7 @@ type Attachment struct {
 }
 
 type Task struct {
+	WorkerID        string                     `json:"workerId,omitempty"`
 	CategorySource  string                     `json:"categorySource,omitempty"`
 	Category        string                     `json:"category,omitempty"`
 	Worktree        *domainworkspaces.Worktree `json:"worktree,omitempty"`

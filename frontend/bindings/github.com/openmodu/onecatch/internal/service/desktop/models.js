@@ -413,6 +413,13 @@ export class CreateTaskInput {
              * @member
              * @type {string | undefined}
              */
+            this["workerId"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
             this["worktreeMode"] = undefined;
         }
         if (/** @type {any} */(false)) {
@@ -502,10 +509,10 @@ export class CreateTaskInput {
      * @returns {CreateTaskInput}
      */
     static createFrom($$source = {}) {
-        const $$createField11_0 = $$createType2;
+        const $$createField12_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("attachmentPaths" in $$parsedSource) {
-            $$parsedSource["attachmentPaths"] = $$createField11_0($$parsedSource["attachmentPaths"]);
+            $$parsedSource["attachmentPaths"] = $$createField12_0($$parsedSource["attachmentPaths"]);
         }
         return new CreateTaskInput(/** @type {Partial<CreateTaskInput>} */($$parsedSource));
     }

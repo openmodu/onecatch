@@ -36,19 +36,20 @@ const codexAppServerIdleTimeout = 5 * time.Minute
 // a frozen environment, and sharing it across unrelated tasks would bypass
 // OneCatch's per-runtime environment allowlist.
 type codexAppProcess struct {
-	mu        sync.Mutex
-	cmd       *exec.Cmd
-	stdin     io.WriteCloser
-	encoder   *json.Encoder
-	scanner   *bufio.Scanner
-	stderr    *lineCapture
-	threadID  string
-	skills    []Skill
-	key       string
-	idleTimer *time.Timer
-	stopOnce  sync.Once
-	waitOnce  sync.Once
-	waitDone  chan struct{}
+	mu         sync.Mutex
+	cmd        *exec.Cmd
+	stdin      io.WriteCloser
+	encoder    *json.Encoder
+	scanner    *bufio.Scanner
+	stderr     *lineCapture
+	threadID   string
+	skills     []Skill
+	key        string
+	idleTimer  *time.Timer
+	stopRemote func()
+	stopOnce   sync.Once
+	waitOnce   sync.Once
+	waitDone   chan struct{}
 }
 
 // NewCodexRunner builds a runner driving the given codex binary. An empty
@@ -957,6 +958,10 @@ func (p *codexAppProcess) stop() {
 
 func (p *codexAppProcess) stopWithGrace(grace time.Duration) {
 	p.stopOnce.Do(func() {
+		if p.stopRemote != nil {
+			p.stopRemote()
+			return
+		}
 		if grace <= 0 {
 			grace = 2 * time.Second
 		}
@@ -979,7 +984,9 @@ func (p *codexAppProcess) stopWithGrace(grace time.Duration) {
 func (p *codexAppProcess) startWait() <-chan struct{} {
 	p.waitOnce.Do(func() {
 		go func() {
-			_ = p.cmd.Wait()
+			if p.cmd != nil {
+				_ = p.cmd.Wait()
+			}
 			close(p.waitDone)
 		}()
 	})

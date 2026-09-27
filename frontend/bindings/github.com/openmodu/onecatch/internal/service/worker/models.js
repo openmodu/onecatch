@@ -86,6 +86,20 @@ export class Info {
      * @param {Partial<Info>} [$$source = {}] - The source object to create the Info.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["provider"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["remotePath"] = undefined;
+        }
         if (!("id" in $$source)) {
             /**
              * @member
@@ -423,6 +437,20 @@ export class UpdateInput {
      * @param {Partial<UpdateInput>} [$$source = {}] - The source object to create the UpdateInput.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["provider"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["remotePath"] = undefined;
+        }
         if (!("id" in $$source)) {
             /**
              * @member

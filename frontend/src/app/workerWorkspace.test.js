@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { assessWorkerWorkspace, buildWorkerCommand, classifyWorkerPreflightError } from "./workerWorkspace.js";
+import { assessWorkerWorkspace, buildWorkerCommand, classifyWorkerPreflightError, isVolcengineSandboxURL } from "./workerWorkspace.js";
 
 const clean = { isRepo: true, head: "abc123", branch: "main", status: "", files: [] };
 
@@ -35,4 +35,12 @@ test("worker preflight turns common transport errors into actionable states", ()
   assert.deepEqual(classifyWorkerPreflightError("worker_workspace_clone_failed: auth required"), { code: "workspaceCloneFailed", message: "" });
   assert.deepEqual(classifyWorkerPreflightError("worker_unavailable: connection refused"), { code: "workerUnavailable", message: "" });
   assert.deepEqual(classifyWorkerPreflightError("worker_tls_invalid: bad certificate"), { code: "error", message: "worker_tls_invalid: bad certificate" });
+});
+
+
+test("sandbox entry appears only for a Volcengine instance URL", () => {
+  assert.equal(isVolcengineSandboxURL("https://sandbox.volceapi.com/?faasInstanceName=instance&Authorization=token"), true);
+  for (const url of ["https://worker.local", "https://sandbox.volceapi.com/", "http://sandbox.volceapi.com/?faasInstanceName=x", "https://volceapi.com.evil.test/?faasInstanceName=x", "not a url"]) {
+    assert.equal(isVolcengineSandboxURL(url), false);
+  }
 });

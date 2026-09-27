@@ -196,3 +196,27 @@ func runWorkerGitTest(t *testing.T, directory string, args ...string) string {
 	}
 	return string(output)
 }
+
+func TestSandboxExecutorSkipsLocalGitAndRejectsOtherRuntimes(t *testing.T) {
+	root := t.TempDir()
+	registry := worker.NewRegistry(filepath.Join(root, "workers.json"))
+	_, err := registry.Save(context.Background(), worker.Input{
+		ID: "sandbox", Name: "Sandbox", Provider: worker.ProviderVolcengineSandbox,
+		BaseURL: "https://sandbox.volceapi.com/?faasInstanceName=instance", Token: "secret", RemotePath: "/home/gem", Enabled: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := &remoteExecutor{registry: registry, client: worker.NewClient()}
+	// This path does not even exist. The sandbox route must be selected before
+	// any local baseline, Git remote, preparation, or patch synchronization.
+	_, err = executor.RunRemote(context.Background(), "sandbox", "workspace", agentrun.Request{
+		Runtime: agentrun.RuntimeClaude, Workspace: filepath.Join(root, "not-a-repository"),
+	}, nil)
+	if err == nil || !strings.Contains(err.Error(), "support Codex only") {
+		t.Fatalf("sandbox dispatched through local Git: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "not-a-repository")); !os.IsNotExist(err) {
+		t.Fatal("sandbox created a local checkout")
+	}
+}

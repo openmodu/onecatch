@@ -45,3 +45,13 @@ export function buildWorkerCommand({ workerID }) {
     "  --tls-key '<server-key.pem>'",
   ].join("\n");
 }
+
+// The sandbox option appears only for a pasted Volcengine instance URL.
+export function isVolcengineSandboxURL(value) {
+  try {
+    const url = new URL(value.trim());
+    return url.protocol === "https:" && url.hostname.endsWith(".volceapi.com") && Boolean(url.searchParams.get("faasInstanceName"));
+  } catch {
+    return false;
+  }
+}

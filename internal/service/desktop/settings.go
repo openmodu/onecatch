@@ -365,9 +365,10 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 	for index := range definition.Steps {
 		step := &definition.Steps[index]
 		if directAgent {
+			step.WorkerID = task.WorkerID
 			step.Runtime = task.Harness
 			step.Model = task.Model
-			if step.Model == "" {
+			if step.Model == "" && task.WorkerID == "" {
 				step.Model = settings.Runtimes[step.Runtime].DefaultModel
 			}
 		} else if task.Harness != "" && step.Runtime == task.Harness && task.Model != "" {
@@ -392,6 +393,10 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 	}
 	if task.Harness != "" {
 		resolved := runtimeSettings[task.Harness]
+		if directAgent && task.WorkerID != "" {
+			// Remote conversations use the harness configuration on their worker.
+			resolved = domainworkflows.ResolvedRuntimeSettings{}
+		}
 		if task.ReasoningEffort != "" {
 			resolved.ReasoningEffort = task.ReasoningEffort
 		}

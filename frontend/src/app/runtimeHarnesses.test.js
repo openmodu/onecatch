@@ -96,6 +96,7 @@ test("Agent and workflow are mutually exclusive execution targets", () => {
   const workflow = selectTaskExecutionTarget(agent, "workflow:implement_review");
   assert.deepEqual(workflow, {
     workflowId: "implement_review",
+    workerId: "",
     harness: "",
     model: "",
     reasoningEffort: "",
