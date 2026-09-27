@@ -23,7 +23,7 @@ function demoWorktrees(workspace) {
   ];
 }
 
-export default function WorkspaceComposerMeta({ mode, workspace, onEdit, onSelectWorktree, selection, disabled = false }) {
+export default function WorkspaceComposerMeta({ mode, workspace, onEdit, onSelectWorktree, selection, disabled = false, syncLocal = false }) {
   const { t } = useTranslation();
   const [state, setState] = useState({ id: "", snapshot: null, error: false });
   const [open, setOpen] = useState(false);
@@ -81,6 +81,7 @@ export default function WorkspaceComposerMeta({ mode, workspace, onEdit, onSelec
       <HardDrive size={12} strokeWidth={2.2} aria-hidden="true" />
       {mode === "wails" ? t(workspace.remoteFs ? "workspace.remoteFS" : "common.local") : t("common.preview")}
     </StatusBadge>
+    {syncLocal && <span className="text-xs text-muted-foreground" title={t("worker.syncLocalHint")}>{t("worker.syncPerTurn")}</span>}
     {failed ? <span className="composer-git-error" role="status">{t("worktree.statusUnavailable")}</span> : (snapshot?.isRepo || (onSelectWorktree && workspace.autoWorktree)) && <>
       <span className="composer-meta-divider" aria-hidden="true" />
       <span className="composer-git-branch" title={`${branch} · ${location}`}><GitBranch size={13} aria-hidden="true" /><span>{pendingNew ? t("worktree.fromBranch", { branch }) : branch}</span></span>

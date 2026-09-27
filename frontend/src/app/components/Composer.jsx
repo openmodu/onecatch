@@ -67,7 +67,8 @@ export default function Composer({
   const directAgent = !workflowId || workflowId === directAgentWorkflowID;
   const workflowLabel = workflowName || t("task.workflowMode");
   const remoteWorker = isRemoteWorker(workerId);
-  const sandboxWorker = workers?.find((worker) => worker.id === workerId)?.provider === "volcengine-sandbox";
+  const selectedWorker = workers?.find((worker) => worker.id === workerId);
+  const sandboxWorker = selectedWorker?.provider === "volcengine-sandbox";
   const workerSuffix = remoteWorker ? workerLabel(workers?.find((worker) => worker.id === workerId), workerId) : "";
   const showRuntimeProfile = !remoteWorker && Boolean(runtimeProfile && supportsRuntimeProfile(runtimeProfile.harness));
   const steerShortcut = primaryShortcutLabel("⇧↵");
@@ -138,7 +139,7 @@ export default function Composer({
         </div>
       </div>
       </div>
-      {!remoteWorker && <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} />}
+      <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} syncLocal={remoteWorker && selectedWorker?.syncLocal} />
     </div>
   </div>;
 }

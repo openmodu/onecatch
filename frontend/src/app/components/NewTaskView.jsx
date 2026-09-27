@@ -162,7 +162,7 @@ export default function NewTaskView({
           </div>
         </div>
         {!workerReady && <p role="alert" className="text-xs text-destructive">{t("worker.executionUnavailable")}</p>}
-        {!remoteWorker && <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} selection={form.worktree} onSelectWorktree={remoteWorker ? undefined : (worktree) => onChange((current) => ({ ...current, worktree }))} disabled={busy === "run"} />}
+        <WorkspaceComposerMeta mode={mode} workspace={workspace} onEdit={onEditWorkspace} syncLocal={remoteWorker && selectedWorker?.syncLocal} selection={form.worktree} onSelectWorktree={remoteWorker ? undefined : (worktree) => onChange((current) => ({ ...current, worktree }))} disabled={busy === "run"} />
       </div>
     </form>
   </div>;

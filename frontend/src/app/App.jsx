@@ -1027,14 +1027,15 @@ function App() {
     } catch (error) { notify("error", errorMessage(error)); } finally { setBusy(""); }
   };
 
-  const pairWorker = async (baseURL, code) => {
+  const pairWorker = async (baseURL, code, syncLocal = false) => {
     if (!baseURL.trim() || !code.trim()) { notify("error", t("app.workerPairingFieldsRequired")); return; }
     setBusy("worker-pair");
     try {
       if (mode === "demo") {
         setWorkers((items) => [...items, { id: "paired-worker", name: "Paired Worker", baseUrl: baseURL, hasToken: true, enabled: true }]);
       } else {
-        await WorkerBinding.PairWorker(baseURL, code);
+        const paired = await WorkerBinding.PairWorker(baseURL, code);
+        if (syncLocal) await WorkerBinding.UpdateWorker({ ...paired, syncLocal: true });
         setWorkers(await WorkerBinding.ListWorkers());
       }
       setWorkerModal(false);

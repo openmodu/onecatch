@@ -13,6 +13,7 @@ import (
 const MaxRunDuration = 24 * time.Hour
 
 type Config struct {
+	SyncLocal               bool      `json:"syncLocal"`
 	Provider                string    `json:"provider,omitempty"`
 	RemotePath              string    `json:"remotePath,omitempty"`
 	ID                      string    `json:"id"`
@@ -30,6 +31,7 @@ type Config struct {
 }
 
 type Input struct {
+	SyncLocal               bool   `json:"syncLocal"`
 	Provider                string `json:"provider,omitempty"`
 	RemotePath              string `json:"remotePath,omitempty"`
 	ID                      string `json:"id"`
@@ -45,6 +47,7 @@ type Input struct {
 }
 
 type UpdateInput struct {
+	SyncLocal               bool   `json:"syncLocal"`
 	Provider                string `json:"provider,omitempty"`
 	RemotePath              string `json:"remotePath,omitempty"`
 	ID                      string `json:"id"`
@@ -59,6 +62,7 @@ type UpdateInput struct {
 }
 
 type Info struct {
+	SyncLocal               bool      `json:"syncLocal"`
 	Provider                string    `json:"provider,omitempty"`
 	RemotePath              string    `json:"remotePath,omitempty"`
 	ID                      string    `json:"id"`

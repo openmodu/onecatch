@@ -86,6 +86,13 @@ export class Info {
      * @param {Partial<Info>} [$$source = {}] - The source object to create the Info.
      */
     constructor($$source = {}) {
+        if (!("syncLocal" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["syncLocal"] = false;
+        }
         if (/** @type {any} */(false)) {
             /**
              * @member
@@ -437,6 +444,13 @@ export class UpdateInput {
      * @param {Partial<UpdateInput>} [$$source = {}] - The source object to create the UpdateInput.
      */
     constructor($$source = {}) {
+        if (!("syncLocal" in $$source)) {
+            /**
+             * @member
+             * @type {boolean}
+             */
+            this["syncLocal"] = false;
+        }
         if (/** @type {any} */(false)) {
             /**
              * @member

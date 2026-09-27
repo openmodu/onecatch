@@ -24,7 +24,7 @@ const WorkerPage = lazy(() => import("./components/WorkerPage.jsx"));
 const WorkerModal = lazy(() => import("./components/WorkerModal.jsx"));
 
 const emptyWorkerForm = () => ({ id: "", name: "", baseUrl: "https://", caFile: "", clientCertFile: "", clientKeyFile: "", serverName: "", serverCertificateSha256: "", enabled: true });
-const editWorkerForm = (worker) => ({ provider: worker.provider || "", remotePath: worker.remotePath || "", id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled });
+const editWorkerForm = (worker) => ({ syncLocal: Boolean(worker.syncLocal), provider: worker.provider || "", remotePath: worker.remotePath || "", id: worker.id, name: worker.name, baseUrl: worker.baseUrl, caFile: worker.caFile || "", clientCertFile: worker.clientCertFile || "", clientKeyFile: worker.clientKeyFile || "", serverName: worker.serverName || "", serverCertificateSha256: worker.serverCertificateSha256 || "", enabled: worker.enabled });
 const loadingRuntimes = [
   { id: "codex", name: "Codex", checking: true },
   { id: "claude", name: "Claude Code", checking: true },
@@ -193,7 +193,7 @@ export function SettingsWindow() {
     }
   };
 
-  const pairWorker = async (baseURL, code) => {
+  const pairWorker = async (baseURL, code, syncLocal = false) => {
     if (!baseURL.trim() || !code.trim()) {
       notify("error", t("app.workerPairingFieldsRequired"));
       return;
@@ -202,7 +202,8 @@ export function SettingsWindow() {
     try {
       if (mode === "demo") setWorkers((items) => [...items, { id: "paired-worker", name: "Paired Worker", baseUrl: baseURL, hasToken: true, enabled: true }]);
       else {
-        await WorkerBinding.PairWorker(baseURL, code);
+        const paired = await WorkerBinding.PairWorker(baseURL, code);
+        if (syncLocal) await WorkerBinding.UpdateWorker({ ...paired, syncLocal: true });
         setWorkers(await WorkerBinding.ListWorkers());
         void Events.Emit(settingsChangedEvent, {});
       }

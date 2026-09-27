@@ -25,7 +25,7 @@ export default function WorkerModal({ form, setForm, busy, onClose, onUpdate, on
         <DialogTitle>{t(creating ? "worker.connectTitle" : "worker.modalTitle")}</DialogTitle>
         <DialogDescription className="sr-only">{t("worker.connectTitle")}</DialogDescription>
       </DialogHeader>
-      <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); if (submitting || (creating && !canPair)) return; if (creating) onPair(form.baseUrl, sandbox ? remotePath : pairingCode); else onUpdate(); }}>
+      <form className="flex min-h-0 flex-col" onSubmit={(event) => { event.preventDefault(); if (submitting || (creating && !canPair)) return; if (creating) onPair(form.baseUrl, sandbox ? remotePath : pairingCode, sandbox && Boolean(form.syncLocal)); else onUpdate(); }}>
         <div className="min-h-0 overflow-y-auto px-6">
           <div className="grid gap-4 pb-4">
             {creating && <div className="grid gap-5">
@@ -62,6 +62,7 @@ export default function WorkerModal({ form, setForm, busy, onClose, onUpdate, on
                 <SettingsSwitchRow checked={form.enabled} onChange={(enabled) => update("enabled", enabled)} label={t("worker.enableScheduling")} />
               </div>
             </>}
+            {sandbox && <SettingsSwitchRow checked={Boolean(form.syncLocal)} onChange={(syncLocal) => update("syncLocal", syncLocal)} label={t("worker.syncLocal")} description={t("worker.syncLocalHint")} />}
             {!sandbox && <details className="text-sm"><summary className="cursor-pointer text-muted-foreground">{t("worker.deploymentInstructions")}</summary><pre className="mt-3 overflow-x-auto rounded-lg bg-muted p-3 text-xs select-text"><code>{buildWorkerCommand({ workerID: form.id || "remote-worker" })}</code></pre></details>}
           </div>
         </div>

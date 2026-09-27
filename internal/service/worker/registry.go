@@ -62,6 +62,9 @@ func (r *Registry) Save(ctx context.Context, input Input) (Info, error) {
 	if input.ID == "" || input.ID == "local" || input.Name == "" || !localfile.ValidID(input.ID) || !workerIDPattern.MatchString(input.ID) {
 		return Info{}, errors.New("worker id and name are invalid")
 	}
+	if input.SyncLocal && input.Provider != ProviderVolcengineSandbox {
+		return Info{}, errors.New("local file sync currently requires a Volcengine sandbox")
+	}
 	if err := normalizeSandboxInput(&input); err != nil {
 		return Info{}, err
 	}
@@ -89,7 +92,7 @@ func (r *Registry) Save(ctx context.Context, input Input) (Info, error) {
 	}
 	now := time.Now().UTC()
 	config := Config{
-		Provider: input.Provider, RemotePath: input.RemotePath,
+		Provider: input.Provider, RemotePath: input.RemotePath, SyncLocal: input.SyncLocal,
 		ID: input.ID, Name: input.Name, BaseURL: input.BaseURL, Token: strings.TrimSpace(input.Token),
 		CAFile: input.CAFile, ClientCertFile: input.ClientCertFile, ClientKeyFile: input.ClientKeyFile,
 		ServerName: input.ServerName, ServerCertificateSHA256: input.ServerCertificateSHA256,
@@ -125,7 +128,7 @@ func (r *Registry) Save(ctx context.Context, input Input) (Info, error) {
 
 func (r *Registry) Update(ctx context.Context, input UpdateInput) (Info, error) {
 	return r.Save(ctx, Input{
-		Provider: input.Provider, RemotePath: input.RemotePath,
+		Provider: input.Provider, RemotePath: input.RemotePath, SyncLocal: input.SyncLocal,
 		ID: input.ID, Name: input.Name, BaseURL: input.BaseURL,
 		CAFile: input.CAFile, ClientCertFile: input.ClientCertFile, ClientKeyFile: input.ClientKeyFile,
 		ServerName: input.ServerName, ServerCertificateSHA256: input.ServerCertificateSHA256,
@@ -216,7 +219,7 @@ func (r *Registry) loadLocked() ([]Config, error) {
 
 func publicInfo(config Config) Info {
 	return Info{
-		Provider: config.Provider, RemotePath: config.RemotePath,
+		Provider: config.Provider, RemotePath: config.RemotePath, SyncLocal: config.SyncLocal,
 		ID: config.ID, Name: config.Name, BaseURL: config.BaseURL,
 		CAFile: config.CAFile, ClientCertFile: config.ClientCertFile, ClientKeyFile: config.ClientKeyFile,
 		ServerName: config.ServerName, ServerCertificateSHA256: config.ServerCertificateSHA256,

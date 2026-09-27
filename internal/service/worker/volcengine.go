@@ -201,6 +201,16 @@ type sandboxStream struct {
 }
 
 func (c *Client) openSandboxCodex(ctx context.Context, config Config, args []string) (*sandboxStream, error) {
+	command := "codex app-server --listen stdio://"
+	for _, arg := range args {
+		command += " " + sandboxQuote(arg)
+	}
+	return c.openSandboxProcess(ctx, config, command)
+}
+
+// Each process has a dedicated PTY and connection; file transfers never share
+// the app-server stream.
+func (c *Client) openSandboxProcess(ctx context.Context, config Config, process string) (*sandboxStream, error) {
 	endpoint, err := sandboxURL(config, "/v1/shell/ws", true)
 	if err != nil {
 		return nil, err
@@ -229,10 +239,7 @@ func (c *Client) openSandboxCodex(ctx context.Context, config Config, args []str
 		return nil, err
 	}
 	marker := "\nONECATCH_" + hex.EncodeToString(nonce[:]) + "\n"
-	command := "stty -echo -icanon -opost && cd " + sandboxQuote(config.RemotePath) + " && printf " + sandboxQuote(marker) + " && exec codex app-server --listen stdio://"
-	for _, arg := range args {
-		command += " " + sandboxQuote(arg)
-	}
+	command := "stty -echo -icanon -opost && cd " + sandboxQuote(config.RemotePath) + " && printf " + sandboxQuote(marker) + " && exec " + process
 	// Send the marker as escaped printf input; its literal newline-delimited
 	// value must not appear in the shell's echo of the bootstrap command.
 	command = strings.ReplaceAll(command, "\n", "\\n") + "\n"

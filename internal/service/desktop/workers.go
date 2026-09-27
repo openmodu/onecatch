@@ -62,7 +62,7 @@ func (a *Service) CheckWorker(ctx context.Context, id string) (WorkerStatus, err
 		return WorkerStatus{}, err
 	}
 	return WorkerStatus{Worker: worker.Info{
-		Provider: config.Provider, RemotePath: config.RemotePath,
+		Provider: config.Provider, RemotePath: config.RemotePath, SyncLocal: config.SyncLocal,
 		ID: config.ID, Name: config.Name, BaseURL: config.BaseURL,
 		CAFile: config.CAFile, ClientCertFile: config.ClientCertFile, ClientKeyFile: config.ClientKeyFile,
 		ServerName: config.ServerName, ServerCertificateSHA256: config.ServerCertificateSHA256,
@@ -179,6 +179,9 @@ func (e *remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID st
 		return agentrun.Result{}, worker.RemoteError{Code: "worker_not_found", Message: "worker is missing or disabled"}
 	}
 	if config.Provider == worker.ProviderVolcengineSandbox {
+		if config.SyncLocal {
+			return e.client.RunSandboxSynced(ctx, config, request, e.registry.SyncStateRoot(), sink)
+		}
 		return e.client.RunSandbox(ctx, config, request, sink)
 	}
 	baseRevision, err := worker.WorkspaceBaseline(ctx, request.Workspace)

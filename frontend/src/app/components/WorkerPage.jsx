@@ -23,7 +23,7 @@ export default function WorkerPage({ workers, health, checkWorker, deleteWorker,
       return <div className="flex min-w-0 flex-wrap items-center gap-3 px-4 py-4" key={worker.id}>
         <div className="min-w-0 flex-1">
           <strong className="block truncate text-sm font-medium">{workerLabel(worker)}</strong>
-          <span className="text-xs text-muted-foreground">{sandbox ? "volc sandbox" : t("worker.standardWorker")}</span>
+          <span className="text-xs text-muted-foreground">{sandbox ? (worker.syncLocal ? t("worker.syncOnRun") : "volc sandbox") : t("worker.standardWorker")}</span>
         </div>
         <span className={`text-xs ${worker.enabled && status?.ok ? "text-success" : "text-muted-foreground"}`} title={status?.error || undefined}>{label}</span>
         <div className="flex shrink-0 gap-2">
