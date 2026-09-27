@@ -409,7 +409,7 @@ public class WailsBridge {
                 return;
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createOneCatch(durationMs, VibrationEffect.DEFAULT_AMPLITUDE));
+                vibrator.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE));
             } else {
                 vibrator.vibrate(durationMs);
             }
@@ -613,6 +613,20 @@ public class WailsBridge {
         }
     }
 
+    /** Match the safe-area surface and system icons to the page background. */
+    public void setBackgroundColour(int red, int green, int blue, int alpha) {
+        mainHandler.post(() -> {
+            int colour = android.graphics.Color.argb(alpha, red, green, blue);
+            activity.findViewById(R.id.main_container).setBackgroundColor(colour);
+            boolean light = androidx.core.graphics.ColorUtils.calculateLuminance(colour) > 0.5;
+            androidx.core.view.WindowInsetsControllerCompat controller =
+                    androidx.core.view.WindowCompat.getInsetsController(
+                            activity.getWindow(), activity.getWindow().getDecorView());
+            controller.setAppearanceLightStatusBars(light);
+            controller.setAppearanceLightNavigationBars(light);
+        });
+    }
+
     /**
      * Set status-bar appearance. json: {"style":"light|dark|default","hidden":bool}.
      * "light" = light (white) icons; "dark" = dark icons.
@@ -812,7 +826,7 @@ public class WailsBridge {
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 long ms = "impact-heavy".equals(type) || "error".equals(type) ? 40
                         : "impact-light".equals(type) || "selection".equals(type) ? 10 : 20;
-                vibrator.vibrate(VibrationEffect.createOneCatch(ms, VibrationEffect.DEFAULT_AMPLITUDE));
+                vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
             } else {
                 vibrator.vibrate(20);
             }

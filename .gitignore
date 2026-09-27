@@ -13,8 +13,10 @@
 /build/android/overlay.json
 /build/android/gen/
 /build/android/.gradle/
+/build/android/build/
 /build/android/app/build/
 /build/android/app/src/main/jniLibs/
+/.sdk/
 .DS_Store
 .modu_code/
 /.secrets/

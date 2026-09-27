@@ -20,6 +20,10 @@ export async function syncNativeChrome(target = Window) {
   const colour = parseRGB(getComputedStyle(surface).backgroundColor);
   if (!colour) return false;
   try {
+    if (typeof globalThis.wails?.setBackgroundColour === "function") {
+      globalThis.wails.setBackgroundColour(colour.red, colour.green, colour.blue, 255);
+      return true;
+    }
     await target.SetBackgroundColour(colour.red, colour.green, colour.blue, 255);
     return true;
   } catch {

@@ -23,6 +23,7 @@ import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 import android.util.Base64;
 import android.util.Log;
+import android.view.View;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
@@ -32,6 +33,10 @@ import android.webkit.WebViewClient;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.FileProvider;
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.webkit.WebViewAssetLoader;
 
 import org.json.JSONObject;
@@ -85,7 +90,9 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
         setContentView(R.layout.activity_main);
+        setupSafeArea();
 
         // Initialize the native Go library
         bridge = new WailsBridge(this);
@@ -96,6 +103,21 @@ public class MainActivity extends AppCompatActivity {
 
         // Load the application
         loadApplication();
+    }
+
+    private void setupSafeArea() {
+        View container = findViewById(R.id.main_container);
+        ViewCompat.setOnApplyWindowInsetsListener(container, (view, windowInsets) -> {
+            // Handle this natively: older WebViews report zero CSS safe-area insets.
+            int types = WindowInsetsCompat.Type.systemBars()
+                    | WindowInsetsCompat.Type.displayCutout() | WindowInsetsCompat.Type.ime();
+            Insets insets = windowInsets.getInsets(types);
+            view.setPadding(insets.left, insets.top, insets.right, insets.bottom);
+            // Let newer WebViews receive updates without applying the same space twice.
+            return new WindowInsetsCompat.Builder(windowInsets)
+                    .setInsets(types, Insets.NONE).build();
+        });
+        ViewCompat.requestApplyInsets(container);
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -202,7 +224,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadApplication() {
-        String url = WAILS_SCHEME + "://" + WAILS_HOST + "/";
+        String url = WAILS_SCHEME + "://" + WAILS_HOST + "/?platform=mobile";
         if (DEBUG) Log.d(TAG, "Loading URL: " + url);
         webView.loadUrl(url);
     }

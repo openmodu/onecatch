@@ -28,6 +28,11 @@ public class WailsJSBridge {
         this.webView = webView;
     }
 
+    @JavascriptInterface
+    public void setBackgroundColour(int red, int green, int blue, int alpha) {
+        bridge.setBackgroundColour(red, green, blue, alpha);
+    }
+
     /**
      * Send a message to Go and return the response synchronously.
      * Called from JavaScript: wails.invoke(message)
