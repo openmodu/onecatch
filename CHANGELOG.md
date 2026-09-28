@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.3.6
+
+- Fix local network discovery on Android 11 and later when the system blocks the interface lookup used by Go; paired phones can find nearby computers again and resolve a worker after its IP address changes.
+- Show Android-specific Wi-Fi troubleshooting guidance in mobile pairing, and use phone-neutral wording in the empty state.
+- Android APKs remain test-signed when release signing secrets are not configured. The signing key changes between CI runs, so upgrading may require uninstalling the old app and pairing again.
+
 ## 0.3.5
 
 - Replace the default Wails Android launcher icon with the OneCatch artwork across all screen densities, including round and adaptive icons.
