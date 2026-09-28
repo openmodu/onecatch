@@ -33,7 +33,7 @@ func advertiseLAN(fingerprint string, port int) (func(), error) {
 		tick := time.NewTicker(5 * time.Second)
 		defer tick.Stop()
 		for {
-			addresses, ifaces := lanInterfaces()
+			addresses, ifaces, _ := lanInterfaces()
 			current := strings.Join(addresses, ",")
 			for _, iface := range ifaces {
 				current += fmt.Sprintf("/%d:%s", iface.Index, iface.Name)
@@ -68,7 +68,10 @@ func resolveLAN(ctx context.Context, fingerprint string) ([]string, error) {
 	}
 	ctx, cancel := context.WithTimeout(ctx, 4*time.Second)
 	defer cancel()
-	_, ifaces := lanInterfaces()
+	_, ifaces, err := lanInterfaces()
+	if err != nil {
+		return nil, fmt.Errorf("list LAN interfaces: %w", err)
+	}
 	if len(ifaces) == 0 {
 		return nil, fmt.Errorf("no active LAN interface")
 	}
@@ -112,7 +115,10 @@ func browseLAN(parent context.Context) ([]Candidate, error) {
 	}
 	ctx, cancel := context.WithTimeout(parent, 4*time.Second)
 	defer cancel()
-	_, ifaces := lanInterfaces()
+	_, ifaces, err := lanInterfaces()
+	if err != nil {
+		return nil, fmt.Errorf("list LAN interfaces: %w", err)
+	}
 	if len(ifaces) == 0 {
 		return nil, fmt.Errorf("no active LAN interface")
 	}

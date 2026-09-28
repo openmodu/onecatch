@@ -25,21 +25,30 @@ func Instance(fingerprint string) (string, error) {
 	return "onecatch-" + value[:32], nil
 }
 
+// link is one interface with its unicast addresses. Android lists these
+// differently, so the platform files fill it in.
+type link struct {
+	iface net.Interface
+	ips   []net.IP
+}
+
 // Only query usable LAN interfaces, not loopback or peer-to-peer interfaces
 // that expose multicast flags but have no routable address.
-func lanInterfaces() ([]string, []net.Interface) {
+func lanInterfaces() ([]string, []net.Interface, error) {
+	links, err := systemLinks()
+	if err != nil {
+		return nil, nil, err
+	}
 	var ips []string
 	var active []net.Interface
-	ifaces, _ := net.Interfaces()
-	for _, iface := range ifaces {
+	for _, l := range links {
+		iface := l.iface
 		if iface.Flags&net.FlagUp == 0 || iface.Flags&(net.FlagLoopback|net.FlagPointToPoint) != 0 || iface.Flags&net.FlagMulticast == 0 {
 			continue
 		}
-		addresses, _ := iface.Addrs()
 		found := false
-		for _, a := range addresses {
-			ip, _, err := net.ParseCIDR(a.String())
-			if err == nil && !ip.IsLoopback() && !ip.IsLinkLocalUnicast() && !ip.IsUnspecified() {
+		for _, ip := range l.ips {
+			if !ip.IsLoopback() && !ip.IsLinkLocalUnicast() && !ip.IsUnspecified() {
 				ips = append(ips, ip.String())
 				found = true
 			}
@@ -49,7 +58,26 @@ func lanInterfaces() ([]string, []net.Interface) {
 		}
 	}
 	sort.Strings(ips)
-	return ips, active
+	return ips, active, nil
+}
+
+func netLinks() ([]link, error) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	links := make([]link, 0, len(ifaces))
+	for _, iface := range ifaces {
+		l := link{iface: iface}
+		addresses, _ := iface.Addrs()
+		for _, a := range addresses {
+			if ip, _, err := net.ParseCIDR(a.String()); err == nil {
+				l.ips = append(l.ips, ip)
+			}
+		}
+		links = append(links, l)
+	}
+	return links, nil
 }
 
 func endpoint(ip string, port int) string {
