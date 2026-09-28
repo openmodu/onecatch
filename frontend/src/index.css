@@ -635,6 +635,7 @@
     container-type: inline-size;
     width: 100%;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     margin-inline: 0;
     padding: 10px 12px 9px;
@@ -647,7 +648,9 @@
 
   .new-task-composer-stack {
     width: 100%;
+    min-width: 0;
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 10px;
     margin-inline: auto;
   }
@@ -657,11 +660,16 @@
   }
 
   .new-task-input {
+    min-width: 0;
     min-height: 80px;
     padding: 3px 6px 0;
   }
 
   .new-task-prompt {
+    /* JS controls height; content sizing must not widen the grid for long logs. */
+    field-sizing: fixed !important;
+    min-width: 0;
+    max-width: 100%;
     min-height: 76px !important;
     max-height: 228px;
     overflow-y: hidden;
