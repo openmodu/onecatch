@@ -146,7 +146,7 @@ function EmptyConnection({ onPair }) {
   return <section className="mobile-empty-state">
     <span className="mobile-empty-symbol"><Cloud /></span>
     <h2>连接你的开发机</h2>
-    <p>iPhone 只作为工作台。代码、Git 和 Agent 都在远端 Worker 上运行。</p>
+    <p>手机只作为工作台。代码、Git 和 Agent 都在远端 Worker 上运行。</p>
 	<Button className="mobile-main-action" onClick={onPair}><Link2 />连接电脑</Button>
   </section>;
 }

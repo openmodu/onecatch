@@ -3,6 +3,7 @@ import { Check, Link2, LoaderCircle, Monitor, RefreshCw, X } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MobileBinding } from "../../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
+import { discoveryHint } from "../platform.js";
 
 const discoverWorkers = () => MobileBinding.DiscoverWorkers();
 
@@ -49,7 +50,7 @@ export default function PairSheet({ open, busy, initialURL = "https://", onClose
           : nearby.length ? nearby.map((item) => <button type="button" className="mobile-discovered-worker" key={item.id} aria-pressed={selected?.id === item.id} disabled={busy} onClick={() => { setBaseURL(item.addresses[0]); setManual(false); }}>
             <Monitor /><span><strong>{item.name}</strong><small>{item.addresses[0]}</small></span>{selected?.id === item.id && <Check />}
           </button>)
-            : <p role="status">{searchFailed ? "搜索暂不可用。请检查本地网络权限，或手动输入电脑地址。" : "未发现电脑。请确认电脑已开启「手机连接」、两端在同一局域网，并已允许本地网络访问。"}</p>}
+            : <p role="status">{discoveryHint(searchFailed)}</p>}
       </div>
       <form onSubmit={(event) => { event.preventDefault(); if (validAddress) void onPair({ baseURL, code }).then((ok) => { if (ok) { setCode(""); onClose(); } }); }}>
         <button type="button" className="mobile-pair-manual-toggle" aria-expanded={manual} disabled={busy} onClick={() => setManual((value) => !value)}>{manual ? "收起手动地址" : "手动输入地址"}</button>
