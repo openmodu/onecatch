@@ -95,9 +95,14 @@ export default function MobileUsageBoard({ usage = [], loading, error, onRefresh
           <b>{Math.round(percent)}%</b>
         </div>
         <div className="mobile-usage-bar"><span style={{ width: `${percent}%` }} /></div>
+        {(limit.quotaRemaining != null || limit.quotaLimit != null) && <small>剩余额度 {limit.quotaRemaining ?? "—"} / {limit.quotaLimit ?? "—"}</small>}
+        {limit.spendControlReached === true && <small>额度已用尽</small>}
+        {quota.resetsAt > 0 && <small>重置时间：{new Date(quota.resetsAt * 1000).toLocaleString()}</small>}
       </div>;
     }))}
 
+    {current.dailyUsageScope === "device" && <p className="text-xs text-muted-foreground">Token 明细来自本机会话记录；周额度来自账号接口。</p>}
+    {current.warning && <p className="text-xs text-muted-foreground">部分数据未能读取：{current.warning}</p>}
     <Heatmap dailyUsage={daily} />
 
     <section className="mobile-usage-daily">
@@ -111,6 +116,7 @@ export default function MobileUsageBoard({ usage = [], loading, error, onRefresh
         <time dateTime={row.key}>{dayLabel(row.date)}</time>
         <span><i style={{ width: `${row.tokens > 0 ? Math.max(3, (row.tokens / peak) * 100) : 0}%` }} /></span>
         <b className={row.tokens ? "" : "quiet"}>{compactTokens(row.tokens)}</b>
+        {row.breakdown && <small className="col-span-full flex flex-wrap gap-x-3">{Object.entries({ input: "输入", output: "输出", cacheRead: "缓存读取", cacheWrite: "缓存写入", reasoning: "推理" }).map(([key, label]) => <span key={key}>{label} {row.breakdown[key].toLocaleString()}</span>)}</small>}
       </div>)}
     </section>
 

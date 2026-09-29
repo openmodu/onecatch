@@ -301,3 +301,27 @@ test("trims a long thought preview and drops its markdown lead-in", () => {
   assert.equal(long.length, 160);
   assert.ok(long.endsWith("…"));
 });
+
+test("keeps queue progress visible and coalesces adjacent status updates", () => {
+  const runtimeEvents = [
+    { state: "queued", position: 8 },
+    { state: "waiting", position: 0, message: "Capacity busy" },
+  ].map((queue, index) => ({ stepRunId: "queue-step", seq: index + 1, kind: "queue_status", text: JSON.stringify(queue) }));
+  const detail = {
+    task: {}, run: {}, events: [],
+    workflow: { steps: [{ id: "execute", name: "执行", runtime: "trae" }] },
+    stepRuns: [{ id: "queue-step", stepId: "execute", status: "running" }],
+    runtimeEvents,
+  };
+  let [round] = buildRunConversation(detail);
+  assert.equal(round.items.length, 1);
+  assert.equal(round.items[0].state, "waiting");
+  assert.equal(round.items[0].position, 0);
+  assert.equal(round.items[0].message, "Capacity busy");
+  assert.equal(groupRoundItems(round.items)[0].type, "queue");
+  runtimeEvents.push({ stepRunId: "queue-step", seq: 3, kind: "queue_status", text: '{"state":"ready","position":null}' });
+  [round] = buildRunConversation(detail);
+  assert.equal(round.items.length, 1);
+  assert.equal(round.items[0].state, "ready");
+  assert.equal(round.items[0].position, null);
+});

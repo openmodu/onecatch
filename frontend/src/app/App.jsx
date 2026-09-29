@@ -1,3 +1,4 @@
+import { loadTaskRuntimeConfiguration } from "./taskRuntimeConfiguration.js";
 import { isRemoteWorker } from "./taskWorkers.js";
 import TaskCategoryBadge from "./components/TaskCategoryBadge.jsx";
 import { TASK_CATEGORIES } from "./taskCategory.js";
@@ -508,6 +509,9 @@ function App() {
     });
   }, [mode]);
 
+  const selectedTask = runDetail?.task || tasks.find((task) => task.id === selectedQueuedTaskID);
+  const taskCreateVisible = view === "tasks" && !editor && (taskModal || !selectedTask);
+
   const inspectRuntimeConfiguration = useCallback(async (harness) => {
     if (!supportsRuntimeProfile(harness)) return null;
     if (mode === "demo") {
@@ -522,7 +526,7 @@ function App() {
   }, [mode, settings.runtimes, selectedWorkspace?.path, selectedWorkspace?.remoteFs]);
 
   useEffect(() => {
-    if (!taskModal || mode === "loading") return undefined;
+    if (!taskCreateVisible || mode === "loading") return undefined;
     if (taskForm.workflowId !== directAgentWorkflowID || isRemoteWorker(taskForm.workerId)) {
       setTaskRuntimeConfiguration({ loading: false, data: null, error: "" });
       return undefined;
@@ -532,13 +536,8 @@ function App() {
       setTaskRuntimeConfiguration({ loading: false, data: null, error: "" });
       return undefined;
     }
-    let cancelled = false;
-    setTaskRuntimeConfiguration({ loading: true, data: null, error: "" });
-    inspectRuntimeConfiguration(harness)
-      .then((data) => { if (!cancelled) setTaskRuntimeConfiguration({ loading: false, data, error: "" }); })
-      .catch((error) => { if (!cancelled) setTaskRuntimeConfiguration((current) => ({ ...current, loading: false, error: errorMessage(error) })); });
-    return () => { cancelled = true; };
-  }, [inspectRuntimeConfiguration, mode, taskForm.harness, taskForm.workflowId, taskForm.workerId, taskModal]);
+    return loadTaskRuntimeConfiguration(harness, inspectRuntimeConfiguration, setTaskRuntimeConfiguration, errorMessage);
+  }, [inspectRuntimeConfiguration, mode, taskForm.harness, taskForm.workflowId, taskForm.workerId, taskCreateVisible]);
 
   // Settings and workflow definitions are edited in their own WebViews. Wails
   // custom events are application-wide, so the main task window can refresh
@@ -1524,7 +1523,6 @@ function App() {
       ? { label: selectedWorkspace.name, path: workspaceLocation(selectedWorkspace) }
       : { label: t("app.selectWorkspace"), path: "" };
   const commandText = location.path ? `${location.label} · ${location.path}` : location.label;
-  const selectedTask = runDetail?.task || tasks.find((task) => task.id === selectedQueuedTaskID);
   const selectedTaskStatus = runDetail?.run?.status || selectedTask?.status;
   const templateUsesConversation = !taskModal && Boolean(selectedRunID && runDetail) && ["running", "paused", "completed"].includes(runDetail?.run?.status);
   const insertTemplatePrompt = (prompt) => {
@@ -1538,7 +1536,6 @@ function App() {
     }
     setView("tasks");
   };
-  const taskCreateVisible = view === "tasks" && !editor && (taskModal || !selectedTask);
   const taskTitleVisible = view === "tasks" && !editor && !taskModal && selectedTask;
 
   const toggleWorkspaceSearch = useCallback(() => setWorkspaceSearchOpen((open) => !open), []);
@@ -1760,7 +1757,7 @@ function App() {
           remoteWorkersEnabled={Boolean(settings.experimental?.remoteWorkersEnabled)}
           workflows={workflows}
           runtimes={runtimes}
-          taskRuntimeConfiguration={taskRuntimeConfiguration}
+          taskRuntimeConfiguration={taskRuntimeConfiguration.harness === (taskForm.harness || "codex") ? taskRuntimeConfiguration : { loading: true, data: null, error: "" }}
           runtimeSettings={settings.runtimes?.[taskForm.harness]}
           runtimeSettingsByHarness={settings.runtimes}
           allowFullSandbox={Boolean(settings.security?.allowFullSandbox && selectedWorkspace?.defaultSandbox === "full")}

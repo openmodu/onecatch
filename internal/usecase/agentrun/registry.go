@@ -65,6 +65,7 @@ var descriptors = []descriptor{
 	{RuntimeModu, newModuRuntimeRunner},
 	{RuntimePi, func(c Config) Runner { return NewPiRunner(c.Binary(RuntimePi)) }},
 	{RuntimeGrok, func(c Config) Runner { return NewGrokRunner(c.Binary(RuntimeGrok)) }},
+	{RuntimeTrae, func(c Config) Runner { return NewTraeRunner(c.Binary(RuntimeTrae)) }},
 	{RuntimeDsh, func(c Config) Runner { return NewDshRunner(c.Binary(RuntimeDsh), c.DshSessionRoot) }},
 }
 
@@ -149,6 +150,13 @@ func (e *Engine) ListSkills(ctx context.Context, rt Runtime, cwd string, environ
 	return lister.ListSkills(ctx, cwd, environment)
 }
 
+// HarnessModelLoad reports the provider's latest model-level capacity snapshot.
+// Pointers distinguish missing values from a reported zero; load can exceed 100%.
+type HarnessModelLoad struct {
+	Percent   *int   `json:"percent,omitempty"`
+	QueueSize *int64 `json:"queueSize,omitempty"`
+}
+
 // HarnessModel is one model a harness advertises.
 type HarnessModel struct {
 	Model       string `json:"model"`
@@ -163,7 +171,8 @@ type HarnessModel struct {
 	// ContextWindow is the model's window in tokens, zero when the harness
 	// does not report one. It is a property of the model rather than of the
 	// run, which is why it rides the catalog instead of the event stream.
-	ContextWindow int `json:"contextWindow,omitempty"`
+	ContextWindow int               `json:"contextWindow,omitempty"`
+	Load          *HarnessModelLoad `json:"load,omitempty"`
 }
 
 // HarnessConfiguration is what a harness reports about itself when asked.

@@ -105,7 +105,7 @@ func TestRuntimeRegistryCachesVersionChecks(t *testing.T) {
 	// Point every process-backed harness at the counting stub. Leaving any of
 	// them on its real name would probe whatever the developer happens to have
 	// installed and make the spawn count depend on the machine.
-	spawning := []string{"codex", "claude", "pi", "grok", "dsh"}
+	spawning := []string{"codex", "claude", "pi", "grok", "trae", "dsh"}
 	for _, id := range spawning {
 		settings[id] = domainsettings.RuntimeSettings{Binary: binary}
 	}

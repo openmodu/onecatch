@@ -145,6 +145,13 @@ var catalog = []Harness{
 		CanResume:       true,
 	},
 	{
+		ID: "trae", Name: "TRAE CLI", Command: "traecli",
+		Efforts:         []string{"minimal", "low", "medium", "high", "xhigh", "max", "ultra"},
+		Integrations:    []string{IntegrationCLI},
+		EnvironmentHint: "TRAE_HOME, HTTPS_PROXY",
+		CanResume:       true,
+	},
+	{
 		ID: "dsh", Name: "DeepSeek Harness", Command: "dsh",
 		// The harness routes through named provider entries in its own plugin
 		// composition rather than through a generic provider name.

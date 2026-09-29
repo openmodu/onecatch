@@ -12,7 +12,7 @@ import (
 
 const (
 	accountUsageCacheFile    = "account-usage-cache.json"
-	accountUsageCacheVersion = 2
+	accountUsageCacheVersion = 3
 	accountUsageSyncInterval = 30 * time.Minute
 )
 
@@ -22,6 +22,7 @@ var accountUsageRuntimes = []agentrun.Runtime{
 	agentrun.RuntimePi,
 	agentrun.RuntimeGrok,
 	agentrun.RuntimeModu,
+	agentrun.RuntimeTrae,
 }
 
 type accountUsageCacheEntry struct {

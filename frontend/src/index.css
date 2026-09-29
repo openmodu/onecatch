@@ -846,6 +846,8 @@
     object-fit: contain;
   }
 
+  .runtime-harness-icon-trae { border-radius: 22%; }
+
   .project-task-runtime-icon {
     position: absolute;
     left: 8px;
@@ -1292,6 +1294,11 @@
     min-width: 0;
     display: grid;
     gap: 2px;
+  }
+
+  .runtime-profile-option .runtime-model-load.busy {
+    color: var(--foreground);
+    font-weight: 600;
   }
 
   .runtime-profile-option strong {
@@ -3852,3 +3859,25 @@
 .session-category-badge[data-category="fix"] { color: var(--warning); background: color-mix(in oklab, var(--warning) 12%, transparent); }
 .session-category-badge[data-category="refactor"], .session-category-badge[data-category="perf"] { color: var(--info); background: color-mix(in oklab, var(--info) 12%, transparent); }
 .session-category-badge[data-category="docs"], .session-category-badge[data-category="research"], .session-category-badge[data-category="test"] { color: var(--info); background: color-mix(in oklab, var(--info) 8%, transparent); }
+
+/* WebKit (the desktop webview) needs pseudo-elements as well as the standard
+   scrollbar properties. Apply to portals, dialogs, inputs and nested panels. */
+@layer app {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--muted-foreground) 30%, transparent) transparent;
+  }
+  *::-webkit-scrollbar { width: 6px; height: 6px; }
+  *::-webkit-scrollbar-track, *::-webkit-scrollbar-corner { background: transparent; }
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--muted-foreground) 30%, transparent);
+    border-radius: 999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--muted-foreground) 50%, transparent);
+  }
+  .conversation-queue { display: flex; align-items: flex-start; gap: 8px; margin: 12px 0; color: var(--muted-foreground); font-size: 12px; }
+  .conversation-queue > svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 2px; }
+  .conversation-queue strong { color: var(--foreground); font-weight: 500; }
+  .conversation-queue small { display: block; margin-top: 3px; white-space: pre-wrap; overflow-wrap: anywhere; }
+}

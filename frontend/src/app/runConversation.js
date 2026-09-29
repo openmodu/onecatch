@@ -190,6 +190,23 @@ function roundItems(events, fallbackText, fallbackError, translate) {
   const pendingToolsById = new Map();
   for (const event of [...events].sort((a, b) => a.seq - b.seq)) {
     if (hiddenKinds.has(event.kind)) continue;
+    if (event.kind === "queue_status") {
+      let queue;
+      try { queue = JSON.parse(event.text); } catch { continue; }
+      if (!queue || !["queued", "waiting", "ready"].includes(queue.state)) continue;
+      const previous = items[items.length - 1];
+      const entry = {
+        type: "queue", id: `queue-${event.seq}`, state: queue.state,
+        position: Number.isInteger(queue.position) && queue.position >= 0 ? queue.position : null,
+        message: typeof queue.message === "string" ? queue.message : "",
+        operation: queue.operation, at: event.at,
+      };
+      if (previous?.type === "queue" && previous.operation === entry.operation) {
+        items[items.length - 1] = { ...entry, id: previous.id };
+      } else items.push(entry);
+      lastTool = null;
+      continue;
+    }
     if (event.kind === "context_compaction") {
       let details = {};
       try {
@@ -308,9 +325,9 @@ function appliedInstructions(instructions) {
 export function groupRoundItems(items = []) {
   const blocks = [];
   for (const item of items) {
-    const type = item.type === "message" ? "message" : item.type === "compaction" ? "compaction" : item.kind === "file_change" ? "files" : "process";
+    const type = item.type === "message" ? "message" : item.type === "compaction" ? "compaction" : item.type === "queue" ? "queue" : item.kind === "file_change" ? "files" : "process";
     const previous = blocks[blocks.length - 1];
-    if (type === "message" || type === "compaction") {
+    if (type === "message" || type === "compaction" || type === "queue") {
       blocks.push({ type, id: item.id || `message-${blocks.length}`, item });
       continue;
     }

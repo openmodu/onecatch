@@ -33,6 +33,12 @@ export const demoAccountUsage = {
 const demoRuntimeScale = { codex: 1, claude: 0.58, pi: 0.17, grok: 0.31, modu: 0.24 };
 
 export function demoUsageForRuntime(runtime) {
+  if (runtime === "trae") return {
+    runtime, scope: "account", source: "model/internalUsage/read", fetchedAt: new Date().toISOString(),
+    dailyUsage: [], summary: {},
+    rateLimits: [{ id: "trae_weekly", name: "TRAE", quotaLimit: 300, quotaRemaining: 225,
+      primary: { usedPercent: 25, windowDurationMins: 10080, resetsAt: Math.floor(Date.now() / 1000) + 345600 } }],
+  };
   const scale = demoRuntimeScale[runtime] || 0.1;
   const dailyUsage = demoAccountUsage.dailyUsage.map((bucket, index) => ({
     ...bucket,
@@ -100,6 +106,23 @@ function usageByDate(dailyUsage = []) {
   return result;
 }
 
+// A combined day has complete detail only when every contributing source
+// reports a breakdown. Do not present a partial subtotal as the whole day.
+function breakdownsByDate(dailyUsage = []) {
+  const result = new Map();
+  for (const bucket of dailyUsage) {
+    if (!localDate(bucket?.startDate)) continue;
+    if (!bucket.breakdown) { result.set(bucket.startDate, null); continue; }
+    if (result.has(bucket.startDate) && result.get(bucket.startDate) === null) continue;
+    const value = result.get(bucket.startDate) || {};
+    for (const key of ["input", "output", "cacheRead", "cacheWrite", "reasoning"]) {
+      value[key] = (value[key] || 0) + Math.max(0, Number(bucket.breakdown[key]) || 0);
+    }
+    result.set(bucket.startDate, value);
+  }
+  return result;
+}
+
 function dailyStreaks(dailyUsage = [], today = new Date()) {
   const active = [...usageByDate(dailyUsage).entries()]
     .filter(([, tokens]) => tokens > 0)
@@ -131,8 +154,9 @@ export function combineAccountUsage(usages = []) {
       byDate.set(bucket.startDate, (byDate.get(bucket.startDate) || 0) + Math.max(0, Number(bucket.tokens) || 0));
     }
   }
+  const breakdowns = breakdownsByDate(values.flatMap((usage) => usage.dailyUsage || []));
   const dailyUsage = [...byDate.entries()]
-    .map(([startDate, tokens]) => ({ startDate, tokens }))
+    .map(([startDate, tokens]) => ({ startDate, tokens, ...(breakdowns.get(startDate) ? { breakdown: breakdowns.get(startDate) } : {}) }))
     .sort((a, b) => a.startDate.localeCompare(b.startDate));
   const dailyTotal = dailyUsage.reduce((total, bucket) => total + bucket.tokens, 0);
   const lifetimeTokens = values.reduce((total, usage) => total + Math.max(0, Number(usage.summary?.lifetimeTokens) || 0), 0) || dailyTotal;
@@ -204,9 +228,10 @@ export function buildUsageHeatmap(dailyUsage = [], today = new Date()) {
 export function recentDailyUsage(dailyUsage = [], today = new Date(), count = 14) {
   const current = new Date(today.getFullYear(), today.getMonth(), today.getDate());
   const values = usageByDate(dailyUsage);
+  const breakdowns = breakdownsByDate(dailyUsage);
   return Array.from({ length: Math.max(0, count) }, (_, index) => {
     const date = addDays(current, -index);
-    return { date, key: dateKey(date), tokens: values.get(dateKey(date)) || 0 };
+    return { date, key: dateKey(date), tokens: values.get(dateKey(date)) || 0, ...(breakdowns.get(dateKey(date)) ? { breakdown: breakdowns.get(dateKey(date)) } : {}) };
   });
 }
 

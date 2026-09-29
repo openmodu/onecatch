@@ -523,7 +523,7 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
       // Effort levels can belong to the model rather than to the harness — Grok
       // offers xhigh on 4.6 but not on 4.5 — so narrow to the selected model
       // and fall back to the catalog only while nothing has been reported.
-      const reportedEfforts = selectedReportedModel?.efforts?.length ? selectedReportedModel.efforts
+      const reportedEfforts = selectedReportedModel ? (selectedReportedModel.efforts || [])
         : reportedData?.efforts?.length ? reportedData.efforts
         : harness.efforts || [];
       const codexModel = id === "codex" ? selectedCodexModel(codexData, value.codex?.defaultModel) : null;

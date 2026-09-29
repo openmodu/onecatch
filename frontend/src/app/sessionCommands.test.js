@@ -8,6 +8,7 @@ test("builds recovery commands for supported runtimes", () => {
   assert.equal(runtimeResumeCommand("modu", "session-789"), "modu_code --resume session-789");
   assert.equal(runtimeResumeCommand("pi", "session-pi"), "pi --session session-pi");
   assert.equal(runtimeResumeCommand("grok", "session-grok"), "grok --resume session-grok");
+  assert.equal(runtimeResumeCommand("trae", "01a0eb3f-4f04-7872-88f8-0ef7c6438085"), "traecli resume 01a0eb3f-4f04-7872-88f8-0ef7c6438085");
   assert.equal(runtimeResumeCommand("custom", "session-789"), "");
   assert.equal(runtimeResumeCommand("codex", "thread; rm -rf project"), "");
 });

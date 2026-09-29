@@ -8,3 +8,5 @@
 - `pi.svg`: an original Greek letter pi drawn for this project. Lobe Icons ships a `pi.svg`, but that is Inflection AI's Pi assistant, a different product from the Pi coding agent this runtime drives; using it would attribute the wrong mark. A plain typographic glyph claims no brand.
 
 Lobe Icons is distributed under the MIT License. Product names and marks remain the property of their respective owners.
+
+- `trae.png`: unmodified official favicon from [TRAE](https://www.trae.ai/), served at https://lf16-web-neutral.traecdn.ai/obj/trae-ai-static/trae_website/favicon.png.

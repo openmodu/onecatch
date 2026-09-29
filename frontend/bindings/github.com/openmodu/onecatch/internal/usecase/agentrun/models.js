@@ -59,6 +59,13 @@ export class AccountDailyUsage {
      * @param {Partial<AccountDailyUsage>} [$$source = {}] - The source object to create the AccountDailyUsage.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {AccountTokenBreakdown | null | undefined}
+             */
+            this["breakdown"] = undefined;
+        }
         if (!("startDate" in $$source)) {
             /**
              * @member
@@ -83,7 +90,11 @@ export class AccountDailyUsage {
      * @returns {AccountDailyUsage}
      */
     static createFrom($$source = {}) {
+        const $$createField0_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("breakdown" in $$parsedSource) {
+            $$parsedSource["breakdown"] = $$createField0_0($$parsedSource["breakdown"]);
+        }
         return new AccountDailyUsage(/** @type {Partial<AccountDailyUsage>} */($$parsedSource));
     }
 }
@@ -99,6 +110,21 @@ export class AccountRateLimit {
      * @param {Partial<AccountRateLimit>} [$$source = {}] - The source object to create the AccountRateLimit.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * Native quota units are provider-defined and must not be labeled tokens or money.
+             * @member
+             * @type {number | null | undefined}
+             */
+            this["quotaLimit"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | null | undefined}
+             */
+            this["quotaRemaining"] = undefined;
+        }
         if (!("id" in $$source)) {
             /**
              * @member
@@ -172,22 +198,22 @@ export class AccountRateLimit {
      * @returns {AccountRateLimit}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType1;
-        const $$createField4_0 = $$createType1;
         const $$createField5_0 = $$createType3;
-        const $$createField6_0 = $$createType5;
+        const $$createField6_0 = $$createType3;
+        const $$createField7_0 = $$createType5;
+        const $$createField8_0 = $$createType7;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("primary" in $$parsedSource) {
-            $$parsedSource["primary"] = $$createField3_0($$parsedSource["primary"]);
+            $$parsedSource["primary"] = $$createField5_0($$parsedSource["primary"]);
         }
         if ("secondary" in $$parsedSource) {
-            $$parsedSource["secondary"] = $$createField4_0($$parsedSource["secondary"]);
+            $$parsedSource["secondary"] = $$createField6_0($$parsedSource["secondary"]);
         }
         if ("credits" in $$parsedSource) {
-            $$parsedSource["credits"] = $$createField5_0($$parsedSource["credits"]);
+            $$parsedSource["credits"] = $$createField7_0($$parsedSource["credits"]);
         }
         if ("individualLimit" in $$parsedSource) {
-            $$parsedSource["individualLimit"] = $$createField6_0($$parsedSource["individualLimit"]);
+            $$parsedSource["individualLimit"] = $$createField8_0($$parsedSource["individualLimit"]);
         }
         return new AccountRateLimit(/** @type {Partial<AccountRateLimit>} */($$parsedSource));
     }
@@ -293,7 +319,7 @@ export class AccountRateLimitResetCredits {
      * @returns {AccountRateLimitResetCredits}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType7;
+        const $$createField1_0 = $$createType9;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("credits" in $$parsedSource) {
             $$parsedSource["credits"] = $$createField1_0($$parsedSource["credits"]);
@@ -394,6 +420,65 @@ export class AccountSpendControl {
 }
 
 /**
+ * Cache and reasoning counters are subsets of input/output, not additional tokens.
+ */
+export class AccountTokenBreakdown {
+    /**
+     * Creates a new AccountTokenBreakdown instance.
+     * @param {Partial<AccountTokenBreakdown>} [$$source = {}] - The source object to create the AccountTokenBreakdown.
+     */
+    constructor($$source = {}) {
+        if (!("input" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["input"] = 0;
+        }
+        if (!("output" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["output"] = 0;
+        }
+        if (!("cacheRead" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["cacheRead"] = 0;
+        }
+        if (!("cacheWrite" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["cacheWrite"] = 0;
+        }
+        if (!("reasoning" in $$source)) {
+            /**
+             * @member
+             * @type {number}
+             */
+            this["reasoning"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AccountTokenBreakdown instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {AccountTokenBreakdown}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AccountTokenBreakdown(/** @type {Partial<AccountTokenBreakdown>} */($$parsedSource));
+    }
+}
+
+/**
  * AccountUsage is the daily activity and quota snapshot reported by one
  * harness. It is deliberately separate from Usage: Usage counts tokens
  * consumed by one workflow step, while AccountUsage describes a longer-lived
@@ -405,6 +490,20 @@ export class AccountUsage {
      * @param {Partial<AccountUsage>} [$$source = {}] - The source object to create the AccountUsage.
      */
     constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {AccountUsageScope | undefined}
+             */
+            this["dailyUsageScope"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {string | undefined}
+             */
+            this["warning"] = undefined;
+        }
         if (!("runtime" in $$source)) {
             /**
              * @member
@@ -471,22 +570,22 @@ export class AccountUsage {
      * @returns {AccountUsage}
      */
     static createFrom($$source = {}) {
-        const $$createField4_0 = $$createType9;
-        const $$createField5_0 = $$createType11;
-        const $$createField6_0 = $$createType12;
-        const $$createField7_0 = $$createType14;
+        const $$createField6_0 = $$createType11;
+        const $$createField7_0 = $$createType13;
+        const $$createField8_0 = $$createType14;
+        const $$createField9_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("rateLimits" in $$parsedSource) {
-            $$parsedSource["rateLimits"] = $$createField4_0($$parsedSource["rateLimits"]);
+            $$parsedSource["rateLimits"] = $$createField6_0($$parsedSource["rateLimits"]);
         }
         if ("dailyUsage" in $$parsedSource) {
-            $$parsedSource["dailyUsage"] = $$createField5_0($$parsedSource["dailyUsage"]);
+            $$parsedSource["dailyUsage"] = $$createField7_0($$parsedSource["dailyUsage"]);
         }
         if ("summary" in $$parsedSource) {
-            $$parsedSource["summary"] = $$createField6_0($$parsedSource["summary"]);
+            $$parsedSource["summary"] = $$createField8_0($$parsedSource["summary"]);
         }
         if ("resetCredits" in $$parsedSource) {
-            $$parsedSource["resetCredits"] = $$createField7_0($$parsedSource["resetCredits"]);
+            $$parsedSource["resetCredits"] = $$createField9_0($$parsedSource["resetCredits"]);
         }
         return new AccountUsage(/** @type {Partial<AccountUsage>} */($$parsedSource));
     }
@@ -507,6 +606,7 @@ export const AccountUsageScope = {
 
     AccountUsageScopeAccount: "account",
     AccountUsageScopeDevice: "device",
+    AccountUsageScopeMixed: "mixed",
 };
 
 /**
@@ -607,8 +707,8 @@ export class ClaudeConfiguration {
      * @returns {ClaudeConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType16;
-        const $$createField2_0 = $$createType17;
+        const $$createField1_0 = $$createType18;
+        const $$createField2_0 = $$createType19;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
             $$parsedSource["models"] = $$createField1_0($$parsedSource["models"]);
@@ -706,7 +806,7 @@ export class CodexConfiguration {
      * @returns {CodexConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType19;
+        const $$createField3_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
             $$parsedSource["models"] = $$createField3_0($$parsedSource["models"]);
@@ -794,8 +894,8 @@ export class CodexModelInfo {
      * @returns {CodexModelInfo}
      */
     static createFrom($$source = {}) {
-        const $$createField5_0 = $$createType17;
-        const $$createField6_0 = $$createType21;
+        const $$createField5_0 = $$createType19;
+        const $$createField6_0 = $$createType23;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("reasoningEfforts" in $$parsedSource) {
             $$parsedSource["reasoningEfforts"] = $$createField5_0($$parsedSource["reasoningEfforts"]);
@@ -1048,12 +1148,12 @@ export class Event {
      * @returns {Event}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType17;
-        const $$createField2_0 = $$createType23;
-        const $$createField9_0 = $$createType25;
-        const $$createField10_0 = $$createType27;
-        const $$createField12_0 = $$createType29;
-        const $$createField13_0 = $$createType31;
+        const $$createField0_0 = $$createType19;
+        const $$createField2_0 = $$createType25;
+        const $$createField9_0 = $$createType27;
+        const $$createField10_0 = $$createType29;
+        const $$createField12_0 = $$createType31;
+        const $$createField13_0 = $$createType33;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("attachments" in $$parsedSource) {
             $$parsedSource["attachments"] = $$createField0_0($$parsedSource["attachments"]);
@@ -1124,6 +1224,11 @@ export const EventKind = {
      * KindUsage carries token/cost accounting for the turn.
      */
     KindUsage: "usage",
+
+    /**
+     * KindQueueStatus carries queue state and optional position from the runtime.
+     */
+    KindQueueStatus: "queue_status",
 
     /**
      * KindContextCompaction marks a context compaction. It is forwarded directly
@@ -1210,8 +1315,8 @@ export class HarnessConfiguration {
      * @returns {HarnessConfiguration}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType33;
-        const $$createField2_0 = $$createType17;
+        const $$createField1_0 = $$createType35;
+        const $$createField2_0 = $$createType19;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("models" in $$parsedSource) {
             $$parsedSource["models"] = $$createField1_0($$parsedSource["models"]);
@@ -1281,6 +1386,13 @@ export class HarnessModel {
              */
             this["contextWindow"] = undefined;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {HarnessModelLoad | null | undefined}
+             */
+            this["load"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }
@@ -1291,12 +1403,55 @@ export class HarnessModel {
      * @returns {HarnessModel}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType17;
+        const $$createField3_0 = $$createType19;
+        const $$createField6_0 = $$createType37;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("efforts" in $$parsedSource) {
             $$parsedSource["efforts"] = $$createField3_0($$parsedSource["efforts"]);
         }
+        if ("load" in $$parsedSource) {
+            $$parsedSource["load"] = $$createField6_0($$parsedSource["load"]);
+        }
         return new HarnessModel(/** @type {Partial<HarnessModel>} */($$parsedSource));
+    }
+}
+
+/**
+ * HarnessModelLoad reports the provider's latest model-level capacity snapshot.
+ * Pointers distinguish missing values from a reported zero; load can exceed 100%.
+ */
+export class HarnessModelLoad {
+    /**
+     * Creates a new HarnessModelLoad instance.
+     * @param {Partial<HarnessModelLoad>} [$$source = {}] - The source object to create the HarnessModelLoad.
+     */
+    constructor($$source = {}) {
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | null | undefined}
+             */
+            this["percent"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | null | undefined}
+             */
+            this["queueSize"] = undefined;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new HarnessModelLoad instance from a string or object.
+     * @param {any} [$$source = {}]
+     * @returns {HarnessModelLoad}
+     */
+    static createFrom($$source = {}) {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new HarnessModelLoad(/** @type {Partial<HarnessModelLoad>} */($$parsedSource));
     }
 }
 
@@ -1398,8 +1553,8 @@ export class PermissionRequest {
      * @returns {PermissionRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType34;
-        const $$createField4_0 = $$createType36;
+        const $$createField3_0 = $$createType38;
+        const $$createField4_0 = $$createType40;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("input" in $$parsedSource) {
             $$parsedSource["input"] = $$createField3_0($$parsedSource["input"]);
@@ -1478,8 +1633,8 @@ export class Result {
      * @returns {Result}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType22;
-        const $$createField2_0 = $$createType24;
+        const $$createField1_0 = $$createType24;
+        const $$createField2_0 = $$createType26;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("usage" in $$parsedSource) {
             $$parsedSource["usage"] = $$createField1_0($$parsedSource["usage"]);
@@ -1526,6 +1681,11 @@ export const Runtime = {
      * RuntimeGrok drives xAI's Grok Build via its ACP server (`grok agent stdio`).
      */
     RuntimeGrok: "grok",
+
+    /**
+     * RuntimeTrae drives TRAE CLI through its app-server protocol.
+     */
+    RuntimeTrae: "trae",
 
     /**
      * RuntimeDsh drives DeepSeek Harness via its one-shot headless profile.
@@ -1766,7 +1926,7 @@ export class UserInputQuestion {
      * @returns {UserInputQuestion}
      */
     static createFrom($$source = {}) {
-        const $$createField3_0 = $$createType38;
+        const $$createField3_0 = $$createType42;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField3_0($$parsedSource["options"]);
@@ -1808,7 +1968,7 @@ export class UserInputRequest {
      * @returns {UserInputRequest}
      */
     static createFrom($$source = {}) {
-        const $$createField1_0 = $$createType40;
+        const $$createField1_0 = $$createType44;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("questions" in $$parsedSource) {
             $$parsedSource["questions"] = $$createField1_0($$parsedSource["questions"]);
@@ -1851,7 +2011,7 @@ export class UserInputResponse {
      * @returns {UserInputResponse}
      */
     static createFrom($$source = {}) {
-        const $$createField0_0 = $$createType41;
+        const $$createField0_0 = $$createType45;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("answers" in $$parsedSource) {
             $$parsedSource["answers"] = $$createField0_0($$parsedSource["answers"]);
@@ -1861,50 +2021,54 @@ export class UserInputResponse {
 }
 
 // Private type creation functions
-const $$createType0 = AccountRateLimitWindow.createFrom;
+const $$createType0 = AccountTokenBreakdown.createFrom;
 const $$createType1 = $Create.Nullable($$createType0);
-const $$createType2 = AccountCredits.createFrom;
+const $$createType2 = AccountRateLimitWindow.createFrom;
 const $$createType3 = $Create.Nullable($$createType2);
-const $$createType4 = AccountSpendControl.createFrom;
+const $$createType4 = AccountCredits.createFrom;
 const $$createType5 = $Create.Nullable($$createType4);
-const $$createType6 = AccountRateLimitResetCredit.createFrom;
-const $$createType7 = $Create.Array($$createType6);
-const $$createType8 = AccountRateLimit.createFrom;
+const $$createType6 = AccountSpendControl.createFrom;
+const $$createType7 = $Create.Nullable($$createType6);
+const $$createType8 = AccountRateLimitResetCredit.createFrom;
 const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = AccountDailyUsage.createFrom;
+const $$createType10 = AccountRateLimit.createFrom;
 const $$createType11 = $Create.Array($$createType10);
-const $$createType12 = AccountUsageSummary.createFrom;
-const $$createType13 = AccountRateLimitResetCredits.createFrom;
-const $$createType14 = $Create.Nullable($$createType13);
-const $$createType15 = ClaudeModelInfo.createFrom;
-const $$createType16 = $Create.Array($$createType15);
-const $$createType17 = $Create.Array($Create.Any);
-const $$createType18 = CodexModelInfo.createFrom;
-const $$createType19 = $Create.Array($$createType18);
-const $$createType20 = CodexServiceTier.createFrom;
+const $$createType12 = AccountDailyUsage.createFrom;
+const $$createType13 = $Create.Array($$createType12);
+const $$createType14 = AccountUsageSummary.createFrom;
+const $$createType15 = AccountRateLimitResetCredits.createFrom;
+const $$createType16 = $Create.Nullable($$createType15);
+const $$createType17 = ClaudeModelInfo.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = $Create.Array($Create.Any);
+const $$createType20 = CodexModelInfo.createFrom;
 const $$createType21 = $Create.Array($$createType20);
-const $$createType22 = Usage.createFrom;
-const $$createType23 = $Create.Nullable($$createType22);
-const $$createType24 = ContextUsage.createFrom;
+const $$createType22 = CodexServiceTier.createFrom;
+const $$createType23 = $Create.Array($$createType22);
+const $$createType24 = Usage.createFrom;
 const $$createType25 = $Create.Nullable($$createType24);
-const $$createType26 = PermissionRequest.createFrom;
+const $$createType26 = ContextUsage.createFrom;
 const $$createType27 = $Create.Nullable($$createType26);
-const $$createType28 = UserInputRequest.createFrom;
+const $$createType28 = PermissionRequest.createFrom;
 const $$createType29 = $Create.Nullable($$createType28);
-const $$createType30 = UserInputResponse.createFrom;
+const $$createType30 = UserInputRequest.createFrom;
 const $$createType31 = $Create.Nullable($$createType30);
-const $$createType32 = HarnessModel.createFrom;
-const $$createType33 = $Create.Array($$createType32);
-const $$createType34 = $Create.Map($Create.Any, $Create.Any);
-var $$createType35 = /** @type {(...args: any[]) => any} */(function $$initCreateType35(...args) {
-    if ($$createType35 === $$initCreateType35) {
-        $$createType35 = $$createType34;
+const $$createType32 = UserInputResponse.createFrom;
+const $$createType33 = $Create.Nullable($$createType32);
+const $$createType34 = HarnessModel.createFrom;
+const $$createType35 = $Create.Array($$createType34);
+const $$createType36 = HarnessModelLoad.createFrom;
+const $$createType37 = $Create.Nullable($$createType36);
+const $$createType38 = $Create.Map($Create.Any, $Create.Any);
+var $$createType39 = /** @type {(...args: any[]) => any} */(function $$initCreateType39(...args) {
+    if ($$createType39 === $$initCreateType39) {
+        $$createType39 = $$createType38;
     }
-    return $$createType35(...args);
+    return $$createType39(...args);
 });
-const $$createType36 = $Create.Array($$createType35);
-const $$createType37 = UserInputOption.createFrom;
-const $$createType38 = $Create.Array($$createType37);
-const $$createType39 = UserInputQuestion.createFrom;
 const $$createType40 = $Create.Array($$createType39);
-const $$createType41 = $Create.Map($Create.Any, $Create.Any);
+const $$createType41 = UserInputOption.createFrom;
+const $$createType42 = $Create.Array($$createType41);
+const $$createType43 = UserInputQuestion.createFrom;
+const $$createType44 = $Create.Array($$createType43);
+const $$createType45 = $Create.Map($Create.Any, $Create.Any);

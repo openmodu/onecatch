@@ -90,7 +90,7 @@ test("harness settings derive every per-harness fact from the backend catalog", 
 // let a user save a level the selected model rejects at run time.
 test("reasoning levels narrow to the model the harness reported", () => {
   const harness = source.slice(source.indexOf("function HarnessSettings"), source.indexOf("function ExecutionSettings"));
-  assert.match(harness, /selectedReportedModel\?\.efforts\?\.length \? selectedReportedModel\.efforts/);
+  assert.match(harness, /selectedReportedModel \? \(selectedReportedModel\.efforts \|\| \[\]\)/);
   // Changing the model must drop a level the new one does not offer.
   assert.match(harness, /!supported\.includes\(current\) \? "" : current/);
   // One inspection path serves every harness that reports the shared shape.

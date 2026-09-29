@@ -9,7 +9,7 @@ import (
 )
 
 func TestRuntimeValidityCoversEveryHarness(t *testing.T) {
-	for _, runtime := range []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeDsh} {
+	for _, runtime := range []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeTrae, RuntimeDsh} {
 		if !runtime.Valid() {
 			t.Fatalf("runtime %q must be valid", runtime)
 		}
@@ -21,7 +21,7 @@ func TestRuntimeValidityCoversEveryHarness(t *testing.T) {
 
 func TestEngineRegistersEveryHarness(t *testing.T) {
 	engine := NewEngine(Config{})
-	for _, runtime := range []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeDsh} {
+	for _, runtime := range []Runtime{RuntimeCodex, RuntimeClaude, RuntimeModu, RuntimePi, RuntimeGrok, RuntimeTrae, RuntimeDsh} {
 		if engine.Runner(runtime) == nil {
 			t.Fatalf("no runner registered for %q", runtime)
 		}
@@ -32,9 +32,9 @@ func TestEngineRejectsUninstalledHarness(t *testing.T) {
 	// Point every new harness at a binary that cannot resolve, so the engine
 	// must fail fast rather than spawn anything.
 	engine := NewEngine(Config{Binaries: map[string]string{
-		"pi": "onecatch-absent-pi", "grok": "onecatch-absent-grok", "dsh": "onecatch-absent-dsh",
+		"trae": "onecatch-absent-trae", "pi": "onecatch-absent-pi", "grok": "onecatch-absent-grok", "dsh": "onecatch-absent-dsh",
 	}})
-	for _, runtime := range []Runtime{RuntimePi, RuntimeGrok, RuntimeDsh} {
+	for _, runtime := range []Runtime{RuntimePi, RuntimeGrok, RuntimeTrae, RuntimeDsh} {
 		if engine.Available(runtime) {
 			t.Fatalf("runtime %q reported available with a missing binary", runtime)
 		}
@@ -51,10 +51,11 @@ func TestAvailableRuntimesKeepsAStableOrder(t *testing.T) {
 	engine := NewEngineWithRunners(
 		NewPiRunner(stub),
 		NewGrokRunner(stub),
+		NewTraeRunner(stub),
 		NewDshRunner(stub, t.TempDir()),
 	)
 	got := engine.AvailableRuntimes()
-	want := []Runtime{RuntimePi, RuntimeGrok, RuntimeDsh}
+	want := []Runtime{RuntimePi, RuntimeGrok, RuntimeTrae, RuntimeDsh}
 	if len(got) != len(want) {
 		t.Fatalf("available = %v, want %v", got, want)
 	}
@@ -71,7 +72,7 @@ func TestInteractivePermissionCapability(t *testing.T) {
 	stub := stubBinary(t, "", "", 0)
 	engine := NewEngineWithRunners(
 		NewClaudeRunner(stub), NewGrokRunner(stub), NewPiRunner(stub),
-		NewDshRunner(stub, t.TempDir()), NewCodexRunner(stub),
+		NewDshRunner(stub, t.TempDir()), NewCodexRunner(stub), NewTraeRunner(stub),
 	)
 	for _, testCase := range []struct {
 		runtime Runtime
@@ -96,6 +97,9 @@ func TestInteractivePermissionCapability(t *testing.T) {
 		{RuntimeCodex, SandboxReadOnly, true, "codex read-only"},
 		{RuntimeCodex, SandboxWorkspaceWrite, true, "codex workspace-write"},
 		{RuntimeCodex, SandboxFull, false, "codex full"},
+		{RuntimeTrae, SandboxReadOnly, true, "trae read-only"},
+		{RuntimeTrae, SandboxWorkspaceWrite, true, "trae workspace-write"},
+		{RuntimeTrae, SandboxFull, false, "trae full"},
 	} {
 		if got := engine.SupportsInteractivePermissions(testCase.runtime, testCase.sandbox); got != testCase.want {
 			t.Fatalf("%s: interactive permissions = %v, want %v", testCase.why, got, testCase.want)

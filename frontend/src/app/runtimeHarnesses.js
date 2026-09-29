@@ -11,6 +11,7 @@ const seedHarnesses = [
   { id: "modu", label: "modu_code", supportsReasoning: false, supportsSpeed: false, supportsRemoteFs: true },
   { id: "pi", label: "Pi", supportsReasoning: true, supportsSpeed: false, supportsRemoteFs: false },
   { id: "grok", label: "Grok Build", supportsReasoning: true, supportsSpeed: false, supportsRemoteFs: false },
+  { id: "trae", label: "TRAE CLI", supportsReasoning: true, supportsSpeed: false, supportsRemoteFs: false },
   { id: "dsh", label: "DeepSeek Harness", supportsReasoning: false, supportsSpeed: false, supportsRemoteFs: false },
 ];
 
@@ -34,7 +35,7 @@ export function hydrateRuntimeHarnesses(runtimes = []) {
 }
 
 export const directAgentWorkflowID = "single_agent";
-const runtimeSkillHarnesses = new Set(["codex", "claude", "modu", "pi", "grok"]);
+const runtimeSkillHarnesses = new Set(["codex", "claude", "modu", "pi", "grok", "trae"]);
 
 export function runtimeHarness(id = "codex") {
   return runtimeHarnesses.find((item) => item.id === id) || { id, label: id || "Codex", supportsReasoning: false, supportsSpeed: false };

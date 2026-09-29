@@ -19,7 +19,7 @@ func TestDefaultsAreSafeAndValid(t *testing.T) {
 	if got.Experimental.RemoteWorkersEnabled {
 		t.Fatal("remote workers must default to disabled")
 	}
-	for _, id := range []string{"codex", "claude", "modu", "pi", "grok", "dsh"} {
+	for _, id := range []string{"codex", "claude", "modu", "pi", "grok", "trae", "dsh"} {
 		if !got.HarnessEnabled(id) {
 			t.Fatalf("runtime %q must default to enabled", id)
 		}
@@ -29,7 +29,7 @@ func TestDefaultsAreSafeAndValid(t *testing.T) {
 			t.Fatalf("runtime %q must default to remote FS enabled", id)
 		}
 	}
-	for _, id := range []string{"pi", "grok", "dsh"} {
+	for _, id := range []string{"pi", "grok", "trae", "dsh"} {
 		if got.HarnessRemoteFSEnabled(id) {
 			t.Fatalf("runtime %q must not support remote FS", id)
 		}
@@ -213,7 +213,7 @@ func TestValidateRejectsDangerousEnvironmentKeys(t *testing.T) {
 
 func TestDefaultsIncludeEveryHarness(t *testing.T) {
 	got := Defaults()
-	for _, id := range []string{"codex", "claude", "modu", "pi", "grok", "dsh"} {
+	for _, id := range []string{"codex", "claude", "modu", "pi", "grok", "trae", "dsh"} {
 		if _, ok := got.Runtimes[id]; !ok {
 			t.Fatalf("runtime %q missing from defaults", id)
 		}
@@ -227,14 +227,14 @@ func TestNormalizeAddsNewHarnessesToExistingSettings(t *testing.T) {
 	// Settings saved before these harnesses existed must gain them rather than
 	// failing validation on the way in.
 	input := Defaults()
-	for _, id := range []string{"pi", "grok", "dsh"} {
+	for _, id := range []string{"pi", "grok", "trae", "dsh"} {
 		delete(input.Runtimes, id)
 	}
 	got, err := Normalize(input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, id := range []string{"pi", "grok", "dsh"} {
+	for _, id := range []string{"pi", "grok", "trae", "dsh"} {
 		if got.Runtimes[id].Integration != "cli" {
 			t.Fatalf("runtime %q = %+v, want cli integration", id, got.Runtimes[id])
 		}

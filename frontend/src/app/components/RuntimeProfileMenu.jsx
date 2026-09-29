@@ -1,3 +1,4 @@
+import { modelLoadLabel, modelLoadStatus } from "../modelLoad.js";
 import { Check, ChevronDown, LoaderCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -60,6 +61,13 @@ function speedDescription(t, tier, model) {
 
 export function compactRuntimeModelLabel(label = "") {
   return String(label).replace(/^gpt-/i, "").replaceAll("-", " ");
+}
+
+function ModelLoad({ model }) {
+ const { t } = useTranslation();
+ const status = modelLoadStatus(model);
+ if (!status) return null;
+ return <small className={`runtime-model-load ${status.busy ? "busy" : ""}`} title={t("settings.modelLoadSnapshot")}>{modelLoadLabel(model, t)}</small>;
 }
 
 function RuntimeRow({ label, value }) {
@@ -189,7 +197,7 @@ export default function RuntimeProfileMenu({
               <DropdownMenuSeparator />
               <DropdownMenuSub>
                 <DropdownMenuSubTrigger className="claude-more-models-trigger">{t("task.moreModels")}</DropdownMenuSubTrigger>
-                <DropdownMenuSubContent className="runtime-profile-submenu claude-more-models" sideOffset={6}>
+                <DropdownMenuSubContent className="max-h-[min(420px,var(--radix-dropdown-menu-content-available-height))] runtime-profile-submenu claude-more-models" sideOffset={6}>
                   <DropdownMenuRadioGroup value={claudeModelValue} onValueChange={selectClaudeModel}>
                     {claudeModels.more.map((model) => <ClaudeModelOption
                       model={model}
@@ -210,7 +218,7 @@ export default function RuntimeProfileMenu({
             ? <ReadOnlyRow label={t("settings.reasoningEffort")} value={effortLabel(t, profile.reasoningEffort)} />
             : <DropdownMenuSub>
               <DropdownMenuSubTrigger className="runtime-profile-row" disabled={loading || !efforts.length}><RuntimeRow label={t("settings.reasoningEffort")} value={effortLabel(t, profile.reasoningEffort)} /></DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="runtime-profile-submenu compact" sideOffset={6}>
+              <DropdownMenuSubContent className="max-h-[min(420px,var(--radix-dropdown-menu-content-available-height))] runtime-profile-submenu compact" sideOffset={6}>
                 <DropdownMenuLabel className="runtime-profile-submenu-heading">{t("settings.reasoningEffort")}</DropdownMenuLabel>
                 <DropdownMenuRadioGroup value={reasoningMenuValue} onValueChange={selectReasoningEffort}>
                   {efforts.map((effort) => <RuntimeSubmenuOption
@@ -233,16 +241,16 @@ export default function RuntimeProfileMenu({
         </> : <>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger className="runtime-profile-row" disabled={loading || (!models.length && !profile.model)}><RuntimeRow label={t("task.model")} value={displaySelectedModelLabel} /></DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="runtime-profile-submenu" sideOffset={6}>
+            <DropdownMenuSubContent className="max-h-[min(420px,var(--radix-dropdown-menu-content-available-height))] runtime-profile-submenu" sideOffset={6}>
               <DropdownMenuRadioGroup value={optionValue(value?.model)} onValueChange={selectModel}>
                 <DropdownMenuRadioItem value={DEFAULT_VALUE}><span className="runtime-profile-option"><strong>{inheritedModelLabel}</strong><small>{modelLabel(configuration, "", runtimeSettings?.defaultModel) || capability.label}</small></span></DropdownMenuRadioItem>
-                {models.map((model) => <DropdownMenuRadioItem value={model.model || model.id} key={model.id || model.model}><span className="runtime-profile-option"><strong>{model.displayName || model.model || model.id}</strong>{model.description && <small>{model.description}</small>}</span></DropdownMenuRadioItem>)}
+                {models.map((model) => <DropdownMenuRadioItem value={model.model || model.id} key={model.id || model.model}><span className="runtime-profile-option"><strong>{model.displayName || model.model || model.id}</strong>{model.description && <small>{model.description}</small>}<ModelLoad model={model} /></span></DropdownMenuRadioItem>)}
               </DropdownMenuRadioGroup>
             </DropdownMenuSubContent>
           </DropdownMenuSub>
           {capability.supportsReasoning && <DropdownMenuSub>
             <DropdownMenuSubTrigger className="runtime-profile-row" disabled={loading || !efforts.length}><RuntimeRow label={t("settings.reasoningEffort")} value={effortLabel(t, profile.reasoningEffort)} /></DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="runtime-profile-submenu compact" sideOffset={6}>
+            <DropdownMenuSubContent className="max-h-[min(420px,var(--radix-dropdown-menu-content-available-height))] runtime-profile-submenu compact" sideOffset={6}>
               <DropdownMenuLabel className="runtime-profile-submenu-heading">{t("settings.reasoningEffort")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={reasoningMenuValue} onValueChange={selectReasoningEffort}>
                 {efforts.map((effort) => <RuntimeSubmenuOption
@@ -257,7 +265,7 @@ export default function RuntimeProfileMenu({
           </DropdownMenuSub>}
           {capability.supportsSpeed && <DropdownMenuSub>
             <DropdownMenuSubTrigger className="runtime-profile-row" disabled={loading || !tiers.length}><RuntimeRow label={t("settings.speed")} value={speedLabel(t, profile.serviceTier)} /></DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="runtime-profile-submenu compact" sideOffset={6}>
+            <DropdownMenuSubContent className="max-h-[min(420px,var(--radix-dropdown-menu-content-available-height))] runtime-profile-submenu compact" sideOffset={6}>
               <DropdownMenuLabel className="runtime-profile-submenu-heading">{t("settings.speed")}</DropdownMenuLabel>
               <DropdownMenuRadioGroup value={profile.serviceTier || inheritedServiceTier} onValueChange={(serviceTier) => update({ serviceTier: serviceTier === inheritedServiceTier ? "" : serviceTier })}>
                 {tiers.map((tier) => <RuntimeSubmenuOption

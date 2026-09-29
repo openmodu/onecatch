@@ -9,7 +9,7 @@ import RuntimeHarnessIcon from "./components/RuntimeHarnessIcon.jsx";
 
 const heatTones = ["bg-muted/70", "bg-primary/20", "bg-primary/40", "bg-primary/60", "bg-primary"];
 const automaticSyncInterval = 30 * 60 * 1000;
-const usageRuntimeIDs = ["codex", "claude", "pi", "grok", "modu"];
+const usageRuntimeIDs = ["codex", "claude", "pi", "grok", "modu", "trae"];
 const runtimeFallbackNames = { codex: "Codex", claude: "Claude Code", pi: "Pi", grok: "Grok Build", modu: "Modu" };
 
 function calendarDate(date, language, options = {}) {
@@ -56,6 +56,8 @@ function LimitCard({ value, runtime, t }) {
       {value.planType && <span className="shrink-0 rounded-md border bg-muted/50 px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{value.planType}</span>}
     </header>
     {windows.length > 0 ? <div className="mt-4 grid gap-3 md:grid-cols-2">{windows.map((window, index) => <RateWindow value={window} t={t} key={`${window.windowDurationMins || "window"}-${index}`} />)}</div> : <p className="mt-4 mb-0 rounded-lg bg-muted p-3 text-xs text-muted-foreground">{t("usage.noWindows")}</p>}
+    {(value.quotaRemaining != null || value.quotaLimit != null) && <p className="mt-3 mb-0 text-xs text-muted-foreground">{t("usage.quotaRemaining", { remaining: value.quotaRemaining ?? "—", limit: value.quotaLimit ?? "—" })}</p>}
+    {value.spendControlReached === true && <p className="mt-2 mb-0 text-xs text-destructive">{t("usage.quotaDepleted")}</p>}
     {(value.credits || value.individualLimit) && <footer className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-border/70 pt-4"><Credits value={value.credits} t={t} />{value.individualLimit && <span className="text-xs text-muted-foreground">{t("usage.spend", { used: value.individualLimit.used, limit: value.individualLimit.limit })}</span>}</footer>}
   </article>;
 }
@@ -115,6 +117,7 @@ function DailyUsage({ dailyUsage, t, language }) {
         <time className="text-xs font-medium text-foreground" dateTime={row.key}>{calendarDate(row.date, language, { month: "short", day: "numeric", weekday: "short" })}</time>
         <span className="h-1.5 overflow-hidden rounded-full bg-muted"><i className="block h-full rounded-full bg-primary/70" style={{ width: `${row.tokens > 0 ? Math.max(3, (row.tokens / peak) * 100) : 0}%` }} /></span>
         <strong className={`min-w-20 text-right text-xs tabular-nums ${row.tokens > 0 ? "text-foreground" : "font-normal text-muted-foreground"}`}>{formatTokens(row.tokens)}</strong>
+        {row.breakdown && <dl className="col-span-3 m-0 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">{["input", "output", "cacheRead", "cacheWrite", "reasoning"].map((key) => <div className="flex gap-1.5" key={key}><dt>{t(`usage.tokens.${key}`)}</dt><dd className="m-0 tabular-nums">{row.breakdown[key].toLocaleString()}</dd></div>)}</dl>}
       </div>)}
     </div>
   </section>;
@@ -204,7 +207,7 @@ export default function UsagePage({ mode = "wails", runtimes = [] }) {
   const selectedName = selected === "all" ? t("usage.allRuntimes") : runtimeName(selected, runtimes);
   const heatmapDescription = selected === "all"
     ? t("usage.heatmapDescriptionAll")
-    : usage?.scope === "account" ? t("usage.heatmapDescriptionAccount", { runtime: selectedName }) : t("usage.heatmapDescriptionDevice", { runtime: selectedName });
+    : (usage?.dailyUsageScope || usage?.scope) === "account" ? t("usage.heatmapDescriptionAccount", { runtime: selectedName }) : t("usage.heatmapDescriptionDevice", { runtime: selectedName });
   const rateLimits = usage?.rateLimits || [];
   const syncTargets = selected === "all" ? runtimeIDs : [selected];
 
@@ -220,7 +223,9 @@ export default function UsagePage({ mode = "wails", runtimes = [] }) {
       {selectedErrors.length > 0 && <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-destructive/30 bg-destructive/7 px-4 py-3 text-sm text-destructive" role="alert"><AlertCircle className="mt-0.5 shrink-0" size={16} aria-hidden="true" /><div><strong className="block font-semibold">{t("usage.loadFailed")}</strong>{selectedErrors.map((item) => <span className="mt-0.5 block text-xs opacity-90" key={item.runtime}>{runtimeName(item.runtime, runtimes)}：{item.message}</span>)}</div></div>}
       {loading && !usage ? <div className="mt-5 grid min-h-48 place-items-center rounded-xl border border-dashed text-sm text-muted-foreground"><span className="flex items-center gap-2"><RefreshCw className="animate-spin" size={16} aria-hidden="true" />{t("usage.loading")}</span></div>
         : usage && <>
-          <AccountSummary value={usage.summary} t={t} />
+          {usage.warning && <p className="mt-4 text-sm text-muted-foreground" role="status">{t("usage.partialData")} {usage.warning}</p>}
+          {usage.dailyUsageScope === "device" && <p className="mt-4 text-xs text-muted-foreground">{t("usage.localTokenDetail")}</p>}
+          {Object.values(usage.summary || {}).some((value) => value != null) && <AccountSummary value={usage.summary} t={t} />}
           {(usage.dailyUsage || []).length > 0 ? <><UsageHeatmap dailyUsage={usage.dailyUsage} description={heatmapDescription} t={t} language={i18n.resolvedLanguage} /><DailyUsage dailyUsage={usage.dailyUsage} t={t} language={i18n.resolvedLanguage} /></> : <div className="mt-5 rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">{t("usage.noDailyData")}</div>}
           {rateLimits.length > 0 && <section className="mt-7" aria-labelledby="rolling-usage-title"><header className="mb-3"><h2 id="rolling-usage-title" className="m-0 text-base font-semibold text-foreground">{t("usage.rollingTitle")}</h2><p className="mt-1 mb-0 text-xs text-muted-foreground">{t("usage.rollingDescription")}</p></header><div className="grid gap-4">{rateLimits.map((limit, index) => <LimitCard value={limit} runtime={selected === "all" ? limit.runtime : selected} t={t} key={`${limit.runtime || selected}-${limit.id}-${index}`} />)}</div></section>}
           <footer className="mt-5 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground"><span>{t("usage.updatedAt", { time: usage.fetchedAt ? formatDateTime(usage.fetchedAt) : "—" })} · {selected === "all" ? t("usage.scope.mixed") : t(`usage.scope.${usage.scope || "device"}`)}</span>{usage.resetCredits?.availableCount > 0 && <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/8 px-2.5 py-1.5 text-primary"><RotateCcw size={13} aria-hidden="true" />{t("usage.resetCredits", { count: usage.resetCredits.availableCount })}</span>}</footer>

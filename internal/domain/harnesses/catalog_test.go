@@ -68,7 +68,7 @@ func TestResumeClaimsAreExplicit(t *testing.T) {
 	if dsh.CanResume {
 		t.Fatal("the DeepSeek Harness headless profile cannot resume")
 	}
-	for _, id := range []string{"codex", "claude", "modu", "pi", "grok"} {
+	for _, id := range []string{"codex", "claude", "modu", "pi", "grok", "trae"} {
 		harness, _ := Find(id)
 		if !harness.CanResume {
 			t.Fatalf("harness %q is expected to resume", id)
@@ -83,7 +83,7 @@ func TestRemoteFSCapabilitiesAreExplicit(t *testing.T) {
 			t.Fatalf("harness %q must support remote FS", id)
 		}
 	}
-	for _, id := range []string{"pi", "grok", "dsh"} {
+	for _, id := range []string{"pi", "grok", "trae", "dsh"} {
 		harness, _ := Find(id)
 		if harness.SupportsRemoteFS {
 			t.Fatalf("harness %q must not advertise remote FS", id)

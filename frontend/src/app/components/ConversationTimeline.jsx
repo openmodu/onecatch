@@ -231,6 +231,19 @@ function ContextCompactionTimelineItem({ entry }) {
   </div>;
 }
 
+function QueueTimelineItem({ entry }) {
+  const { t } = useTranslation();
+  const Icon = entry.state === "ready" ? Check : Clock3;
+  return <div className="conversation-queue" role="status">
+    <Icon aria-hidden="true" />
+    <div><strong>{t(`timeline.queue.${entry.state}`)}</strong>
+      {entry.operation === "contextCompaction" && <span> · {t("timeline.queue.compaction")}</span>}
+      {entry.state !== "ready" && entry.position !== null && <span> · {t("timeline.queue.position", { position: entry.position })}</span>}
+      {entry.message && <small>{entry.message}</small>}
+    </div>
+  </div>;
+}
+
 function ProcessGroup({ entries, active, round, permissionBusy, userInputBusy, onPermissionDecision, onUserInputResponse }) {
   const { t } = useTranslation();
   const timeLabel = createTimeLabeler();
@@ -275,6 +288,7 @@ const ConversationRound = memo(function ConversationRound({ round, active, permi
           const entry = block.item;
           return <div className={`conversation-agent-message ${entry.tone}`} key={block.id}><MessageBody content={entry.text} streaming={entry.streaming} /><MessageActions at={entry.at || round.finishedAt || round.startedAt} content={entry.text} /></div>;
         }
+        if (block.type === "queue") return <QueueTimelineItem entry={block.item} key={block.id} />;
         if (block.type === "compaction") return <ContextCompactionTimelineItem entry={block.item} key={block.id} />;
         if (block.type === "files") return <FileChangeGroup entries={block.items} onReview={onReview} key={block.id} />;
         return <ProcessGroup entries={block.items} active={Boolean(active) && lastItem === block.items[block.items.length - 1]} round={round} permissionBusy={permissionBusy} userInputBusy={userInputBusy} onPermissionDecision={onPermissionDecision} onUserInputResponse={onUserInputResponse} key={block.id} />;

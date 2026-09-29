@@ -43,6 +43,8 @@ const (
 	RuntimePi Runtime = "pi"
 	// RuntimeGrok drives xAI's Grok Build via its ACP server (`grok agent stdio`).
 	RuntimeGrok Runtime = "grok"
+	// RuntimeTrae drives TRAE CLI through its app-server protocol.
+	RuntimeTrae Runtime = "trae"
 	// RuntimeDsh drives DeepSeek Harness via its one-shot headless profile.
 	RuntimeDsh Runtime = "dsh"
 )
@@ -74,6 +76,8 @@ const (
 	KindFileChange EventKind = "file_change"
 	// KindUsage carries token/cost accounting for the turn.
 	KindUsage EventKind = "usage"
+	// KindQueueStatus carries queue state and optional position from the runtime.
+	KindQueueStatus EventKind = "queue_status"
 	// KindContextCompaction marks a context compaction. It is forwarded directly
 	// when the runtime exposes one and inferred from a substantial occupancy drop
 	// for runtimes and older protocol versions that do not.

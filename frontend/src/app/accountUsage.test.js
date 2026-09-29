@@ -70,3 +70,15 @@ test("usage page reads every supported runtime and renders every quota bucket", 
   assert.match(source, /windowDurationMins/);
   assert.match(source, /resetsAt/);
 });
+
+test("daily detail retains input/output and cache subsets without inflating totals", () => {
+  const breakdown = { input: 100, output: 20, cacheRead: 30, cacheWrite: 50, reasoning: 5 };
+  const source = { runtime: "trae", dailyUsage: [{ startDate: "2026-09-03", tokens: 120, breakdown }] };
+  const combined = combineAccountUsage([source]);
+  assert.deepEqual(combined.dailyUsage[0].breakdown, breakdown);
+  assert.equal(combined.dailyUsage[0].tokens, 120);
+  assert.deepEqual(recentDailyUsage(combined.dailyUsage, new Date(2026, 8, 3), 1)[0].breakdown, breakdown);
+  const partial = combineAccountUsage([source, { dailyUsage: [{ startDate: "2026-09-03", tokens: 40 }] }]);
+  assert.equal(partial.dailyUsage[0].tokens, 160);
+  assert.equal(partial.dailyUsage[0].breakdown, undefined);
+});

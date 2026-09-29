@@ -35,7 +35,7 @@ test("runtime harness metadata exposes the supported task runtimes", () => {
   assert.equal(runtimeHarness("grok").supportsSpeed, false);
   assert.equal(runtimeHarness("codex").supportsRemoteFs, true);
   assert.equal(runtimeHarness("pi").supportsRemoteFs, false);
-  for (const id of ["codex", "claude", "modu", "pi", "grok"]) assert.equal(supportsRuntimeSkills(id), true);
+  for (const id of ["codex", "claude", "modu", "pi", "grok", "trae"]) assert.equal(supportsRuntimeSkills(id), true);
   assert.equal(supportsRuntimeSkills("dsh"), false);
 });
 
@@ -53,7 +53,7 @@ test("harness preferences filter local and remote choices", () => {
   assert.equal(runtimeHarnessEnabled("pi", runtimes, settings), true);
   assert.equal(runtimeHarnessEnabled("pi", runtimes, settings, true), false);
   assert.equal(hasRemoteFSHarness(runtimes, settings), true);
-  assert.deepEqual(runtimeHarnessOptions(runtimes, "missing", settings).map((item) => item.value), ["codex", "modu", "pi", "grok", "dsh"]);
+  assert.deepEqual(runtimeHarnessOptions(runtimes, "missing", settings).map((item) => item.value), ["codex", "modu", "pi", "grok", "trae", "dsh"]);
   assert.deepEqual(runtimeHarnessOptions(runtimes, "missing", settings, true).map((item) => item.value), ["codex", "modu"]);
   assert.equal(workflowHarnessesEnabled({ steps: [{ runtime: "pi" }] }, runtimes, settings, true), false);
   assert.equal(workflowHarnessesEnabled({ steps: [{ runtime: "codex" }] }, runtimes, settings, true), true);
@@ -70,6 +70,7 @@ test("runtime harness options preserve choices and flag unavailable binaries", (
     { value: "modu", label: "modu_code" },
     { value: "pi", label: "Pi" },
     { value: "grok", label: "Grok Build" },
+    { value: "trae", label: "TRAE CLI" },
     { value: "dsh", label: "DeepSeek Harness" },
   ]);
   assert.equal(options[1].disabled, true);

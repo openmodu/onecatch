@@ -9,6 +9,7 @@ an `agentrun.Result`, so workflows do not depend on the transport.
 | Runtime | Transport | Resume | Sandbox lever |
 | --- | --- | --- | --- |
 | `codex` | app-server JSON-RPC | `thread/resume` | `--sandbox` / `-c sandbox_mode` |
+| `trae` | `traecli app-server --listen stdio://` JSON-RPC | `thread/resume` | thread sandbox policy |
 | `claude` | `claude -p --output-format stream-json` | `--resume` | tool deny list |
 | `modu` | native Go SDK, or `modu_code -p … -json` | `--resume` | n/a |
 | `pi` | `pi -p --mode json` | `--session <id>` | `--tools` allowlist |
@@ -218,3 +219,36 @@ persistence, remote execution, and the UI consume only normalized events.
 Adapter tests replay captured harness output through the parser rather than
 asserting against hand-written shapes. `ONECATCH_LIVE=1` runs the live smoke
 tests, which spend real model quota and are excluded from the normal suite.
+
+## TRAE CLI
+
+Select **TRAE CLI** in **Settings → Harness**. The default executable is
+`traecli`; an explicit binary path can be configured when it is not on PATH.
+The adapter uses the CLI's existing login and configuration.
+
+TRAE has an independent app-server transport, event decoder and approval handler,
+validated against `traecli 0.207.1` protocol schemas. It supports streaming
+messages, tool results, token usage, approvals and thread resume. Each turn owns
+a fresh process and resumes explicitly; no Codex adapter code is used.
+Model discovery uses TRAE's `model/list`, preserving `configName` as the value
+passed back to the server (its `model` field can be a display alias). Reasoning
+levels and context sizes are read per model. The model menu displays the load
+snapshot and queue size when provided; missing queue size is not treated as zero.
+During a turn, `queue/status` notifications update a visible timeline entry with
+queued, waiting or ready state, optional queue position and backend message.
+Notifications arriving before the turn/start response are retained and replayed.
+Skill discovery uses `skills/list`.
+Remote workspaces, service tiers and maximum-context overrides are not exposed
+because their compatibility has not been established. Account usage uses TRAE's
+`model/internalUsage/read`: weekly usage percentage, remaining/total basic quota,
+exhaustion state and reset time. Daily token details are read independently from `~/.trae/cli/sessions` and
+labeled as device history: input, output, cache read/write and reasoning.
+Cumulative session counters are differenced by local calendar day; duplicate
+snapshots and copied histories are excluded. Cache/reasoning subsets are not
+added again to the total. If the quota endpoint fails, local history remains
+available with a warning. Missing quota readings are never treated as zero.
+
+`TestTraeRealAppServerCatalog` verifies the installed binary without starting a
+model turn. `ONECATCH_LIVE=1 go test ./internal/usecase/agentrun -run TestLiveTraeAppServer -v`
+checks a real read-only turn and a cold session resume, and consumes model quota.
+Set `ONECATCH_TRAE_MODEL` to override the local default model for this test.
