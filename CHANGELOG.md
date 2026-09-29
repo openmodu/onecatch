@@ -3,6 +3,13 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.3.7
+
+- Add TRAE CLI as a supported runtime: run conversations through `traecli` with streaming replies, approvals, tool results and thread resume, using the CLI's existing login and configuration.
+- Discover TRAE models with per-model reasoning levels and context windows; show model load and queue size in the model menu, and show queued, waiting or ready queue status in the conversation timeline.
+- Show TRAE account weekly quota and remaining basic quota in Usage, alongside daily token details read from this device's TRAE sessions; cache and reasoning tokens are counted only once, and local history stays available with a warning if the account quota endpoint fails.
+- Android APKs remain test-signed when release signing secrets are not configured. The signing key changes between CI runs, so upgrading may require uninstalling the old app and pairing again.
+
 ## 0.3.6
 
 - Fix local network discovery on Android 11 and later when the system blocks the interface lookup used by Go; paired phones can find nearby computers again and resolve a worker after its IP address changes.
