@@ -3,6 +3,17 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.4.0
+
+- Redesign the desktop sidebar with compact navigation, a More menu, customizable shortcuts, and project search and status filters beside the project heading. Persist sidebar navigation preferences across launches.
+- Use full-height sidebar columns with a single divider, a coordinated neutral palette, and the OneCatch app icon in the footer without a redundant local-environment label.
+- Remove decorative borders and focus rings from desktop cards, buttons, fields, menus and dialogs. Use filled surfaces for selection, focus and validation while retaining pane dividers and internal separators.
+- Open Check for Updates in a dedicated compact window from the native app menu, Settings or the sidebar update indicator. Show checking, download progress, available releases and restart actions in state-specific layouts, with optional release notes.
+- Cancel update checks when requested, preserve downloads when closing the update window, and reconcile update state when reopening it.
+- Restore workflow back and forward controls on macOS by keeping the draggable titlebar clear of interactive controls, and refine workflow edit actions.
+- Dock the terminal flush with the workbench, removing nested corner frames and extra gutters while preserving split panes and maximize controls.
+- Android APKs remain test-signed when release signing secrets are not configured. The signing key changes between CI runs, so upgrading may require uninstalling the old app and pairing again.
+
 ## 0.3.7
 
 - Add TRAE CLI as a supported runtime: run conversations through `traecli` with streaming replies, approvals, tool results and thread resume, using the CLI's existing login and configuration.
