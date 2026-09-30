@@ -158,7 +158,7 @@ export function SettingsWindow() {
     const nativeSidebar = globalThis.webkit?.messageHandlers?.onecatchSidebar;
     if (!nativeSidebar || mode === "loading") return;
     document.documentElement.dataset.nativeSidebarMaterial = "true";
-    nativeSidebar.postMessage({ width: document.querySelector(".settings-sidebar")?.getBoundingClientRect().width || 216 });
+    nativeSidebar.postMessage({ width: document.querySelector(".settings-sidebar")?.getBoundingClientRect().width || 216, flush: true });
   }, [mode]);
 
   const updateSettings = useCallback((value) => {
@@ -297,7 +297,7 @@ export function WorkflowsWindow() {
     const nativeSidebar = globalThis.webkit?.messageHandlers?.onecatchSidebar;
     if (!nativeSidebar || mode === "loading") return;
     document.documentElement.dataset.nativeSidebarMaterial = "true";
-    nativeSidebar.postMessage({ width: document.querySelector(".workflow-sidebar")?.getBoundingClientRect().width || 240 });
+    nativeSidebar.postMessage({ width: document.querySelector(".workflow-sidebar")?.getBoundingClientRect().width || 240, flush: true });
   }, [mode]);
   useEffect(() => Events.On(settingsChangedEvent, async () => {
     if (mode !== "wails") return;

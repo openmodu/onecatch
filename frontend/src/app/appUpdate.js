@@ -1,6 +1,41 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Events } from "@wailsio/runtime";
-import { UpdateBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
+import { UpdateBinding, WindowBinding } from "../../bindings/github.com/openmodu/onecatch/internal/transport/wails/index.js";
+
+export function openAppUpdateWindow(mode) {
+  if (mode === "wails") return WindowBinding.OpenUpdates();
+  window.open("/?window=updates", "onecatch-updates", "width=400,height=146");
+  return Promise.resolve();
+}
+
+export function appUpdateWindowSize(state, notesExpanded = false) {
+  if (["checking", "downloading", "verifying", "installing"].includes(state)) return { width: 400, height: 146 };
+  if (state === "up-to-date") return { width: 260, height: 220 };
+  if (notesExpanded) return { width: 380, height: 340 };
+  if (["available", "ready", "error"].includes(state)) return { width: 320, height: 260 };
+  return { width: 300, height: 240 };
+}
+
+export function appUpdateAction(status, busy = false) {
+  const state = status?.state;
+  if (busy || !status?.verificationEnabled || ["checking", "downloading", "verifying", "installing"].includes(state)) return null;
+  if (state === "ready") return status.automaticSupported ? "apply" : null;
+  if ((state === "available" || state === "error") && status.availableVersion) return "download";
+  return ["idle", "up-to-date", "error"].includes(state) ? "check" : null;
+}
+
+export function shouldCheckAppUpdateOnOpen(status) {
+  return appUpdateAction(status) === "check";
+}
+
+export function appUpdateStateLabel(status, t) {
+  const state = status?.state || "unconfigured";
+  if (state === "available") return t("settings.updateAvailable", { version: status.availableVersion });
+  if (state === "ready") return t("settings.updateReady", { version: status.availableVersion });
+  if (state === "up-to-date") return t("settings.updateCurrent");
+  if (state === "unconfigured") return t("settings.updateDisabled");
+  return t(`settings.updateState.${state}`, { defaultValue: state });
+}
 
 export const APP_UPDATE_EVENTS = [
   "wails:updater:check-started",
@@ -31,15 +66,17 @@ export function shouldShowSidebarUpdate(status) {
   return state === "error" && Boolean(status?.availableVersion);
 }
 
-// The workbench sidebar and the standalone Settings window are separate React
+// The workbench sidebar and auxiliary windows are separate React
 // roots, so updater state is reconciled from the native service and its event
-// stream instead of being owned by either screen. Both surfaces consequently
+// stream instead of being owned by a screen. All surfaces consequently
 // show the same release and follow the same check/download/apply transitions.
 export function useAppUpdate(mode) {
   const [status, setStatus] = useState(null);
   const [progress, setProgress] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [loaded, setLoaded] = useState(mode !== "wails");
   const mounted = useRef(true);
+  const pendingCheck = useRef(null);
 
   useEffect(() => {
     // React Strict Mode intentionally performs a setup/cleanup/setup cycle in
@@ -59,6 +96,8 @@ export function useAppUpdate(mode) {
       // The Wails bindings can be reachable a paint before the updater service
       // finishes booting. Its first status event will reconcile this state.
       return null;
+    } finally {
+      if (mounted.current) setLoaded(true);
     }
   }, [mode]);
 
@@ -67,6 +106,7 @@ export function useAppUpdate(mode) {
     void refresh();
     const off = APP_UPDATE_EVENTS.map((name) => Events.On(name, () => { void refresh(); }));
     off.push(Events.On("wails:updater:download-progress", (event) => setProgress(event?.data || null)));
+    off.push(Events.On("wails:updater:download-started", () => setProgress(null)));
     return () => off.forEach((stop) => stop?.());
   }, [mode, refresh]);
 
@@ -86,8 +126,18 @@ export function useAppUpdate(mode) {
 
   const check = useCallback(() => perform(async () => {
     if (mode !== "wails") return null;
-    return UpdateBinding.Check();
+    const operation = UpdateBinding.Check();
+    pendingCheck.current = operation;
+    try { return await operation; }
+    catch (error) { if (pendingCheck.current !== operation) return null; throw error; }
+    finally { if (pendingCheck.current === operation) pendingCheck.current = null; }
   }), [mode, perform]);
+
+  const cancelCheck = useCallback(() => {
+    const operation = pendingCheck.current;
+    pendingCheck.current = null;
+    void operation?.cancel();
+  }, []);
 
   const download = useCallback(() => perform(async () => {
     if (mode !== "wails") return null;
@@ -99,5 +149,5 @@ export function useAppUpdate(mode) {
     return UpdateBinding.Apply();
   }), [mode, perform]);
 
-  return { status, progress, busy, refresh, check, download, apply };
+  return { status, progress, busy, loaded, refresh, check, cancelCheck, download, apply };
 }

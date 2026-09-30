@@ -40,6 +40,13 @@ export function OpenSettings() {
 /**
  * @returns {$CancellablePromise<void>}
  */
+export function OpenUpdates() {
+    return $Call.ByID(2626467695);
+}
+
+/**
+ * @returns {$CancellablePromise<void>}
+ */
 export function OpenWorkflows() {
     return $Call.ByID(3483995735);
 }

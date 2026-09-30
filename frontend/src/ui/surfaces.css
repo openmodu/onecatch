@@ -1,0 +1,143 @@
+/* Desktop surfaces are separated by fill and spacing, never an outer frame.
+   This policy also covers Radix portals and auxiliary windows. Important rules
+   in the early surfaces layer outrank legacy focus rings and utility borders;
+   individual pages cannot accidentally bring the frames back. Border widths
+   remain authored locally so first/last-child divider exceptions still work. */
+:where(html:not([data-platform="mobile"])) :where(*) {
+  border-style: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  --tw-ring-shadow: 0 0 #0000 !important;
+  --tw-ring-offset-shadow: 0 0 #0000 !important;
+}
+
+/* A single edge is a separator, not a card perimeter. Keep pane boundaries,
+   section rules and table rows without restoring any surrounding rectangle. */
+:where(html:not([data-platform="mobile"])) :where(
+  [class~="border-t"], [class~="border-t-1"],
+  .sidebar-footer, .terminal-dock, .markdown-content hr,
+  .review-hunk + .review-hunk, .conversation-tool-body
+) {
+  border-top-style: solid !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  [class~="border-b"], [class~="border-b-1"],
+  .markdown-content th, .markdown-content td,
+  .review-toolbar, .review-file, .review-file > header,
+  .review-files-heading, .codex-skill-menu-header
+) {
+  border-bottom-style: solid !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  [class~="border-l"], [class~="border-l-1"],
+  .inspector, .editor-side, .dag-inspector, .review-files,
+  .workbench-inspector.open
+) {
+  border-left-style: solid !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  [class~="border-r"], [class~="border-r-1"],
+  .sidebar-flush, .windows-titlebar-brand, .settings-titlebar-sidebar,
+  .review-line-number, .terminal-tab-shell,
+  .markdown-content th, .markdown-content td
+) {
+  border-right-style: solid !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where([class~="divide-y"] > :not(:last-child)) {
+  border-block-end-style: solid !important;
+}
+
+/* Popups retain a soft elevation shadow so they remain legible over content.
+   There is no inset stroke or spread-radius ring. */
+:where(html:not([data-platform="mobile"])) :where(
+  [role="menu"], [role="dialog"], [data-slot="select-content"], [role="tooltip"],
+  .toast, .terminal-search, .codex-skill-menu
+) {
+  box-shadow: 0 12px 32px rgb(0 0 0 / 12%), 0 2px 8px rgb(0 0 0 / 5%) !important;
+}
+
+/* Form affordances come from a quiet filled surface. Composer fields already
+   live inside a filled parent and stay transparent to avoid nested boxes. */
+:where(html:not([data-platform="mobile"])) :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]),
+  textarea, select, [data-slot="select-trigger"],
+  [data-slot="button"][data-variant="outline"]
+) {
+  background-color: var(--muted) !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):focus,
+  textarea:focus, select:focus, [data-slot="select-trigger"]:focus-visible,
+  [data-slot="button"][data-variant="outline"]:is(:hover, :focus-visible)
+) {
+  background-color: var(--accent) !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  [data-slot="button"][data-variant="outline"][aria-checked="true"],
+  [data-slot="button"][data-variant="outline"][aria-pressed="true"]
+) {
+  background-color: var(--accent) !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  .new-task-prompt, .workbench-composer-input textarea,
+  .pt-search input, .terminal-search input,
+  .codex-skill-field.has-skill-highlight textarea
+) {
+  background-color: transparent !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  .new-task-composer, .workbench-composer-shell
+) {
+  background-color: color-mix(in oklab, var(--muted) 65%, var(--card)) !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  .new-task-composer:focus-within, .workbench-composer-shell:focus-within
+) {
+  background-color: var(--muted) !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where([data-slot="checkbox"][data-state="unchecked"]) {
+  background-color: var(--input) !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  [role="checkbox"]:focus-visible, [role="switch"]:focus-visible,
+  [role="radio"]:focus-visible
+) {
+  filter: brightness(.85);
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  summary:focus-visible, a:focus-visible
+) {
+  background-color: var(--accent) !important;
+  color: var(--accent-foreground) !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  input[aria-invalid="true"], textarea[aria-invalid="true"],
+  [data-slot="select-trigger"][aria-invalid="true"]
+) {
+  background-color: color-mix(in oklab, var(--destructive) 10%, var(--background)) !important;
+}
+
+:where(html:not([data-platform="mobile"])) :where(
+  .dag-node-card.selected, .dag-node-card.connecting, .run-card.selected
+) {
+  background-color: var(--accent) !important;
+}
+
+/* Docked inspectors use the same straight column seam as the sidebar. */
+:where(html:not([data-platform="mobile"])) .workbench-inspector.open {
+  margin-right: 0 !important;
+  border-radius: 0 !important;
+}

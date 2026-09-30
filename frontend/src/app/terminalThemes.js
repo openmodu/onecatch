@@ -19,9 +19,9 @@ export function resolveTerminalTheme(id = "system") {
   const style = getComputedStyle(document.documentElement);
   const token = (name, fallback) => style.getPropertyValue(name).trim() || fallback;
   return {
-    background: token("--background", "#f5f5f0"), foreground: token("--foreground", "#1a1a1a"),
-    cursor: token("--primary", "#694d1f"), cursorAccent: token("--primary-foreground", "#f7f4ec"),
-    selectionBackground: token("--accent", "#e4e1d5"), black: token("--foreground", "#1a1a1a"),
-    brightBlack: token("--muted-foreground", "#60605e"), white: token("--background", "#f5f5f0"), brightWhite: token("--card", "#fcfcfa"),
+    background: token("--background", "#fcfcfb"), foreground: token("--foreground", "#1a1a1a"),
+    cursor: token("--primary", "#694d1f"), cursorAccent: token("--primary-foreground", "#ffffff"),
+    selectionBackground: token("--accent", "#edece8"), black: token("--foreground", "#1a1a1a"),
+    brightBlack: token("--muted-foreground", "#73726e"), white: token("--background", "#fcfcfb"), brightWhite: token("--card", "#ffffff"),
   };
 }

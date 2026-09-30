@@ -5,6 +5,7 @@ package wailstransport
 // usable in tests and on platforms where a window role does not exist.
 type WindowCallbacks struct {
 	OpenSettings   func()
+	OpenUpdates    func()
 	OpenWorkflows  func()
 	OpenInspector  func()
 	CloseInspector func()
@@ -24,6 +25,10 @@ func NewWindowBinding(callbacks WindowCallbacks) *WindowBinding {
 
 func (b *WindowBinding) OpenSettings() {
 	b.invoke(func(callbacks WindowCallbacks) func() { return callbacks.OpenSettings })
+}
+
+func (b *WindowBinding) OpenUpdates() {
+	b.invoke(func(callbacks WindowCallbacks) func() { return callbacks.OpenUpdates })
 }
 
 func (b *WindowBinding) OpenWorkflows() {

@@ -33,7 +33,7 @@ import MobileAccessSettings from "./components/settings/MobileAccessSettings.jsx
 import { demoSettings } from "./settingsDefaults.js";
 import { demoSyncTargets } from "./skills.js";
 import { usesCompactAuxiliaryChrome } from "./platform.js";
-import { appUpdatePercent, useAppUpdate } from "./appUpdate.js";
+import { appUpdateStateLabel, openAppUpdateWindow, useAppUpdate } from "./appUpdate.js";
 
 const sectionMeta = (t) => ["runtime", "harness", "skills", "mobile", "terminal", "execution", "security", "storage", "experimental"].map((id) => ({ id, label: t(`settings.section.${id}`), description: t(`settings.section.${id}Description`) }));
 const clone = (value) => JSON.parse(JSON.stringify(value));
@@ -235,7 +235,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
         : <strong className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85">{t("sidebar.settings")}</strong>}
     </div>
     <AuxWindowCloseButton />
-    <ScrollArea className="sidebar settings-sidebar relative z-30 min-h-0 select-none text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]">
+    <ScrollArea className="sidebar sidebar-flush settings-sidebar relative z-30 min-h-0 select-none text-sidebar-foreground">
       <aside className="flex min-h-full flex-col gap-1 px-3 pt-[60px] pb-4" aria-label={t("settings.sectionsAria")}>
         {sections.map((item) => <Button key={item.id} variant="ghost" className={`h-auto w-full justify-start rounded-lg px-3 py-2.5 text-left ${section === item.id ? "bg-accent text-accent-foreground hover:bg-accent" : "text-muted-foreground hover:bg-background/45"}`} aria-current={section === item.id ? "page" : undefined} onClick={() => switchSection(item.id)}>
           <span className="min-w-0"><strong className="flex items-center gap-2 text-[13px] font-medium text-foreground">{item.label}{section === item.id && dirty && <i className="size-1.5 rounded-full bg-primary" aria-label={t("settings.unsaved")} />}</strong>{item.id !== "experimental" && <small className="mt-0.5 block whitespace-normal text-[11px] font-normal leading-snug text-muted-foreground">{item.description}</small>}</span>
@@ -431,40 +431,18 @@ function InterfaceSettings({ i18n, mode, notify }) {
 
 function AppUpdateSettings({ mode, notify }) {
   const { t } = useTranslation();
-  const { status, busy, progress, check, download, apply } = useAppUpdate(mode);
-
-  const run = async (action, successKey) => {
-    try {
-      await action();
-      if (successKey) notify("success", t(successKey));
-    } catch (error) {
-      notify("error", message(error, t));
-    }
+  const { status } = useAppUpdate(mode);
+  const open = async () => {
+    try { await openAppUpdateWindow(mode); } catch (error) { notify("error", message(error, t)); }
   };
-  const state = status?.state || "unconfigured";
-  const available = Boolean(status?.availableVersion);
-  const downloading = ["downloading", "verifying", "installing"].includes(state);
-  const stateLabel = state === "available" ? t("settings.updateAvailable", { version: status.availableVersion })
-    : state === "ready" ? t("settings.updateReady", { version: status.availableVersion })
-      : state === "up-to-date" ? t("settings.updateCurrent")
-        : state === "unconfigured" ? t("settings.updateDisabled")
-          : t(`settings.updateState.${state}`, { defaultValue: state });
-  const percent = appUpdatePercent(progress);
-
   return <section className="app-update-settings rounded-md bg-muted/25 px-2.5 py-2" aria-labelledby="app-update-heading">
     <div className="flex min-h-8 items-center justify-between gap-3">
       <div className="flex min-w-0 items-baseline gap-2">
         <h3 className="m-0 shrink-0 text-sm font-medium text-foreground" id="app-update-heading">{t("settings.appUpdate")}</h3>
-        <span className="min-w-0 truncate text-xs text-muted-foreground">OneCatch {status?.currentVersion || "—"} · {stateLabel}</span>
+        <span className="min-w-0 truncate text-xs text-muted-foreground">OneCatch {status?.currentVersion || "—"} · {appUpdateStateLabel(status, t)}</span>
       </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {state === "ready" ? <SettingsButton compact className="rounded-md" tone="primary" disabled={busy || !status.automaticSupported} onClick={() => run(apply)}>{t("settings.restartToUpdate")}</SettingsButton>
-          : available ? <SettingsButton compact className="rounded-md" tone="primary" disabled={busy || downloading} onClick={() => run(download, "settings.updateVerified")}>{downloading ? t("settings.downloadingUpdate") : t("settings.downloadUpdate")}</SettingsButton>
-            : <SettingsButton compact className="rounded-md" tone="muted" disabled={busy || state === "unconfigured" || state === "checking"} onClick={() => run(check)}>{state === "checking" ? t("settings.checkingUpdate") : t("settings.checkForUpdates")}</SettingsButton>}
-      </div>
+      <SettingsButton compact className="shrink-0 rounded-md" tone="muted" onClick={() => void open()}>{t("settings.checkForUpdates")}</SettingsButton>
     </div>
-    {downloading && progress && <div className="mt-2 flex items-center gap-3" role="progressbar" aria-label={t("settings.downloadingUpdate")} aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress.total > 0 ? percent : undefined}><div className="h-1 min-w-0 flex-1 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${percent}%` }} /></div><span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">{progress.total > 0 ? `${percent}%` : bytes(progress.written)}</span></div>}
-    {!status?.automaticSupported && status?.verificationEnabled && <p className="mt-2 mb-0 text-xs text-muted-foreground">{t("settings.manualUpdateRequired")}</p>}
   </section>;
 }
 

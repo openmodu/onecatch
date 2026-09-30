@@ -1665,6 +1665,7 @@ function App() {
         runHasMore={Boolean(runNextCursor)}
         taskSearch={runSearchDraft}
         taskStatus={runStatus}
+        onTaskStatusChange={setRunStatus}
         view={view}
         editor={editor}
         onToggleSearch={toggleWorkspaceSearch}

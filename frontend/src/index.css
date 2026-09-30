@@ -3,7 +3,7 @@
    unlayered CSS outranks every Tailwind layer, so as long as the hand-written
    stylesheets stayed unlayered, no utility class could override them. Inside
    the layer they keep their own source order (mirage still beats styles). */
-@layer theme, base, components, legacy, app, utilities;
+@layer theme, base, surfaces, components, legacy, app, utilities;
 
 @import "tailwindcss";
 @import "tw-animate-css";
@@ -12,6 +12,7 @@
 @import "./styles.css" layer(legacy);
 @import "./ui/tokens.css" layer(legacy);
 @import "./mirage.css" layer(legacy);
+@import "./ui/surfaces.css" layer(surfaces);
 
 /* Theme resolution mirrors appearance.js: no [data-theme] means "follow the OS",
    an explicit [data-theme] pins it. Keeping the OS branch in CSS (rather than a
@@ -96,26 +97,26 @@
 :root[data-chat-font-size="large"] { --chat-font-size: 16px; }
 :root[data-chat-font-size="extra-large"] { --chat-font-size: 18px; }
 
-/* ---- Light: the mirage cream canvas, with cards lifted above it ---------- */
+/* ---- Light: sampled Claude desktop surfaces, with quiet gray separators -- */
 :root {
-  --background: #f5f5f0;
+  --background: #fcfcfb;
   --foreground: #1a1a1a;
-  --card: #fcfcfa;
+  --card: #ffffff;
   --card-foreground: #1a1a1a;
-  --popover: #fcfcfa;
+  --popover: #ffffff;
   --popover-foreground: #1a1a1a;
   --primary: #694d1f;
-  --primary-foreground: #f7f4ec;
-  --secondary: #e9e7dd;
-  --secondary-foreground: #33302a;
-  --muted: #ebeae3;
-  --muted-foreground: #60605e;
-  --accent: #e4e1d5;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f1;
+  --secondary-foreground: #52514e;
+  --muted: #f2f2f1;
+  --muted-foreground: #73726e;
+  --accent: #edece8;
   --accent-foreground: #1a1a1a;
   --destructive: #ad2e24;
   --destructive-foreground: #fdf6f4;
-  --border: #d5d2c6;
-  --input: #c6c4bb;
+  --border: #e4e4e1;
+  --input: #d4d4d0;
   --ring: #694d1f;
 
   --success: #33732e;
@@ -125,13 +126,13 @@
   --info: #216e78;
   --info-foreground: #f0f8f9;
 
-  --sidebar: #efeee7;
-  --sidebar-foreground: #1a1a1a;
+  --sidebar: #fafaf9;
+  --sidebar-foreground: #52514e;
   --sidebar-primary: #694d1f;
-  --sidebar-primary-foreground: #f7f4ec;
-  --sidebar-accent: #e4e1d5;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #edece8;
   --sidebar-accent-foreground: #1a1a1a;
-  --sidebar-border: #d5d2c6;
+  --sidebar-border: #e4e4e1;
   --sidebar-ring: #694d1f;
 }
 
@@ -267,6 +268,32 @@
    Living in @layer app means it outranks the hand-written stylesheets it
    replaces without having to delete them row by row. */
 @layer app {
+  /* Action focus belongs on the button surface, not in a second accent frame.
+     Keep this shared rule so app-drawn and shadcn controls agree. */
+  button:not([role="checkbox"]):focus-visible {
+    outline: none !important;
+    --tw-ring-shadow: 0 0 #0000 !important;
+    --tw-ring-offset-shadow: 0 0 #0000 !important;
+  }
+
+  button:not([data-slot]):focus-visible {
+    background-color: var(--accent) !important;
+    color: var(--accent-foreground) !important;
+  }
+
+  button[data-slot="button"]:focus-visible {
+    filter: brightness(.92);
+  }
+
+  button[data-variant="outline"]:focus-visible {
+    border-color: var(--border) !important;
+  }
+
+  button[data-variant="ghost"]:focus-visible {
+    background-color: var(--accent);
+    color: var(--accent-foreground);
+  }
+
   input,
   textarea,
   select,
@@ -578,7 +605,86 @@
   }
 
   .sidebar {
+    --accent: var(--sidebar-accent);
+    --accent-foreground: var(--sidebar-accent-foreground);
+    --muted-foreground: #898781;
     background-color: var(--sidebar);
+  }
+
+  .sidebar-flush {
+    border-right: 1px solid var(--sidebar-border);
+  }
+
+  .sidebar-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    height: 26px;
+    padding: 0 10px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--sidebar-foreground);
+    text-align: left;
+    font-size: 14px;
+    font-weight: 400;
+    line-height: 1;
+    box-shadow: none;
+    cursor: pointer;
+  }
+
+  .sidebar-nav-item svg { flex-shrink: 0; }
+  .sidebar-nav-item:hover,
+  .sidebar-nav-item:focus-visible,
+  .sidebar-nav-item.active,
+  .sidebar-nav-item[data-state="open"] {
+    background: var(--sidebar-accent);
+    color: var(--sidebar-accent-foreground);
+  }
+  .sidebar-nav-item:focus-visible,
+  .sidebar-more-navigation[data-state="open"] {
+    outline: none;
+  }
+  .sidebar-new-task { background: var(--sidebar-accent); color: var(--sidebar-accent-foreground); }
+  .sidebar .sidebar-icon-button {
+    width: 26px;
+    height: 26px;
+    min-height: 0;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--sidebar-foreground);
+    box-shadow: none;
+  }
+  .sidebar .sidebar-icon-button:hover,
+  .sidebar .sidebar-icon-button:focus-visible,
+  .sidebar .sidebar-icon-button.active,
+  .sidebar .sidebar-icon-button[data-state="open"] { background: var(--sidebar-accent); }
+  .sidebar .project-task-item { color: var(--sidebar-foreground); }
+  .sidebar .project-task-item.selected { color: var(--sidebar-accent-foreground); }
+  .sidebar-footer { --border: var(--sidebar-border); border-top: 1px solid var(--border); }
+  .sidebar-navigation-menu { --accent: var(--sidebar-accent); }
+
+  .sidebar button:focus-visible {
+    border-color: transparent !important;
+    background-color: var(--sidebar-accent) !important;
+    box-shadow: none !important;
+    filter: none;
+  }
+
+  .sidebar-customization-dialog {
+    background: var(--popover);
+    color: var(--popover-foreground);
+    border-color: var(--border);
+    box-shadow: 0 16px 64px rgb(0 0 0 / 14%), 0 2px 8px rgb(0 0 0 / 6%);
+  }
+  .sidebar-customization-item { color: var(--popover-foreground); font-weight: 400; }
+  .sidebar-customization-item > span { margin-bottom: 0; }
+  :root[data-theme="dark"] .sidebar { --muted-foreground: #96968e; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .sidebar { --muted-foreground: #96968e; }
   }
 
   /* Both the pinned rail and its compact preview use the same tint. The native
@@ -586,6 +692,12 @@
      showing through when the rail temporarily floats over the workspace. */
   :root[data-native-sidebar-material] .sidebar {
     background-color: color-mix(in oklab, var(--sidebar) 94%, transparent);
+  }
+
+  /* Expanded rails match the reference palette exactly, independent of the
+     wallpaper behind AppKit's material. Only the floating preview uses tint. */
+  :root[data-native-sidebar-material] .sidebar-flush {
+    background-color: var(--sidebar);
   }
 
   .conversation-workspace {
@@ -656,7 +768,7 @@
   }
 
   .new-task-composer:focus-within {
-    border-color: color-mix(in oklab, var(--ring) 38%, var(--border));
+    border-color: var(--input);
   }
 
   .new-task-input {
@@ -2422,7 +2534,7 @@
   }
 
   .workbench-composer-shell:focus-within {
-    border-color: color-mix(in oklab, var(--ring) 38%, var(--border));
+    border-color: var(--input);
   }
 
   .workbench-composer-shell.disabled { opacity: .62; }
@@ -3427,16 +3539,32 @@
 }
 
 @layer app {
+  .app-update-window .aux-window-controls { height: 32px; }
+  .app-update-indeterminate {
+    width: 38%;
+    animation: app-update-sweep 1.4s ease-in-out infinite;
+  }
+
+  @keyframes app-update-sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(265%); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .app-update-indeterminate { animation: none; transform: translateX(82%); }
+  }
+
   .terminal-dock {
     position: relative;
     z-index: 24;
     display: grid;
     min-height: 36px;
     grid-template-rows: 36px minmax(0, 1fr);
-    margin: 0 8px 8px 4px;
+    margin: 0;
     overflow: visible;
-    border: 1px solid color-mix(in oklab, var(--border) 86%, transparent);
-    border-radius: 14px;
+    border: 0;
+    border-top: 1px solid var(--border);
+    border-radius: 0;
     background: color-mix(in oklab, var(--background) 97%, var(--sidebar));
     box-shadow: none;
     container-type: inline-size;
@@ -3453,7 +3581,7 @@
   .terminal-dock.is-maximized {
     position: absolute;
     z-index: 40;
-    inset: 8px 8px 8px 4px;
+    inset: 0;
     height: auto;
     margin: 0;
   }
@@ -3496,7 +3624,7 @@
     align-items: center;
     gap: 6px;
     padding: 0 8px 0 10px;
-    border-radius: 13px 13px 0 0;
+    border-radius: 0;
     background: color-mix(in oklab, var(--muted) 34%, var(--background));
   }
 
@@ -3646,7 +3774,7 @@
     position: relative;
     min-height: 0;
     overflow: hidden;
-    border-radius: 0 0 13px 13px;
+    border-radius: 0;
     background: var(--background);
   }
 
@@ -3686,7 +3814,7 @@
     position: absolute;
     min-width: 0;
     min-height: 0;
-    padding: 1px;
+    padding: 0;
     overflow: hidden;
     background: color-mix(in oklab, var(--border) 56%, transparent);
   }
@@ -3700,6 +3828,15 @@
 
   .terminal-split-handle.vertical { width: 7px; cursor: col-resize; transform: translateX(-50%); }
   .terminal-split-handle.horizontal { height: 7px; cursor: row-resize; transform: translateY(-50%); }
+
+  .terminal-split-handle::before {
+    position: absolute;
+    background: var(--border);
+    content: "";
+  }
+
+  .terminal-split-handle.vertical::before { inset: 0 3px; }
+  .terminal-split-handle.horizontal::before { inset: 3px 0; }
 
   .terminal-split-handle::after {
     position: absolute;

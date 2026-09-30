@@ -41,6 +41,13 @@ func TestHiddenRetainedWindowsSeparatesWhatTheUserCanSee(t *testing.T) {
 			visible:      []string{settingsWindowName, workflowsWindowName},
 			wantStillVis: true,
 		},
+		{
+			name:         "update window outlives the workbench",
+			retained:     []string{settingsWindowName, updatesWindowName},
+			visible:      []string{updatesWindowName},
+			wantHidden:   []string{settingsWindowName},
+			wantStillVis: true,
+		},
 	} {
 		t.Run(testCase.name, func(t *testing.T) {
 			controller := newAuxiliaryWindowController(nil)

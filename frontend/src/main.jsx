@@ -18,9 +18,9 @@ const platform = launchParameters.get("platform") === "mobile" ? "mobile" : "des
 document.documentElement.dataset.platform = platform === "mobile" ? "mobile" : desktopPlatform();
 
 // Native chrome installs a sidebar material panel (and its hairline) in every
-// window, sized for a rail. The detached inspector has no rail, so retire that
+// window, sized for a rail. The inspector and updater have no rail, so retire that
 // panel here — before React paints — instead of letting it show through.
-if (windowKind === "inspector") {
+if (windowKind === "inspector" || windowKind === "updates") {
   globalThis.webkit?.messageHandlers?.onecatchSidebar?.postMessage({ hidden: true });
 }
 
@@ -52,6 +52,9 @@ const WindowRoot = lazy(async () => {
   }
   if (windowKind === "inspector") {
     return import("./app/InspectorWindow.jsx");
+  }
+  if (windowKind === "updates") {
+    return import("./app/AppUpdateWindow.jsx");
   }
   return import("./app/App.jsx");
 });

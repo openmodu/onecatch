@@ -23,12 +23,12 @@ func (b *UpdateBinding) GetStatus() appupdate.Status {
 	return service.Status()
 }
 
-func (b *UpdateBinding) Check() (appupdate.Status, error) {
+func (b *UpdateBinding) Check(ctx context.Context) (appupdate.Status, error) {
 	service, err := b.current()
 	if err != nil {
 		return appupdate.Status{}, err
 	}
-	return service.Check(context.Background())
+	return service.Check(ctx)
 }
 
 func (b *UpdateBinding) Download() (appupdate.Status, error) {

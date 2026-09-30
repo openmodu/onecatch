@@ -1,8 +1,7 @@
-import TaskCategoryBadge from "./TaskCategoryBadge.jsx";
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
-import { Ellipsis, Folder, FolderOpen, GitFork, Languages, Menu, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, RefreshCw, Search, Settings2, Sparkles, SunMoon, Trash2, Workflow } from "lucide-react";
+import { Blocks, BriefcaseBusiness, ChartNoAxesColumn, ChevronDown, ChevronRight, Ellipsis, GitFork, Languages, Palette, PanelLeftClose, PanelLeftOpen, Pencil, Pin, Plus, RefreshCw, Search, Settings2, SlidersHorizontal, Sparkles, SunMoon, Trash2, Workflow } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,10 +32,16 @@ import { collapsePanelAtCompact } from "../responsiveLayout.js";
 import { directAgentWorkflowID } from "../runtimeHarnesses.js";
 import RuntimeHarnessIcon from "./RuntimeHarnessIcon.jsx";
 import SidebarUpdateButton from "./SidebarUpdateButton.jsx";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import appIcon from "../../../../internal/app/desktop/assets/appicon.png";
+import { SIDEBAR_NAVIGATION_ITEMS, readSidebarItems, writeSidebarItems } from "../sidebarPreferences.js";
 
 const CommandPalette = lazy(() => import("./CommandPalette.jsx"));
 const SIDEBAR_COLLAPSED_STORAGE_KEY = "onecatch.sidebar.collapsed";
 const SIDEBAR_PEEK_WIDTH = 216;
+const sidebarNavigationIcons = { templates: Blocks, skills: BriefcaseBusiness, usage: ChartNoAxesColumn, workflows: Workflow };
 
 const workspaceLocation = (workspace) => workspace?.remoteFs ? `${workspace.remoteFs.username ? `${workspace.remoteFs.username}@` : ""}${workspace.remoteFs.host}:${workspace.remoteFs.root}` : workspace?.path || "";
 
@@ -95,6 +100,7 @@ function Sidebar({
   onToggleSearch,
   onClearSearch,
   onSearchQueryChange,
+  onTaskStatusChange,
   onSelectWorkspace,
   onCheckWorkspaceHealth,
   onToggleTaskPinned,
@@ -120,6 +126,11 @@ function Sidebar({
   const [width, setWidth] = useState(initialSidebarWidth);
   const [resizing, setResizing] = useState(false);
   const [appearance, setAppearance] = useState(readAppearance);
+  const [navigationItems, setNavigationItems] = useState(() => readSidebarItems(globalThis.localStorage));
+  const [editingNavigation, setEditingNavigation] = useState(false);
+  const moreTriggerRef = useRef(null);
+  const overflowItems = SIDEBAR_NAVIGATION_ITEMS.filter((item) => !navigationItems.includes(item));
+  const overflowView = overflowItems.find((item) => item === view && !editor);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => collapsePanelAtCompact(initialSidebarCollapsed(), compactViewport));
   const [sidebarPeeked, setSidebarPeeked] = useState(false);
   const [expandedWorkspaceIDs, setExpandedWorkspaceIDs] = useState(() => new Set(workspaceID ? [workspaceID] : []));
@@ -173,6 +184,13 @@ function Sidebar({
   useEffect(() => Events.On(APPEARANCE_CHANGED_EVENT, (event) => setAppearance(event?.data || readAppearance())), []);
 
   useEffect(() => {
+    if (!editingNavigation) return;
+    window.clearTimeout(sidebarPeekTimer.current);
+    sidebarMenuOpen.current = true;
+    return () => { sidebarMenuOpen.current = false; };
+  }, [editingNavigation]);
+
+  useEffect(() => {
     // On macOS the WebView is transparent over a native NSVisualEffectView.
     // Browser previews simply have no such handler and keep the CSS fallback.
     const nativeSidebar = globalThis.webkit?.messageHandlers?.onecatchSidebar;
@@ -180,6 +198,7 @@ function Sidebar({
     document.documentElement.dataset.nativeSidebarMaterial = "true";
     nativeSidebar.postMessage({
       width: sidebarVisible ? sidebarDisplayWidth : 0,
+      flush: !sidebarCollapsed,
       compact: sidebarCollapsed && sidebarVisible,
     });
   }, [sidebarCollapsed, sidebarDisplayWidth, sidebarVisible]);
@@ -400,12 +419,12 @@ function Sidebar({
     commitWidth(next);
   };
 
-  const renderTaskActions = (task) => <div data-analyzing={analyzingTaskIDs?.has(task.id) || undefined} className="task-row-actions pointer-events-none absolute top-1 right-1 z-20 flex h-6 items-center bg-gradient-to-l from-sidebar/95 via-sidebar/80 to-transparent pl-3 opacity-0 transition-opacity data-[analyzing=true]:pointer-events-auto data-[analyzing=true]:opacity-100 group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100">
+  const renderTaskActions = (task) => <div data-analyzing={analyzingTaskIDs?.has(task.id) || undefined} className="task-row-actions pointer-events-none absolute top-0.5 right-1 z-20 flex h-6 items-center bg-gradient-to-l from-sidebar/95 via-sidebar/80 to-transparent pl-3 opacity-0 transition-opacity data-[analyzing=true]:pointer-events-auto data-[analyzing=true]:opacity-100 group-hover/task:pointer-events-auto group-hover/task:opacity-100 group-focus-within/task:pointer-events-auto group-focus-within/task:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100">
     <DropdownMenu onOpenChange={(open) => { sidebarMenuOpen.current = open; if (open) revealSidebar(); else scheduleSidebarHide(); }}>
       <DropdownMenuTrigger asChild>
         <Action size="compact" tone="muted" className="size-6 border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-background/70 hover:text-foreground" aria-label={t("sidebar.sessionMenu", { name: task.title })} title={t("sidebar.sessionMenu", { name: task.title })}>{analyzingTaskIDs?.has(task.id) ? <RefreshCw size={14} className="animate-spin" aria-hidden="true" /> : <Ellipsis size={14} aria-hidden="true" />}</Action>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="right" className="w-56">
+      <DropdownMenuContent align="start" side="right" className="w-56 border-0">
         <DropdownMenuItem disabled={analyzingTaskIDs?.has(task.id)} onSelect={() => onAnalyzeTask(task)}>
           <Sparkles size={15} aria-hidden="true" />{t(analyzingTaskIDs?.has(task.id) ? "task.analyzing" : "task.analyze")}
         </DropdownMenuItem>
@@ -426,7 +445,7 @@ function Sidebar({
   const renderPinnedTask = (task) => {
     const selectedRun = runs.find((run) => run.id === selectedRunID);
     const selected = selectedQueuedTaskID === task.id || selectedRun?.task?.id === task.id;
-    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><TaskCategoryBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
+    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-md ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`project-task-item relative flex h-7 w-full min-w-0 max-w-full items-center rounded-md bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] font-normal`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
   };
 
   const renderWorkspace = (workspace) => {
@@ -470,49 +489,49 @@ function Sidebar({
     const workspaceTitle = !workspaceAvailable && workspace.remoteFs
       ? `${workspaceLocation(workspace)}\n${remoteHealth?.error ? `${remoteHealth.error}\n` : ""}${t(remoteHealthPending ? "workspace.remoteChecking" : "workspace.remoteRetry")}`
       : workspaceLocation(workspace);
-    return <div className={`workspace-row group relative block w-full min-w-0 max-w-full overflow-hidden ${active ? "active" : ""} ${displayExpanded ? "expanded" : ""}`} key={workspace.id}>
-      <button className={`workspace-item grid h-8 w-full min-w-0 grid-cols-[16px_minmax(0,1fr)] items-center gap-2 rounded-lg py-0 pr-2 pl-2 text-left transition-colors hover:bg-accent/70 hover:text-foreground ${active ? "text-foreground" : "text-muted-foreground"}`} title={workspaceTitle} aria-expanded={displayExpanded} aria-controls={taskPanelID} aria-busy={remoteHealth?.checking || undefined} onClick={() => toggleProject(workspace)}>
-        {displayExpanded ? <FolderOpen size={16} strokeWidth={2} aria-hidden="true" className="text-muted-foreground" /> : <Folder size={16} strokeWidth={2} aria-hidden="true" className="text-muted-foreground" />}
+    return <div className={`workspace-row group relative mb-3 block w-full min-w-0 max-w-full overflow-hidden ${active ? "active" : ""} ${displayExpanded ? "expanded" : ""}`} key={workspace.id}>
+      <button className={`workspace-item flex h-8 w-full min-w-0 items-center gap-1 rounded-md py-0 pr-2 pl-2 text-left transition-colors hover:bg-accent/70 hover:text-foreground text-muted-foreground`} title={workspaceTitle} aria-expanded={displayExpanded} aria-controls={taskPanelID} aria-busy={remoteHealth?.checking || undefined} onClick={() => toggleProject(workspace)}>
         <span className="inline-flex w-fit min-w-0 max-w-full items-center gap-1.5">
-          <strong className="min-w-0 truncate text-[13px] font-medium leading-none">{workspace.name}</strong>
+          <strong className="min-w-0 truncate text-[13px] font-normal leading-none">{workspace.name}</strong>
           {workspace.remoteFs && <span className={`inline-flex h-4 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[9px] font-medium leading-none ${workspaceAvailable ? "border-success/25 bg-success/10 text-success" : remoteHealthPending ? "border-border bg-background/30 text-muted-foreground" : "border-destructive/25 bg-destructive/10 text-destructive"}`}>
             {workspaceAvailable ? <i className="size-1 rounded-full bg-current" aria-hidden="true" /> : <RefreshCw size={9} className={remoteHealthPending ? "animate-spin" : ""} aria-hidden="true" />}
             {t(workspaceAvailable ? "workspace.remote" : remoteHealthPending ? "workspace.remoteChecking" : "workspace.remoteUnavailable")}
           </span>}
         </span>
+        <ChevronRight size={12} aria-hidden="true" className={`shrink-0 opacity-0 transition-[transform,opacity] group-hover:opacity-60 group-focus-within:opacity-60 ${displayExpanded ? "rotate-90" : ""}`} />
       </button>
-      {/* Hidden by opacity rather than `display: none`, for two reasons:
+      {/* The project menu is hidden by opacity rather than `display: none`, for two reasons:
           display:none drops the buttons out of the tab order, so they were
           unreachable by keyboard and group-focus-within could never fire; and
           it un-focuses the trigger the moment the menu closes, leaving Radix
           nowhere to restore focus to. has-[[data-state=open]] keeps the row
           revealed while the menu is up — Radix stamps that on the trigger. */}
-      <div className="workspace-row-actions pointer-events-none absolute top-1 right-1 z-20 flex h-6 items-center gap-0.5 bg-gradient-to-l from-sidebar/95 via-sidebar/80 to-transparent pl-3 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100">
+      <div className="workspace-row-actions absolute top-1 right-1 z-20 flex h-6 items-center gap-0.5 bg-gradient-to-l from-sidebar/95 via-sidebar/80 to-transparent pl-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Action size="compact" tone="muted" className="workspace-menu-trigger size-6 border-0 bg-transparent p-0 shadow-none hover:bg-accent" aria-label={t("sidebar.projectMenu", { name: workspace.name })} title={t("sidebar.projectMenu", { name: workspace.name })}><Ellipsis size={14} aria-hidden="true" /></Action>
+            <Action size="compact" tone="muted" className="workspace-menu-trigger pointer-events-none size-6 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 data-[state=open]:pointer-events-auto data-[state=open]:opacity-100 border-0 bg-transparent p-0 shadow-none hover:bg-accent dark:border-0 dark:bg-transparent dark:hover:bg-sidebar-accent" aria-label={t("sidebar.projectMenu", { name: workspace.name })} title={t("sidebar.projectMenu", { name: workspace.name })}><Ellipsis size={14} aria-hidden="true" /></Action>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" side="right" className="w-44">
+          <DropdownMenuContent align="start" side="right" className="w-44 border-0">
             <DropdownMenuItem variant="destructive" onSelect={() => onRemoveWorkspace(workspace)}>
               <Trash2 size={15} aria-hidden="true" />{t("common.remove")}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        {workspaceAvailable && <Action size="compact" tone="muted" className="workspace-new-task size-6 border-0 bg-transparent p-0 shadow-none hover:bg-accent" aria-label={t("sidebar.newTaskInProject", { name: workspace.name })} title={t("sidebar.newTaskInProject", { name: workspace.name })} onClick={() => createTaskForWorkspace(workspace)}><Plus size={14} strokeWidth={2} aria-hidden="true" /></Action>}
+        {workspaceAvailable && <Action size="compact" tone="muted" className="workspace-new-task size-6 border-0 bg-transparent p-0 shadow-none hover:bg-accent dark:border-0 dark:bg-transparent dark:hover:bg-sidebar-accent" aria-label={t("sidebar.newTaskInProject", { name: workspace.name })} title={t("sidebar.newTaskInProject", { name: workspace.name })} onClick={() => createTaskForWorkspace(workspace)}><Plus size={14} strokeWidth={2} aria-hidden="true" /></Action>}
       </div>
-      {displayExpanded && <div className="project-task-panel mb-1 ml-2" id={taskPanelID}>
+      {displayExpanded && <div className="project-task-panel mb-1" id={taskPanelID}>
         <div className="project-task-list grid gap-px">
           {workspaceVisibleEntries.map((entry) => {
             if (entry.kind === "queued" || entry.kind === "pinned") {
               const task = entry.item;
               const selected = active && selectedQueuedTaskID === task.id;
-              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><TaskCategoryBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{task.title}</span></button>{active && renderTaskActions(task)}</div>;
+              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-md ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-7 w-full min-w-0 max-w-full items-center rounded-md bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] font-normal`}>{task.title}</span></button>{active && renderTaskActions(task)}</div>;
             }
             const run = entry.item;
             const task = run.task;
             const title = run.task?.title || run.id;
             const selected = active && selectedRunID === run.id;
-            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-lg ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-8 w-full min-w-0 max-w-full items-center rounded-lg bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}>{task && <TaskExecutionIcon task={task} workflowID={run.workflowId} />}<TaskWorktreeBadge task={task} /><TaskCategoryBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-medium" : "font-normal"}`}>{title}</span></button>{active && task && renderTaskActions(task)}</div>;
+            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-md ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-7 w-full min-w-0 max-w-full items-center rounded-md bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}>{task && <TaskExecutionIcon task={task} workflowID={run.workflowId} />}<TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] font-normal`}>{title}</span></button>{active && task && renderTaskActions(task)}</div>;
           })}
           {!workspaceEntries.length && !(active && runLoading) && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
           {active && runLoading && !workspaceEntries.length && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{t("task.loading")}</div>}
@@ -527,41 +546,71 @@ function Sidebar({
   const widthBounds = typeof window === "undefined" ? sidebarWidthBounds() : sidebarWidthBounds(window.innerWidth);
   return <div className={`sidebar-shell relative z-50 h-full min-h-0 shrink-0 ${sidebarCollapsed ? "is-collapsed" : ""}`} style={{ width: sidebarCollapsed ? 0 : `${width}px` }}>
     <button ref={sidebarToggleRef} type="button" className={`sidebar-visibility-toggle no-drag fixed top-3 left-[92px] z-50 grid place-items-center text-muted-foreground transition-colors hover:text-foreground focus-visible:text-foreground focus-visible:outline-none ${sidebarCollapsed ? "text-foreground" : ""}`} aria-label={sidebarCollapsed ? t("sidebar.expandPanel") : t("sidebar.collapsePanel")} aria-expanded={!sidebarCollapsed} aria-controls="app-sidebar-content" title={sidebarCollapsed ? t("sidebar.expandPanel") : t("sidebar.collapsePanel")} onClick={toggleSidebar} onPointerEnter={revealSidebar} onPointerLeave={releaseSidebarPeekBlock} onFocus={revealSidebar} onBlur={releaseSidebarPeekBlock}>{sidebarCollapsed ? <PanelLeftOpen size={16} aria-hidden="true" /> : <PanelLeftClose size={16} aria-hidden="true" />}</button>
-    <aside id="app-sidebar-content" data-visible={sidebarVisible ? "true" : "false"} className={`sidebar z-30 flex min-h-0 shrink-0 select-none flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)] ${resizing ? "resizing" : ""} ${sidebarCollapsed ? "absolute top-0 left-0 h-[min(560px,calc(100vh-16px))] transition-[opacity,transform] duration-150" : "relative h-full"} ${sidebarVisible ? "translate-x-0 opacity-100" : "pointer-events-none invisible -translate-x-2 opacity-0"}`} style={{ width: `${sidebarDisplayWidth}px` }} aria-label={t("app.windowAria")} aria-hidden={!sidebarVisible} onPointerEnter={revealSidebar} onPointerLeave={scheduleSidebarHide}>
+    <aside id="app-sidebar-content" data-visible={sidebarVisible ? "true" : "false"} className={`sidebar z-30 flex min-h-0 shrink-0 select-none flex-col text-sidebar-foreground ${resizing ? "resizing" : ""} ${sidebarCollapsed ? "absolute top-0 left-0 h-[min(560px,calc(100vh-16px))] [clip-path:inset(8px_4px_8px_8px_round_16px)] transition-[opacity,transform] duration-150" : "sidebar-flush relative h-full"} ${sidebarVisible ? "translate-x-0 opacity-100" : "pointer-events-none invisible -translate-x-2 opacity-0"}`} style={{ width: `${sidebarDisplayWidth}px` }} aria-label={t("app.windowAria")} aria-hidden={!sidebarVisible} onPointerEnter={revealSidebar} onPointerLeave={scheduleSidebarHide}>
     {/* Traffic-light gutter. The window hides its titlebar and insets the
         lights, so the rail has to reserve this strip itself — and it doubles
         as the window's drag handle, which is why it is empty. */}
     <div className="drag-region h-[52px] shrink-0 cursor-default" aria-hidden="true" />
-    <div className="brand grid h-[46px] shrink-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 pr-4 pl-5"><strong className="block text-[15px] font-semibold tracking-tight text-foreground">OneCatch</strong><div className="flex items-center gap-0.5"><Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent ${workspaceSearchOpen ? "active bg-accent text-foreground" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ⌘K`} onClick={toggleSearch}><Search size={15} strokeWidth={2} aria-hidden="true" /></Action><Action size="compact" tone="muted" className="add-workspace size-7 border-0 bg-transparent p-0 shadow-none hover:bg-accent hover:text-foreground" aria-label={t("sidebar.addProject")} title={t("sidebar.addProject")} onClick={onAddWorkspace}><Plus size={15} strokeWidth={2} aria-hidden="true" /></Action></div></div>
+    <nav className="sidebar-navigation grid shrink-0 gap-px px-2 pb-5" aria-label={t("sidebar.menu")}>
+      <button type="button" className={`sidebar-nav-item sidebar-new-task ${view === "tasks" && !selectedRunID && !selectedQueuedTaskID ? "active" : ""}`} onClick={() => { onGoView("tasks"); if (workspaces.length) onNewTask(); else onAddWorkspace(); }}>
+        <Plus size={16} strokeWidth={1.8} aria-hidden="true" /><span>{t("sidebar.newSession")}</span>
+      </button>
+      {navigationItems.map((item) => {
+        const Icon = sidebarNavigationIcons[item];
+        const active = view === item && !editor;
+        return <button key={item} type="button" className={`sidebar-nav-item skills-navigation-trigger ${active ? "active" : ""}`} aria-current={active ? "page" : undefined} onClick={() => goToSecondaryView(item)}><Icon size={16} strokeWidth={1.7} aria-hidden="true" /><span>{t(`sidebar.${item}`)}</span></button>;
+      })}
+      <DropdownMenu onOpenChange={(open) => { sidebarMenuOpen.current = open; if (open) revealSidebar(); else scheduleSidebarHide(); }}>
+        <DropdownMenuTrigger asChild>
+          <button ref={moreTriggerRef} type="button" className={`sidebar-nav-item sidebar-more-navigation ${overflowView ? "active" : ""}`}><ChevronDown size={16} strokeWidth={1.7} aria-hidden="true" /><span>{t(overflowView ? `sidebar.${overflowView}` : "sidebar.more")}</span></button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent side="right" align="start" sideOffset={4} collisionPadding={8} className="sidebar-navigation-menu border-0 w-44 rounded-xl p-1.5" onCloseAutoFocus={(event) => { if (editingNavigation) event.preventDefault(); }}>
+          {overflowItems.map((item) => {
+            const Icon = sidebarNavigationIcons[item];
+            return <DropdownMenuItem key={item} onSelect={() => goToSecondaryView(item)}><Icon aria-hidden="true" />{t(`sidebar.${item}`)}</DropdownMenuItem>;
+          })}
+          {overflowItems.length > 0 && <DropdownMenuSeparator />}
+          <DropdownMenuItem onSelect={() => setEditingNavigation(true)}>{t("sidebar.editNavigation")}</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </nav>
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
-      <div className="project-sections min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 pt-2 pb-3">
-        <button type="button" className={`skills-navigation-trigger flex h-7 w-full items-center rounded-lg px-2 text-left text-[11px] font-bold text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${view === "skills" && !editor ? "bg-accent" : ""}`} aria-current={view === "skills" && !editor ? "page" : undefined} onClick={() => goToSecondaryView("skills")}>{t("sidebar.skills")}</button>
-        <button type="button" className={`skills-navigation-trigger flex h-7 w-full items-center rounded-lg px-2 text-left text-[11px] font-bold text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${view === "templates" && !editor ? "bg-accent" : ""}`} aria-current={view === "templates" && !editor ? "page" : undefined} onMouseDown={(event) => event.preventDefault()} onClick={() => goToSecondaryView("templates")}>{t("sidebar.templates")}</button>
-        <button type="button" className={`skills-navigation-trigger flex h-7 w-full items-center rounded-lg px-2 text-left text-[11px] font-bold text-foreground transition-colors hover:bg-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${view === "usage" && !editor ? "bg-accent" : ""}`} aria-current={view === "usage" && !editor ? "page" : undefined} onClick={() => goToSecondaryView("usage")}>{t("sidebar.usage")}</button>
+      <div className="project-sections min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 pb-3">
         {pinnedTasks.length > 0 && <section className="project-section mb-3 min-w-0 max-w-full" aria-labelledby="pinned-task-heading">
-          <div className="flex h-7 items-center px-2 text-[11px] font-bold text-foreground" id="pinned-task-heading">{t("sidebar.pinnedTasks")}</div>
+          <div className="flex h-8 items-center px-2 text-[13px] font-normal text-muted-foreground" id="pinned-task-heading">{t("sidebar.pinnedTasks")}</div>
           <div className="flex flex-col">{pinnedTasks.map(renderPinnedTask)}</div>
         </section>}
         <section className="project-section min-w-0 max-w-full" aria-labelledby="project-heading">
-          <div className="flex h-7 items-center px-2 text-[11px] font-bold text-foreground" id="project-heading">{t("sidebar.projects")}</div>
+          <div className="sidebar-project-heading mb-1 flex h-8 items-center justify-between gap-2 pl-2 pr-1">
+            <span className="text-[13px] font-normal text-muted-foreground" id="project-heading">{t("sidebar.projects")}</span>
+            <div className="flex shrink-0 items-center gap-0.5">
+              <Action size="compact" tone="muted" className="add-workspace sidebar-icon-button size-[26px] border-0 bg-transparent p-0 shadow-none hover:bg-sidebar-accent dark:border-0 dark:bg-transparent dark:hover:bg-sidebar-accent" aria-label={t("sidebar.addProject")} title={t("sidebar.addProject")} onClick={onAddWorkspace}><Plus size={16} strokeWidth={1.7} aria-hidden="true" className="size-4" /></Action>
+              <Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger sidebar-icon-button size-[26px] border-0 bg-transparent p-0 shadow-none hover:bg-sidebar-accent dark:border-0 dark:bg-transparent dark:hover:bg-sidebar-accent ${workspaceSearchOpen ? "active" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ${primaryShortcutLabel("K")}`} onClick={toggleSearch}><Search size={15} strokeWidth={2} aria-hidden="true" className="size-4" /></Action>
+              <DropdownMenu onOpenChange={(open) => { sidebarMenuOpen.current = open; if (open) revealSidebar(); else scheduleSidebarHide(); }}>
+                <DropdownMenuTrigger asChild><Action size="compact" tone="muted" className={`sidebar-icon-button size-[26px] border-0 bg-transparent p-0 shadow-none hover:bg-sidebar-accent dark:border-0 dark:bg-transparent dark:hover:bg-sidebar-accent ${taskStatus ? "active" : ""}`} aria-label={t("task.status")} title={t("task.status")}><SlidersHorizontal size={16} strokeWidth={1.7} aria-hidden="true" className="size-4" /></Action></DropdownMenuTrigger>
+                <DropdownMenuContent align="start" side="right" className="sidebar-navigation-menu border-0 w-44 rounded-xl p-1.5">
+                  <DropdownMenuRadioGroup value={taskStatus || ""} onValueChange={onTaskStatusChange}>
+                    {["", "queued", "running", "paused", "completed", "failed", "cancelled"].map((status) => <DropdownMenuRadioItem value={status} key={status}>{t(`status.${status || "all"}`)}</DropdownMenuRadioItem>)}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
           <div className={`workspace-list flex min-h-0 min-w-0 max-w-full flex-none flex-col ${workspaceExpanded ? "expanded" : ""}`}>{projectWorkspaces.map(renderWorkspace)}{!workspaces.length && <div className="sidebar-empty px-2 py-3 text-xs text-muted-foreground">{t("sidebar.noWorkspaces")}</div>}</div>
           {regularProjectCount > 8 && <Action size="compact" tone="muted" className="workspace-expand h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={onToggleExpanded}>{workspaceExpanded ? t("sidebar.collapse") : t("sidebar.allProjects", { count: regularProjectCount })}</Action>}
         </section>
       </div>
     </div>
-    <nav className="primary-nav relative mt-auto grid grid-cols-[minmax(0,1fr)_36px] items-center gap-1 bg-sidebar-accent/20 px-3 pt-1 pb-3 shadow-[inset_0_1px_0_color-mix(in_oklab,var(--sidebar-border)_35%,transparent)]">
-      {/* The footer is a full-width band with one top divider and two buttons.
-          The menu still opens upward and spans the group's inner width. */}
+    <nav className="primary-nav sidebar-footer relative mt-auto flex shrink-0 items-center gap-1 px-2 py-2">
       <DropdownMenu onOpenChange={(open) => { sidebarMenuOpen.current = open; if (open) revealSidebar(); else scheduleSidebarHide(); }}>
         <DropdownMenuTrigger asChild>
-          <button className={`secondary-navigation-trigger group flex h-9 w-full min-w-0 self-center items-center border-0 bg-transparent p-0 text-left text-sm font-medium shadow-none focus-visible:outline-none ${view === "workflows" || view === "settings" || editor ? "active text-sidebar-accent-foreground" : "text-muted-foreground"}`} aria-label={t("sidebar.menu")}>
-            <span className={`secondary-navigation-trigger-content inline-flex h-8 max-w-full self-center items-center gap-2 rounded-lg px-2.5 leading-none transition-colors group-hover:bg-sidebar-accent group-focus-visible:bg-sidebar-accent group-data-[state=open]:bg-sidebar-accent ${view === "workflows" || view === "settings" || editor ? "bg-sidebar-accent" : ""}`}>
-              <Menu className="shrink-0" size={16} aria-hidden="true" />
-              <b className="truncate font-medium leading-none">{t("sidebar.menu")}</b>
-            </span>
+          <button type="button" className={`secondary-navigation-trigger group flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border-0 px-2 text-left text-sm shadow-none outline-none transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent data-[state=open]:bg-sidebar-accent ${view === "settings" && !editor ? "active bg-sidebar-accent" : ""}`} aria-label={t("sidebar.menu")}>
+            <img className="sidebar-app-mark size-7 shrink-0 object-contain" src={appIcon} alt="" aria-hidden="true" />
+            <span className="secondary-navigation-trigger-content flex min-w-0 flex-1 items-baseline"><span className="truncate font-normal">OneCatch</span></span>
+            <ChevronDown size={13} className="shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" alignOffset={0} sideOffset={6} collisionPadding={12} className="secondary-navigation-menu w-[calc(var(--radix-dropdown-menu-trigger-width)+40px)] p-1.5">
+        <DropdownMenuContent side="top" align="start" alignOffset={0} sideOffset={6} collisionPadding={12} className="secondary-navigation-menu sidebar-navigation-menu border-0 w-[calc(var(--radix-dropdown-menu-trigger-width)+40px)] rounded-xl p-1.5">
           <DropdownMenuItem className={`min-h-8 rounded-md ${view === "settings" && !editor ? "active bg-accent text-accent-foreground" : ""}`} onSelect={() => goToSecondaryView("settings")}>
             <Settings2 aria-hidden="true" />
             <span>{t("sidebar.settings")}</span>
@@ -572,7 +621,7 @@ function Sidebar({
               <Languages aria-hidden="true" />
               <span>{t("settings.language")}</span>
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent sideOffset={7} className="min-w-44 p-1.5">
+            <DropdownMenuSubContent sideOffset={7} className="min-w-44 border-0 p-1.5">
               <DropdownMenuRadioGroup value={normalizeLanguage(i18n.resolvedLanguage)} onValueChange={updateLanguage}>
                 <DropdownMenuRadioItem className="min-h-8 rounded-md" value="zh-CN">{t("language.chinese")}</DropdownMenuRadioItem>
                 <DropdownMenuRadioItem className="min-h-8 rounded-md" value="en">{t("language.english")}</DropdownMenuRadioItem>
@@ -584,7 +633,7 @@ function Sidebar({
               <Palette aria-hidden="true" />
               <span>{t("settings.themeColor")}</span>
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent sideOffset={7} className="min-w-44 p-1.5">
+            <DropdownMenuSubContent sideOffset={7} className="min-w-44 border-0 p-1.5">
               <DropdownMenuRadioGroup value={appearance.accent} onValueChange={(accent) => updateAppearance({ accent })}>
                 {accentThemes.map((accent) => <DropdownMenuRadioItem className="min-h-8 rounded-md" value={accent} key={accent}><i className={`menu-accent-swatch accent-${accent}`} aria-hidden="true" />{t(`settings.themeColor.${accent}`)}</DropdownMenuRadioItem>)}
               </DropdownMenuRadioGroup>
@@ -595,7 +644,7 @@ function Sidebar({
               <SunMoon aria-hidden="true" />
               <span>{t("settings.colorMode")}</span>
             </DropdownMenuSubTrigger>
-            <DropdownMenuSubContent sideOffset={7} className="min-w-36 p-1.5">
+            <DropdownMenuSubContent sideOffset={7} className="min-w-36 border-0 p-1.5">
               <DropdownMenuRadioGroup value={displayedTheme} onValueChange={(theme) => updateAppearance({ theme })}>
                 <DropdownMenuRadioItem className="min-h-8 rounded-md" value="light">{t("settings.colorMode.light")}</DropdownMenuRadioItem>
                 <DropdownMenuRadioItem className="min-h-8 rounded-md" value="dark">{t("settings.colorMode.dark")}</DropdownMenuRadioItem>
@@ -614,6 +663,22 @@ function Sidebar({
     {workspaceSearchOpen && <Suspense fallback={null}><CommandPalette open query={searchQuery} taskResults={searchTaskItems} loading={searchLoading} workspaces={workspaces} onQueryChange={onSearchQueryChange} onClose={closeSearch} onOpenTask={openTaskFromSearch} onOpenWorkspace={openWorkspaceFromSearch} onNewTask={() => { onGoView("tasks"); onNewTask(); }} onAddWorkspace={onAddWorkspace} onOpenSettings={() => onGoView("settings")} onOpenView={goToSecondaryView} /></Suspense>}
     {!sidebarCollapsed && <div className="sidebar-resizer group absolute top-0 -right-[5px] z-20 h-full w-2.5 cursor-col-resize touch-none select-none" role="separator" aria-label={t("sidebar.resize")} aria-orientation="vertical" aria-valuemin={widthBounds.min} aria-valuemax={widthBounds.max} aria-valuenow={width} tabIndex={0} title={t("sidebar.resizeHint")} onDoubleClick={() => commitWidth(SIDEBAR_DEFAULT_WIDTH)} onKeyDown={resizeWithKeyboard} onPointerDown={startResize}><span aria-hidden="true" className={`absolute inset-y-0 left-1 w-px bg-transparent group-hover:w-0.5 group-hover:bg-ring group-focus-visible:w-0.5 group-focus-visible:bg-ring ${resizing ? "w-0.5 bg-ring" : ""}`} /></div>}
     </aside>
+    <Dialog open={editingNavigation} onOpenChange={setEditingNavigation}>
+      <DialogContent className="sidebar-customization-dialog sm:max-w-[360px] gap-4 rounded-2xl border-border bg-popover p-6 text-popover-foreground" onCloseAutoFocus={(event) => { event.preventDefault(); if (sidebarCollapsed) sidebarToggleRef.current?.focus(); else moreTriggerRef.current?.focus(); }}>
+        <DialogHeader className="gap-2 text-left"><DialogTitle className="text-[18px] font-semibold leading-6 tracking-tight">{t("sidebar.editNavigationTitle")}</DialogTitle><DialogDescription className="text-[13px] leading-5">{t("sidebar.editNavigationDescription")}</DialogDescription></DialogHeader>
+        <div className="sidebar-customization-items grid">
+          {SIDEBAR_NAVIGATION_ITEMS.map((item) => {
+            const Icon = sidebarNavigationIcons[item];
+            return <label key={item} className="sidebar-customization-item flex h-9 cursor-pointer items-center gap-3 rounded-lg px-2 text-[14px] font-normal text-foreground transition-colors hover:bg-sidebar-accent"><Checkbox className="sidebar-customization-checkbox" checked={navigationItems.includes(item)} onCheckedChange={(checked) => {
+              const next = SIDEBAR_NAVIGATION_ITEMS.filter((entry) => entry === item ? checked === true : navigationItems.includes(entry));
+              setNavigationItems(next);
+              writeSidebarItems(globalThis.localStorage, next);
+            }} /><Icon size={17} strokeWidth={1.6} className="text-foreground/70" aria-hidden="true" /><span className="mb-0 leading-5">{t(`sidebar.${item}`)}</span></label>;
+          })}
+        </div>
+        <DialogFooter className="mt-1"><Button size="sm" className="sidebar-customization-done min-w-16 rounded-lg px-4 font-normal" onClick={() => setEditingNavigation(false)}>{t("sidebar.editNavigationDone")}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>;
 }
 

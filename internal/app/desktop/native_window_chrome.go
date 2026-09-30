@@ -59,3 +59,18 @@ func hideNativeWindowZoomButton(window *application.WebviewWindow) {
 		apply()
 	}
 }
+
+// Compact update dialogs use their own explicit action buttons rather than
+// the titlebar's close/minimise/zoom controls.
+func hideNativeWindowDialogButtons(window *application.WebviewWindow) {
+	if window == nil {
+		return
+	}
+	apply := func() {
+		application.InvokeSync(func() { setNativeWindowDialogButtonsHidden(window.NativeWindow()) })
+	}
+	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) { apply() })
+	if window.NativeWindow() != nil {
+		apply()
+	}
+}

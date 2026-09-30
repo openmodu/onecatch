@@ -57,6 +57,8 @@ func setWindowIcon(window, module, kind, widthMetric, heightMetric uintptr) {
 
 func setNativeWindowZoomButtonHidden(_ unsafe.Pointer, _ bool) {}
 
+func setNativeWindowDialogButtonsHidden(_ unsafe.Pointer) {}
+
 func setNativeApplicationIcon(_ []byte) {}
 
 func setNativeWindowAppearance(_ unsafe.Pointer, _ unsafe.Pointer) {}

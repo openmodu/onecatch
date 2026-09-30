@@ -138,7 +138,7 @@ function RuntimeSourcePicker({ selected, onSelect, runtimeIDs, usages, runtimes,
       {options.map((runtime) => {
         const active = selected === runtime;
         const scope = usages[runtime]?.scope;
-        return <button type="button" role="tab" aria-selected={active} className={`inline-flex h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors ${active ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-background text-muted-foreground hover:text-foreground"}`} onClick={() => onSelect(runtime)} key={runtime}>
+        return <button type="button" role="tab" aria-selected={active} className={`inline-flex h-9 items-center gap-2 rounded-lg border-0 px-3 text-xs font-medium transition-colors focus-visible:bg-accent focus-visible:text-accent-foreground ${active ? "bg-accent text-accent-foreground" : "bg-transparent text-muted-foreground hover:bg-accent/60 hover:text-foreground"}`} onClick={() => onSelect(runtime)} key={runtime}>
           {runtime === "all" ? <Gauge size={15} aria-hidden="true" /> : <RuntimeHarnessIcon harness={runtime} size={15} />}
           <span>{runtime === "all" ? t("usage.allRuntimes") : runtimeName(runtime, runtimes)}</span>
           {runtime !== "all" && scope && <span className={`rounded px-1.5 py-0.5 text-[10px] ${scope === "account" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>{t(`usage.scopeShort.${scope}`)}</span>}

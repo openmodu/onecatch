@@ -56,19 +56,19 @@ test("workspace actions use a compact project menu and tasks stay visually light
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
   // Geometry now lives in Tailwind classes on the markup rather than in
   // mirage.css, so these assert the same intent against the class lists.
-  assert.match(sidebar, /className="workspace-row-actions[^"]*"/);
-  assert.match(sidebar, /className="workspace-row-actions[^"]*\bopacity-0\b/, "project actions must stay out of sight until the row is engaged");
-  assert.match(sidebar, /className="workspace-row-actions[^"]*group-hover:opacity-100/);
-  assert.match(sidebar, /className="workspace-row-actions[^"]*group-focus-within:opacity-100/, "keyboard users must be able to reach the project actions");
+  assert.match(sidebar, /className="workspace-menu-trigger[^"]*"/);
+  assert.match(sidebar, /className="workspace-menu-trigger[^"]*\bopacity-0\b/, "project actions must stay out of sight until the row is engaged");
+  assert.match(sidebar, /className="workspace-menu-trigger[^"]*group-hover:opacity-100/);
+  assert.match(sidebar, /className="workspace-menu-trigger[^"]*group-focus-within:opacity-100/, "keyboard users must be able to reach the project actions");
   // Not `hidden`: display:none drops the buttons out of the tab order (so
   // group-focus-within can never fire) and un-focuses the trigger the instant
   // the menu closes, leaving Radix nowhere to restore focus to.
-  assert.doesNotMatch(sidebar, /className="workspace-row-actions[^"]*\bhidden\b/, "project actions must not be hidden with display:none");
+  assert.doesNotMatch(sidebar, /className="workspace-menu-trigger[^"]*\bhidden\b/, "project actions must not be hidden with display:none");
   // The menu is a shadcn DropdownMenu now, so role="menu"/aria-haspopup are
   // emitted by Radix at runtime and cannot be asserted in the source. What the
   // source still has to prove is that the row keeps its actions revealed while
   // the menu is up — Radix stamps data-state on the trigger.
-  assert.match(sidebar, /className="workspace-row-actions[^"]*has-\[\[data-state=open\]\]:opacity-100/, "the row must stay revealed while its menu is open");
+  assert.match(sidebar, /className="workspace-menu-trigger[^"]*data-\[state=open\]:opacity-100/, "the menu trigger must stay revealed while its menu is open");
   assert.match(sidebar, /<DropdownMenuTrigger asChild>\s*<Action\b[^>]*className="workspace-menu-trigger(?:\s[^"]*)?"[^>]*><Ellipsis\b/, "the ellipsis button must be the menu trigger");
   // Pinning moved from projects to tasks; task rows own the pin/unpin action.
   assert.doesNotMatch(sidebar, /\bonTogglePinned\b/);
@@ -131,13 +131,13 @@ test("application separators stay thin and use the shared border theme", async (
 
 test("workflow and settings share one contained footer menu", async () => {
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
-  assert.match(sidebar, /className="primary-nav[^\"]*grid-cols-\[minmax\(0,1fr\)_36px\][^\"]*bg-sidebar-accent\/20[^\"]*px-3[^\"]*pt-1 pb-3[^\"]*shadow-\[inset_0_1px_0_color-mix\(in_oklab,var\(--sidebar-border\)_35%,transparent\)\]/, "the footer must be full width, visually centered above the clipped rail edge, and use only one quiet top divider");
-  assert.doesNotMatch(sidebar, /className="primary-nav[^\"]*(?:mx-|mb-|rounded|\sborder(?:-|\s))/, "the footer must not be inset or outlined on four sides");
+  assert.match(sidebar, /className="primary-nav[^"]*sidebar-footer[^"]*flex[^"]*px-2 py-2/, "the footer uses one full-width band with a quiet top divider");
+  assert.doesNotMatch(sidebar, /className="primary-nav[^"]*(?:mx-|mb-|rounded|\sborder(?:-|\s))/, "the footer must not be inset or outlined on four sides");
   assert.match(sidebar, /<DropdownMenuTrigger asChild>[\s\S]{0,200}?className={`secondary-navigation-trigger/);
-  assert.match(sidebar, /secondary-navigation-trigger-content[^`]*inline-flex h-8[^`]*max-w-full self-center[^`]*rounded-lg[^`]*group-data-\[state=open\]:bg-sidebar-accent/, "the visible menu selection must hug its label and stay vertically centered inside the button row");
-  assert.match(sidebar, /secondary-navigation-trigger group flex h-9[^`]*self-center items-center/, "the menu button must stay vertically centered in the footer band");
-  assert.match(sidebar, /secondary-navigation-trigger-content[^`]*items-center[^`]*leading-none/, "the menu icon and label must share one optical center");
-  assert.doesNotMatch(sidebar, /secondary-navigation-trigger-content[^`]*group-focus-visible:ring/, "the menu must not retain an outlined focus frame after pointer interaction");
+  assert.match(sidebar, /secondary-navigation-trigger group flex h-10[^`]*min-w-0 flex-1 items-center/, "the app menu and update control share the footer without overlap");
+  assert.match(sidebar, /secondary-navigation-trigger-content[^"]*min-w-0 flex-1 items-baseline/, "the app name can shrink while the chevron keeps its space");
+  assert.match(sidebar, /sidebar-app-mark[^>]*src=\{appIcon\}/, "the footer uses the canonical application icon");
+  assert.doesNotMatch(sidebar, /t\(mode === "wails" \? "common\.local" : "common\.preview"\)/, "the footer identity does not repeat the workspace environment");
   assert.match(sidebar, /<DropdownMenuItem[^>]*onSelect=\{\(\) => goToSecondaryView\("workflows"\)\}/);
   assert.match(sidebar, /<DropdownMenuItem[^>]*onSelect=\{\(\) => goToSecondaryView\("settings"\)\}/);
   // The footer sits at the bottom of the rail, so the menu opens upward while
@@ -167,13 +167,14 @@ test("settings and terminal defer non-critical startup work", async () => {
   assert.match(workbench, /terminalMounted && <Suspense/);
 });
 
-test("the settings window uses the main window's inset sidebar and draggable chrome", async () => {
+test("the settings window uses the main window's flush sidebar and draggable chrome", async () => {
   const settings = await readFile(path.join(sourceRoot, "app", "SettingsPage.jsx"), "utf8");
   const auxiliary = await readFile(path.join(sourceRoot, "app", "AuxiliaryWindow.jsx"), "utf8");
   const nativeWindow = await readFile(path.join(sourceRoot, "..", "..", "internal", "app", "desktop", "auxiliary_window_controller.go"), "utf8");
   assert.match(settings, /grid-cols-\[216px_minmax\(0,1fr\)\]/);
   assert.match(settings, /settings-page[^\"]*bg-transparent/);
-  assert.match(settings, /<ScrollArea className="sidebar settings-sidebar[^\"]*\[clip-path:inset\(8px_4px_8px_8px_round_16px\)\]/);
+  assert.match(settings, /<ScrollArea className="sidebar sidebar-flush settings-sidebar/);
+  assert.doesNotMatch(settings, /clip-path:inset/);
   assert.match(settings, /<div className="settings-titlebar drag-region [^"]*h-\[52px\][^"]*grid-cols-\[216px_minmax\(0,1fr\)\]/);
   assert.match(settings, /settings-titlebar-sidebar/);
   assert.match(settings, /const compactAuxiliaryChrome = usesCompactAuxiliaryChrome\(\)/, "settings chrome follows the desktop platform");
@@ -182,8 +183,7 @@ test("the settings window uses the main window's inset sidebar and draggable chr
   assert.doesNotMatch(settings, /settings\.preferences/, "the settings rail starts with navigation instead of a redundant preferences title");
   assert.match(settings, /<header className="drag-region [^"]*"/);
   assert.match(settings, /<div className="no-drag flex shrink-0 items-center gap-2\.5">/);
-  assert.match(auxiliary, /nativeSidebar\.postMessage\(\{ width: document\.querySelector\("\.settings-sidebar"\)[^;]*\|\| 216 \}\);/);
-  assert.doesNotMatch(auxiliary, /flush: true/);
+  assert.match(auxiliary, /nativeSidebar\.postMessage\(\{ width: document\.querySelector\("\.settings-sidebar"\)[^;]*\|\| 216, flush: true \}\);/);
   assert.match(auxiliary, /flex h-full min-h-0 flex-col overflow-hidden bg-transparent text-foreground/);
   assert.match(nativeWindow, /macOptions\.InvisibleTitleBarHeight = 28/);
   assert.match(nativeWindow, /CustomTheme:\s*auxiliaryWindowsTheme\(\)/, "native Windows auxiliary captions use the application canvas colours");
@@ -601,7 +601,7 @@ test("select tolerates the empty-string option value Radix rejects", async () =>
   assert.match(primitives, /onValueChange=\{\(next\) => onChange\(fromRadix\(next\)\)\}/);
 });
 
-test("sidebar orders global search, pinned tasks, projects, and nested tasks", async () => {
+test("sidebar groups search and filters with projects below pinned tasks", async () => {
   const app = await readFile(path.join(sourceRoot, "app", "App.jsx"), "utf8");
   const sidebar = await readFile(path.join(sourceRoot, "app", "components", "Sidebar.jsx"), "utf8");
   const palette = await readFile(path.join(sourceRoot, "app", "components", "CommandPalette.jsx"), "utf8");
@@ -610,12 +610,12 @@ test("sidebar orders global search, pinned tasks, projects, and nested tasks", a
   const pinnedIndex = sidebar.indexOf('id="pinned-task-heading"');
   const projectIndex = sidebar.indexOf('id="project-heading"');
   assert.ok(searchIndex >= 0 && pinnedIndex >= 0 && projectIndex >= 0, "search and both section headings must exist");
-  assert.ok(searchIndex < pinnedIndex, "global search must precede pinned tasks");
   assert.ok(pinnedIndex < projectIndex, "pinned tasks must precede projects");
   assert.match(sidebar, /pinnedTasks\.map\(renderPinnedTask\)/);
   assert.doesNotMatch(sidebar, /pinned-project-heading/);
   const addProjectIndex = sidebar.indexOf('className="add-workspace ');
-  assert.ok(addProjectIndex > searchIndex && addProjectIndex < pinnedIndex, "add project belongs beside search in the rail header");
+  assert.ok(addProjectIndex > projectIndex && addProjectIndex < searchIndex, "add project and search belong beside the project heading");
+  assert.match(sidebar, /onValueChange=\{onTaskStatusChange\}/, "status filters must update the task list");
   assert.match(sidebar, /className="project-task-panel[^"]*"/);
   assert.doesNotMatch(sidebar, /className="cwd-shell"|sidebar-search-popover/, "search must use the global palette instead of a sidebar card");
   assert.match(palette, /createPortal\(<div className="command-palette-backdrop"/);

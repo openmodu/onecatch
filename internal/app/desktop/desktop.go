@@ -116,6 +116,11 @@ func Run() {
 	workspaceBinding := wailstransport.NewWorkspaceBinding(service, func() *application.App { return wailsApp })
 	var auxiliaryWindows *auxiliaryWindowController
 	windowBinding := wailstransport.NewWindowBinding(wailstransport.WindowCallbacks{
+		OpenUpdates: func() {
+			if auxiliaryWindows != nil {
+				auxiliaryWindows.OpenUpdates()
+			}
+		},
 		OpenSettings: func() {
 			if auxiliaryWindows != nil {
 				auxiliaryWindows.OpenSettings()
@@ -263,8 +268,7 @@ func Run() {
 		appMenu := menu.AddSubmenu(Name)
 		appMenu.AddRole(application.About)
 		appMenu.Add("检查更新…").OnClick(func(*application.Context) {
-			auxiliaryWindows.OpenSettings()
-			go func() { _, _ = updateService.Check(context.Background()) }()
+			auxiliaryWindows.OpenUpdates()
 		})
 		appMenu.Add("设置…").SetAccelerator("CmdOrCtrl+,").OnClick(func(*application.Context) {
 			auxiliaryWindows.OpenSettings()
@@ -286,8 +290,7 @@ func Run() {
 			auxiliaryWindows.OpenSettings()
 		})
 		fileMenu.Add("检查更新…").OnClick(func(*application.Context) {
-			auxiliaryWindows.OpenSettings()
-			go func() { _, _ = updateService.Check(context.Background()) }()
+			auxiliaryWindows.OpenUpdates()
 		})
 		fileMenu.AddSeparator()
 		fileMenu.AddRole(application.Quit)
@@ -319,7 +322,7 @@ func Run() {
 		Height:           800,
 		MinWidth:         860,
 		MinHeight:        720,
-		BackgroundColour: application.NewRGB(245, 245, 240),
+		BackgroundColour: application.NewRGB(252, 252, 251),
 		URL:              "/",
 		Mac: application.MacWindow{
 			TitleBar: application.MacTitleBarHiddenInsetUnified,

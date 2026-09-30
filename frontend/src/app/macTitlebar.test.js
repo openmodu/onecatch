@@ -134,13 +134,19 @@ test("review and inspector toolbars remain content even inside the old top 80pt 
   assert.deepEqual(host.calls, []);
 });
 
-test("the workflow window's caption is a drag region, so double-clicking it zooms", () => {
-  // It used to be pointer-events-none, which left the content column without a
-  // drag region: only the rail's own strip answered a titlebar double-click.
-  assert.match(source("./components/workflow/WorkflowLibrary.jsx"), /: <div className="workflow-titlebar drag-region /);
+test("the workflow caption passes clicks to rail controls and keeps content chrome draggable", () => {
+  // The full-width overlay must not intercept the history buttons below it.
+  // Only its content-column child receives input and inherits Wails drag/zoom.
+  const workflow = source("./components/workflow/WorkflowLibrary.jsx");
+  assert.match(workflow, /: <div className="workflow-titlebar drag-region pointer-events-none /);
+  assert.match(workflow, /<span className="pointer-events-none" \/>\s*<span className="pointer-events-auto" \/>/);
   const host = createWindow();
-  host.fire("dblclick", element("workflow-titlebar drag-region"), { detail: 2 });
-  assert.deepEqual(host.calls, ["wails:drag:doubleclick"]);
+  const content = element("pointer-events-auto", element("workflow-titlebar drag-region pointer-events-none"));
+  host.fire("mousedown", content, { buttons: 1 });
+  host.fire("mousemove", content, { buttons: 1 });
+  host.fire("mouseup", content);
+  host.fire("dblclick", content, { detail: 2 });
+  assert.deepEqual(host.calls, ["wails:drag", "wails:drag:doubleclick"]);
 });
 
 test("single clicks remain immediate and dragging titlebar space still works", () => {

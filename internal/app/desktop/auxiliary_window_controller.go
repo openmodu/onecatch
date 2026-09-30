@@ -10,6 +10,7 @@ import (
 
 const (
 	settingsWindowName  = "settings"
+	updatesWindowName   = "updates"
 	workflowsWindowName = "workflows"
 	inspectorWindowName = "inspector"
 )
@@ -73,6 +74,19 @@ func settingsWindowOptions() auxiliaryWindowOptions {
 
 func (c *auxiliaryWindowController) OpenSettings() {
 	c.open(settingsWindowOptions(), true)
+}
+
+func updatesWindowOptions() auxiliaryWindowOptions {
+	return auxiliaryWindowOptions{
+		name: updatesWindowName, title: "软件更新", url: "/?window=updates",
+		width: 400, height: 146, minWidth: 260, minHeight: 146,
+		disableResize: true, hideZoomButton: true, customChrome: true, retain: true,
+		dialogChrome: true,
+	}
+}
+
+func (c *auxiliaryWindowController) OpenUpdates() {
+	c.open(updatesWindowOptions(), true)
 }
 
 // PrewarmSettings builds the settings webview ahead of time without showing it.
@@ -164,6 +178,7 @@ type auxiliaryWindowOptions struct {
 	disableResize       bool
 	hideZoomButton      bool
 	customChrome        bool
+	dialogChrome        bool
 	// retain keeps the webview alive when the window is closed, hiding it
 	// instead of destroying it, so reopening costs a Show() rather than a full
 	// bundle load. Only worth it for windows the user opens repeatedly.
@@ -183,8 +198,8 @@ func auxiliaryWindowsTheme() application.ThemeSettings {
 		}
 	}
 	return application.ThemeSettings{
-		LightModeActive:   windowTheme([3]uint8{245, 245, 240}, [3]uint8{26, 26, 26}, [3]uint8{213, 210, 198}),
-		LightModeInactive: windowTheme([3]uint8{245, 245, 240}, [3]uint8{96, 96, 94}, [3]uint8{213, 210, 198}),
+		LightModeActive:   windowTheme([3]uint8{252, 252, 251}, [3]uint8{26, 26, 26}, [3]uint8{228, 228, 225}),
+		LightModeInactive: windowTheme([3]uint8{252, 252, 251}, [3]uint8{137, 135, 129}, [3]uint8{228, 228, 225}),
 		DarkModeActive:    windowTheme([3]uint8{28, 28, 28}, [3]uint8{239, 239, 239}, [3]uint8{58, 58, 58}),
 		DarkModeInactive:  windowTheme([3]uint8{28, 28, 28}, [3]uint8{171, 171, 171}, [3]uint8{58, 58, 58}),
 	}
@@ -248,7 +263,7 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions, show bo
 		DisableResize:    options.disableResize,
 		Frameless:        runtime.GOOS == "windows" || runtime.GOOS == "linux",
 		InitialPosition:  application.WindowCentered,
-		BackgroundColour: application.NewRGB(245, 245, 240),
+		BackgroundColour: application.NewRGB(252, 252, 251),
 		Hidden:           true,
 		URL:              options.url,
 		Mac:              macOptions,
@@ -271,6 +286,9 @@ func (c *auxiliaryWindowController) open(options auxiliaryWindowOptions, show bo
 	}
 	if options.hideZoomButton {
 		hideNativeWindowZoomButton(window)
+	}
+	if options.dialogChrome {
+		hideNativeWindowDialogButtons(window)
 	}
 	window.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
 		c.mu.Lock()

@@ -17,17 +17,14 @@ static char onecatchSidebarBorderKey;
 static char onecatchSidebarBridgeKey;
 static NSString *const onecatchSidebarMessageName = @"onecatchSidebar";
 static const CGFloat onecatchSidebarCornerRadius = 16.0;
-// The rail is an inset floating panel, not a flush column: it clears the window
-// edge on the left, top and bottom, and leaves a gap before the content panel.
+// Only the temporary collapsed-sidebar preview is an inset floating panel.
+// Expanded rails fill the window height; WebKit draws their right-hand divider.
 static const CGFloat onecatchSidebarInset = 8.0;
 static const CGFloat onecatchSidebarGutter = 4.0;
 
 static NSRect onecatchSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
-	CGFloat width = MAX(0.0, MIN(railWidth, NSWidth(bounds)) - onecatchSidebarInset - onecatchSidebarGutter);
-	return NSMakeRect(NSMinX(bounds) + onecatchSidebarInset,
-	                  NSMinY(bounds) + onecatchSidebarInset,
-	                  width,
-	                  MAX(0.0, NSHeight(bounds) - onecatchSidebarInset * 2.0));
+	return NSMakeRect(NSMinX(bounds), NSMinY(bounds),
+	                  MAX(0.0, MIN(railWidth, NSWidth(bounds))), NSHeight(bounds));
 }
 
 static NSRect onecatchCompactSidebarPanelFrame(NSRect bounds, CGFloat railWidth) {
@@ -40,7 +37,7 @@ static NSRect onecatchCompactSidebarPanelFrame(NSRect bounds, CGFloat railWidth)
 	                  height);
 }
 
-// Canvas colour mirrored from frontend tokens (--acp-canvas): light #F5F5F0,
+// Canvas colour mirrored from frontend tokens (--acp-canvas): light #FCFCFB,
 // dark #1C1C1C.
 // Resolved against the window's effective appearance at apply
 // time — WebKit copies NSColor values into plain RGBA on assignment, so a
@@ -63,7 +60,7 @@ static NSColor *onecatchCanvasColor(NSAppearance *appearance) {
 	if ([match isEqualToString:NSAppearanceNameDarkAqua]) {
 		return [NSColor colorWithSRGBRed:0x1C / 255.0 green:0x1C / 255.0 blue:0x1C / 255.0 alpha:1.0];
 	}
-	return [NSColor colorWithSRGBRed:0xF5 / 255.0 green:0xF5 / 255.0 blue:0xF0 / 255.0 alpha:1.0];
+	return [NSColor colorWithSRGBRed:0xFC / 255.0 green:0xFC / 255.0 blue:0xFB / 255.0 alpha:1.0];
 }
 
 static WKWebView *onecatchFindWebView(NSView *view) {
@@ -141,7 +138,7 @@ static WKWebView *onecatchFindWebView(NSView *view) {
 
 	if (width != nil && self.effectView.superview != nil) {
 		NSRect bounds = self.effectView.superview.bounds;
-		BOOL useFlushRail = flush.boolValue;
+		BOOL useFlushRail = flush != nil ? flush.boolValue : !compact.boolValue;
 		BOOL useCompactRail = !useFlushRail && compact.boolValue;
 		self.effectView.frame = useFlushRail
 			? NSMakeRect(NSMinX(bounds), NSMinY(bounds), MIN(width.doubleValue, NSWidth(bounds)), NSHeight(bounds))
@@ -203,15 +200,15 @@ static void onecatchInstallSidebarMaterial(NSWindow *window) {
 	effectView.emphasized = NO;
 	effectView.autoresizingMask = NSViewHeightSizable | NSViewMaxXMargin;
 	effectView.wantsLayer = YES;
-	effectView.layer.cornerRadius = onecatchSidebarCornerRadius;
+	effectView.layer.cornerRadius = 0.0;
 	effectView.layer.cornerCurve = kCACornerCurveContinuous;
 	effectView.layer.masksToBounds = YES;
 	OneCatchWindowBorderView *borderView = [[OneCatchWindowBorderView alloc] initWithFrame:effectView.frame];
 	borderView.wantsLayer = YES;
 	borderView.layer.backgroundColor = [NSColor clearColor].CGColor;
-	borderView.layer.cornerRadius = onecatchSidebarCornerRadius;
+	borderView.layer.cornerRadius = 0.0;
 	borderView.layer.cornerCurve = kCACornerCurveContinuous;
-	borderView.layer.borderWidth = onecatchDeviceHairlineWidth(window);
+	borderView.layer.borderWidth = 0.0;
 	borderView.layer.borderColor = onecatchSidebarBorderColor(window.effectiveAppearance).CGColor;
 	borderView.autoresizingMask = NSViewHeightSizable | NSViewMaxXMargin;
 	[container addSubview:canvasView positioned:NSWindowBelow relativeTo:webView];
@@ -242,6 +239,8 @@ static void onecatchInstallSidebarMaterial(NSWindow *window) {
 		 "var sidebar=document.querySelector('.sidebar');"
 		 "window.webkit.messageHandlers.onecatchSidebar.postMessage({"
 		 "width:sidebar?.dataset.visible==='false'?0:(sidebar?.getBoundingClientRect().width||216),"
+		 "flush:!document.querySelector('.sidebar-shell.is-collapsed'),"
+		 "compact:!!document.querySelector('.sidebar-shell.is-collapsed'),"
 			 "borderOccluded:!!document.querySelector('[data-slot=dialog-content][data-state=open]'),"
 			 "theme:document.documentElement.dataset.theme||'system'"
 			 "});";
@@ -363,6 +362,14 @@ static void onecatchSetWindowZoomButtonHidden(void *handle, bool hidden) {
 	zoomButton.hidden = hidden;
 }
 
+static void onecatchHideWindowDialogButtons(void *handle) {
+	NSWindow *window = (__bridge NSWindow *)handle;
+	if (window == nil) return;
+	[window standardWindowButton:NSWindowCloseButton].hidden = YES;
+	[window standardWindowButton:NSWindowMiniaturizeButton].hidden = YES;
+	[window standardWindowButton:NSWindowZoomButton].hidden = YES;
+}
+
 static void onecatchSetApplicationIcon(void *icon, int length) {
 	if (icon == nil || length <= 0) {
 		return;
@@ -400,6 +407,12 @@ func setNativeWindowZoomButtonHidden(window unsafe.Pointer, hidden bool) {
 		return
 	}
 	C.onecatchSetWindowZoomButtonHidden(window, C.bool(hidden))
+}
+
+func setNativeWindowDialogButtonsHidden(window unsafe.Pointer) {
+	if window != nil {
+		C.onecatchHideWindowDialogButtons(window)
+	}
 }
 
 func setNativeApplicationIcon(icon []byte) {

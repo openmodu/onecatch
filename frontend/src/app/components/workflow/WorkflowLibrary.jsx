@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ChevronLeft, ChevronRight, GitBranch, MoreHorizontal, Pencil, Plus, Trash2, Workflow } from "lucide-react";
+import { ChevronLeft, ChevronRight, GitBranch, MoreHorizontal, Plus, SquarePen, Trash2, Workflow } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,7 @@ function WorkflowListItem({ workflow, selected, busy, onSelect, onEdit, onDelete
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent side="right" align="start" sideOffset={8} collisionPadding={12}>
-        <DropdownMenuItem onSelect={onEdit}><Pencil aria-hidden="true" />{t("common.edit")}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={onEdit}><SquarePen strokeWidth={1.75} aria-hidden="true" />{t("common.edit")}</DropdownMenuItem>
         <DropdownMenuItem variant="destructive" disabled={busy === "delete-workflow"} onSelect={onDelete}><Trash2 aria-hidden="true" />{t("common.delete")}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
@@ -72,7 +72,7 @@ function WorkflowDetail({ workflow, runtimes, onEdit }) {
           <h1 className="m-0 truncate text-2xl font-semibold tracking-tight text-foreground">{workflow.name || workflow.id}</h1>
           <p className="mt-2 mb-0 text-sm leading-relaxed text-muted-foreground">{workflowPath(workflow)}</p>
         </div>
-        <Button variant="outline" className="shrink-0" onClick={onEdit}><Pencil aria-hidden="true" />{t("common.edit")}</Button>
+        <Button variant="ghost" size="sm" className="shrink-0 gap-1.5 rounded-lg font-normal text-muted-foreground hover:text-foreground" onClick={onEdit}><SquarePen strokeWidth={1.75} aria-hidden="true" />{t("common.edit")}</Button>
       </header>
 
       <div className="grid gap-6">
@@ -139,17 +139,17 @@ export default function WorkflowLibrary({ workflows, selectedWorkflow, runtimes,
         </div>
         <div className="bg-background/80" />
       </div>
-      : <div className="workflow-titlebar drag-region absolute inset-x-0 top-0 z-40 grid h-[52px] cursor-default grid-cols-[240px_minmax(0,1fr)] select-none" aria-hidden="true">
+      : <div className="workflow-titlebar drag-region pointer-events-none absolute inset-x-0 top-0 z-40 grid h-[52px] cursor-default grid-cols-[240px_minmax(0,1fr)] select-none" aria-hidden="true">
         {/* The rail owns the first column: it draws its own drag strip and puts
             the history controls there, so this caption stays out of its way and
             only claims the content column as draggable window chrome. */}
         <span className="pointer-events-none" />
-        <span />
+        <span className="pointer-events-auto" />
         <strong className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm font-semibold tracking-[-0.01em] text-foreground/85">{t("workflow.title")}</strong>
       </div>}
     <AuxWindowCloseButton />
 
-    <aside className="sidebar workflow-sidebar relative z-30 flex min-h-0 select-none flex-col text-sidebar-foreground [clip-path:inset(8px_4px_8px_8px_round_16px)]" aria-label={t("workflow.title")}>
+    <aside className="sidebar sidebar-flush workflow-sidebar relative z-30 flex min-h-0 select-none flex-col text-sidebar-foreground" aria-label={t("workflow.title")}>
       {compactAuxiliaryChrome
         ? <>
           <div className="workflow-sidebar-title-spacer h-[60px] shrink-0" aria-hidden="true" />
