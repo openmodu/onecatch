@@ -56,7 +56,7 @@ type codexAppProcess struct {
 // binary falls back to "codex" resolved from PATH.
 func NewCodexRunner(binary string) *CodexRunner {
 	if binary == "" {
-		binary = codexBinaryDefault
+		binary = defaultCodexBinary()
 	}
 	binary = resolveNativeCodexBinary(binary)
 	return &CodexRunner{binary: binary, now: time.Now, sessions: make(map[string]*codexAppProcess)}
@@ -85,6 +85,8 @@ type CodexModelInfo struct {
 	ServiceTiers           []CodexServiceTier `json:"serviceTiers,omitempty"`
 	DefaultServiceTier     string             `json:"defaultServiceTier,omitempty"`
 	IsDefault              bool               `json:"isDefault"`
+	ContextWindow          int                `json:"contextWindow,omitempty"`
+	MaxContextWindow       int                `json:"maxContextWindow,omitempty"`
 }
 
 type CodexConfiguration struct {
@@ -345,6 +347,8 @@ func (r *CodexRunner) InspectConfiguration(ctx context.Context, cwd string, envi
 	}
 
 	var configuration CodexConfiguration
+	var modelProvider, catalogPath string
+	seenCursors := make(map[string]bool)
 	gotConfig, gotModels := false, false
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
@@ -369,7 +373,7 @@ func (r *CodexRunner) InspectConfiguration(ctx context.Context, cwd string, envi
 			if err := encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}}); err != nil {
 				return CodexConfiguration{}, err
 			}
-			if err := encoder.Encode(map[string]any{"id": 2, "method": "config/read", "params": map[string]any{"includeLayers": false}}); err != nil {
+			if err := encoder.Encode(map[string]any{"id": 2, "method": "config/read", "params": map[string]any{"includeLayers": false, "cwd": cwd}}); err != nil {
 				return CodexConfiguration{}, err
 			}
 			if err := encoder.Encode(map[string]any{"id": 3, "method": "model/list", "params": map[string]any{"includeHidden": false}}); err != nil {
@@ -381,14 +385,17 @@ func (r *CodexRunner) InspectConfiguration(ctx context.Context, cwd string, envi
 			}
 			var response struct {
 				Config struct {
-					Model           string `json:"model"`
-					ReasoningEffort string `json:"model_reasoning_effort"`
-					ServiceTier     string `json:"service_tier"`
+					Model            string `json:"model"`
+					ReasoningEffort  string `json:"model_reasoning_effort"`
+					ServiceTier      string `json:"service_tier"`
+					ModelProvider    string `json:"model_provider"`
+					ModelCatalogJSON string `json:"model_catalog_json"`
 				} `json:"config"`
 			}
 			if err := json.Unmarshal(envelope.Result, &response); err != nil {
 				return CodexConfiguration{}, fmt.Errorf("decode Codex configuration: %w", err)
 			}
+			modelProvider, catalogPath = response.Config.ModelProvider, response.Config.ModelCatalogJSON
 			configuration.Model = response.Config.Model
 			configuration.ReasoningEffort = response.Config.ReasoningEffort
 			configuration.ServiceTier = response.Config.ServiceTier
@@ -410,22 +417,38 @@ func (r *CodexRunner) InspectConfiguration(ctx context.Context, cwd string, envi
 					ServiceTiers       []CodexServiceTier `json:"serviceTiers"`
 					DefaultServiceTier string             `json:"defaultServiceTier"`
 					IsDefault          bool               `json:"isDefault"`
+					ContextWindow      int                `json:"contextWindow"`
+					MaxContextWindow   int                `json:"maxContextWindow"`
 				} `json:"data"`
+				NextCursor string `json:"nextCursor"`
 			}
 			if err := json.Unmarshal(envelope.Result, &response); err != nil {
 				return CodexConfiguration{}, fmt.Errorf("decode Codex models: %w", err)
 			}
-			configuration.Models = make([]CodexModelInfo, 0, len(response.Data))
+			if configuration.Models == nil {
+				configuration.Models = make([]CodexModelInfo, 0, len(response.Data))
+			}
 			for _, item := range response.Data {
-				model := CodexModelInfo{ID: item.ID, Model: item.Model, DisplayName: item.DisplayName, Description: item.Description, DefaultReasoningEffort: item.DefaultReasoningEffort, ServiceTiers: item.ServiceTiers, DefaultServiceTier: item.DefaultServiceTier, IsDefault: item.IsDefault}
+				model := CodexModelInfo{ID: item.ID, Model: item.Model, DisplayName: item.DisplayName, Description: item.Description, DefaultReasoningEffort: item.DefaultReasoningEffort, ServiceTiers: item.ServiceTiers, DefaultServiceTier: item.DefaultServiceTier, IsDefault: item.IsDefault, ContextWindow: item.ContextWindow, MaxContextWindow: item.MaxContextWindow}
 				for _, effort := range item.SupportedEfforts {
 					model.ReasoningEfforts = append(model.ReasoningEfforts, effort.ReasoningEffort)
 				}
 				configuration.Models = append(configuration.Models, model)
 			}
-			gotModels = true
+			if response.NextCursor != "" {
+				if seenCursors[response.NextCursor] {
+					return CodexConfiguration{}, fmt.Errorf("Codex model/list repeated cursor")
+				}
+				seenCursors[response.NextCursor] = true
+				if err := encoder.Encode(map[string]any{"id": 3, "method": "model/list", "params": map[string]any{"includeHidden": false, "cursor": response.NextCursor}}); err != nil {
+					return CodexConfiguration{}, err
+				}
+			} else {
+				gotModels = true
+			}
 		}
 		if gotConfig && gotModels {
+			mergeCodexCatalog(&configuration, cwd, environment, modelProvider, catalogPath)
 			return configuration, nil
 		}
 	}
@@ -526,41 +549,6 @@ func newCodexAppState() *codexAppState {
 	return &codexAppState{messageOpen: make(map[string]bool), reasoningOpen: make(map[string]bool), toolOpen: make(map[string]bool)}
 }
 
-// codexModelContextMax is the largest window each model accepts, mirroring the
-// per-model table inside the Codex binary. Codex defaults every model to
-// 272000 even where the model itself allows more, and app-server's model/list
-// reports neither figure — its Model objects carry reasoning efforts and
-// service tiers but nothing about context — so raising the window means
-// carrying the ceiling here.
-//
-// A model absent from this table is left at Codex's default rather than
-// guessed at: the failure mode of guessing high is every request erroring
-// against the real limit, while the failure mode of not knowing is only that
-// the window stays where Codex put it. Models whose ceiling already equals the
-// default (gpt-5.5, gpt-5.4-mini, gpt-5.2) are deliberately absent — there is
-// nothing to raise, and listing them would imply otherwise.
-//
-// Read out of codex-cli 0.149.0.
-var codexModelContextMax = map[string]int{
-	"gpt-5.6-sol":   872000,
-	"gpt-5.6-terra": 872000,
-	"gpt-5.6-luna":  872000,
-	"gpt-5.4":       1000000,
-}
-
-// codexMaxContextWindowOverride returns the `-c` override that opts a model
-// into its full window, or false when the model is unknown, unnamed, or has no
-// headroom. An unnamed model cannot be resolved without asking app-server what
-// its configured default is, and that answer arrives too late to appear on the
-// launch command.
-func codexMaxContextWindowOverride(model string) (string, bool) {
-	maximum, known := codexModelContextMax[strings.TrimSpace(model)]
-	if !known {
-		return "", false
-	}
-	return fmt.Sprintf("model_context_window=%d", maximum), true
-}
-
 func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) (Result, error) {
 	if sink == nil {
 		sink = func(Event) {}
@@ -570,7 +558,17 @@ func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) 
 		commandArgs = append(commandArgs, "-c", "features.fast_mode=true")
 	}
 	if req.MaxContextWindow {
-		if override, ok := codexMaxContextWindowOverride(req.Model); ok {
+		inspectCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		cwd := req.Workspace
+		if req.Remote != nil {
+			cwd, _ = os.UserHomeDir()
+		}
+		configuration, err := r.InspectConfiguration(inspectCtx, cwd, req.Environment)
+		cancel()
+		if err != nil {
+			return Result{}, fmt.Errorf("read Codex model context window: %w", err)
+		}
+		if override, ok := codexMaxContextWindowOverride(configuration, req.Model); ok {
 			commandArgs = append(commandArgs, "-c", override)
 		}
 	}

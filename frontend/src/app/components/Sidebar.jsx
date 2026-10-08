@@ -445,7 +445,7 @@ function Sidebar({
   const renderPinnedTask = (task) => {
     const selectedRun = runs.find((run) => run.id === selectedRunID);
     const selected = selectedQueuedTaskID === task.id || selectedRun?.task?.id === task.id;
-    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-md ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`project-task-item relative flex h-7 w-full min-w-0 max-w-full items-center rounded-md bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] font-normal`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
+    return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-md ${selected ? "bg-accent" : ""}`} key={task.id}><button type="button" className={`project-task-item relative flex h-7 w-full min-w-0 max-w-full items-center rounded-md bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openPinnedTask(task)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-semibold" : "font-medium"}`}>{task.title}</span></button>{renderTaskActions(task)}</div>;
   };
 
   const renderWorkspace = (workspace) => {
@@ -492,7 +492,7 @@ function Sidebar({
     return <div className={`workspace-row group relative mb-3 block w-full min-w-0 max-w-full overflow-hidden ${active ? "active" : ""} ${displayExpanded ? "expanded" : ""}`} key={workspace.id}>
       <button className={`workspace-item flex h-8 w-full min-w-0 items-center gap-1 rounded-md py-0 pr-2 pl-2 text-left transition-colors hover:bg-accent/70 hover:text-foreground text-muted-foreground`} title={workspaceTitle} aria-expanded={displayExpanded} aria-controls={taskPanelID} aria-busy={remoteHealth?.checking || undefined} onClick={() => toggleProject(workspace)}>
         <span className="inline-flex w-fit min-w-0 max-w-full items-center gap-1.5">
-          <strong className="min-w-0 truncate text-[13px] font-normal leading-none">{workspace.name}</strong>
+          <strong className="min-w-0 truncate text-[13px] font-semibold leading-none">{workspace.name}</strong>
           {workspace.remoteFs && <span className={`inline-flex h-4 shrink-0 items-center gap-1 rounded-md border px-1.5 text-[9px] font-medium leading-none ${workspaceAvailable ? "border-success/25 bg-success/10 text-success" : remoteHealthPending ? "border-border bg-background/30 text-muted-foreground" : "border-destructive/25 bg-destructive/10 text-destructive"}`}>
             {workspaceAvailable ? <i className="size-1 rounded-full bg-current" aria-hidden="true" /> : <RefreshCw size={9} className={remoteHealthPending ? "animate-spin" : ""} aria-hidden="true" />}
             {t(workspaceAvailable ? "workspace.remote" : remoteHealthPending ? "workspace.remoteChecking" : "workspace.remoteUnavailable")}
@@ -525,20 +525,20 @@ function Sidebar({
             if (entry.kind === "queued" || entry.kind === "pinned") {
               const task = entry.item;
               const selected = active && selectedQueuedTaskID === task.id;
-              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-md ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-7 w-full min-w-0 max-w-full items-center rounded-md bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] font-normal`}>{task.title}</span></button>{active && renderTaskActions(task)}</div>;
+              return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-md ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-7 w-full min-w-0 max-w-full items-center rounded-md bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={task.title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}><TaskExecutionIcon task={task} /><TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-semibold" : "font-medium"}`}>{task.title}</span></button>{active && renderTaskActions(task)}</div>;
             }
             const run = entry.item;
             const task = run.task;
             const title = run.task?.title || run.id;
             const selected = active && selectedRunID === run.id;
-            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-md ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-7 w-full min-w-0 max-w-full items-center rounded-md bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}>{task && <TaskExecutionIcon task={task} workflowID={run.workflowId} />}<TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] font-normal`}>{title}</span></button>{active && task && renderTaskActions(task)}</div>;
+            return <div className={`group/task relative w-full min-w-0 max-w-full overflow-hidden rounded-md ${selected ? "bg-accent" : ""}`} key={entry.key}><button type="button" className={`project-task-item relative flex h-7 w-full min-w-0 max-w-full items-center rounded-md bg-transparent py-0 pr-2 pl-8 text-left transition-colors hover:bg-accent/60 hover:text-foreground ${selected ? "selected text-foreground" : "text-muted-foreground"}`} title={title} aria-current={selected ? "page" : undefined} onClick={() => openEntry(entry)}>{task && <TaskExecutionIcon task={task} workflowID={run.workflowId} />}<TaskWorktreeBadge task={task} /><span className={`project-task-title block min-w-0 flex-1 truncate text-[13px] ${selected ? "font-semibold" : "font-medium"}`}>{title}</span></button>{active && task && renderTaskActions(task)}</div>;
           })}
           {!workspaceEntries.length && !(active && runLoading) && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{taskSearch || taskStatus ? t("task.noMatches") : t("task.empty")}</div>}
           {active && runLoading && !workspaceEntries.length && <div className="project-task-empty px-2 py-2 text-xs leading-relaxed text-muted-foreground">{t("task.loading")}</div>}
         </div>
-        {!workspaceTaskListExpanded && hiddenTaskCount > 0 && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={() => setTaskListExpanded(true)}>{t("sidebar.showTasks", { count: hiddenTaskCount })}</Action>}
-        {workspaceTaskListExpanded && hiddenTaskCount > 0 && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={() => setTaskListExpanded(false)}>{t("sidebar.hideTasks")}</Action>}
-        {active && (workspaceTaskListExpanded || hiddenTaskCount === 0) && (runLoading || workspaceRunHasMore) && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" disabled={runLoading} onClick={onLoadMoreRuns}>{runLoading ? t("task.loading") : t("task.loadMore", { visible: workspaceEntries.length, total: taskTotal })}</Action>}
+        {!workspaceTaskListExpanded && hiddenTaskCount > 0 && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-medium text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={() => setTaskListExpanded(true)}>{t("sidebar.showTasks", { count: hiddenTaskCount })}</Action>}
+        {workspaceTaskListExpanded && hiddenTaskCount > 0 && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-medium text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={() => setTaskListExpanded(false)}>{t("sidebar.hideTasks")}</Action>}
+        {active && (workspaceTaskListExpanded || hiddenTaskCount === 0) && (runLoading || workspaceRunHasMore) && <Action size="compact" tone="muted" className="project-task-more h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-medium text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" disabled={runLoading} onClick={onLoadMoreRuns}>{runLoading ? t("task.loading") : t("task.loadMore", { visible: workspaceEntries.length, total: taskTotal })}</Action>}
       </div>}
     </div>;
   };
@@ -577,12 +577,12 @@ function Sidebar({
     <div className="workspace-block flex min-h-0 flex-1 flex-col">
       <div className="project-sections min-h-0 min-w-0 max-w-full flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-2 pb-3">
         {pinnedTasks.length > 0 && <section className="project-section mb-3 min-w-0 max-w-full" aria-labelledby="pinned-task-heading">
-          <div className="flex h-8 items-center px-2 text-[13px] font-normal text-muted-foreground" id="pinned-task-heading">{t("sidebar.pinnedTasks")}</div>
+          <div className="flex h-8 items-center px-2 text-[13px] font-medium text-muted-foreground" id="pinned-task-heading">{t("sidebar.pinnedTasks")}</div>
           <div className="flex flex-col">{pinnedTasks.map(renderPinnedTask)}</div>
         </section>}
         <section className="project-section min-w-0 max-w-full" aria-labelledby="project-heading">
           <div className="sidebar-project-heading mb-1 flex h-8 items-center justify-between gap-2 pl-2 pr-1">
-            <span className="text-[13px] font-normal text-muted-foreground" id="project-heading">{t("sidebar.projects")}</span>
+            <span className="text-[13px] font-medium text-muted-foreground" id="project-heading">{t("sidebar.projects")}</span>
             <div className="flex shrink-0 items-center gap-0.5">
               <Action size="compact" tone="muted" className="add-workspace sidebar-icon-button size-[26px] border-0 bg-transparent p-0 shadow-none hover:bg-sidebar-accent dark:border-0 dark:bg-transparent dark:hover:bg-sidebar-accent" aria-label={t("sidebar.addProject")} title={t("sidebar.addProject")} onClick={onAddWorkspace}><Plus size={16} strokeWidth={1.7} aria-hidden="true" className="size-4" /></Action>
               <Action ref={searchTrigger} size="compact" tone="muted" className={`sidebar-search-trigger sidebar-icon-button size-[26px] border-0 bg-transparent p-0 shadow-none hover:bg-sidebar-accent dark:border-0 dark:bg-transparent dark:hover:bg-sidebar-accent ${workspaceSearchOpen ? "active" : ""}`} aria-label={t("sidebar.searchPanel")} aria-haspopup="dialog" aria-expanded={workspaceSearchOpen} aria-controls="global-command-palette" title={`${t("sidebar.searchPanel")} · ${primaryShortcutLabel("K")}`} onClick={toggleSearch}><Search size={15} strokeWidth={2} aria-hidden="true" className="size-4" /></Action>
@@ -597,7 +597,7 @@ function Sidebar({
             </div>
           </div>
           <div className={`workspace-list flex min-h-0 min-w-0 max-w-full flex-none flex-col ${workspaceExpanded ? "expanded" : ""}`}>{projectWorkspaces.map(renderWorkspace)}{!workspaces.length && <div className="sidebar-empty px-2 py-3 text-xs text-muted-foreground">{t("sidebar.noWorkspaces")}</div>}</div>
-          {regularProjectCount > 8 && <Action size="compact" tone="muted" className="workspace-expand h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-normal text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={onToggleExpanded}>{workspaceExpanded ? t("sidebar.collapse") : t("sidebar.allProjects", { count: regularProjectCount })}</Action>}
+          {regularProjectCount > 8 && <Action size="compact" tone="muted" className="workspace-expand h-8 w-full justify-start border-0 bg-transparent pr-2 pl-8 text-[13px] font-medium text-muted-foreground/70 shadow-none hover:bg-transparent hover:text-foreground" onClick={onToggleExpanded}>{workspaceExpanded ? t("sidebar.collapse") : t("sidebar.allProjects", { count: regularProjectCount })}</Action>}
         </section>
       </div>
     </div>
@@ -606,7 +606,7 @@ function Sidebar({
         <DropdownMenuTrigger asChild>
           <button type="button" className={`secondary-navigation-trigger group flex h-10 min-w-0 flex-1 items-center gap-2 rounded-lg border-0 px-2 text-left text-sm shadow-none outline-none transition-colors hover:bg-sidebar-accent focus-visible:bg-sidebar-accent data-[state=open]:bg-sidebar-accent ${view === "settings" && !editor ? "active bg-sidebar-accent" : ""}`} aria-label={t("sidebar.menu")}>
             <img className="sidebar-app-mark size-7 shrink-0 object-contain" src={appIcon} alt="" aria-hidden="true" />
-            <span className="secondary-navigation-trigger-content flex min-w-0 flex-1 items-baseline"><span className="truncate font-normal">OneCatch</span></span>
+            <span className="secondary-navigation-trigger-content flex min-w-0 flex-1 items-baseline"><span className="truncate font-semibold">OneCatch</span></span>
             <ChevronDown size={13} className="shrink-0 text-muted-foreground" aria-hidden="true" />
           </button>
         </DropdownMenuTrigger>

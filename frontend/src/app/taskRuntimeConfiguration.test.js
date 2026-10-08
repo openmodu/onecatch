@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { loadTaskRuntimeConfiguration } from "./taskRuntimeConfiguration.js";
+import { loadTaskRuntimeConfiguration, watchRuntimeConfiguration } from "./taskRuntimeConfiguration.js";
 
 const flush = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -30,4 +30,24 @@ test("TRAE inspection failures are attributed to TRAE and discard old catalog da
   loadTaskRuntimeConfiguration("trae", () => { throw new Error("TRAE unavailable"); }, (next) => { state = next; }, (err) => err.message);
   await flush();
   assert.deepEqual(state, { harness: "trae", loading: false, data: null, error: "TRAE unavailable" });
+});
+
+
+test("returning to the app refreshes models and discards an older in-flight result", async () => {
+  const target = new EventTarget();
+  const pending = [];
+  let state;
+  const stop = watchRuntimeConfiguration("codex", () => new Promise((resolve) => pending.push(resolve)), (next) => { state = next; }, String, target);
+  await flush();
+  target.dispatchEvent(new Event("focus"));
+  await flush();
+  pending[1]({ models: [{ model: "new-model" }] });
+  await flush();
+  pending[0]({ models: [{ model: "old-model" }] });
+  await flush();
+  assert.equal(state.data.models[0].model, "new-model");
+  stop();
+  target.dispatchEvent(new Event("focus"));
+  await flush();
+  assert.equal(pending.length, 2);
 });

@@ -1,4 +1,4 @@
-import { loadTaskRuntimeConfiguration } from "./taskRuntimeConfiguration.js";
+import { watchRuntimeConfiguration } from "./taskRuntimeConfiguration.js";
 import { isRemoteWorker } from "./taskWorkers.js";
 import TaskCategoryBadge from "./components/TaskCategoryBadge.jsx";
 import { TASK_CATEGORIES } from "./taskCategory.js";
@@ -62,7 +62,7 @@ import { notifyStandby } from "./standbyNotify.js";
 import { runtimesChangedEvent, settingsChangedEvent, workflowsChangedEvent } from "./auxiliaryWindowEvents.js";
 import { readInspectorDetached, resolveInspectorCollapsed, writeInspectorDetached } from "./inspectorLayout.js";
 import { buildInspectorContext, inspectorContextSignature, INSPECTOR_ACTION_EVENT, INSPECTOR_CONTEXT_EVENT, INSPECTOR_REQUEST_EVENT, INSPECTOR_WINDOW_EVENT } from "./inspectorContext.js";
-import { demoClaudeConfiguration, demoCodexConfiguration } from "./codexRuntimeOptions.js";
+import { demoClaudeConfiguration } from "./codexRuntimeOptions.js";
 import { collapsePanelAtCompact, COMPACT_LAYOUT_QUERY } from "./responsiveLayout.js";
 import { scheduleIdle } from "./scheduleIdle.js";
 import { REMOTE_FS_HEALTH_INTERVAL_MS, shouldAutoCheckRemoteFS } from "./remoteFSHealth.js";
@@ -515,15 +515,15 @@ function App() {
   const inspectRuntimeConfiguration = useCallback(async (harness) => {
     if (!supportsRuntimeProfile(harness)) return null;
     if (mode === "demo") {
-      if (harness === "codex") return demoCodexConfiguration;
+      if (harness === "codex") throw new Error(t("settings.codexRequiresDesktop"));
       if (harness === "claude") return demoClaudeConfiguration;
       return null;
     }
     const runtimeSettings = settings.runtimes?.[harness] || {};
-    if (harness === "codex") return SettingsBinding.InspectCodexConfiguration(runtimeSettings);
+    if (harness === "codex") return SettingsBinding.InspectCodexConfiguration(runtimeSettings, selectedWorkspace?.remoteFs ? "" : selectedWorkspace?.path || "");
     if (harness === "claude") return SettingsBinding.InspectClaudeConfiguration(runtimeSettings, selectedWorkspace?.remoteFs ? "" : selectedWorkspace?.path || "");
     return SettingsBinding.InspectHarnessConfiguration(harness, runtimeSettings);
-  }, [mode, settings.runtimes, selectedWorkspace?.path, selectedWorkspace?.remoteFs]);
+  }, [mode, settings.runtimes, selectedWorkspace?.path, selectedWorkspace?.remoteFs, t]);
 
   useEffect(() => {
     if (!taskCreateVisible || mode === "loading") return undefined;
@@ -536,7 +536,7 @@ function App() {
       setTaskRuntimeConfiguration({ loading: false, data: null, error: "" });
       return undefined;
     }
-    return loadTaskRuntimeConfiguration(harness, inspectRuntimeConfiguration, setTaskRuntimeConfiguration, errorMessage);
+    return watchRuntimeConfiguration(harness, inspectRuntimeConfiguration, setTaskRuntimeConfiguration, errorMessage);
   }, [inspectRuntimeConfiguration, mode, taskForm.harness, taskForm.workflowId, taskForm.workerId, taskCreateVisible]);
 
   // Settings and workflow definitions are edited in their own WebViews. Wails

@@ -884,6 +884,20 @@ export class CodexModelInfo {
              */
             this["isDefault"] = false;
         }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["contextWindow"] = undefined;
+        }
+        if (/** @type {any} */(false)) {
+            /**
+             * @member
+             * @type {number | undefined}
+             */
+            this["maxContextWindow"] = undefined;
+        }
 
         Object.assign(this, $$source);
     }

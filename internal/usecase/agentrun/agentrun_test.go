@@ -392,7 +392,7 @@ done
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	configuration, err := NewCodexRunner(bin).InspectConfiguration(context.Background(), t.TempDir(), os.Environ())
+	configuration, err := NewCodexRunner(bin).InspectConfiguration(context.Background(), t.TempDir(), append(os.Environ(), "CODEX_HOME="+t.TempDir()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -469,6 +469,8 @@ func stubCodexAppServerBinary(t *testing.T) string {
 while IFS= read -r line; do
   [ -n "$ONECATCH_CODEX_CAPTURE" ] && printf '%s\n' "$line" >> "$ONECATCH_CODEX_CAPTURE"
 	case "$line" in
+        *'"method":"config/read"'*) printf '%s\n' '{"id":2,"result":{"config":{"model":"future-model"}}}' ;;
+        *'"method":"model/list"'*) printf '%s\n' '{"id":3,"result":{"data":[{"id":"future-model","model":"future-model","contextWindow":100,"maxContextWindow":300}],"nextCursor":null}}' ;;
 	    *'"method":"account/rateLimits/read"'*)
 	      printf '%s\n' '{"id":2,"result":{"rateLimits":{"limitId":"codex","primary":{"usedPercent":41,"windowDurationMins":300,"resetsAt":1788515254},"secondary":{"usedPercent":18,"windowDurationMins":10080,"resetsAt":1789102054},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"planType":"pro"},"rateLimitsByLimitId":{"codex_spark":{"limitId":"codex_spark","limitName":"GPT Spark","primary":{"usedPercent":7,"windowDurationMins":300,"resetsAt":1788515254},"secondary":null,"credits":null,"planType":"pro"},"codex":{"limitId":"codex","primary":{"usedPercent":41,"windowDurationMins":300,"resetsAt":1788515254},"secondary":{"usedPercent":18,"windowDurationMins":10080,"resetsAt":1789102054},"credits":{"hasCredits":false,"unlimited":false,"balance":"0"},"planType":"pro"}},"rateLimitResetCredits":{"availableCount":1,"credits":[{"id":"reset-1","resetType":"codexRateLimits","status":"available","grantedAt":1787358622,"expiresAt":1789950622,"title":"Full reset","description":"Granted reset"}]}}}'
 	      ;;
@@ -762,22 +764,19 @@ func TestClaudeRunnerReportsContextWindowAndLiveOccupancy(t *testing.T) {
 	}
 }
 
-// `claude --help` documents --model with examples, not a catalog, so parsing
-// it alone left every pinned version unreachable from the picker.
-func TestCodexMaxContextWindowOverrideOnlyForModelsWithHeadroom(t *testing.T) {
-	// Codex defaults every model to 272000; only some accept more, and
-	// app-server never reports either figure.
-	if override, ok := codexMaxContextWindowOverride("gpt-5.6-sol"); !ok || override != "model_context_window=872000" {
-		t.Fatalf("sol = %q %v", override, ok)
+func TestCodexMaxContextWindowOverrideUsesReportedLimits(t *testing.T) {
+	config := CodexConfiguration{Model: "future-model", Models: []CodexModelInfo{
+		{Model: "future-model", ContextWindow: 100, MaxContextWindow: 300},
+		{Model: "capped", ContextWindow: 100, MaxContextWindow: 100},
+	}}
+	for _, selected := range []string{"future-model", ""} {
+		if got, ok := codexMaxContextWindowOverride(config, selected); !ok || got != "model_context_window=300" {
+			t.Fatalf("override = %q %v", got, ok)
+		}
 	}
-	if override, ok := codexMaxContextWindowOverride("gpt-5.4"); !ok || override != "model_context_window=1000000" {
-		t.Fatalf("5.4 = %q %v", override, ok)
-	}
-	// Raising these would exceed the model's real limit and error every
-	// request, so they must stay at Codex's default rather than be guessed at.
-	for _, model := range []string{"gpt-5.5", "gpt-5.4-mini", "gpt-5.2", "some-future-model", ""} {
-		if override, ok := codexMaxContextWindowOverride(model); ok {
-			t.Fatalf("model %q must not be overridden, got %q", model, override)
+	for _, selected := range []string{"capped", "unknown"} {
+		if got, ok := codexMaxContextWindowOverride(config, selected); ok {
+			t.Fatalf("unexpected override = %q", got)
 		}
 	}
 }
@@ -788,7 +787,7 @@ func TestCodexRunnerRaisesTheContextWindowOnlyWhenAsked(t *testing.T) {
 		bin := stubCodexAppServerBinary(t)
 		argv := filepath.Join(t.TempDir(), "argv.txt")
 		req.Workspace = t.TempDir()
-		req.Environment = append(os.Environ(), "ONECATCH_CODEX_ARGV="+argv)
+		req.Environment = append(os.Environ(), "ONECATCH_CODEX_ARGV="+argv, "CODEX_HOME="+t.TempDir())
 		runner := NewCodexRunner(bin)
 		runner.now = fixedClock()
 		if _, err := runner.Run(context.Background(), req, nil); err != nil {
@@ -800,21 +799,21 @@ func TestCodexRunnerRaisesTheContextWindowOnlyWhenAsked(t *testing.T) {
 		}
 		return string(recorded)
 	}
-	base := Request{Prompt: "go", Model: "gpt-5.6-sol", Sandbox: SandboxWorkspaceWrite}
+	base := Request{Prompt: "go", Model: "future-model", Sandbox: SandboxWorkspaceWrite}
 
 	if off := launched(t, base); strings.Contains(off, "model_context_window") {
 		t.Fatalf("window must stay at the harness default unless asked: %s", off)
 	}
 	on := base
 	on.MaxContextWindow = true
-	if got := launched(t, on); !strings.Contains(got, "-c model_context_window=872000") {
+	if got := launched(t, on); !strings.Contains(got, "-c model_context_window=300") {
 		t.Fatalf("window override missing: %s", got)
 	}
 	// A model with no headroom is left alone even when the setting is on:
 	// raising it would exceed the real limit and error every request.
 	capped := base
 	capped.MaxContextWindow = true
-	capped.Model = "gpt-5.5"
+	capped.Model = "capped"
 	if got := launched(t, capped); strings.Contains(got, "model_context_window") {
 		t.Fatalf("capped model must not be overridden: %s", got)
 	}

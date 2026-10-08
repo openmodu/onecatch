@@ -77,10 +77,11 @@ export function InspectClaudeConfiguration(input, workspacePath) {
 
 /**
  * @param {settings$0.RuntimeSettings} input
+ * @param {string} workspacePath
  * @returns {$CancellablePromise<agentrun$0.CodexConfiguration>}
  */
-export function InspectCodexConfiguration(input) {
-    return $Call.ByID(1386021425, input).then(/** @type {($result: any) => any} */(($result) => {
+export function InspectCodexConfiguration(input, workspacePath) {
+    return $Call.ByID(1386021425, input, workspacePath).then(/** @type {($result: any) => any} */(($result) => {
         return $$createType6($result);
     }));
 }

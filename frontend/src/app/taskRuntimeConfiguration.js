@@ -9,3 +9,19 @@ export function loadTaskRuntimeConfiguration(harness, inspect, publish, formatEr
   );
   return () => { active = false; };
 }
+
+// Re-read when returning from the CLI or account settings. Each refresh cancels
+// publication from the previous request, including failures arriving late.
+export function watchRuntimeConfiguration(harness, inspect, publish, formatError, target = window) {
+  let cancel;
+  const refresh = () => {
+    cancel?.();
+    cancel = loadTaskRuntimeConfiguration(harness, inspect, publish, formatError);
+  };
+  refresh();
+  target.addEventListener("focus", refresh);
+  return () => {
+    cancel?.();
+    target.removeEventListener("focus", refresh);
+  };
+}

@@ -3,6 +3,14 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.4.1
+
+- Read Codex models and context windows from the Codex model catalog instead of a bundled table, so new and renamed models appear in the picker and each model reports its own maximum context window.
+- Raise the context window only for models whose catalog entry reports headroom, leaving capped or unknown models at the runtime default.
+- Follow the Codex `model/list` cursor to load every page of models, and read the catalog file reported by `config/read`, including when the selected provider points at a custom catalog.
+- Refresh the Codex model configuration when a task workbench or the harness settings regain focus, discarding results from a previous in-flight request.
+- Preserve unknown keys when saving settings, so newer configuration written by another build is not dropped on the next save.
+
 ## 0.4.0
 
 - Redesign the desktop sidebar with compact navigation, a More menu, customizable shortcuts, and project search and status filters beside the project heading. Persist sidebar navigation preferences across launches.

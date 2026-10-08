@@ -1,3 +1,4 @@
+import { watchRuntimeConfiguration } from "./taskRuntimeConfiguration.js";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Events } from "@wailsio/runtime";
@@ -26,7 +27,7 @@ import {
 // be shown before it is applied, so it cannot read them off the live token.
 const ACCENT_SWATCH = { forest: "#694d1f", ocean: "#1f6475", violet: "#684886", amber: "#87501d" };
 import { APPEARANCE_CHANGED_EVENT, accentThemes, chatFontSizes, readAppearance, saveAppearance, themeModes } from "./appearance.js";
-import { codexEffortValues, codexServiceTierValues, demoClaudeConfiguration, demoCodexConfiguration, selectedCodexModel } from "./codexRuntimeOptions.js";
+import { codexEffortValues, codexServiceTierValues, demoClaudeConfiguration, selectedCodexModel } from "./codexRuntimeOptions.js";
 import { LANGUAGE_CHANGED_EVENT, normalizeLanguage } from "../i18n.js";
 import { ConfirmDialog } from "./components/settings/ConfirmDialog.jsx";
 import MobileAccessSettings from "./components/settings/MobileAccessSettings.jsx";
@@ -66,6 +67,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
   const [draft, setDraft] = useState(() => clone(value || demoSettings));
   const [saving, setSaving] = useState(false);
   const [runtimeStatus, setRuntimeStatus] = useState({});
+  const [codexRefresh, setCodexRefresh] = useState(0);
   const [codexConfiguration, setCodexConfiguration] = useState({ loading: false, data: null, error: "" });
   // Codex and Claude Code predate the shared configuration shape and keep their
   // own slots; every other harness reports through this one, so a new adapter
@@ -143,6 +145,7 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
     } catch (error) { notify("error", message(error, t)); }
   });
   const checkRuntime = async (id) => {
+    if (id === "codex") { setCodexRefresh((current) => current + 1); return; }
     setRuntimeStatus((current) => ({ ...current, [id]: { checking: true } }));
     try {
       const result = mode === "demo" ? { available: true, version: "preview", checkedAt: new Date().toISOString() } : await SettingsBinding.CheckRuntimeDraft({ runtime: id, settings: draft.runtimes[id] });
@@ -151,16 +154,6 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       setRuntimeStatus((current) => ({ ...current, [id]: { available: false, error: message(error, t) } }));
       if (id === "codex") setCodexConfiguration((current) => ({ ...current, loading: false, error: message(error, t) }));
       if (id === "claude") setClaudeConfiguration((current) => ({ ...current, loading: false, error: message(error, t) }));
-      return;
-    }
-    if (id === "codex") {
-      setCodexConfiguration((current) => ({ ...current, loading: true, error: "" }));
-      try {
-        const data = mode === "demo" ? demoCodexConfiguration : await SettingsBinding.InspectCodexConfiguration(draft.runtimes.codex);
-        setCodexConfiguration({ loading: false, data, error: "" });
-      } catch (error) {
-        setCodexConfiguration((current) => ({ ...current, loading: false, error: message(error, t) }));
-      }
       return;
     }
     if (id === "claude") {
@@ -184,6 +177,14 @@ export default function SettingsPage({ mode, value, runtimes, onChange, notify, 
       setHarnessConfigurations((current) => ({ ...current, [id]: { loading: false, data: null, error: message(error, t) } }));
     }
   };
+  useEffect(() => {
+    if (section !== "harness" || mode === "loading") return undefined;
+    return watchRuntimeConfiguration("codex", async () => {
+      if (mode === "demo") throw new Error(t("settings.codexRequiresDesktop"));
+      return SettingsBinding.InspectCodexConfiguration(draft.runtimes.codex, "");
+    }, setCodexConfiguration, (error) => message(error, t));
+  }, [section, mode, draft.runtimes.codex, codexRefresh, t]);
+
   const refreshUsage = async () => {
     setUsageLoading(true);
     try {
@@ -575,10 +576,10 @@ function HarnessSettings({ value, setValue, status, runtimes, check, errors, cod
           {!nativeModu && <SettingsField className="col-span-2" label={t("settings.envAllowlist")} hint={t("settings.envAllowlistHint")} error={errors[`${id}.environmentAllowlist`]}><Input value={(value[id]?.environmentAllowlist || []).join(", ")} aria-invalid={Boolean(errors[`${id}.environmentAllowlist`])} onChange={(event) => update(id, "environmentAllowlist", event.target.value.toUpperCase().split(",").map((item) => item.trim()).filter(Boolean))} placeholder={meta[id].env} /></SettingsField>}
           <div className="col-span-2 border-t border-border/60" />
           <SettingsField className={id === "claude" || id === "modu" ? "col-span-2" : ""} label={t("settings.defaultModel")} hint={modelHint} error={errors[`${id}.defaultModel`]}>{modelOptions.length > 1 ? <SettingsSelect ariaLabel={t("settings.defaultModel")} value={value[id]?.defaultModel || ""} onChange={updateModel} options={modelOptions} /> : <Input value={value[id]?.defaultModel || ""} aria-invalid={Boolean(errors[`${id}.defaultModel`])} onChange={(event) => update(id, "defaultModel", event.target.value)} placeholder={t("settings.runtimeDefault")} />}</SettingsField>
-          {id === "codex" && <SettingsField label={t("settings.reasoningEffort")} hint={t("settings.codexDetectedValue", { value: detectedEffort })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.codex?.reasoningEffort || ""} onChange={(reasoningEffort) => update("codex", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedEffort }, ...(codexData && effortValues.length ? effortValues : ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]).map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
+          {id === "codex" && <SettingsField label={t("settings.reasoningEffort")} hint={t("settings.codexDetectedValue", { value: detectedEffort })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.codex?.reasoningEffort || ""} onChange={(reasoningEffort) => update("codex", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedEffort }, ...effortValues.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
           {id === "claude" && <SettingsField className="col-span-2" label={t("settings.reasoningEffort")} hint={t("settings.claudeEffortsDetected", { count: claudeEffortValues.length })} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value.claude?.reasoningEffort || ""} onChange={(reasoningEffort) => update("claude", "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.useClaudeConfig"), meta: t("settings.runtimeDefault") }, ...claudeEffortValues.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`), meta: effort }))]} /></SettingsField>}
           {id !== "codex" && id !== "claude" && reportedEfforts.length > 0 && <SettingsField className="col-span-2" label={t("settings.reasoningEffort")} hint={selectedReportedModel ? t("settings.effortsForModel", { model: selectedReportedModel.displayName || selectedReportedModel.model }) : t("settings.runtimeDecides")} error={errors[`${id}.reasoningEffort`]}><SettingsSelect ariaLabel={t("settings.reasoningEffort")} value={value[id]?.reasoningEffort || ""} onChange={(reasoningEffort) => update(id, "reasoningEffort", reasoningEffort)} options={[{ value: "", label: t("settings.runtimeDefault"), meta: selectedReportedModel?.defaultEffort || "" }, ...reportedEfforts.map((effort) => ({ value: effort, label: t(`settings.reasoningEffort.${effort}`, { defaultValue: effort }), meta: effort }))]} /></SettingsField>}
-          {id === "codex" && <SettingsField className="col-span-2" label={t("settings.speed")} hint={t("settings.codexDetectedValue", { value: detectedTier })} error={errors[`${id}.serviceTier`]}><SettingsSelect ariaLabel={t("settings.speed")} value={value.codex?.serviceTier || ""} onChange={(serviceTier) => update("codex", "serviceTier", serviceTier)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedTier }, ...(codexData ? serviceTierValues : ["standard", "fast", "priority", "flex"]).map((tier) => ({ value: tier, label: t(`settings.speed.${tier}`, { defaultValue: tierDetails.get(tier)?.name || tier }), meta: tierDetails.get(tier)?.description || tier }))]} /></SettingsField>}
+          {id === "codex" && <SettingsField className="col-span-2" label={t("settings.speed")} hint={t("settings.codexDetectedValue", { value: detectedTier })} error={errors[`${id}.serviceTier`]}><SettingsSelect ariaLabel={t("settings.speed")} value={value.codex?.serviceTier || ""} onChange={(serviceTier) => update("codex", "serviceTier", serviceTier)} options={[{ value: "", label: t("settings.useCodexConfig"), meta: detectedTier }, ...serviceTierValues.map((tier) => ({ value: tier, label: t(`settings.speed.${tier}`, { defaultValue: tierDetails.get(tier)?.name || tier }), meta: tierDetails.get(tier)?.description || tier }))]} /></SettingsField>}
           {(harness.providers || []).length > 0 && <SettingsField className="col-span-2" label={t("common.provider")} hint={t(`settings.providerHint.${id}`, { defaultValue: t("settings.providerHint") })} error={errors[`${id}.provider`]}><SettingsSelect ariaLabel={t("common.provider")} value={value[id]?.provider || harness.providers[0]} onChange={(provider) => update(id, "provider", provider)} options={harness.providers.map((provider) => ({ value: provider, label: t(`settings.provider.${provider}`, { defaultValue: provider }) }))} /></SettingsField>}
           </div>
           <div className="mt-4 flex justify-end"><SettingsButton tone="cyan" disabled={current.checking || configurationLoading} onClick={() => check(id)}>{current.checking || configurationLoading ? t("settings.checking") : id === "codex" ? t("settings.refreshCodexConfig") : id === "claude" ? t("settings.refreshClaudeModels") : t("settings.testConfig")}</SettingsButton></div>

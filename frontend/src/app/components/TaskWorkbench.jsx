@@ -1,3 +1,4 @@
+import { watchRuntimeConfiguration } from "../taskRuntimeConfiguration.js";
 import { isRemoteWorker } from "../taskWorkers.js";
 import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, Maximize2, Minimize2, PanelRightClose, SquareArrowOutUpRight, SquareTerminal, X } from "lucide-react";
@@ -128,12 +129,7 @@ function TaskWorkbench({ workers, remoteWorkersEnabled, composerDrafts, mode, wo
       setContinuationRuntimeConfiguration({ loading: false, data: null, error: "" });
       return undefined;
     }
-    let cancelled = false;
-    setContinuationRuntimeConfiguration({ loading: true, data: null, error: "" });
-    onInspectRuntimeConfiguration(harness)
-      .then((data) => { if (!cancelled) setContinuationRuntimeConfiguration({ loading: false, data, error: "" }); })
-      .catch((error) => { if (!cancelled) setContinuationRuntimeConfiguration({ loading: false, data: null, error: errorMessage(error) }); });
-    return () => { cancelled = true; };
+    return watchRuntimeConfiguration(harness, onInspectRuntimeConfiguration, setContinuationRuntimeConfiguration, errorMessage);
   }, [continuationRuntimeProfile?.harness, selectedTask?.workerId, onInspectRuntimeConfiguration]);
 
   useEffect(() => {

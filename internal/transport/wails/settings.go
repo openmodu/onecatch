@@ -40,8 +40,8 @@ func (b *SettingsBinding) ResetSettingsSection(section string, expectedRevision 
 func (b *SettingsBinding) CheckRuntimeDraft(input desktopservice.RuntimeDraftInput) (desktopservice.RuntimeInfo, error) {
 	return b.service.CheckRuntimeDraft(input)
 }
-func (b *SettingsBinding) InspectCodexConfiguration(input domainsettings.RuntimeSettings) (agentrun.CodexConfiguration, error) {
-	return b.service.InspectCodexConfiguration(context.Background(), input)
+func (b *SettingsBinding) InspectCodexConfiguration(input domainsettings.RuntimeSettings, workspacePath string) (agentrun.CodexConfiguration, error) {
+	return b.service.InspectCodexConfiguration(context.Background(), input, workspacePath)
 }
 func (b *SettingsBinding) InspectClaudeConfiguration(input domainsettings.RuntimeSettings, workspacePath string) (agentrun.ClaudeConfiguration, error) {
 	return b.service.InspectClaudeConfiguration(context.Background(), input, workspacePath)

@@ -122,7 +122,7 @@ func (a *Service) CheckRuntimeDraft(input RuntimeDraftInput) (RuntimeInfo, error
 	return status, nil
 }
 
-func (a *Service) InspectCodexConfiguration(ctx context.Context, input domainsettings.RuntimeSettings) (agentrun.CodexConfiguration, error) {
+func (a *Service) InspectCodexConfiguration(ctx context.Context, input domainsettings.RuntimeSettings, workspacePath string) (agentrun.CodexConfiguration, error) {
 	settings := domainsettings.Defaults()
 	settings.Runtimes["codex"] = input
 	normalized, err := domainsettings.Normalize(settings)
@@ -138,6 +138,9 @@ func (a *Service) InspectCodexConfiguration(ctx context.Context, input domainset
 		return agentrun.CodexConfiguration{}, coded("runtime_draft_unavailable", "Codex binary is not executable")
 	}
 	home, _ := os.UserHomeDir()
+	if strings.TrimSpace(workspacePath) != "" {
+		home = workspacePath
+	}
 	inspectCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	return agentrun.NewCodexRunner(input.Binary).InspectConfiguration(inspectCtx, home, allowedEnvironment(input.EnvironmentAllowlist))

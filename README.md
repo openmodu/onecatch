@@ -61,6 +61,8 @@ After OneCatch opens:
 
 See [`docs/harness-integrations.md`](docs/harness-integrations.md) for protocol, resume, and sandbox differences between harnesses.
 
+See [local data compatibility](docs/data-compatibility.md) before changing persisted settings or planning an upgrade/downgrade.
+
 ## Common development commands
 
 Run these commands from the repository root:

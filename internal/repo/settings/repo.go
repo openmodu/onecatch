@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -62,15 +63,27 @@ func (r *settingsImpl) Save(ctx context.Context, input domainsettings.Settings, 
 	if err := domainsettings.Validate(input); err != nil {
 		return domainsettings.Settings{}, err
 	}
-	if err := localfile.WriteJSONAtomic(r.path, input); err != nil {
+	var original json.RawMessage
+	if err := localfile.ReadJSON(r.path, &original); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return domainsettings.Settings{}, fmt.Errorf("read settings before save: %w", err)
+	}
+	merged, err := mergeCompatibleSettings(original, input)
+	if err != nil {
+		return domainsettings.Settings{}, fmt.Errorf("merge settings: %w", err)
+	}
+	if err := localfile.WriteJSONAtomic(r.path, merged); err != nil {
 		return domainsettings.Settings{}, fmt.Errorf("save settings: %w", err)
 	}
 	return input, nil
 }
 
 func (r *settingsImpl) getLocked() (domainsettings.Settings, error) {
-	var value domainsettings.Settings
-	if err := localfile.ReadJSON(r.path, &value); err == nil {
+	var raw json.RawMessage
+	if err := localfile.ReadJSON(r.path, &raw); err == nil {
+		value, err := decodeCompatibleSettings(raw)
+		if err != nil {
+			return domainsettings.Settings{}, fmt.Errorf("decode settings: %w", err)
+		}
 		value, err = domainsettings.Normalize(value)
 		if err != nil {
 			return domainsettings.Settings{}, err

@@ -803,6 +803,9 @@ func runtimeInfo(engine *agentrun.Engine, runtime agentrun.Runtime, name, config
 		}
 		return info
 	}
+	if executable, ok := engine.Runner(runtime).(interface{ Executable() string }); ok {
+		binary = executable.Executable()
+	}
 	info.Version = probeRuntimeVersion(binary)
 	return info
 }
