@@ -53,11 +53,13 @@ tasks:
       - appicon.icon/icon.json
     generates:
       - ../../internal/app/desktop/assets/appicon.png
+      - ../../internal/app/keel/appicon.png
       - appicon.icon/Assets/onecatch_icon_final.png
       - darwin/Assets.car
       - darwin/icons.icns
     cmds:
       - swift render_appicon.swift appicon-source.png ../../internal/app/desktop/assets/appicon.png
+      - cp appicon-source.png ../../internal/app/keel/appicon.png
       - cp ../../internal/app/desktop/assets/appicon.png appicon.icon/Assets/onecatch_icon_final.png
       - go tool wails3 generate icons -iconcomposerinput appicon.icon -macassetdir darwin
       - go tool wails3 generate icons -input ../../internal/app/desktop/assets/appicon.png -macfilename darwin/icons.icns
@@ -89,6 +91,21 @@ tasks:
         platforms: [darwin, linux]
       - cmd: go tool wails3 dev -config ./build/desktop/config.windows.yml -port {{.VITE_PORT}}
         platforms: [windows]
+
+  dev:keel:
+    desc: Run the Go-rendered Keel desktop client
+    cmds:
+      - go run ./build/keel/go tool keel run
+
+  build:keel:
+    desc: Build the Keel desktop client without frontend assets or bindings
+    cmds:
+      - go run ./build/keel/go build -trimpath -o '{{.BIN_DIR}}/onecatch-keel{{.EXE_EXT}}' ./cmd/keel
+
+  package:keel:
+    desc: Package the development Keel client for the current desktop platform
+    cmds:
+      - go run ./build/keel/go tool keel build -debug -o bin/keel
 
   build:desktop:
     desc: Build the desktop app with development settings

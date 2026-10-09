@@ -20,3 +20,5 @@
 .DS_Store
 .modu_code/
 /.secrets/
+/dist/
+/cmd/keel/*.syso

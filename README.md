@@ -65,6 +65,14 @@ See [local data compatibility](docs/data-compatibility.md) before changing persi
 
 ## Common development commands
 
+An experimental desktop client with its entire UI written in Go is available at
+[`cmd/keel`](cmd/keel/README.md). Run `go run ./build/keel/go run ./cmd/keel` or package it with
+`go run ./build/keel/go tool keel build -debug -o bin/keel`; it uses Keel/Gio and does not need the frontend
+build. Development currently points to `~/Code/go/src/github.com/dyike/keel`
+through a local module replacement and uses Keel's standard Sidebar component.
+It currently covers projects, Agent tasks, streaming conversations,
+permissions, workflow JSON editing and runtime settings.
+
 Run these commands from the repository root:
 
 ```bash
