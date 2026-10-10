@@ -284,12 +284,12 @@ func TestKeelSidebarTaskHoverPreviewActions(t *testing.T) {
 		}
 		settle()
 		hello := find("Say hello")
-		if shown("删除任务") {
+		if shown("任务操作") {
 			t.Fatal("idle task exposes pointer actions")
 		}
 		move(hello)
-		pin, del := find("置顶任务"), find("删除任务")
-		if find("Say hello") != hello || pin.Dy() != 26*scale || del.Min.X-pin.Min.X != 28*scale {
+		actions := find("任务操作")
+		if find("Say hello") != hello || actions.Dy() != 26*scale {
 			t.Fatal("hover changed row geometry")
 		}
 		if shown("任务详情：Say hello") {
@@ -305,11 +305,12 @@ func TestKeelSidebarTaskHoverPreviewActions(t *testing.T) {
 		if shown("任务详情：Say hello") {
 			t.Fatal("Escape did not dismiss preview")
 		}
-		move(del)
-		if find("删除任务") != del || find("置顶任务") != pin || shown("任务详情：Say hello") {
+		move(actions)
+		if find("任务操作") != actions || shown("任务详情：Say hello") {
 			t.Fatal("moving to actions lost the row or retained preview")
 		}
-		click(del)
+		click(actions)
+		click(find("删除"))
 		if !a.confirmation.Value() || a.taskID != "hello" {
 			t.Fatal("delete skipped confirmation or selected a task")
 		}
@@ -460,7 +461,8 @@ func TestKeelSidebarDirectPinAndConfirmedDeletePersist(t *testing.T) {
 	}
 
 	hover()
-	click(find("置顶任务"))
+	click(find("任务操作"))
+	click(find("置顶"))
 	wait(func() bool {
 		current, e := getTask()
 		return e == nil && current.Pinned
@@ -473,18 +475,23 @@ func TestKeelSidebarDirectPinAndConfirmedDeletePersist(t *testing.T) {
 	frame()
 	frame()
 	hover()
-	click(find("取消置顶任务"))
+	click(find("任务操作"))
+	click(find("取消置顶"))
 	wait(func() bool {
 		current, e := getTask()
 		return e == nil && !current.Pinned
 	})
-	click(find("删除任务"))
+	hover()
+	click(find("任务操作"))
+	click(find("删除"))
 	click(find("取消"))
 	if _, err = getTask(); err != nil {
 		t.Fatal("cancel deleted the persisted task", err)
 	}
 	hover()
-	click(find("删除任务"))
+	hover()
+	click(find("任务操作"))
+	click(find("删除"))
 	click(find("删除"))
 	wait(func() bool { items, e := a.backend.service.ListTasks(a.ctx, w.ID); return e == nil && len(items) == 0 })
 }

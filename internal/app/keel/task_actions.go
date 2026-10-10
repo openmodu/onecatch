@@ -32,7 +32,7 @@ func (a *app) taskMenu(task domaintasks.Task) *kit.MenuView {
 		if task.Pinned {
 			pin, pinIcon = "取消置顶", "pin-off"
 		}
-		menu = kit.Menu().Width(232).Placement(el.Right, el.Start)
+		menu = kit.Menu().Width(1).Placement(el.Right, el.Start)
 		menu.ContentItem("AI 分析标题和类型", "", menuIcon("sparkles", "AI 分析标题和类型"), func() {
 			a.analyzeTaskDetails(task.ID)
 		}).ContentItem("重命名", "", menuIcon("square-pen", "重命名"), func() {
@@ -49,7 +49,7 @@ func (a *app) taskMenu(task domaintasks.Task) *kit.MenuView {
 			a.confirmDeleteTask(task.ID)
 		})
 		menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
-			return iconAction(cx, "task-actions/"+task.ID, "任务操作", "ellipsis", menu.Toggle, menu.Value())
+			return iconAction(cx, "task-actions/"+task.ID, "任务操作", "ellipsis-vertical", menu.Toggle, menu.Value())
 		}))
 		a.ui.TaskMenus[task.ID] = menu
 		a.ui.TaskMenuPinned[task.ID] = task.Pinned
@@ -171,7 +171,10 @@ func (a *app) applyAnalyzedTaskDetails(updated domaintasks.Task) {
 	if a.task != nil {
 		apply(a.task)
 	}
-	apply(&a.detail.Task)
+	// Analysis may finish after navigation, or before a session has a run.
+	if a.detail != nil {
+		apply(&a.detail.Task)
+	}
 	if a.ui.SearchPalette != nil && a.ui.SearchPalette.Value() {
 		a.refreshSearchItems()
 	}

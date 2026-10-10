@@ -20,18 +20,12 @@ func (a *app) sidebarTaskRowID(id string) string {
 }
 
 func (a *app) sidebarTaskActions(cx *el.Context, id string) el.Element {
-	box := el.Div().Row().Items(el.Center).W(el.Dp(54)).H(el.Dp(36)).NoShrink().Gap(2)
 	task, exists := a.cachedTask(id)
 	if !exists {
-		return box
+		return el.Div()
 	}
-	label, icon := "置顶任务", "pin"
-	if task.Pinned {
-		label, icon = "取消置顶任务", "pin-off"
-	}
-	return box.Child(
-		iconAction(cx, "task-pin/"+id, label, icon, func() { a.toggleTaskPinned(id) }, task.Pinned),
-		iconAction(cx, "task-delete/"+id, "删除任务", "trash-2", func() { a.confirmDeleteTask(id) }, false))
+	menu := a.taskMenu(task)
+	return iconAction(cx, "task-actions/"+id, "任务操作", "ellipsis-vertical", menu.Toggle, menu.Value())
 }
 
 func (a *app) sidebarTaskDetails(cx *el.Context) {

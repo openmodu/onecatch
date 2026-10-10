@@ -408,7 +408,7 @@ func (a *app) userMessageContent(cx *el.Context, e *entry) el.Element {
 			FocusStyle(neutralFocus).Hover(func(s *el.Style) { s.Bg(theme.SubtleHover) }).
 			OnClick(func() { v.expanded = !v.expanded; a.scroller.Invalidate(e.key) }).
 			Child(el.Text(label).TextSize(13).TextColor(theme.Muted), lucide(cx, caret, 15, theme.Muted))
-		body.Child(el.Div().Pt(5).Child(disclosure))
+		body.Child(el.Div().Row().Items(el.Center).Pt(5).Child(disclosure))
 	}
 	return body
 }
