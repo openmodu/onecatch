@@ -23,12 +23,13 @@ type navigationItem struct {
 var sidebarItems = []navigationItem{{"templates", "模板", kit.IconInbox}, {"skills", "Skills", kit.IconUser}, {"usage", "用量", kit.IconReceipt}, {"workflows", "工作流", kit.IconArchive}}
 
 type uiPreferences struct {
-	Version      int      `json:"version"`
-	Navigation   []string `json:"navigation"`
-	SidebarWidth float32  `json:"sidebarWidth"`
-	Collapsed    bool     `json:"collapsed"`
-	Theme        string   `json:"theme"`
-	Accent       string   `json:"accent"`
+	Version           int      `json:"version"`
+	Navigation        []string `json:"navigation"`
+	SidebarWidth      float32  `json:"sidebarWidth"`
+	Collapsed         bool     `json:"collapsed"`
+	Theme             string   `json:"theme"`
+	Accent            string   `json:"accent"`
+	HideTableDividers bool     `json:"hideTableDividers,omitempty"`
 }
 
 type location struct {
@@ -66,46 +67,53 @@ func (h *navigationHistory) move(delta int) (location, bool) {
 }
 
 type uiState struct {
-	Preferences             uiPreferences
-	PreferencesError        error
-	History                 navigationHistory
-	Restoring               bool
-	SearchFocus             bool
-	Filter                  string
-	Expanded, ShowAll       map[string]bool
-	More, Footer, Filters   *kit.MenuView
-	SidebarNav              *kit.SidebarView
-	SidebarModel            string
-	SidebarExpanded         map[string]bool
-	Customize               *kit.DialogView
-	Executor                *kit.PopoverView
-	Add                     *kit.MenuView
-	WorkflowSource          bool
-	SelectedWorkflow        string
-	WorkflowWindow          *window.Window
-	WorkflowHistory         navigationHistory
-	WorkflowConfirm         *kit.DialogView
-	WorkflowRaw             bool
-	WorkflowAdvanced        bool
-	WorkflowRoles           bool
-	WorkflowDraft           domainworkflows.Definition
-	DAG                     dagState
-	WorkflowStep            int
-	WorkflowRowMenus        map[string]*kit.MenuView
-	WorkflowNew             *kit.MenuView
-	WorkflowSelects         map[string]*kit.SelectView
-	WorkflowStepID          string
-	WorkflowSignal          string
-	WorkflowPolicy          map[string]string
-	SidebarDragOffset       float32
-	TaskMenus               map[string]*kit.MenuView
-	TaskDialog              *kit.DialogView
-	TaskRenameID, TaskTitle string
-	TaskSaving              bool
+	Preferences                     uiPreferences
+	PreferencesError                error
+	History                         navigationHistory
+	Restoring                       bool
+	SearchPalette                   *kit.CommandView
+	SearchCategory                  string
+	Filter                          string
+	Expanded, ShowAll               map[string]bool
+	More, Footer, Filters           *kit.MenuView
+	SidebarNav                      *kit.SidebarView
+	SidebarPeek, SidebarPeekBlocked bool
+	SidebarPeekKeyboard             bool
+	SidebarModel                    string
+	SidebarExpanded                 map[string]bool
+	SidebarVisibleTasks             []string
+	SidebarPreview                  sidebarTaskPreview
+	Customize                       *kit.DialogView
+	Executor                        *kit.PopoverView
+	Add                             *kit.MenuView
+	WorkflowSource                  bool
+	SelectedWorkflow                string
+	WorkflowWindow                  *window.Window
+	WorkflowHistory                 navigationHistory
+	WorkflowConfirm                 *kit.DialogView
+	WorkflowRaw                     bool
+	WorkflowAdvanced                bool
+	WorkflowRoles                   bool
+	WorkflowDraft                   domainworkflows.Definition
+	DAG                             dagState
+	WorkflowStep                    int
+	WorkflowRowMenus                map[string]*kit.MenuView
+	WorkflowNew                     *kit.MenuView
+	WorkflowSelects                 map[string]*kit.SelectView
+	WorkflowStepID                  string
+	WorkflowSignal                  string
+	WorkflowPolicy                  map[string]string
+	SidebarDragOffset               float32
+	TaskMenus                       map[string]*kit.MenuView
+	TaskAnalyzing                   map[string]bool
+	TaskMenuPinned                  map[string]bool // pinned state each task menu was built for
+	TaskDialog                      *kit.DialogView
+	TaskRenameID, TaskTitle         string
+	TaskSaving                      bool
 }
 
 func defaultUIPreferences() uiPreferences {
-	return uiPreferences{1, []string{"templates", "skills"}, 244, false, "system", "forest"}
+	return uiPreferences{Version: 1, Navigation: []string{"templates", "skills"}, SidebarWidth: 244, Theme: "system", Accent: "forest"}
 }
 func normalizeUIPreferences(p uiPreferences) uiPreferences {
 	p.Version = 1
@@ -199,13 +207,14 @@ func (a *app) initNavigation() {
 	}))
 	a.ui.WorkflowConfirm = kit.Dialog("").Width(420)
 	a.ui.TaskMenus = map[string]*kit.MenuView{}
+	a.ui.TaskMenuPinned = map[string]bool{}
 	a.ui.TaskDialog = kit.Dialog("重命名任务").Width(360).CloseButton(true).Body(el.ViewFunc(func(cx *el.Context) el.Element {
 		return el.Div().Gap(12).Child(field("task-title", "任务标题", &a.ui.TaskTitle).WFull().ReadOnly(a.ui.TaskSaving), a.errorBanner(cx))
 	})).Footer(button("取消", func() { a.ui.TaskDialog.SetValue(false) }, kit.ButtonGhost), button("保存", a.renameTask, kit.ButtonPrimary))
 	a.buildMoreMenu()
 	a.buildFooterMenu()
-	a.ui.Add = kit.Menu().Width(220).Placement(el.Top, el.Start).Label("执行方式")
-	a.ui.Add.ContentItem("添加附件…", "", menuIcon("paperclip", "添加附件…"), a.chooseAttachments).Separator().CheckItem("立即执行", "", true, func(bool) { a.setQueueMode(false) }).CheckItem("加入队列", "", false, func(bool) { a.setQueueMode(true) })
+	a.ui.Add = kit.Menu().Width(176).CheckSide(el.Right).Placement(el.Top, el.Start)
+	a.ui.Add.ContentItem("添加附件…", "", menuIcon("paperclip", "添加附件…"), a.chooseAttachments).Separator().Label("执行方式").CheckItem("立即执行", "", true, func(bool) { a.setQueueMode(false) }).CheckItem("加入队列", "", false, func(bool) { a.setQueueMode(true) })
 	a.ui.Add.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 		return iconAction(cx, "composer-config", "添加与配置", "plus", a.ui.Add.Toggle, a.library.Queue)
 	}))
@@ -286,6 +295,10 @@ func (a *app) selectWorkflow(id string, source bool) {
 	}
 	a.ui.WorkflowHistory.push(before, a.currentLocation())
 }
+
+// menuMinWidth lets icon-and-label menus fit their entries.
+const menuMinWidth = 120
+
 func menuIcon(name, label string) el.View {
 	return el.ViewFunc(func(cx *el.Context) el.Element {
 		return el.Div().Row().Items(el.Center).Gap(10).Child(lucide(cx, name, 16, theme.Muted), el.Text(label).TextSize(13))
@@ -325,15 +338,9 @@ func (a *app) buildFooterMenu() {
 		it := item
 		mode.CheckItem(it.Label, "", a.ui.Preferences.Theme == it.ID, func(bool) { a.setAppearance(it.ID, a.ui.Preferences.Accent) })
 	}
-	accents := kit.Menu().Width(140)
-	for _, item := range []struct{ ID, Label string }{{"forest", "森林"}, {"ocean", "海洋"}, {"violet", "紫罗兰"}, {"amber", "琥珀"}} {
-		it := item
-		accents.CheckItem(it.Label, "", a.ui.Preferences.Accent == it.ID, func(bool) { a.setAppearance(a.ui.Preferences.Theme, it.ID) })
-	}
-	menu := kit.Menu().Width(a.ui.Preferences.SidebarWidth+24).Placement(el.Top, el.Start).Offset(6)
-	menu.ContentItem("设置", "mod+,", menuIcon("settings-2", "设置"), a.openSettings).Sub("主题配色", accents).Sub("显示模式", mode).Separator().ContentItem("工作流", "", menuIcon("workflow", "工作流"), func() { a.goPage("workflows") })
-	menu.SetItemContent("主题配色", menuIcon("palette", "主题配色"))
-	menu.SetItemContent("显示模式", menuIcon("sun-moon", "显示模式"))
+	menu := kit.Menu().Width(208).Placement(el.Top, el.Start).Offset(6)
+	menu.ContentItem("设置", "mod+,", menuIcon("settings", "设置"), a.openSettings).Sub("显示模式", mode).Separator().ContentItem("工作流", "", menuIcon("git-branch", "工作流"), func() { a.goPage("workflows") })
+	menu.SetItemContent("显示模式", menuIcon("monitor", "显示模式"))
 	menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 		row := el.Div().WFull().ID("app-menu").Role("button").Name("OneCatch 菜单").Focusable(true).Row().Items(el.Center).Gap(8).H(el.Dp(40)).Px(8).Rounded(8).CursorPointer().OnClick(menu.Toggle).Hover(func(s *el.Style) { s.Bg(theme.Highlight) }).FocusStyle(neutralFocus)
 		if menu.Value() {
@@ -381,6 +388,16 @@ func (a *app) setAppearance(mode, accent string) {
 	a.scroller.Invalidate()
 	a.saveUIPreferences()
 	a.buildFooterMenu()
+	core.Update(func() {})
+}
+
+func (a *app) setTableDividers(on bool) {
+	a.ui.Preferences.HideTableDividers = !on
+	for _, doc := range a.docs {
+		doc.TableDividers(on)
+	}
+	a.scroller.Invalidate()
+	a.saveUIPreferences()
 	core.Update(func() {})
 }
 func iconAction(cx *el.Context, id, label, name string, callback func(), selected bool) el.Element {

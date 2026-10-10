@@ -19,6 +19,7 @@ type projectState struct {
 	Kind, Access                             *kit.SelectView
 	Auto                                     *filledToggle
 	Menus                                    map[string]*kit.MenuView
+	MenuPinned                               map[string]bool // pinned state each menu was built for
 	Version                                  uint64
 	Saving, Picking                          bool
 	Error                                    string
@@ -27,12 +28,12 @@ type projectState struct {
 func (a *app) initProjects() {
 	a.project.Kind = kit.Select("").Hint("项目位置").Appearance(false).Size(32)
 	a.project.Kind.SetEntries(kit.SelectOption{Value: "local", Label: "本地目录"}, kit.SelectOption{Value: "remote", Label: "远端文件系统"})
-	a.project.Access = kit.Select("").Hint("工作区访问").Appearance(false).Size(32)
-	a.project.Access.SetEntries(kit.SelectOption{Value: "read-only", Label: "只读访问"}, kit.SelectOption{Value: "workspace-write", Label: "工作区访问"}, kit.SelectOption{Value: "full", Label: "完全访问"})
+	a.project.Access = newAccessSelect()
 	a.project.Kind.SetValue("local")
 	a.project.Access.SetValue("workspace-write")
 	a.project.Auto = newFilledToggle("新任务默认创建 Worktree", false, true)
 	a.project.Menus = map[string]*kit.MenuView{}
+	a.project.MenuPinned = map[string]bool{}
 }
 func (a *app) workspaceForID(id string) domainworkspaces.Workspace {
 	if strings.HasPrefix(id, "task:") || strings.HasPrefix(id, "worktree:") {
@@ -178,9 +179,19 @@ func (a *app) addWorkspace() {
 }
 func (a *app) projectMenu(w domainworkspaces.Workspace) *kit.MenuView {
 	menu := a.project.Menus[w.ID]
+	if menu != nil && a.project.MenuPinned[w.ID] != w.Pinned {
+		// Rebuild so the pin entry's label and icon follow the project.
+		menu.SetValue(false)
+		menu = nil
+	}
 	if menu == nil {
-		menu = kit.Menu().Width(180).Placement(el.Right, el.Start)
-		menu.ContentItem("编辑项目…", "", menuIcon("square-pen", "编辑项目…"), func() { a.editProject(w.ID) }).CheckItem("置顶项目", "", w.Pinned, func(on bool) {
+		pin, pinIcon := "置顶项目", "pin"
+		if w.Pinned {
+			pin, pinIcon = "取消置顶", "pin-off"
+		}
+		menu = kit.Menu().Width(menuMinWidth).Placement(el.Right, el.Start)
+		menu.ContentItem("编辑项目…", "", menuIcon("square-pen", "编辑项目…"), func() { a.editProject(w.ID) }).ContentItem(pin, "", menuIcon(pinIcon, pin), func() {
+			on := !w.Pinned
 			go func() {
 				_, err := a.backend.service.SetWorkspacePinned(a.ctx, w.ID, on)
 				core.Update(func() {
@@ -212,8 +223,8 @@ func (a *app) projectMenu(w domainworkspaces.Workspace) *kit.MenuView {
 			return iconAction(cx, "project-actions/"+w.ID, "项目操作", "ellipsis", menu.Toggle, menu.Value())
 		}))
 		a.project.Menus[w.ID] = menu
+		a.project.MenuPinned[w.ID] = w.Pinned
 	}
-	menu.SetItemChecked("置顶项目", w.Pinned)
 	return menu
 }
 func (a *app) selectWorktree(mode string, entry *domainworkspaces.Worktree) {
@@ -322,7 +333,7 @@ func (a *app) loadWorktrees() {
 	}()
 }
 func (a *app) createTaskInput(prompt string) desktopservice.CreateTaskInput {
-	input := desktopservice.CreateTaskInput{WorkspaceID: a.workspaceID, Prompt: prompt, WorkflowID: a.workflow.Value(), Harness: a.runtime.Value(), Model: strings.TrimSpace(a.model), Sandbox: a.sandbox.Value(), WorktreeMode: a.workbench.WorktreeMode, AttachmentPaths: a.attachmentPaths(), WorkerID: a.workerID}
+	input := desktopservice.CreateTaskInput{WorkspaceID: a.workspaceID, Prompt: prompt, WorkflowID: a.workflow.Value(), Harness: a.runtime.Value(), Model: strings.TrimSpace(a.model), ReasoningEffort: strings.TrimSpace(a.reasoningEffort), ServiceTier: strings.TrimSpace(a.serviceTier), Sandbox: a.sandbox.Value(), WorktreeMode: a.workbench.WorktreeMode, AttachmentPaths: a.attachmentPaths(), WorkerID: a.workerID}
 	if a.remoteConversation() {
 		input.WorktreeMode = "project"
 	}

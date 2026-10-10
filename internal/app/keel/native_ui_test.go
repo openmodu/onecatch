@@ -79,10 +79,14 @@ func TestSettingsAppearanceControlsFitAtMinimumWindowSize(t *testing.T) {
 		var ops op.Ops
 		root.Layout(layout.Context{Ops: &ops, Now: time.Now(), Source: router.Source(), Constraints: layout.Exact(size), Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}})
 		router.Frame(&ops)
-		wanted := map[string]bool{"跟随系统": false, "浅色": false, "深色": false, "森林": false, "海洋": false, "紫罗兰": false, "琥珀": false}
+		wanted := map[string]bool{"跟随系统": false, "浅色": false, "深色": false}
 		var inspect func([]input.SemanticNode)
 		inspect = func(nodes []input.SemanticNode) {
 			for _, node := range nodes {
+				switch node.Desc.Label {
+				case "主题配色", "森林", "海洋", "紫罗兰", "琥珀":
+					t.Fatalf("removed accent option still visible: %s", node.Desc.Label)
+				}
 				if _, ok := wanted[node.Desc.Label]; ok && node.Desc.Gestures&input.ClickGesture != 0 {
 					box := node.Desc.Bounds
 					if box.Empty() || !box.In(image.Rectangle{Max: size}) {

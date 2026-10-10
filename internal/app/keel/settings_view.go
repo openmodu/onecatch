@@ -184,29 +184,31 @@ func (p *settingsPage) appearanceGroups() []kit.SettingGroup {
 	for _, group := range []struct {
 		label, description string
 		values, labels     []string
-		accent             bool
 	}{
-		{"显示模式", "跟随系统外观，或固定使用浅色、深色模式。", []string{"system", "light", "dark"}, []string{"跟随系统", "浅色", "深色"}, false},
-		{"主题配色", "选择按钮和选中状态的强调色。", []string{"forest", "ocean", "violet", "amber"}, []string{"森林", "海洋", "紫罗兰", "琥珀"}, true},
+		{"显示模式", "跟随系统外观，或固定使用浅色、深色模式。", []string{"system", "light", "dark"}, []string{"跟随系统", "浅色", "深色"}},
 	} {
 		rows = append(rows, kit.SettingItem{Label: group.label, Description: group.description, Keywords: group.labels, Control: el.ViewFunc(func(cx *el.Context) el.Element {
 			options := el.Div().Row().Wrap().Gap(4)
 			selected := p.app.ui.Preferences.Theme
-			if group.accent {
-				selected = p.app.ui.Preferences.Accent
-			}
 			for i, value := range group.values {
 				options.Child(button(group.labels[i], func() {
-					if group.accent {
-						p.app.setAppearance(p.app.ui.Preferences.Theme, value)
-					} else {
-						p.app.setAppearance(value, p.app.ui.Preferences.Accent)
-					}
+					p.app.setAppearance(value, p.app.ui.Preferences.Accent)
 				}, kit.ButtonGhost).Selected(selected == value).Render(cx))
 			}
 			return options
 		})})
 	}
+	rows = append(rows, kit.SettingItem{Label: "表格分隔线", Description: "显示对话表格内部的行、列分隔线，切换后立即生效。", Keywords: []string{"Markdown", "表格", "分隔线"}, Control: el.ViewFunc(func(cx *el.Context) el.Element {
+		control := p.switches["table-dividers"]
+		if control == nil {
+			control = newFilledToggle("表格分隔线", true, false)
+			control.hideLabel = true
+			control.onChange = p.app.setTableDividers
+			p.switches["table-dividers"] = control
+		}
+		control.SetValue(!p.app.ui.Preferences.HideTableDividers)
+		return control.Render(cx)
+	})})
 	return []kit.SettingGroup{{Title: "界面", Items: rows}}
 }
 

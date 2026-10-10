@@ -55,7 +55,7 @@ func (a *app) selectConversationWorker(id, harness string) bool {
 				a.workerID = id
 				a.workflow.SetValue("single_agent")
 				a.runtime.SetValue(harness)
-				a.model = ""
+				a.resetProfileSelection()
 				a.workbench.WorktreeMode, a.workbench.Worktree = "project", nil
 				a.workbench.WorktreeVersion++
 				a.buildWorktreeMenu()
@@ -76,9 +76,9 @@ func (a *app) selectLocalConversation(harness, workflow string) {
 		return
 	}
 	if a.remoteConversation() {
-		a.model = ""
+		a.resetProfileSelection()
 	} else if a.runtime.Value() != harness {
-		a.model = a.settings.Runtimes[harness].DefaultModel
+		a.resetProfileSelection()
 	}
 	a.workerID = ""
 	a.runtime.SetValue(harness)

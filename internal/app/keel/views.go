@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strings"
 
+	"gioui.org/font"
+	"gioui.org/io/key"
 	"gioui.org/io/system"
 	"gioui.org/op/clip"
 	"github.com/dyike/keel/ui/core"
@@ -23,30 +25,35 @@ var (
 	seamColor    = theme.RGB(0xe4e4e1)
 )
 
+func accessWarningColor() color.NRGBA {
+	if theme.Text.R > 128 {
+		return theme.RGB(0xf5874f)
+	}
+	return theme.RGB(0xb85b2a)
+}
+
 func applyPalette(dark bool) { applyAppPalette(dark, "forest") }
 
 func applyAppPalette(dark bool, accent string) {
 	p := theme.Light()
 	if dark {
 		p = theme.Dark()
-		p.Bg, p.Surface, p.Subtle, p.SubtleHover = theme.RGB(0x1c1c1c), theme.RGB(0x232323), theme.RGB(0x2a2a2a), theme.RGB(0x333333)
-		sidebarColor, seamColor = theme.RGB(0x202020), theme.RGB(0x333333)
+		p.Bg, p.Surface, p.Subtle, p.SubtleHover = theme.RGB(0x222222), theme.RGB(0x2c2c2c), theme.RGB(0x333333), theme.RGB(0x3e3e3e)
+		sidebarColor, seamColor = theme.RGB(0x272727), theme.RGB(0x393939)
 	} else {
 		p.Bg, p.Surface = theme.RGB(0xfcfcfb), theme.RGB(0xffffff)
 		p.Text, p.Muted = theme.RGB(0x1a1a1a), theme.RGB(0x73726e)
 		p.Subtle, p.SubtleHover = theme.RGB(0xf2f2f1), theme.RGB(0xedece8)
 		sidebarColor, seamColor = theme.RGB(0xfafaf9), theme.RGB(0xe4e4e1)
 	}
-	lightAccents := map[string]uint32{"forest": 0x694d1f, "ocean": 0x1f6475, "violet": 0x684886, "amber": 0x87501d}
-	darkAccents := map[string]uint32{"forest": 0xedc278, "ocean": 0x79d7e7, "violet": 0xd0a8f2, "amber": 0xf0bd73}
-	p.Primary = theme.RGB(lightAccents[accent])
 	p.OnColor = theme.RGB(0xffffff)
 	if dark {
-		p.Primary = theme.RGB(darkAccents[accent])
-		p.OnColor = theme.RGB(0x1f1a10)
+		p.OnColor = p.Bg
 		p.Text = theme.RGB(0xefefef)
-		p.Muted = theme.RGB(0xababab)
+		p.Muted = theme.RGB(0xb6b6b6)
 	}
+	p.Primary = p.Text
+	p.Frameless = true
 	p.Info = theme.RGB(0x216e78)
 	if dark {
 		p.Info = theme.RGB(0x73e0eb)
@@ -77,7 +84,12 @@ func listOption(cx *el.Context, id, label string, mark el.Element, callback func
 	v := button(label, callback, kit.ButtonGhost).ID(id).Name(label).Selected(selected).Compact(true).Size(32).
 		Content(el.ViewFunc(func(cx *el.Context) el.Element {
 			icon := el.Div().ID(id + "/icon").Role("image").Name(label + "图标").Size(el.Dp(16)).NoShrink().Center().Child(mark)
-			return el.Div().WFull().Row().Items(el.Center).Gap(8).Child(icon, el.Text(label).TextSize(13).MaxLines(1).Grow().W(el.Dp(0)))
+			fg := theme.Text
+			if disabled {
+				fg = theme.Muted
+				icon.Opacity(.35)
+			}
+			return el.Div().WFull().Row().Items(el.Center).Gap(8).Child(icon, el.Text(label).TextSize(13).Weight(font.Normal).TextColor(fg).MaxLines(1).Grow().W(el.Dp(0)))
 		}))
 	v.SetDisabled(disabled)
 	return v.Render(cx).(*el.DivEl).WFull().Px(8).Justify(el.Start).FocusStyle(neutralFocus)
@@ -133,7 +145,12 @@ func dragArea(cx *el.Context, d *el.DivEl) *el.DivEl {
 }
 
 func (a *app) Render(cx *el.Context) el.Element {
-	root := el.Div().Row().WFull().HFull().Bg(theme.Bg).TextSize(14).Child(a.projectDialog.Render(cx), a.ui.Customize.Render(cx), a.confirmation.Render(cx), a.ui.TaskDialog.Render(cx))
+	root := el.Div().Row().WFull().HFull().Bg(theme.Bg).TextSize(14)
+	peekTrigger := a.sidebarPeek(cx)
+	if a.ui.SearchPalette != nil {
+		root.Child(a.renderSearchPalette(cx))
+	}
+	root.Child(a.projectDialog.Render(cx), a.ui.Customize.Render(cx), a.confirmation.Render(cx), a.ui.TaskDialog.Render(cx))
 	if a.page == "skills" {
 		root.Child(a.skills.Create.Render(cx), a.skills.Confirm.Render(cx))
 	}
@@ -156,7 +173,7 @@ func (a *app) Render(cx *el.Context) el.Element {
 	if a.page == "skills" && a.skills.Visible {
 		root.Child(a.skillResizeSeam("skill-inspector-resize", "调整 Skills 检查面板宽度", &a.skills.Width, 280, 820, true), a.skillInspector(cx))
 	}
-	return root
+	return root.Child(peekTrigger)
 }
 
 func (a *app) header(cx *el.Context) el.Element {
@@ -185,12 +202,12 @@ func (a *app) header(cx *el.Context) el.Element {
 	if a.page == "" {
 		left.Child(lucide(cx, "lock", 15, theme.Muted))
 	}
-	bar := el.Div().Row().Items(el.Center).H(el.Dp(52)).Px(24).Gap(12)
+	bar := el.Div().Row().Items(el.Center).H(el.Dp(mainTitleBarHeight)).Px(24).Gap(12)
 	if a.ui.Preferences.Collapsed {
 		if runtime.GOOS == "darwin" {
-			bar.Pl(94)
+			bar.Pl(macSidebarToggleLeft)
 		}
-		bar.Child(iconAction(cx, "show-sidebar", "展开侧栏", "panel-left-open", a.toggleSidebar, false))
+		bar.Child(iconAction(cx, "show-sidebar", "展开侧栏", "panel-left", a.toggleSidebar, false))
 	}
 	bar.Child(left)
 	if a.page == "" || a.page == "skills" {
@@ -223,13 +240,15 @@ func (a *app) content(cx *el.Context) el.Element {
 		))
 	}
 	column := el.Div().Grow().H(el.Dp(0))
-	if a.loading {
+	// Only when nothing is on screen yet: above a shown conversation the
+	// notice pushed every message down while a run reloaded.
+	if a.loading && len(a.entries) == 0 {
 		column.Child(el.Div().Px(32).Py(8).Child(el.Text("正在读取对话…").TextColor(theme.Muted).TextSize(12)))
 	}
 	if a.detail != nil && a.detail.RuntimeEventsTotal > len(a.detail.RuntimeEvents) {
 		column.Child(button("加载更早的记录", a.loadFullHistory, kit.ButtonGhost).Render(cx))
 	}
-	column.Child(a.scroller.Render(cx), el.Div().Center().Px(24).Pt(8).Pb(14).Child(el.Div().WFull().MaxW(el.Dp(920)).Gap(10).Child(a.errorBanner(cx), a.composer(cx), a.workspaceCaption(cx))))
+	column.Child(a.conversationScroll(cx), el.Div().Center().Px(24).Pt(8).Pb(14).Child(el.Div().WFull().MaxW(el.Dp(920)).Gap(10).Child(a.errorBanner(cx), a.composer(cx), a.workspaceCaption(cx))))
 	return column
 }
 
@@ -243,7 +262,15 @@ func (a *app) composer(cx *el.Context) el.Element {
 			hint = "补充指令并恢复运行…"
 		}
 	}
-	input := el.TextArea().PasteReader(readClipboard).OnPaste(a.pasteTaskAttachments).OnPasteError(a.fail).ID("prompt").Name("任务指令").Bind(&a.prompt).Placeholder(hint).AutoGrow(4, 10).Border(0, color.NRGBA{}).Bg(color.NRGBA{}).Px(2).Py(2).TextSize(14).WFull()
+	input := el.TextArea().PasteReader(readClipboard).OnPaste(a.pasteTaskAttachments).OnPasteError(a.fail).ID("prompt").Name("任务指令").Bind(&a.prompt).Placeholder(hint).AutoGrow(4, 10).Scrollbars(el.ScrollbarAlways).Border(0, color.NRGBA{}).Bg(color.NRGBA{}).Px(2).Py(2).TextSize(14).Weight(font.Normal).LineHeight(1.6).WFull()
+	// As in the Wails client: Enter sends, Shift+Enter breaks the line, and
+	// an input method composing text keeps Enter to confirm its candidate.
+	input.CaptureKeys(string(key.NameReturn), string(key.NameEnter)).OnKey(func(e el.KeyEvent) bool {
+		if e.State == el.KeyPress {
+			a.send()
+		}
+		return true
+	})
 	if a.detail != nil && a.detail.Run.Status != domainworkflows.RunRunning && a.detail.Run.Status != domainworkflows.RunPaused && a.detail.Run.Status != domainworkflows.RunCompleted {
 		input.ReadOnly(true).Placeholder("此执行已结束")
 	}
@@ -263,17 +290,22 @@ func (a *app) composer(cx *el.Context) el.Element {
 	}
 	controls.Child(iconButton("模板", func() { a.goPage("templates") }, kit.ButtonGhost, kit.IconFile).Size(32).Compact(true).Render(cx))
 	controls.Child(a.executorPicker(cx))
-	permission := el.Div().Row().Items(el.Center).Gap(5).Child(lucide(cx, "shield-check", 16, theme.Text))
 	if a.task != nil {
 		label := map[string]string{"full": "完全访问", "read-only": "只读访问", "workspace-write": "工作区访问"}[a.task.Sandbox]
 		if label == "" {
 			label = "工作区访问"
 		}
-		permission.Child(el.Text(label).TextSize(12))
+		controls.Child(accessValue(cx, a.task.Sandbox, label))
 	} else {
-		permission.Child(el.Div().W(el.Dp(110)).Child(a.sandbox.Render(cx)))
+		controls.Child(el.Div().W(el.Dp(136)).Child(a.sandbox.Render(cx)))
 	}
-	controls.Child(permission, el.Div().Grow())
+	if gauge := a.contextGauge(cx); gauge != nil {
+		controls.Child(gauge)
+	}
+	controls.Child(el.Div().Grow())
+	if !a.remoteConversation() && a.workflow.Value() == "single_agent" {
+		controls.Child(a.runtimeProfilePicker(cx))
+	}
 	sendLabel := "发送"
 	if a.detail != nil {
 		if a.detail.Run.Status == domainworkflows.RunPaused {
@@ -310,14 +342,15 @@ func (a *app) composer(cx *el.Context) el.Element {
 		controls.Child(sendControl)
 	}
 	composerBg := theme.Subtle
-	if a.dark {
-		composerBg = theme.RGB(0x282828)
-	}
 	box := el.Div().WFull().Px(12).Py(10).Gap(8).Rounded(20).Bg(composerBg)
 	if len(a.attachments.Items) > 0 || a.attachments.Loading {
 		box.Child(a.attachmentStrip(cx))
 	}
-	box.Child(input, controls)
+	// The composer is already the input's surface. Keep the transparent editor
+	// transparent on focus too; the global frameless focus fill is for controls.
+	inputPalette := theme.Current()
+	inputPalette.Frameless = false
+	box.Child(cx.Themed(inputPalette, el.ViewFunc(func(*el.Context) el.Element { return input })).WFull(), controls)
 	if a.task == nil && !a.conversationWorkerReady() {
 		box.Child(el.Text("所选 Worker 不可用，或不支持当前 Agent。请选择可用的执行位置。").TextSize(12).TextColor(theme.Danger))
 	}
@@ -350,6 +383,8 @@ func (a *app) message(cx *el.Context, index int) el.Element {
 		}
 		content.Child(a.processGroup(cx, e))
 	} else if e.user {
+		// Align the bubble with the composer's edge, clear of the scrollbar.
+		content.Px(4)
 		if index > 0 && !a.entries[index-1].user {
 			content.Pt(27)
 		}
@@ -361,7 +396,7 @@ func (a *app) message(cx *el.Context, index int) el.Element {
 			width -= a.workbench.Width + 1
 		}
 		maxWidth := min(float32(680), max(float32(160), min(float32(920), width-40)*.72))
-		bubble := el.Div().Role("article").Name("用户消息：" + e.text).MaxW(el.Dp(maxWidth)).Px(16).Py(11).Rounded(18).Bg(theme.Subtle).Child(a.conversationDocument(cx, e, true))
+		bubble := el.Div().Role("article").Name("用户消息：" + e.text).MaxW(el.Dp(maxWidth)).Px(16).Py(11).Rounded(18).Bg(theme.Subtle).Child(a.userMessageContent(cx, e))
 		wrapper := el.Div().ID("message/"+e.key).Child(bubble, a.messageActions(cx, e, true))
 		content.Items(el.End).Child(wrapper)
 	} else if e.kind == agentrun.KindMessage || e.kind == agentrun.KindError {
@@ -437,4 +472,18 @@ func runStatus(status string) string {
 func mixColor(foreground, background color.NRGBA, amount float32) color.NRGBA {
 	mix := func(a, b uint8) uint8 { return uint8(float32(a)*amount + float32(b)*(1-amount)) }
 	return color.NRGBA{R: mix(foreground.R, background.R), G: mix(foreground.G, background.G), B: mix(foreground.B, background.B), A: 255}
+}
+
+// conversationScroll is the message list with the Wails client's jump
+// control: a round arrow centred 12dp above the composer while the reader is
+// scrolled away from the newest message.
+func (a *app) conversationScroll(cx *el.Context) el.Element {
+	area := el.Div().Grow().H(el.Dp(0)).Items(el.Stretch).Child(a.scroller.Render(cx))
+	if a.detail == nil || !a.scroller.IsScrolledUp(cx) {
+		return area
+	}
+	jump := el.Div().ID("jump-latest").Role("button").Name("回到最新").Focusable(true).Size(el.Dp(36)).Rounded(18).Center().
+		Bg(theme.Surface).Border(1, seamColor).Shadow(theme.ElevationSm).CursorPointer().OnClick(a.scroller.ScrollToEnd).
+		Hover(func(s *el.Style) { s.Bg(theme.Subtle) }).FocusStyle(neutralFocus).Child(lucide(cx, "arrow-down", 20, theme.Text))
+	return area.Child(el.Div().Absolute().Left(0).Right(0).Bottom(12).Row().Justify(el.Center).Child(jump))
 }

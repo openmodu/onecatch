@@ -71,7 +71,7 @@ func (a *app) actOnInstruction(id, kind string) {
 			a.fail(err)
 			// The service may have changed state even on failure (for example a
 			// steering rollback). Refresh without touching the current draft.
-			a.openRun(action.RunID)
+			a.reloadRun(action.RunID)
 		})
 	}()
 }

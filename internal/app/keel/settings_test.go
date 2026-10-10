@@ -2,16 +2,91 @@ package keeldesktop
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 
+	"gioui.org/io/key"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/locale"
 	"github.com/dyike/keel/ui/window"
 )
+
+func TestTableDividerSettingPersistsThroughPointerAndKeyboard(t *testing.T) {
+	locale.Apply(locale.Chinese())
+	applyPalette(false)
+	for _, scale := range []int{1, 2} {
+		a := conversationFixture(t)
+		p := workerTestSettings(a)
+		p.section = ""
+		router, frame, click := alignmentRouter(el.Root(p), 960, 800, scale)
+		control := func() {
+			t.Helper()
+			box, ok := findSkillControl(router.AppendSemantics(nil), "表格分隔线")
+			if !ok {
+				t.Fatal("missing divider setting")
+			}
+			click(box)
+			frame()
+		}
+		if a.ui.Preferences.HideTableDividers || !p.switches["table-dividers"].Value() {
+			t.Fatal("dividers must be enabled by default")
+		}
+		control()
+		saved, err := loadUIPreferences(a.backend.service.DataRoot())
+		if err != nil || !saved.HideTableDividers || p.switches["table-dividers"].Value() {
+			t.Fatalf("disabled preference was not persisted: %+v %v", saved, err)
+		}
+		// Reopening/rebuilding settings reads the persisted preference.
+		a.ui.Preferences = saved
+		p.fields = nil
+		frame()
+		frame()
+		if p.switches["table-dividers"].Value() {
+			t.Fatal("rebuilding settings reset the switch")
+		}
+		// Focus the rebuilt switch without changing it; Space re-enables it.
+		requested := false
+		root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element {
+			view := p.Render(cx)
+			if !requested {
+				cx.Focus(fmt.Sprintf("filled-toggle/%p", p.switches["table-dividers"]))
+				requested = true
+			}
+			return view
+		}))
+		router, frame, _ = alignmentRouter(root, 960, 800, scale)
+		router.Queue(key.Event{Name: key.NameSpace, State: key.Press}, key.Event{Name: key.NameSpace, State: key.Release})
+		frame()
+		frame()
+		saved, err = loadUIPreferences(a.backend.service.DataRoot())
+		if err != nil || saved.HideTableDividers || !p.switches["table-dividers"].Value() {
+			t.Fatalf("keyboard did not restore dividers: %+v %v", saved, err)
+		}
+	}
+}
+
+func TestRenderTableDividerSettings(t *testing.T) {
+	dir := os.Getenv("ONECATCH_KEEL_PREVIEWS")
+	if dir == "" {
+		t.Skip("set ONECATCH_KEEL_PREVIEWS to render settings")
+	}
+	locale.Apply(locale.Chinese())
+	defer applyPalette(false)
+	for _, dark := range []bool{false, true} {
+		applyPalette(dark)
+		a := conversationFixture(t)
+		a.dark = dark
+		p := workerTestSettings(a)
+		p.section = ""
+		if err := screenshotWithFocus(el.Root(p), 960, 800, filepath.Join(dir, fmt.Sprintf("settings-table-dividers-dark-%v.png", dark))); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
 
 func TestKeelSettingsDraftUsesRepositoryRevisionAndPreservesOtherSections(t *testing.T) {
 	ctx := context.Background()

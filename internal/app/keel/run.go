@@ -45,10 +45,13 @@ func Run(options Options) error {
 	applyAppPalette(a.dark, a.ui.Preferences.Accent)
 	a.logo = kit.Image(icon, "OneCatch").Size(22, 22).Rounded(5)
 	a.refresh()
+	// Like the Wails client's styled WebKit scrollbars, overflowing views
+	// always show their thin bar rather than only while scrolling.
+	el.SetScrollbarDefault(el.ScrollbarAlways)
 	a.window = window.Open(window.Options{
 		Title: "OneCatch · Keel", Width: 1120, Height: 760, MinWidth: 860, MinHeight: 560,
 		Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin",
-		TrafficLightLayout: &window.TrafficLightLayout{Height: 52, Left: 20},
+		TrafficLightLayout: &window.TrafficLightLayout{Height: mainTitleBarHeight, Left: 20},
 		Content:            el.Root(a), OnClose: a.close,
 		Shortcuts: map[string]func(){"mod+`": a.toggleTerminal, "mod+enter": a.send, "mod+shift+enter": a.sendSteering, "mod+s": a.saveActiveWorkspaceFile, "mod+k": a.focusTaskSearch, "mod+b": a.toggleSidebar, "mod+[": func() { a.goHistory(-1) }, "mod+]": func() { a.goHistory(1) }},
 	})

@@ -119,6 +119,11 @@ func TestConversationNativeDisclosure(t *testing.T) {
 	if !a.conversation.open["tool"] {
 		t.Fatal("tool did not expand")
 	}
+	// Expanding the tool can scroll its group header behind the fixed title bar.
+	// Scroll back before testing a second click on the visible disclosure.
+	router.Queue(pointer.Event{Kind: pointer.Scroll, Source: pointer.Mouse, Position: f32.Pt(800, 200), Scroll: f32.Pt(0, -400)})
+	frame()
+	frame()
 	box, ok = findSkillControl(router.AppendSemantics(nil), "运行了 1 个工具")
 	if !ok {
 		t.Fatal("expanded process header missing")

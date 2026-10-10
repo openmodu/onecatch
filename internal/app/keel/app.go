@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"strings"
+	"sync"
 
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
@@ -23,66 +24,83 @@ import (
 )
 
 type app struct {
-	ui                                                        uiState
-	library                                                   libraryState
-	skills                                                    skillWorkspaceState
-	workbench                                                 workbenchState
-	terminal                                                  terminalState
-	attachments                                               attachmentState
-	project                                                   projectState
-	backend                                                   *backend
-	ctx                                                       context.Context
-	cancel                                                    context.CancelFunc
-	closed                                                    bool
-	unsubscribe                                               func()
-	window, settingsWindow                                    *window.Window
-	logo                                                      *kit.ImageView
-	dark                                                      bool
-	workspaces                                                []domainworkspaces.Workspace
-	tasks                                                     map[string][]domaintasks.Task
-	runtimes                                                  []desktopservice.RuntimeInfo
-	workers                                                   []workerservice.Info
-	workerID                                                  string
-	settings                                                  domainsettings.Settings
-	definitions                                               []domainworkflows.Definition
-	workspaceID, taskID, runID, page                          string
-	task                                                      *domaintasks.Task
-	detail                                                    *desktopservice.RunDetail
-	stateView                                                 *runstate.View
-	transcript                                                *transcript
-	entries                                                   []*entry
-	docs                                                      map[string]*markdown.Doc
-	conversation                                              conversationState
-	scroller                                                  *kit.MessageScrollerView
-	prompt, query, model, projectPath, projectName, errorText string
-	busy, loading                                             bool
-	selection, refreshVersion                                 uint64
-	projectDialog, confirmation                               *kit.DialogView
-	runtime, sandbox, workflow                                *kit.SelectView
-	workflowEditor                                            *kit.CodeEditorView
-	editingWorkflow                                           string
-	captionGit                                                *domainworkspaces.GitSnapshot
-	captionContext                                            string
-	captionVersion                                            uint64
-	captionLoading                                            bool
-	answers                                                   map[string]string
-	pendingResponses                                          map[string]bool
-	instructionAction                                         instructionAction
+	ui                                                                                      uiState
+	library                                                                                 libraryState
+	skills                                                                                  skillWorkspaceState
+	workbench                                                                               workbenchState
+	terminal                                                                                terminalState
+	attachments                                                                             attachmentState
+	project                                                                                 projectState
+	backend                                                                                 *backend
+	ctx                                                                                     context.Context
+	cancel                                                                                  context.CancelFunc
+	closed                                                                                  bool
+	unsubscribe                                                                             func()
+	window, settingsWindow                                                                  *window.Window
+	logo                                                                                    *kit.ImageView
+	dark                                                                                    bool
+	workspaces                                                                              []domainworkspaces.Workspace
+	tasks                                                                                   map[string][]domaintasks.Task
+	runtimes                                                                                []desktopservice.RuntimeInfo
+	workers                                                                                 []workerservice.Info
+	workerID                                                                                string
+	settings                                                                                domainsettings.Settings
+	definitions                                                                             []domainworkflows.Definition
+	workspaceID, taskID, runID, page                                                        string
+	task                                                                                    *domaintasks.Task
+	detail                                                                                  *desktopservice.RunDetail
+	stateView                                                                               *runstate.View
+	transcript                                                                              *transcript
+	entries                                                                                 []*entry
+	docs                                                                                    map[string]*markdown.Doc
+	conversation                                                                            conversationState
+	profile                                                                                 runtimeProfileState
+	scroller                                                                                *kit.MessageScrollerView
+	prompt, query, model, reasoningEffort, serviceTier, projectPath, projectName, errorText string
+	busy, loading                                                                           bool
+	selection, refreshVersion                                                               uint64
+	projectDialog, confirmation                                                             *kit.DialogView
+	runtime, sandbox, workflow                                                              *kit.SelectView
+	workflowEditor                                                                          *kit.CodeEditorView
+	editingWorkflow                                                                         string
+	captionGit                                                                              *domainworkspaces.GitSnapshot
+	captionContext                                                                          string
+	captionVersion                                                                          uint64
+	captionLoading                                                                          bool
+	answers                                                                                 map[string]string
+	pendingResponses                                                                        map[string]bool
+	instructionAction                                                                       instructionAction
+	// live holds run-stream frames until the next UI frame applies them.
+	live liveFrames
+	// postUpdate schedules fn on the UI thread; tests replace it.
+	postUpdate func(func())
+	// rowSigs records each conversation row's content at its last measure,
+	// so a token re-measures only the rows it changed.
+	rowSigs map[string]string
+}
+
+// liveFrames batches run-stream frames. A provider may deliver dozens of
+// small deltas between two frames; applying them one by one rebuilt the
+// conversation dozens of times per frame.
+type liveFrames struct {
+	mu        sync.Mutex
+	frames    []runstream.Frame
+	scheduled bool
 }
 
 func newApp(b *backend) *app {
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &app{backend: b, ctx: ctx, cancel: cancel, tasks: make(map[string][]domaintasks.Task), transcript: newTranscript(), docs: make(map[string]*markdown.Doc), answers: make(map[string]string), pendingResponses: make(map[string]bool)}
 	a.runtime = kit.Select("").Hint("选择 Agent").Appearance(false).MenuWidth(220).OnChange(func(id string) {
-		a.model = a.settings.Runtimes[id].DefaultModel
+		a.resetProfileSelection()
 	})
-	a.sandbox = kit.Select("").Hint("工作区访问").Appearance(false).Size(32).MenuWidth(190)
-	a.sandbox.SetEntries(kit.SelectOption{Value: "read-only", Label: "只读访问"}, kit.SelectOption{Value: "workspace-write", Label: "工作区访问"}, kit.SelectOption{Value: "full", Label: "完全访问"})
+	a.sandbox = newAccessSelect()
 	a.sandbox.SetValue("workspace-write")
 	a.workflow = kit.Select("").Hint("单 Agent 完成").Appearance(false).MenuWidth(260)
 	a.workflow.SetValue("single_agent")
 	a.workflowEditor = kit.CodeEditor("").Language("json").Name("工作流定义").Fill()
-	a.scroller = kit.MessageScroller(nil, 140, a.message)
+	// The Wails client's round arrow replaces the built-in latest pill.
+	a.scroller = kit.MessageScroller(nil, 140, a.message).LatestButton(false)
 	a.projectDialog = kit.Dialog("添加项目").Width(440).CloseButton(true).OnClose(func() { a.project.Password = "" }).BeforeCancel(func() bool { return !a.project.Saving && !a.project.Picking }).Body(el.ViewFunc(a.projectForm)).Footer(
 		button("取消", func() {
 			if !a.project.Saving {
@@ -99,16 +117,7 @@ func newApp(b *backend) *app {
 	a.initWorkbench()
 	a.initTerminal()
 	a.watchWorkspace()
-	a.unsubscribe = b.streams.Subscribe(func(f runstream.Frame) {
-		core.Update(func() {
-			if a.closed || f.RunID != a.runID {
-				return
-			}
-			if a.transcript.frame(f) {
-				a.syncMessages()
-			}
-		})
-	})
+	a.unsubscribe = b.streams.Subscribe(a.receiveFrame)
 	b.states.SetEmitter(func(v runstate.View) {
 		core.Update(func() {
 			if a.closed || a.runID != v.RunID {
@@ -238,7 +247,7 @@ func (a *app) updatePickers() {
 		for _, r := range a.runtimes {
 			if r.Enabled && r.Available {
 				a.runtime.SetValue(r.ID)
-				a.model = a.settings.Runtimes[r.ID].DefaultModel
+				a.resetProfileSelection()
 				break
 			}
 		}
@@ -272,6 +281,7 @@ func (a *app) resetTask(workspaceID string) {
 		}
 	}
 	a.taskID, a.runID, a.page, a.prompt, a.errorText = "", "", "", "", ""
+	a.resetProfileSelection()
 	a.workerID = ""
 	a.updateWorkerSandbox()
 	a.task, a.detail, a.loading = nil, nil, false
@@ -299,7 +309,7 @@ func (a *app) openTask(task domaintasks.Task) {
 	a.updateWorkerSandbox()
 	a.recordNavigation(before)
 	a.runtime.SetValue(task.Harness)
-	a.model = task.Model
+	a.model, a.reasoningEffort, a.serviceTier = task.Model, task.ReasoningEffort, task.ServiceTier
 	a.workflow.SetValue(task.WorkflowID)
 	a.sandbox.SetValue(task.Sandbox)
 	a.runtime.SetDisabled(true)
@@ -340,19 +350,90 @@ func (a *app) openRun(id string) {
 			if err != nil {
 				return
 			}
-			a.detail = &detail
-			if v := a.stateView; v != nil && v.Run.Revision >= detail.Run.Revision {
-				a.detail.Run, a.detail.StepRuns, a.detail.Instructions, a.detail.Active = v.Run, v.StepRuns, v.Instructions, v.Active
-			}
-			a.transcript.detail(*a.detail)
-			for _, f := range snapshot {
-				a.transcript.frame(f)
-			}
-			a.syncMessages()
+			a.applyRunDetail(detail, snapshot)
 			a.scroller.ScrollToEnd()
-			a.followActiveInspectorSource()
 		})
 	}()
+}
+
+// reloadRun reconciles the open run after an action, in the background, as
+// the Wails client does: no loading state, the composer stays usable and the
+// conversation does not jump. Live frames and run-state pushes have usually
+// shown the change already; this only fills what they do not carry.
+func (a *app) reloadRun(id string) {
+	if id == "" || id != a.runID || a.detail == nil {
+		a.openRun(id)
+		return
+	}
+	version := a.selection
+	go func() {
+		detail, err := a.backend.service.GetRunDetail(a.ctx, id)
+		snapshot := a.backend.service.GetRunStreamSnapshot(id)
+		core.Update(func() {
+			if a.closed || version != a.selection || id != a.runID {
+				return
+			}
+			a.fail(err)
+			if err == nil {
+				a.applyRunDetail(detail, snapshot)
+			}
+		})
+	}()
+}
+
+// applyRunDetail merges a loaded run with the live snapshot taken after it.
+func (a *app) applyRunDetail(detail desktopservice.RunDetail, snapshot []runstream.Frame) {
+	a.detail = &detail
+	if v := a.stateView; v != nil && v.Run.Revision >= detail.Run.Revision {
+		a.detail.Run, a.detail.StepRuns, a.detail.Instructions, a.detail.Active = v.Run, v.StepRuns, v.Instructions, v.Active
+	}
+	a.transcript.detail(*a.detail)
+	for _, f := range snapshot {
+		a.transcript.frame(f)
+	}
+	a.syncMessages()
+	a.followActiveInspectorSource()
+}
+
+// receiveFrame queues a run-stream frame from the publishing goroutine and
+// schedules one UI update for everything queued before the next frame, as
+// the Wails client batches frames per animation frame.
+func (a *app) receiveFrame(f runstream.Frame) {
+	q := &a.live
+	q.mu.Lock()
+	q.frames = append(q.frames, f)
+	schedule := !q.scheduled
+	q.scheduled = true
+	q.mu.Unlock()
+	if schedule {
+		post := a.postUpdate
+		if post == nil {
+			post = core.Update
+		}
+		post(a.applyLiveFrames)
+	}
+}
+
+// applyLiveFrames merges the queued frames of the open run and rebuilds the
+// conversation once.
+func (a *app) applyLiveFrames() {
+	q := &a.live
+	q.mu.Lock()
+	frames := q.frames
+	q.frames, q.scheduled = nil, false
+	q.mu.Unlock()
+	if a.closed {
+		return
+	}
+	changed := false
+	for _, f := range frames {
+		if f.RunID == a.runID && a.transcript.frame(f) {
+			changed = true
+		}
+	}
+	if changed {
+		a.syncMessages()
+	}
 }
 
 func (a *app) syncMessages() {
@@ -363,7 +444,7 @@ func (a *app) syncMessages() {
 		if e.kind == "message" || e.user {
 			doc := a.docs[e.key]
 			if doc == nil {
-				doc = newConversationDocument(e.text)
+				doc = newConversationDocument(e.text).TableDividers(!a.ui.Preferences.HideTableDividers)
 				a.docs[e.key] = doc
 			}
 			if doc.Source() != e.text {
@@ -373,7 +454,62 @@ func (a *app) syncMessages() {
 		}
 	}
 	a.scroller.SetKeys(keys)
-	a.scroller.Invalidate(keys...)
+	// Re-measure only rows whose content changed: a streaming token touches
+	// one row, and re-measuring every row's Markdown made long runs stutter.
+	if a.rowSigs == nil {
+		a.rowSigs = map[string]string{}
+	}
+	active := a.detail != nil && a.detail.Active
+	seen := make(map[string]bool, len(a.entries))
+	var changed []string
+	for i, e := range a.entries {
+		sig := rowSignature(e, active, i == len(a.entries)-1)
+		seen[e.key] = true
+		if a.rowSigs[e.key] != sig {
+			a.rowSigs[e.key] = sig
+			changed = append(changed, e.key)
+		}
+	}
+	for key := range a.rowSigs {
+		if !seen[key] {
+			delete(a.rowSigs, key)
+		}
+	}
+	if len(changed) > 0 {
+		a.scroller.Invalidate(changed...)
+	}
+}
+
+// rowSignature identifies what a conversation row draws: its records'
+// revisions and text, streaming and outcome flags, and, for process groups
+// and streaming messages, whether the run is active and the row is last.
+func rowSignature(e *entry, active, last bool) string {
+	var b strings.Builder
+	var write func(*entry)
+	write = func(e *entry) {
+		fmt.Fprintf(&b, "%s|%s|%t|%d|%d|%t|%t|%t|", e.key, e.kind, e.user, e.revision, len(e.text), e.streaming, e.failed, e.settled)
+		if e.permission != nil {
+			b.WriteString("p:" + e.permission.ID + "|")
+		}
+		if e.question != nil {
+			b.WriteString("q:" + e.question.ID + "|")
+		}
+		for _, d := range e.details {
+			write(d)
+		}
+		b.WriteString(";")
+		for _, p := range e.process {
+			write(p)
+		}
+	}
+	write(e)
+	// Run activity only changes a process group's label and a streaming
+	// message's caret; re-estimating every row when a run ends lost the
+	// view's place at the bottom.
+	if len(e.process) > 0 || e.streaming {
+		fmt.Fprintf(&b, "%t|%t", active, last)
+	}
+	return b.String()
 }
 
 func (a *app) send() {
@@ -425,7 +561,7 @@ func (a *app) sendWithMode(steer bool) {
 			a.busy = false
 			return
 		}
-		input := desktopservice.ResumeRunInput{Instruction: prompt, Model: a.model, Harness: a.continuationHarness()}
+		input := desktopservice.ResumeRunInput{Instruction: prompt, Model: a.model, ReasoningEffort: a.reasoningEffort, ServiceTier: a.serviceTier, Harness: a.continuationHarness()}
 		active := a.detail != nil && a.detail.Active
 		if a.detail != nil && !active && a.detail.Run.Status != domainworkflows.RunPaused && a.detail.Run.Status != domainworkflows.RunCompleted {
 			a.busy = false
@@ -446,7 +582,10 @@ func (a *app) sendWithMode(steer bool) {
 				if err == nil || persisted {
 					a.prompt = ""
 					a.clearAttachments()
-					a.openRun(runID)
+					// Like Wails: follow the conversation to the new message
+					// and reconcile quietly; frames and run-state pushes show it.
+					a.scroller.ScrollToEnd()
+					a.reloadRun(runID)
 				}
 			})
 		}()
@@ -548,7 +687,7 @@ func (a *app) stop() {
 				return
 			}
 			a.fail(err)
-			a.openRun(id)
+			a.reloadRun(id)
 		})
 	}()
 }

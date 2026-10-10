@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"slices"
 	"strings"
+	"time"
 
 	"gioui.org/font"
 	"gioui.org/io/pointer"
@@ -19,9 +20,21 @@ import (
 // 项目管理 heading in its Header, which mirrors them.
 const sectionTitleWeight = font.SemiBold
 
+const (
+	mainTitleBarHeight     float32 = 52
+	macSidebarToggleLeft   float32 = 94
+	sidebarPeekInset       float32 = 8
+	sidebarHeaderRowHeight float32 = 36
+)
+
 // Sidebar owns navigation, expansion, scrolling, keyboard handling and context
 // menus. OneCatch supplies the model and calls its existing application actions.
 func (a *app) sidebar(cx *el.Context) el.Element {
+	_, height := cx.ViewportSize()
+	return a.sidebarPanel(cx, height, false)
+}
+
+func (a *app) sidebarPanel(cx *el.Context, height float32, peek bool) el.Element {
 	if a.ui.SidebarExpanded == nil {
 		a.ui.SidebarExpanded = map[string]bool{}
 	}
@@ -55,7 +68,7 @@ func (a *app) sidebar(cx *el.Context) el.Element {
 			continue
 		}
 		menu := a.projectMenu(w)
-		project := kit.SidebarItem{ID: "project/" + w.ID, Label: w.Name, Icon: kit.IconFolder, ContextMenu: menu,
+		project := kit.SidebarItem{ID: "project/" + w.ID, Label: w.Name, Icon: kit.IconFolder, ContextMenu: menu, SuffixOnHover: true,
 			Suffix: el.ViewFunc(func(cx *el.Context) el.Element {
 				return el.Div().Row().Items(el.Center).Child(
 					iconAction(cx, "new-task/"+w.ID, "新建任务", "plus", func() { a.newTask(w.ID) }, false),
@@ -119,6 +132,22 @@ func (a *app) sidebar(cx *el.Context) el.Element {
 		fmt.Fprintf(&model, "%q", section.title)
 		fingerprint(section.items)
 	}
+	a.ui.SidebarVisibleTasks = nil
+	var collectVisibleTasks func([]kit.SidebarItem)
+	collectVisibleTasks = func(items []kit.SidebarItem) {
+		for _, item := range items {
+			if strings.HasPrefix(item.ID, "task/") {
+				id := strings.TrimPrefix(item.ID, "task/")
+				a.ui.SidebarVisibleTasks = append(a.ui.SidebarVisibleTasks, id)
+			}
+			if !strings.HasPrefix(item.ID, "project/") || a.ui.Expanded[strings.TrimPrefix(item.ID, "project/")] || query != "" || a.ui.Filter != "" {
+				collectVisibleTasks(item.Children)
+			}
+		}
+	}
+	for _, section := range sections {
+		collectVisibleTasks(section.items)
+	}
 	if a.ui.SidebarNav == nil {
 		a.ui.SidebarNav = kit.Sidebar()
 	}
@@ -154,12 +183,19 @@ func (a *app) sidebar(cx *el.Context) el.Element {
 		nav.SetExpanded(id, on)
 		a.ui.SidebarExpanded[id] = nav.Expanded(id)
 	}
-	_, height := cx.ViewportSize()
-	nav.Width(a.sidebarWidth(cx)).Height(height).Header(el.ViewFunc(a.sidebarHeader)).Footer(el.ViewFunc(func(cx *el.Context) el.Element { return fullMenu(cx, a.ui.Footer) }))
-	return nav.Render(cx)
+	nav.Width(a.sidebarWidth(cx)).Height(height).Header(el.ViewFunc(func(cx *el.Context) el.Element { return a.sidebarPanelHeader(cx, peek) })).Footer(el.ViewFunc(func(cx *el.Context) el.Element { return fullMenu(cx, a.ui.Footer) }))
+	palette := theme.Current()
+	palette.Bg = sidebarPanelColor(peek)
+	content := cx.Themed(palette, nav)
+	a.sidebarTaskDetails(cx)
+	return content
 }
 
 func (a *app) sidebarSelect(id string) {
+	if id != "more" && !strings.HasPrefix(id, "show-all/") && !strings.HasPrefix(id, "project/") {
+		a.ui.SidebarPeek = false
+		a.ui.SidebarPeekBlocked = true
+	}
 	switch {
 	case id == "more":
 		a.ui.More.SetValue(true)
@@ -178,12 +214,26 @@ func (a *app) sidebarSelect(id string) {
 	}
 }
 
-func (a *app) sidebarHeader(cx *el.Context) el.Element {
-	title := el.Div().Row().Items(el.Center).H(el.Dp(36))
+func (a *app) sidebarHeader(cx *el.Context) el.Element { return a.sidebarPanelHeader(cx, false) }
+func (a *app) sidebarPanelHeader(cx *el.Context, peek bool) el.Element {
+	title := el.Div().H(el.Dp(sidebarHeaderRowHeight))
+	toolbar := el.Div().Row().Items(el.Center).H(el.Dp(sidebarHeaderRowHeight)).WFull()
 	if runtime.GOOS == "darwin" {
-		title.Pl(78)
+		inset := float32(0)
+		if peek {
+			inset = sidebarPeekInset
+		}
+		// Keel Sidebar owns its padding; AppKit owns the traffic-light geometry.
+		// Keep the toolbar slot's size but position its controls in window space.
+		toolbar.Absolute().Left(0).Right(0).Top(mainTitleBarHeight/2 - theme.SpaceLg - inset - sidebarHeaderRowHeight/2).
+			Pl(macSidebarToggleLeft - theme.SpaceLg - inset)
 	}
-	title.Child(iconAction(cx, "hide-sidebar", "收起侧栏", "panel-left-close", a.toggleSidebar, false), dragArea(cx, el.Div().Grow().HFull()))
+	id, label, icon := "hide-sidebar", "收起侧栏", "panel-left"
+	if peek {
+		id, label, icon = "peek-show-sidebar", "展开侧栏", "panel-left"
+	}
+	toolbar.Child(iconAction(cx, id, label, icon, a.toggleSidebar, false), dragArea(cx, el.Div().Grow().HFull()))
+	title.Child(toolbar)
 	// Status filtering sits beside the search it narrows.
 	search := el.Div().Row().Items(el.Center).Gap(4).Child(a.sidebarSearch(cx), a.ui.Filters.Render(cx))
 	// Match Sidebar's 10dp section-heading inset inside its outer padding.
@@ -191,40 +241,19 @@ func (a *app) sidebarHeader(cx *el.Context) el.Element {
 	return el.Div().Gap(8).Child(title, search, heading)
 }
 
-// sidebarSearch is an always-visible task filter; ⌘K focuses it.
+// sidebarSearch opens the shared search palette without filtering the sidebar.
 func (a *app) sidebarSearch(cx *el.Context) el.Element {
-	if a.ui.SearchFocus {
-		cx.Focus("task-search")
-		a.ui.SearchFocus = false
-	}
-	input := field("task-search", "搜索任务", &a.query).Grow().H(el.Dp(32)).Px(0).Bg(color.NRGBA{}).
-		FocusStyle(func(st *el.Style) { st.BorderColor(color.NRGBA{}).Bg(color.NRGBA{}) }).
-		CaptureKeys("⎋").OnKey(func(e el.KeyEvent) bool {
-		if e.State == el.KeyPress && e.Name == "⎋" && a.query != "" {
-			a.query = ""
-			return true
-		}
-		return false
-	})
-	// The field itself is borderless; its box shows the focus a caret alone does not.
-	box := el.Div().Row().Items(el.Center).Gap(8).Grow().W(el.Dp(0)).H(el.Dp(32)).Pl(10).Pr(4).Rounded(8).Bg(theme.Subtle).Border(1, color.NRGBA{})
-	icon := theme.Muted
-	if cx.Focused("task-search") {
-		box.Bg(theme.Surface).Border(1, theme.Border)
-		icon = theme.Text
-	}
-	box.Child(lucide(cx, "search", 16, icon), input)
-	if a.query != "" {
-		box.Child(iconAction(cx, "task-search-clear", "清除搜索", "x", func() { a.query = "" }, false))
-	}
-	return box
+	return el.Div().ID("task-search-box").Name("搜索任务").Role("button").Focusable(true).
+		Row().Items(el.Center).Gap(8).Grow().W(el.Dp(0)).H(el.Dp(32)).Px(10).Rounded(8).Bg(theme.Subtle).
+		CursorPointer().OnClick(a.focusTaskSearch).Hover(func(s *el.Style) { s.Bg(theme.SubtleHover) }).
+		Child(lucide(cx, "search", 16, theme.Muted), el.Text("搜索").TextColor(theme.Muted).Grow())
 }
 
 func (a *app) sidebarTask(t domaintasks.Task) kit.SidebarItem {
 	menu := a.taskMenu(t)
-	item := kit.SidebarItem{ID: "task/" + t.ID, Label: t.Title, ContextMenu: menu,
+	item := kit.SidebarItem{ID: "task/" + t.ID, Label: t.Title, ContextMenu: menu, SuffixOnHover: true,
 		Suffix: el.ViewFunc(func(cx *el.Context) el.Element {
-			return iconAction(cx, "task-actions/"+t.ID, "任务操作", "ellipsis", menu.Toggle, menu.Value())
+			return a.sidebarTaskActions(cx, t.ID)
 		})}
 	if t.WorkflowID == "single_agent" || t.WorkflowID == "" && t.Harness != "" {
 		item.IconView = el.ViewFunc(func(cx *el.Context) el.Element {
@@ -260,6 +289,8 @@ func (a *app) sidebarWidth(cx *el.Context) float32 {
 }
 func (a *app) toggleSidebar() {
 	a.ui.Preferences.Collapsed = !a.ui.Preferences.Collapsed
+	a.ui.SidebarPeek = false
+	a.ui.SidebarPeekBlocked = a.ui.Preferences.Collapsed
 	a.saveUIPreferences()
 }
 func (a *app) sidebarSeam(cx *el.Context) el.Element {
@@ -311,7 +342,8 @@ func (a *app) executorPicker(cx *el.Context) el.Element {
 	return a.ui.Executor.Render(cx)
 }
 func (a *app) buildExecutorMenu() {
-	menu := kit.Popover(el.ViewFunc(a.executorOptions)).Width(300).Placement(el.Top, el.Start)
+	menu := kit.Popover(el.ViewFunc(a.executorOptions)).Width(236).Placement(el.Top, el.Start).
+		PanelStyle(func(panel *el.DivEl) { panel.P(8).Rounded(12).Name("选择 Agent 与工作流") })
 	menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 		label, id := "选择 Agent", a.runtime.Value()
 		direct := a.workflow.Value() == "single_agent"
@@ -348,7 +380,11 @@ func (a *app) buildExecutorMenu() {
 }
 
 func (a *app) executorOptions(cx *el.Context) el.Element {
-	column := el.Div().Gap(4).MaxH(el.Dp(480)).ScrollY()
+	_, height := cx.ViewportSize()
+	column := el.Div().ID("executor-options").Gap(2).MaxH(el.Dp(min(float32(420), max(float32(120), height-120)))).ScrollY().Scrollbars(el.ScrollbarAlways)
+	if _, viewport, content := cx.ScrollState("executor-options"); viewport > 0 && content > viewport {
+		column.Pr(12)
+	}
 	column.Child(el.Text("Agent").TextSize(11).TextColor(theme.Muted).Px(8).Py(4))
 	for _, runtime := range a.runtimes {
 		r := runtime
@@ -374,9 +410,6 @@ func (a *app) executorOptions(cx *el.Context) el.Element {
 			}
 		}
 	}
-	if !a.remoteConversation() {
-		column.Child(el.Div().H(el.Dp(1)).WFull().Bg(seamColor).My(6), el.Text("模型").TextSize(11).TextColor(theme.Muted).Px(8), field("executor-model", "使用 Agent 的默认模型", &a.model).Px(8).ReadOnly(a.busy || a.detail != nil && a.detail.Active))
-	}
 	if a.task == nil {
 		column.Child(el.Div().H(el.Dp(1)).WFull().Bg(seamColor).My(6), el.Text("工作流").TextSize(11).TextColor(theme.Muted).Px(8))
 		for _, definition := range a.definitions {
@@ -390,8 +423,77 @@ func (a *app) executorOptions(cx *el.Context) el.Element {
 }
 
 func (a *app) focusTaskSearch() {
-	if a.ui.Preferences.Collapsed {
-		a.toggleSidebar()
+	a.openSearchPalette()
+}
+
+// The peek uses the same Sidebar instance, model and menus as the docked view.
+// It is temporary: only a click on the toggle changes the stored preference.
+func (a *app) sidebarPeek(cx *el.Context) el.Element {
+	left := float32(24)
+	if runtime.GOOS == "darwin" {
+		left = macSidebarToggleLeft
 	}
-	a.ui.SearchFocus = true
+	probe := el.Div().ID("sidebar-peek-trigger").Absolute().Left(left).Top((mainTitleBarHeight - 28) / 2).Size(el.Dp(28))
+	position := el.Div().ID("sidebar-peek-position").Absolute().Left(sidebarPeekInset).Top(sidebarPeekInset - 1).Size(el.Dp(1))
+	trigger := el.Div().Absolute().Left(0).Top(0).Child(probe, position)
+	if !a.ui.Preferences.Collapsed {
+		a.ui.SidebarPeek = false
+		return trigger
+	}
+	hovered := cx.Hovered("sidebar-peek-trigger") || cx.Hovered("show-sidebar") || cx.Hovered("peek-show-sidebar")
+	if !hovered && !cx.Hovered("sidebar-peek-panel") {
+		a.ui.SidebarPeekBlocked = false
+	}
+	if (hovered || cx.FocusVisible("show-sidebar")) && !a.ui.SidebarPeekBlocked {
+		if !a.ui.SidebarPeek {
+			a.ui.SidebarPeekKeyboard = !hovered && cx.FocusVisible("show-sidebar")
+		}
+		a.ui.SidebarPeek = true
+	}
+	if !a.ui.SidebarPeek {
+		return trigger
+	}
+	if cx.Hovered("sidebar-peek-panel") {
+		a.ui.SidebarPeekKeyboard = false
+	}
+	keep := hovered || cx.Hovered("sidebar-peek-panel") || cx.FocusVisible("show-sidebar") || a.sidebarMenuOpen() || (a.ui.SidebarPeekKeyboard && cx.FocusWithin("sidebar-peek-panel"))
+	if !keep {
+		cx.AfterEnabled("sidebar-peek-panel", "sidebar-peek-hide", 120*time.Millisecond, func() { a.ui.SidebarPeek = false })
+	}
+	_, height := cx.ViewportSize()
+	panelHeight := min(float32(560), max(float32(80), height-16))
+	panel := el.Div().ID("sidebar-peek-panel").Role("navigation").Name("侧栏预览").W(el.Dp(a.sidebarWidth(cx))).H(el.Dp(panelHeight)).Bg(sidebarPanelColor(true)).Rounded(16).Shadow(theme.ElevationMd)
+	dismiss := func() { a.ui.SidebarPeek = false; a.ui.SidebarPeekBlocked = true }
+	cx.Overlay("sidebar-peek", el.Anchored("sidebar-peek-position", panel).Placement(el.Bottom, el.Start).Offset(0).OnDismiss(dismiss))
+	// Declare the parent before rendering nested Sidebar menus and previews.
+	panel.Child(a.sidebarPanel(cx, panelHeight, true))
+	return trigger
+}
+
+func (a *app) sidebarMenuOpen() bool {
+	for _, menu := range []*kit.MenuView{a.ui.More, a.ui.Footer, a.ui.Filters} {
+		if menu != nil && menu.Value() {
+			return true
+		}
+	}
+	for _, menu := range a.project.Menus {
+		if menu.Value() {
+			return true
+		}
+	}
+	for _, menu := range a.ui.TaskMenus {
+		if menu.Value() {
+			return true
+		}
+	}
+	return false
+}
+
+// A temporary pane is an elevated surface; the docked pane sits between the
+// page and controls. Keel still owns the navigation rows and their interaction.
+func sidebarPanelColor(peek bool) color.NRGBA {
+	if peek {
+		return theme.Surface
+	}
+	return sidebarColor
 }
