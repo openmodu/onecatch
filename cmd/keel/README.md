@@ -10,6 +10,11 @@ the macOS file/folder sheet; no JavaScript UI runtime is used.
 
 Development currently uses the local Keel checkout at
 `~/Code/go/src/github.com/dyike/keel` through the `go.mod` replacement.
+`go.mod` also replaces `gioui.org` and `github.com/go-text/typesetting` with
+that checkout's `third_party` copies, as Keel requires of apps: they draw macOS
+text with CoreText (native weight, antialiasing and gamma) and find PingFang
+in the system font assets. Without them text falls back to Gio's thinner
+vector outlines and Chinese to Hiragino Sans GB.
 The build launcher uses this checkout directly, without its cached backport.
 The sidebar uses Keel's standard Sidebar, Suffix and ContextMenu interfaces;
 application callbacks provide project/task actions and data. The local Keel

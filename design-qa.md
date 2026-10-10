@@ -1202,3 +1202,29 @@ Scoped Settings-component result: passed. Overall migration remains pending.
   like `:focus-visible`; Escape/Tab users still see where focus returned.
 - New Keel test `TestRestoredFocusRingFollowsInputModality`; Keel `./...` and
   OneCatch keel tests pass.
+
+## CoreText text rendering and PingFang — 2026-10-10
+
+- Cause of "fonts look worse than Wails": (1) go-text never scanned macOS's
+  `/System/Library/AssetsV2` font assets, so `PingFang SC` never resolved and
+  Chinese used Hiragino Sans GB W3 (no Medium/Semibold); (2) Gio fills vector
+  outlines blended in linear light, without CoreText's stem darkening and
+  gamma, so all text carried ~62–70% of WKWebView's ink.
+- Fix (local Keel and its Gio/go-text copies): fontscan scans the AssetsV2
+  font directories; Gio's shaper exposes `GlyphFile` and a per-shaper
+  `SetRasterHook`; labels, editors and selectables pass their solid color.
+  Keel's theme rasterizes glyph masks with CoreText (sRGB coverage converted
+  to the linear alpha that reproduces it; dark-on-light and light-on-dark
+  variants; quarter-pixel phases), caches them in tinted 1024² pages with
+  per-frame copy-on-write, and draws labels, inputs, rich ranges, markdown,
+  the code editor, shimmer and the terminal through it. Emoji, in-memory
+  fonts and >160px text keep vector outlines. `KEEL_TEXT=vector` compares.
+- OneCatch `go.mod` now replaces `gioui.org` and go-text with Keel's
+  `third_party` copies, as Keel documents for apps.
+- Measured at 14sp/2x against a WKWebView capture of the same line: ink
+  Latin 0.70 → 1.00, Chinese 0.62 → 1.06; dark mode matches visually. Icon
+  and label ink centers stay within ±1px. Steady-state frame cost for ~2,000
+  glyphs 0.43 ms vs 0.42 ms vector. Remaining difference: WebKit's system
+  font tightens Latin tracking slightly.
+- Keel (including both third_party modules), race checks on theme/el/markdown
+  and OneCatch tests pass; Keel `ui/...` still builds against upstream Gio.

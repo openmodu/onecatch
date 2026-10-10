@@ -195,3 +195,10 @@ tool (
 )
 
 replace github.com/dyike/keel => /Users/ityike/Code/go/src/github.com/dyike/keel
+
+// Keel draws with its own Gio and go-text copies (third_party): CoreText text
+// on macOS and other fixes. A replace applies only to the module writing it.
+replace (
+	gioui.org => /Users/ityike/Code/go/src/github.com/dyike/keel/third_party/gio
+	github.com/go-text/typesetting => /Users/ityike/Code/go/src/github.com/dyike/keel/third_party/typesetting
+)
