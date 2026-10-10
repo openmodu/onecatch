@@ -35,6 +35,15 @@ func NewWithRunner(runner CommandRunner) *Inspector {
 }
 
 func (i *Inspector) Inspect(ctx context.Context, workspace string) (domainworkspaces.GitSnapshot, error) {
+	return i.inspect(ctx, workspace, true)
+}
+
+// InspectFiles omits repository-wide diff statistics for paginated review.
+func (i *Inspector) InspectFiles(ctx context.Context, workspace string) (domainworkspaces.GitSnapshot, error) {
+	return i.inspect(ctx, workspace, false)
+}
+
+func (i *Inspector) inspect(ctx context.Context, workspace string, statistics bool) (domainworkspaces.GitSnapshot, error) {
 	if _, err := exec.LookPath(i.binary); err != nil {
 		return domainworkspaces.GitSnapshot{}, fmt.Errorf("git is unavailable: %w", err)
 	}
@@ -53,13 +62,16 @@ func (i *Inspector) Inspect(ctx context.Context, workspace string) (domainworksp
 		return domainworkspaces.GitSnapshot{}, err
 	}
 	files := parseStatus(status)
-	diffStat, err := i.run(ctx, workspace, "diff", "--stat", "--no-ext-diff")
-	if err != nil {
-		return domainworkspaces.GitSnapshot{}, err
-	}
-	stagedStat, err := i.run(ctx, workspace, "diff", "--cached", "--stat", "--no-ext-diff")
-	if err != nil {
-		return domainworkspaces.GitSnapshot{}, err
+	var diffStat, stagedStat string
+	if statistics {
+		diffStat, err = i.run(ctx, workspace, "diff", "--stat", "--no-ext-diff")
+		if err != nil {
+			return domainworkspaces.GitSnapshot{}, err
+		}
+		stagedStat, err = i.run(ctx, workspace, "diff", "--cached", "--stat", "--no-ext-diff")
+		if err != nil {
+			return domainworkspaces.GitSnapshot{}, err
+		}
 	}
 	branch, _ := i.run(ctx, workspace, "symbolic-ref", "--short", "HEAD")
 	ahead, behind := i.aheadBehind(ctx, workspace)
@@ -89,6 +101,32 @@ func (i *Inspector) Diff(ctx context.Context, workspace string, staged bool) (st
 	args := []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-color"}
 	if staged {
 		args = append(args, "--cached")
+	}
+	return i.run(ctx, workspace, args...)
+}
+
+// DiffContext reads additional unchanged lines for the interactive diff viewer.
+func (i *Inspector) DiffContext(ctx context.Context, workspace string, staged bool, lines int) (string, error) {
+	args := []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-color", fmt.Sprintf("--unified=%d", max(3, min(lines, 2000)))}
+	if staged {
+		args = append(args, "--cached")
+	}
+	return i.run(ctx, workspace, args...)
+}
+
+// DiffPathsContext reads only the requested batch. Empty batches must not fall
+// back to a repository-wide diff. Literal pathspecs preserve glob-like names.
+func (i *Inspector) DiffPathsContext(ctx context.Context, workspace string, staged bool, lines int, paths []string) (string, error) {
+	if len(paths) == 0 {
+		return "", nil
+	}
+	args := []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-color", fmt.Sprintf("--unified=%d", max(3, min(lines, 2000)))}
+	if staged {
+		args = append(args, "--cached")
+	}
+	args = append(args, "--")
+	for _, path := range paths {
+		args = append(args, ":(literal)"+path)
 	}
 	return i.run(ctx, workspace, args...)
 }

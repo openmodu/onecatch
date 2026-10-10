@@ -161,9 +161,11 @@ func TestSidebarToggleSharesNativeTrafficLightCenter(t *testing.T) {
 						t.Fatalf("toggle %v differs from native center %.0fdp and shared left %.0fdp", box, mainTitleBarHeight/2, macSidebarToggleLeft)
 					}
 				}
-				fixed := find("收起侧栏")
-				assertAligned(fixed)
-				click(fixed)
+				if width >= 861 {
+					fixed := find("收起侧栏")
+					assertAligned(fixed)
+					click(fixed)
+				}
 				collapsed := find("展开侧栏")
 				assertAligned(collapsed)
 				// Open the overlay through state here; the hover lifecycle has its own

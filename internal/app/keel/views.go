@@ -154,21 +154,28 @@ func (a *app) Render(cx *el.Context) el.Element {
 	if a.page == "skills" {
 		root.Child(a.skills.Create.Render(cx), a.skills.Confirm.Render(cx))
 	}
-	if !a.ui.Preferences.Collapsed {
+	if !a.sidebarCollapsed(cx) {
 		root.Child(a.sidebar(cx), a.sidebarSeam(cx))
 	}
-	if !(a.workbench.Visible && a.workbench.Maximized && a.page == "" || a.page == "skills" && a.skills.Visible && a.skills.Maximized) {
-		center := el.Div().Grow().W(el.Dp(0)).HFull().Child(a.header(cx))
+	if !((a.workbench.Visible && a.workbench.Maximized || a.terminal.Open && a.terminal.Maximized) && a.page == "" || a.page == "skills" && a.skills.Visible && a.skills.Maximized) {
+		center := el.Div().Grow().W(el.Dp(0)).HFull().Decorate(func(gtx core.C, draw func()) {
+			defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
+			draw()
+		}).Child(a.header(cx))
 		if a.page != "" && a.page != "skills" || !a.terminal.Open || !a.terminal.Maximized {
 			center.Child(a.content(cx))
 		}
-		if (a.page == "" || a.page == "skills") && a.terminal.Open {
+		if a.page == "skills" && a.terminal.Open {
 			center.Child(a.terminalDock(cx))
 		}
 		root.Child(center)
 	}
-	if a.workbench.Visible && a.page == "" {
-		root.Child(a.inspectorSeam(cx), a.inspector(cx))
+	if a.page == "" {
+		if a.terminal.Open {
+			root.Child(a.inspectorSeam(cx), a.sidePanelCard(cx, a.terminalDock(cx)))
+		} else if a.workbench.Visible {
+			root.Child(a.inspectorSeam(cx), a.sidePanelCard(cx, a.inspector(cx)))
+		}
 	}
 	if a.page == "skills" && a.skills.Visible {
 		root.Child(a.skillResizeSeam("skill-inspector-resize", "调整 Skills 检查面板宽度", &a.skills.Width, 280, 820, true), a.skillInspector(cx))
@@ -198,12 +205,9 @@ func (a *app) header(cx *el.Context) el.Element {
 		}
 		left.Child(el.Div().Px(5).Py(2).Rounded(4).Bg(theme.Subtle).Child(el.Text(category).TextSize(10).TextColor(theme.Muted)))
 	}
-	left.Child(el.Text(title).MaxLines(1).Medium().TextSize(13))
-	if a.page == "" {
-		left.Child(lucide(cx, "lock", 15, theme.Muted))
-	}
-	bar := el.Div().Row().Items(el.Center).H(el.Dp(mainTitleBarHeight)).Px(24).Gap(12)
-	if a.ui.Preferences.Collapsed {
+	left.Child(el.Text(title).Grow().W(el.Dp(0)).MaxLines(1).Medium().TextSize(13))
+	bar := el.Div().Row().Items(el.Center).H(el.Dp(mainTitleBarHeight)).Px(18).Gap(4)
+	if a.sidebarCollapsed(cx) {
 		if runtime.GOOS == "darwin" {
 			bar.Pl(macSidebarToggleLeft)
 		}
@@ -211,10 +215,14 @@ func (a *app) header(cx *el.Context) el.Element {
 	}
 	bar.Child(left)
 	if a.page == "" || a.page == "skills" {
-		bar.Child(iconAction(cx, "toggle-terminal", "切换终端", "square-terminal", a.toggleTerminal, a.terminal.Open))
+		bar.Child(iconAction(cx, "toggle-terminal", "Terminal", "terminal", a.toggleTerminal, a.terminal.Open))
 	}
-	if a.page == "" && !a.workbench.Visible {
-		bar.Child(iconAction(cx, "show-inspector", "展开检查面板", "panel-right-open", func() { a.toggleInspector("") }, false))
+	if a.page == "" {
+		bar.Child(
+			iconAction(cx, "show-changes", "Changes", "square-diff", func() { a.toggleInspector("review") }, a.workbench.Visible && a.workbench.Tab == "review"),
+			iconAction(cx, "show-files", "Files", "folder", func() { a.toggleInspector("files") }, a.workbench.Visible && a.workbench.Tab == "files"),
+			a.headerMore(cx),
+		)
 	}
 	if a.page == "skills" && !a.skills.Visible {
 		bar.Child(iconAction(cx, "show-skill-inspector", "展开检查面板", "panel-right-open", func() { a.openSkillInspector(a.skills.Tab) }, false))
@@ -280,7 +288,7 @@ func (a *app) composer(cx *el.Context) el.Element {
 			input.Placeholder("排队等待执行…")
 		}
 	}
-	controls := el.Div().Row().Wrap().Items(el.Center).Gap(8)
+	controls := el.Div().Row().Items(el.Center).Gap(8).NoShrink()
 	if a.task == nil && !a.remoteConversation() {
 		controls.Child(a.ui.Add.Render(cx))
 	}
@@ -302,7 +310,9 @@ func (a *app) composer(cx *el.Context) el.Element {
 	if gauge := a.contextGauge(cx); gauge != nil {
 		controls.Child(gauge)
 	}
-	controls.Child(el.Div().Grow())
+	leftControls := controls
+	controls = el.Div().Row().Items(el.Center).Gap(8)
+	controls.Child(el.Div().Grow().W(el.Dp(0)).ScrollX().Child(leftControls))
 	if !a.remoteConversation() && a.workflow.Value() == "single_agent" {
 		controls.Child(a.runtimeProfilePicker(cx))
 	}
@@ -389,7 +399,7 @@ func (a *app) message(cx *el.Context, index int) el.Element {
 			content.Pt(27)
 		}
 		width, _ := cx.ViewportSize()
-		if !a.ui.Preferences.Collapsed {
+		if !a.sidebarCollapsed(cx) {
 			width -= a.sidebarWidth(cx) + 1
 		}
 		if a.workbench.Visible {

@@ -138,12 +138,36 @@ func (a *Service) GitStatus(ctx context.Context, workspaceID string) (domainwork
 	return a.gitForWorkspace(workspace).Inspect(ctx, workspace.Path)
 }
 
+func (a *Service) GitReviewStatus(ctx context.Context, workspaceID string) (domainworkspaces.GitSnapshot, error) {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
+	if err != nil {
+		return domainworkspaces.GitSnapshot{}, err
+	}
+	return a.gitForWorkspace(workspace).InspectFiles(ctx, workspace.Path)
+}
+
 func (a *Service) GitDiff(ctx context.Context, workspaceID string, staged bool) (string, error) {
 	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
 	if err != nil {
 		return "", err
 	}
 	return a.gitForWorkspace(workspace).Diff(ctx, workspace.Path, staged)
+}
+
+func (a *Service) GitDiffContext(ctx context.Context, workspaceID string, staged bool, lines int) (string, error) {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
+	if err != nil {
+		return "", err
+	}
+	return a.gitForWorkspace(workspace).DiffContext(ctx, workspace.Path, staged, lines)
+}
+
+func (a *Service) GitDiffPathsContext(ctx context.Context, workspaceID string, staged bool, lines int, paths []string) (string, error) {
+	workspace, err := a.GetWorkspace(ctx, strings.TrimSpace(workspaceID))
+	if err != nil {
+		return "", err
+	}
+	return a.gitForWorkspace(workspace).DiffPathsContext(ctx, workspace.Path, staged, lines, paths)
 }
 
 func (a *Service) GitStageAll(ctx context.Context, workspaceID string) error {

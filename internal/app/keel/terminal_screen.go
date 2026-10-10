@@ -51,6 +51,7 @@ type terminalScreen struct {
 	scrollRemainder                   float32
 	Error                             string
 	Palette                           terminalPalette
+	IndexedForeground                 [256]color.NRGBA
 	paletteID                         string
 	focused, focusNext, cursorVisible bool
 	cursorStyle                       vt.CursorStyle
@@ -189,6 +190,9 @@ func (s *terminalScreen) setPalette(id string, dark bool) {
 	s.Emulator.SetDefaultCursorColor(palette.Cursor)
 	for i, c := range palette.Colors {
 		s.Emulator.SetIndexedColor(i, c)
+	}
+	for i := range s.IndexedForeground {
+		s.IndexedForeground[i] = terminalIndexedForeground(terminalColor(s.Emulator.IndexedColor(i), palette.Foreground), palette.Background)
 	}
 }
 func (s *terminalScreen) historyLen() int {
@@ -629,7 +633,9 @@ func (s *terminalScreen) Layout(gtx core.C) core.D {
 		}
 	}
 	defer clip.Rect(image.Rectangle{Max: size}).Push(gtx.Ops).Pop()
-	defaultBg := terminalColor(s.Emulator.BackgroundColor(), s.Palette.Background)
+	// Keep the terminal canvas integrated with the panel even when a shell
+	// emits an OSC default-background override. Explicit cell colors still apply.
+	defaultBg := s.Palette.Background
 	defaultFg := terminalColor(s.Emulator.ForegroundColor(), s.Palette.Foreground)
 	paint.Fill(gtx.Ops, defaultBg)
 	event.Op(gtx.Ops, s)
@@ -647,7 +653,7 @@ func (s *terminalScreen) Layout(gtx core.C) core.D {
 			fg, bg, attrs, content := defaultFg, defaultBg, uint8(0), ""
 			if c != nil {
 				w = max(1, c.Width)
-				fg = s.resolveColor(c.Style.Fg, fg)
+				fg = s.resolveForegroundColor(c.Style.Fg, fg)
 				bg = s.resolveColor(c.Style.Bg, bg)
 				attrs = c.Style.Attrs
 				content = c.Content
@@ -813,4 +819,14 @@ func (s *terminalScreen) resolveColor(c color.Color, fallback color.NRGBA) color
 		c = s.Emulator.IndexedColor(int(v))
 	}
 	return terminalColor(c, fallback)
+}
+
+func (s *terminalScreen) resolveForegroundColor(c color.Color, fallback color.NRGBA) color.NRGBA {
+	switch v := c.(type) {
+	case ansi.BasicColor:
+		return s.IndexedForeground[uint8(v)]
+	case ansi.IndexedColor:
+		return s.IndexedForeground[uint8(v)]
+	}
+	return s.resolveColor(c, fallback)
 }

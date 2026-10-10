@@ -231,7 +231,7 @@ func TestInspectorControlsFitAndMaximizeRestoresPanel(t *testing.T) {
 	for _, viewport := range []image.Point{{1120, 760}, {860, 560}} {
 		size = viewport
 		frame()
-		for _, label := range []string{"状态", "文件", "Git", "审阅", "事件", "放大状态栏", "在独立窗口打开", "收起检查面板", "OneCatch 菜单"} {
+		for _, label := range []string{"面板更多操作", "放大状态栏", "收起检查面板", "展开侧栏"} {
 			rect, ok := find(router.AppendSemantics(nil), label)
 			if !ok || rect.Empty() || !rect.In(image.Rectangle{Max: viewport}) {
 				t.Fatalf("%q clipped at %v: %v", label, viewport, rect)
@@ -258,6 +258,8 @@ func TestInspectorControlsFitAndMaximizeRestoresPanel(t *testing.T) {
 	if a.workbench.Maximized {
 		t.Fatal("restore ignored")
 	}
+	frame()
+	frame()
 	click("收起检查面板")
 	if a.workbench.Visible {
 		t.Fatal("collapse ignored")
@@ -329,6 +331,38 @@ func TestReviewScrollRegionSurvivesWideAndNarrowLayout(t *testing.T) {
 		inspect(router.AppendSemantics(nil))
 		if bounds.Dx() < 300 || bounds.Dy() < 500 {
 			t.Fatalf("diff scroll region collapsed at %d: %v", width, bounds)
+		}
+	}
+}
+
+func TestInspectorResizeWideHitAreaAndCapture(t *testing.T) {
+	for _, offset := range []float32{1, 6, 11} {
+		a := alignmentFixture(t)
+		a.workbench.Width = 400
+		a.ui.Preferences.Collapsed = true
+		root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element {
+			return el.Div().Row().WFull().HFull().Child(el.Div().Grow().W(el.Dp(0)), a.inspectorSeam(cx), el.Div().W(el.Dp(a.inspectorWidth(cx))).NoShrink().HFull())
+		}))
+		var router input.Router
+		var ops op.Ops
+		frame := func() {
+			ops.Reset()
+			root.Layout(layout.Context{Ops: &ops, Now: time.Now(), Source: router.Source(), Constraints: layout.Exact(image.Pt(1000, 600)), Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}})
+			router.Frame(&ops)
+		}
+		frame()
+		x := float32(588) + offset
+		router.Queue(pointer.Event{Kind: pointer.Press, Source: pointer.Mouse, Buttons: pointer.ButtonPrimary, Position: f32.Pt(x, 300)})
+		frame()
+		router.Queue(pointer.Event{Kind: pointer.Move, Source: pointer.Mouse, Buttons: pointer.ButtonPrimary, Position: f32.Pt(x-60, 300)})
+		frame()
+		if !a.workbench.Resizing || a.workbench.Width != 460 {
+			t.Fatalf("offset %v: drag not captured: %v / %v", offset, a.workbench.Resizing, a.workbench.Width)
+		}
+		router.Queue(pointer.Event{Kind: pointer.Release, Source: pointer.Mouse, Position: f32.Pt(x-60, 300)})
+		frame()
+		if a.workbench.Resizing {
+			t.Fatal("resize indicator stuck")
 		}
 	}
 }

@@ -26,8 +26,10 @@ import (
 // execution context so a tab switch or task navigation cannot discard a draft.
 type workbenchState struct {
 	Visible, Maximized                bool
+	Resizing                          bool
 	DetachedWindow                    *window.Window
 	Confirm                           *kit.DialogView
+	MoreMenu                          *kit.MenuView
 	Tab                               string
 	Width, DragX                      float32
 	Context, Error, Source, NewBranch string
@@ -65,11 +67,31 @@ type fileBuffer struct {
 	Error           string
 }
 type reviewWorkspace struct {
-	Files           []reviewFile
-	Selected, Error string
-	Loading         bool
-	Version         uint64
-	Limit           int
+	Snapshot  *domainworkspaces.GitSnapshot
+	Cancel    context.CancelFunc
+	StartPath string
+
+	ShowFiles, FileSearchFocus                                          bool
+	FileSearchIndex                                                     int
+	ContextLines                                                        int
+	NoHighlight                                                         bool
+	Options                                                             *kit.MenuView
+	FilePicker                                                          *kit.PopoverView
+	FileQuery                                                           string
+	GroupFolders, SeparateGenerated, SideBySide, NoWrap, HideWhitespace bool
+	Jump                                                                string
+
+	Collapsed                                      map[string]bool
+	ExpandedContext                                map[string]bool
+	Query                                          string
+	SearchOpen                                     bool
+	CommentKey, Comment, CommentPath, CommentScope string
+	CommentLine                                    int
+	Files                                          []reviewFile
+	Selected, Error                                string
+	Loading                                        bool
+	Version                                        uint64
+	Limit                                          int
 }
 
 func (a *app) initWorkbench() {
@@ -88,7 +110,8 @@ func (a *app) toggleInspector(tab string) {
 		a.workbench.DetachedWindow.Raise()
 		return
 	}
-	if tab == "" {
+	a.terminal.Open, a.terminal.Maximized = false, false
+	if tab == "" || a.workbench.Visible && a.workbench.Tab == tab {
 		a.workbench.Visible = !a.workbench.Visible
 	} else {
 		a.workbench.Visible = true
@@ -100,21 +123,29 @@ func (a *app) toggleInspector(tab string) {
 }
 func (a *app) inspectorWidth(cx *el.Context) float32 {
 	width, _ := cx.ViewportSize()
-	if !a.ui.Preferences.Collapsed {
+	if !a.sidebarCollapsed(cx) {
 		width -= a.sidebarWidth(cx) + 1
 	}
-	if a.workbench.Maximized {
-		return width - 1
+	if a.workbench.Maximized || a.page == "" && a.terminal.Maximized {
+		return max(0, width-12)
 	}
-	return min(a.workbench.Width, max(320, width-360))
+	return min(a.workbench.Width, max(0, width-292))
 }
 func (a *app) inspectorSeam(cx *el.Context) el.Element {
-	return el.Div().W(el.Dp(1)).NoShrink().HFull().Bg(seamColor).Child(el.Div().Absolute().Left(-4).Top(0).Bottom(0).W(el.Dp(9)).ID("inspector-resize").Role("separator").Name("调整检查面板宽度").Focusable(true).Cursor(pointer.CursorColResize).OnDrag(func(e el.DragEvent) {
+	line := el.Div().W(el.Dp(3)).H(el.Dp(64)).Rounded(2).NoShrink()
+	if cx.Hovered("inspector-resize") || a.workbench.Resizing {
+		line.Bg(mixColor(theme.Muted, theme.Bg, .45))
+	}
+	return el.Div().W(el.Dp(12)).NoShrink().HFull().Center().Child(line).ID("inspector-resize").Role("separator").Name("调整检查面板宽度").Focusable(true).Cursor(pointer.CursorColResize).OnDrag(func(e el.DragEvent) {
 		switch e.Kind {
 		case el.DragStart:
 			a.workbench.DragX = e.X
+			a.workbench.Resizing = true
+			a.workbench.Width = a.inspectorWidth(cx)
 		case el.DragMove:
-			a.workbench.Width = max(320, min(820, a.workbench.Width+a.workbench.DragX-e.X))
+			a.workbench.Width = max(240, min(820, a.inspectorWidth(cx)+a.workbench.DragX-e.X))
+		case el.DragEnd:
+			a.workbench.Resizing = false
 		}
 	}).OnKey(func(e el.KeyEvent) bool {
 		if e.State != el.KeyPress {
@@ -129,7 +160,7 @@ func (a *app) inspectorSeam(cx *el.Context) el.Element {
 			return true
 		}
 		return false
-	}))
+	})
 }
 
 var inspectorTabs = []struct{ ID, Label, Icon string }{{"status", "状态", "activity"}, {"files", "文件", "file-code-2"}, {"git", "Git", "git-branch"}, {"review", "审阅", "file-diff"}, {"events", "事件", "list-tree"}}
@@ -159,6 +190,9 @@ func (a *app) inspector(cx *el.Context) el.Element {
 		bar.Pl(94)
 	}
 
+	if a.workbench.DetachedWindow == nil {
+		bar = a.inspectorPanelHeader(cx)
+	}
 	var body el.Element
 	a.syncInspectorGitSource()
 	switch a.workbench.Tab {
@@ -174,11 +208,7 @@ func (a *app) inspector(cx *el.Context) el.Element {
 		body = a.statusInspector(cx)
 	}
 	pane := el.Div().ID("inspector").Name("检查面板").NoShrink().HFull().Child(a.workbench.Confirm.Render(cx), bar, body)
-	if a.workbench.DetachedWindow != nil {
-		pane.WFull()
-	} else {
-		pane.W(el.Dp(a.inspectorWidth(cx)))
-	}
+	pane.WFull()
 	return pane
 }
 func (a *app) loadInspector() {

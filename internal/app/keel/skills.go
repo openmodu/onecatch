@@ -344,7 +344,7 @@ func (a *app) skillPreviewContent() string {
 func (a *app) skillsPage(cx *el.Context) el.Element {
 	s := &a.skills
 	available, _ := cx.ViewportSize()
-	if !a.ui.Preferences.Collapsed {
+	if !a.sidebarCollapsed(cx) {
 		available -= a.sidebarWidth(cx) + 1
 	}
 	if s.Visible {

@@ -26,8 +26,11 @@ func (a *app) buildTerminalSplitMenu() {
 	a.terminal.SplitMenu = m
 }
 func (a *app) terminalWidth(cx *el.Context) float32 {
+	if a.page == "" {
+		return a.inspectorWidth(cx) - 8
+	}
 	w, _ := cx.ViewportSize()
-	if !a.ui.Preferences.Collapsed {
+	if !a.sidebarCollapsed(cx) {
 		w -= a.sidebarWidth(cx) + 1
 	}
 	if a.workbench.Visible {
@@ -42,13 +45,13 @@ func (a *app) terminalHeight(cx *el.Context) float32 {
 func (a *app) terminalDock(cx *el.Context) el.Element {
 	s := &a.terminal
 	dock := el.Div().WFull().NoShrink().Bg(theme.Bg).ID("terminal-dock")
-	if s.Maximized {
+	if s.Maximized || a.page == "" {
 		dock.Grow().H(el.Dp(0))
 	} else {
 		dock.H(el.Dp(a.terminalHeight(cx)))
 	}
 	dock.Child(el.Div().H(el.Dp(1)).WFull().NoShrink().Bg(seamColor))
-	if !s.Maximized {
+	if !s.Maximized && a.page != "" {
 		dock.Child(el.Div().Absolute().Left(0).Right(0).Top(-5).H(el.Dp(10)).ID("terminal-resize").Role("separator").Name("调整终端高度").Focusable(true).Cursor(pointer.CursorRowResize).OnDrag(func(e el.DragEvent) {
 			switch e.Kind {
 			case el.DragStart:
@@ -160,6 +163,9 @@ func (a *app) terminalDock(cx *el.Context) el.Element {
 		maxLabel, maxIcon = "还原终端", "minimize-2"
 	}
 	bar.Child(iconAction(cx, "terminal-maximize", maxLabel, maxIcon, func() { s.Maximized = !s.Maximized }, false), iconAction(cx, "terminal-collapse", "收起终端", "chevron-down", func() { s.Open, s.Maximized = false, false }, false))
+	if a.page == "" {
+		bar = a.terminalPanelHeader(cx)
+	}
 	dock.Child(bar)
 	body := el.Div().Grow().H(el.Dp(0)).WFull()
 	if tab := a.terminalTab(); tab != nil {

@@ -76,6 +76,7 @@ type uiState struct {
 	Filter                          string
 	Expanded, ShowAll               map[string]bool
 	More, Footer, Filters           *kit.MenuView
+	HeaderMore                      *kit.MenuView
 	SidebarNav                      *kit.SidebarView
 	SidebarPeek, SidebarPeekBlocked bool
 	SidebarPeekKeyboard             bool
@@ -428,4 +429,18 @@ func fullMenu(cx *el.Context, menu *kit.MenuView) el.Element {
 		div.WFull()
 	}
 	return result
+}
+
+func (a *app) headerMore(cx *el.Context) el.Element {
+	if a.ui.HeaderMore == nil {
+		menu := kit.Menu().Width(1).Placement(el.Bottom, el.End)
+		menu.ContentItem("新建对话", "", menuIcon("plus", "新建对话"), func() { a.newTask(a.workspaceID) }).
+			ContentItem("搜索对话", "mod+k", menuIcon("search", "搜索对话"), a.focusTaskSearch).
+			Separator().ContentItem("设置", "mod+,", menuIcon("settings", "设置"), a.openSettings)
+		menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
+			return iconAction(cx, "header-more", "更多操作", "ellipsis-vertical", menu.Toggle, menu.Value())
+		}))
+		a.ui.HeaderMore = menu
+	}
+	return a.ui.HeaderMore.Render(cx)
 }

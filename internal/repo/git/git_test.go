@@ -168,3 +168,78 @@ func TestInspectReportsVerbatimPathsForUnstagedAndRenamedFiles(t *testing.T) {
 		t.Fatalf("worktree diff = %q, %v", worktreeDiff, err)
 	}
 }
+
+func TestDiffContextIncludesUnchangedLines(t *testing.T) {
+	repo := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git: %v %s", err, out)
+		}
+	}
+	run("init")
+	run("config", "user.email", "test@example.test")
+	run("config", "user.name", "Test")
+	lines := make([]string, 40)
+	for i := range lines {
+		lines[i] = strings.Repeat("x", i+1)
+	}
+	path := filepath.Join(repo, "file.txt")
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	run("add", ".")
+	run("commit", "-m", "initial")
+	lines[20] = "changed"
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	inspector := gitrepo.New("")
+	small, err := inspector.DiffContext(context.Background(), repo, false, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	large, err := inspector.DiffContext(context.Background(), repo, false, 30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(large) <= len(small) || !strings.Contains(large, "\n x\n") || !strings.Contains(large, "+changed") {
+		t.Fatal("expanded context did not include surrounding source")
+	}
+	run("add", ".")
+	staged, err := inspector.DiffContext(context.Background(), repo, true, 30)
+	if err != nil || !strings.Contains(staged, "+changed") {
+		t.Fatalf("staged expansion: %v", err)
+	}
+}
+
+func TestDiffBatchUsesLiteralPaths(t *testing.T) {
+	repo := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	run("init")
+	for _, name := range []string{"a[1].txt", "a1.txt", "other.txt"} {
+		if err := os.WriteFile(filepath.Join(repo, name), []byte("new\n"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("add", ".")
+	inspector := gitrepo.New("")
+	diff, err := inspector.DiffPathsContext(context.Background(), repo, true, 3, []string{"a[1].txt"})
+	if err != nil || !strings.Contains(diff, "a[1].txt") || strings.Contains(diff, "a1.txt") || strings.Contains(diff, "other.txt") {
+		t.Fatalf("incorrect batch: %v %s", err, diff)
+	}
+	empty, err := inspector.DiffPathsContext(context.Background(), repo, true, 3, nil)
+	if err != nil || empty != "" {
+		t.Fatalf("empty batch read repository: %v %q", err, empty)
+	}
+	snapshot, err := inspector.InspectFiles(context.Background(), repo)
+	if err != nil || len(snapshot.Files) != 3 || snapshot.DiffStat != "" || snapshot.StagedStat != "" {
+		t.Fatalf("lightweight status: %+v %v", snapshot, err)
+	}
+}

@@ -283,9 +283,23 @@ func runtimeMark(cx *el.Context, id string, size float32) el.Element {
 	}
 	return lucide(cx, "bot", size, theme.Muted)
 }
-func (a *app) sidebarWidth(cx *el.Context) float32 {
+
+// Keep enough space for the composer without changing the user's saved sidebar width.
+func (a *app) sidebarAvailableWidth(cx *el.Context) float32 {
 	w, _ := cx.ViewportSize()
-	return min(a.ui.Preferences.SidebarWidth, max(180, w-560))
+	if a.page == "" && (a.workbench.Visible || a.terminal.Open) && !a.workbench.Maximized && !a.terminal.Maximized {
+		w -= min(a.workbench.Width, max(float32(320), w-680)) + 1
+	}
+	return w
+}
+func (a *app) sidebarCollapsed(cx *el.Context) bool {
+	return a.ui.Preferences.Collapsed || a.page == "" && a.sidebarAvailableWidth(cx) < 861
+}
+func (a *app) sidebarWidth(cx *el.Context) float32 {
+	if a.sidebarCollapsed(cx) {
+		return min(a.ui.Preferences.SidebarWidth, 280)
+	}
+	return min(a.ui.Preferences.SidebarWidth, max(180, a.sidebarAvailableWidth(cx)-681))
 }
 func (a *app) toggleSidebar() {
 	a.ui.Preferences.Collapsed = !a.ui.Preferences.Collapsed
@@ -436,7 +450,7 @@ func (a *app) sidebarPeek(cx *el.Context) el.Element {
 	probe := el.Div().ID("sidebar-peek-trigger").Absolute().Left(left).Top((mainTitleBarHeight - 28) / 2).Size(el.Dp(28))
 	position := el.Div().ID("sidebar-peek-position").Absolute().Left(sidebarPeekInset).Top(sidebarPeekInset - 1).Size(el.Dp(1))
 	trigger := el.Div().Absolute().Left(0).Top(0).Child(probe, position)
-	if !a.ui.Preferences.Collapsed {
+	if !a.sidebarCollapsed(cx) {
 		a.ui.SidebarPeek = false
 		return trigger
 	}

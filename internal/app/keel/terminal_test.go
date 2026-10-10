@@ -3,6 +3,7 @@ package keeldesktop
 import (
 	"context"
 	"encoding/base64"
+	"github.com/charmbracelet/x/ansi"
 	"image"
 	"runtime"
 	"strings"
@@ -333,4 +334,52 @@ func queueTerminalDrag(r *input.Router, frame func()) {
 	frame()
 	r.Queue(pointer.Event{Kind: pointer.Release, Source: pointer.Mouse, Position: f32.Pt(478, 140)})
 	frame()
+}
+
+func TestTerminalCanvasAlwaysFollowsAppearance(t *testing.T) {
+	defer applyPalette(false)
+	for _, dark := range []bool{false, true} {
+		applyPalette(dark)
+		for _, id := range []string{"system", "paper", "midnight", "contrast"} {
+			p := resolveNativeTerminalPalette(id, dark)
+			if p.Background != theme.Surface || p.Foreground != theme.Text {
+				t.Fatalf("%s dark=%v overrides application canvas", id, dark)
+			}
+		}
+	}
+}
+
+func TestTerminalPanelCloseDisposesAllTabs(t *testing.T) {
+	a := alignmentFixture(t)
+	panes := make([]*terminalPane, 0, len(a.terminal.Panes))
+	for _, p := range a.terminal.Panes {
+		panes = append(panes, p)
+	}
+	a.closeTerminalPanel()
+	if len(a.terminal.Tabs) != 0 || len(a.terminal.Panes) != 0 || a.terminal.Open {
+		t.Fatal("close retained terminal state")
+	}
+	for _, p := range panes {
+		if !p.Removed {
+			t.Fatal("close did not dispose pane")
+		}
+	}
+}
+
+func TestTerminalLightIndexedTextRemainsReadable(t *testing.T) {
+	applyPalette(false)
+	s := newTerminalScreen(nil)
+	defer s.close()
+	s.setPalette("system", false)
+	for _, idx := range []ansi.IndexedColor{40, 220, 229} {
+		original := s.resolveColor(idx, theme.Text)
+		adjusted := s.resolveForegroundColor(idx, theme.Text)
+		if adjusted == original {
+			t.Fatalf("bright index %d was not adapted for white background", idx)
+		}
+	}
+	exact := theme.RGB(0xffff00)
+	if s.resolveForegroundColor(exact, theme.Text) != exact {
+		t.Fatal("true color changed")
+	}
 }

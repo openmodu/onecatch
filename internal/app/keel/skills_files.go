@@ -165,7 +165,7 @@ func (a *app) skillInspector(cx *el.Context) el.Element {
 		title = "Modu 调试"
 	}
 	bar := el.Div().Row().Items(el.Center).H(el.Dp(44)).Px(8).Gap(6).Child(tabs, el.Text(title).TextSize(12).Medium().MaxLines(1), iconAction(cx, "maximize-skill-inspector", maxLabel, maxIcon, func() { s.Maximized = !s.Maximized }, false), iconAction(cx, "hide-skill-inspector", "收起检查面板", "panel-right-close", func() { s.Visible = false; s.Maximized = false }, false))
-	if s.Maximized && a.ui.Preferences.Collapsed && runtime.GOOS == "darwin" {
+	if s.Maximized && a.sidebarCollapsed(cx) && runtime.GOOS == "darwin" {
 		bar.Pl(94)
 	}
 	var body el.Element
@@ -175,7 +175,7 @@ func (a *app) skillInspector(cx *el.Context) el.Element {
 		body = a.skillFilesInspector(cx)
 	}
 	width, _ := cx.ViewportSize()
-	if !a.ui.Preferences.Collapsed {
+	if !a.sidebarCollapsed(cx) {
 		width -= a.sidebarWidth(cx) + 1
 	}
 	pane := el.Div().ID("skill-inspector").Role("complementary").Name("Skills 检查面板").HFull().NoShrink().Child(bar, body)

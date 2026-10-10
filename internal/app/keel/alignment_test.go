@@ -174,6 +174,7 @@ func TestTerminalTabHeaderAlignmentAndNativeSelection(t *testing.T) {
 	for _, width := range []int{1120, 860} {
 		for _, scale := range []int{1, 2} {
 			a := alignmentFixture(t)
+			a.page = "skills" // The Skills workspace retains the bottom terminal strip.
 			labels := []string{"ityike@Mac-mini", "zsh", "very-long-terminal-session-title"}
 			if width == 860 {
 				// Keep both a short and a long tab visible in the narrow strip.

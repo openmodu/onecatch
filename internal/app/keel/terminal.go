@@ -45,6 +45,7 @@ type terminalState struct {
 	Next                                     uint64
 	Creating                                 int
 	SplitMenu                                *kit.MenuView
+	MoreMenu                                 *kit.MenuView
 }
 
 func (a *app) initTerminal() {
@@ -121,6 +122,10 @@ func (a *app) toggleTerminal() {
 	if a.terminal.Open {
 		a.terminal.Open, a.terminal.Maximized = false, false
 		return
+	}
+	if a.page == "" {
+		a.workbench.Visible = false
+		a.workbench.Maximized = false
 	}
 	a.terminal.Open = true
 	if len(a.terminal.Tabs) == 0 {
@@ -368,4 +373,12 @@ func (a *app) searchTerminal(backward bool) {
 	if p := a.activeTerminal(); p != nil {
 		a.terminal.SearchFound = p.Screen.search(a.terminal.Query, backward)
 	}
+}
+
+// closeTerminalPanel disposes every tab and its PTY; toolbar toggling only hides it.
+func (a *app) closeTerminalPanel() {
+	for len(a.terminal.Tabs) > 0 {
+		a.closeTerminalTab(a.terminal.Tabs[0].ID)
+	}
+	a.terminal.Open, a.terminal.Maximized, a.terminal.SearchOpen = false, false, false
 }
