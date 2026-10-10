@@ -1101,3 +1101,21 @@ Scoped disclosure-position result: passed. Migration acceptance remains pending.
   rebuilt and the macOS bundle re-signed.
 
 Scoped title-alignment result: passed. Migration acceptance remains pending.
+
+## Standard Keel Settings window — 2026-10-10
+
+- The settings window now uses `kit.Settings`, `SettingPage`, `SettingGroup`
+  and `SettingItem` for navigation, search, groups and ordinary form rows.
+  Skills, mobile pairing and Worker management use documented custom-content
+  slots and keep their existing application actions. Keel itself is unchanged.
+- Application-owned drafts, revision checks and persistence are preserved.
+  Save/reload actions remain in a fixed footer so search cannot hide them.
+  Worker unlock shortcuts also work when the standard sidebar has focus.
+- Production input-router checks at 1x/2x pass for page selection, search,
+  Agent changes and draft retention. Existing appearance, Worker, mobile and
+  Skills checks pass, as do the complete Keel application suite, race checks
+  and Go vet. Light/dark captures of six ordinary settings pages are saved as
+  `bin/keel-qa/settings-component-{page}-{light,dark}.png`; Agent dark and
+  security light captures were visually inspected. Both executables rebuilt.
+
+Scoped Settings-component result: passed. Overall migration remains pending.

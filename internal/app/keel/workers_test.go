@@ -329,7 +329,7 @@ func TestWorkerModalNativeKeyboardAndMinimumViewport(t *testing.T) {
 	frame()
 	frame()
 	if !p.workersVisible() || a.settings.Experimental.RemoteWorkersEnabled {
-		t.Fatal("unlock changed persistent enabled flag")
+		t.Fatalf("unlock state: section=%q page=%q unlocked=%v persisted=%v", p.section, p.view.Value(), p.workers.unlocked, a.settings.Experimental.RemoteWorkersEnabled)
 	}
 	click("添加环境")
 	frame()

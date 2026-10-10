@@ -70,6 +70,10 @@ The integrated `worker`, SSH askpass and shell process roles also remain availab
 - Connect, edit, test and remove remote Workers in Settings, including sandbox
   URL/path/sync options, one-time pairing and collapsed TLS certificate controls.
   The original Ctrl+Alt+S reveal and deferred enable/save behavior are preserved.
+- The settings window uses Keel's standard `Settings`, `SettingPage`,
+  `SettingGroup` and `SettingItem` components for navigation, search and form
+  layout. Complex Skills, mobile and Worker actions use its custom content
+  slots; settings drafts, revision checks and persistence remain application-owned.
   Enabled Workers appear in the Agent menu; remote tasks persist their execution
   target and reject incompatible attachments, Remote FS, full access and local
   Worktrees. Ordinary Worker pairing retains its TLS pin through later edits.
