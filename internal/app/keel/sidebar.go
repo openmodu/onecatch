@@ -2,16 +2,22 @@ package keeldesktop
 
 import (
 	"fmt"
+	"image/color"
 	"runtime"
 	"slices"
 	"strings"
 
+	"gioui.org/font"
 	"gioui.org/io/pointer"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 )
+
+// sectionTitleWeight is shared by the Sidebar's section headings and the
+// 项目管理 heading in its Header, which mirrors them.
+const sectionTitleWeight = font.SemiBold
 
 // Sidebar owns navigation, expansion, scrolling, keyboard handling and context
 // menus. OneCatch supplies the model and calls its existing application actions.
@@ -28,8 +34,9 @@ func (a *app) sidebar(cx *el.Context) el.Element {
 		}
 	}
 	type section struct {
-		title string
-		items []kit.SidebarItem
+		title  string
+		action el.View
+		items  []kit.SidebarItem
 	}
 	var sections []section
 	var links []kit.SidebarItem
@@ -47,17 +54,18 @@ func (a *app) sidebar(cx *el.Context) el.Element {
 		if w.Hidden {
 			continue
 		}
-		label := w.Name
-		if w.RemoteFS != nil {
-			label += " · 远端"
-		}
 		menu := a.projectMenu(w)
-		project := kit.SidebarItem{ID: "project/" + w.ID, Label: label, Icon: kit.IconFolder, ContextMenu: menu,
+		project := kit.SidebarItem{ID: "project/" + w.ID, Label: w.Name, Icon: kit.IconFolder, ContextMenu: menu,
 			Suffix: el.ViewFunc(func(cx *el.Context) el.Element {
 				return el.Div().Row().Items(el.Center).Child(
 					iconAction(cx, "new-task/"+w.ID, "新建任务", "plus", func() { a.newTask(w.ID) }, false),
 					iconAction(cx, "project-actions/"+w.ID, "项目操作", "ellipsis", menu.Toggle, menu.Value()))
 			})}
+		if w.RemoteFS != nil {
+			project.Tag = kit.Tag("远端").Tone(kit.ToneInfo).Size(20)
+		}
+		// The model fingerprint reads labels, not tags.
+		fmt.Fprintf(&iconModel, "%q/%v;", w.ID, w.RemoteFS != nil)
 		var tasks []domaintasks.Task
 		for _, task := range a.tasks[w.ID] {
 			fmt.Fprintf(&iconModel, "%q/%q/%q;", task.ID, task.Harness, task.WorkflowID)
@@ -89,7 +97,10 @@ func (a *app) sidebar(cx *el.Context) el.Element {
 	if len(pinned) > 0 {
 		sections = append(sections, section{title: "置顶", items: pinned})
 	}
-	sections = append(sections, section{title: "项目", items: projects})
+	addProject := el.ViewFunc(func(cx *el.Context) el.Element {
+		return iconAction(cx, "add-project", "新建项目", "plus", a.newProject, false)
+	})
+	sections = append(sections, section{title: "项目", action: addProject, items: projects})
 	// Keep the component pointer stable so el retains scroll/focus identity.
 	// Rebuild its data only when destinations change; normal frames retain its
 	// selection/expansion state.
@@ -122,9 +133,9 @@ func (a *app) sidebar(cx *el.Context) el.Element {
 				menu.SetValue(false)
 			}
 		}
-		next := kit.Sidebar().BorderWidth(0).Collapsible(false).OnChange(a.sidebarSelect)
+		next := kit.Sidebar().BorderWidth(0).Collapsible(false).SectionTitleWeight(sectionTitleWeight).OnChange(a.sidebarSelect)
 		for _, section := range sections {
-			next.Section(section.title, section.items...)
+			next.SectionAction(section.title, section.action, section.items...)
 		}
 		*a.ui.SidebarNav = *next
 		a.ui.SidebarModel = model.String()
@@ -173,30 +184,40 @@ func (a *app) sidebarHeader(cx *el.Context) el.Element {
 		title.Pl(78)
 	}
 	title.Child(iconAction(cx, "hide-sidebar", "收起侧栏", "panel-left-close", a.toggleSidebar, false), dragArea(cx, el.Div().Grow().HFull()))
-	create := button("新建", func() {
-		if len(a.workspaces) == 0 {
-			a.newProject()
-		} else {
-			a.newTask(a.workspaceID)
-		}
-	}, kit.ButtonGhost).Icon(kit.IconPlus).Selected(a.page == "" && a.taskID == "").Render(cx).(*el.DivEl).WFull().Justify(el.Start).FocusStyle(neutralFocus)
+	// Status filtering sits beside the search it narrows.
+	search := el.Div().Row().Items(el.Center).Gap(4).Child(a.sidebarSearch(cx), a.ui.Filters.Render(cx))
 	// Match Sidebar's 10dp section-heading inset inside its outer padding.
-	tools := el.Div().Row().Items(el.Center).H(el.Dp(28)).Pl(10).Child(el.Text("项目管理").Grow().TextSize(theme.TextSm).TextColor(theme.Muted),
-		iconAction(cx, "add-project", "添加项目", "plus", a.newProject, false),
-		iconAction(cx, "task-search-toggle", "搜索任务", "search", func() {
-			a.ui.SearchOpen = !a.ui.SearchOpen
-			if !a.ui.SearchOpen {
-				a.query = ""
-			}
-		}, a.ui.SearchOpen), a.ui.Filters.Render(cx))
-	header := el.Div().Gap(8).Child(title, create, tools)
-	if a.ui.SearchOpen {
-		header.Child(field("task-search", "搜索任务", &a.query))
+	heading := el.Div().Row().Items(el.Center).H(el.Dp(28)).Pl(10).Child(el.Text("项目管理").TextSize(theme.TextSm).TextColor(theme.Muted).Weight(sectionTitleWeight))
+	return el.Div().Gap(8).Child(title, search, heading)
+}
+
+// sidebarSearch is an always-visible task filter; ⌘K focuses it.
+func (a *app) sidebarSearch(cx *el.Context) el.Element {
+	if a.ui.SearchFocus {
+		cx.Focus("task-search")
+		a.ui.SearchFocus = false
 	}
-	if len(a.workspaces) == 0 {
-		header.Child(el.Text("暂无项目").TextSize(12).TextColor(theme.Muted))
+	input := field("task-search", "搜索任务", &a.query).Grow().H(el.Dp(32)).Px(0).Bg(color.NRGBA{}).
+		FocusStyle(func(st *el.Style) { st.BorderColor(color.NRGBA{}).Bg(color.NRGBA{}) }).
+		CaptureKeys("⎋").OnKey(func(e el.KeyEvent) bool {
+		if e.State == el.KeyPress && e.Name == "⎋" && a.query != "" {
+			a.query = ""
+			return true
+		}
+		return false
+	})
+	// The field itself is borderless; its box shows the focus a caret alone does not.
+	box := el.Div().Row().Items(el.Center).Gap(8).Grow().W(el.Dp(0)).H(el.Dp(32)).Pl(10).Pr(4).Rounded(8).Bg(theme.Subtle).Border(1, color.NRGBA{})
+	icon := theme.Muted
+	if cx.Focused("task-search") {
+		box.Bg(theme.Surface).Border(1, theme.Border)
+		icon = theme.Text
 	}
-	return header
+	box.Child(lucide(cx, "search", 16, icon), input)
+	if a.query != "" {
+		box.Child(iconAction(cx, "task-search-clear", "清除搜索", "x", func() { a.query = "" }, false))
+	}
+	return box
 }
 
 func (a *app) sidebarTask(t domaintasks.Task) kit.SidebarItem {
@@ -366,4 +387,11 @@ func (a *app) executorOptions(cx *el.Context) el.Element {
 		}
 	}
 	return column
+}
+
+func (a *app) focusTaskSearch() {
+	if a.ui.Preferences.Collapsed {
+		a.toggleSidebar()
+	}
+	a.ui.SearchFocus = true
 }

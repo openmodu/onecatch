@@ -1102,6 +1102,20 @@ Scoped disclosure-position result: passed. Migration acceptance remains pending.
 
 Scoped title-alignment result: passed. Migration acceptance remains pending.
 
+## Sidebar search and project creation placement — 2026-10-09
+
+- Search is now a labeled standard Keel ghost-button row below New. Its input
+  opens immediately beneath that row and retains the existing query state.
+  Closing search clears the query as before.
+- Project management keeps its filter control; its adjacent plus/search icons
+  were removed. A separate `+ 新建项目` row calls the existing project dialog.
+  Project task-creation suffixes keep their existing actions.
+- Existing Sidebar interaction checks pass. Updated light/dark captures show
+  the revised production Header; the executables were rebuilt and the macOS
+  bundle re-signed. This iteration changes OneCatch only.
+
+Scoped control-placement result: passed. Migration acceptance remains pending.
+
 ## Standard Keel Settings window — 2026-10-10
 
 - The settings window now uses `kit.Settings`, `SettingPage`, `SettingGroup`
@@ -1119,3 +1133,72 @@ Scoped title-alignment result: passed. Migration acceptance remains pending.
   security light captures were visually inspected. Both executables rebuilt.
 
 Scoped Settings-component result: passed. Overall migration remains pending.
+
+## Sidebar header simplification — 2026-10-10
+
+- Removed the `+ 新建` header row; tasks start from each project's `+` suffix.
+- Search is an always-visible input with a leading search icon. ⌘K focuses it
+  (expanding a collapsed sidebar), Esc and the trailing clear button empty it.
+- `+ 新建项目` moved into the 项目 section heading as a trailing `+`. Keel's
+  Sidebar gained `SectionAction(title, action, items...)`; a section with an
+  action keeps its heading while empty (hidden during a filter query), so a
+  first project can still be added. The action sits flush with the filter icon.
+- Keel kit and OneCatch keel tests pass; light/dark sidebar captures inspected.
+
+## Icon and label vertical alignment — 2026-10-10
+
+- Cause: Keel's optical text shift was measured once per font from a `国Ag`
+  sample. With `SF Pro Text` and a PingFang fallback that sample's line box
+  mixes both faces, so pure-Latin labels (own, shorter SF line box) sat 2.5dp
+  low and pure-Chinese labels (own PingFang box) 1.25dp high beside icons.
+- Fix (local Keel `ui/el/paint.go`): the shift is measured per script class —
+  Latin (`Ag`, cap height), East Asian (`国`), mixed (`国Ag`) — and rounded
+  instead of truncated. Inputs keep the mixed measurement so typing never
+  moves the line.
+- Measured on the 2× sidebar capture, ink-center offset text vs icon: Latin
+  +5px → 0, Chinese −2.5/−3px → −0.5/−1px; composer chips and footer within
+  ±2px. Keel `./...` and OneCatch keel tests pass.
+
+## Sidebar section heading weight — 2026-10-10
+
+- Keel's Sidebar section headings were always regular weight (the components
+  gallery matches). Keel now offers `SectionTitleWeight(font.Weight)` (default
+  unchanged) and `el` gained a general `Weight(font.Weight)` text setter.
+- OneCatch sets `font.SemiBold` for 项目 and for its mirrored 项目管理 Header
+  heading through one shared constant. Keel and OneCatch keel tests pass.
+
+## Remote project marker as a Keel Tag — 2026-10-10
+
+- Remote FS projects show `H5000M` followed by a neutral `kit.Tag("远端")`
+  (20dp) instead of the ` · 远端` label suffix. Keel's `SidebarItem` gained a
+  display-only `Tag` slot right after the label (before the disclosure arrow),
+  kept at regular weight on selected rows and hidden when collapsed.
+- The sidebar model fingerprint now includes the remote flag, since the label
+  alone no longer changes. Keel and OneCatch keel tests pass.
+
+## Sidebar search state, filter placement, More menu, remote tone — 2026-10-10
+
+- The status filter now sits right of the search box on the same row; the
+  项目管理 heading stands alone above the navigation links.
+- The search box shows focus: Surface fill, 1dp Border and a Text-colored
+  search icon while `task-search` is focused (1dp transparent border at rest,
+  so focus does not move layout).
+- 更多 opens as a dropdown below its row (`el.Bottom, el.Start`) inside the
+  sidebar instead of overlapping the page. The separator appears only when
+  hidden pages precede it, and 编辑侧栏… has the square-pen icon like the other
+  entries. Keel still focuses the first item on open for keyboard use.
+- The 远端 tag uses `kit.ToneInfo`, distinct from the green 本地 caption pill.
+- Captures of the open menu and focused search were inspected; OneCatch keel
+  tests pass.
+
+## Focus ring after closing a menu with the mouse — 2026-10-10
+
+- Cause: a closing overlay returned focus to its trigger (the 更多 row) as
+  programmatic focus, which Keel always ringed, so a mouse open/pick left a
+  2dp Primary outline on the row.
+- Fix (local Keel `ui/el`): the root tracks input modality — pointer presses,
+  outside-press dismissal and drags clear it; key presses, Escape and
+  shortcuts set it. Restored focus shows its ring only after keyboard input,
+  like `:focus-visible`; Escape/Tab users still see where focus returned.
+- New Keel test `TestRestoredFocusRingFollowsInputModality`; Keel `./...` and
+  OneCatch keel tests pass.

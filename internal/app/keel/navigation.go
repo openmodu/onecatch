@@ -70,7 +70,7 @@ type uiState struct {
 	PreferencesError        error
 	History                 navigationHistory
 	Restoring               bool
-	SearchOpen              bool
+	SearchFocus             bool
 	Filter                  string
 	Expanded, ShowAll       map[string]bool
 	More, Footer, Filters   *kit.MenuView
@@ -292,14 +292,20 @@ func menuIcon(name, label string) el.View {
 	})
 }
 func (a *app) buildMoreMenu() {
-	menu := kit.Menu().Width(176).Placement(el.Right, el.Start)
+	// A dropdown under the row, inside the sidebar rather than over the page.
+	menu := kit.Menu().Width(176).Placement(el.Bottom, el.Start)
+	hidden := false
 	for _, item := range sidebarItems {
 		if !slices.Contains(a.ui.Preferences.Navigation, item.ID) {
 			it := item
+			hidden = true
 			menu.ContentItem(it.Label, "", menuIcon(iconNames[it.Icon], it.Label), func() { a.goPage(it.ID) })
 		}
 	}
-	menu.Separator().Item("编辑侧栏…", "", func() { a.ui.Customize.SetValue(true) })
+	if hidden {
+		menu.Separator()
+	}
+	menu.ContentItem("编辑侧栏…", "", menuIcon("square-pen", "编辑侧栏…"), func() { a.ui.Customize.SetValue(true) })
 	menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 		label := "更多"
 		active := false

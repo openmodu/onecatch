@@ -50,7 +50,7 @@ func Run(options Options) error {
 		Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin",
 		TrafficLightLayout: &window.TrafficLightLayout{Height: 52, Left: 20},
 		Content:            el.Root(a), OnClose: a.close,
-		Shortcuts: map[string]func(){"mod+`": a.toggleTerminal, "mod+enter": a.send, "mod+shift+enter": a.sendSteering, "mod+s": a.saveActiveWorkspaceFile, "mod+k": func() { a.ui.SearchOpen = !a.ui.SearchOpen }, "mod+b": a.toggleSidebar, "mod+[": func() { a.goHistory(-1) }, "mod+]": func() { a.goHistory(1) }},
+		Shortcuts: map[string]func(){"mod+`": a.toggleTerminal, "mod+enter": a.send, "mod+shift+enter": a.sendSteering, "mod+s": a.saveActiveWorkspaceFile, "mod+k": a.focusTaskSearch, "mod+b": a.toggleSidebar, "mod+[": func() { a.goHistory(-1) }, "mod+]": func() { a.goHistory(1) }},
 	})
 	if err := window.SetApplicationMenu(
 		window.MenuItem{Title: "OneCatch", Role: window.MenuApplication, Children: []window.MenuItem{
