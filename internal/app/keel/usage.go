@@ -13,91 +13,194 @@ import (
 )
 
 func (a *app) usagePage(cx *el.Context) el.Element {
-	root := el.Div().ID("usage-page").Grow().H(el.Dp(0)).ScrollY().P(32).Gap(20)
+	now := time.Now()
+	width, _ := cx.ViewportSize()
+	if !a.sidebarCollapsed(cx) {
+		width -= a.sidebarWidth(cx) + 1
+	}
+	padding := float32(28)
+	if width < 700 {
+		padding = 16
+	}
+	root := el.Div().ID("usage-page").Grow().H(el.Dp(0)).ScrollY().P(padding).Gap(24)
 	refresh := iconButton("刷新", func() { a.loadUsage(true) }, kit.ButtonGhost, kit.IconRetry).Loading(a.library.UsageLoading)
-	root.Child(el.Div().Row().Items(el.Center).Gap(16).Child(lucide(cx, "chart-no-axes-column", 28, theme.Primary), el.Div().Grow().Gap(8).Child(el.Text("Agent 用量").TextSize(28).Medium(), el.Text("汇总各运行时的每日 Token 用量和账户限额。").TextSize(13).TextColor(theme.Muted)), refresh.Render(cx)))
-	filters := el.Div().Row().Wrap().Gap(8)
+	root.Child(el.Div().Row().Items(el.Center).Child(el.Text("用量").Grow().TextSize(24).Medium(), refresh.Render(cx)))
+	filters := el.Div().Row().Wrap().Gap(6)
 	filters.Child(button("全部", func() { a.library.UsageFilter = "" }, kit.ButtonGhost).Selected(a.library.UsageFilter == "").Render(cx))
 	for _, usage := range a.library.Usage {
 		id := string(usage.Runtime)
-		filters.Child(button(id, func() { a.library.UsageFilter = id }, kit.ButtonGhost).Selected(a.library.UsageFilter == id).Render(cx))
+		filters.Child(button(usageProviderName(id), func() { a.library.UsageFilter = id }, kit.ButtonGhost).Selected(a.library.UsageFilter == id).Render(cx))
 	}
-	root.Child(el.Div().P(18).Gap(12).Rounded(12).Bg(theme.Surface).Child(el.Text("用量来源").TextSize(15).Medium(), el.Text("账户限额与本机活动按来源分别展示。").TextSize(12).TextColor(theme.Muted), filters))
-	aggregate := summarizeUsage(a.library.Usage, a.library.UsageFilter, time.Now())
-	daily := aggregate.Daily
+	root.Child(filters)
+	aggregate := summarizeUsage(a.library.Usage, a.library.UsageFilter, now)
 	metrics := el.Div().Row().Wrap().Gap(12)
 	for _, m := range []struct {
-		Label     string
-		Value     int64
-		Available bool
-	}{{"累计 Token", aggregate.Lifetime, aggregate.Available[0]}, {"单日峰值", aggregate.Peak, aggregate.Available[1]}, {"当前连续天数", aggregate.Current, aggregate.Available[2]}, {"最长连续天数", aggregate.Longest, aggregate.Available[3]}} {
+		label     string
+		value     int64
+		available bool
+	}{
+		{"累计 Token", aggregate.Lifetime, aggregate.Available[0]}, {"单日峰值", aggregate.Peak, aggregate.Available[1]},
+		{"连续活跃天数", aggregate.Current, aggregate.Available[2]}, {"最长连续天数", aggregate.Longest, aggregate.Available[3]},
+	} {
 		value := "—"
-		if m.Available {
-			value = formatNumber(m.Value)
+		if m.available {
+			value = formatNumber(m.value)
 		}
-		metrics.Child(el.Div().Grow().MinW(el.Dp(150)).P(18).Rounded(12).Bg(theme.Surface).Gap(10).Child(el.Text(m.Label).TextSize(12).TextColor(theme.Muted), el.Text(value).Name(value).TextSize(20).Medium().MaxLines(1)))
+		metrics.Child(el.Div().Grow().MinW(el.Dp(135)).P(16).Rounded(10).Bg(theme.Subtle).Gap(8).Child(el.Text(m.label).TextSize(12).TextColor(theme.Muted), el.Text(value).TextSize(22).Medium().MaxLines(1)))
 	}
-	root.Child(metrics, usageHeatmap(daily, time.Now()))
+	root.Child(metrics)
+	if len(aggregate.Daily) > 0 {
+		heatmapID := "usage-activity/" + a.library.UsageFilter
+		_, viewport, _ := cx.ScrollStateX(heatmapID)
+		if viewport == 0 {
+			a.library.UsageHeatmapReady = ""
+		}
+		if viewport > 0 && a.library.UsageHeatmapReady != heatmapID {
+			cx.ScrollToX(heatmapID, 1000000)
+			a.library.UsageHeatmapReady = heatmapID
+		}
+		root.Child(usageHeatmap(aggregate.Daily, now, width-2*padding, heatmapID))
+	}
 	for _, usage := range a.library.Usage {
 		id := string(usage.Runtime)
 		if a.library.UsageFilter != "" && a.library.UsageFilter != id {
 			continue
 		}
+		section := el.Div().Gap(14)
+		heading := el.Div().Row().Wrap().Items(el.Center).Gap(8).Child(runtimeMark(cx, id, 18), el.Text(usageProviderName(id)).TextSize(16).Medium())
+		scope := usage.DailyUsageScope
+		if scope == "" {
+			scope = usage.Scope
+		}
+		scopeLabel := "用量范围未知"
+		switch scope {
+		case agentrun.AccountUsageScopeAccount:
+			scopeLabel = "账户活动"
+		case agentrun.AccountUsageScopeDevice:
+			scopeLabel = "本机活动"
+		case agentrun.AccountUsageScopeMixed:
+			scopeLabel = "账户与本机活动"
+		}
+		heading.Child(el.Text(scopeLabel).TextSize(11).TextColor(theme.Muted))
+		section.Child(heading)
 		for _, limit := range usage.RateLimits {
 			name := limit.Name
 			if name == "" {
 				name = limit.ID
 			}
-			card := el.Div().P(20).Rounded(12).Bg(theme.Surface).Gap(12).Child(el.Div().Row().Items(el.Center).Gap(8).Child(runtimeMark(cx, id, 16), el.Text(id+" · "+name).Medium().TextSize(15)), el.Text(limit.PlanType).TextSize(11).TextColor(theme.Muted))
-			windows := el.Div().Row().Wrap().Gap(12)
+			title := name
+			if limit.PlanType != "" {
+				title += " · " + limit.PlanType
+			}
+			card := el.Div().P(16).Rounded(10).Bg(theme.Subtle).Gap(12)
+			if title != "" {
+				card.Child(el.Text(title).TextSize(12).TextColor(theme.Muted))
+			}
+			windows := el.Div().Row().Wrap().Gap(20)
 			for _, w := range []*agentrun.AccountRateLimitWindow{limit.Primary, limit.Secondary} {
 				if w == nil {
 					continue
 				}
 				percent := max(0, min(100, w.UsedPercent))
+				color := theme.Primary
+				if percent >= 90 {
+					color = theme.DangerText
+				}
+				progress := kit.Progress("").Height(5).Color(color)
+				progress.SetValue(float32(percent) / 100)
 				reset := "重置时间未知"
 				if w.ResetsAt > 0 {
-					reset = "重置于 " + time.Unix(w.ResetsAt, 0).Local().Format("01-02 15:04")
+					reset = "重置于 " + time.Unix(w.ResetsAt, 0).Local().Format("01-02 15:04 MST -07:00")
 				}
-				progress := kit.Progress("").Height(6).Color(theme.Primary)
-				progress.SetValue(float32(percent) / 100)
-				windows.Child(el.Div().Grow().MinW(el.Dp(180)).P(16).Rounded(8).Bg(theme.Subtle).Gap(12).Child(el.Text(fmt.Sprintf("%d 分钟窗口", w.WindowDurationMins)).TextSize(12).TextColor(theme.Muted), el.Text(fmt.Sprintf("已用 %d%% · 剩余 %d%%", percent, 100-percent)).Medium().TextSize(18), progress.Render(cx), el.Text(reset).TextSize(11).TextColor(theme.Muted)))
+				windows.Child(el.Div().Grow().MinW(el.Dp(200)).Gap(10).Child(el.Div().Row().Child(el.Text(usageWindowLabel(w.WindowDurationMins)).Grow().TextSize(13), el.Text(fmt.Sprintf("已用 %d%%", percent)).TextSize(13).Medium().TextColor(color)), progress.Render(cx), el.Text(reset).TextSize(11).TextColor(theme.Muted)))
 			}
 			card.Child(windows)
 			if limit.QuotaRemaining != nil {
-				card.Child(el.Text(fmt.Sprintf("剩余额度：%d", *limit.QuotaRemaining)).TextSize(12).TextColor(theme.Muted))
+				card.Child(el.Text(fmt.Sprintf("剩余额度：%d", *limit.QuotaRemaining)).TextSize(12))
 			}
-			root.Child(card)
+			section.Child(card)
 		}
-		scope := string(usage.DailyUsageScope)
-		if scope == "" {
-			scope = string(usage.Scope)
+		if len(usage.RateLimits) == 0 {
+			section.Child(el.Text("此来源未提供账户限额").TextSize(12).TextColor(theme.Muted))
 		}
-		note := id + " · " + scope + " · " + usage.Source
+		note := usage.Source
+		if !usage.FetchedAt.IsZero() {
+			note += " · 更新于 " + usage.FetchedAt.Local().Format("01-02 15:04 MST -07:00")
+		}
+		if note != "" {
+			section.Child(el.Text(strings.TrimPrefix(note, " · ")).TextSize(11).TextColor(theme.Muted))
+		}
 		if usage.Warning != "" {
-			note += "\n" + usage.Warning
+			section.Child(kit.Alert(usage.Warning).Size(kit.AlertSizeSmall).Tone(kit.ToneWarning).Render(cx))
 		}
-		root.Child(el.Text(note).TextSize(11).TextColor(theme.Muted))
+		root.Child(section)
 	}
 	errors := make([]string, 0, len(a.library.UsageErrors))
 	for id := range a.library.UsageErrors {
+		if a.library.UsageFilter != "" && a.library.UsageFilter != id {
+			continue
+		}
 		errors = append(errors, id)
 	}
 	sort.Strings(errors)
 	for _, id := range errors {
-		root.Child(el.Text(id + "：" + a.library.UsageErrors[id]).TextSize(12).TextColor(theme.Muted))
+		root.Child(kit.Alert(usageProviderName(id) + "：" + a.library.UsageErrors[id]).Size(kit.AlertSizeSmall).Tone(kit.ToneDanger).Render(cx))
 	}
-	if len(a.library.Usage) == 0 && !a.library.UsageLoading {
-		root.Child(el.Text("暂无用量数据，请配置并登录支持用量查询的 Agent。").TextSize(13).TextColor(theme.Muted))
+	if len(a.library.Usage) == 0 {
+		message := "暂无用量数据，请配置并登录支持用量查询的 Agent。"
+		if a.library.UsageLoading {
+			message = "正在加载用量…"
+		}
+		root.Child(el.Div().Py(32).Child(el.Text(message).TextSize(13).TextColor(theme.Muted)))
 	}
-	recent := el.Div().P(20).Rounded(12).Bg(theme.Surface).Gap(12).Child(el.Text("每日用量").TextSize(18).Medium())
-	for offset := 0; offset < 14; offset++ {
-		day := time.Now().AddDate(0, 0, -offset).Format("2006-01-02")
-		recent.Child(el.Div().Row().Child(el.Text(day).Grow().TextSize(12).TextColor(theme.Muted), el.Text(formatNumber(daily[day])).Mono().TextSize(12)))
+	if len(aggregate.Daily) > 0 {
+		key := fmt.Sprintf("%d/%s/%s/%t", a.library.UsageVersion, a.library.UsageFilter, now.Format("2006-01-02"), a.library.UsageLoading)
+		if a.library.UsageChart == nil || a.library.UsageChartKey != key {
+			labels := make([]string, 30)
+			values := make([]float64, 30)
+			for i := range labels {
+				day := now.AddDate(0, 0, i-29).Format("2006-01-02")
+				labels[i] = day[5:]
+				values[i] = float64(aggregate.Daily[day])
+			}
+			a.library.UsageChart = kit.BarChart(labels, kit.Series{Name: "Token", Values: values}).Controls(false).Height(220).Format(usageAxisNumber).TooltipContent(func(_ *el.Context, point kit.ChartTooltip) el.Element {
+				return el.Div().Gap(4).Child(el.Text(point.Label).TextSize(12), el.Text(formatNumber(int64(point.Values[0].Value))+" Token").TextSize(13).Medium())
+			})
+			a.library.UsageChartKey = key
+		}
+		a.library.UsageChart.SeriesStyle(0, kit.ChartSeriesStyle{Stroke: &theme.Primary, Fill: &theme.Primary})
+		root.Child(el.Div().Gap(16).Child(el.Text("近 30 天").TextSize(16).Medium(), a.library.UsageChart.Render(cx)))
 	}
-	root.Child(recent)
 	return root
 }
+
+func usageProviderName(id string) string {
+	switch id {
+	case "codex":
+		return "Codex"
+	case "claude":
+		return "Claude Code"
+	case "modu":
+		return "Modu Code"
+	case "pi":
+		return "Pi"
+	}
+	return id
+}
+
+func usageWindowLabel(minutes int64) string {
+	if minutes <= 0 {
+		return "用量窗口"
+	}
+	if minutes%1440 == 0 {
+		return fmt.Sprintf("%d 天限额", minutes/1440)
+	}
+	if minutes%60 == 0 {
+		return fmt.Sprintf("%d 小时限额", minutes/60)
+	}
+	return fmt.Sprintf("%d 分钟限额", minutes)
+}
+
 func formatNumber(value int64) string {
 	raw := fmt.Sprint(value)
 	var groups []string
@@ -107,7 +210,8 @@ func formatNumber(value int64) string {
 	}
 	return strings.Join(append([]string{raw}, groups...), ",")
 }
-func usageHeatmap(daily map[string]int64, now time.Time) el.Element {
+func usageHeatmap(daily map[string]int64, now time.Time, width float32, id string) el.Element {
+	cellSize := max(float32(8), (width-52*4)/53)
 	end := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	start := end.AddDate(0, 0, -52*7-int(end.Weekday()))
 	var visible []int64
@@ -117,9 +221,9 @@ func usageHeatmap(daily map[string]int64, now time.Time) el.Element {
 		}
 	}
 	sort.Slice(visible, func(i, j int) bool { return visible[i] < visible[j] })
-	grid := el.Div().Row().Gap(4).ScrollX()
+	grid := el.Div().ID(id).Row().Gap(4).ScrollX().Scrollbars(el.ScrollbarHover)
 	for week := 0; week < 53; week++ {
-		column := el.Div().Gap(4)
+		column := el.Div().Gap(4).Pb(12).NoShrink()
 		for weekday := 0; weekday < 7; weekday++ {
 			date := start.AddDate(0, 0, week*7+weekday)
 			tokens := daily[date.Format("2006-01-02")]
@@ -135,9 +239,22 @@ func usageHeatmap(daily map[string]int64, now time.Time) el.Element {
 			if date.After(end) {
 				fg.A = 0
 			}
-			column.Child(el.Div().Size(el.Dp(12)).Rounded(3).Bg(fg).Role("gridcell").Name(date.Format("2006-01-02") + " · " + formatNumber(tokens) + " Token"))
+			column.Child(el.Div().Size(el.Dp(cellSize)).NoShrink().Rounded(3).Bg(fg).Role("gridcell").Name(date.Format("2006-01-02") + " · " + formatNumber(tokens) + " Token"))
 		}
 		grid.Child(column)
 	}
-	return el.Div().P(20).Rounded(12).Bg(theme.Surface).Gap(16).Child(el.Text("全局用量热力图").TextSize(18).Medium(), el.Text("过去 53 周的每日 Token 活动").TextSize(12).TextColor(theme.Muted), grid)
+	return el.Div().Gap(12).Child(el.Text("活跃记录").TextSize(16).Medium(), el.Text("过去 53 周 · 每日 Token").TextSize(12).TextColor(theme.Muted), grid)
+}
+
+func usageAxisNumber(value float64) string {
+	switch {
+	case value >= 1e9:
+		return fmt.Sprintf("%.1fB", value/1e9)
+	case value >= 1e6:
+		return fmt.Sprintf("%.0fM", value/1e6)
+	case value >= 1e3:
+		return fmt.Sprintf("%.0fK", value/1e3)
+	default:
+		return fmt.Sprintf("%.0f", value)
+	}
 }

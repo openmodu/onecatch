@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
@@ -43,5 +44,28 @@ func TestWorkflowStarterTemplatesRemainValid(t *testing.T) {
 	a.newWorkflow()
 	if a.ui.WorkflowDraft.ID != "my_implement_review_3" {
 		t.Fatalf("duplicate draft ID: %s", a.ui.WorkflowDraft.ID)
+	}
+}
+
+func TestUsageChartSurvivesLayoutAndRefresh(t *testing.T) {
+	for _, width := range []int{480, 1200} {
+		a := conversationFixture(t)
+		a.library.Usage = []agentrun.AccountUsage{{Runtime: "codex", DailyUsage: []agentrun.AccountDailyUsage{{StartDate: time.Now().Format("2006-01-02"), Tokens: 123}}, RateLimits: []agentrun.AccountRateLimit{{Primary: &agentrun.AccountRateLimitWindow{UsedPercent: 95, WindowDurationMins: 300}}}}}
+		root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element { return el.Div().WFull().HFull().Child(a.usagePage(cx)) }))
+		_, frame, _ := alignmentRouter(root, width, 700, 1)
+		frame()
+		chart := a.library.UsageChart
+		if chart == nil {
+			t.Fatal("missing activity chart")
+		}
+		frame()
+		if chart != a.library.UsageChart {
+			t.Fatal("chart recreated without new data")
+		}
+		a.library.UsageVersion++
+		frame()
+		if chart == a.library.UsageChart {
+			t.Fatal("chart did not update on refresh")
+		}
 	}
 }

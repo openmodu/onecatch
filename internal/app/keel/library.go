@@ -49,6 +49,9 @@ type libraryState struct {
 	Usage                                []agentrun.AccountUsage
 	UsageLoading                         bool
 	UsageFilter                          string
+	UsageChart                           *kit.ChartView
+	UsageHeatmapReady                    string
+	UsageChartKey                        string
 	UsageVersion                         uint64
 	UsageErrors                          map[string]string
 }
