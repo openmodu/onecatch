@@ -76,7 +76,7 @@ func Run(options Options) error {
 }
 
 func (a *app) installApplicationMenu() error {
-	return window.SetApplicationMenu(
+	menu, err := window.NewMenuBar(
 		window.MenuItem{Title: "OneCatch", Role: window.MenuApplication, Children: []window.MenuItem{
 			{Title: uiText("设置…"), Shortcut: "mod+,", OnSelect: a.openSettings},
 			{Separator: true},
@@ -96,4 +96,9 @@ func (a *app) installApplicationMenu() error {
 			{Title: uiText("全选"), Shortcut: "mod+a", Action: window.MenuSelectAll},
 		}},
 	)
+	if err != nil {
+		return err
+	}
+	a.applicationMenu = menu
+	return menu.Install()
 }

@@ -124,7 +124,7 @@ func field(id, hint string, value *string) *el.InputEl {
 }
 
 func dragArea(cx *el.Context, d *el.DivEl) *el.DivEl {
-	if runtime.GOOS != "darwin" {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 		return d
 	}
 	return d.Decorate(func(gtx core.C, draw func()) {
@@ -165,7 +165,10 @@ func (a *app) Render(cx *el.Context) el.Element {
 		center := el.Div().Grow().W(el.Dp(0)).HFull().Decorate(func(gtx core.C, draw func()) {
 			defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
 			draw()
-		}).Child(a.header(cx))
+		})
+		if runtime.GOOS != "windows" {
+			center.Child(a.header(cx))
+		}
 		if a.page != "" && a.page != "skills" || !a.terminal.Open || !a.terminal.Maximized {
 			center.Child(a.content(cx))
 		}
@@ -184,7 +187,11 @@ func (a *app) Render(cx *el.Context) el.Element {
 	if a.page == "skills" && a.skills.Visible {
 		root.Child(a.skillResizeSeam("skill-inspector-resize", "调整 Skills 检查面板宽度", &a.skills.Width, 280, 820, true), a.skillInspector(cx))
 	}
-	return root.Child(peekTrigger)
+	root.Child(peekTrigger)
+	if runtime.GOOS == "windows" {
+		return el.Div().WFull().HFull().Bg(theme.Bg).Child(a.header(cx), root.Grow().H(el.Dp(0)))
+	}
+	return root
 }
 
 func (a *app) header(cx *el.Context) el.Element {
@@ -209,6 +216,11 @@ func (a *app) header(cx *el.Context) el.Element {
 		}
 		left.Child(el.Div().Px(5).Py(2).Rounded(4).Bg(theme.Subtle).Child(el.Text(category).TextSize(10).TextColor(theme.Muted)))
 	}
+	if runtime.GOOS == "windows" {
+		if w := core.CurrentWindow(); w != nil {
+			left.OnDoubleClick(w.ToggleMaximize)
+		}
+	}
 	left.Child(el.Text(title).Grow().W(el.Dp(0)).MaxLines(1).Medium().TextSize(13))
 	bar := el.Div().Row().Items(el.Center).H(el.Dp(mainTitleBarHeight)).Px(18).Gap(4)
 	if a.sidebarCollapsed(cx) {
@@ -216,6 +228,9 @@ func (a *app) header(cx *el.Context) el.Element {
 			bar.Pl(macSidebarToggleLeft)
 		}
 		bar.Child(iconAction(cx, "show-sidebar", "展开侧栏", "panel-left", a.toggleSidebar, false))
+	}
+	if runtime.GOOS == "windows" {
+		bar.Child(a.windowsApplicationMenu(cx))
 	}
 	bar.Child(left)
 	if a.page == "" || a.page == "skills" {
@@ -230,6 +245,9 @@ func (a *app) header(cx *el.Context) el.Element {
 	}
 	if a.page == "skills" && !a.skills.Visible {
 		bar.Child(iconAction(cx, "show-skill-inspector", "展开检查面板", "panel-right-open", func() { a.openSkillInspector(a.skills.Tab) }, false))
+	}
+	if runtime.GOOS == "windows" {
+		bar.H(el.Dp(44)).Pr(0).Child(windowsWindowButtons(cx))
 	}
 	return bar
 }

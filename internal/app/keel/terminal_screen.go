@@ -602,7 +602,7 @@ func (s *terminalScreen) Layout(gtx core.C) core.D {
 	if size.X <= 0 || size.Y <= 0 || s.closed {
 		return core.D{Size: size}
 	}
-	params := text.Parameters{Font: font.Font{Typeface: font.Typeface(theme.MonoFace)}, PxPerEm: fixed.I(gtx.Sp(unit.Sp(12))), MaxWidth: 1 << 24, MaxLines: 1, DisableSpaceTrim: true, Locale: gtx.Locale}
+	params := text.Parameters{Font: font.Font{Typeface: platformTerminalFace(runtime.GOOS)}, PxPerEm: fixed.I(gtx.Sp(unit.Sp(12))), MaxWidth: 1 << 24, MaxLines: 1, DisableSpaceTrim: true, Locale: gtx.Locale}
 	sh := theme.Material.Shaper
 	sh.LayoutString(params, "M")
 	advance := fixed.Int26_6(0)

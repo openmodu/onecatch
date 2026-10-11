@@ -23,6 +23,8 @@ import (
 )
 
 type app struct {
+	applicationMenu                                                                         *window.MenuBar
+	windowsMenu                                                                             *kit.MenuView
 	promptTokenNext                                                                         uint64
 	promptDocument                                                                          el.InputDocument
 	skillPicker                                                                             composerSkillState
