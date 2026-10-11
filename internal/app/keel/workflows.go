@@ -1,10 +1,8 @@
 package keeldesktop
 
 import (
-	_ "embed"
 	"encoding/json"
 	"fmt"
-	"runtime"
 	"sort"
 	"strings"
 
@@ -12,33 +10,33 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
-	"github.com/dyike/keel/ui/window"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
 
-// Source: frontend/src/app/templates.js. Embedded data keeps the native binary
-// independent of the JavaScript build and preserves the existing starter flows.
-//
-//go:embed workflow_templates.json
-var workflowTemplateData []byte
-
+// starterWorkflow returns a new draft: "blank" is a single step, any other
+// kind copies the built-in workflow with that ID.
 func starterWorkflow(kind string) domainworkflows.Definition {
-	var templates map[string]domainworkflows.Definition
-	if err := json.Unmarshal(workflowTemplateData, &templates); err != nil {
-		panic(err)
+	for _, template := range desktopservice.WorkflowTemplates() {
+		if template.ID == kind {
+			template.ID = "my_" + template.ID
+			template.Name = "我的" + template.Name
+			return domainworkflows.Normalize(template)
+		}
 	}
-	d, ok := templates[kind]
-	if !ok {
-		d = templates["loop"]
-	}
-	return domainworkflows.Normalize(d)
+	return domainworkflows.Normalize(domainworkflows.Definition{ID: "my_workflow", Name: "我的工作流", Steps: []domainworkflows.Step{
+		{ID: "execute", Name: "执行", Runtime: "codex", Sandbox: "workspace-write"},
+	}})
 }
 
 func (a *app) newWorkflowMenu(cx *el.Context) el.Element {
 	if a.ui.WorkflowNew == nil {
-		menu := kit.Menu().Width(210).Placement(el.Bottom, el.End)
-		menu.ContentItem("实现与审查 Loop", "", menuIcon("workflow", "实现与审查 Loop"), func() { a.newWorkflowFrom("loop") })
-		menu.ContentItem("并行 DAG", "", menuIcon("git-branch", "并行 DAG"), func() { a.newWorkflowFrom("dag") })
+		menu := kit.Menu().Width(220).Placement(el.Bottom, el.End)
+		menu.ContentItem("空白", "", menuIcon("square", "空白"), func() { a.newWorkflowFrom("blank") })
+		for _, template := range desktopservice.WorkflowTemplates() {
+			id := template.ID
+			menu.ContentItem(template.Name, "", menuIcon("workflow", template.Name), func() { a.newWorkflowFrom(id) })
+		}
 		menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 			return iconAction(cx, "new-workflow", "新建工作流", "plus", menu.Toggle, menu.Value())
 		}))
@@ -47,163 +45,59 @@ func (a *app) newWorkflowMenu(cx *el.Context) el.Element {
 	return a.ui.WorkflowNew.Render(cx)
 }
 
+// workflowPath reads a graph left to right: steps that can run together are
+// joined with ∥, and ↺ marks a workflow that can send work back.
 func workflowPath(d domainworkflows.Definition) string {
-	var names []string
+	levels := dagAutoLayout(d)
+	columns := map[float64][]string{}
+	var xs []float64
 	for _, s := range d.Steps {
-		names = append(names, s.Name)
-	}
-	if d.Mode == domainworkflows.ModeDAG {
-		var roots, joins []string
-		for _, s := range d.Steps {
-			if len(s.DependsOn) == 0 {
-				roots = append(roots, s.Name)
-			} else {
-				joins = append(joins, s.Name)
-			}
+		x := levels[s.ID].X
+		if _, ok := columns[x]; !ok {
+			xs = append(xs, x)
 		}
-		path := strings.Join(roots, " ∥ ")
-		if len(joins) > 0 {
-			path += " → " + strings.Join(joins, " → ")
+		columns[x] = append(columns[x], s.Name)
+	}
+	sort.Float64s(xs)
+	parts := make([]string, 0, len(xs))
+	for _, x := range xs {
+		parts = append(parts, strings.Join(columns[x], " ∥ "))
+	}
+	path := strings.Join(parts, " → ")
+	for _, e := range d.Edges {
+		if e.Kind == domainworkflows.EdgeRework {
+			return path + " ↺"
 		}
-		return path
 	}
-	if len(names) > 1 {
-		return strings.Join(names, " → ") + " ↺"
+	return path
+}
+
+func workflowSummary(d domainworkflows.Definition) string {
+	rework := 0
+	for _, e := range d.Edges {
+		if e.Kind == domainworkflows.EdgeRework {
+			rework++
+		}
 	}
-	return strings.Join(names, " → ") + " → $done"
+	if rework == 0 {
+		return fmt.Sprintf("%d 个步骤", len(d.Steps))
+	}
+	return fmt.Sprintf("%d 个步骤 · %d 条返工 · 每条最多 %d 轮", len(d.Steps), rework, d.Policy.MaxReworkRounds)
 }
-func (a *app) workflowPage(cx *el.Context) el.Element {
-	return a.workflowPageLayout(cx, a.ui.WorkflowWindow != nil)
-}
-func (a *app) workflowPageLayout(cx *el.Context, auxiliary bool) el.Element {
-	embedded := a.settingsPanel != nil && a.settingsPanel.section == "workflows"
-	if embedded && !a.ui.WorkflowSource {
+
+// workflowSettings is the Settings section for workflows: the library, or the
+// canvas editor for the workflow being edited. Workflows live only here.
+func (a *app) workflowSettings(cx *el.Context) el.Element {
+	if !a.ui.WorkflowSource {
 		return a.workflowLibrary(cx)
 	}
-	editable := make([]domainworkflows.Definition, 0, len(a.definitions))
-	var selected *domainworkflows.Definition
-	for _, d := range a.definitions {
-		if d.ID != "single_agent" {
-			editable = append(editable, d)
-			if d.ID == a.ui.SelectedWorkflow {
-				copy := d
-				selected = &copy
-			}
-		}
-	}
-	if selected == nil && len(editable) > 0 {
-		selected = &editable[0]
-	}
-	// The source's 240px rail includes its right-hand divider.
-	left := el.Div().W(el.Dp(239)).NoShrink().Bg(sidebarColor).HFull()
-	back := iconButton("", func() { a.goWorkflowHistory(-1) }, kit.ButtonGhost, kit.IconChevronLeft).ID("workflow-back").Name("返回").Size(26).Compact(true)
-	forward := iconButton("", func() { a.goWorkflowHistory(1) }, kit.ButtonGhost, kit.IconChevronRight).ID("workflow-forward").Name("前进").Size(26).Compact(true)
-	back.SetDisabled(len(a.ui.WorkflowHistory.Entries) == 0 || a.ui.WorkflowHistory.Index == 0)
-	forward.SetDisabled(a.ui.WorkflowHistory.Index+1 >= len(a.ui.WorkflowHistory.Entries))
-	top := el.Div().Row().Items(el.Center).Px(16).H(el.Dp(52))
-	if runtime.GOOS == "darwin" && auxiliary {
-		top.Pl(94)
-	}
-	left.Child(top.Hidden(embedded).Child(dragArea(cx, el.Div().Grow().HFull()), back.Render(cx), forward.Render(cx)),
-		el.Div().Row().Items(el.Center).Px(20).Pt(8).Pb(12).Child(el.Div().Grow().Gap(3).Child(el.Text("工作流").Bold().TextSize(14), el.Text(fmt.Sprint(len(editable))).TextSize(11).TextColor(theme.Muted)), a.newWorkflowMenu(cx)))
-	list := el.Div().ID("workflow-list").Grow().H(el.Dp(0)).ScrollY().Px(12).Pb(16).Gap(1)
-	for _, definition := range editable {
-		d := definition
-		active := selected != nil && selected.ID == d.ID
-		row := el.Div().Row().Items(el.Center).Rounded(8).Px(4).Py(4).Hover(func(s *el.Style) { s.Bg(theme.Highlight) })
-		if active {
-			row.Bg(theme.Highlight)
-		}
-		summary := fmt.Sprintf("%d 个步骤 · 最多 %d 次转换", len(d.Steps), d.Policy.MaxTransitions)
-		if d.Mode == domainworkflows.ModeDAG {
-			summary = fmt.Sprintf("%d 个节点 · 全部汇合", len(d.Steps))
-		}
-		row.Child(el.Div().ID("workflow/"+d.ID).Name(d.Name).Role("button").Selected(active).Focusable(true).Grow().W(el.Dp(0)).Px(8).Py(8).CursorPointer().OnClick(func() { a.selectWorkflow(d.ID, false) }).FocusStyle(neutralFocus).Gap(3).Child(el.Text(d.Name).MaxLines(1).Medium().TextSize(13), el.Text(summary).MaxLines(1).TextSize(11).TextColor(theme.Muted)))
-		row.Child(a.workflowRowMenu(d).Render(cx))
-		list.Child(row)
-	}
-	left.Child(list)
-	right := el.Div().Grow().W(el.Dp(0)).HFull()
-	if a.ui.WorkflowSource && !a.ui.WorkflowRaw && a.ui.WorkflowDraft.Mode == domainworkflows.ModeDAG {
-		right.Child(dragArea(cx, el.Div().H(el.Dp(52)).WFull().Hidden(embedded)), a.dagEditor(cx))
-	} else if a.ui.WorkflowSource {
-		save := button("保存", a.saveWorkflow, kit.ButtonPrimary).Loading(a.busy)
-		save.SetDisabled(a.editingWorkflow == "single_agent")
-		_, simple := simpleReviewWorkflow(a.ui.WorkflowDraft)
-		guided := simple && !a.ui.WorkflowAdvanced && !a.ui.WorkflowRaw
-		title := "编辑工作流"
-		if guided {
-			title = "配置流程"
-		}
-		header := el.Div().Row().Items(el.Center).Px(20).H(el.Dp(64)).Child(el.Text(title).Medium().Grow())
-		if simple && !a.ui.WorkflowRaw {
-			label := "高级编辑"
-			if a.ui.WorkflowAdvanced {
-				label = "简化配置"
-			}
-			header.Child(iconButton(label, func() { a.ui.WorkflowAdvanced = !a.ui.WorkflowAdvanced }, kit.ButtonGhost, kit.IconSettings).Render(cx))
-		}
-		if !guided {
-			header.Child(button(map[bool]string{true: "表单", false: "源码"}[a.ui.WorkflowRaw], a.toggleWorkflowRaw, kit.ButtonGhost).Render(cx), save.Render(cx))
-		}
-		right.Child(dragArea(cx, el.Div().H(el.Dp(52)).WFull().Hidden(embedded)), header, el.Div().Px(24).Child(a.errorBanner(cx)))
-		if a.ui.WorkflowRaw {
-			right.Child(a.workflowEditor.Render(cx))
-		} else if guided {
-			right.Child(a.simpleWorkflowForm(cx), el.Div().Row().Items(el.Center).Px(24).Py(16).Child(el.Text("保存后，可在新任务中选择这个流程。").TextSize(11).TextColor(theme.Muted).Grow(), save.Render(cx)))
-		} else {
-			right.Child(a.workflowForm(cx))
-		}
-	} else if selected != nil {
-		d := *selected
-		body := el.Div().ID("workflow-detail").ScrollY().Grow().H(el.Dp(0)).Px(48).Pt(16).Pb(32).Gap(32)
-		mode := "串行"
-		if d.Mode == domainworkflows.ModeDAG {
-			mode = "并行 DAG"
-		}
-		body.Child(el.Div().Row().Items(el.Start).Gap(12).Child(el.Div().Grow().W(el.Dp(0)).Gap(8).Child(el.Text(mode+"  ·  "+d.ID).TextSize(11).TextColor(theme.Muted), el.Text(d.Name).TextSize(24).Bold(), el.Text(workflowPath(d)).TextSize(13).TextColor(theme.Muted)), iconButton("编辑", func() { a.selectWorkflow(d.ID, true) }, kit.ButtonGhost, kit.IconEdit).Size(30).Render(cx)))
-		preview := el.Div().Gap(8).Child(el.Div().Row().Items(el.Center).Gap(8).Child(lucide(cx, "workflow", 16, theme.Muted), el.Text("流程预览").TextSize(15).Medium()))
-		for i, step := range d.Steps {
-			node := el.Div().Row().Items(el.Start).Gap(12).Px(16).Py(14).Rounded(12).Bg(theme.Surface)
-			node.Child(el.Div().Size(el.Dp(28)).Rounded(14).Bg(theme.Subtle).Center().Child(el.Text(fmt.Sprint(i + 1)).TextSize(12).Medium().TextColor(theme.Muted)))
-			content := el.Div().Grow().W(el.Dp(0)).Gap(8).Child(el.Div().Row().Items(el.Center).Gap(8).Child(el.Text(step.Name).Medium().TextSize(14), el.Text(step.Runtime).Mono().TextSize(11).TextColor(theme.Muted)))
-			if d.Mode == domainworkflows.ModeDAG {
-				content.Child(el.Text("依赖：" + strings.Join(step.DependsOn, ", ")).TextSize(12).TextColor(theme.Muted))
-			} else {
-				keys := make([]string, 0, len(step.Transitions))
-				for key := range step.Transitions {
-					keys = append(keys, key)
-				}
-				sort.Strings(keys)
-				transitions := el.Div().Row().Wrap().Gap(6)
-				for _, signal := range keys {
-					transitions.Child(el.Text(signal + " → " + step.Transitions[signal]).Mono().TextSize(11).TextColor(theme.Muted).Bg(theme.Subtle).Rounded(5).Px(8).Py(4))
-				}
-				content.Child(transitions)
-			}
-			if step.Instruction != "" {
-				content.Child(el.Text(step.Instruction).TextSize(12).TextColor(theme.Muted).MaxLines(3))
-			}
-			preview.Child(node.Child(content))
-		}
-		policy := el.Div().P(16).Rounded(12).Bg(theme.Surface).Gap(12).Child(el.Text("策略").TextSize(14).Medium())
-		for _, item := range []struct{ Label, Value string }{{"最大转移次数", fmt.Sprint(d.Policy.MaxTransitions)}, {"连续失败上限", fmt.Sprint(d.Policy.MaxConsecutiveFailures)}, {"单步超时", fmt.Sprintf("%d s", d.Policy.StepTimeoutSeconds)}} {
-			policy.Child(el.Div().Row().Child(el.Text(item.Label).Grow().TextSize(12).TextColor(theme.Muted), el.Text(item.Value).Mono().TextSize(12)))
-		}
-		body.Child(preview, policy, el.Text("工作流不会自动替换缺失的运行环境，以免破坏角色语义。").P(14).Rounded(10).Bg(theme.Subtle).TextSize(12).TextColor(theme.Muted))
-		right.Child(dragArea(cx, el.Div().H(el.Dp(52)).WFull().Hidden(embedded)), body)
-	} else {
-		right.Center().Child(el.Text("创建工作流，编排 Agent 的执行步骤。").TextSize(13).TextColor(theme.Muted))
-	}
-	if embedded {
-		back := button("返回工作流", func() { a.ui.WorkflowSource = false }, kit.ButtonGhost).Size(30).Compact(true)
-		toolbar := el.Div().Row().Items(el.Center).H(el.Dp(40)).NoShrink().Child(back.Render(cx), el.Div().Grow(), el.Text(a.ui.WorkflowDraft.Name).MaxLines(1).TextSize(12).TextColor(theme.Muted), a.newWorkflowMenu(cx))
-		return el.Div().Grow().H(el.Dp(0)).Child(toolbar, right.WFull())
-	}
-	return el.Div().Row().Grow().H(el.Dp(0)).Child(left, el.Div().W(el.Dp(1)).Bg(seamColor).NoShrink(), right, el.Div().Hidden(embedded).Absolute().Top(0).Left(0).Right(0).H(el.Dp(52)).Center().Child(el.Text("工作流").TextSize(14).Medium()))
+	back := button("返回工作流", func() { a.ui.WorkflowSource, a.ui.WorkflowFullscreen = false, false }, kit.ButtonGhost).Size(30).Compact(true)
+	toolbar := el.Div().Row().Items(el.Center).H(el.Dp(40)).NoShrink().Child(back.Render(cx), el.Div().Grow(), el.Text(a.ui.WorkflowDraft.Name).MaxLines(1).TextSize(12).TextColor(theme.Muted), a.newWorkflowMenu(cx))
+	return el.Div().Grow().H(el.Dp(0)).Child(toolbar, a.dagEditor(cx))
 }
+
 func (a *app) newWorkflow() {
-	a.newWorkflowFrom("loop")
+	a.newWorkflowFrom("implement_review")
 }
 func (a *app) newWorkflowFrom(kind string) {
 	before := a.currentLocation()
@@ -227,16 +121,15 @@ func (a *app) newWorkflowFrom(kind string) {
 	}
 	if a.settings.SchemaVersion > 0 {
 		e := a.settings.Execution
-		d.Policy = domainworkflows.Policy{MaxTransitions: e.MaxTransitions, MaxConsecutiveFailures: e.MaxConsecutiveFailures, StepTimeoutSeconds: e.StepTimeoutSeconds}
+		d.Policy = domainworkflows.Policy{MaxReworkRounds: e.MaxReworkRounds, MaxConsecutiveFailures: e.MaxConsecutiveFailures, StepTimeoutSeconds: e.StepTimeoutSeconds}
 	}
 	a.ui.WorkflowDraft = domainworkflows.Normalize(d)
 	a.ui.WorkflowRaw, a.ui.WorkflowStep = false, 0
-	a.ui.WorkflowAdvanced = false
 	a.resetWorkflowForm()
 	data, _ := json.MarshalIndent(d, "", "  ")
 	a.workflowEditor.SetValue(string(data))
 	a.workflowEditor.SetReadOnly(false)
-	a.ui.WorkflowHistory.push(before, a.currentLocation())
+	a.recordNavigation(before)
 }
 func (a *app) deleteWorkflow(id string) {
 	if id == "single_agent" {
@@ -260,36 +153,21 @@ func (a *app) deleteWorkflow(id string) {
 	})
 }
 
-type workflowWindowView struct{ app *app }
+func (a *app) workflowFullscreen() bool {
+	return a.ui.WorkflowFullscreen && a.ui.WorkflowSource && a.settingsPanel != nil && a.settingsPanel.section == "workflows"
+}
 
-func (v workflowWindowView) Render(cx *el.Context) el.Element {
-	a := v.app
-	return el.Div().WFull().HFull().Bg(theme.Bg).Child(a.ui.WorkflowConfirm.Render(cx), a.workflowPageLayout(cx, true))
-}
+// workflowView renders the workflow settings on its own, for tests and previews.
+type workflowView struct{ app *app }
+
+func (v workflowView) Render(cx *el.Context) el.Element { return v.app.workflowSettings(cx) }
+
+// openWorkflows shows the workflow section of Settings.
 func (a *app) openWorkflows() {
-	if a.ui.WorkflowWindow != nil && !a.ui.WorkflowWindow.Closed() {
-		a.ui.WorkflowWindow.Raise()
-		return
+	a.openSettings()
+	if a.settingsPanel != nil {
+		a.settingsPanel.activateSettingsSection("workflows")
 	}
-	if a.ui.SelectedWorkflow == "" {
-		for _, d := range a.definitions {
-			if d.ID != "single_agent" {
-				a.ui.SelectedWorkflow = d.ID
-				break
-			}
-		}
-	}
-	a.ui.WorkflowWindow = window.Open(window.Options{Title: "OneCatch · 工作流", Width: 1040, Height: 760, MinWidth: 860, MinHeight: 600, Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin", TrafficLightLayout: &window.TrafficLightLayout{Height: 52, Left: 20}, Content: el.Root(workflowWindowView{a}), OnClose: func() { a.ui.WorkflowWindow = nil }, Shortcuts: map[string]func(){"mod+[": func() { a.goWorkflowHistory(-1) }, "mod+]": func() { a.goWorkflowHistory(1) }}})
-}
-func (a *app) goWorkflowHistory(delta int) {
-	if h := &a.ui.WorkflowHistory; len(h.Entries) > 0 {
-		h.Entries[h.Index] = a.currentLocation()
-	}
-	target, ok := a.ui.WorkflowHistory.move(delta)
-	if !ok {
-		return
-	}
-	a.restoreWorkflowLocation(target)
 }
 
 func (a *app) restoreWorkflowLocation(target location) {
@@ -305,7 +183,6 @@ func (a *app) restoreWorkflowLocation(target location) {
 		if !target.Raw {
 			a.toggleWorkflowRaw()
 		}
-		a.ui.WorkflowAdvanced = target.Advanced
 		return
 	}
 	for _, d := range a.definitions {
@@ -324,7 +201,8 @@ func (a *app) workflowRowMenu(d domainworkflows.Definition) *kit.MenuView {
 		return menu
 	}
 	menu := kit.Menu().Width(150).Placement(el.Bottom, el.End)
-	menu.ContentItem("编辑", "", menuIcon("square-pen", "编辑"), func() { a.selectWorkflow(d.ID, true) }).ContentItem("删除", "", menuIcon("trash-2", "删除"), func() { a.deleteWorkflow(d.ID) })
+	menu.ContentItem("编辑", "", menuIcon("square-pen", "编辑"), func() { a.selectWorkflow(d.ID, true) }).
+		ContentItem("删除", "", menuIcon("trash-2", "删除"), func() { a.deleteWorkflow(d.ID) })
 	menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 		return iconAction(cx, "workflow-actions/"+d.ID, "编辑 "+d.Name, "ellipsis", menu.Toggle, menu.Value())
 	}))

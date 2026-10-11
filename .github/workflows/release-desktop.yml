@@ -1,242 +1,46 @@
-name: Release desktop and Android installers
-
+name: Release native desktop
 on:
   push:
-    tags:
-      - "v*.*.*"
-
+    tags: ['v*.*.*']
 permissions:
-  contents: write
-
-concurrency:
-  group: desktop-release-${{ github.ref }}
-  cancel-in-progress: false
-
+  contents: read
 jobs:
-  macos:
-    runs-on: macos-latest
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [macos-14, windows-latest, ubuntu-24.04]
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-          cache: true
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+      - name: Install native Linux libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwayland-dev libx11-dev libx11-xcb-dev libxkbcommon-x11-dev libegl1-mesa-dev libgles2-mesa-dev libxcursor-dev libxfixes-dev libvulkan-dev pkg-config
       - name: Verify release version
         shell: bash
         run: |
-          version="$(node build/scripts/release-info.mjs --version)"
-          test "v$version" = "$GITHUB_REF_NAME"
-          go tool wails3 task release:check
-      - name: Build macOS installer
-        run: go tool wails3 task package:desktop
+          test "v$(node build/scripts/release-info.mjs --version)" = "$GITHUB_REF_NAME"
+          node build/scripts/release-info.mjs --check
+      - name: Package Keel desktop
+        run: node build/scripts/package-keel.mjs
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-macos
-          path: |
-            bin/*.dmg
-            bin/*.dmg.sha256
-            bin/*-darwin-*.zip
-            bin/*-darwin-*.zip.sha256
+          name: desktop-${{ runner.os }}
+          path: dist/*
           if-no-files-found: error
-
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Verify release version
-        shell: pwsh
-        run: |
-          $version = (& node build/scripts/release-info.mjs --version).Trim()
-          if ("v$version" -ne $env:GITHUB_REF_NAME) {
-            throw "Tag $env:GITHUB_REF_NAME does not match CHANGELOG.md version $version"
-          }
-          go tool wails3 task release:check
-      - name: Install NSIS
-        shell: pwsh
-        run: |
-          choco install nsis.install --no-progress -y
-          if ($LASTEXITCODE -ne 0) {
-            throw "Chocolatey failed to install NSIS"
-          }
-
-          $chocolateyRoot = if ($env:ChocolateyInstall) {
-            $env:ChocolateyInstall
-          } else {
-            Join-Path $env:ProgramData "chocolatey"
-          }
-          $searchRoots = @(
-            (Join-Path ${env:ProgramFiles(x86)} "NSIS"),
-            (Join-Path $env:ProgramFiles "NSIS"),
-            (Join-Path $chocolateyRoot "bin"),
-            (Join-Path $chocolateyRoot "lib")
-          ) | Where-Object { $_ -and (Test-Path -LiteralPath $_ -PathType Container) }
-          $makeNsis = $searchRoots |
-            ForEach-Object {
-              Get-ChildItem -LiteralPath $_ -Filter "makensis.exe" -File -Recurse -ErrorAction SilentlyContinue
-            } |
-            Select-Object -First 1
-          if (-not $makeNsis) {
-            throw "Chocolatey installed NSIS, but makensis.exe could not be located"
-          }
-
-          Write-Output "Using NSIS compiler: $($makeNsis.FullName)"
-          "NSIS_MAKENSIS=$($makeNsis.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          $makeNsis.DirectoryName | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-      - name: Build Windows installer
-        shell: pwsh
-        run: |
-          $buildOutput = @(& go tool wails3 task package:desktop 2>&1)
-          $buildExit = $LASTEXITCODE
-          $buildOutput | ForEach-Object { Write-Output $_ }
-          if ($buildExit -ne 0) {
-            $tail = (($buildOutput | Select-Object -Last 40) -join "`n")
-            $tail = $tail.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
-            Write-Output "::error title=Windows packaging failed::$tail"
-            exit $buildExit
-          }
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-windows
-          path: |
-            bin/*-Setup.exe
-            bin/*-Setup.exe.sha256
-          if-no-files-found: error
-
-  linux:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - name: Install Linux build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            build-essential \
-            curl \
-            dpkg-dev \
-            libgtk-4-dev \
-            libwebkitgtk-6.0-dev \
-            pkg-config
-      - name: Verify release version
-        shell: bash
-        run: |
-          version="$(node build/scripts/release-info.mjs --version)"
-          test "v$version" = "$GITHUB_REF_NAME"
-          go tool wails3 task release:check
-      - name: Build Linux packages
-        run: go tool wails3 task package:desktop
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-linux
-          path: |
-            bin/*.AppImage
-            bin/*.AppImage.sha256
-            bin/*.deb
-            bin/*.deb.sha256
-          if-no-files-found: error
-
-  android:
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-      - uses: actions/setup-java@v6
-        with:
-          distribution: temurin
-          java-version: '21'
-          cache: gradle
-          cache-dependency-path: |
-            build/android/**/*.gradle
-            build/android/gradle/wrapper/gradle-wrapper.properties
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: 'platform-tools platforms;android-35 build-tools;34.0.0 ndk;27.0.12077973'
-      - name: Install host build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
-      - name: Verify release version
-        run: |
-          version="$(node build/scripts/release-info.mjs --version)"
-          test "v$version" = "$GITHUB_REF_NAME"
-          go tool wails3 task release:check
-      - name: Build and verify Android APK
-        env:
-          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          set -euo pipefail
-          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.0.12077973"
-          keystore="$RUNNER_TEMP/onecatch-android-release.keystore"
-          trap 'rm -f "$keystore"' EXIT
-          suffix=""
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
-            : "${ANDROID_KEYSTORE_PASSWORD:?Missing ANDROID_KEYSTORE_PASSWORD}"
-            : "${ANDROID_KEY_ALIAS:?Missing ANDROID_KEY_ALIAS}"
-            : "${ANDROID_KEY_PASSWORD:?Missing ANDROID_KEY_PASSWORD}"
-            umask 077
-            printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
-            export ANDROID_KEYSTORE_FILE="$keystore"
-          else
-            if [ -n "$ANDROID_KEYSTORE_PASSWORD$ANDROID_KEY_ALIAS$ANDROID_KEY_PASSWORD" ]; then
-              echo '::error::Android signing secrets are incomplete: ANDROID_KEYSTORE_BASE64 is missing.'
-              exit 1
-            fi
-            suffix="-test-signed"
-            echo '::warning::No Android signing key configured. This APK is for testing; its signing key changes between CI runs.'
-          fi
-          go tool wails3 task package:android ARCH=arm64
-          version="$(node build/scripts/release-info.mjs --version)"
-          artifact="OneCatch-${version}-Android-arm64${suffix}.apk"
-          cp bin/onecatch-mobile.apk "bin/$artifact"
-          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify --verbose "bin/$artifact"
-          unzip -l "bin/$artifact" | grep 'lib/arm64-v8a/libwails.so'
-          (cd bin && sha256sum "$artifact" > "$artifact.sha256")
-      - uses: actions/upload-artifact@v4
-        with:
-          name: mobile-android
-          path: |
-            bin/OneCatch-*-Android-arm64*.apk
-            bin/OneCatch-*-Android-arm64*.apk.sha256
-          if-no-files-found: error
-
   github-release:
-    needs: [macos, windows, linux, android]
+    needs: desktop
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -247,26 +51,18 @@ jobs:
           pattern: desktop-*
           path: dist
           merge-multiple: true
-      - uses: actions/download-artifact@v4
-        with:
-          name: mobile-android
-          path: dist
-      - name: Generate signed update feeds
+      - name: Generate signed macOS update feed and checksums
         env:
           ONECATCH_UPDATE_PRIVATE_KEY: ${{ secrets.ONECATCH_UPDATE_PRIVATE_KEY }}
         run: |
           node build/scripts/release-info.mjs --notes > "$RUNNER_TEMP/release-notes.md"
-          node build/scripts/update-feed.mjs generate \
-            --dist dist \
-            --version "$GITHUB_REF_NAME" \
-            --release-notes-file "$RUNNER_TEMP/release-notes.md" \
-            --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
-      - name: Publish GitHub release
+          node build/scripts/update-feed.mjs generate --dist dist --version "$GITHUB_REF_NAME" --release-notes-file "$RUNNER_TEMP/release-notes.md" --base-url "https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME"
+          (cd dist && sha256sum *.zip *.tar.gz > SHA256SUMS)
+      - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          node build/scripts/release-info.mjs --notes > "$RUNNER_TEMP/release-notes.md"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release edit "$GITHUB_REF_NAME" --title "OneCatch $GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/release-notes.md"
             gh release upload "$GITHUB_REF_NAME" dist/* --clobber

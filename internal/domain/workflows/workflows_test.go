@@ -2,392 +2,285 @@ package workflows
 
 import (
 	"errors"
-	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
 
-func reviewLoopDefinition() Definition {
+// pipeline is design → implement → review → e2e → pr, with review and e2e able
+// to send work back to implement, and review able to send it to design.
+func pipeline() Definition {
 	return Definition{
-		ID:          "review_loop",
-		Name:        "实现与审查",
-		EntryStepID: "implement",
+		ID:   "pipeline",
+		Name: "设计到 PR",
 		Steps: []Step{
-			{
-				ID:          "implement",
-				Name:        "实现",
-				Runtime:     "codex",
-				RolePrompt:  "你是负责落地代码的实现者",
-				Instruction: "实现需求并完成验证",
-				Transitions: map[string]string{
-					"ready_for_review": "review",
-					"need_human":       TargetPause,
-				},
-			},
-			{
-				ID:          "review",
-				Name:        "审查",
-				Runtime:     "claude",
-				RolePrompt:  "你是独立、严格的代码审查者",
-				Instruction: "审查实现和测试",
-				Transitions: map[string]string{
-					"changes_requested": "implement",
-					"approved":          TargetDone,
-					"invalid":           TargetFail,
-				},
-			},
+			{ID: "design", Name: "架构", Runtime: "claude", Model: "opus", Sandbox: "read-only"},
+			{ID: "implement", Name: "实现", Runtime: "codex", Sandbox: "workspace-write"},
+			{ID: "review", Name: "审查", Runtime: "claude", Model: "sonnet", Sandbox: "read-only"},
+			{ID: "e2e", Name: "E2E", Kind: StepCommand, Command: "npm run e2e"},
+			{ID: "pr", Name: "PR", Runtime: "modu", Sandbox: "workspace-write"},
+		},
+		Edges: []Edge{
+			{From: "design", To: "implement"},
+			{From: "implement", To: "review"},
+			{From: "review", To: "e2e"},
+			{From: "e2e", To: "pr"},
+			{From: "review", To: "implement", Kind: EdgeRework},
+			{From: "review", To: "design", Kind: EdgeRework},
+			{From: "e2e", To: "implement", Kind: EdgeRework, MaxRounds: 1},
 		},
 	}
 }
 
-func TestNormalizeDefaultsAndCopiesTransitions(t *testing.T) {
-	input := reviewLoopDefinition()
-	got := Normalize(input)
-	if got.Policy.MaxTransitions != DefaultMaxTransitions || got.Policy.MaxConsecutiveFailures != DefaultMaxConsecutiveFailures || got.Policy.StepTimeoutSeconds != DefaultStepTimeoutSeconds {
-		t.Fatalf("unexpected defaults: %+v", got.Policy)
+var now = time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
+
+func startedRun(t *testing.T, def Definition) Run {
+	t.Helper()
+	run, err := NewRun(def, "run_1", now)
+	if err != nil {
+		t.Fatalf("NewRun() error = %v", err)
 	}
-	got.Steps[0].Transitions["ready_for_review"] = TargetDone
-	if input.Steps[0].Transitions["ready_for_review"] != "review" {
-		t.Fatal("Normalize mutated the input transitions")
+	run, err = Start(def, run, now)
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
 	}
+	return run
 }
 
-func TestValidateReviewLoop(t *testing.T) {
-	if err := Validate(reviewLoopDefinition()); err != nil {
+func pass(t *testing.T, def Definition, run Run, stepID string) Run {
+	t.Helper()
+	out, err := ApplyOutcome(def, run, stepID, Outcome{Verdict: VerdictPass, Summary: stepID + " done"}, now)
+	if err != nil {
+		t.Fatalf("ApplyOutcome(%s) error = %v", stepID, err)
+	}
+	return out
+}
+
+func readyIDs(def Definition, run Run) string {
+	var ids []string
+	for _, step := range ReadySteps(def, run) {
+		ids = append(ids, step.ID)
+	}
+	return strings.Join(ids, ",")
+}
+
+func TestValidatePipeline(t *testing.T) {
+	if err := Validate(pipeline()); err != nil {
 		t.Fatalf("Validate() error = %v", err)
 	}
 }
 
-func TestValidateRejectsInvalidGraphs(t *testing.T) {
-	tests := []struct {
-		name string
-		edit func(*Definition)
-		code string
-	}{
-		{name: "unknown entry", edit: func(d *Definition) { d.EntryStepID = "missing" }, code: "unknown_step"},
-		{name: "duplicate step", edit: func(d *Definition) { d.Steps[1].ID = "implement" }, code: "duplicate"},
-		{name: "unknown target", edit: func(d *Definition) { d.Steps[0].Transitions["ready_for_review"] = "missing" }, code: "unknown_step"},
-		{name: "unreachable step", edit: func(d *Definition) { d.Steps[0].Transitions["ready_for_review"] = TargetDone }, code: "unreachable"},
-		{name: "no completion path", edit: func(d *Definition) { d.Steps[1].Transitions["approved"] = "implement" }, code: "no_completion_path"},
-		{name: "invalid signal", edit: func(d *Definition) { d.Steps[0].Transitions["Ready Now"] = TargetDone }, code: "invalid_signal"},
-		{name: "missing runtime", edit: func(d *Definition) { d.Steps[0].Runtime = "" }, code: "required"},
-		{name: "missing role prompt", edit: func(d *Definition) { d.Steps[0].RolePrompt = "" }, code: "required"},
+func TestValidateRejectsBadGraphs(t *testing.T) {
+	cases := map[string]func(*Definition){
+		"cycle": func(d *Definition) {
+			d.Edges = append(d.Edges, Edge{From: "pr", To: "design"})
+		},
+		"rework_not_upstream": func(d *Definition) {
+			d.Edges = append(d.Edges, Edge{From: "design", To: "pr", Kind: EdgeRework})
+		},
+		"unknown_step": func(d *Definition) {
+			d.Edges = append(d.Edges, Edge{From: "design", To: "ghost"})
+		},
+		"parallel_write_conflict": func(d *Definition) {
+			d.Steps = append(d.Steps, Step{ID: "docs", Name: "文档", Runtime: "codex", Sandbox: "workspace-write"})
+		},
+		"command_local_only": func(d *Definition) {
+			d.Steps[3].WorkerID = "remote_box"
+		},
+		"required": func(d *Definition) {
+			d.Steps[3].Command = " "
+		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			def := reviewLoopDefinition()
-			tt.edit(&def)
-			err := Validate(def)
-			var validationErrs ValidationErrors
-			if !errors.As(err, &validationErrs) {
-				t.Fatalf("Validate() error = %v, want ValidationErrors", err)
+	for code, mutate := range cases {
+		t.Run(code, func(t *testing.T) {
+			def := pipeline()
+			mutate(&def)
+			var issues ValidationErrors
+			if err := Validate(def); !errors.As(err, &issues) {
+				t.Fatalf("Validate() error = %v, want issues", err)
 			}
-			for _, issue := range validationErrs {
-				if issue.Code == tt.code {
+			for _, issue := range issues {
+				if issue.Code == code {
 					return
 				}
 			}
-			t.Fatalf("issues = %+v, want code %q", validationErrs, tt.code)
+			t.Fatalf("issues = %+v, want code %s", issues, code)
 		})
+	}
+}
+
+func TestSingleStepNeedsNoPromptOrEdges(t *testing.T) {
+	def := Definition{ID: "single_agent", Name: "单 Agent", Steps: []Step{{ID: "execute", Name: "执行", Runtime: "codex"}}}
+	if err := Validate(def); err != nil {
+		t.Fatalf("Validate() error = %v", err)
+	}
+}
+
+func TestPipelineRunsInDependencyOrder(t *testing.T) {
+	def := pipeline()
+	run := startedRun(t, def)
+	for _, want := range []string{"design", "implement", "review", "e2e", "pr"} {
+		if got := readyIDs(def, run); got != want {
+			t.Fatalf("ready = %q, want %q", got, want)
+		}
+		run = pass(t, def, run, want)
+	}
+	if !AllCompleted(def, run) {
+		t.Fatal("pipeline did not complete")
+	}
+}
+
+func TestReworkReopensOnlyThePathAndDeliversFeedback(t *testing.T) {
+	def := pipeline()
+	def.Steps = append(def.Steps, Step{ID: "notes", Name: "记录", Runtime: "claude", Sandbox: "read-only"})
+	def.Edges = append(def.Edges, Edge{From: "implement", To: "notes"})
+	run := startedRun(t, def)
+	for _, id := range []string{"design", "implement", "notes"} {
+		run = pass(t, def, run, id)
+	}
+	run, err := ApplyOutcome(def, run, "review", Outcome{Verdict: VerdictRework, Summary: "缺测试", Feedback: "补上并发测试", Target: "implement"}, now)
+	if err != nil {
+		t.Fatalf("ApplyOutcome(rework) error = %v", err)
+	}
+	if run.Nodes["design"].Status != NodeCompleted || run.Nodes["notes"].Status != NodeCompleted {
+		t.Fatalf("rework reopened steps outside the path: %+v", run.Nodes)
+	}
+	if run.Nodes["implement"].Status != NodePending || run.Nodes["review"].Status != NodePending {
+		t.Fatalf("rework did not reopen the path: %+v", run.Nodes)
+	}
+	inbox := run.Nodes["implement"].Inbox
+	if len(inbox) != 1 || inbox[0].From != "review" || inbox[0].Text != "补上并发测试" {
+		t.Fatalf("implement inbox = %+v", inbox)
+	}
+	if got := readyIDs(def, run); got != "implement" {
+		t.Fatalf("ready = %q, want implement", got)
+	}
+	run = pass(t, def, run, "implement")
+	if len(run.Nodes["implement"].Inbox) != 0 {
+		t.Fatal("inbox was not cleared after the step passed")
+	}
+	if run.ReworkRounds[EdgeKey("review", "implement")] != 1 {
+		t.Fatalf("rework rounds = %+v", run.ReworkRounds)
+	}
+}
+
+func TestReworkNeedsTargetWhenSeveralAreAllowed(t *testing.T) {
+	def := pipeline()
+	if err := CheckOutcome(def, "review", Outcome{Verdict: VerdictRework, Summary: "x"}); err == nil {
+		t.Fatal("review has two rework targets; an implicit target must be rejected")
+	}
+	if err := CheckOutcome(def, "e2e", Outcome{Verdict: VerdictRework, Summary: "x"}); err != nil {
+		t.Fatalf("e2e has one rework target: %v", err)
+	}
+	if err := CheckOutcome(def, "implement", Outcome{Verdict: VerdictRework, Summary: "x"}); err == nil {
+		t.Fatal("implement has no rework edge")
+	}
+}
+
+func TestReworkLimitPausesForHuman(t *testing.T) {
+	def := pipeline()
+	run := startedRun(t, def)
+	for _, id := range []string{"design", "implement", "review"} {
+		run = pass(t, def, run, id)
+	}
+	fail := Outcome{Verdict: VerdictRework, Summary: "e2e failed", Feedback: "login spec times out"}
+	run, err := ApplyOutcome(def, run, "e2e", fail, now)
+	if err != nil || run.Status != RunRunning {
+		t.Fatalf("first rework: status=%s err=%v", run.Status, err)
+	}
+	for _, id := range []string{"implement", "review"} {
+		run = pass(t, def, run, id)
+	}
+	run, err = ApplyOutcome(def, run, "e2e", fail, now)
+	if err != nil {
+		t.Fatalf("second rework error = %v", err)
+	}
+	if run.Status != RunPaused || run.PauseReason != PauseReasonReworkLimit || run.Nodes["e2e"].Status != NodePaused {
+		t.Fatalf("status=%s reason=%s node=%+v", run.Status, run.PauseReason, run.Nodes["e2e"])
+	}
+}
+
+func TestAskHumanThenResumeDeliversAnswer(t *testing.T) {
+	def := pipeline()
+	run := startedRun(t, def)
+	run, err := ApplyOutcome(def, run, "design", Outcome{Verdict: VerdictAskHuman, Summary: "用 Postgres 还是 SQLite？"}, now)
+	if err != nil || run.Status != RunPaused || run.LastError != "用 Postgres 还是 SQLite？" {
+		t.Fatalf("status=%s lastError=%q err=%v", run.Status, run.LastError, err)
+	}
+	run, err = Resume(def, run, "", "SQLite", now)
+	if err != nil {
+		t.Fatalf("Resume() error = %v", err)
+	}
+	if got := readyIDs(def, run); got != "design" {
+		t.Fatalf("ready = %q", got)
+	}
+	if inbox := run.Nodes["design"].Inbox; len(inbox) != 1 || inbox[0].From != MessageFromHuman || inbox[0].Text != "SQLite" {
+		t.Fatalf("design inbox = %+v", inbox)
+	}
+}
+
+func TestResumeFromStepReopensItAndEverythingAfter(t *testing.T) {
+	def := pipeline()
+	run := startedRun(t, def)
+	for _, id := range []string{"design", "implement", "review", "e2e", "pr"} {
+		run = pass(t, def, run, id)
+	}
+	run.Status = RunCompleted
+	run, err := Resume(def, run, "review", "再严格检查一次错误处理", now)
+	if err != nil {
+		t.Fatalf("Resume() error = %v", err)
+	}
+	for id, want := range map[string]NodeStatus{"design": NodeCompleted, "implement": NodeCompleted, "review": NodePending, "e2e": NodePending, "pr": NodePending} {
+		if run.Nodes[id].Status != want {
+			t.Fatalf("%s = %s, want %s", id, run.Nodes[id].Status, want)
+		}
+	}
+	if len(run.Nodes["review"].Inbox) != 1 || len(run.Nodes["e2e"].Inbox) != 0 {
+		t.Fatal("resume message must go only to the chosen step")
+	}
+}
+
+func TestResumeCompletedRunReopensSinks(t *testing.T) {
+	def := pipeline()
+	run := startedRun(t, def)
+	for _, id := range []string{"design", "implement", "review", "e2e", "pr"} {
+		run = pass(t, def, run, id)
+	}
+	run.Status = RunCompleted
+	run, err := Resume(def, run, "", "PR 标题改成中文", now)
+	if err != nil {
+		t.Fatalf("Resume() error = %v", err)
+	}
+	if got := readyIDs(def, run); got != "pr" {
+		t.Fatalf("ready = %q, want pr", got)
+	}
+}
+
+func TestFailuresRetryThenPause(t *testing.T) {
+	def := pipeline()
+	def.Policy.MaxConsecutiveFailures = 2
+	run := startedRun(t, def)
+	run = RecordStepFailure(def, run, "design", "exit 1", now)
+	if run.Status != RunRunning || run.Nodes["design"].Status != NodePending {
+		t.Fatalf("first failure should retry: %+v", run.Nodes["design"])
+	}
+	run = RecordStepFailure(def, run, "design", "exit 1", now)
+	if run.Status != RunPaused || run.PauseReason != PauseReasonFailureLimit {
+		t.Fatalf("second failure should pause: status=%s reason=%s", run.Status, run.PauseReason)
 	}
 }
 
 func TestParseOutcome(t *testing.T) {
-	tests := []struct {
-		name    string
-		text    string
-		want    Outcome
-		wantErr bool
-	}{
-		{name: "raw", text: `{"signal":"approved","content":"looks good"}`, want: Outcome{Signal: "approved", Content: "looks good"}},
-		{name: "fenced", text: "```json\n{\"signal\":\"approved\",\"content\":\"完成\"}\n```", want: Outcome{Signal: "approved", Content: "完成"}},
-		{name: "terminal object after provider prose", text: "所有测试通过，工作区干净。\n\n{\"signal\":\"completed\",\"content\":\"提交成功\"}", want: Outcome{Signal: "completed", Content: "提交成功"}},
-		{name: "trailing prose", text: "{\"signal\":\"approved\",\"content\":\"ok\"}\ndone", wantErr: true},
-		{name: "unknown field", text: `{"signal":"approved","content":"ok","target":"$done"}`, wantErr: true},
-		{name: "missing content", text: `{"signal":"approved","content":""}`, wantErr: true},
-		{name: "multiple values", text: `{"signal":"approved","content":"ok"} {}`, wantErr: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseOutcome(tt.text)
-			if tt.wantErr {
-				if !errors.Is(err, ErrProtocol) {
-					t.Fatalf("ParseOutcome() error = %v, want ErrProtocol", err)
-				}
-				return
-			}
-			if err != nil || got != tt.want {
-				t.Fatalf("ParseOutcome() = %+v, %v, want %+v", got, err, tt.want)
-			}
-		})
-	}
-}
-
-func TestReviewLoopCanReturnAndComplete(t *testing.T) {
-	def := reviewLoopDefinition()
-	now := time.Date(2026, 7, 10, 10, 0, 0, 0, time.UTC)
-	run, err := NewRun(def, "run_1", now)
+	got, err := ParseOutcome("改好了。\n{\"verdict\":\"rework\",\"summary\":\"测试缺失\",\"target\":\"implement\"}")
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("ParseOutcome() error = %v", err)
 	}
-	run, err = Start(def, run, now.Add(time.Second))
-	if err != nil {
-		t.Fatal(err)
+	if got.Verdict != VerdictRework || got.Feedback != "测试缺失" || got.Target != "implement" {
+		t.Fatalf("outcome = %+v", got)
 	}
-
-	steps := []struct {
-		outcome Outcome
-		step    string
-		status  RunStatus
-	}{
-		{Outcome{Signal: "ready_for_review", Content: "implemented"}, "review", RunRunning},
-		{Outcome{Signal: "changes_requested", Content: "add tests"}, "implement", RunRunning},
-		{Outcome{Signal: "ready_for_review", Content: "tests added"}, "review", RunRunning},
-		{Outcome{Signal: "approved", Content: "approved"}, "review", RunCompleted},
-	}
-	for i, step := range steps {
-		run, err = Advance(def, run, step.outcome, now.Add(time.Duration(i+2)*time.Second))
-		if err != nil {
-			t.Fatalf("Advance(%d) error = %v", i, err)
-		}
-		if run.CurrentStepID != step.step || run.Status != step.status {
-			t.Fatalf("Advance(%d) run = %+v, want step=%s status=%s", i, run, step.step, step.status)
+	for _, bad := range []string{"", "done", `{"verdict":"approve","summary":"x"}`, `{"verdict":"pass"}`, `{"verdict":"pass","summary":"x"} trailing`} {
+		if _, err := ParseOutcome(bad); !errors.Is(err, ErrProtocol) {
+			t.Fatalf("ParseOutcome(%q) error = %v, want ErrProtocol", bad, err)
 		}
 	}
-	if run.TransitionCount != 4 || len(run.History) != 4 || run.CompletedAt.IsZero() {
-		t.Fatalf("unexpected completed run: %+v", run)
-	}
-}
-
-func TestUnknownSignalDoesNotMutateRun(t *testing.T) {
-	def := reviewLoopDefinition()
-	now := time.Now()
-	run, _ := NewRun(def, "run_1", now)
-	run, _ = Start(def, run, now)
-	want := cloneRun(run)
-	_, err := Advance(def, run, Outcome{Signal: "invented", Content: "go elsewhere"}, now)
-	var unknown ErrUnknownSignal
-	if !errors.As(err, &unknown) {
-		t.Fatalf("Advance() error = %v, want ErrUnknownSignal", err)
-	}
-	if !reflect.DeepEqual(run, want) {
-		t.Fatalf("input run mutated: got %+v want %+v", run, want)
-	}
-}
-
-func TestTerminalTargets(t *testing.T) {
-	def := reviewLoopDefinition()
-	now := time.Now()
-	for _, tt := range []struct {
-		signal string
-		want   RunStatus
-	}{
-		{signal: "need_human", want: RunPaused},
-	} {
-		run, _ := NewRun(def, "run_1", now)
-		run, _ = Start(def, run, now)
-		got, err := Advance(def, run, Outcome{Signal: tt.signal, Content: "reason"}, now)
-		if err != nil || got.Status != tt.want {
-			t.Fatalf("Advance(%s) = %+v, %v", tt.signal, got, err)
-		}
-	}
-
-	run, _ := NewRun(def, "run_2", now)
-	run, _ = Start(def, run, now)
-	run, _ = Advance(def, run, Outcome{Signal: "ready_for_review", Content: "ready"}, now)
-	got, err := Advance(def, run, Outcome{Signal: "invalid", Content: "broken output"}, now)
-	if err != nil || got.Status != RunFailed || got.LastError != "broken output" {
-		t.Fatalf("fail terminal = %+v, %v", got, err)
-	}
-}
-
-func TestTransitionLimitPausesAtNextStepAndCanResume(t *testing.T) {
-	def := reviewLoopDefinition()
-	def.Policy.MaxTransitions = 2
-	now := time.Now()
-	run, _ := NewRun(def, "run_1", now)
-	run, _ = Start(def, run, now)
-	run, _ = Advance(def, run, Outcome{Signal: "ready_for_review", Content: "ready"}, now)
-	run, err := Advance(def, run, Outcome{Signal: "changes_requested", Content: "fix"}, now)
-	if err != nil || run.Status != RunPaused || run.CurrentStepID != "implement" || run.PauseReason != PauseReasonTransitionLimit {
-		t.Fatalf("limited run = %+v, %v", run, err)
-	}
-	run, err = Resume(def, run, now.Add(time.Second))
-	if err != nil || run.Status != RunRunning || run.CurrentStepID != "implement" {
-		t.Fatalf("resumed run = %+v, %v", run, err)
-	}
-}
-
-func TestFailureLimitPauses(t *testing.T) {
-	def := reviewLoopDefinition()
-	def.Policy.MaxConsecutiveFailures = 2
-	now := time.Now()
-	run, _ := NewRun(def, "run_1", now)
-	run, _ = Start(def, run, now)
-	run, _ = RecordFailure(def, run, "first", now)
-	if run.Status != RunRunning || run.ConsecutiveFailures != 1 {
-		t.Fatalf("first failure = %+v", run)
-	}
-	run, err := RecordFailure(def, run, "second", now)
-	if err != nil || run.Status != RunPaused || run.PauseReason != PauseReasonFailureLimit {
-		t.Fatalf("second failure = %+v, %v", run, err)
-	}
-}
-
-func TestPauseAndResumeKeepCurrentStep(t *testing.T) {
-	def := reviewLoopDefinition()
-	now := time.Now()
-	run, _ := NewRun(def, "run_1", now)
-	run, _ = Start(def, run, now)
-	paused, err := Pause(def, run, "interrupted", "cancelled by user", now.Add(time.Second))
-	if err != nil || paused.Status != RunPaused || paused.CurrentStepID != "implement" || paused.PauseReason != "interrupted" {
-		t.Fatalf("Pause() = %+v, %v", paused, err)
-	}
-	resumed, err := Resume(def, paused, now.Add(2*time.Second))
-	if err != nil || resumed.Status != RunRunning || resumed.CurrentStepID != "implement" {
-		t.Fatalf("Resume() = %+v, %v", resumed, err)
-	}
-}
-
-func TestCompletedSerialRunCanContinueCurrentStep(t *testing.T) {
-	def := reviewLoopDefinition()
-	now := time.Date(2026, 7, 10, 10, 0, 0, 0, time.UTC)
-	run, _ := NewRun(def, "run_completed", now)
-	run, _ = Start(def, run, now.Add(time.Second))
-	run, _ = Advance(def, run, Outcome{Signal: "ready_for_review", Content: "ready"}, now.Add(2*time.Second))
-	run.Sessions["review"] = "review-session"
-	run, _ = Advance(def, run, Outcome{Signal: "approved", Content: "done"}, now.Add(3*time.Second))
-
-	resumed, err := Resume(def, run, now.Add(4*time.Second))
-	if err != nil || resumed.Status != RunRunning || resumed.CurrentStepID != "review" {
-		t.Fatalf("Resume(completed) = %+v, %v", resumed, err)
-	}
-	if !resumed.CompletedAt.IsZero() || resumed.Sessions["review"] != "review-session" {
-		t.Fatalf("completed continuation lost completion/session state: %+v", resumed)
-	}
-}
-
-func TestCancelReadyOrPausedRun(t *testing.T) {
-	def := reviewLoopDefinition()
-	now := time.Now()
-	ready, _ := NewRun(def, "run_ready", now)
-	cancelled, err := Cancel(def, ready, now.Add(time.Second))
-	if err != nil || cancelled.Status != RunCancelled {
-		t.Fatalf("Cancel(ready) = %+v, %v", cancelled, err)
-	}
-
-	running, _ := Start(def, ready, now)
-	if _, err := Cancel(def, running, now); !errors.Is(err, ErrInvalidRunState) {
-		t.Fatalf("Cancel(running) error = %v, want ErrInvalidRunState", err)
-	}
-	paused, _ := Pause(def, running, "interrupted", "stopped", now)
-	cancelled, err = Cancel(def, paused, now)
-	if err != nil || cancelled.Status != RunCancelled || cancelled.PauseReason != "" {
-		t.Fatalf("Cancel(paused) = %+v, %v", cancelled, err)
-	}
-}
-
-func TestRunMustMatchDefinitionID(t *testing.T) {
-	def := reviewLoopDefinition()
-	run, _ := NewRun(def, "run_1", time.Now())
-	def.ID = "different_workflow"
-	_, err := Start(def, run, time.Now())
-	if !errors.Is(err, ErrRunDefinitionMismatch) {
-		t.Fatalf("Start() error = %v, want ErrRunDefinitionMismatch", err)
-	}
-}
-
-func dagDefinition() Definition {
-	return Definition{
-		ID: "parallel_review", Name: "Parallel review", Mode: ModeDAG, EntryStepID: "security",
-		Steps: []Step{
-			{ID: "security", Name: "Security", Runtime: "codex", Sandbox: "read-only", RolePrompt: "Review security", Instruction: "Review", Transitions: map[string]string{"completed": TargetDone}},
-			{ID: "tests", Name: "Tests", Runtime: "claude", Sandbox: "read-only", RolePrompt: "Review tests", Instruction: "Review", Transitions: map[string]string{"completed": TargetDone}},
-			{ID: "synthesis", Name: "Synthesis", Runtime: "codex", Sandbox: "workspace-write", DependsOn: []string{"security", "tests"}, RolePrompt: "Synthesize", Instruction: "Apply findings", Transitions: map[string]string{"completed": TargetDone}},
-		},
-	}
-}
-
-func TestValidateDAG(t *testing.T) {
-	def := dagDefinition()
-	if err := Validate(def); err != nil {
-		t.Fatalf("Validate(DAG) error = %v", err)
-	}
-	run, err := NewRun(def, "run_dag", time.Now())
-	if err != nil || len(run.Nodes) != 3 || run.Nodes["security"].Status != NodePending {
-		t.Fatalf("NewRun(DAG) = %+v, %v", run, err)
-	}
-}
-
-func TestCompletedDAGContinuationReopensOnlyTerminalNodes(t *testing.T) {
-	def := dagDefinition()
-	now := time.Date(2026, 7, 10, 10, 0, 0, 0, time.UTC)
-	run, err := NewRun(def, "run_dag_completed", now)
-	if err != nil {
-		t.Fatal(err)
-	}
-	run.Status = RunCompleted
-	run.CompletedAt = now.Add(time.Minute)
-	run.Nodes["security"] = NodeState{StepID: "security", Status: NodeCompleted, Content: "secure", Attempt: 1}
-	run.Nodes["tests"] = NodeState{StepID: "tests", Status: NodeCompleted, Content: "passing", Attempt: 1}
-	run.Nodes["synthesis"] = NodeState{StepID: "synthesis", Status: NodeCompleted, Content: "applied", Signal: "completed", Attempt: 1}
-	run.Sessions["synthesis"] = "synthesis-session"
-
-	resumed, err := Resume(def, run, now.Add(2*time.Minute))
-	if err != nil || resumed.Status != RunRunning || !resumed.CompletedAt.IsZero() {
-		t.Fatalf("Resume(completed DAG) = %+v, %v", resumed, err)
-	}
-	if resumed.Nodes["security"].Status != NodeCompleted || resumed.Nodes["tests"].Status != NodeCompleted {
-		t.Fatalf("upstream nodes were reopened: %+v", resumed.Nodes)
-	}
-	terminal := resumed.Nodes["synthesis"]
-	if terminal.Status != NodePending || terminal.Content != "" || terminal.Signal != "" || terminal.Attempt != 1 {
-		t.Fatalf("terminal node was not reset for continuation: %+v", terminal)
-	}
-	if resumed.Sessions["synthesis"] != "synthesis-session" {
-		t.Fatalf("terminal session was not preserved: %+v", resumed.Sessions)
-	}
-}
-
-func TestValidateDAGRejectsCycleAndParallelWrites(t *testing.T) {
-	cycle := dagDefinition()
-	cycle.Steps[0].DependsOn = []string{"synthesis"}
-	assertValidationCode(t, Validate(cycle), "dag_cycle")
-
-	writes := dagDefinition()
-	writes.Steps[0].Sandbox = "workspace-write"
-	writes.Steps[1].Sandbox = "workspace-write"
-	assertValidationCode(t, Validate(writes), "parallel_write_conflict")
-
-	remoteWrite := dagDefinition()
-	remoteWrite.Steps[2].WorkerID = "mac-mini"
-	if err := Validate(remoteWrite); err != nil {
-		t.Fatalf("serialized remote write should be valid, got %v", err)
-	}
-}
-
-func TestValidateAllowsRemoteWorkspaceWriteButRejectsFullSandbox(t *testing.T) {
-	serialWrite := reviewLoopDefinition()
-	serialWrite.Steps[0].WorkerID = "mac-mini"
-	serialWrite.Steps[0].Sandbox = "workspace-write"
-	if err := Validate(serialWrite); err != nil {
-		t.Fatalf("remote workspace-write serial step should be valid, got %v", err)
-	}
-
-	serialWrite.Steps[0].Sandbox = "full"
-	assertValidationCode(t, Validate(serialWrite), "remote_full_unsupported")
-}
-
-func assertValidationCode(t *testing.T, err error, code string) {
-	t.Helper()
-	var issues ValidationErrors
-	if !errors.As(err, &issues) {
-		t.Fatalf("error = %v, want ValidationErrors", err)
-	}
-	for _, issue := range issues {
-		if issue.Code == code {
-			return
-		}
-	}
-	t.Fatalf("issues = %+v, want %s", issues, code)
 }

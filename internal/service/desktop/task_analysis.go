@@ -46,15 +46,13 @@ func (a *Service) AnalyzeTaskDetails(ctx context.Context, taskID string) (domain
 	}
 	runtime, model := agentrun.Runtime(task.Harness), task.Model
 	if runtime == "" {
-		definition, err := a.store.Repos.Workflows.GetDefinition(ctx, task.WorkflowID)
+		definition, err := a.taskDefinition(ctx, task)
 		if err != nil {
 			return task, err
 		}
-		for _, step := range definition.Steps {
-			if step.ID == definition.EntryStepID {
-				runtime, model = agentrun.Runtime(step.Runtime), step.Model
-				break
-			}
+		if len(definition.Steps) > 0 {
+			step := definition.Steps[0]
+			runtime, model = agentrun.Runtime(step.Runtime), step.Model
 		}
 	}
 	if !runtime.Valid() || !a.runtimes.Available(runtime) {
@@ -97,8 +95,8 @@ func (a *Service) AnalyzeTaskDetails(ctx context.Context, taskID string) (domain
 			steps = steps[len(steps)-2:]
 		}
 		for _, step := range steps {
-			if step.Content != "" {
-				contextParts = append(contextParts, "Assistant: "+clip(step.Content, 800))
+			if step.Summary != "" {
+				contextParts = append(contextParts, "Assistant: "+clip(step.Summary, 800))
 			}
 		}
 	}

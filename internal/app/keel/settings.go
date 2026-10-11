@@ -61,6 +61,7 @@ func (a *app) openSettings() {
 }
 
 func (a *app) closeSettings() {
+	a.ui.WorkflowFullscreen = false
 	if a.settingsPanel != nil {
 		a.settingsPanel.closeWorkers()
 		a.settingsPanel = nil
@@ -72,8 +73,24 @@ func (a *app) settingsOverlay(cx *el.Context) {
 		return
 	}
 	width, height := cx.ViewportSize()
+	// Only the workflow canvas may take over the window; Esc first leaves full
+	// screen and returns to the Settings dialog.
+	fullscreen := a.workflowFullscreen()
 	panel := el.Div().Role("dialog").Name("设置").W(el.Dp(min(1120, max(0, width-64)))).H(el.Dp(min(760, max(0, height-128)))).Bg(theme.Surface).Rounded(16).Items(el.Stretch)
-	cx.Overlay("settings-modal", el.Modal(panel).Owner("settings-modal").Scrim(true).KeepOnOutsidePress().BeforeDismiss(func() bool { return !p.saving }).OnDismiss(a.closeSettings))
+	if fullscreen {
+		panel = el.Div().Role("dialog").Name("编排工作流").W(el.Dp(width)).H(el.Dp(height)).Bg(theme.Surface).Items(el.Stretch).Pt(40).Px(16)
+	}
+	cx.Overlay("settings-modal", el.Modal(panel).Owner("settings-modal").Scrim(true).KeepOnOutsidePress().BeforeDismiss(func() bool {
+		if a.workflowFullscreen() {
+			a.ui.WorkflowFullscreen = false
+			return false
+		}
+		return !p.saving
+	}).OnDismiss(a.closeSettings))
+	if fullscreen {
+		panel.Child(a.ui.WorkflowConfirm.Render(cx), a.workflowSettings(cx))
+		return
+	}
 	panel.Child(p.Render(cx))
 }
 
@@ -286,7 +303,7 @@ func (p *settingsPage) draftForSave() (domainsettings.Settings, error) {
 		for _, f := range []struct {
 			id     string
 			target *int
-		}{{"max-transitions", &d.Execution.MaxTransitions}, {"max-failures", &d.Execution.MaxConsecutiveFailures}, {"step-timeout", &d.Execution.StepTimeoutSeconds}, {"dag-concurrency", &d.Execution.MaxLocalDAGConcurrency}, {"interrupt-grace", &d.Execution.InterruptGraceSeconds}} {
+		}{{"max-rework-rounds", &d.Execution.MaxReworkRounds}, {"max-failures", &d.Execution.MaxConsecutiveFailures}, {"step-timeout", &d.Execution.StepTimeoutSeconds}, {"max-concurrency", &d.Execution.MaxConcurrency}, {"interrupt-grace", &d.Execution.InterruptGraceSeconds}} {
 			if err := number(f.id, f.target); err != nil {
 				return d, err
 			}

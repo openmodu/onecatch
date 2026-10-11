@@ -105,7 +105,7 @@ func TestProcessRoles(t *testing.T) {
 			}
 			cmd := exec.CommandContext(ctx, self, tc.args...)
 			for _, env := range os.Environ() {
-				if strings.HasPrefix(env, "ONECATCH_") || strings.HasPrefix(env, "WAILS_UPDATER_") {
+				if strings.HasPrefix(env, "ONECATCH_") {
 					continue
 				}
 				cmd.Env = append(cmd.Env, env)

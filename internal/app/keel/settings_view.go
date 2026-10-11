@@ -162,9 +162,12 @@ func (p *settingsPage) settingsToggle(id, label string, initial func() bool) kit
 func (p *settingsPage) settingsGroups(id string) []kit.SettingGroup {
 	switch id {
 	case "workflows":
-		return []kit.SettingGroup{{Items: []kit.SettingItem{{Label: "工作流管理", Content: el.ViewFunc(func(cx *el.Context) el.Element {
+		return []kit.SettingGroup{{Title: "工作流管理", Items: []kit.SettingItem{{Label: "工作流管理", Content: el.ViewFunc(func(cx *el.Context) el.Element {
+			if !p.app.ui.WorkflowSource {
+				return el.Div().WFull().Child(p.app.ui.WorkflowConfirm.Render(cx), p.app.workflowSettings(cx))
+			}
 			_, h := cx.ViewportSize()
-			return el.Div().H(el.Dp(min(580, max(240, h-190)))).Items(el.Stretch).Child(p.app.ui.WorkflowConfirm.Render(cx), p.app.workflowPageLayout(cx, false))
+			return el.Div().H(el.Dp(max(280, min(760, h-128)-200))).Items(el.Stretch).Child(p.app.ui.WorkflowConfirm.Render(cx), p.app.workflowSettings(cx))
 		})}}}}
 	case "":
 		return p.appearanceGroups()
@@ -172,10 +175,10 @@ func (p *settingsPage) settingsGroups(id string) []kit.SettingGroup {
 		return p.harnessGroups()
 	case "execution":
 		return []kit.SettingGroup{{Title: "新流程默认值", Items: []kit.SettingItem{
-			p.settingsNumber("max-transitions", "最大转移次数", func() int { return p.draft.Execution.MaxTransitions }),
+			p.settingsNumber("max-rework-rounds", "每条返工最多轮数", func() int { return p.draft.Execution.MaxReworkRounds }),
 			p.settingsNumber("max-failures", "连续失败上限", func() int { return p.draft.Execution.MaxConsecutiveFailures }),
 			p.settingsNumber("step-timeout", "单步超时（秒）", func() int { return p.draft.Execution.StepTimeoutSeconds }),
-			p.settingsNumber("dag-concurrency", "本地 DAG 并发数", func() int { return p.draft.Execution.MaxLocalDAGConcurrency }),
+			p.settingsNumber("max-concurrency", "最多并行步骤数", func() int { return p.draft.Execution.MaxConcurrency }),
 			p.settingsNumber("interrupt-grace", "中断宽限期（秒）", func() int { return p.draft.Execution.InterruptGraceSeconds }),
 			p.settingsChoice("default-sandbox", "默认访问权限", func() string { return p.draft.Execution.DefaultSandbox }, []string{"read-only", "workspace-write", "full"}),
 		}}}

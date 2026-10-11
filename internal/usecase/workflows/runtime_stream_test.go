@@ -150,7 +150,7 @@ func (rawEmittingEngine) Run(_ context.Context, _ agentrun.Request, sink agentru
 	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: "hello", Raw: `{"type":"assistant","duplicated":"payload"}`, At: at})
 	sink(agentrun.Event{Kind: agentrun.KindToolResult, Text: "ok", Raw: `{"type":"tool_result","duplicated":"payload"}`, At: at})
 	sink(agentrun.Event{Kind: agentrun.KindUsage, Raw: `{"type":"turn.completed","usage":{"input_tokens":11,"output_tokens":3}}`, At: at})
-	return agentrun.Result{Succeeded: true, SessionID: "session_1", FinalMessage: `{"signal":"approved","content":"done"}`}, nil
+	return agentrun.Result{Succeeded: true, SessionID: "session_1", FinalMessage: `{"verdict":"pass","summary":"done"}`}, nil
 }
 
 // Raw dominated the stored transcript — on a real run, 2.7MB of a 3.3MB file —

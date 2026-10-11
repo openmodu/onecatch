@@ -1,5 +1,11 @@
 // Package workflows contains the runtime-agnostic domain model and state
-// machine for user-defined, signal-driven Agent workflows.
+// machine for user-defined Agent graphs.
+//
+// A workflow is a directed graph of steps. "next" edges are dependencies and
+// must form a DAG: a step runs once every upstream step has passed. "rework"
+// edges point back to an upstream step: when the source step returns a rework
+// verdict, the target step receives the feedback in its own resumed session and
+// only the steps on the path between them run again.
 package workflows
 
 import (
@@ -8,14 +14,17 @@ import (
 )
 
 const (
-	ModeSerial = "serial"
-	ModeDAG    = "dag"
+	StepAgent   = "agent"
+	StepCommand = "command"
 
-	TargetDone  = "$done"
-	TargetPause = "$pause"
-	TargetFail  = "$fail"
+	EdgeNext   = "next"
+	EdgeRework = "rework"
 
-	DefaultMaxTransitions         = 20
+	VerdictPass     = "pass"
+	VerdictRework   = "rework"
+	VerdictAskHuman = "ask_human"
+
+	DefaultMaxReworkRounds        = 3
 	DefaultMaxConsecutiveFailures = 3
 	DefaultStepTimeoutSeconds     = 30 * 60
 )
@@ -26,29 +35,37 @@ type Definition struct {
 	ID          string    `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description,omitempty"`
-	Mode        string    `json:"mode,omitempty"`
-	EntryStepID string    `json:"entryStepId"`
 	Steps       []Step    `json:"steps"`
+	Edges       []Edge    `json:"edges,omitempty"`
 	Policy      Policy    `json:"policy"`
 	Layout      Layout    `json:"layout,omitempty"`
 	CreatedAt   time.Time `json:"createdAt,omitempty"`
 	UpdatedAt   time.Time `json:"updatedAt,omitempty"`
 }
 
-// Step is one serial Agent turn in a workflow. Runtime is resolved by the
-// local runtime registry; the domain layer deliberately does not depend on CLI
-// adapters.
+// Step is one node of the graph. An agent step drives a coding-agent runtime
+// and keeps one provider session for the whole run, so every revisit resumes
+// that step's own context. A command step runs a shell command in the
+// workspace; exit status zero passes, anything else is treated as rework.
 type Step struct {
-	ID          string            `json:"id"`
-	Name        string            `json:"name"`
-	Runtime     string            `json:"runtime"`
-	Model       string            `json:"model,omitempty"`
-	Sandbox     string            `json:"sandbox,omitempty"`
-	WorkerID    string            `json:"workerId,omitempty"`
-	DependsOn   []string          `json:"dependsOn,omitempty"`
-	RolePrompt  string            `json:"rolePrompt"`
-	Instruction string            `json:"instruction"`
-	Transitions map[string]string `json:"transitions"`
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Kind     string `json:"kind,omitempty"`
+	Runtime  string `json:"runtime,omitempty"`
+	Model    string `json:"model,omitempty"`
+	Sandbox  string `json:"sandbox,omitempty"`
+	WorkerID string `json:"workerId,omitempty"`
+	Prompt   string `json:"prompt,omitempty"`
+	Command  string `json:"command,omitempty"`
+}
+
+// Edge connects two steps. MaxRounds bounds a rework edge; zero uses the
+// workflow policy.
+type Edge struct {
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Kind      string `json:"kind"`
+	MaxRounds int    `json:"maxRounds,omitempty"`
 }
 
 type Point struct {
@@ -62,7 +79,7 @@ type Layout struct {
 
 // Policy bounds automatic execution. Zero values are filled by Normalize.
 type Policy struct {
-	MaxTransitions         int `json:"maxTransitions"`
+	MaxReworkRounds        int `json:"maxReworkRounds"`
 	MaxConsecutiveFailures int `json:"maxConsecutiveFailures"`
 	StepTimeoutSeconds     int `json:"stepTimeoutSeconds"`
 }
@@ -79,27 +96,27 @@ const (
 )
 
 // Run is the durable state needed to resume orchestration. Runtime sessions
-// are keyed by step ID so revisiting a role resumes only that role's context.
+// are keyed by step ID so revisiting a step resumes only that step's context.
+// CurrentStepID names the step that most recently started; it is a display and
+// resume hint, not the scheduler's source of truth, which is Nodes.
 type Run struct {
-	ID                     string                             `json:"id"`
-	TaskID                 string                             `json:"taskId"`
-	WorkflowID             string                             `json:"workflowId"`
-	Revision               int64                              `json:"revision"`
-	Status                 RunStatus                          `json:"status"`
-	CurrentStepID          string                             `json:"currentStepId"`
-	TransitionCount        int                                `json:"transitionCount"`
-	ConsecutiveFailures    int                                `json:"consecutiveFailures"`
-	Sessions               map[string]string                  `json:"sessions,omitempty"`
-	History                []TransitionRecord                 `json:"history,omitempty"`
-	Nodes                  map[string]NodeState               `json:"nodes,omitempty"`
-	PauseReason            string                             `json:"pauseReason,omitempty"`
-	LastError              string                             `json:"lastError,omitempty"`
-	StartedAt              time.Time                          `json:"startedAt"`
-	UpdatedAt              time.Time                          `json:"updatedAt"`
-	CompletedAt            time.Time                          `json:"completedAt,omitempty"`
-	MaxLocalDAGConcurrency int                                `json:"maxLocalDAGConcurrency,omitempty"`
-	InterruptGraceSeconds  int                                `json:"interruptGraceSeconds,omitempty"`
-	RuntimeSettings        map[string]ResolvedRuntimeSettings `json:"runtimeSettings,omitempty"`
+	ID                    string                             `json:"id"`
+	TaskID                string                             `json:"taskId"`
+	WorkflowID            string                             `json:"workflowId"`
+	Revision              int64                              `json:"revision"`
+	Status                RunStatus                          `json:"status"`
+	CurrentStepID         string                             `json:"currentStepId"`
+	Sessions              map[string]string                  `json:"sessions,omitempty"`
+	Nodes                 map[string]NodeState               `json:"nodes,omitempty"`
+	ReworkRounds          map[string]int                     `json:"reworkRounds,omitempty"`
+	PauseReason           string                             `json:"pauseReason,omitempty"`
+	LastError             string                             `json:"lastError,omitempty"`
+	StartedAt             time.Time                          `json:"startedAt"`
+	UpdatedAt             time.Time                          `json:"updatedAt"`
+	CompletedAt           time.Time                          `json:"completedAt,omitempty"`
+	MaxConcurrency        int                                `json:"maxConcurrency,omitempty"`
+	InterruptGraceSeconds int                                `json:"interruptGraceSeconds,omitempty"`
+	RuntimeSettings       map[string]ResolvedRuntimeSettings `json:"runtimeSettings,omitempty"`
 }
 
 // RunListQuery is a repository-level query over durable Run snapshots. A
@@ -138,30 +155,43 @@ const (
 	NodeFailed    NodeStatus = "failed"
 )
 
+// NodeState is one step's live position in a run. Inbox holds messages the
+// step has not yet acted on: rework feedback from a downstream step, guidance
+// a human addressed to it, or a note from a resume. It is delivered on the
+// step's next execution and cleared once the step reaches a verdict.
 type NodeState struct {
 	StepID     string     `json:"stepId"`
 	Status     NodeStatus `json:"status"`
 	Attempt    int        `json:"attempt"`
-	Signal     string     `json:"signal,omitempty"`
-	Content    string     `json:"content,omitempty"`
+	Failures   int        `json:"failures,omitempty"`
+	Verdict    string     `json:"verdict,omitempty"`
+	Summary    string     `json:"summary,omitempty"`
 	Error      string     `json:"error,omitempty"`
+	Inbox      []Message  `json:"inbox,omitempty"`
 	StartedAt  time.Time  `json:"startedAt,omitempty"`
 	FinishedAt time.Time  `json:"finishedAt,omitempty"`
 }
 
-// Outcome is the only control message an Agent can return. It names a signal,
-// not a target; the server-owned definition decides where that signal leads.
-type Outcome struct {
-	Signal  string `json:"signal"`
-	Content string `json:"content"`
+const (
+	MessageFromHuman = "human"
+)
+
+// Message is one piece of input waiting for a step. From is a step ID for
+// rework feedback, or MessageFromHuman.
+type Message struct {
+	From string    `json:"from"`
+	Text string    `json:"text"`
+	At   time.Time `json:"at"`
 }
 
-type TransitionRecord struct {
-	FromStepID string    `json:"fromStepId"`
-	Signal     string    `json:"signal"`
-	Target     string    `json:"target"`
-	Content    string    `json:"content"`
-	At         time.Time `json:"at"`
+// Outcome is the verdict a step reports when it finishes. Agents choose a
+// verdict, never a destination: a rework Target must name one of the step's
+// declared rework edges, and the definition decides everything else.
+type Outcome struct {
+	Verdict  string `json:"verdict"`
+	Summary  string `json:"summary"`
+	Feedback string `json:"feedback,omitempty"`
+	Target   string `json:"target,omitempty"`
 }
 
 type StepRunStatus string
@@ -180,8 +210,8 @@ type StepRun struct {
 	StepID                   string        `json:"stepId"`
 	Attempt                  int           `json:"attempt"`
 	Status                   StepRunStatus `json:"status"`
-	Signal                   string        `json:"signal,omitempty"`
-	Content                  string        `json:"content,omitempty"`
+	Verdict                  string        `json:"verdict,omitempty"`
+	Summary                  string        `json:"summary,omitempty"`
 	SessionIDBefore          string        `json:"sessionIdBefore,omitempty"`
 	SessionIDAfter           string        `json:"sessionIdAfter,omitempty"`
 	StartedAt                time.Time     `json:"startedAt"`
@@ -209,11 +239,13 @@ const (
 	InstructionRemoved InstructionStatus = "removed"
 )
 
-// Instruction is durable human guidance queued while an Agent step is active.
-// It lives in a file separate from run.json so enqueueing cannot race the Run
-// revision used by the workflow state machine.
+// Instruction is durable human guidance queued while a run is active. It lives
+// in a file separate from run.json so enqueueing cannot race the Run revision
+// used by the workflow state machine. A non-empty StepID addresses one step;
+// otherwise the guidance goes to whichever steps start next.
 type Instruction struct {
 	ID          string            `json:"id"`
+	StepID      string            `json:"stepId,omitempty"`
 	Content     string            `json:"content"`
 	Attachments []string          `json:"attachments,omitempty"`
 	Status      InstructionStatus `json:"status"`
@@ -239,13 +271,4 @@ type RuntimeEvent struct {
 	Seq     int64           `json:"seq"`
 	At      time.Time       `json:"at"`
 	Payload json.RawMessage `json:"payload"`
-}
-
-func isTerminalTarget(target string) bool {
-	switch target {
-	case TargetDone, TargetPause, TargetFail:
-		return true
-	default:
-		return false
-	}
 }

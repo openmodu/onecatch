@@ -34,13 +34,13 @@ func TestUsageAllCombinesDailyPeaksAndCrossProviderStreaks(t *testing.T) {
 }
 
 func TestWorkflowStarterTemplatesRemainValid(t *testing.T) {
-	for _, kind := range []string{"single", "loop", "dag"} {
+	for _, kind := range []string{"blank", "implement_review", "design_to_pr", "parallel_review"} {
 		d := starterWorkflow(kind)
 		if err := domainworkflows.Validate(d); err != nil {
 			t.Fatalf("%s: %v", kind, err)
 		}
 	}
-	a := &app{workflowEditor: kit.CodeEditor("{}"), definitions: []domainworkflows.Definition{starterWorkflow("loop"), {ID: "my_implement_review_2"}}}
+	a := &app{workflowEditor: kit.CodeEditor("{}"), definitions: []domainworkflows.Definition{starterWorkflow("implement_review"), {ID: "my_implement_review_2"}}}
 	a.newWorkflow()
 	if a.ui.WorkflowDraft.ID != "my_implement_review_3" {
 		t.Fatalf("duplicate draft ID: %s", a.ui.WorkflowDraft.ID)

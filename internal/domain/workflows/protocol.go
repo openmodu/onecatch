@@ -20,7 +20,6 @@ func ParseOutcome(text string) (Outcome, error) {
 		return Outcome{}, err
 	}
 	dec := json.NewDecoder(bytes.NewBufferString(raw))
-	dec.DisallowUnknownFields()
 	var outcome Outcome
 	if err := dec.Decode(&outcome); err != nil {
 		return Outcome{}, fmt.Errorf("%w: decode JSON: %v", ErrProtocol, err)
@@ -32,11 +31,21 @@ func ParseOutcome(text string) (Outcome, error) {
 		}
 		return Outcome{}, fmt.Errorf("%w: trailing content: %v", ErrProtocol, err)
 	}
-	if !identifierPattern.MatchString(outcome.Signal) {
-		return Outcome{}, fmt.Errorf("%w: signal must be a lowercase identifier", ErrProtocol)
+	outcome.Verdict = strings.TrimSpace(outcome.Verdict)
+	outcome.Target = strings.TrimSpace(outcome.Target)
+	switch outcome.Verdict {
+	case VerdictPass, VerdictRework, VerdictAskHuman:
+	default:
+		return Outcome{}, fmt.Errorf("%w: verdict must be pass, rework or ask_human", ErrProtocol)
 	}
-	if strings.TrimSpace(outcome.Content) == "" {
-		return Outcome{}, fmt.Errorf("%w: content is required", ErrProtocol)
+	if strings.TrimSpace(outcome.Summary) == "" {
+		outcome.Summary = outcome.Feedback
+	}
+	if strings.TrimSpace(outcome.Summary) == "" {
+		return Outcome{}, fmt.Errorf("%w: summary is required", ErrProtocol)
+	}
+	if outcome.Verdict == VerdictRework && strings.TrimSpace(outcome.Feedback) == "" {
+		outcome.Feedback = outcome.Summary
 	}
 	return outcome, nil
 }

@@ -105,3 +105,26 @@ func TestTranscriptResolvedRequestsStayResolvedAfterLateHistory(t *testing.T) {
 		t.Fatalf("resolved cards reappeared: %+v", tx.visible())
 	}
 }
+
+func TestTranscriptRequestIDsAreScopedToStep(t *testing.T) {
+	tx := newTranscript()
+	q := &agentrun.UserInputRequest{ID: "modu-input-1"}
+	p := &agentrun.PermissionRequest{ID: "permission-1"}
+	tx.history([]desktopservice.RuntimeEventView{
+		{StepRunID: "old", Seq: 1, Kind: "user_input_request", UserInput: q},
+		{StepRunID: "old", Seq: 2, Kind: "user_input_resolved", UserInput: q},
+		{StepRunID: "old", Seq: 3, Kind: "permission_request", Permission: p},
+		{StepRunID: "old", Seq: 4, Kind: "permission_resolved", Permission: p},
+		{StepRunID: "new", Seq: 1, Kind: "user_input_request", UserInput: q},
+		{StepRunID: "new", Seq: 2, Kind: "permission_request", Permission: p},
+	})
+	visible := tx.visible()
+	if len(visible) != 2 {
+		t.Fatalf("new requests hidden by previous step: %+v", visible)
+	}
+	for _, e := range visible {
+		if e.step != "new" {
+			t.Fatalf("old request reappeared: %+v", e)
+		}
+	}
+}

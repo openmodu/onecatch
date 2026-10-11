@@ -10,7 +10,7 @@ import (
 )
 
 func graphFixture() domainworkflows.Definition {
-	return domainworkflows.Definition{ID: "review", EntryStepID: "implement", Steps: []domainworkflows.Step{{ID: "implement", Name: "实现", Transitions: map[string]string{"ready": "review"}}, {ID: "review", Name: "审查", DependsOn: []string{"implement"}, Transitions: map[string]string{"retry": "implement", "approved": "$done"}}}, Layout: domainworkflows.Layout{Nodes: map[string]domainworkflows.Point{"implement": {X: 10, Y: 20}}}}
+	return domainworkflows.Definition{ID: "review", Steps: []domainworkflows.Step{{ID: "implement", Name: "实现"}, {ID: "review", Name: "审查"}}, Edges: []domainworkflows.Edge{{From: "implement", To: "review", Kind: domainworkflows.EdgeNext}, {From: "review", To: "implement", Kind: domainworkflows.EdgeRework}}, Layout: domainworkflows.Layout{Nodes: map[string]domainworkflows.Point{"implement": {X: 10, Y: 20}}}}
 }
 
 func TestWorkflowRenamePreservesGraphReferences(t *testing.T) {
@@ -18,7 +18,7 @@ func TestWorkflowRenamePreservesGraphReferences(t *testing.T) {
 	if err := renameWorkflowStep(&d, 0, "build"); err != nil {
 		t.Fatal(err)
 	}
-	if d.EntryStepID != "build" || d.Steps[1].DependsOn[0] != "build" || d.Steps[1].Transitions["retry"] != "build" || d.Layout.Nodes["build"].X != 10 {
+	if d.Edges[0].From != "build" || d.Edges[1].To != "build" || d.Layout.Nodes["build"].X != 10 {
 		t.Fatalf("references not updated: %+v", d)
 	}
 	if _, exists := d.Layout.Nodes["implement"]; exists {
@@ -38,33 +38,11 @@ func TestWorkflowRemoveRepairsEdges(t *testing.T) {
 	if !removeWorkflowNode(&d, 0) {
 		t.Fatal("not removed")
 	}
-	if d.EntryStepID != "review" || len(d.Steps[0].DependsOn) != 0 || d.Steps[0].Transitions["retry"] != "$pause" || len(d.Layout.Nodes) != 0 {
+	if d.Steps[0].ID != "review" || len(d.Edges) != 0 || len(d.Layout.Nodes) != 0 {
 		t.Fatalf("dangling references: %+v", d)
 	}
 	if removeWorkflowNode(&d, 0) {
 		t.Fatal("last node was removed")
-	}
-}
-
-func TestWorkflowHistoryRestoresUnsavedNewDraft(t *testing.T) {
-	a := &app{workflowEditor: kit.CodeEditor("{}")}
-	a.newWorkflow()
-	// Form edits and raw edits both survive leaving and returning to a draft.
-	a.ui.WorkflowDraft.Name = "未保存的流程"
-	a.syncWorkflowDocument()
-	a.ui.WorkflowHistory.push(a.currentLocation(), location{Workflow: "existing"})
-	a.ui.SelectedWorkflow = "existing"
-	a.ui.WorkflowSource = false
-	a.goWorkflowHistory(-1)
-	if !a.ui.WorkflowSource || a.ui.WorkflowRaw || a.editingWorkflow != "" || a.ui.WorkflowDraft.Name != "未保存的流程" {
-		t.Fatalf("new draft lost: %+v", a.ui.WorkflowDraft)
-	}
-	a.toggleWorkflowRaw()
-	a.workflowEditor.SetValue("invalid JSON draft")
-	a.goWorkflowHistory(1)
-	a.goWorkflowHistory(-1)
-	if a.workflowEditor.Value() != "invalid JSON draft" || !a.ui.WorkflowRaw {
-		t.Fatal("invalid raw draft discarded")
 	}
 }
 
@@ -84,5 +62,25 @@ func TestDraftSelectorsTolerateMissingAndDuplicateIDs(t *testing.T) {
 	options := uniqueSelectOptions([]kit.SelectOption{{Value: "", Label: "Empty"}, {Value: "a", Label: "First"}, {Value: "a", Label: "Duplicate"}, {Value: "b", Label: "Second"}})
 	if len(options) != 2 || options[0].Label != "First" {
 		t.Fatalf("options: %+v", options)
+	}
+}
+
+func TestWorkflowSourceLivePreviewKeepsLastValidDraft(t *testing.T) {
+	a := &app{workflowEditor: kit.CodeEditor("{}")}
+	a.ui.WorkflowDraft = starterWorkflow("implement_review")
+	a.syncWorkflowDocument()
+	source := a.workflowEditor.Value()
+	a.applyWorkflowSource(source)
+	if a.ui.DAG.SourceError != "" {
+		t.Fatal(a.ui.DAG.SourceError)
+	}
+	id := a.ui.WorkflowDraft.ID
+	a.applyWorkflowSource("{\n invalid")
+	if a.ui.DAG.SourceError == "" || a.ui.WorkflowDraft.ID != id {
+		t.Fatal("invalid source replaced preview")
+	}
+	a.applyWorkflowSource(source)
+	if a.ui.DAG.SourceError != "" {
+		t.Fatal("source error not cleared")
 	}
 }

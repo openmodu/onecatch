@@ -77,13 +77,11 @@ func (a *Service) generateTaskTitle(ctx context.Context, workspace string, defin
 	runtime := agentrun.Runtime(strings.TrimSpace(input.Harness))
 	model := strings.TrimSpace(input.Model)
 	if runtime == "" {
-		for _, step := range definition.Steps {
-			if step.ID == definition.EntryStepID {
-				runtime = agentrun.Runtime(strings.TrimSpace(step.Runtime))
-				if model == "" {
-					model = strings.TrimSpace(step.Model)
-				}
-				break
+		if len(definition.Steps) > 0 {
+			step := definition.Steps[0]
+			runtime = agentrun.Runtime(strings.TrimSpace(step.Runtime))
+			if model == "" {
+				model = strings.TrimSpace(step.Model)
 			}
 		}
 	}

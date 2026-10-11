@@ -40,7 +40,7 @@ func TestWorkflowRepoPersistsRunSnapshotAndEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if savedDefinition.CreatedAt.IsZero() || savedDefinition.Policy.MaxTransitions != domainworkflows.DefaultMaxTransitions {
+	if savedDefinition.CreatedAt.IsZero() || savedDefinition.Policy.MaxReworkRounds != domainworkflows.DefaultMaxReworkRounds {
 		t.Fatalf("saved definition = %+v", savedDefinition)
 	}
 	run, err := domainworkflows.NewRun(savedDefinition, "run_1", now)
@@ -58,7 +58,7 @@ func TestWorkflowRepoPersistsRunSnapshotAndEvents(t *testing.T) {
 	}
 	editedDefinition := domainworkflows.Normalize(savedDefinition)
 	editedDefinition.Name = "Edited Review Loop"
-	editedDefinition.Steps[0].Instruction = "Use the newly edited instructions."
+	editedDefinition.Steps[0].Prompt = "Use the newly edited instructions."
 	if _, err := store.Repos.Workflows.SaveDefinition(ctx, editedDefinition); err != nil {
 		t.Fatal(err)
 	}
@@ -71,15 +71,15 @@ func TestWorkflowRepoPersistsRunSnapshotAndEvents(t *testing.T) {
 		t.Fatalf("ListDefinitions() = %+v, %v", definitions, err)
 	}
 	runDefinition, err := store.Repos.Workflows.GetRunDefinition(ctx, run.ID)
-	if err != nil || runDefinition.Name != savedDefinition.Name || runDefinition.Steps[0].Instruction != savedDefinition.Steps[0].Instruction {
+	if err != nil || runDefinition.Name != savedDefinition.Name || runDefinition.Steps[0].Prompt != savedDefinition.Steps[0].Prompt {
 		t.Fatalf("GetRunDefinition() = %+v, %v; template edit leaked into run snapshot", runDefinition, err)
 	}
-	advanced, err := domainworkflows.Advance(savedDefinition, run, domainworkflows.Outcome{Signal: "ready_for_review", Content: "implemented"}, now.Add(2*time.Second))
+	advanced, err := domainworkflows.ApplyOutcome(savedDefinition, run, "implement", domainworkflows.Outcome{Verdict: domainworkflows.VerdictPass, Summary: "implemented"}, now.Add(2*time.Second))
 	if err != nil {
 		t.Fatal(err)
 	}
 	updated, err := store.Repos.Workflows.UpdateRun(ctx, advanced, run.Revision)
-	if err != nil || updated.Revision != 2 || updated.CurrentStepID != "review" {
+	if err != nil || updated.Revision != 2 || updated.Nodes["implement"].Status != domainworkflows.NodeCompleted {
 		t.Fatalf("UpdateRun() = %+v, %v", updated, err)
 	}
 	if _, err := store.Repos.Workflows.UpdateRun(ctx, advanced, run.Revision); !errors.Is(err, repoworkflows.ErrStateConflict) {
@@ -92,8 +92,8 @@ func TestWorkflowRepoPersistsRunSnapshotAndEvents(t *testing.T) {
 		StepID:          "implement",
 		Attempt:         1,
 		Status:          domainworkflows.StepRunSucceeded,
-		Signal:          "ready_for_review",
-		Content:         "implemented",
+		Verdict:         domainworkflows.VerdictPass,
+		Summary:         "implemented",
 		SessionIDBefore: "",
 		SessionIDAfter:  "session_codex_1",
 		StartedAt:       now,
@@ -129,11 +129,11 @@ func TestWorkflowRepoPersistsRunSnapshotAndEvents(t *testing.T) {
 	}
 	defer reopened.Close()
 	gotRun, err := reopened.Repos.Workflows.GetRun(ctx, run.ID)
-	if err != nil || gotRun.Revision != 2 || gotRun.CurrentStepID != "review" || gotRun.Sessions["implement"] != "session_codex_1" || len(gotRun.History) != 1 {
+	if err != nil || gotRun.Revision != 2 || gotRun.Nodes["implement"].Summary != "implemented" || gotRun.Sessions["implement"] != "session_codex_1" {
 		t.Fatalf("GetRun() after reopen = %+v, %v", gotRun, err)
 	}
 	gotRunDefinition, err := reopened.Repos.Workflows.GetRunDefinition(ctx, run.ID)
-	if err != nil || gotRunDefinition.Name != savedDefinition.Name || gotRunDefinition.Steps[0].Instruction != savedDefinition.Steps[0].Instruction {
+	if err != nil || gotRunDefinition.Name != savedDefinition.Name || gotRunDefinition.Steps[0].Prompt != savedDefinition.Steps[0].Prompt {
 		t.Fatalf("GetRunDefinition() after reopen = %+v, %v", gotRunDefinition, err)
 	}
 	stepRuns, err := reopened.Repos.Workflows.ListStepRuns(ctx, run.ID)
@@ -340,12 +340,15 @@ func TestRunListQueryFiltersSearchesAndPages(t *testing.T) {
 
 func reviewLoopDefinition() domainworkflows.Definition {
 	return domainworkflows.Definition{
-		ID:          "review_loop",
-		Name:        "Review Loop",
-		EntryStepID: "implement",
+		ID:   "review_loop",
+		Name: "Review Loop",
 		Steps: []domainworkflows.Step{
-			{ID: "implement", Name: "Implement", Runtime: "codex", RolePrompt: "You implement changes.", Instruction: "Implement and test.", Transitions: map[string]string{"ready_for_review": "review", "need_human": domainworkflows.TargetPause}},
-			{ID: "review", Name: "Review", Runtime: "claude", RolePrompt: "You review changes.", Instruction: "Review the diff.", Transitions: map[string]string{"approved": domainworkflows.TargetDone, "changes_requested": "implement"}},
+			{ID: "implement", Name: "Implement", Runtime: "codex", Prompt: "Implement and test."},
+			{ID: "review", Name: "Review", Runtime: "claude", Sandbox: "read-only", Prompt: "Review the diff."},
+		},
+		Edges: []domainworkflows.Edge{
+			{From: "implement", To: "review"},
+			{From: "review", To: "implement", Kind: domainworkflows.EdgeRework},
 		},
 	}
 }

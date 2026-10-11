@@ -341,6 +341,15 @@ func (a *app) sidebarSeam(cx *el.Context) el.Element {
 	}).FocusStyle(neutralFocus))
 }
 func (a *app) executorPicker(cx *el.Context) el.Element {
+	if a.task != nil && a.task.WorkflowID != "" && a.task.WorkflowID != "single_agent" {
+		name := a.task.WorkflowID
+		if a.detail != nil && a.detail.Workflow.Name != "" {
+			name = a.detail.Workflow.Name
+		} else if d, ok := a.findDefinition(a.task.WorkflowID); ok {
+			name = d.Name
+		}
+		return el.Div().Row().Items(el.Center).Gap(7).H(el.Dp(32)).Px(10).Rounded(16).Bg(theme.Subtle).Child(lucide(cx, "workflow", 14, theme.Muted), el.Text(name).TextSize(12).MaxLines(1))
+	}
 	if a.task != nil {
 		label := a.task.Harness
 		for _, r := range a.runtimes {
@@ -367,12 +376,8 @@ func (a *app) buildExecutorMenu() {
 					label = r.Name
 				}
 			}
-		} else {
-			for _, d := range a.definitions {
-				if d.ID == a.workflow.Value() {
-					label = d.Name
-				}
-			}
+		} else if d, ok := a.findDefinition(a.workflow.Value()); ok {
+			label = d.Name
 		}
 		if label == "选择 Agent" && id != "" {
 			label = id
@@ -426,11 +431,13 @@ func (a *app) executorOptions(cx *el.Context) el.Element {
 	}
 	if a.task == nil {
 		column.Child(el.Div().H(el.Dp(1)).WFull().Bg(seamColor).My(6), el.Text(uiText("工作流")).TextSize(11).TextColor(theme.Muted).Px(8))
-		for _, definition := range a.definitions {
-			if definition.ID != "single_agent" {
-				d := definition
-				column.Child(listOption(cx, "executor-workflow/"+d.ID, d.Name, lucide(cx, "workflow", 16, theme.Muted), func() { a.selectLocalConversation(a.runtime.Value(), d.ID) }, a.workflow.Value() == d.ID, a.busy || a.loading))
+		for _, definition := range a.selectableDefinitions() {
+			d := definition
+			icon := "workflow"
+			if isProjectWorkflow(d.ID) {
+				icon = "file-code-2"
 			}
+			column.Child(listOption(cx, "executor-workflow/"+d.ID, d.Name, lucide(cx, icon, 16, theme.Muted), func() { a.selectLocalConversation(a.runtime.Value(), d.ID) }, a.workflow.Value() == d.ID, a.busy || a.loading))
 		}
 	}
 	return column

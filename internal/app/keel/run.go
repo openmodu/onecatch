@@ -13,7 +13,6 @@ import (
 	"github.com/dyike/keel/ui/locale"
 	"github.com/dyike/keel/ui/window"
 	"github.com/openmodu/onecatch/internal/service/appupdate"
-	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
 //go:embed appicon.png
@@ -22,7 +21,6 @@ var appIcon []byte
 type Options struct{ DataRoot string }
 
 func Run(options Options) error {
-	updater.HandleHelperMode()
 	prepareCommandEnvironment()
 	b, err := openBackend(context.Background(), options.DataRoot)
 	if err != nil {
@@ -50,8 +48,7 @@ func Run(options Options) error {
 	applyAppPalette(a.dark, a.ui.Preferences.Accent)
 	a.logo = kit.Image(icon, "OneCatch").Size(22, 22).Rounded(5)
 	a.refresh()
-	// Like the Wails client's styled WebKit scrollbars, overflowing views
-	// always show their thin bar rather than only while scrolling.
+	// Overflowing views always show their thin scrollbar.
 	el.SetScrollbarDefault(el.ScrollbarAlways)
 	a.window = window.Open(window.Options{
 		Title: "OneCatch · Keel", Width: 1120, Height: 760, MinWidth: 640, MinHeight: 480,

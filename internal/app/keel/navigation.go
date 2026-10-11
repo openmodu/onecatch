@@ -39,7 +39,6 @@ type location struct {
 	Source                          bool
 	Editor                          string
 	Raw                             bool
-	Advanced                        bool
 }
 type navigationHistory struct {
 	Entries []location
@@ -91,29 +90,26 @@ type uiState struct {
 	Add                             *kit.MenuView
 	WorkflowSource                  bool
 	SelectedWorkflow                string
-	WorkflowWindow                  *window.Window
-	WorkflowHistory                 navigationHistory
 	WorkflowConfirm                 *kit.DialogView
 	WorkflowRaw                     bool
-	WorkflowAdvanced                bool
-	WorkflowRoles                   bool
-	WorkflowDraft                   domainworkflows.Definition
-	DAG                             dagState
-	WorkflowStep                    int
-	WorkflowRowMenus                map[string]*kit.MenuView
-	WorkflowNew                     *kit.MenuView
-	WorkflowSelects                 map[string]*kit.SelectView
-	WorkflowNumbers                 map[string]*kit.NumberInputView
-	WorkflowStepID                  string
-	WorkflowSignal                  string
-	WorkflowPolicy                  map[string]string
-	SidebarDragOffset               float32
-	TaskMenus                       map[string]*kit.MenuView
-	TaskAnalyzing                   map[string]bool
-	TaskMenuPinned                  map[string]bool // pinned state each task menu was built for
-	TaskDialog                      *kit.DialogView
-	TaskRenameID, TaskTitle         string
-	TaskSaving                      bool
+	// WorkflowFullscreen lets the canvas editor fill the window while it is
+	// open from Settings; nothing else in Settings goes full screen.
+	WorkflowFullscreen      bool
+	WorkflowDraft           domainworkflows.Definition
+	DAG                     dagState
+	WorkflowStep            int
+	WorkflowRowMenus        map[string]*kit.MenuView
+	WorkflowNew             *kit.MenuView
+	WorkflowSelects         map[string]*kit.SelectView
+	WorkflowNumbers         map[string]*kit.NumberInputView
+	WorkflowStepID          string
+	SidebarDragOffset       float32
+	TaskMenus               map[string]*kit.MenuView
+	TaskAnalyzing           map[string]bool
+	TaskMenuPinned          map[string]bool // pinned state each task menu was built for
+	TaskDialog              *kit.DialogView
+	TaskRenameID, TaskTitle string
+	TaskSaving              bool
 }
 
 func defaultUIPreferences() uiPreferences {
@@ -235,7 +231,7 @@ func (a *app) currentLocation() location {
 	if a.ui.WorkflowSource {
 		editor = a.workflowEditor.Value()
 	}
-	return location{Page: a.page, Workspace: a.workspaceID, Task: a.taskID, Workflow: a.ui.SelectedWorkflow, Source: a.ui.WorkflowSource, Editor: editor, Raw: a.ui.WorkflowRaw, Advanced: a.ui.WorkflowAdvanced}
+	return location{Page: a.page, Workspace: a.workspaceID, Task: a.taskID, Workflow: a.ui.SelectedWorkflow, Source: a.ui.WorkflowSource, Editor: editor, Raw: a.ui.WorkflowRaw}
 }
 func (a *app) recordNavigation(before location) {
 	if !a.ui.Restoring {
@@ -243,20 +239,12 @@ func (a *app) recordNavigation(before location) {
 	}
 }
 func (a *app) goPage(id string) {
-	if id == "workflows" && a.window != nil {
+	if id == "workflows" {
 		a.openWorkflows()
 		return
 	}
 	before := a.currentLocation()
 	a.page, a.errorText = id, ""
-	if id == "workflows" && a.ui.SelectedWorkflow == "" {
-		for _, d := range a.definitions {
-			if d.ID != "single_agent" {
-				a.ui.SelectedWorkflow = d.ID
-				break
-			}
-		}
-	}
 	if id == "skills" {
 		a.loadSkills()
 	}
@@ -303,7 +291,7 @@ func (a *app) selectWorkflow(id string, source bool) {
 			}
 		}
 	}
-	a.ui.WorkflowHistory.push(before, a.currentLocation())
+	a.recordNavigation(before)
 }
 
 // menuMinWidth lets icon-and-label menus fit their entries.

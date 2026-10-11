@@ -29,7 +29,14 @@ type entry struct {
 	process      []*entry
 	details      []*entry
 	settled      bool
+	// stepLabel names the workflow step that produced this row; it is set on
+	// the first row of each run of output from one step.
+	stepLabel string
 }
+
+// kindTransition is a workflow event shown in the conversation: a step
+// sending work back, or asking the person a question.
+const kindTransition agentrun.EventKind = "workflow_transition"
 
 // transcript joins durable history and live snapshots by stream identity and
 // revision. Subscribe before loading history; merge rather than replace so a
@@ -54,12 +61,14 @@ func eventKey(step, stream string, seq int64, kind agentrun.EventKind) string {
 	return fmt.Sprintf("%s/event/%d/%s", step, seq, kind)
 }
 
+func requestKey(step, id string) string { return step + "/request/" + id }
+
 func (t *transcript) merge(e entry, delta bool) bool {
 	if e.kind == agentrun.KindPermissionResolved && e.permission != nil {
-		t.resolvedPermissions[e.permission.ID] = true
+		t.resolvedPermissions[requestKey(e.step, e.permission.ID)] = true
 	}
 	if e.kind == agentrun.KindUserInputResolved && e.question != nil {
-		t.resolvedQuestions[e.question.ID] = true
+		t.resolvedQuestions[requestKey(e.step, e.question.ID)] = true
 	}
 	old := t.items[e.key]
 	if old != nil && (e.revision <= old.revision) {
@@ -123,7 +132,53 @@ func (t *transcript) detail(d desktopservice.RunDetail) {
 		}
 		t.items[key] = &entry{key: key, text: i.Content, user: true, at: at}
 	}
+	t.transitions(d)
 	t.history(d.RuntimeEvents)
+}
+
+// transitions turns rework and ask-human verdicts into conversation rows, so
+// the hand-offs between steps read in order with the steps' own output.
+func (t *transcript) transitions(d desktopservice.RunDetail) {
+	if len(d.Workflow.Steps) < 2 {
+		return
+	}
+	name := func(id string) string {
+		if step, ok := domainworkflows.FindStep(d.Workflow, id); ok {
+			return step.Name
+		}
+		return id
+	}
+	for _, event := range d.Events {
+		if event.Type != "step.completed" {
+			continue
+		}
+		var payload struct {
+			Verdict, Summary, Feedback, Target string
+		}
+		if json.Unmarshal([]byte(event.Payload), &payload) != nil {
+			continue
+		}
+		var text string
+		switch payload.Verdict {
+		case domainworkflows.VerdictRework:
+			text = fmt.Sprintf("↩ 「%s」退回给「%s」：%s", name(event.StepID), name(payload.Target), firstLine(payload.Feedback))
+		case domainworkflows.VerdictAskHuman:
+			text = fmt.Sprintf("?「%s」在问你：%s", name(event.StepID), firstLine(payload.Summary))
+		default:
+			continue
+		}
+		at, _ := time.Parse(time.RFC3339Nano, event.At)
+		key := fmt.Sprintf("transition/%d", event.Seq)
+		t.items[key] = &entry{key: key, kind: kindTransition, text: text, at: at}
+	}
+}
+
+func firstLine(text string) string {
+	text = strings.TrimSpace(text)
+	if i := strings.IndexByte(text, '\n'); i >= 0 {
+		return strings.TrimSpace(text[:i]) + " …"
+	}
+	return text
 }
 
 func (t *transcript) visible() []*entry {
@@ -133,7 +188,7 @@ func (t *transcript) visible() []*entry {
 		case agentrun.KindStarted, agentrun.KindUsage, agentrun.KindResult, agentrun.KindPermissionResolved, agentrun.KindUserInputResolved:
 			continue
 		}
-		if e.permission != nil && t.resolvedPermissions[e.permission.ID] || e.question != nil && t.resolvedQuestions[e.question.ID] {
+		if e.permission != nil && t.resolvedPermissions[requestKey(e.step, e.permission.ID)] || e.question != nil && t.resolvedQuestions[requestKey(e.step, e.question.ID)] {
 			continue
 		}
 		if e.text == "" && e.permission == nil && e.question == nil && e.kind != agentrun.KindToolResult {

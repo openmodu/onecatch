@@ -236,8 +236,6 @@ func (a *app) header(cx *el.Context) el.Element {
 
 func (a *app) content(cx *el.Context) el.Element {
 	switch a.page {
-	case "workflows":
-		return a.workflowPage(cx)
 	case "templates":
 		return a.templatesPage(cx)
 	case "skills":
@@ -258,7 +256,7 @@ func (a *app) content(cx *el.Context) el.Element {
 		column.Child(el.Div().Px(32).Py(8).Child(el.Text("正在读取对话…").TextColor(theme.Muted).TextSize(12)))
 	}
 
-	column.Child(a.conversationScroll(cx), el.Div().Center().Px(24).Pt(8).Pb(14).Child(el.Div().WFull().MaxW(el.Dp(920)).Gap(10).Child(a.errorBanner(cx), a.composer(cx), a.workspaceCaption(cx))))
+	column.Child(a.conversationScroll(cx), el.Div().Center().Px(24).Pt(8).Pb(14).Child(el.Div().WFull().MaxW(el.Dp(920)).Gap(10).Child(a.errorBanner(cx), a.composerContext(cx), a.composer(cx), a.workspaceCaption(cx))))
 	return column
 }
 
@@ -267,20 +265,22 @@ func (a *app) composer(cx *el.Context) el.Element {
 		_ = a.promptDocument.SetText(a.prompt)
 	}
 	a.composerSkills(cx)
-	hint := "随心输入"
+	a.composerMentions(cx)
+	hint := "随心输入，@ 选择工作流"
 	if a.detail != nil {
 		hint = "继续发送消息…"
-		if a.detail.Active {
-			hint = "继续发送消息…"
-		} else if a.detail.Run.Status == domainworkflows.RunPaused {
+		if a.detail.Run.Status == domainworkflows.RunPaused && !a.detail.Active {
 			hint = "补充指令并恢复运行…"
+		}
+		if _, ok := a.mentionWorkflow(); ok {
+			hint = strings.TrimSuffix(hint, "…") + "，@ 某个步骤只发给它…"
 		}
 	}
 	input := el.TextArea().PasteReader(readClipboard).OnPaste(a.pasteTaskAttachments).OnPasteError(a.fail).ID("prompt").Name("任务指令").Document(&a.promptDocument).OnChange(func(text string) { a.prompt = text }).TokenRenderer(renderComposerSkillToken).Placeholder(hint).AutoGrow(4, 10).Scrollbars(el.ScrollbarAlways).Border(0, color.NRGBA{}).Bg(color.NRGBA{}).Px(2).Py(2).TextSize(14).Weight(font.Normal).LineHeight(1.6).WFull()
 	// As in the Wails client: Enter sends, Shift+Enter breaks the line, and
 	// an input method composing text keeps Enter to confirm its candidate.
 	input.CaptureKeys(string(key.NameReturn), string(key.NameEnter)).OnKey(func(e el.KeyEvent) bool {
-		if a.composerSkillKey(cx, e) {
+		if a.composerSkillKey(cx, e) || a.composerMentionKey(cx, e) {
 			return true
 		}
 		if e.State == el.KeyPress {
@@ -288,7 +288,7 @@ func (a *app) composer(cx *el.Context) el.Element {
 		}
 		return true
 	})
-	if a.skillPicker.open {
+	if a.skillPicker.open || a.mentionPicker.open {
 		input.CaptureKeys(string(key.NameReturn), string(key.NameEnter), string(key.NameTab), string(key.NameEscape), string(key.NameUpArrow), string(key.NameDownArrow))
 	}
 	if a.detail != nil && a.detail.Run.Status != domainworkflows.RunRunning && a.detail.Run.Status != domainworkflows.RunPaused && a.detail.Run.Status != domainworkflows.RunCompleted {
@@ -398,7 +398,12 @@ func (a *app) message(cx *el.Context, index int) el.Element {
 	if index == len(a.entries)-1 {
 		content.Pb(20)
 	}
-	if len(e.process) > 0 {
+	if e.stepLabel != "" {
+		content.Child(el.Div().Px(16).Pt(10).Pb(2).Row().Items(el.Center).Gap(6).Child(el.Div().Size(el.Dp(6)).Rounded(3).Bg(theme.Info), el.Text(e.stepLabel).TextSize(11).Medium().TextColor(theme.Muted)))
+	}
+	if e.kind == kindTransition {
+		content.Px(14).Child(el.Div().ID("message/" + e.key).Row().Items(el.Center).Gap(8).Px(12).Py(8).Rounded(10).Bg(theme.Subtle).Child(el.Text(e.text).TextSize(12).TextColor(theme.Warning).MaxLines(3)))
+	} else if len(e.process) > 0 {
 		content.Px(14)
 		if index > 0 && a.entries[index-1].user {
 			content.Pt(26)
@@ -456,7 +461,7 @@ func (a *app) requestMessage(cx *el.Context, e *entry) el.Element {
 	} else if e.question != nil {
 		content.Child(el.Text("需要你补充信息").Medium())
 		for _, q := range e.question.Questions {
-			key := e.question.ID + "/" + q.ID
+			key := requestKey(e.step, e.question.ID) + "/" + q.ID
 			content.Child(el.Text(q.Question).TextSize(14))
 			options := el.Div().Row().Wrap().Gap(6)
 			for _, option := range q.Options {

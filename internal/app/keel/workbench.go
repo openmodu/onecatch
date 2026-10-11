@@ -49,6 +49,8 @@ type workbenchState struct {
 	Worktrees                         []domainworkspaces.Worktree
 	WorktreeMenu                      *kit.MenuView
 	WorktreeVersion                   uint64
+	StepAction                        *stepActionState
+	StepFocus                         string
 }
 type fileWorkspace struct {
 	TreeRevision, RowsRevision uint64
@@ -654,6 +656,13 @@ func (a *app) statusInspector(cx *el.Context) el.Element {
 	column.Child(inputCard, el.Div().Bg(theme.Subtle).Rounded(10).P(12).Gap(8).Child(el.Text("输出总 Token").TextSize(12).TextColor(theme.Muted), el.Text(sessionNumber(output)).TextSize(26).Medium(), metric("推理输出", sessionNumber(reasoning))))
 	column.Child(el.Div().Row().Bg(theme.Subtle).Rounded(10).P(16).Gap(16).Child(el.Div().Grow().W(el.Dp(0)).Gap(8).Child(el.Text("已记录耗时").TextSize(11).TextColor(theme.Muted), el.Text(sessionElapsed(duration)).TextSize(16).Medium()), el.Div().Grow().W(el.Dp(0)).Gap(8).Child(el.Text("执行次数").TextSize(11).TextColor(theme.Muted), el.Text(fmt.Sprint(len(d.StepRuns))).TextSize(16).Medium())))
 
+	if len(d.Workflow.Steps) > 1 {
+		column.Child(a.workflowProgress(cx), a.sessionRecovery(cx))
+		if d.Run.LastError != "" {
+			column.Child(inspectorNotice(d.Run.LastError, true))
+		}
+		return column
+	}
 	steps := kit.Stepper().Vertical().Size(20)
 	entries := make([]kit.StepperItem, 0, len(d.Workflow.Steps))
 	current := 0

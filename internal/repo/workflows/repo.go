@@ -253,8 +253,12 @@ func (r *workflowsImpl) SaveRun(ctx context.Context, run domainworkflows.Run, de
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("check workflow run: %w", err)
 	}
-	if _, err := r.getDefinitionLocked(run.WorkflowID); err != nil {
-		return err
+	// A project workflow lives in the project's files, not in this store; the
+	// snapshot written below is the run's only copy.
+	if !IsProjectWorkflowID(run.WorkflowID) {
+		if _, err := r.getDefinitionLocked(run.WorkflowID); err != nil {
+			return err
+		}
 	}
 	if err := localfile.WriteJSONAtomic(r.runDefinitionPath(run.ID), definition); err != nil {
 		return fmt.Errorf("save run workflow snapshot: %w", err)

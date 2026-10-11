@@ -1,42 +1,21 @@
 # OneCatch Keel desktop
 
-This is a separate desktop entry point built with [Keel](https://keel.dyike.com).
-All UI, layout, state and event handling are written in Go. Gio renders the UI;
-this executable does not link Wails, load a WebView, or build the React frontend.
-System integration uses Keel/Gio native bindings and a small AppKit adapter for
-the macOS file/folder sheet; no JavaScript UI runtime is used.
+The native desktop uses Keel v0.1.10 and the pinned remote Gio/typesetting forks in `go.mod`. All interface code is Go; no local framework checkout or patch launcher is required.
 
 ## Run
-
-Development currently uses the local Keel checkout at
-`~/Code/go/src/github.com/dyike/keel` through the `go.mod` replacement.
-`go.mod` also replaces `gioui.org` and `github.com/go-text/typesetting` with
-that checkout's `third_party` copies, as Keel requires of apps: they draw macOS
-text with CoreText (native weight, antialiasing and gamma) and find PingFang
-in the system font assets. Without them text falls back to Gio's thinner
-vector outlines and Chinese to Hiragino Sans GB.
-The build launcher uses this checkout directly, without its cached backport.
-The sidebar uses Keel's standard Sidebar, Suffix and ContextMenu interfaces;
-application callbacks provide project/task actions and data. The local Keel
-checkout has an optional `SidebarItem.IconView` slot for existing Agent logos,
-using the same 16dp icon geometry and standard navigation behavior.
 
 Requires Go 1.26.1+, and on macOS the Xcode Command Line Tools and macOS 14+.
 On Linux, use `go tool keel doctor` to check the required Wayland/X11, EGL and
 xkbcommon development packages. Windows requires Go.
 
 ```sh
-go run ./build/keel/go run ./cmd/keel
+go run ./cmd/keel
 ```
 
-The default data directory is `~/.onecatch/`. Existing projects, tasks, settings,
-workflows and transcripts are read directly through the same repositories and
-desktop service as the Wails client. Close the other desktop client before
-executing against the same directory. Do not use both clients to mutate the same
-store concurrently. To try this version with separate data:
+The default data directory is `~/.onecatch/`. Existing projects, tasks, settings, workflows and transcripts use the shared repositories and desktop service. To use separate data:
 
 ```sh
-go run ./build/keel/go run ./cmd/keel -data-dir /tmp/onecatch-keel-preview
+go run ./cmd/keel -data-dir /tmp/onecatch-keel-preview
 ```
 
 The separate data directory isolates projects, runs, settings and Keel UI
@@ -137,48 +116,32 @@ The integrated `worker`, SSH askpass and shell process roles also remain availab
   Cmd/Ctrl+, (settings), Cmd/Ctrl+S (save active file), Cmd/Ctrl+` (terminal),
   Cmd/Ctrl+Q (quit).
 
-The migration is still in progress.
-Template import/export, language and chat-font preferences, complete Agent
-profiles, tray and automatic updater UI have not
-yet been ported. Unmodified Enter still inserts a newline; IME-safe parity with
-the source's Enter-to-send behavior remains pending. The existing
-Wails release remains the full client. See the Keel section of [design-qa.md](../../design-qa.md) for the latest
-visual comparisons and remaining fidelity gaps. Agent requests still use
-the selected harness's model provider; this is a native UI, not an offline model.
+Agent requests use the selected harness provider. Visual QA history is recorded in [design-qa.md](../../design-qa.md).
 Interrupted-run recovery is not automatically triggered on launch, to avoid
 altering a run still owned by another process.
 
 ## Build and package
 
 ```sh
-go run ./build/keel/go build -o bin/onecatch-keel ./cmd/keel
-go tool keel doctor
-go run ./build/keel/go tool keel build -debug -o bin/keel
+go build -trimpath -ldflags='-s -w' -o bin/onecatch ./cmd/keel
+node build/scripts/package-keel.mjs
 ```
 
-On macOS the latter produces `bin/keel/OneCatch Keel.app`, signed ad hoc for local
-use. `keel.json` has its own application ID, `com.openmodu.onecatch.keel`, so it
-can be installed alongside the existing app. Its neutral `0.0.0` version is a
-development template; the existing release workflow does not publish this target.
-These commands apply the [Select and macOS titlebar backports](../../build/keel/README.md).
-Use this entry point until Keel releases the fix. The development package uses
-`-debug` because Keel v0.1.8 release packaging replaces inherited `GOFLAGS`.
-No JavaScript toolchain is needed for these commands. Use Keel's `-sign` option
-and notarization for distributing a signed macOS application.
+The release script reads CHANGELOG, injects version metadata, and runs the pinned Keel packager. On macOS it creates `bin/keel/OneCatch Keel.app` and a ZIP under `dist/`. `SIGN_IDENTITY` optionally sets the signing identity; notarization remains a separate step.
 
 ## Verify
 
 ```sh
-go run ./build/keel/go test ./internal/app/keel ./cmd/keel
-go run ./build/keel/go test -race ./internal/app/keel
-go run ./build/keel/go vet ./internal/app/keel ./cmd/keel
+go test ./internal/app/keel ./cmd/keel
+go test -race ./internal/app/keel
+go vet ./internal/app/keel ./cmd/keel
 ```
 
 To render the production views with sample data, set an **absolute** output path:
 
 ```sh
 ONECATCH_KEEL_PREVIEWS="$PWD/bin/keel-qa" \
-  go run ./build/keel/go test ./internal/app/keel -run TestRenderPreview -count=1
+  go test ./internal/app/keel -run TestRenderPreview -count=1
 ```
 
 Use `-run TestRenderDAGPreview` with the same environment variable for DAG

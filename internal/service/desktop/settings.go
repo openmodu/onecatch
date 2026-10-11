@@ -240,7 +240,7 @@ func (a *Service) updateSettings(ctx context.Context, expected int64, mutate fun
 
 func (a *Service) applySettings(value domainsettings.Settings) error {
 	a.runtimes.ApplySettings(value.Runtimes, value.Execution.InterruptGraceSeconds)
-	a.orchestrator.SetMaxDAGConcurrency(value.Execution.MaxLocalDAGConcurrency)
+	a.orchestrator.SetMaxConcurrency(value.Execution.MaxConcurrency)
 	if a.settingsReload != nil {
 		return a.settingsReload(value)
 	}
@@ -327,6 +327,9 @@ func validateDefinitionSettings(definition domainworkflows.Definition, settings 
 
 func validateHarnessSettings(definition domainworkflows.Definition, settings domainsettings.Settings, remoteFS bool) error {
 	for _, step := range definition.Steps {
+		if step.Kind == domainworkflows.StepCommand {
+			continue // a command step runs a shell command, not an Agent
+		}
 		if !settings.HarnessEnabled(step.Runtime) {
 			return coded("runtime_disabled", fmt.Sprintf("Agent %q is disabled in Settings", step.Runtime))
 		}
@@ -355,7 +358,7 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 	if err != nil {
 		return domainworkflows.Definition{}, workflowuc.RunResolution{}, mapError(err)
 	}
-	definition, err := a.GetDefinition(ctx, task.WorkflowID)
+	definition, err := a.taskDefinition(ctx, task)
 	if err != nil {
 		return domainworkflows.Definition{}, workflowuc.RunResolution{}, mapError(err)
 	}
@@ -408,7 +411,7 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 		}
 		runtimeSettings[task.Harness] = resolved
 	}
-	return definition, workflowuc.RunResolution{MaxLocalDAGConcurrency: settings.Execution.MaxLocalDAGConcurrency, InterruptGraceSeconds: settings.Execution.InterruptGraceSeconds, RuntimeSettings: runtimeSettings}, nil
+	return definition, workflowuc.RunResolution{MaxConcurrency: settings.Execution.MaxConcurrency, InterruptGraceSeconds: settings.Execution.InterruptGraceSeconds, RuntimeSettings: runtimeSettings}, nil
 }
 
 func resolvedRuntimeSetting(id string, item domainsettings.RuntimeSettings) domainworkflows.ResolvedRuntimeSettings {

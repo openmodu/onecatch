@@ -77,9 +77,10 @@ func (h *hostedRuns) Import(ctx context.Context, input worker.SharedRun) (worker
 			return worker.SharedRun{}, err
 		}
 	}
-	step := domainworkflows.StepRun{ID: input.ID + "_import", RunID: input.ID, StepID: definition.EntryStepID, Attempt: 1,
+	entryStepID := definition.Steps[0].ID
+	step := domainworkflows.StepRun{ID: input.ID + "_import", RunID: input.ID, StepID: entryStepID, Attempt: 1,
 		Status: domainworkflows.StepRunSucceeded, StartedAt: input.StartedAt, FinishedAt: finished, Error: input.Error}
-	run := domainworkflows.Run{ID: input.ID, TaskID: task.ID, WorkflowID: definition.ID, CurrentStepID: definition.EntryStepID, Revision: 1,
+	run := domainworkflows.Run{ID: input.ID, TaskID: task.ID, WorkflowID: definition.ID, CurrentStepID: entryStepID, Revision: 1,
 		Status: domainworkflows.RunCompleted, StartedAt: input.StartedAt, UpdatedAt: finished, CompletedAt: finished, LastError: input.Error, Sessions: map[string]string{}}
 	if input.Status == "failed" {
 		run.Status = domainworkflows.RunPaused
@@ -88,10 +89,10 @@ func (h *hostedRuns) Import(ctx context.Context, input worker.SharedRun) (worker
 	}
 	if input.Result != nil {
 		result := input.Result
-		step.Content, step.SessionIDAfter = result.FinalMessage, result.SessionID
+		step.Summary, step.SessionIDAfter = result.FinalMessage, result.SessionID
 		step.InputTokens, step.OutputTokens = result.Usage.InputTokens, result.Usage.OutputTokens
 		step.CachedInputTokens, step.CacheCreationInputTokens, step.ReasoningOutputTokens = result.Usage.CachedInputTokens, result.Usage.CacheCreationInputTokens, result.Usage.ReasoningOutputTokens
-		run.Sessions[definition.EntryStepID] = result.SessionID
+		run.Sessions[entryStepID] = result.SessionID
 	}
 	if existing.ID == "" {
 		if err := repo.SaveRun(ctx, run, definition); err != nil {

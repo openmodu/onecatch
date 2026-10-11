@@ -27,6 +27,8 @@ type app struct {
 	promptTokenNext                                                                         uint64
 	promptDocument                                                                          el.InputDocument
 	skillPicker                                                                             composerSkillState
+	projectWorkflows                                                                        projectWorkflowState
+	mentionPicker                                                                           composerMentionState
 	ui                                                                                      uiState
 	updates                                                                                 appUpdates
 	library                                                                                 libraryState
@@ -123,6 +125,7 @@ func newApp(b *backend) *app {
 	a.initWorkbench()
 	a.initTerminal()
 	a.watchWorkspace()
+	a.watchProjectWorkflows()
 	a.unsubscribe = b.streams.Subscribe(a.receiveFrame)
 	b.states.SetEmitter(func(v runstate.View) {
 		core.Update(func() {
@@ -176,9 +179,6 @@ func (a *app) close() {
 		a.workbench.DetachedWindow.Close()
 	}
 	a.closeSettings()
-	if a.ui.WorkflowWindow != nil {
-		a.ui.WorkflowWindow.Close()
-	}
 	_ = a.backend.close()
 }
 
@@ -259,12 +259,19 @@ func (a *app) updatePickers() {
 			}
 		}
 	}
-	flows := make([]kit.SelectOption, 0, len(a.definitions))
-	for _, d := range a.definitions {
+	a.syncWorkflowEntries()
+}
+
+// syncWorkflowEntries offers the app's workflows and the open project's
+// workflow files, and falls back to a single Agent when the chosen workflow
+// is gone (a project file was removed, or another project is open).
+func (a *app) syncWorkflowEntries() {
+	flows := []kit.SelectOption{{Value: "single_agent", Label: "单 Agent 完成"}}
+	for _, d := range a.selectableDefinitions() {
 		flows = append(flows, kit.SelectOption{Value: d.ID, Label: d.Name})
 	}
-	a.workflow.SetEntries(flows...)
-	if a.workflow.Value() == "" {
+	a.workflow.SetEntries(uniqueSelectOptions(flows)...)
+	if _, ok := a.findDefinition(a.workflow.Value()); a.task == nil && !ok || a.workflow.Value() == "" {
 		a.workflow.SetValue("single_agent")
 	}
 }
@@ -445,6 +452,7 @@ func (a *app) applyLiveFrames() {
 
 func (a *app) syncMessages() {
 	a.entries = buildConversationEntries(a.transcript.visible())
+	a.labelWorkflowSteps()
 	keys := make([]string, len(a.entries))
 	for i, e := range a.entries {
 		keys[i] = e.key
@@ -494,7 +502,7 @@ func rowSignature(e *entry, active, last bool) string {
 	var b strings.Builder
 	var write func(*entry)
 	write = func(e *entry) {
-		fmt.Fprintf(&b, "%s|%s|%t|%d|%d|%t|%t|%t|", e.key, e.kind, e.user, e.revision, len(e.text), e.streaming, e.failed, e.settled)
+		fmt.Fprintf(&b, "%s|%s|%t|%d|%d|%t|%t|%t|%s|", e.key, e.kind, e.user, e.revision, len(e.text), e.streaming, e.failed, e.settled, e.stepLabel)
 		if e.permission != nil {
 			b.WriteString("p:" + e.permission.ID + "|")
 		}
@@ -569,6 +577,24 @@ func (a *app) sendWithMode(steer bool) {
 			return
 		}
 		input := desktopservice.ResumeRunInput{Instruction: prompt, Model: a.model, ReasoningEffort: a.reasoningEffort, ServiceTier: a.serviceTier, Harness: a.continuationHarness()}
+		// A workflow's steps carry their own Agent and model; a follow-up is
+		// only text, so it never replaces a step's model or session.
+		if a.task != nil && a.task.WorkflowID != "single_agent" {
+			input = desktopservice.ResumeRunInput{Instruction: prompt}
+		}
+		definition, workflow := a.mentionWorkflow()
+		var steps []string
+		if workflow {
+			var rest string
+			if steps, rest = splitStepMentions(definition, prompt); len(steps) > 0 {
+				if rest == "" && len(attachments) == 0 {
+					a.busy = false
+					a.errorText = "写下要交给这个步骤的内容。"
+					return
+				}
+				input.Instruction = rest
+			}
+		}
 		active := a.detail != nil && a.detail.Active
 		if a.detail != nil && !active && a.detail.Run.Status != domainworkflows.RunPaused && a.detail.Run.Status != domainworkflows.RunCompleted {
 			a.busy = false
@@ -576,7 +602,13 @@ func (a *app) sendWithMode(steer bool) {
 			return
 		}
 		go func() {
-			persisted, err := submitContinuationMode(a.ctx, a.backend.service, runID, input, attachments, active, steer)
+			var persisted bool
+			var err error
+			if len(steps) > 0 {
+				persisted, err = submitStepMessages(a.ctx, a.backend.service, runID, definition, steps, input.Instruction, attachments, active, steer)
+			} else {
+				persisted, err = submitContinuationMode(a.ctx, a.backend.service, runID, input, attachments, active, steer)
+			}
 			core.Update(func() {
 				if a.closed {
 					return
@@ -744,7 +776,7 @@ func (a *app) respondPermission(e *entry, decision string) {
 			delete(a.pendingResponses, id)
 			a.fail(err)
 			if err == nil {
-				a.transcript.resolvedPermissions[id] = true
+				a.transcript.resolvedPermissions[requestKey(e.step, id)] = true
 				a.syncMessages()
 			}
 		})
@@ -759,7 +791,7 @@ func (a *app) respondQuestion(e *entry, cancelled bool) {
 	a.pendingResponses[id] = true
 	answers := make(map[string]string)
 	for _, q := range e.question.Questions {
-		answers[q.ID] = a.answers[id+"/"+q.ID]
+		answers[q.ID] = a.answers[requestKey(e.step, id)+"/"+q.ID]
 	}
 	runID, version := a.runID, a.selection
 	go func() {
@@ -771,7 +803,7 @@ func (a *app) respondQuestion(e *entry, cancelled bool) {
 			delete(a.pendingResponses, id)
 			a.fail(err)
 			if err == nil {
-				a.transcript.resolvedQuestions[id] = true
+				a.transcript.resolvedQuestions[requestKey(e.step, id)] = true
 				a.syncMessages()
 			}
 		})
@@ -782,7 +814,6 @@ func (a *app) editWorkflow(d domainworkflows.Definition) {
 	a.editingWorkflow = d.ID
 	a.ui.WorkflowDraft = domainworkflows.Normalize(d)
 	a.ui.WorkflowRaw, a.ui.WorkflowStep = false, 0
-	a.ui.WorkflowAdvanced = false
 	a.resetWorkflowForm()
 	data, _ := json.MarshalIndent(d, "", "  ")
 	a.workflowEditor.SetValue(string(data))
@@ -796,9 +827,8 @@ func (a *app) saveWorkflow() {
 		return
 	}
 	if err := domainworkflows.Validate(definition); err != nil {
-		if definition.Mode == domainworkflows.ModeDAG {
-			a.validateDAG()
-		}
+		// Validate what is being saved, which in source mode is the JSON.
+		a.ui.DAG.Validation, _ = err.(domainworkflows.ValidationErrors)
 		a.fail(err)
 		return
 	}

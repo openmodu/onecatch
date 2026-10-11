@@ -25,6 +25,10 @@ import (
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
 
+func hasEdge(d domainworkflows.Definition, from, to, kind string) bool {
+	return slices.ContainsFunc(d.Edges, func(e domainworkflows.Edge) bool { return e.From == from && e.To == to && e.Kind == kind })
+}
+
 func dagTestApp(t *testing.T) *app {
 	t.Helper()
 	b, err := openBackendWithEngine(context.Background(), t.TempDir(), testEngine{})
@@ -43,12 +47,13 @@ func dagTestApp(t *testing.T) *app {
 	}
 	a.runtimes = []desktopservice.RuntimeInfo{{ID: "codex", Name: "Codex", Enabled: true, Available: true}, {ID: "claude", Name: "Claude Code", Enabled: true, Available: true}}
 	a.selectWorkflow("parallel_review", true)
+	a.ui.DAG.InspectorOpen = true
 	return a
 }
 
 func TestDAGNativeCanvasInteractions(t *testing.T) {
 	a := dagTestApp(t)
-	root := el.Root(workflowWindowView{a})
+	root := el.Root(workflowView{a})
 	var router input.Router
 	var ops op.Ops
 	size := image.Pt(1040, 760)
@@ -89,13 +94,13 @@ func TestDAGNativeCanvasInteractions(t *testing.T) {
 		clickPoint(f32.Pt(float32(b.Min.X+b.Dx()/2), float32(b.Min.Y+b.Dy()/2)))
 	}
 	frame()
-	for _, label := range []string{"自动布局", "节点", "保存 DAG", "校验 DAG"} {
+	for _, label := range []string{"自动布局", "步骤", "保存", "校验", "连线类型 返工"} {
 		b := box(label)
 		if !b.In(image.Rectangle{Max: size}) {
 			t.Fatalf("%s clipped: %v", label, b)
 		}
 	}
-	b := box("节点 安全审查")
+	b := box("步骤 安全审查")
 	if b.Dx() != 204 || b.Dy() != 94 {
 		t.Fatalf("node geometry: %v", b)
 	}
@@ -117,53 +122,69 @@ func TestDAGNativeCanvasInteractions(t *testing.T) {
 	before = a.ui.WorkflowDraft.Layout.Nodes["security"]
 	click("从 安全审查 连接")
 	if a.ui.DAG.ConnectFrom != "security" || a.ui.WorkflowDraft.Layout.Nodes["security"] != before {
-		t.Fatalf("port did not start connection independently: connection=%q position=%+v before=%+v port=%v", a.ui.DAG.ConnectFrom, a.ui.WorkflowDraft.Layout.Nodes["security"], before, box("从 安全审查 连接"))
+		t.Fatalf("port did not start connection independently: edges=%+v connection=%q position=%+v before=%+v port=%v", a.ui.WorkflowDraft.Edges, a.ui.DAG.ConnectFrom, a.ui.WorkflowDraft.Layout.Nodes["security"], before, box("从 安全审查 连接"))
 	}
 	click("连接到 测试审查")
-	if !slices.Contains(a.ui.WorkflowDraft.Steps[1].DependsOn, "security") {
+	if !hasEdge(a.ui.WorkflowDraft, "security", "tests", domainworkflows.EdgeNext) {
 		t.Fatalf("ports did not connect nodes: connection=%q target=%+v port=%v", a.ui.DAG.ConnectFrom, a.ui.WorkflowDraft.Steps[1], box("连接到 测试审查"))
 	}
 	click("从 安全审查 连接")
 	click("连接到 测试审查")
-	if len(a.ui.WorkflowDraft.Steps[1].DependsOn) != 1 {
+	if len(domainworkflows.Upstream(a.ui.WorkflowDraft, "tests")) != 1 {
 		t.Fatal("duplicate connection")
 	}
 	click("删除依赖 security → tests")
-	if len(a.ui.WorkflowDraft.Steps[1].DependsOn) != 0 {
+	if hasEdge(a.ui.WorkflowDraft, "security", "tests", domainworkflows.EdgeNext) {
 		t.Fatal("edge delete did not remove dependency")
 	}
 	// Actual path clicks delete only that edge, not a broad bounding rectangle.
 	edge := dagEdges(a.ui.WorkflowDraft)[0]
-	origin := box("节点 安全审查").Min.Sub(image.Pt(int(before.X), int(before.Y)))
+	origin := box("步骤 安全审查").Min.Sub(image.Pt(int(before.X), int(before.Y)))
 	curve := edge.point(.3).Add(f32.Pt(float32(origin.X), float32(origin.Y)))
 	clickPoint(curve)
-	if slices.Contains(a.ui.WorkflowDraft.Steps[2].DependsOn, "security") {
+	if hasEdge(a.ui.WorkflowDraft, "security", "synthesis", domainworkflows.EdgeNext) {
 		t.Fatal("Bézier path hit did not remove dependency")
 	}
 	click("自动布局")
-	if got := a.ui.WorkflowDraft.Layout.Nodes["security"]; got != (domainworkflows.Point{X: 60, Y: 55}) {
+	if got := a.ui.WorkflowDraft.Layout.Nodes["security"]; got != (domainworkflows.Point{X: 60, Y: 80}) {
 		t.Fatalf("layout: %+v", got)
 	}
-	click("节点")
-	if len(a.ui.WorkflowDraft.Steps) != 4 || a.ui.WorkflowStepID != "node_4" {
-		t.Fatal("node button did not create/select")
+	// A rework edge runs from the checking step back to an upstream step.
+	a.connectDAGNode("security")
+	a.connectDAGNode("synthesis")
+	frame()
+	click("连线类型 返工")
+	// Either port of a step starts a connection; the input port is the one
+	// inside this narrow canvas.
+	click("连接到 汇总落地")
+	click("连接到 安全审查")
+	if !hasEdge(a.ui.WorkflowDraft, "synthesis", "security", domainworkflows.EdgeRework) || len(a.ui.DAG.Validation) != 0 {
+		t.Fatalf("rework edge not created cleanly: %+v %+v", a.ui.WorkflowDraft.Edges, a.ui.DAG.Validation)
 	}
-	click("删除节点")
+	click("删除返工 synthesis → security")
+	if hasEdge(a.ui.WorkflowDraft, "synthesis", "security", domainworkflows.EdgeRework) {
+		t.Fatal("rework edge delete failed")
+	}
+	click("连线类型 依赖")
+	click("步骤")
+	if len(a.ui.WorkflowDraft.Steps) != 4 || a.ui.WorkflowStepID != "step_4" {
+		t.Fatal("step button did not create/select")
+	}
+	click("删除步骤")
 	if len(a.ui.WorkflowDraft.Steps) != 3 || a.ui.WorkflowStepID != "security" {
 		t.Fatal("inspector delete did not repair selection")
 	}
 	// Cycle validation stays in the editor and reports every domain issue.
-	a.ui.WorkflowDraft.Steps[0].DependsOn = []string{"synthesis"}
-	a.ui.WorkflowDraft.Steps[2].DependsOn = []string{"security"}
+	a.ui.WorkflowDraft.Edges = append(a.ui.WorkflowDraft.Edges, domainworkflows.Edge{From: "synthesis", To: "security", Kind: domainworkflows.EdgeNext})
 	frame()
-	click("校验 DAG")
+	click("校验")
 	if len(a.ui.DAG.Validation) == 0 {
 		t.Fatal("cycle silently accepted")
 	}
 	for _, small := range []image.Point{{860, 600}, {1040, 760}} {
 		size = small
 		frame()
-		b := box("校验 DAG")
+		b := box("校验")
 		if !b.In(image.Rectangle{Max: size}) {
 			t.Fatalf("validation clipped at %v: %v", size, b)
 		}
@@ -187,7 +208,7 @@ func TestDAGLayoutPersistenceAndInvalidPositions(t *testing.T) {
 	if err := json.Unmarshal([]byte(a.workflowEditor.Value()), &parsed); err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(parsed.Layout, a.ui.WorkflowDraft.Layout) || !slices.Contains(parsed.Steps[1].DependsOn, "security_review") {
+	if !reflect.DeepEqual(parsed.Layout, a.ui.WorkflowDraft.Layout) || !hasEdge(parsed, "security_review", "tests", domainworkflows.EdgeNext) {
 		t.Fatal("JSON did not retain layout/reference changes")
 	}
 	_, err := a.backend.service.CreateDefinition(context.Background(), parsed)
@@ -216,7 +237,7 @@ func TestDAGLayoutPersistenceAndInvalidPositions(t *testing.T) {
 			}
 		}
 	}
-	if !found {
+	if !found || !reflect.DeepEqual(defs[slices.IndexFunc(defs, func(d domainworkflows.Definition) bool { return d.ID == parsed.ID })].Edges, parsed.Edges) {
 		t.Fatal("saved DAG was missing after reopening store")
 	}
 	p := dagPosition(parsed, "unknown")
@@ -256,9 +277,7 @@ func TestRenderDAGPreview(t *testing.T) {
 	applyPalette(false)
 	// The browser preview uses its demo definition. Match that data without
 	// changing the real backend's built-in definition or a user's stored layout.
-	preview := starterWorkflow("dag")
-	preview.ID = "parallel_review"
-	preview.Name = "并行审查 DAG"
+	preview := starterWorkflow("design_to_pr")
 	a.ui.WorkflowDraft = preview
 	a.resetWorkflowForm()
 	a.syncWorkflowDocument()
@@ -266,7 +285,7 @@ func TestRenderDAGPreview(t *testing.T) {
 		w, h := 1040, 760
 		switch state {
 		case "connected":
-			a.ui.DAG.ConnectFrom = "security"
+			a.ui.DAG.ConnectFrom = "review"
 		case "layout":
 			a.ui.DAG.ConnectFrom = ""
 			a.layoutDAG()
@@ -275,7 +294,7 @@ func TestRenderDAGPreview(t *testing.T) {
 		case "dark":
 			applyPalette(true)
 		}
-		if err := window.Screenshot(el.Root(workflowWindowView{a}), w, h, filepath.Join(dir, "workflow-dag-"+state+".png")); err != nil {
+		if err := window.Screenshot(el.Root(workflowView{a}), w, h, filepath.Join(dir, "workflow-dag-"+state+".png")); err != nil {
 			t.Fatal(err)
 		}
 	}

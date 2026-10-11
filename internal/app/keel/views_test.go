@@ -163,7 +163,7 @@ func TestRenderPreview(t *testing.T) {
 			break
 		}
 	}
-	if err := window.Screenshot(el.Root(workflowWindowView{a}), 1040, 760, filepath.Join(dir, "workflows.png")); err != nil {
+	if err := window.Screenshot(el.Root(workflowView{a}), 1040, 760, filepath.Join(dir, "workflows.png")); err != nil {
 		t.Fatal(err)
 	}
 	for _, d := range a.definitions {
@@ -172,16 +172,11 @@ func TestRenderPreview(t *testing.T) {
 			break
 		}
 	}
-	if err := window.Screenshot(el.Root(workflowWindowView{a}), 1040, 760, filepath.Join(dir, "workflow-form.png")); err != nil {
+	if err := window.Screenshot(el.Root(workflowView{a}), 1040, 760, filepath.Join(dir, "workflow-form.png")); err != nil {
 		t.Fatal(err)
 	}
-	a.ui.WorkflowAdvanced = true
-	if err := window.Screenshot(el.Root(workflowWindowView{a}), 1040, 760, filepath.Join(dir, "workflow-advanced.png")); err != nil {
-		t.Fatal(err)
-	}
-	a.ui.WorkflowAdvanced = false
 	a.ui.WorkflowRaw = true
-	if err := window.Screenshot(el.Root(workflowWindowView{a}), 1040, 760, filepath.Join(dir, "workflow-source.png")); err != nil {
+	if err := window.Screenshot(el.Root(workflowView{a}), 1040, 760, filepath.Join(dir, "workflow-source.png")); err != nil {
 		t.Fatal(err)
 	}
 	a.ui.WorkflowSource = false

@@ -195,7 +195,7 @@ func (h *hostedRuns) Get(ctx context.Context, id string, window worker.Transcrip
 		result.Usage.CachedInputTokens += step.CachedInputTokens
 		result.Usage.CacheCreationInputTokens += step.CacheCreationInputTokens
 		result.Usage.ReasoningOutputTokens += step.ReasoningOutputTokens
-		result.FinalMessage = step.Content
+		result.FinalMessage = step.Summary
 		result.SessionID = step.SessionIDAfter
 	}
 	view.Result = &result

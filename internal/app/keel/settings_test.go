@@ -101,7 +101,7 @@ func TestKeelSettingsDraftUsesRepositoryRevisionAndPreservesOtherSections(t *tes
 		t.Fatal(err)
 	}
 	value := "6"
-	p := &settingsPage{draft: initial, section: "execution", fields: map[string]*string{"dag-concurrency": &value}, runtime: kit.Select("")}
+	p := &settingsPage{draft: initial, section: "execution", fields: map[string]*string{"max-concurrency": &value}, runtime: kit.Select("")}
 	draft, err := p.draftForSave()
 	if err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestKeelSettingsDraftUsesRepositoryRevisionAndPreservesOtherSections(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated.Execution.MaxLocalDAGConcurrency != 6 || initial.Execution.MaxLocalDAGConcurrency == 6 || updated.Terminal.Shell != initial.Terminal.Shell || updated.Terminal.Theme != initial.Terminal.Theme || !slices.Equal(updated.Terminal.Arguments, initial.Terminal.Arguments) {
+	if updated.Execution.MaxConcurrency != 6 || initial.Execution.MaxConcurrency == 6 || updated.Terminal.Shell != initial.Terminal.Shell || updated.Terminal.Theme != initial.Terminal.Theme || !slices.Equal(updated.Terminal.Arguments, initial.Terminal.Arguments) {
 		t.Fatalf("incorrect section update: %+v", updated.Execution)
 	}
 	// A settings window opened before another save must receive a conflict;
@@ -122,7 +122,7 @@ func TestKeelSettingsDraftUsesRepositoryRevisionAndPreservesOtherSections(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if current.Execution.MaxLocalDAGConcurrency != 6 {
+	if current.Execution.MaxConcurrency != 6 {
 		t.Fatal("conflict changed data")
 	}
 	value = "not a number"
@@ -149,14 +149,14 @@ func TestKeelSettingsNavigationSearchAndDraftRetention(t *testing.T) {
 			frame()
 		}
 		view := p.view
-		value := p.fields["dag-concurrency"]
+		value := p.fields["max-concurrency"]
 		*value = "6"
 		find("安全")
 		if p.section != "security" {
 			t.Fatal("Keel navigation did not select security repository section")
 		}
 		find("执行")
-		if p.fields["dag-concurrency"] != value || *value != "6" || p.view != view {
+		if p.fields["max-concurrency"] != value || *value != "6" || p.view != view {
 			t.Fatal("page navigation lost draft or component identity")
 		}
 		p.view.SetQuery("完全访问")
@@ -179,7 +179,7 @@ func TestKeelSettingsNavigationSearchAndDraftRetention(t *testing.T) {
 		frame()
 		frame()
 		draft, err := p.draftForSave()
-		if err != nil || draft.Execution.MaxLocalDAGConcurrency != 6 {
+		if err != nil || draft.Execution.MaxConcurrency != 6 {
 			t.Fatalf("retained field did not reach repository draft: %+v, %v", draft.Execution, err)
 		}
 		find("Harness")
@@ -196,7 +196,7 @@ func TestKeelSettingsNavigationSearchAndDraftRetention(t *testing.T) {
 		p.section = "execution"
 		frame()
 		frame()
-		if *p.fields["dag-concurrency"] == "6" {
+		if *p.fields["max-concurrency"] == "6" {
 			t.Fatal("reload retained discarded draft")
 		}
 	}
@@ -261,8 +261,10 @@ func TestSettingsModalLifecycle(t *testing.T) {
 	if _, ok := alignmentNode(router.AppendSemantics(nil), "新建工作流", true); !ok {
 		t.Fatal("workflow manager not embedded")
 	}
-	if a.ui.WorkflowWindow != nil {
-		t.Fatal("workflow opened a separate window")
+	p.activateSettingsSection("")
+	a.goPage("workflows")
+	if a.settingsPanel != p || p.section != "workflows" || a.page == "workflows" {
+		t.Fatal("workflows must open inside Settings, not as a page or window")
 	}
 	p.activateSettingsSection("")
 	frame()
@@ -391,7 +393,7 @@ func TestWorkflowLibraryOpensEditorInsideSettings(t *testing.T) {
 	}
 	click(node.Bounds())
 	frame()
-	if !a.ui.WorkflowSource || a.ui.WorkflowWindow != nil {
+	if !a.ui.WorkflowSource {
 		t.Fatal("configuration must open inline")
 	}
 	a.ui.WorkflowDraft.Description = "unsaved library draft"
@@ -412,5 +414,51 @@ func TestWorkflowLibraryOpensEditorInsideSettings(t *testing.T) {
 	frame()
 	if a.ui.WorkflowDraft.Description != "unsaved library draft" {
 		t.Fatal("returning to the same workflow lost its draft")
+	}
+}
+
+func TestWorkflowEditorAloneGoesFullScreen(t *testing.T) {
+	a := conversationFixture(t)
+	a.goPage("workflows")
+	a.selectWorkflow("design_to_pr", true)
+	router, frame, click := alignmentRouter(el.Root(a), 1280, 800, 1)
+	box, ok := findSkillControl(router.AppendSemantics(nil), "全屏")
+	if !ok {
+		t.Fatal("workflow editor has no full screen control")
+	}
+	click(box)
+	if _, ok := alignmentNode(router.AppendSemantics(nil), "编排工作流", false); !ok || !a.workflowFullscreen() {
+		t.Fatal("editor did not take over the window")
+	}
+	if _, ok := alignmentNode(router.AppendSemantics(nil), "关闭设置", true); ok {
+		t.Fatal("full screen still shows the Settings chrome")
+	}
+	router.Queue(key.Event{Name: key.NameEscape, State: key.Press}, key.Event{Name: key.NameEscape, State: key.Release})
+	frame()
+	frame()
+	if a.settingsPanel == nil || a.ui.WorkflowFullscreen || a.settingsPanel.section != "workflows" {
+		t.Fatal("Escape must leave full screen and keep the workflow settings open")
+	}
+	// Other Settings sections never render full screen, even with the flag set.
+	a.ui.WorkflowFullscreen = true
+	a.settingsPanel.activateSettingsSection("")
+	if a.workflowFullscreen() {
+		t.Fatal("full screen leaked outside the workflow editor")
+	}
+}
+
+func TestRenderWorkflowFullScreenPreview(t *testing.T) {
+	dir := os.Getenv("ONECATCH_KEEL_PREVIEWS")
+	if dir == "" {
+		t.Skip("set ONECATCH_KEEL_PREVIEWS to render the full screen editor")
+	}
+	a := dagTestApp(t)
+	a.openWorkflows()
+	a.selectWorkflow("design_to_pr", true)
+	a.ui.WorkflowFullscreen = true
+	a.layoutDAG()
+	// The full screen panel holds only the editor, so render it at window size.
+	if err := window.Screenshot(el.Root(workflowView{a}), 1440, 900, filepath.Join(dir, "workflow-fullscreen.png")); err != nil {
+		t.Fatal(err)
 	}
 }

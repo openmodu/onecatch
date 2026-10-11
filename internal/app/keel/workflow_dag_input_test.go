@@ -20,7 +20,7 @@ import (
 func TestDAGCanvasScrollReachesOffscreenNodes(t *testing.T) {
 	a := dagTestApp(t)
 	a.ui.WorkflowDraft.Layout.Nodes["synthesis"] = domainworkflows.Point{X: 620, Y: 340}
-	root := el.Root(workflowWindowView{a})
+	root := el.Root(workflowView{a})
 	var router input.Router
 	var ops op.Ops
 	frame := func() {
@@ -35,7 +35,7 @@ func TestDAGCanvasScrollReachesOffscreenNodes(t *testing.T) {
 	var find func([]input.SemanticNode) (image.Rectangle, bool)
 	find = func(nodes []input.SemanticNode) (image.Rectangle, bool) {
 		for _, n := range nodes {
-			if n.Desc.Label == "节点 汇总落地" {
+			if n.Desc.Label == "步骤 汇总落地" {
 				return n.Desc.Bounds, true
 			}
 			if box, ok := find(n.Children); ok {
@@ -45,7 +45,9 @@ func TestDAGCanvasScrollReachesOffscreenNodes(t *testing.T) {
 		return image.Rectangle{}, false
 	}
 	b, ok := find(router.AppendSemantics(nil))
-	if !ok || b.Min.X < 240 || b.Max.X > 720 || b.Min.Y < 226 || b.Max.Y > 716 {
+	// Visible means inside the canvas: left of the 320dp inspector and above
+	// the validation footer.
+	if !ok || b.Min.X < 0 || b.Max.X > 1040-320 || b.Min.Y < 200 || b.Max.Y > 716 {
 		t.Fatalf("scroll did not expose node: %v, %v", b, ok)
 	}
 	p := f32.Pt(float32(b.Min.X+50), float32(b.Min.Y+40))
@@ -64,7 +66,7 @@ func TestDAGInspectorIDThroughNativeEditor(t *testing.T) {
 			cx.Focus(focus)
 			focus = ""
 		}
-		return workflowWindowView{a}.Render(cx)
+		return workflowView{a}.Render(cx)
 	}))
 	var router input.Router
 	var ops op.Ops
@@ -78,7 +80,7 @@ func TestDAGInspectorIDThroughNativeEditor(t *testing.T) {
 	router.Queue(key.EditEvent{Range: key.Range{Start: 0, End: 8}, Text: "security_review"})
 	frame()
 	frame()
-	if a.ui.WorkflowDraft.Steps[0].ID != "security_review" || a.ui.WorkflowDraft.EntryStepID != "security_review" || !slices.Contains(a.ui.WorkflowDraft.Steps[2].DependsOn, "security_review") {
+	if a.ui.WorkflowDraft.Steps[0].ID != "security_review" || !slices.Contains(domainworkflows.Upstream(a.ui.WorkflowDraft, "synthesis"), "security_review") {
 		t.Fatalf("editor did not update graph ID: %+v", a.ui.WorkflowDraft)
 	}
 	before := a.ui.WorkflowDraft.Layout.Nodes["security_review"]
@@ -106,7 +108,7 @@ func TestDAGInspectorIDThroughNativeEditor(t *testing.T) {
 	var inspect func([]input.SemanticNode)
 	inspect = func(nodes []input.SemanticNode) {
 		for _, n := range nodes {
-			if n.Desc.Label == "保存 DAG" && n.Desc.Disabled {
+			if n.Desc.Label == "保存" && n.Desc.Disabled {
 				disabled = true
 			}
 			inspect(n.Children)
@@ -118,59 +120,16 @@ func TestDAGInspectorIDThroughNativeEditor(t *testing.T) {
 	}
 }
 
-func TestDAGSignalRenameRetainsNativeFocus(t *testing.T) {
+func TestDAGCommandStepIsLocalAndValid(t *testing.T) {
 	a := dagTestApp(t)
-	focus := ""
-	root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element {
-		if focus != "" {
-			cx.Focus(focus)
-			focus = ""
-		}
-		return workflowWindowView{a}.Render(cx)
-	}))
-	var router input.Router
-	var ops op.Ops
-	frame := func() {
-		ops.Reset()
-		root.Layout(layout.Context{Ops: &ops, Now: time.Now(), Source: router.Source(), Constraints: layout.Exact(image.Pt(1040, 760)), Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}})
-		router.Frame(&ops)
+	a.ui.WorkflowDraft.Steps[2].WorkerID = "remote_box"
+	a.setDAGKind(2, domainworkflows.StepCommand)
+	a.ui.WorkflowDraft.Steps[2].Command = "go test ./..."
+	a.ui.WorkflowDraft.Edges = append(a.ui.WorkflowDraft.Edges, domainworkflows.Edge{From: "synthesis", To: "tests", Kind: domainworkflows.EdgeRework})
+	if a.ui.WorkflowDraft.Steps[2].WorkerID != "local" {
+		t.Fatal("command step kept a remote worker")
 	}
-	frame()
-	router.Queue(pointer.Event{Kind: pointer.Scroll, Source: pointer.Mouse, Position: f32.Pt(900, 650), Scroll: f32.Pt(0, 700)})
-	frame()
-	frame()
-	focus = "dag-signal/security/0"
-	frame()
-	frame()
-	router.Queue(key.EditEvent{Range: key.Range{Start: 0, End: 9}, Text: "approved"})
-	frame()
-	frame()
-	if a.ui.WorkflowDraft.Steps[0].Transitions["approved"] != "$done" {
-		t.Fatal("signal field was not edited")
-	}
-	router.Queue(key.EditEvent{Range: key.Range{Start: 8, End: 8}, Text: "_final"})
-	frame()
-	frame()
-	if a.ui.WorkflowDraft.Steps[0].Transitions["approved_final"] != "$done" {
-		t.Fatal("signal rename lost keyboard focus after first edit")
-	}
-	if _, ok := a.ui.WorkflowDraft.Steps[0].Transitions["approved"]; ok {
-		t.Fatal("old signal remained")
-	}
-	router.Queue(key.EditEvent{Range: key.Range{Start: 0, End: 14}, Text: "need_human"})
-	frame()
-	frame()
-	if a.ui.DAG.SignalError == "" || len(a.ui.WorkflowDraft.Steps[0].Transitions) != 2 {
-		t.Fatal("duplicate signal destroyed an existing transition")
-	}
-	// A rejected collision restores the previous valid field value.
-	router.Queue(key.EditEvent{Range: key.Range{Start: 0, End: 14}, Text: ""})
-	frame()
-	frame()
-	if a.ui.DAG.SignalError != "" {
-		t.Fatal("signal field could not recover")
-	}
-	if err := domainworkflows.Validate(a.ui.WorkflowDraft); err == nil {
-		t.Fatal("empty signal silently saved the previous valid value")
+	if err := domainworkflows.Validate(a.ui.WorkflowDraft); err != nil {
+		t.Fatal(err)
 	}
 }

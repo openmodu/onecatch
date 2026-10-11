@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -388,12 +389,14 @@ func TestDesktopApplicationServiceCreatesAndExecutesRun(t *testing.T) {
 
 func TestValidateDefinitionReturnsAllIssues(t *testing.T) {
 	app := &Service{}
-	issues := app.ValidateDefinition(builtinDefinitions()[0])
-	if len(issues) != 0 {
-		t.Fatalf("builtin issues = %+v", issues)
+	for _, definition := range builtinDefinitions() {
+		if issues := app.ValidateDefinition(definition); len(issues) != 0 {
+			t.Fatalf("builtin %s issues = %+v", definition.ID, issues)
+		}
 	}
 	invalid := builtinDefinitions()[0]
-	invalid.EntryStepID = "missing"
+	invalid.Edges = []domainworkflows.Edge{{From: "execute", To: "missing"}}
+	var issues []domainworkflows.ValidationIssue
 	issues = app.ValidateDefinition(invalid)
 	if len(issues) == 0 {
 		t.Fatal("invalid workflow returned no issues")
@@ -1110,4 +1113,148 @@ func TestNeedsUsageBackfillOnlyForStepRunsWithoutTokens(t *testing.T) {
 			t.Errorf("%s: a step run that recorded tokens must not be backfilled", name)
 		}
 	}
+}
+
+type verdictEngine struct {
+	mu       sync.Mutex
+	requests []agentrun.Request
+}
+
+func (*verdictEngine) Available(agentrun.Runtime) bool { return true }
+func (e *verdictEngine) Run(_ context.Context, request agentrun.Request, _ agentrun.Sink) (agentrun.Result, error) {
+	e.mu.Lock()
+	e.requests = append(e.requests, request)
+	e.mu.Unlock()
+	return agentrun.Result{Succeeded: true, SessionID: "session_" + string(request.Runtime), FinalMessage: `{"verdict":"pass","summary":"ok"}`}, nil
+}
+
+// A follow-up typed in a workflow conversation must not carry the composer's
+// runtime into the step that ran last: that replaced the step's model and
+// discarded its session, losing the step's context.
+func TestWorkflowFollowUpKeepsStepModelAndSession(t *testing.T) {
+	engine := &verdictEngine{}
+	app, _ := newLocalTestApp(t, engine)
+	ctx := context.Background()
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "implement_review", Title: "follow-up", Prompt: "build it"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := app.StartRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitInactive := func() RunDetail {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for time.Now().Before(deadline) {
+			detail, err := app.GetRunDetail(ctx, run.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !detail.Active && detail.Run.Status != domainworkflows.RunRunning {
+				return detail
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		t.Fatal("run did not settle")
+		return RunDetail{}
+	}
+	if detail := waitInactive(); detail.Run.Status != domainworkflows.RunCompleted {
+		t.Fatalf("first run = %s", detail.Run.Status)
+	}
+	if _, err := app.ResumeRunConfigured(ctx, run.ID, ResumeRunInput{Instruction: "再检查一遍", Harness: "claude"}); err != nil {
+		t.Fatal(err)
+	}
+	detail := waitInactive()
+	if step := detail.Workflow.Steps[1]; step.Runtime != "claude" || step.Model != "sonnet" {
+		t.Fatalf("review step was rewritten by the follow-up: %+v", step)
+	}
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	last := engine.requests[len(engine.requests)-1]
+	if last.Model != "sonnet" || last.ResumeSessionID != "session_claude" {
+		t.Fatalf("follow-up lost the review step's model or session: model=%q session=%q", last.Model, last.ResumeSessionID)
+	}
+}
+
+func TestProjectWorkflowFileRunsAndExports(t *testing.T) {
+	engine := &verdictEngine{}
+	app, _ := newLocalTestApp(t, engine)
+	ctx := context.Background()
+	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, ".onecatch", "workflows")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := "name: 实现并检查\nsteps:\n  implement:\n    agent: codex\n  check:\n    run: test -n \"$ONECATCH_RUN_ID\"\n    after: implement\n    rework: implement\n"
+	if err := os.WriteFile(filepath.Join(dir, "build_check.yaml"), []byte(file), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "broken.yaml"), []byte("name: x\nsteps:\n  a:\n    agnet: codex\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	items, err := app.ListProjectWorkflows(ctx, workspace.ID)
+	if err != nil || len(items) != 2 {
+		t.Fatalf("project workflows = %+v, %v", items, err)
+	}
+	if items[0].ErrorLine != 4 || items[1].Definition.ID != "repo-build_check" || items[1].File != ".onecatch/workflows/build_check.yaml" {
+		t.Fatalf("project workflows = %+v", items)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "repo-build_check", Title: "file", Prompt: "build it"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := app.StartRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	var detail RunDetail
+	for time.Now().Before(deadline) {
+		if detail, err = app.GetRunDetail(ctx, run.ID); err != nil {
+			t.Fatal(err)
+		}
+		if !detail.Active && detail.Run.Status != domainworkflows.RunRunning {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if detail.Run.Status != domainworkflows.RunCompleted || detail.Run.Nodes["check"].Verdict != domainworkflows.VerdictPass {
+		t.Fatalf("project workflow run = %+v", detail.Run)
+	}
+	// Editing the file later must not change the run's snapshot.
+	if err := os.WriteFile(filepath.Join(dir, "build_check.yaml"), []byte("name: changed\nsteps:\n  only:\n    agent: codex\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if snapshot, err := app.store.Repos.Workflows.GetRunDefinition(ctx, run.ID); err != nil || len(snapshot.Steps) != 2 {
+		t.Fatalf("run snapshot followed the file: %+v, %v", snapshot, err)
+	}
+	path, err := app.ExportWorkflowToProject(ctx, workspace.ID, "design_to_pr")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(filepath.ToSlash(path), "/.onecatch/workflows/design_to_pr.yaml") {
+		t.Fatalf("export path = %s", path)
+	}
+	items, _ = app.ListProjectWorkflows(ctx, workspace.ID)
+	for _, item := range items {
+		if item.Definition.ID == "repo-design_to_pr" && item.Error == "" && len(item.Definition.Steps) == 5 {
+			if _, err := app.ExportWorkflowToProject(ctx, workspace.ID, "design_to_pr"); err == nil {
+				t.Fatal("export overwrote an existing file")
+			}
+			return
+		}
+	}
+	t.Fatalf("exported workflow did not load: %+v", items)
 }

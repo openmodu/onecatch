@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/wailsapp/wails/v3/pkg/updater"
 	"golang.org/x/mod/semver"
 )
 
@@ -27,14 +26,14 @@ const (
 )
 
 type cacheManifest struct {
-	Schema        int             `json:"schema"`
-	Release       updater.Release `json:"release"`
-	Platform      string          `json:"platform"`
-	Architecture  string          `json:"architecture"`
-	Payload       string          `json:"payload"`
-	PayloadSHA256 string          `json:"payloadSha256"`
-	PayloadSize   int64           `json:"payloadSize"`
-	VerifiedAt    time.Time       `json:"verifiedAt"`
+	Schema        int       `json:"schema"`
+	Release       Release   `json:"release"`
+	Platform      string    `json:"platform"`
+	Architecture  string    `json:"architecture"`
+	Payload       string    `json:"payload"`
+	PayloadSHA256 string    `json:"payloadSha256"`
+	PayloadSize   int64     `json:"payloadSize"`
+	VerifiedAt    time.Time `json:"verifiedAt"`
 }
 
 type cachedUpdate struct {
@@ -57,7 +56,7 @@ func updateCacheRoot(dataRoot string) (string, error) {
 	return filepath.Join(filepath.Clean(abs), "updates"), nil
 }
 
-func validateSignedRelease(release *updater.Release) error {
+func validateSignedRelease(release *Release) error {
 	if release == nil {
 		return errors.New("app update: check for an update before downloading")
 	}
@@ -71,7 +70,7 @@ func validateSignedRelease(release *updater.Release) error {
 	return nil
 }
 
-func persistCachedUpdate(root string, release *updater.Release, staged string) (*cachedUpdate, error) {
+func persistCachedUpdate(root string, release *Release, staged string) (*cachedUpdate, error) {
 	if err := validateSignedRelease(release); err != nil {
 		return nil, err
 	}
@@ -189,11 +188,8 @@ func restoreCachedUpdate(root, currentVersion string, publicKey []byte) (*cached
 	if err != nil {
 		return nil, fmt.Errorf("app update: inspect cached artifact: %w", err)
 	}
-	// Windows installers and Linux AppImages remain byte-for-byte identical
-	// to the signed enclosure, so re-check the publisher signature as well as
-	// the local manifest hash. macOS enclosures are ZIPs that Wails verifies
-	// before extracting the .app; the deterministic tree hash above protects
-	// that verified extracted payload across launches.
+	// Re-check signed archives on every restore. Directory payloads are
+	// retained only for compatibility with previously verified bundle caches.
 	if !info.IsDir() {
 		digestBytes, decodeErr := hex.DecodeString(digest)
 		verification := manifest.Release.Verification

@@ -64,7 +64,7 @@ func buildConversationEntries(raw []*entry) []*entry {
 	}
 	out := make([]*entry, 0, len(items))
 	for _, e := range items {
-		process := !e.user && e.kind != agentrun.KindMessage && e.kind != agentrun.KindError
+		process := !e.user && e.kind != agentrun.KindMessage && e.kind != agentrun.KindError && e.kind != kindTransition
 		if !process {
 			out = append(out, e)
 			continue

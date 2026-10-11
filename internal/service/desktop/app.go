@@ -4,6 +4,7 @@
 package desktop
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
@@ -108,13 +109,20 @@ type TaskSearchPage struct {
 	Total int              `json:"total"`
 }
 
+// InstructionInput is human guidance for a run. StepID addresses one workflow
+// step; otherwise the guidance goes to whichever steps start next.
 type InstructionInput struct {
+	StepID          string   `json:"stepId,omitempty"`
 	Content         string   `json:"content"`
 	AttachmentPaths []string `json:"attachmentPaths,omitempty"`
 }
 
+// ResumeRunInput continues a paused or completed run. FromStepID reruns that
+// step and every step after it; StepID selects the step a Harness override
+// applies to.
 type ResumeRunInput struct {
 	Instruction     string `json:"instruction"`
+	FromStepID      string `json:"fromStepId,omitempty"`
 	StepID          string `json:"stepId,omitempty"`
 	Harness         string `json:"harness,omitempty"`
 	Model           string `json:"model,omitempty"`
@@ -258,6 +266,7 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 		accountUsageCache: newAccountUsageCache(store.Data.Paths.Root),
 	}
 	orchestrator.SetWorkspaceResolver(app.resolveTaskWorkspace)
+	orchestrator.SetDefinitionResolver(app.taskDefinition)
 	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
 	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, preparations: newRemotePreparationRegistry()})
 	app.accountUsageWG.Add(1)
@@ -825,8 +834,8 @@ func (a *Service) prepareDefinition(ctx context.Context, input domainworkflows.D
 	if err != nil {
 		return domainworkflows.Definition{}, mapSettingsError(err)
 	}
-	if input.Policy.MaxTransitions == 0 {
-		input.Policy.MaxTransitions = settings.Execution.MaxTransitions
+	if input.Policy.MaxReworkRounds == 0 {
+		input.Policy.MaxReworkRounds = settings.Execution.MaxReworkRounds
 	}
 	if input.Policy.MaxConsecutiveFailures == 0 {
 		input.Policy.MaxConsecutiveFailures = settings.Execution.MaxConsecutiveFailures
@@ -873,22 +882,48 @@ func (a *Service) GetDefinition(ctx context.Context, id string) (domainworkflows
 }
 
 func (a *Service) EnsureBuiltinDefinitions(ctx context.Context) error {
+	marker := filepath.Join(a.store.Data.Paths.Workflows, ".builtins-v2")
+	if _, err := os.Stat(marker); errors.Is(err, os.ErrNotExist) {
+		if err := a.reseedBuiltinDefinitions(ctx); err != nil {
+			return err
+		}
+		if err := localfile.WriteTextAtomic(marker, "seeded\n"); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
 	// The direct Agent target is application infrastructure, not a user
-	// workflow. Repair it on every launch even when an older build allowed the
-	// backing definition to be deleted after the seed marker was written.
-	if err := a.ensureDirectAgentDefinition(ctx); err != nil {
+	// workflow. Repair it on every launch even if it was deleted.
+	return a.ensureDirectAgentDefinition(ctx)
+}
+
+// reseedBuiltinDefinitions replaces the signal-based workflows of earlier
+// versions with the graph built-ins. Old definitions cannot express edges, so
+// they are moved aside to workflows/.retired rather than reinterpreted.
+func (a *Service) reseedBuiltinDefinitions(ctx context.Context) error {
+	root := a.store.Data.Paths.Workflows
+	entries, err := os.ReadDir(root)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
-	marker := filepath.Join(a.store.Data.Paths.Workflows, ".builtins-v1")
-	if _, err := os.Stat(marker); err == nil {
-		return nil
-	} else if !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
-	for _, definition := range builtinDefinitions() {
-		if definition.ID == directAgentWorkflowID {
+	retired := filepath.Join(root, ".retired")
+	for _, entry := range entries {
+		if !entry.IsDir() || strings.HasPrefix(entry.Name(), ".") {
 			continue
 		}
+		raw, err := os.ReadFile(filepath.Join(root, entry.Name(), "workflow.json"))
+		if err != nil || !bytes.Contains(raw, []byte(`"transitions"`)) {
+			continue
+		}
+		if err := os.MkdirAll(retired, 0o700); err != nil {
+			return err
+		}
+		if err := os.Rename(filepath.Join(root, entry.Name()), filepath.Join(retired, entry.Name())); err != nil {
+			return err
+		}
+	}
+	for _, definition := range builtinDefinitions() {
 		if _, err := a.store.Repos.Workflows.GetDefinition(ctx, definition.ID); err == nil {
 			continue
 		}
@@ -896,7 +931,7 @@ func (a *Service) EnsureBuiltinDefinitions(ctx context.Context) error {
 			return err
 		}
 	}
-	return localfile.WriteTextAtomic(marker, "seeded\n")
+	return nil
 }
 
 func (a *Service) ensureDirectAgentDefinition(ctx context.Context) error {
@@ -945,7 +980,7 @@ func (a *Service) CreateTask(ctx context.Context, input CreateTaskInput) (domain
 	if err != nil {
 		return domaintasks.Task{}, err
 	}
-	definition, err := a.GetDefinition(ctx, strings.TrimSpace(input.WorkflowID))
+	definition, err := a.definitionFor(ctx, input.WorkflowID, workspace.ID)
 	if err != nil {
 		return domaintasks.Task{}, err
 	}
@@ -1179,6 +1214,12 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 	if err != nil {
 		return run, coded("task_not_found", "task was not found")
 	}
+	// In a multi-step workflow every step's Agent comes from the definition.
+	// An override without a named step would silently replace the model of
+	// whichever step ran last and discard its session, so it is ignored.
+	if strings.TrimSpace(input.StepID) == "" && (definition.ID != directAgentWorkflowID || len(definition.Steps) != 1) {
+		input.Harness, input.Model, input.ReasoningEffort, input.ServiceTier = "", "", "", ""
+	}
 	if err := validateResumeHarness(task, definition, input.Harness); err != nil {
 		return run, err
 	}
@@ -1196,7 +1237,13 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 	if err := validateHarnessSettings(definition, settings, workspace.RemoteFS != nil); err != nil {
 		return run, err
 	}
-	profile := workflowuc.ResumeProfile{}
+	fromStepID := strings.TrimSpace(input.FromStepID)
+	if fromStepID != "" {
+		if _, ok := domainworkflows.FindStep(definition, fromStepID); !ok {
+			return run, coded("workflow_step_not_found", "the workflow step was not found")
+		}
+	}
+	profile := workflowuc.ResumeProfile{FromStepID: fromStepID}
 	if harness := strings.TrimSpace(input.Harness); harness != "" {
 		runtime := agentrun.Runtime(harness)
 		if !runtime.Valid() {
@@ -1216,7 +1263,7 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 		if model == "" {
 			model = settings.Runtimes[harness].DefaultModel
 		}
-		profile = workflowuc.ResumeProfile{StepID: strings.TrimSpace(input.StepID), Harness: harness, Model: model, RuntimeSettings: resolved}
+		profile = workflowuc.ResumeProfile{FromStepID: fromStepID, StepID: strings.TrimSpace(input.StepID), Harness: harness, Model: model, RuntimeSettings: resolved}
 	}
 	a.dispatch(run.ID, func(runCtx context.Context) (domainworkflows.Run, error) {
 		return a.orchestrator.ResumeRunWithProfile(runCtx, run.ID, input.Instruction, profile)
@@ -1322,6 +1369,9 @@ func (a *Service) RespondUserInput(input UserInputResponseInput) error {
 }
 
 func (a *Service) GetRunDetail(ctx context.Context, runID string) (RunDetail, error) {
+	// Sample activity before reading state: a run that stops in between then
+	// reports Active with its final state, never inactive with a stale one.
+	active, lastError := a.isActive(runID), a.lastError(runID)
 	run, err := a.store.Repos.Workflows.GetRun(ctx, runID)
 	if err != nil {
 		return RunDetail{}, coded("run_not_found", "run was not found")
@@ -1355,7 +1405,7 @@ func (a *Service) GetRunDetail(ctx context.Context, runID string) (RunDetail, er
 		workspace.Path = task.Worktree.Path
 		workspace.ID = "task:" + task.ID
 	}
-	detail := RunDetail{Run: run, Task: task, Workspace: workspace, Workflow: workflow, StepRuns: stepRuns, Events: make([]WorkflowEventView, 0, len(events)), RuntimeEvents: []RuntimeEventView{}, Instructions: instructions, Active: a.isActive(runID), LastError: a.lastError(runID)}
+	detail := RunDetail{Run: run, Task: task, Workspace: workspace, Workflow: workflow, StepRuns: stepRuns, Events: make([]WorkflowEventView, 0, len(events)), RuntimeEvents: []RuntimeEventView{}, Instructions: instructions, Active: active, LastError: lastError}
 	for _, event := range events {
 		detail.Events = append(detail.Events, WorkflowEventView{RunID: event.RunID, Seq: event.Seq, Type: event.Type, StepID: event.StepID, Payload: string(event.Payload), At: event.At.Format(time.RFC3339Nano)})
 	}
@@ -1656,17 +1706,48 @@ func mapError(err error) error {
 	return err
 }
 
+// WorkflowTemplates returns the built-in workflows other than the direct Agent,
+// as starting points for new user workflows.
+func WorkflowTemplates() []domainworkflows.Definition {
+	return builtinDefinitions()[1:]
+}
+
 func builtinDefinitions() []domainworkflows.Definition {
+	rework := domainworkflows.EdgeRework
 	return []domainworkflows.Definition{
-		{ID: "single_agent", Name: "单 Agent 完成", Description: "由选定的 coding agent 持续执行任务，需要时暂停给人处理。", EntryStepID: "execute", Steps: []domainworkflows.Step{{ID: "execute", Name: "执行", Runtime: "codex", Sandbox: "workspace-write", RolePrompt: "你是负责独立完成任务的本地 Agent。", Instruction: "完成任务、验证结果，并按 outcome contract 汇报。", Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}}}},
-		{ID: "implement_review", Name: "实现与审查 Loop", Description: "Codex 实现，Claude Code 审查；有问题就回到实现步骤。", EntryStepID: "implement", Steps: []domainworkflows.Step{
-			{ID: "implement", Name: "实现", Runtime: "codex", Sandbox: "workspace-write", RolePrompt: "你是负责落地代码和测试的实现者。", Instruction: "实现目标、运行验证，并把变更交给审查者。", Transitions: map[string]string{"ready_for_review": "review", "need_human": domainworkflows.TargetPause}},
-			{ID: "review", Name: "审查", Runtime: "claude", Sandbox: "read-only", RolePrompt: "你是独立、严格的代码审查者。", Instruction: "检查需求、实现、风险和测试；有问题要求修改。", Transitions: map[string]string{"changes_requested": "implement", "approved": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}},
+		{ID: directAgentWorkflowID, Name: "单 Agent 完成", Description: "由选定的 coding agent 持续执行任务，需要时暂停给人处理。", Steps: []domainworkflows.Step{
+			{ID: "execute", Name: "执行", Runtime: "codex", Sandbox: "workspace-write"},
 		}},
-		{ID: "parallel_review", Name: "并行审查 DAG", Description: "安全与测试节点并行只读分析，等待全部完成后由汇总节点落地修改。", Mode: domainworkflows.ModeDAG, EntryStepID: "security", Layout: domainworkflows.Layout{Nodes: map[string]domainworkflows.Point{"security": {X: 80, Y: 90}, "tests": {X: 80, Y: 280}, "synthesis": {X: 420, Y: 185}}}, Steps: []domainworkflows.Step{
-			{ID: "security", Name: "安全审查", Runtime: "codex", WorkerID: "local", Sandbox: "read-only", RolePrompt: "你是安全审查 Agent。", Instruction: "独立检查安全风险并给出可操作建议。", Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}},
-			{ID: "tests", Name: "测试审查", Runtime: "claude", WorkerID: "local", Sandbox: "read-only", RolePrompt: "你是测试与可靠性审查 Agent。", Instruction: "独立检查测试覆盖、并发和回归风险。", Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}},
-			{ID: "synthesis", Name: "汇总落地", Runtime: "codex", WorkerID: "local", Sandbox: "workspace-write", DependsOn: []string{"security", "tests"}, RolePrompt: "你是负责汇总并落地修改的 Agent。", Instruction: "结合所有直接依赖结果实施修改并验证。", Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause}},
-		}},
+		{ID: "implement_review", Name: "实现与审查", Description: "Codex 实现，Claude Code 审查；不通过就带着意见回到实现。",
+			Layout: domainworkflows.Layout{Nodes: map[string]domainworkflows.Point{"implement": {X: 80, Y: 120}, "review": {X: 380, Y: 120}}},
+			Steps: []domainworkflows.Step{
+				{ID: "implement", Name: "实现", Runtime: "codex", Sandbox: "workspace-write", Prompt: "实现需求并运行相关测试。"},
+				{ID: "review", Name: "审查", Runtime: "claude", Model: "sonnet", Sandbox: "read-only", Prompt: "独立审查当前改动：需求是否满足、有没有缺陷和风险、测试是否充分。有必须修改的问题就返工给实现。"},
+			},
+			Edges: []domainworkflows.Edge{{From: "implement", To: "review"}, {From: "review", To: "implement", Kind: rework}},
+		},
+		{ID: "design_to_pr", Name: "设计到 PR", Description: "Opus 设计，Codex 实现，Sonnet 审查，Modu 跑 E2E 并提交 PR；任一环节不通过就带着细节退回。",
+			Layout: domainworkflows.Layout{Nodes: map[string]domainworkflows.Point{"design": {X: 60, Y: 140}, "implement": {X: 320, Y: 140}, "review": {X: 580, Y: 140}, "e2e": {X: 840, Y: 140}, "pr": {X: 1100, Y: 140}}},
+			Steps: []domainworkflows.Step{
+				{ID: "design", Name: "架构设计", Runtime: "claude", Model: "opus", Sandbox: "read-only", Prompt: "阅读相关代码，给出实现方案：要改哪些模块、接口和数据结构、关键取舍和风险、怎么验证。不要写代码。"},
+				{ID: "implement", Name: "实现", Runtime: "codex", Sandbox: "workspace-write", Prompt: "按设计方案实现，补齐测试并确保本地通过。"},
+				{ID: "review", Name: "代码审查", Runtime: "claude", Model: "sonnet", Sandbox: "read-only", Prompt: "对照设计方案审查当前改动。实现问题返工给实现；方案本身有问题返工给架构设计。"},
+				{ID: "e2e", Name: "E2E 测试", Runtime: "modu", Sandbox: "workspace-write", Prompt: "运行项目的端到端测试并检查关键流程。失败时把失败用例、日志和复现步骤返工给实现。"},
+				{ID: "pr", Name: "提交 PR", Runtime: "modu", Sandbox: "workspace-write", Prompt: "新建分支，按仓库规范提交改动，推送并创建 Pull Request，在描述里写清楚改了什么和怎么验证的。"},
+			},
+			Edges: []domainworkflows.Edge{
+				{From: "design", To: "implement"}, {From: "implement", To: "review"}, {From: "review", To: "e2e"}, {From: "e2e", To: "pr"},
+				{From: "review", To: "implement", Kind: rework}, {From: "review", To: "design", Kind: rework}, {From: "e2e", To: "implement", Kind: rework},
+			},
+		},
+		{ID: "parallel_review", Name: "并行审查", Description: "安全与测试两路只读审查同时进行，全部完成后汇总落地修改。",
+			Layout: domainworkflows.Layout{Nodes: map[string]domainworkflows.Point{"security": {X: 80, Y: 60}, "tests": {X: 80, Y: 240}, "synthesis": {X: 420, Y: 150}}},
+			Steps: []domainworkflows.Step{
+				{ID: "security", Name: "安全审查", Runtime: "codex", Sandbox: "read-only", Prompt: "独立检查安全风险并给出可操作建议。"},
+				{ID: "tests", Name: "测试审查", Runtime: "claude", Sandbox: "read-only", Prompt: "独立检查测试覆盖、并发和回归风险。"},
+				{ID: "synthesis", Name: "汇总落地", Runtime: "codex", Sandbox: "workspace-write", Prompt: "结合两路审查结果实施修改并验证。"},
+			},
+			Edges: []domainworkflows.Edge{{From: "security", To: "synthesis"}, {From: "tests", To: "synthesis"}},
+		},
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/dyike/keel/ui/theme"
 	"github.com/openmodu/onecatch/internal/buildinfo"
 	"github.com/openmodu/onecatch/internal/service/appupdate"
-	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
 type appUpdates struct {
@@ -17,13 +16,8 @@ type appUpdates struct {
 	err     string
 }
 
-// WindowNone: the existing update engine never opens a WebView. Keel renders
-// status and actions in the same settings modal as the rest of the app.
 type nativeUpdateHost struct{ app *app }
 
-func (h nativeUpdateHost) Emit(string, ...any) bool                              { return true }
-func (h nativeUpdateHost) OnEvent(string, func(any)) func()                      { return func() {} }
-func (h nativeUpdateHost) OpenWindow(updater.WindowOptions) updater.WindowHandle { return nil }
 func (h nativeUpdateHost) Quit() {
 	core.Update(func() {
 		if h.app.window != nil {
@@ -33,7 +27,7 @@ func (h nativeUpdateHost) Quit() {
 }
 func (a *app) initUpdates() {
 	host := nativeUpdateHost{a}
-	service, err := appupdate.New(updater.New(host), a.backend.service.DataRoot(), func(status appupdate.Status) {
+	service, err := appupdate.New(a.backend.service.DataRoot(), func(status appupdate.Status) {
 		core.Update(func() {
 			if !a.closed {
 				a.updates.status = status

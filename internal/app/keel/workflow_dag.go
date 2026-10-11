@@ -12,14 +12,24 @@ const dagNodeWidth, dagNodeHeight = 204, 94
 const dagCanvasWidth, dagCanvasHeight = 1600, 1000
 
 type dagState struct {
-	ConnectFrom  string
+	InspectorOpen bool
+	SourceError   string
+	ConnectFrom   string
+	// ConnectKind is the edge the next connection creates: a dependency, or a
+	// rework edge from a checking step back to the step it can return work to.
+	ConnectKind  string
 	DragID       string
 	DragX, DragY float32
 	IDError      string
-	SignalError  string
 	Validation   domainworkflows.ValidationErrors
 	Edges        dagEdgeInput
-	SignalOrder  map[string][]string
+}
+
+func (s dagState) connectKind() string {
+	if s.ConnectKind == domainworkflows.EdgeRework {
+		return domainworkflows.EdgeRework
+	}
+	return domainworkflows.EdgeNext
 }
 
 func dagPosition(d domainworkflows.Definition, id string) domainworkflows.Point {
@@ -30,11 +40,9 @@ func dagPosition(d domainworkflows.Definition, id string) domainworkflows.Point 
 	return domainworkflows.Point{X: max(10, min(1e6, p.X)), Y: max(10, min(1e6, p.Y))}
 }
 
+// dagAutoLayout places each step one column to the right of its deepest
+// dependency. Rework edges do not affect columns.
 func dagAutoLayout(d domainworkflows.Definition) map[string]domainworkflows.Point {
-	steps := map[string]domainworkflows.Step{}
-	for _, s := range d.Steps {
-		steps[s.ID] = s
-	}
 	levels := map[string]int{}
 	visiting := map[string]bool{}
 	var levelOf func(string) int
@@ -47,7 +55,7 @@ func dagAutoLayout(d domainworkflows.Definition) map[string]domainworkflows.Poin
 		}
 		visiting[id] = true
 		level := 0
-		for _, dep := range steps[id].DependsOn {
+		for _, dep := range domainworkflows.Upstream(d, id) {
 			level = max(level, levelOf(dep)+1)
 		}
 		delete(visiting, id)
@@ -63,7 +71,7 @@ func dagAutoLayout(d domainworkflows.Definition) map[string]domainworkflows.Poin
 		level := levels[s.ID]
 		row := rows[level]
 		rows[level]++
-		nodes[s.ID] = domainworkflows.Point{X: float64(60 + level*310), Y: float64(55 + row*155)}
+		nodes[s.ID] = domainworkflows.Point{X: float64(60 + level*290), Y: float64(80 + row*175)}
 	}
 	return nodes
 }
@@ -76,18 +84,27 @@ func (a *app) selectDAGNode(id string) {
 		if s.ID == id {
 			a.ui.WorkflowStep = i
 			a.ui.WorkflowStepID = id
-			a.ui.WorkflowSignal = ""
 			a.ui.DAG.IDError = ""
-			a.ui.DAG.SignalError = ""
 			a.resetWorkflowSelects()
 			return
 		}
 	}
 }
+
+func (a *app) setDAGConnectKind(kind string) {
+	a.ui.DAG.ConnectKind = kind
+	a.ui.DAG.ConnectFrom = ""
+}
+
+// connectDAGNode is a two-click gesture: the first click picks the source, the
+// second adds an edge of the current kind to the clicked step.
 func (a *app) connectDAGNode(id string) {
 	d := &a.ui.WorkflowDraft
 	source := a.ui.DAG.ConnectFrom
-	if !slices.ContainsFunc(d.Steps, func(s domainworkflows.Step) bool { return s.ID == id }) {
+	exists := func(id string) bool {
+		return slices.ContainsFunc(d.Steps, func(s domainworkflows.Step) bool { return s.ID == id })
+	}
+	if !exists(id) {
 		a.ui.DAG.ConnectFrom = ""
 		return
 	}
@@ -95,34 +112,34 @@ func (a *app) connectDAGNode(id string) {
 		a.ui.DAG.ConnectFrom = id
 		return
 	}
-	if source != id && slices.ContainsFunc(d.Steps, func(s domainworkflows.Step) bool { return s.ID == source }) {
-		for i := range d.Steps {
-			if d.Steps[i].ID == id && !slices.Contains(d.Steps[i].DependsOn, source) {
-				d.Steps[i].DependsOn = append(d.Steps[i].DependsOn, source)
-				a.syncWorkflowDocument()
-				break
-			}
-		}
+	edge := domainworkflows.Edge{From: source, To: id, Kind: a.ui.DAG.connectKind()}
+	if source != id && exists(source) && !slices.ContainsFunc(d.Edges, func(e domainworkflows.Edge) bool {
+		return e.From == edge.From && e.To == edge.To && e.Kind == edge.Kind
+	}) {
+		d.Edges = append(d.Edges, edge)
+		a.syncWorkflowDocument()
+		a.validateDAG()
 	}
 	a.ui.DAG.ConnectFrom = ""
 }
-func (a *app) removeDAGEdge(source, target string) {
-	for i := range a.ui.WorkflowDraft.Steps {
-		s := &a.ui.WorkflowDraft.Steps[i]
-		if s.ID == target {
-			s.DependsOn = slices.DeleteFunc(s.DependsOn, func(id string) bool { return id == source })
-			a.syncWorkflowDocument()
-			return
-		}
+func (a *app) removeDAGEdge(source, target, kind string) {
+	d := &a.ui.WorkflowDraft
+	before := len(d.Edges)
+	d.Edges = slices.DeleteFunc(d.Edges, func(e domainworkflows.Edge) bool {
+		return e.From == source && e.To == target && e.Kind == kind
+	})
+	if len(d.Edges) != before {
+		a.syncWorkflowDocument()
+		a.validateDAG()
 	}
 }
 func (a *app) addDAGNode() {
 	d := &a.ui.WorkflowDraft
 	index := len(d.Steps) + 1
-	id := fmt.Sprintf("node_%d", index)
+	id := fmt.Sprintf("step_%d", index)
 	for slices.ContainsFunc(d.Steps, func(s domainworkflows.Step) bool { return s.ID == id }) {
 		index++
-		id = fmt.Sprintf("node_%d", index)
+		id = fmt.Sprintf("step_%d", index)
 	}
 	runtime := ""
 	for _, r := range a.runtimes {
@@ -131,18 +148,13 @@ func (a *app) addDAGNode() {
 			break
 		}
 	}
-	sandbox := a.settings.Execution.DefaultSandbox
-	if sandbox == "" {
-		sandbox = "workspace-write"
-	}
-	d.Steps = append(d.Steps, domainworkflows.Step{ID: id, Name: "新节点", Runtime: runtime, WorkerID: "local", Sandbox: sandbox, RolePrompt: "你是负责这个节点的 Agent。", Instruction: "完成当前节点目标。", Transitions: map[string]string{"completed": "$done", "need_human": "$pause"}})
+	// New steps start read-only so adding one never creates a parallel write
+	// conflict; the user widens access when the step needs it.
+	d.Steps = append(d.Steps, domainworkflows.Step{ID: id, Name: "新步骤", Kind: domainworkflows.StepAgent, Runtime: runtime, WorkerID: "local", Sandbox: "read-only"})
 	if d.Layout.Nodes == nil {
 		d.Layout.Nodes = map[string]domainworkflows.Point{}
 	}
 	d.Layout.Nodes[id] = domainworkflows.Point{X: float64(120 + (len(d.Steps)-1)*34), Y: float64(110 + (len(d.Steps)-1)*34)}
-	if d.EntryStepID == "" {
-		d.EntryStepID = id
-	}
 	a.selectDAGNode(id)
 	a.syncWorkflowDocument()
 }
@@ -174,4 +186,13 @@ func (a *app) setDAGWorker(index int, id string) {
 	if id != "" && id != "local" && step.Sandbox == "full" {
 		step.Sandbox = "workspace-write"
 	}
+}
+
+func (a *app) setDAGKind(index int, kind string) {
+	step := &a.ui.WorkflowDraft.Steps[index]
+	step.Kind = kind
+	if kind == domainworkflows.StepCommand {
+		step.WorkerID = "local"
+	}
+	a.resetWorkflowSelects()
 }

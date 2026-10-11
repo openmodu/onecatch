@@ -4,6 +4,6 @@
   "version": "0.0.0",
   "build": 1,
   "binary": "onecatch-keel",
-  "icon": "build/desktop/appicon-source.png",
+  "icon": "build/keel/appicon.png",
   "main": "./cmd/keel"
 }
