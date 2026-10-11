@@ -1,6 +1,8 @@
 package keeldesktop
 
 import (
+	"gioui.org/f32"
+	"gioui.org/io/system"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/window"
@@ -77,5 +79,30 @@ func TestWindowsHeaderKeepsSidebarToggleBesideAppIcon(t *testing.T) {
 	}
 	if got := sidebarContentHeight("darwin", 600); got != 600 {
 		t.Fatalf("macOS sidebar changed: %v", got)
+	}
+}
+
+func TestWindowsHeaderNativeDragHitRegion(t *testing.T) {
+	a := alignmentFixture(t)
+	a.ui.Preferences.Collapsed = false
+	w := &captionTestWindow{}
+	defer core.SetCurrentWindow(w)()
+	for _, scale := range []int{1, 2} {
+		root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element { return a.headerForPlatform(cx, "windows") }))
+		router, _, _ := alignmentRouter(root, 1000, 44, scale)
+		position := f32.Pt(float32((a.ui.Preferences.SidebarWidth+100)*float32(scale)), 22*float32(scale))
+		if action, ok := router.ActionAt(position); !ok || action != system.ActionMove {
+			t.Fatalf("title area does not produce native move action at %v: %v %v", position, action, ok)
+		}
+		for _, label := range []string{"最小化", "最大化", "关闭", "收起侧栏"} {
+			node, ok := alignmentButton(router.AppendSemantics(nil), label)
+			if !ok {
+				t.Fatal(label)
+			}
+			p := f32.Pt(float32(node.Bounds.Min.X+node.Bounds.Dx()/2), float32(node.Bounds.Min.Y+node.Bounds.Dy()/2))
+			if _, ok := router.ActionAt(p); ok {
+				t.Fatalf("%s is covered by drag region", label)
+			}
+		}
 	}
 }

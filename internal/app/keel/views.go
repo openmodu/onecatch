@@ -127,6 +127,9 @@ func dragArea(cx *el.Context, d *el.DivEl) *el.DivEl {
 	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
 		return d
 	}
+	if runtime.GOOS == "windows" {
+		return windowsDragArea(d)
+	}
 	return d.Decorate(func(gtx core.C, draw func()) {
 		if w := core.CurrentWindow(); w != nil {
 			origin, visible := cx.PaintGeometry()
@@ -210,7 +213,7 @@ func (a *app) headerForPlatform(cx *el.Context, platform string) el.Element {
 	if a.page == "skills" {
 		title = "Skills 管理"
 	}
-	left := dragArea(cx, el.Div().Row().Items(el.Center).Gap(10).Grow().HFull().Child(outlineIcon(cx, kit.IconFolder, 18, theme.Muted)))
+	left := el.Div().Row().Items(el.Center).Gap(10).Grow().HFull().Child(outlineIcon(cx, kit.IconFolder, 18, theme.Muted))
 	if a.task != nil && a.page == "" {
 		category := a.task.Category
 		if category == "" || category == "other" {
@@ -219,9 +222,9 @@ func (a *app) headerForPlatform(cx *el.Context, platform string) el.Element {
 		left.Child(el.Div().Px(5).Py(2).Rounded(4).Bg(theme.Subtle).Child(el.Text(category).TextSize(10).TextColor(theme.Muted)))
 	}
 	if platform == "windows" {
-		if w := core.CurrentWindow(); w != nil {
-			left.OnDoubleClick(w.ToggleMaximize)
-		}
+		left = windowsDragArea(left)
+	} else {
+		left = dragArea(cx, left)
 	}
 	left.Child(el.Text(title).Grow().W(el.Dp(0)).MaxLines(1).Medium().TextSize(13))
 	bar := el.Div().Row().Items(el.Center).H(el.Dp(mainTitleBarHeight)).Px(18).Gap(4)
@@ -232,12 +235,20 @@ func (a *app) headerForPlatform(cx *el.Context, platform string) el.Element {
 		bar.Child(iconAction(cx, "show-sidebar", "展开侧栏", "panel-left", a.toggleSidebar, false))
 	}
 	if platform == "windows" {
-		bar.Child(a.windowsApplicationMenu(cx))
+		bar.Px(0).Gap(0).NoShrink()
+		leading := el.Div().ID("windows-sidebar-header").Row().Items(el.Center).HFull().Px(18).Gap(4).NoShrink()
 		id, label := "hide-sidebar", "收起侧栏"
 		if a.sidebarCollapsed(cx) {
 			id, label = "show-sidebar", "展开侧栏"
+		} else {
+			leading.W(el.Dp(a.sidebarWidth(cx))).Bg(sidebarColor)
 		}
-		bar.Child(iconAction(cx, id, label, "panel-left", a.toggleSidebar, false))
+		leading.Child(a.windowsApplicationMenu(cx), iconAction(cx, id, label, "panel-left", a.toggleSidebar, false))
+		bar.Child(leading)
+		if !a.sidebarCollapsed(cx) {
+			bar.Child(el.Div().ID("windows-sidebar-header-seam").W(el.Dp(1)).HFull().Bg(seamColor).NoShrink())
+		}
+		left.Pl(18)
 	}
 	bar.Child(left)
 	if a.page == "" || a.page == "skills" {

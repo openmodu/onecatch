@@ -1,10 +1,16 @@
 package keeldesktop
 
 import (
+	"gioui.org/f32"
+	"gioui.org/io/system"
+	"gioui.org/op/clip"
+	"gioui.org/op/paint"
+	"gioui.org/unit"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	"image"
 	"image/color"
 	"strings"
 )
@@ -71,19 +77,43 @@ func windowsShortcutLabel(shortcut string) string {
 	return strings.NewReplacer("mod", "Ctrl", "shift", "Shift", "alt", "Alt", "enter", "Enter").Replace(shortcut)
 }
 
-// Caption symbols must not fall back to a document icon when an SVG is absent.
+// Match keel-rex's stroke geometry without borders suppressed by the frameless theme.
 func windowsCaptionGlyph(cx *el.Context, name string, ink color.NRGBA) el.Element {
-	switch name {
-	case "minus":
-		return el.Div().ID("caption-minimize-glyph").W(el.Dp(10)).H(el.Dp(1)).Bg(ink)
-	case "square":
-		return el.Div().Size(el.Dp(10)).Border(1, ink)
-	case "copy":
-		return el.Div().Size(el.Dp(12)).Child(
-			el.Div().Absolute().Left(3).Top(0).W(el.Dp(9)).H(el.Dp(1)).Bg(ink),
-			el.Div().Absolute().Left(11).Top(0).W(el.Dp(1)).H(el.Dp(9)).Bg(ink),
-			el.Div().Absolute().Left(0).Top(3).Size(el.Dp(9)).Border(1, ink))
-	default:
-		return lucide(cx, "x", 12, ink)
-	}
+	return el.Widget(core.Func(func(gtx core.C) core.D {
+		size := gtx.Dp(unit.Dp(12))
+		line := func(x, y, w, h float32) {
+			paint.FillShape(gtx.Ops, ink, clip.Rect{Min: image.Pt(gtx.Dp(unit.Dp(x)), gtx.Dp(unit.Dp(y))), Max: image.Pt(gtx.Dp(unit.Dp(x+w)), gtx.Dp(unit.Dp(y+h)))}.Op())
+		}
+		box := func(x, y float32) { line(x, y, 10, 1); line(x, y+9, 10, 1); line(x, y, 1, 10); line(x+9, y, 1, 10) }
+		switch name {
+		case "minus":
+			line(1, 6, 10, 1)
+		case "square":
+			box(1, 1)
+		case "copy":
+			line(3, 0, 9, 1)
+			line(11, 0, 1, 9)
+			box(0, 2)
+		default:
+			var path clip.Path
+			path.Begin(gtx.Ops)
+			scale := gtx.Metric.PxPerDp
+			path.MoveTo(f32.Pt(scale, scale))
+			path.LineTo(f32.Pt(11*scale, 11*scale))
+			path.MoveTo(f32.Pt(11*scale, scale))
+			path.LineTo(f32.Pt(scale, 11*scale))
+			paint.FillShape(gtx.Ops, ink, clip.Stroke{Path: path.End(), Width: scale}.Op())
+		}
+		return core.D{Size: image.Pt(size, size)}
+	}))
+}
+
+// Keep the native caption action scoped around its drawn hit area, matching
+// keel-rex. Win32 uses this action to handle caption dragging and double-clicks.
+func windowsDragArea(d *el.DivEl) *el.DivEl {
+	return d.Decorate(func(gtx core.C, draw func()) {
+		defer clip.Rect{Max: gtx.Constraints.Max}.Push(gtx.Ops).Pop()
+		system.ActionInputOp(system.ActionMove).Add(gtx.Ops)
+		draw()
+	})
 }
