@@ -257,14 +257,16 @@ func (a *app) content(cx *el.Context) el.Element {
 	if a.loading && len(a.entries) == 0 {
 		column.Child(el.Div().Px(32).Py(8).Child(el.Text("正在读取对话…").TextColor(theme.Muted).TextSize(12)))
 	}
-	if a.detail != nil && a.detail.RuntimeEventsTotal > len(a.detail.RuntimeEvents) {
-		column.Child(button("加载更早的记录", a.loadFullHistory, kit.ButtonGhost).Render(cx))
-	}
+
 	column.Child(a.conversationScroll(cx), el.Div().Center().Px(24).Pt(8).Pb(14).Child(el.Div().WFull().MaxW(el.Dp(920)).Gap(10).Child(a.errorBanner(cx), a.composer(cx), a.workspaceCaption(cx))))
 	return column
 }
 
 func (a *app) composer(cx *el.Context) el.Element {
+	if a.promptDocument.Content().Text() != a.prompt {
+		_ = a.promptDocument.SetText(a.prompt)
+	}
+	a.composerSkills(cx)
 	hint := "随心输入"
 	if a.detail != nil {
 		hint = "继续发送消息…"
@@ -274,15 +276,21 @@ func (a *app) composer(cx *el.Context) el.Element {
 			hint = "补充指令并恢复运行…"
 		}
 	}
-	input := el.TextArea().PasteReader(readClipboard).OnPaste(a.pasteTaskAttachments).OnPasteError(a.fail).ID("prompt").Name("任务指令").Bind(&a.prompt).Placeholder(hint).AutoGrow(4, 10).Scrollbars(el.ScrollbarAlways).Border(0, color.NRGBA{}).Bg(color.NRGBA{}).Px(2).Py(2).TextSize(14).Weight(font.Normal).LineHeight(1.6).WFull()
+	input := el.TextArea().PasteReader(readClipboard).OnPaste(a.pasteTaskAttachments).OnPasteError(a.fail).ID("prompt").Name("任务指令").Document(&a.promptDocument).OnChange(func(text string) { a.prompt = text }).TokenRenderer(renderComposerSkillToken).Placeholder(hint).AutoGrow(4, 10).Scrollbars(el.ScrollbarAlways).Border(0, color.NRGBA{}).Bg(color.NRGBA{}).Px(2).Py(2).TextSize(14).Weight(font.Normal).LineHeight(1.6).WFull()
 	// As in the Wails client: Enter sends, Shift+Enter breaks the line, and
 	// an input method composing text keeps Enter to confirm its candidate.
 	input.CaptureKeys(string(key.NameReturn), string(key.NameEnter)).OnKey(func(e el.KeyEvent) bool {
+		if a.composerSkillKey(cx, e) {
+			return true
+		}
 		if e.State == el.KeyPress {
 			a.send()
 		}
 		return true
 	})
+	if a.skillPicker.open {
+		input.CaptureKeys(string(key.NameReturn), string(key.NameEnter), string(key.NameTab), string(key.NameEscape), string(key.NameUpArrow), string(key.NameDownArrow))
+	}
 	if a.detail != nil && a.detail.Run.Status != domainworkflows.RunRunning && a.detail.Run.Status != domainworkflows.RunPaused && a.detail.Run.Status != domainworkflows.RunCompleted {
 		input.ReadOnly(true).Placeholder("此执行已结束")
 	}
@@ -493,6 +501,9 @@ func mixColor(foreground, background color.NRGBA, amount float32) color.NRGBA {
 // scrolled away from the newest message.
 func (a *app) conversationScroll(cx *el.Context) el.Element {
 	area := el.Div().Grow().H(el.Dp(0)).Items(el.Stretch).Child(a.scroller.Render(cx))
+	if a.historyLoading[a.runID] {
+		area.Child(el.Div().Absolute().Top(8).Left(0).Right(0).Row().Justify(el.Center).Child(el.Text("正在加载更早的记录…").TextSize(12).TextColor(theme.Muted).Bg(theme.Surface).Rounded(8).Px(12).Py(6)))
+	}
 	if a.detail == nil || !a.scroller.IsScrolledUp(cx) {
 		return area
 	}

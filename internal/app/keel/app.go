@@ -24,6 +24,9 @@ import (
 )
 
 type app struct {
+	promptTokenNext                                                                         uint64
+	promptDocument                                                                          el.InputDocument
+	skillPicker                                                                             composerSkillState
 	ui                                                                                      uiState
 	updates                                                                                 appUpdates
 	library                                                                                 libraryState
@@ -58,6 +61,7 @@ type app struct {
 	conversation                                                                            conversationState
 	profile                                                                                 runtimeProfileState
 	scroller                                                                                *kit.MessageScrollerView
+	historyLoading                                                                          map[string]bool
 	prompt, query, model, reasoningEffort, serviceTier, projectPath, projectName, errorText string
 	busy, loading                                                                           bool
 	selection, refreshVersion                                                               uint64
@@ -102,7 +106,7 @@ func newApp(b *backend) *app {
 	a.workflow.SetValue("single_agent")
 	a.workflowEditor = kit.CodeEditor("").Language("json").Name("工作流定义").Fill()
 	// The Wails client's round arrow replaces the built-in latest pill.
-	a.scroller = kit.MessageScroller(nil, 140, a.message).LatestButton(false)
+	a.scroller = kit.MessageScroller(nil, 140, a.message).LatestButton(false).OnReachTop(a.loadFullHistory)
 	a.projectDialog = kit.Dialog("添加项目").Width(440).CloseButton(true).OnClose(func() { a.project.Password = "" }).BeforeCancel(func() bool { return !a.project.Saving && !a.project.Picking }).Body(el.ViewFunc(a.projectForm)).Footer(
 		button("取消", func() {
 			if !a.project.Saving {
@@ -697,9 +701,17 @@ func (a *app) stop() {
 
 func (a *app) loadFullHistory() {
 	id, version := a.runID, a.selection
+	if id == "" || a.loading || a.detail == nil || a.detail.RuntimeEventsTotal <= len(a.detail.RuntimeEvents) || a.historyLoading[id] {
+		return
+	}
+	if a.historyLoading == nil {
+		a.historyLoading = map[string]bool{}
+	}
+	a.historyLoading[id] = true
 	go func() {
 		events, err := a.backend.service.GetRunTranscript(a.ctx, id)
 		core.Update(func() {
+			delete(a.historyLoading, id)
 			if a.closed || version != a.selection || a.runID != id {
 				return
 			}

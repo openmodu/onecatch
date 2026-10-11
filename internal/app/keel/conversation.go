@@ -438,9 +438,10 @@ func (a *app) messageActions(cx *el.Context, e *entry, user bool) el.Element {
 	}
 	copied := copyButton.Copied()
 	visible := cx.Hovered(id) || cx.Hovered(id+"/actions") || cx.FocusWithin(id+"/actions") || copied
-	actions := el.Div().ID(id + "/actions").Hover(func(*el.Style) {}).Absolute().Bottom(-24).H(el.Dp(24)).Row().Items(el.Center).Gap(3)
+	// The metadata row must not inherit a short message bubble's narrow width.
+	actions := el.Div().ID(id + "/actions").Hover(func(*el.Style) {}).Absolute().Bottom(-24).W(el.Dp(132)).H(el.Dp(24)).Row().Items(el.Center).Gap(3)
 	if user {
-		actions.Right(4)
+		actions.Right(0).Justify(el.End)
 	} else {
 		actions.Left(2)
 	}
@@ -453,8 +454,13 @@ func (a *app) messageActions(cx *el.Context, e *entry, user bool) el.Element {
 	}
 	control := copyButton.Render(cx)
 	if box, ok := control.(*el.DivEl); ok {
-		box.Name(label).Size(el.Dp(24)).MinH(el.Dp(24)).P(0).Center().FocusStyle(neutralFocus)
+		box.Name(label).Size(el.Dp(24)).MinH(el.Dp(24)).NoShrink().P(0).Center().FocusStyle(neutralFocus)
 	}
-	actions.Child(el.Text(e.at.Local().Format("01/02 15:04")).TextSize(12).TextColor(theme.Muted).Px(3), control)
+	timestamp := el.Text(e.at.Local().Format("01/02 15:04")).MaxLines(1).NoShrink().TextSize(12).TextColor(theme.Muted)
+	if user {
+		actions.Child(timestamp, control)
+	} else {
+		actions.Child(timestamp.Px(3), control)
+	}
 	return actions
 }
