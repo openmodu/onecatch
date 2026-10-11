@@ -296,3 +296,19 @@ func TestValidateProviderAndServiceTierPerHarness(t *testing.T) {
 		t.Fatal("pi does not support a service tier and must reject one")
 	}
 }
+
+func TestFullAccessDefaultDoesNotChangeSecurityGates(t *testing.T) {
+	settings := Defaults()
+	settings.Execution.DefaultSandbox = "full"
+	got, err := Normalize(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Execution.DefaultSandbox != "full" || got.Security.AllowFullSandbox || !got.Security.ConfirmFullSandboxEveryRun {
+		t.Fatalf("unexpected settings: %+v", got)
+	}
+	settings.Execution.DefaultSandbox = "invalid"
+	if err := Validate(settings); err == nil {
+		t.Fatal("invalid sandbox accepted")
+	}
+}

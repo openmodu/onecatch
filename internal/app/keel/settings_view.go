@@ -2,24 +2,24 @@ package keeldesktop
 
 import (
 	"fmt"
-	"runtime"
+	"gioui.org/io/key"
 	"strconv"
 	"strings"
 
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
+	"github.com/dyike/keel/ui/locale"
 	"github.com/dyike/keel/ui/theme"
-	"github.com/openmodu/onecatch/internal/buildinfo"
 	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
 )
 
 func settingsTitle(id string) string {
 	for _, section := range settingsSections {
 		if section.ID == id {
-			return section.Label
+			return uiText(section.Label)
 		}
 	}
-	return "外观"
+	return uiText("外观")
 }
 
 func (p *settingsPage) activateSettingsSection(id string) {
@@ -42,7 +42,7 @@ func (p *settingsPage) syncSettingsSection() {
 		p.view.SetValue(settingsTitle(p.section))
 	} else {
 		for _, section := range settingsSections {
-			if section.Label == p.view.Value() {
+			if uiText(section.Label) == p.view.Value() {
 				p.activateSettingsSection(section.ID)
 				break
 			}
@@ -52,7 +52,7 @@ func (p *settingsPage) syncSettingsSection() {
 }
 
 func (p *settingsPage) ensureSettingsView() {
-	model := fmt.Sprintf("%s/%d", p.runtime.Value(), len(p.runtime.Entries()))
+	model := fmt.Sprintf("%s/%d/%d", p.runtime.Value(), len(p.runtime.Entries()), locale.Revision())
 	if p.view != nil && p.viewModel == model {
 		return
 	}
@@ -60,18 +60,25 @@ func (p *settingsPage) ensureSettingsView() {
 	if p.view != nil {
 		query = p.view.Query()
 	}
-	next := kit.Settings().Size(kit.SettingsSizeSmall).GroupVariant(kit.GroupBoxFill)
-	icons := []kit.IconName{kit.IconSettings, kit.IconUser, kit.IconInbox, kit.IconExternalLink,
-		kit.IconFile, kit.IconArchive, kit.IconLock, kit.IconFolder, kit.IconHome}
+	next := kit.Settings().Size(kit.SettingsSizeMedium).GroupVariant(kit.GroupBoxNormal).SearchInSidebar(true).PageHeading(false)
+	icons := []kit.IconName{kit.IconSettings, kit.IconUser, kit.IconInbox, kit.IconLock, kit.IconFolder, kit.IconPhone, kit.IconComputer, kit.IconArchive, kit.IconArchive}
 	for i, section := range settingsSections {
 		groups := p.settingsGroups(section.ID)
 		for gi := range groups {
+			groups[gi].Title = uiText(groups[gi].Title)
 			for ii := range groups[gi].Items {
 				item := &groups[gi].Items[ii]
-				item.Keywords = append(item.Keywords, section.Label, section.Description)
+				item.Keywords = append(item.Keywords, section.Label, section.Description, item.Label, item.Description)
+				// Keep help text searchable without displaying a second line on every setting.
+				item.Keywords = append(item.Keywords, uiText(item.Description))
+				if item.Label != "数据目录" {
+					item.Description = ""
+					item.DescriptionContent = nil
+				}
+				item.Label, item.Description = uiText(item.Label), uiText(item.Description)
 			}
 		}
-		next.Page(kit.SettingPage{Title: section.Label, Icon: icons[i], Groups: groups})
+		next.Page(kit.SettingPage{Category: uiText(section.Category), Title: uiText(section.Label), Icon: icons[i], Groups: groups})
 	}
 	next.SetValue(settingsTitle(p.section))
 	next.SetQuery(query)
@@ -84,35 +91,60 @@ func (p *settingsPage) ensureSettingsView() {
 }
 
 func (p *settingsPage) settingsFooter(cx *el.Context, id string) el.Element {
-	info := el.Div().Grow().W(el.Dp(0)).Gap(4)
-	if p.status != "" {
-		info.Child(el.Text(p.status).TextSize(12).TextColor(theme.Muted))
+	info := el.Div().Gap(4)
+
+	root := el.Div().WFull().Row().Items(el.Center).Gap(12).Child(info)
+	width, _ := cx.ViewportSize()
+	if width < 900 {
+		root.Col().Items(el.Stretch)
+		info.WFull()
+	} else {
+		info.Grow().W(el.Dp(0))
 	}
-	if id != "skills" && id != "experimental" && id != "mobile" {
-		info.Child(el.Text(fmt.Sprintf("OneCatch %s · %s", buildinfo.Version, runtime.GOARCH)).TextSize(11).TextColor(theme.Muted))
-	}
-	root := el.Div().Row().Items(el.Center).Gap(12).Child(info)
 	if id != "" && id != "skills" && id != "experimental" && id != "mobile" {
 		save := button("保存", p.saveSection, kit.ButtonPrimary).Loading(p.saving)
 		save.SetDisabled(!p.initialized)
 		reload := button("重新加载", p.reload, kit.ButtonGhost)
 		reload.SetDisabled(p.saving)
-		root.Child(el.Div().Row().Items(el.Center).NoShrink().Gap(8).Child(reload.Render(cx), save.Render(cx)))
+		root.Child(el.Div().WrapFit().Items(el.Center).Justify(el.End).NoShrink().Gap(8).Child(button("恢复默认值", p.resetSettings, kit.ButtonGhost).Render(cx), button("放弃修改", p.discardSettings, kit.ButtonGhost).Render(cx), reload.Render(cx), save.Render(cx)))
 	}
 	return root
 }
 
 func (p *settingsPage) settingsText(id, label, hint string, initial func() string) kit.SettingItem {
 	return kit.SettingItem{Label: label, Control: el.ViewFunc(func(*el.Context) el.Element {
-		return p.text(id, hint, initial()).(*el.InputEl).Name(label)
+		return p.text(id, hint, initial()).(*el.InputEl).Name(uiText(label))
 	})}
 }
 func (p *settingsPage) settingsNumber(id, label string, initial func() int) kit.SettingItem {
-	return p.settingsText(id, label, "请输入整数", func() string { return strconv.Itoa(initial()) })
+	return kit.SettingItem{Label: label, Control: el.ViewFunc(func(cx *el.Context) el.Element {
+		if p.numbers == nil {
+			p.numbers = map[string]*kit.NumberInputView{}
+		}
+		p.text(id, "", strconv.Itoa(initial()))
+		control := p.numbers[id]
+		if control == nil {
+			control = kit.NumberInput("").Size(32).Decimals(0).Range(0, 2147483647).VerticalButtons(true).OnChange(func(value float64) { *p.fields[id] = strconv.FormatInt(int64(value), 10) })
+			p.numbers[id] = control
+		}
+		value, err := strconv.ParseFloat(*p.fields[id], 64)
+		if err == nil && control.Value() != value {
+			control.SetValue(value)
+		}
+		return el.Div().W(el.Dp(80)).MaxW(el.Full).Bg(theme.Subtle).Rounded(8).Items(el.Stretch).Child(control.Render(cx))
+	})}
 }
 func (p *settingsPage) settingsChoice(id, label string, initial func() string, values []string) kit.SettingItem {
 	return kit.SettingItem{Label: label, Control: el.ViewFunc(func(cx *el.Context) el.Element {
-		return p.choice(cx, id, initial(), values)
+		control := p.choice(cx, id, initial(), values)
+		if id == "log-level" {
+			p.selects[id].Size(32)
+			return control.(*el.DivEl).W(el.Dp(96)).MaxW(el.Full)
+		}
+		if id == "default-sandbox" {
+			return control.(*el.DivEl).W(el.Dp(148)).MaxW(el.Full)
+		}
+		return control
 	})}
 }
 func (p *settingsPage) settingsToggle(id, label string, initial func() bool) kit.SettingItem {
@@ -129,20 +161,15 @@ func (p *settingsPage) settingsToggle(id, label string, initial func() bool) kit
 
 func (p *settingsPage) settingsGroups(id string) []kit.SettingGroup {
 	switch id {
+	case "workflows":
+		return []kit.SettingGroup{{Items: []kit.SettingItem{{Label: "工作流管理", Content: el.ViewFunc(func(cx *el.Context) el.Element {
+			_, h := cx.ViewportSize()
+			return el.Div().H(el.Dp(min(580, max(240, h-190)))).Items(el.Stretch).Child(p.app.ui.WorkflowConfirm.Render(cx), p.app.workflowPageLayout(cx, false))
+		})}}}}
 	case "":
 		return p.appearanceGroups()
 	case "harness":
 		return p.harnessGroups()
-	case "terminal":
-		return []kit.SettingGroup{{Title: "Shell", Items: []kit.SettingItem{
-			p.settingsText("shell", "Shell", "留空使用系统默认 Shell", func() string { return p.draft.Terminal.Shell }),
-			{Label: "启动参数", Description: "每行一个参数", Control: el.ViewFunc(func(*el.Context) el.Element {
-				p.text("shell-args", "每行一个参数", strings.Join(p.draft.Terminal.Arguments, "\n"))
-				return el.TextArea().ID("settings/shell-args").Name("启动参数").Bind(p.fields["shell-args"]).Placeholder("每行一个参数").AutoGrow(2, 5).Bg(theme.Subtle).Rounded(8).P(12).TextSize(13)
-			})},
-		}}, {Title: "外观", Items: []kit.SettingItem{
-			p.settingsChoice("terminal-theme", "终端主题", func() string { return p.draft.Terminal.Theme }, []string{"system", "paper", "midnight", "contrast"}),
-		}}}
 	case "execution":
 		return []kit.SettingGroup{{Title: "新流程默认值", Items: []kit.SettingItem{
 			p.settingsNumber("max-transitions", "最大转移次数", func() int { return p.draft.Execution.MaxTransitions }),
@@ -161,15 +188,7 @@ func (p *settingsPage) settingsGroups(id string) []kit.SettingGroup {
 			p.settingsToggle("diagnostics-events", "诊断包包含原始事件", func() bool { return p.draft.Security.DiagnosticsIncludeRawEvents }),
 		}}}
 	case "storage":
-		return []kit.SettingGroup{{Title: "数据", Items: []kit.SettingItem{
-			{Label: "数据目录", Description: p.app.backend.service.DataRoot()},
-			p.settingsNumber("retention-days", "完成任务保留天数（0 为永久保留）", func() int { return p.draft.Storage.CompletedRunRetentionDays }),
-		}}, {Title: "日志", Items: []kit.SettingItem{
-			p.settingsChoice("log-level", "日志级别", func() string { return p.draft.Storage.LogLevel }, []string{"debug", "info", "warn", "error"}),
-			p.settingsNumber("log-size", "单文件最大大小（MB）", func() int { return p.draft.Storage.LogMaxSizeMB }),
-			p.settingsNumber("log-backups", "日志备份数", func() int { return p.draft.Storage.LogMaxBackups }),
-			p.settingsNumber("log-age", "日志保留天数", func() int { return p.draft.Storage.LogMaxAgeDays }),
-		}}}
+		return p.storageActions()
 	case "skills":
 		return []kit.SettingGroup{{Items: []kit.SettingItem{{Label: "Skills 同步目标", Keywords: []string{"Skill", "同步", "目录", "Agent"}, Content: el.ViewFunc(p.skillTargetSettings)}}}}
 	case "mobile":
@@ -180,7 +199,14 @@ func (p *settingsPage) settingsGroups(id string) []kit.SettingGroup {
 }
 
 func (p *settingsPage) appearanceGroups() []kit.SettingGroup {
-	var rows []kit.SettingItem
+	rows := []kit.SettingItem{p.languageSetting()}
+	rows = append(rows, kit.SettingItem{Label: "聊天字体大小", Description: "只调整对话正文的文字大小，立即生效。", Control: el.ViewFunc(func(cx *el.Context) el.Element {
+		row := el.Div().Row().Justify(el.End).WFull().Gap(4)
+		for i, value := range []string{"small", "standard", "large", "extra-large"} {
+			row.Child(button([]string{"小", "标准", "大", "特大"}[i], func() { p.app.setChatFontSize(value) }, kit.ButtonGhost).Compact(true).Size(28).Selected(normalizeUIPreferences(p.app.ui.Preferences).ChatFontSize == value).Render(cx))
+		}
+		return row
+	})})
 	for _, group := range []struct {
 		label, description string
 		values, labels     []string
@@ -188,12 +214,12 @@ func (p *settingsPage) appearanceGroups() []kit.SettingGroup {
 		{"显示模式", "跟随系统外观，或固定使用浅色、深色模式。", []string{"system", "light", "dark"}, []string{"跟随系统", "浅色", "深色"}},
 	} {
 		rows = append(rows, kit.SettingItem{Label: group.label, Description: group.description, Keywords: group.labels, Control: el.ViewFunc(func(cx *el.Context) el.Element {
-			options := el.Div().Row().Wrap().Gap(4)
+			options := el.Div().Row().Justify(el.End).WFull().Gap(4)
 			selected := p.app.ui.Preferences.Theme
 			for i, value := range group.values {
 				options.Child(button(group.labels[i], func() {
 					p.app.setAppearance(value, p.app.ui.Preferences.Accent)
-				}, kit.ButtonGhost).Selected(selected == value).Render(cx))
+				}, kit.ButtonGhost).Compact(true).Size(28).Selected(selected == value).Render(cx))
 			}
 			return options
 		})})
@@ -209,26 +235,20 @@ func (p *settingsPage) appearanceGroups() []kit.SettingGroup {
 		control.SetValue(!p.app.ui.Preferences.HideTableDividers)
 		return control.Render(cx)
 	})})
-	return []kit.SettingGroup{{Title: "界面", Items: rows}}
+	rows = append(rows, p.terminalThemeSetting())
+	return []kit.SettingGroup{{Title: "外观", Items: rows}}
 }
 
-func (p *settingsPage) harnessGroups() []kit.SettingGroup {
-	id := p.runtime.Value()
+func (p *settingsPage) harnessRows(id string) []kit.SettingItem {
 	h, _ := domainharnesses.Find(id)
-	p.runtime.OnChange(p.selectRuntime)
 	rows := []kit.SettingItem{
-		{Label: "Agent", Control: p.runtime},
-		{Label: "启用此 Agent", Control: el.ViewFunc(func(cx *el.Context) el.Element { p.enabled.hideLabel = true; return p.enabled.Render(cx) })},
-		{Label: "可执行文件", Control: el.ViewFunc(func(*el.Context) el.Element {
-			return field("runtime-binary", "留空使用 PATH 中的默认命令", &p.binary).Name("可执行文件")
-		})},
-		{Label: "默认模型", Control: el.ViewFunc(func(*el.Context) el.Element {
-			return field("runtime-model", "留空使用 Agent 的默认模型", &p.model).Name("默认模型")
-		})},
+		p.settingsToggle("runtime-enabled/"+id, uiText("启用")+" "+h.Name, func() bool { return p.draft.Runtimes[id].Enabled }),
+		p.settingsText("runtime-binary/"+id, "可执行文件", "留空使用 PATH 中的默认命令", func() string { return p.draft.Runtimes[id].Binary }),
+		{Label: "默认模型", Control: el.ViewFunc(func(cx *el.Context) el.Element { return p.harnessModel(cx, id) })},
 		p.settingsText("runtime-env/"+id, "环境变量白名单", "仅填写变量名称，用逗号分隔", func() string { return strings.Join(p.draft.Runtimes[id].EnvironmentAllowlist, ", ") }),
 	}
 	if len(h.Efforts) > 0 {
-		rows = append(rows, p.settingsChoice("runtime-effort/"+id, "推理强度", func() string { return p.draft.Runtimes[id].ReasoningEffort }, append([]string{""}, h.Efforts...)))
+		rows = append(rows, p.settingsChoice("runtime-effort/"+id, "推理强度", func() string { return p.draft.Runtimes[id].ReasoningEffort }, p.harnessEfforts(id, h.Efforts)))
 	}
 	if len(h.Providers) > 0 {
 		rows = append(rows, p.settingsChoice("runtime-provider/"+id, "Provider", func() string { return p.draft.Runtimes[id].Provider }, h.Providers))
@@ -239,7 +259,7 @@ func (p *settingsPage) harnessGroups() []kit.SettingGroup {
 	if len(h.Integrations) > 1 {
 		rows = append(rows,
 			p.settingsChoice("runtime-integration/"+id, "集成方式", func() string { return p.draft.Runtimes[id].Integration }, h.Integrations),
-			p.settingsChoice("runtime-source/"+id, "配置来源", func() string { return p.draft.Runtimes[id].ConfigSource }, []string{"shared", "isolated"}),
+			p.settingsChoice("runtime-source/"+id, "配置来源", func() string { return p.draft.Runtimes[id].ConfigSource }, []string{"shared", "onecatch"}),
 			p.settingsText("runtime-config/"+id, "配置路径", "留空使用默认路径", func() string { return p.draft.Runtimes[id].ConfigPath }))
 	}
 	if h.SupportsRemoteFS {
@@ -248,17 +268,76 @@ func (p *settingsPage) harnessGroups() []kit.SettingGroup {
 	if id == "codex" {
 		rows = append(rows, p.settingsToggle("runtime-context/"+id, "使用最大上下文窗口", func() bool { return p.draft.Runtimes[id].MaxContextWindow }))
 	}
-	return []kit.SettingGroup{{Title: "Agent 配置", Items: rows, Footer: el.ViewFunc(func(*el.Context) el.Element {
-		status := ""
-		for _, agent := range p.app.runtimes {
-			if agent.ID == p.runtime.Value() {
-				status = "未检测到命令，请配置路径后重新检测。"
-				if agent.Available {
-					status = "已连接 · " + agent.Version
-				}
-				break
-			}
+	return rows
+}
+
+func (p *settingsPage) harnessGroups() []kit.SettingGroup {
+	return []kit.SettingGroup{{Title: "Agent 配置", Items: []kit.SettingItem{{Label: "Harness", Content: el.ViewFunc(p.harnessCards)}}}}
+}
+
+func (p *settingsPage) harnessCards(cx *el.Context) el.Element {
+	if p.harnessExpanded == nil {
+		p.harnessExpanded = map[string]bool{}
+	}
+	root := el.Div().Items(el.Stretch)
+	width, _ := cx.ViewportSize()
+	columns := 2
+	if min(float32(1120), width-64) < 800 {
+		columns = 1
+	}
+	for index, runtime := range p.runtime.Entries() {
+		id, name := runtime.Value, runtime.Label
+		expanded := p.harnessExpanded[id]
+		arrow := kit.IconChevronRight
+		if expanded {
+			arrow = kit.IconChevronDown
 		}
-		return el.Text(status).TextSize(12).TextColor(theme.Muted)
-	})}}
+		toggle := func() { p.harnessExpanded[id] = !p.harnessExpanded[id] }
+		header := el.Div().OnKey(func(e el.KeyEvent) bool {
+			if e.Name != string(key.NameReturn) && e.Name != string(key.NameSpace) {
+				return false
+			}
+			if e.State == el.KeyPress {
+				toggle()
+			}
+			return true
+		}).Row().Items(el.Center).Gap(10).Py(16).Focusable(true).Role("button").Name(name).Selected(expanded).CursorPointer().OnClick(toggle).Child(el.Text(name).Medium().Grow(), kit.Icon(arrow).Size(16).Render(cx))
+		if index > 0 {
+			root.Child(el.Div().H(el.Dp(1)).NoShrink().Bg(seamColor))
+		}
+		card := el.Div().Items(el.Stretch).Child(header)
+		if expanded {
+			grid := el.Div().Grid(columns).Gap(16).Items(el.Stretch)
+			for _, row := range p.harnessRows(id) {
+				cell := el.Div().Items(el.Stretch).Gap(6).Child(el.Text(uiText(row.Label)).TextSize(12).TextColor(theme.Muted), row.Control.Render(cx))
+				grid.Child(cell)
+			}
+			card.Child(el.Div().Pb(16).Gap(16).Items(el.Stretch).Child(grid, p.harnessStatus(cx, id)))
+		}
+		root.Child(card)
+	}
+	return root
+}
+
+func (p *settingsPage) terminalThemeSetting() kit.SettingItem {
+	return kit.SettingItem{Label: "终端主题", Control: el.ViewFunc(func(cx *el.Context) el.Element {
+		control := p.choice(cx, "terminal-theme", p.app.settings.Terminal.Theme, []string{"system", "paper", "midnight", "contrast"})
+		choice := p.selects["terminal-theme"]
+		choice.SetValue(p.app.settings.Terminal.Theme)
+		choice.SetDisabled(p.actions.busy != "" || p.saving)
+		choice.OnChange(func(value string) {
+			settings := p.app.settings.Terminal
+			settings.Theme = value
+			revision, ctx := p.app.settings.Revision, p.workerContext()
+			p.settingsAction("terminal-theme", func() (func(), error) {
+				result, err := p.app.backend.service.UpdateTerminalSettings(ctx, settings, revision)
+				return func() {
+					p.app.settings = result
+					p.draft.Terminal, p.draft.Revision = result.Terminal, result.Revision
+				}, err
+			})
+		})
+		return control.(*el.DivEl).W(el.Dp(128)).MaxW(el.Full)
+	})}
+
 }

@@ -319,8 +319,8 @@ func Validate(input Settings) error {
 	if e.InterruptGraceSeconds < 1 || e.InterruptGraceSeconds > 60 {
 		return errors.New("interruptGraceSeconds must be between 1 and 60")
 	}
-	if e.DefaultSandbox != "read-only" && e.DefaultSandbox != "workspace-write" {
-		return errors.New("defaultSandbox must be read-only or workspace-write")
+	if e.DefaultSandbox != "read-only" && e.DefaultSandbox != "workspace-write" && e.DefaultSandbox != "full" {
+		return errors.New("defaultSandbox must be read-only, workspace-write or full")
 	}
 	if input.Storage.CompletedRunRetentionDays != 0 && input.Storage.CompletedRunRetentionDays != 30 && input.Storage.CompletedRunRetentionDays != 90 && input.Storage.CompletedRunRetentionDays != 180 {
 		return errors.New("completedRunRetentionDays must be 0, 30, 90, or 180")

@@ -25,6 +25,7 @@ import (
 
 type app struct {
 	ui                                                                                      uiState
+	updates                                                                                 appUpdates
 	library                                                                                 libraryState
 	skills                                                                                  skillWorkspaceState
 	workbench                                                                               workbenchState
@@ -36,7 +37,8 @@ type app struct {
 	cancel                                                                                  context.CancelFunc
 	closed                                                                                  bool
 	unsubscribe                                                                             func()
-	window, settingsWindow                                                                  *window.Window
+	window                                                                                  *window.Window
+	settingsPanel                                                                           *settingsPage
 	logo                                                                                    *kit.ImageView
 	dark                                                                                    bool
 	workspaces                                                                              []domainworkspaces.Workspace
@@ -158,6 +160,9 @@ func newApp(b *backend) *app {
 
 func (a *app) close() {
 	a.closed = true
+	if a.updates.service != nil {
+		go a.updates.service.Close()
+	}
 	a.backend.service.SetSkillDebugEmitter(nil)
 	a.closeTerminals()
 	a.clearAttachments()
@@ -166,9 +171,7 @@ func (a *app) close() {
 	if a.workbench.DetachedWindow != nil {
 		a.workbench.DetachedWindow.Close()
 	}
-	if a.settingsWindow != nil {
-		a.settingsWindow.Close()
-	}
+	a.closeSettings()
 	if a.ui.WorkflowWindow != nil {
 		a.ui.WorkflowWindow.Close()
 	}

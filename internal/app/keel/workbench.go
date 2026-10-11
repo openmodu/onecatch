@@ -2,7 +2,6 @@ package keeldesktop
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"image/color"
 	"path"
@@ -25,6 +24,9 @@ import (
 // All view state belongs to the serialized UI queue. Files are cached by their
 // execution context so a tab switch or task navigation cannot discard a draft.
 type workbenchState struct {
+	Events       eventNavigator
+	StatusCopies map[string]*kit.CopyButtonView
+
 	Visible, Maximized                bool
 	Resizing                          bool
 	DetachedWindow                    *window.Window
@@ -49,6 +51,22 @@ type workbenchState struct {
 	WorktreeVersion                   uint64
 }
 type fileWorkspace struct {
+	TreeRevision, RowsRevision uint64
+	Rows                       []fileTreeRow
+
+	NoWrap bool
+
+	HideTree, SearchFocus bool
+	Query                 string
+	SearchVersion         uint64
+	SearchCancel          context.CancelFunc
+	SearchLoading         bool
+	SearchResult          desktopservice.WorkspaceFileSearch
+	SearchIndex           int
+	Tabs                  []string
+	Menu                  *kit.MenuView
+	OpenLine              int
+
 	Directory, Active, Error string
 	Entries                  []desktopservice.WorkspaceFileEntry
 	Buffers                  map[string]*fileBuffer
@@ -118,6 +136,12 @@ func (a *app) toggleInspector(tab string) {
 		a.workbench.Tab = tab
 	}
 	if a.workbench.Visible {
+		if a.workbench.Tab == "files" {
+			s := a.fileState(a.workspaceContext())
+			if len(s.Buffers) == 0 {
+				s.SearchFocus = true
+			}
+		}
 		a.loadInspector()
 	}
 }
@@ -163,7 +187,7 @@ func (a *app) inspectorSeam(cx *el.Context) el.Element {
 	})
 }
 
-var inspectorTabs = []struct{ ID, Label, Icon string }{{"status", "状态", "activity"}, {"files", "文件", "file-code-2"}, {"git", "Git", "git-branch"}, {"review", "审阅", "file-diff"}, {"events", "事件", "list-tree"}}
+var inspectorTabs = []struct{ ID, Label, Icon string }{{"status", "Session 状态", "activity"}, {"files", "文件", "file-code-2"}, {"git", "Git", "git-branch"}, {"review", "审阅", "file-diff"}, {"events", "事件时间轴", "clock"}}
 
 func (a *app) inspector(cx *el.Context) el.Element {
 	tabs := el.Div().Row().Items(el.Center).Gap(2).Grow().W(el.Dp(0)).P(3).Rounded(8).Bg(mixColor(theme.Subtle, theme.Bg, .72))
@@ -422,6 +446,7 @@ func (a *app) loadDirectory(id, directory string) {
 		return
 	}
 	state.DirectoryLoading[directory] = true
+	state.TreeRevision++
 	go func() {
 		ctx, cancel := context.WithTimeout(a.ctx, 10*time.Second)
 		defer cancel()
@@ -431,6 +456,7 @@ func (a *app) loadDirectory(id, directory string) {
 				return
 			}
 			state.DirectoryLoading[directory] = false
+			state.TreeRevision++
 			if err != nil {
 				state.Error = err.Error()
 				return
@@ -445,7 +471,13 @@ func (a *app) loadDirectory(id, directory string) {
 func (a *app) openWorkspaceFile(id, name string) {
 	state := a.fileState(id)
 	if existing := state.Buffers[name]; existing != nil {
+		state.Version++
+		state.Loading = false
 		state.Active = name
+		if state.OpenLine > 0 {
+			existing.Editor.SetCursor(state.OpenLine-1, 0)
+			state.OpenLine = 0
+		}
 		return
 	}
 	state.Version++
@@ -468,7 +500,12 @@ func (a *app) openWorkspaceFile(id, name string) {
 			buffer := newFileBuffer(doc)
 			buffer.Editor.OnChange(func(string) { a.queueAutoSave(id, name, buffer) })
 			state.Buffers[name] = buffer
+			state.Tabs = append(state.Tabs, name)
 			state.Active = name
+			if state.OpenLine > 0 {
+				buffer.Editor.SetCursor(state.OpenLine-1, 0)
+				state.OpenLine = 0
+			}
 		})
 	}()
 }
@@ -540,9 +577,22 @@ func (a *app) closeFile(id, name string) {
 		return
 	}
 	close := func() {
+		paths := fileTabPaths(state)
 		delete(state.Buffers, name)
+		state.Tabs = nil
+		at := 0
+		for i, p := range paths {
+			if p == name {
+				at = i
+			} else {
+				state.Tabs = append(state.Tabs, p)
+			}
+		}
 		if state.Active == name {
 			state.Active = ""
+			if len(state.Tabs) > 0 {
+				state.Active = state.Tabs[min(at, len(state.Tabs)-1)]
+			}
 		}
 	}
 	if b.dirty() {
@@ -550,90 +600,6 @@ func (a *app) closeFile(id, name string) {
 	} else {
 		close()
 	}
-}
-func (a *app) fileInspector(cx *el.Context) el.Element {
-	id := a.workspaceContext()
-	state := a.fileState(id)
-	if id == "" {
-		return inspectorNotice("选择项目后浏览文件。", false)
-	}
-	editor := el.Div().Grow().W(el.Dp(0)).HFull()
-	tabs := el.Div().Row().ScrollX().Items(el.Center).Gap(4).Px(8).H(el.Dp(32))
-	if len(state.Buffers) == 0 {
-		tabs.Child(el.Text("未打开文件").TextSize(11).TextColor(theme.Muted))
-	}
-	for _, name := range sortedBufferPaths(state.Buffers) {
-		p := name
-		buffer := state.Buffers[p]
-		label := pathBase(p)
-		if buffer.dirty() {
-			label += " •"
-		}
-		tabs.Child(button(label, func() { state.Active = p }, kit.ButtonGhost).Selected(state.Active == p).Compact(true).Size(28).Render(cx))
-	}
-	editor.Child(tabs)
-	if b := state.Buffers[state.Active]; b != nil {
-		name := state.Active
-		save := button("保存", func() { a.saveFile(id, name) }, kit.ButtonGhost).Compact(true).Size(28)
-		save.SetDisabled(!b.dirty() || b.Saving)
-		editor.Child(el.Div().Row().Items(el.Center).Px(8).Gap(4).H(el.Dp(32)).Child(el.Text(name).Mono().TextSize(11).MaxLines(1).Grow().W(el.Dp(0)), save.Render(cx), iconAction(cx, "close-file", "关闭文件", "x", func() { a.closeFile(id, name) }, false)))
-		if b.Error != "" {
-			editor.Child(inspectorNotice(b.Error, true), button("重新读取文件", func() { a.reloadFile(id, name) }, kit.ButtonGhost).Compact(true).Render(cx))
-		}
-		editor.Child(b.Editor.Render(cx))
-	} else {
-		editor.Child(inspectorNotice("从右侧文件树选择一个 UTF-8 文本文件开始编辑。", false))
-	}
-	treeWidth := float32(140)
-	if a.workbench.Maximized || a.workbench.DetachedWindow != nil {
-		treeWidth = 200
-	}
-	tree := el.Div().W(el.Dp(treeWidth)).NoShrink().HFull().Child(el.Div().Row().Items(el.Center).Gap(4).Px(8).H(el.Dp(32)).Child(el.Text("工作区文件").TextSize(11).TextColor(theme.Muted).Grow().W(el.Dp(0)).MaxLines(1), iconAction(cx, "file-refresh", "刷新文件列表", "refresh-cw", func() { a.refreshFileTree(id) }, false)))
-	listing := el.Div().ID("file-tree").Role("tree").Name("工作区文件").ScrollY().Grow().H(el.Dp(0)).Px(4)
-	if state.Error != "" {
-		listing.Child(inspectorNotice(state.Error, true))
-	}
-	var directory func(string, int)
-	directory = func(parent string, depth int) {
-		if depth > 32 {
-			return
-		}
-		entries := state.Tree[parent]
-		if parent == "" && entries == nil {
-			entries = state.Entries
-		}
-		for _, item := range entries {
-			entry := item
-			icon := "file-text"
-			if entry.Directory {
-				icon = "folder"
-			}
-			row := el.Div().Row().Items(el.Center).Pl(float32(4 + depth*12)).Pr(4).H(el.Dp(28)).Gap(4).Rounded(5).ID("file-entry/" + entry.Path).Role("treeitem").Name(entry.Name).Focusable(true).CursorPointer().OnClick(func() {
-				if entry.Directory {
-					state.Expanded[entry.Path] = !state.Expanded[entry.Path]
-					if state.Expanded[entry.Path] && state.Tree[entry.Path] == nil {
-						a.loadDirectory(id, entry.Path)
-					}
-				} else {
-					a.openWorkspaceFile(id, entry.Path)
-				}
-			}).Hover(func(s *el.Style) { s.Bg(theme.Highlight) }).FocusStyle(neutralFocus)
-			if state.Active == entry.Path {
-				row.Bg(theme.Highlight)
-			}
-			row.Child(lucide(cx, icon, 13, theme.Muted), el.Text(entry.Name).TextSize(11).MaxLines(1).Grow().W(el.Dp(0)))
-			listing.Child(row)
-			if entry.Directory && state.Expanded[entry.Path] {
-				directory(entry.Path, depth+1)
-			}
-		}
-		if state.DirectoryLoading[parent] {
-			listing.Child(el.Text("读取中…").TextSize(10).TextColor(theme.Muted).Px(8).Py(4))
-		}
-	}
-	directory("", 0)
-	tree.Child(listing)
-	return el.Div().Row().Grow().H(el.Dp(0)).Child(editor, el.Div().W(el.Dp(1)).NoShrink().HFull().Bg(seamColor), tree)
 }
 func (a *app) refreshFileTree(id string) {
 	state := a.fileState(id)
@@ -661,77 +627,61 @@ func (a *app) saveActiveWorkspaceFile() {
 	a.saveFile(id, a.fileState(id).Active)
 }
 func pathBase(name string) string { return path.Base(name) }
-func (a *app) eventInspector(cx *el.Context) el.Element {
-	if a.detail == nil {
-		return inspectorNotice("选择执行后查看事件。", false)
-	}
-	column := el.Div().ScrollY().Grow().H(el.Dp(0)).P(14).Gap(8)
-	for i := len(a.detail.Events) - 1; i >= 0; i-- {
-		e := a.detail.Events[i]
-		card := el.Div().Rounded(6).Bg(theme.Subtle).P(10).Gap(6).Child(el.Div().Row().Gap(8).Items(el.Center).Child(el.Text(fmt.Sprint(e.Seq)).TextSize(11).TextColor(theme.Muted), el.Text(e.Type).TextSize(12).Medium().Grow().W(el.Dp(0)).MaxLines(1), el.Text(eventClock(e.At)).TextSize(11).TextColor(theme.Muted)))
-		if e.StepID != "" {
-			card.Child(el.Text(e.StepID).Mono().TextSize(11).TextColor(theme.Muted))
-		}
-		if len(e.Payload) > 0 && string(e.Payload) != "{}" {
-			var data any
-			source := string(e.Payload)
-			if json.Unmarshal([]byte(e.Payload), &data) == nil {
-				raw, _ := json.MarshalIndent(data, "", "  ")
-				source = string(raw)
-			}
-			card.Child(el.Text(source).Mono().TextSize(11).TextColor(theme.Muted))
-		}
-		column.Child(card)
-	}
-	if len(a.detail.Events) == 0 {
-		column.Child(el.Text("暂无事件。").TextSize(12).TextColor(theme.Muted))
-	}
-	return column
-}
 func (a *app) statusInspector(cx *el.Context) el.Element {
 	if a.detail == nil {
 		return inspectorNotice("任务开始后，这里会显示执行状态、工作流进度和用量。", false)
 	}
 	d := a.detail
 	column := el.Div().ScrollY().Grow().H(el.Dp(0)).P(14).Gap(12)
-	column.Child(el.Div().Row().Items(el.Center).Gap(8).Rounded(8).Bg(theme.Subtle).Px(12).Py(10).Child(el.Text(runStatus(string(d.Run.Status))).TextSize(12).Medium(), el.Text(d.Run.CurrentStepID).TextSize(12).MaxLines(1).Grow().W(el.Dp(0))))
-	var input, output, cached, reasoning int
-	var duration int64
+	column.Child(kit.StatusMarker(runStatus(string(d.Run.Status))).ID("session-run-status").Render(cx))
+	var input, output, cached, created, reasoning int
+	duration := sessionDuration(d, time.Now())
 	for _, step := range d.StepRuns {
-		input += step.InputTokens
+		input += normalizedSessionInput(step.InputTokens, step.CachedInputTokens, step.CacheCreationInputTokens)
+		created += step.CacheCreationInputTokens
 		output += step.OutputTokens
 		cached += step.CachedInputTokens
 		reasoning += step.ReasoningOutputTokens
-		duration += step.DurationMS
+
 	}
 	metric := func(label, value string) el.Element {
-		return el.Div().Row().Items(el.Center).Gap(8).Child(el.Text(label).TextSize(11).TextColor(theme.Muted).Grow(), el.Text(value).TextSize(13).Medium())
+		return el.Div().Row().Items(el.Center).Gap(8).Child(el.Text(label).TextSize(11).TextColor(theme.Muted).Grow(), el.Text(value).TextSize(12).Medium())
 	}
-	column.Child(el.Div().Bg(theme.Subtle).Rounded(8).P(12).Gap(8).Child(metric("输入 Token", fmt.Sprint(input)), metric("输出 Token", fmt.Sprint(output)), metric("缓存读取", fmt.Sprint(cached)), metric("推理输出", fmt.Sprint(reasoning)), metric("用时", fmt.Sprintf("%.1f 秒", float64(duration)/1000)), metric("执行次数", fmt.Sprint(len(d.StepRuns)))))
-	steps := el.Div().Bg(theme.Subtle).Rounded(8).P(12).Gap(8).Child(el.Text("工作流").TextSize(11).TextColor(theme.Muted))
+	column.Child(el.Div().Row().Items(el.Center).Child(el.Text("累计 Token").TextSize(11).TextColor(theme.Muted), el.Div().Grow(), el.Text(sessionNumber(input+output)).TextSize(15).Medium()))
+	inputCard := el.Div().Bg(theme.Subtle).Rounded(10).P(12).Gap(8).Child(el.Text("输入总 Token").TextSize(12).TextColor(theme.Muted), el.Text(sessionNumber(input)).TextSize(26).Medium())
+
+	inputCard.Child(el.Div().Bg(theme.Surface).Rounded(8).P(12).Gap(10).Child(metric("缓存命中率", sessionCacheRate(input, cached)), metric("缓存读取", sessionNumber(cached)), metric("缓存写入", sessionNumber(created))))
+	column.Child(inputCard, el.Div().Bg(theme.Subtle).Rounded(10).P(12).Gap(8).Child(el.Text("输出总 Token").TextSize(12).TextColor(theme.Muted), el.Text(sessionNumber(output)).TextSize(26).Medium(), metric("推理输出", sessionNumber(reasoning))))
+	column.Child(el.Div().Row().Bg(theme.Subtle).Rounded(10).P(16).Gap(16).Child(el.Div().Grow().W(el.Dp(0)).Gap(8).Child(el.Text("已记录耗时").TextSize(11).TextColor(theme.Muted), el.Text(sessionElapsed(duration)).TextSize(16).Medium()), el.Div().Grow().W(el.Dp(0)).Gap(8).Child(el.Text("执行次数").TextSize(11).TextColor(theme.Muted), el.Text(fmt.Sprint(len(d.StepRuns))).TextSize(16).Medium())))
+
+	steps := kit.Stepper().Vertical().Size(20)
+	entries := make([]kit.StepperItem, 0, len(d.Workflow.Steps))
+	current := 0
 	for i, step := range d.Workflow.Steps {
 		status := "等待执行"
 		for _, run := range d.StepRuns {
 			if run.StepID == step.ID {
 				status = runStatus(string(run.Status))
+				if string(run.Status) == "succeeded" {
+					status = "成功"
+				}
 			}
 		}
-		fg := theme.Muted
 		if step.ID == d.Run.CurrentStepID {
-			fg = theme.PrimaryText
+			current = i
 		}
-		steps.Child(el.Div().Row().Items(el.Center).Gap(10).Child(el.Text(fmt.Sprint(i+1)).TextSize(11).Medium().TextColor(fg), el.Div().Gap(3).Grow().W(el.Dp(0)).Child(el.Text(step.Name).TextSize(12).Medium().TextColor(fg), el.Text(string(step.Runtime)+" · "+status).TextSize(11).TextColor(theme.Muted))))
+		name, subtitle := step.Name, string(step.Runtime)+" · "+status
+		entries = append(entries, kit.StepperItem{Label: name, Content: el.ViewFunc(func(*el.Context) el.Element {
+			return el.Div().Gap(3).Child(el.Text(name).TextSize(12).Medium(), el.Text(subtitle).TextSize(10).TextColor(theme.Muted))
+		})})
 	}
-	column.Child(steps)
-	sessions := el.Div().Bg(theme.Subtle).Rounded(8).P(12).Gap(8).Child(el.Text("恢复会话").TextSize(11).TextColor(theme.Muted))
-	for _, step := range d.Workflow.Steps {
-		if id := d.Run.Sessions[step.ID]; id != "" {
-			sessions.Child(el.Text(step.Name+" · "+string(step.Runtime)).TextSize(11).TextColor(theme.Muted), el.Text(id).Mono().TextSize(11))
-		}
+	steps.SetEntries(entries...)
+	if string(d.Run.Status) == "completed" {
+		current = len(entries)
 	}
-	if len(d.Run.Sessions) > 0 {
-		column.Child(sessions)
-	}
+	steps.SetValue(current)
+	column.Child(el.Div().Gap(12).Py(8).Child(el.Text("工作流").TextSize(12).Medium(), steps.Render(cx)))
+	column.Child(a.sessionRecovery(cx))
 	if d.Run.LastError != "" {
 		column.Child(inspectorNotice(d.Run.LastError, true))
 	}

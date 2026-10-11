@@ -291,3 +291,20 @@ func commandExited(err error) bool {
 	var exitErr exitCoder
 	return errors.As(err, &exitErr)
 }
+
+// FilePaths lists tracked and non-ignored untracked files without reading contents.
+func (i *Inspector) FilePaths(ctx context.Context, workspace string) ([]string, error) {
+	output, err := i.run(ctx, workspace, "ls-files", "--cached", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var paths []string
+	for _, path := range strings.Split(output, "\x00") {
+		if path != "" && !seen[path] {
+			seen[path] = true
+			paths = append(paths, path)
+		}
+	}
+	return paths, nil
+}

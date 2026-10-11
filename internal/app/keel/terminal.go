@@ -157,7 +157,9 @@ func (a *app) selectTerminalTab(tab *terminalTab) {
 	}
 	a.terminal.SearchOpen = false
 }
-func (a *app) createTerminal(direction string) {
+func (a *app) createTerminal(direction string) { a.createTerminalCommand(direction, "") }
+
+func (a *app) createTerminalCommand(direction, command string) {
 	if a.closed {
 		return
 	}
@@ -278,6 +280,9 @@ func (a *app) createTerminal(direction string) {
 				delete(s.Pending, session.ID)
 			}
 			a.resizeTerminal(p)
+			if command != "" && p.Running {
+				p.Screen.paste(command)
+			}
 		})
 	}()
 }

@@ -27,9 +27,9 @@ var (
 
 func accessWarningColor() color.NRGBA {
 	if theme.Text.R > 128 {
-		return theme.RGB(0xf5874f)
+		return theme.RGB(0xf28b82)
 	}
-	return theme.RGB(0xb85b2a)
+	return theme.RGB(0xb7443e)
 }
 
 func applyPalette(dark bool) { applyAppPalette(dark, "forest") }
@@ -72,7 +72,7 @@ func applyAppPalette(dark bool, accent string) {
 }
 
 func button(label string, action func(), variant kit.ButtonVariant) *kit.ButtonView {
-	return kit.Button(label, action).Variant(variant).Appearance(func(p kit.ButtonAppearance) kit.ButtonAppearance {
+	return kit.Button(uiText(label), action).Variant(variant).Appearance(func(p kit.ButtonAppearance) kit.ButtonAppearance {
 		p.Border, p.Focus = color.NRGBA{}, color.NRGBA{}
 		return p
 	})
@@ -119,7 +119,7 @@ func action(cx *el.Context, id, label string, icon kit.IconName, callback func()
 }
 
 func field(id, hint string, value *string) *el.InputEl {
-	return el.Input().ID(id).Name(hint).Placeholder(hint).Bind(value).Border(0, color.NRGBA{}).Bg(theme.Subtle).Rounded(8).Px(12).TextSize(13).
+	return el.Input().ID(id).Name(uiText(hint)).Placeholder(uiText(hint)).Bind(value).Border(0, color.NRGBA{}).Bg(theme.Subtle).Rounded(8).Px(12).TextSize(13).
 		FocusStyle(neutralInputFocus)
 }
 
@@ -147,6 +147,10 @@ func dragArea(cx *el.Context, d *el.DivEl) *el.DivEl {
 func (a *app) Render(cx *el.Context) el.Element {
 	root := el.Div().Row().WFull().HFull().Bg(theme.Bg).TextSize(14)
 	peekTrigger := a.sidebarPeek(cx)
+	if a.settingsPanel != nil {
+		root.Child(el.Div().ID("settings-modal").Absolute().Size(el.Dp(0)))
+		a.settingsOverlay(cx)
+	}
 	if a.ui.SearchPalette != nil {
 		root.Child(a.renderSearchPalette(cx))
 	}
@@ -243,7 +247,7 @@ func (a *app) content(cx *el.Context) el.Element {
 	}
 	if a.task == nil {
 		return el.Div().Grow().Center().Px(24).Pb(46).Child(el.Div().WFull().MaxW(el.Dp(920)).Gap(18).Child(
-			el.Div().WFull().Items(el.Center).Gap(8).Child(el.Text("你想推进什么？").TextSize(28).Bold(), el.Text("描述目标和约束，任务标题会由 AI 自动生成。").TextSize(13).TextColor(theme.Muted)),
+			el.Div().WFull().Items(el.Center).Gap(8).Child(el.Text(uiText("你想推进什么？")).TextSize(28).Bold(), el.Text(uiText("描述目标和约束，任务标题会由 AI 自动生成。")).TextSize(13).TextColor(theme.Muted)),
 			a.composer(cx), a.workspaceCaption(cx), a.errorBanner(cx),
 		))
 	}
@@ -362,7 +366,7 @@ func (a *app) composer(cx *el.Context) el.Element {
 	inputPalette.Frameless = false
 	box.Child(cx.Themed(inputPalette, el.ViewFunc(func(*el.Context) el.Element { return input })).WFull(), controls)
 	if a.task == nil && !a.conversationWorkerReady() {
-		box.Child(el.Text("所选 Worker 不可用，或不支持当前 Agent。请选择可用的执行位置。").TextSize(12).TextColor(theme.Danger))
+		box.Child(el.Text(uiText("所选 Worker 不可用，或不支持当前 Agent。请选择可用的执行位置。")).TextSize(12).TextColor(theme.Danger))
 	}
 	return el.Div().WFull().Child(a.pendingInstructionList(cx), box)
 }

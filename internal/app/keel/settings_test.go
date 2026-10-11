@@ -3,6 +3,7 @@ package keeldesktop
 import (
 	"context"
 	"fmt"
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 	"os"
 	"path/filepath"
 	"slices"
@@ -150,9 +151,9 @@ func TestKeelSettingsNavigationSearchAndDraftRetention(t *testing.T) {
 		view := p.view
 		value := p.fields["dag-concurrency"]
 		*value = "6"
-		find("终端")
-		if p.section != "terminal" {
-			t.Fatal("Keel navigation did not select terminal repository section")
+		find("安全")
+		if p.section != "security" {
+			t.Fatal("Keel navigation did not select security repository section")
 		}
 		find("执行")
 		if p.fields["dag-concurrency"] != value || *value != "6" || p.view != view {
@@ -182,10 +183,9 @@ func TestKeelSettingsNavigationSearchAndDraftRetention(t *testing.T) {
 			t.Fatalf("retained field did not reach repository draft: %+v, %v", draft.Execution, err)
 		}
 		find("Harness")
-		find("Agent")
 		find("Claude Code")
-		if p.runtime.Value() != "claude" || p.view != view {
-			t.Fatal("Agent switching lost Settings identity")
+		if !p.harnessExpanded["claude"] || p.view != view {
+			t.Fatal("Harness expansion lost Settings identity")
 		}
 		if _, ok := findSkillControl(router.AppendSemantics(nil), "允许完全访问"); ok {
 			t.Fatal("previous section control leaked into Agent page")
@@ -216,7 +216,7 @@ func TestRenderKeelSettingsComponent(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		a.dark = dark
 		applyPalette(dark)
-		for _, id := range []string{"", "harness", "execution", "terminal", "security", "storage"} {
+		for _, id := range []string{"", "harness", "execution", "security", "storage"} {
 			p.section = id
 			name := id
 			if name == "" {
@@ -232,4 +232,185 @@ func TestRenderKeelSettingsComponent(t *testing.T) {
 		}
 	}
 	applyPalette(false)
+}
+
+func TestSettingsModalLifecycle(t *testing.T) {
+	a := conversationFixture(t)
+	a.openSettings()
+	p := a.settingsPanel
+	if p == nil {
+		t.Fatal("settings did not open")
+	}
+	a.openSettings()
+	if a.settingsPanel != p {
+		t.Fatal("opening twice replaced settings")
+	}
+	router, frame, click := alignmentRouter(el.Root(a), 1280, 800, 1)
+	for _, label := range []string{"外观", "手机连接", "执行", "安全", "存储与日志", "远端 Worker"} {
+		if _, ok := alignmentNode(router.AppendSemantics(nil), label, true); !ok {
+			t.Fatalf("missing settings category %s", label)
+		}
+	}
+	if _, ok := alignmentNode(router.AppendSemantics(nil), "收起侧栏", true); ok {
+		t.Fatal("settings must not collapse navigation")
+	}
+
+	p.activateSettingsSection("workflows")
+	frame()
+	frame()
+	if _, ok := alignmentNode(router.AppendSemantics(nil), "新建工作流", true); !ok {
+		t.Fatal("workflow manager not embedded")
+	}
+	if a.ui.WorkflowWindow != nil {
+		t.Fatal("workflow opened a separate window")
+	}
+	p.activateSettingsSection("")
+	frame()
+	frame()
+
+	box, ok := alignmentNode(router.AppendSemantics(nil), "关闭设置", true)
+	if !ok {
+		t.Fatal("missing modal close button")
+	}
+	click(box.Bounds)
+	frame()
+	if a.settingsPanel != nil || !p.workers.closed {
+		t.Fatal("closing did not release settings")
+	}
+	a.openSettings()
+	if a.settingsPanel == p {
+		t.Fatal("reused closed settings")
+	}
+	router, frame, _ = alignmentRouter(el.Root(a), 1280, 800, 1)
+	router.Queue(key.Event{Name: key.NameEscape, State: key.Press}, key.Event{Name: key.NameEscape, State: key.Release})
+	frame()
+	frame()
+	if a.settingsPanel != nil {
+		t.Fatal("Escape did not dismiss settings")
+	}
+}
+func TestRenderSettingsModal(t *testing.T) {
+	dir := os.Getenv("ONECATCH_KEEL_PREVIEWS")
+	if dir == "" {
+		t.Skip("preview disabled")
+	}
+	for _, dark := range []bool{false, true} {
+		a := conversationFixture(t)
+		applyPalette(dark)
+		a.settingsPanel = workerTestSettings(a)
+		a.settingsPanel.section = ""
+		if err := screenshotWithFocus(el.Root(a), 1920, 997, filepath.Join(dir, fmt.Sprintf("settings-modal-%v.png", dark))); err != nil {
+			t.Fatal(err)
+		}
+		a.closeSettings()
+	}
+}
+
+func TestSettingsSaveActionsStayAtBottomRight(t *testing.T) {
+	locale.Apply(locale.Chinese())
+	a := conversationFixture(t)
+	p := workerTestSettings(a)
+	p.section = "execution"
+	router, _, _ := alignmentRouter(el.Root(p), 1120, 760, 1)
+	nodes := router.AppendSemantics(nil)
+	save, ok := findSkillControl(nodes, "保存")
+	if !ok {
+		t.Fatal("missing save action")
+	}
+	if save.Min.X < 900 || save.Min.Y < 680 || save.Max.Y > 760 {
+		t.Fatalf("save action outside compact bottom-right footer: %v", save)
+	}
+	for _, label := range []string{"恢复默认值", "放弃修改", "重新加载"} {
+		box, ok := findSkillControl(nodes, label)
+		if !ok || box.Min.Y != save.Min.Y {
+			t.Fatalf("action %q is not aligned with save: %v vs %v", label, box, save)
+		}
+	}
+	if got := settingsOptionLabel("default-sandbox", "workspace-write"); got != "工作区访问" {
+		t.Fatalf("internal permission value leaked: %q", got)
+	}
+}
+
+func TestHarnessCardsExpandIndependentlyAndPreserveDrafts(t *testing.T) {
+	locale.Apply(locale.Chinese())
+	a := conversationFixture(t)
+	a.runtimes = []desktopservice.RuntimeInfo{{ID: "claude", Name: "Claude Code"}, {ID: "codex", Name: "Codex"}}
+	p := workerTestSettings(a)
+	p.section = "harness"
+	router, frame, click := alignmentRouter(el.Root(p), 1120, 760, 1)
+	entries := p.runtime.Entries()
+	if len(entries) < 2 {
+		t.Fatal("expected multiple harnesses")
+	}
+	if len(p.harnessExpanded) != 0 {
+		t.Fatal("harnesses must start collapsed")
+	}
+	for _, entry := range entries[:2] {
+		box, ok := findSkillControl(router.AppendSemantics(nil), entry.Label)
+		if !ok {
+			t.Fatalf("missing harness %s", entry.Label)
+		}
+		click(box)
+		frame()
+		if !p.harnessExpanded[entry.Value] {
+			t.Fatal("card did not expand")
+		}
+		field := p.fields["runtime-binary/"+entry.Value]
+		if field == nil {
+			t.Fatal("missing executable field")
+		}
+		*field = "/custom/" + entry.Value
+	}
+	for _, entry := range entries[:2] {
+		if !p.harnessExpanded[entry.Value] {
+			t.Fatal("opening another harness collapsed existing card")
+		}
+		if got := p.runtimeDraft(entry.Value).Binary; got != "/custom/"+entry.Value {
+			t.Fatalf("draft lost: %s", got)
+		}
+	}
+	p.harnessExpanded[entries[0].Value] = false
+	frame()
+	p.harnessExpanded[entries[0].Value] = true
+	frame()
+	if got := p.runtimeDraft(entries[0].Value).Binary; got != "/custom/"+entries[0].Value {
+		t.Fatal("collapse discarded draft")
+	}
+}
+
+func TestWorkflowLibraryOpensEditorInsideSettings(t *testing.T) {
+	a := conversationFixture(t)
+	a.openSettings()
+	a.ui.WorkflowSource = false
+	a.settingsPanel.activateSettingsSection("workflows")
+	router, frame, click := alignmentRouter(el.Root(a), 1280, 800, 1)
+	frame()
+	node, ok := findSkillControl(router.AppendSemantics(nil), "配置")
+	if !ok {
+		t.Fatal("workflow configuration action missing")
+	}
+	click(node.Bounds())
+	frame()
+	if !a.ui.WorkflowSource || a.ui.WorkflowWindow != nil {
+		t.Fatal("configuration must open inline")
+	}
+	a.ui.WorkflowDraft.Description = "unsaved library draft"
+	back, ok := findSkillControl(router.AppendSemantics(nil), "返回工作流")
+	if !ok {
+		t.Fatal("missing return to library")
+	}
+	click(back.Bounds())
+	frame()
+	if a.ui.WorkflowSource {
+		t.Fatal("return did not restore library")
+	}
+	node, ok = findSkillControl(router.AppendSemantics(nil), "配置")
+	if !ok {
+		t.Fatal("configuration action missing after return")
+	}
+	click(node.Bounds())
+	frame()
+	if a.ui.WorkflowDraft.Description != "unsaved library draft" {
+		t.Fatal("returning to the same workflow lost its draft")
+	}
 }

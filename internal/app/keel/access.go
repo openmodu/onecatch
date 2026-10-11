@@ -20,7 +20,13 @@ func newAccessSelect() *kit.SelectView {
 			icon, description = "shield-alert", "可访问互联网和电脑上的工作区外文件"
 			tint, secondary = accessWarningColor(), accessWarningColor()
 		}
-		return el.Div().Row().Items(el.Center).Gap(9).Child(
+		row := el.Div().Row().Items(el.Center).Gap(9)
+		if item.Option.Value == "full" {
+			background := tint
+			background.A = 24
+			row.Bg(background).Rounded(6).Px(6)
+		}
+		return row.Child(
 			lucide(cx, icon, 17, tint),
 			el.Div().Grow().W(el.Dp(0)).Gap(2).Child(
 				el.Text(item.Option.Label).TextColor(tint).MaxLines(1),
@@ -41,7 +47,9 @@ func accessValue(cx *el.Context, value, label string) el.Element {
 	}
 	if value == "full" {
 		tint, icon = accessWarningColor(), "shield-alert"
-		row.Bg(theme.SubtleHover).Rounded(14).Px(8)
+		background := tint
+		background.A = 24
+		row.Bg(background).Rounded(14).Px(8)
 	}
 	return row.Child(lucide(cx, icon, 16, tint), el.Text(label).TextColor(tint).MaxLines(1))
 }

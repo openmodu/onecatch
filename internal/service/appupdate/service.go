@@ -17,7 +17,6 @@ import (
 
 	"github.com/openmodu/onecatch/internal/buildinfo"
 	"github.com/openmodu/onecatch/internal/processmode"
-	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/appcast"
 )
@@ -44,7 +43,8 @@ type Status struct {
 }
 
 type Service struct {
-	app         *application.App
+	emit        func(Status)
+	quit        func()
 	updater     *updater.Updater
 	feedURL     string
 	cacheRoot   string
@@ -60,15 +60,16 @@ type Service struct {
 	done    chan struct{}
 }
 
-func New(app *application.App, dataRoot string) (*Service, error) {
-	if app == nil {
+// New shares signed downloads and cache validation between desktop frontends.
+func New(engine *updater.Updater, dataRoot string, emit func(Status), quit func()) (*Service, error) {
+	if engine == nil || quit == nil {
 		return nil, errors.New("app update: application is nil")
 	}
 	cacheRoot, err := updateCacheRoot(dataRoot)
 	if err != nil {
 		return nil, err
 	}
-	service := &Service{app: app, updater: app.Updater, cacheRoot: cacheRoot}
+	service := &Service{updater: engine, cacheRoot: cacheRoot, emit: emit, quit: quit}
 	keyText := strings.TrimSpace(buildinfo.UpdatePublicKey)
 	if keyText == "" || buildinfo.Version == "dev" {
 		return service, nil
@@ -86,7 +87,7 @@ func New(app *application.App, dataRoot string) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := app.Updater.Init(updater.Config{
+	if err := engine.Init(updater.Config{
 		CurrentVersion: buildinfo.Version,
 		Providers:      []updater.Provider{provider},
 		PublicKey:      key,
@@ -228,7 +229,9 @@ func (s *Service) Check(ctx context.Context) (Status, error) {
 		_ = removeCachedUpdate(s.cacheRoot)
 	}
 	status := s.Status()
-	s.app.Event.Emit(EventStatusChanged, status)
+	if s.emit != nil {
+		s.emit(status)
+	}
 	return status, err
 }
 
@@ -259,7 +262,9 @@ func (s *Service) Download(ctx context.Context) (Status, error) {
 	}
 	s.rememberError(err)
 	status := s.Status()
-	s.app.Event.Emit(EventStatusChanged, status)
+	if s.emit != nil {
+		s.emit(status)
+	}
 	return status, err
 }
 
@@ -329,7 +334,7 @@ func (s *Service) startUpdaterHelper(staged string) error {
 		_ = os.Remove(helper)
 		return fmt.Errorf("app update: start updater helper: %w", err)
 	}
-	s.app.Quit()
+	s.quit()
 	return nil
 }
 
@@ -355,7 +360,7 @@ func (s *Service) restartCachedDarwin(staged string) error {
 	if err := command.Start(); err != nil {
 		return fmt.Errorf("app update: start macOS updater helper: %w", err)
 	}
-	s.app.Quit()
+	s.quit()
 	return nil
 }
 

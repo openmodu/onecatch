@@ -16,6 +16,7 @@ import (
 
 func (a *app) resetWorkflowForm() {
 	a.ui.DAG = dagState{}
+	a.ui.WorkflowNumbers = map[string]*kit.NumberInputView{}
 	a.ui.WorkflowSelects = map[string]*kit.SelectView{}
 	a.ui.WorkflowStep = 0
 	a.ui.WorkflowStepID, a.ui.WorkflowSignal = "", ""
@@ -72,7 +73,7 @@ func (a *app) workflowSelect(cx *el.Context, id, label, value string, options []
 	}
 	view := a.ui.WorkflowSelects[id]
 	if view == nil {
-		view = kit.Select("").Hint(label).Appearance(false).MenuWidth(240).Size(32)
+		view = kit.Select("").Hint(label).Appearance(false).MenuWidth(240).MenuAlign(el.End).Size(32)
 		if strings.HasPrefix(id, "dag-") {
 			view.Size(36)
 		}
@@ -212,16 +213,21 @@ func (a *app) workflowForm(cx *el.Context) el.Element {
 		Value     *int
 	}{{"transitions", "最大转换次数", &d.Policy.MaxTransitions}, {"failures", "最大连续失败次数", &d.Policy.MaxConsecutiveFailures}, {"timeout", "步骤超时（秒）", &d.Policy.StepTimeoutSeconds}} {
 		it := item
-		value := a.ui.WorkflowPolicy[it.ID]
-		policy.Child(workflowField(it.Label, field("policy/"+it.ID, it.Label, &value).Filter("0123456789").MaxLen(7).OnChange(func(s string) {
-			a.ui.WorkflowPolicy[it.ID] = s
-			n, err := strconv.Atoi(s)
-			if err != nil {
-				n = -1
-			}
-			*it.Value = n
+		if a.ui.WorkflowNumbers == nil {
+			a.ui.WorkflowNumbers = map[string]*kit.NumberInputView{}
+		}
+		number := a.ui.WorkflowNumbers[it.ID]
+		if number == nil {
+			number = kit.NumberInput("").Size(32).Decimals(0).Range(1, 86400).VerticalButtons(true)
+			a.ui.WorkflowNumbers[it.ID] = number
+		}
+		number.SetValue(float64(*it.Value))
+		number.OnChange(func(value float64) {
+			*it.Value = int(value)
+			a.ui.WorkflowPolicy[it.ID] = strconv.Itoa(int(value))
 			a.syncWorkflowDocument()
-		})))
+		})
+		policy.Child(el.Div().Row().Items(el.Center).Py(8).Gap(12).Child(el.Text(it.Label).TextSize(13).Grow(), el.Div().W(el.Dp(88)).Bg(theme.Subtle).Rounded(8).Child(number.Render(cx))), el.Div().H(el.Dp(1)).WFull().Bg(seamColor))
 	}
 	body.Child(policy)
 	if err := domainworkflows.Validate(*d); err != nil {

@@ -379,7 +379,7 @@ func (a *Service) resolveRunSettings(ctx context.Context, taskID string) (domain
 		} else if step.Model == "" {
 			step.Model = settings.Runtimes[step.Runtime].DefaultModel
 		}
-		if directAgent && task.Sandbox != "" {
+		if directAgent {
 			step.Sandbox = task.Sandbox
 		}
 		step.Sandbox = resolveSandbox(step.Sandbox, settings.Execution.DefaultSandbox, workspace.DefaultSandbox)

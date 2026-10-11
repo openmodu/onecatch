@@ -54,7 +54,7 @@ func (v *filledToggle) Render(cx *el.Context) el.Element {
 			}
 		}
 	}
-	row := el.Div().ID(fmt.Sprintf("filled-toggle/%p", v)).Role(role).Name(v.label).Value(strconv.FormatBool(v.value)).Selected(v.value).Disabled(v.disabled).Focusable(true).CursorPointer().Row().Items(el.Center).Gap(10).Py(4).Rounded(6).OnClick(toggle).OnKey(func(e el.KeyEvent) bool {
+	row := el.Div().ID(fmt.Sprintf("filled-toggle/%p", v)).Role(role).Name(uiText(v.label)).Value(strconv.FormatBool(v.value)).Selected(v.value).Disabled(v.disabled).Focusable(true).CursorPointer().Row().Items(el.Center).Gap(10).Py(4).Rounded(6).OnClick(toggle).OnKey(func(e el.KeyEvent) bool {
 		if e.State == el.KeyPress && (e.Name == "Space" || e.Name == "Return" || e.Name == "Enter") {
 			toggle()
 			return true
@@ -62,7 +62,7 @@ func (v *filledToggle) Render(cx *el.Context) el.Element {
 		return false
 	}).FocusStyle(neutralInputFocus).Child(mark)
 	if !v.hideLabel {
-		row.Child(el.Text(v.label).TextSize(13))
+		row.Child(el.Text(uiText(v.label)).TextSize(13))
 	}
 	return row
 }

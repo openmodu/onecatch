@@ -4,24 +4,25 @@ import (
 	"context"
 	"fmt"
 	"maps"
-	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"gioui.org/io/key"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
-	"github.com/dyike/keel/ui/window"
 	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
 )
 
 type settingsPage struct {
+	numbers                map[string]*kit.NumberInputView
 	app                    *app
 	runtime                *kit.SelectView
 	enabled                *filledToggle
 	binary, model, status  string
+	statusError            string
 	saving                 bool
 	initialized            bool
 	section                string
@@ -34,11 +35,15 @@ type settingsPage struct {
 	workers                workerSettingsState
 	mobile                 mobileAccessState
 	skillTargets           skillTargetSettings
+	actions                settingsActions
+	confirm                *kit.DialogView
+	currentRuntime         string
+	harnesses              map[string]*settingsHarness
+	harnessExpanded        map[string]bool
 }
 
 func (a *app) openSettings() {
-	if a.settingsWindow != nil && !a.settingsWindow.Closed() {
-		a.settingsWindow.Raise()
+	if a.settingsPanel != nil {
 		return
 	}
 	p := &settingsPage{app: a, runtime: kit.Select("").Hint("选择 Agent").Appearance(false), enabled: newFilledToggle("启用此 Agent", true, true)}
@@ -52,11 +57,35 @@ func (a *app) openSettings() {
 	p.watchWorkers()
 	p.watchMobileAccess()
 	p.loadMobileAccess()
-	a.settingsWindow = window.Open(window.Options{Title: "OneCatch · 设置", Width: 960, Height: 800, MinWidth: 860, MinHeight: 600, Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin", TrafficLightLayout: &window.TrafficLightLayout{Height: 52, Left: 20}, Content: el.Root(p), OnClose: func() { p.closeWorkers(); a.settingsWindow = nil }})
+	a.settingsPanel = p
+}
+
+func (a *app) closeSettings() {
+	if a.settingsPanel != nil {
+		a.settingsPanel.closeWorkers()
+		a.settingsPanel = nil
+	}
+}
+func (a *app) settingsOverlay(cx *el.Context) {
+	p := a.settingsPanel
+	if p == nil {
+		return
+	}
+	width, height := cx.ViewportSize()
+	panel := el.Div().Role("dialog").Name("设置").W(el.Dp(min(1120, max(0, width-64)))).H(el.Dp(min(760, max(0, height-128)))).Bg(theme.Surface).Rounded(16).Items(el.Stretch)
+	cx.Overlay("settings-modal", el.Modal(panel).Owner("settings-modal").Scrim(true).KeepOnOutsidePress().BeforeDismiss(func() bool { return !p.saving }).OnDismiss(a.closeSettings))
+	panel.Child(p.Render(cx))
 }
 
 func (p *settingsPage) selectRuntime(id string) {
+	if p.currentRuntime != "" && p.draft.Runtimes != nil {
+		p.draft.Runtimes[p.currentRuntime] = p.runtimeDraft(p.currentRuntime)
+	}
 	r := p.app.settings.Runtimes[id]
+	if p.draft.Runtimes != nil {
+		r = p.draft.Runtimes[id]
+	}
+	p.currentRuntime = id
 	p.binary, p.model, p.status = r.Binary, r.DefaultModel, ""
 	p.enabled.SetValue(r.Enabled)
 	p.initialized = p.app.settings.SchemaVersion > 0
@@ -91,12 +120,22 @@ func (p *settingsPage) Render(cx *el.Context) el.Element {
 		p.draft.Runtimes = maps.Clone(a.settings.Runtimes)
 		p.selectRuntime(p.runtime.Value())
 	}
+	if p.section == "storage" && !p.actions.usageRequested && p.actions.busy == "" {
+		p.actions.usageRequested = true
+		p.refreshStorageUsage()
+	}
 	p.ensureSettingsView()
+	w, _ := cx.ViewportSize()
+	panelWidth := min(float32(1120), max(float32(0), w-64))
+	p.view.AvailableWidth(panelWidth)
 	p.syncSettingsSection()
-	settings := p.view.Render(cx)
+	palette := theme.Current()
+	palette.Bg = theme.Surface
+	palette.Border = seamColor
+	settings := cx.Themed(palette, p.view)
 	p.syncSettingsSection()
 	content := el.Div().Grow().H(el.Dp(0)).Items(el.Stretch).Disabled(p.saving).Child(settings)
-	root := el.Div().WFull().HFull().Bg(theme.Bg).Items(el.Stretch).OnKey(func(e el.KeyEvent) bool {
+	root := el.Div().WFull().HFull().Bg(theme.Surface).Rounded(16).Items(el.Stretch).OnKey(func(e el.KeyEvent) bool {
 		// Sidebar handles focused keys before window shortcuts. Let its
 		// unhandled unlock chord bubble to the settings window as well.
 		if p.section != "experimental" || e.Name != "S" || e.Modifiers != key.ModCtrl|key.ModAlt {
@@ -109,20 +148,59 @@ func (p *settingsPage) Render(cx *el.Context) el.Element {
 		return true
 	}).Child(
 		p.workerOverlays(cx),
-		dragArea(cx, el.Div().H(el.Dp(52)).WFull().Center().Child(el.Text("设置").TextSize(14).Medium())), content)
+		p.settingsConfirmation(cx))
+
+	root.Child(content)
+	if p.status != "" {
+		message := p.status
+		cx.After(struct {
+			Page    *settingsPage
+			Message string
+		}{p, message}, 5*time.Second, func() {
+			if p.status == message {
+				p.status = ""
+			}
+		})
+		tone := kit.ToneInfo
+		if p.status == p.statusError {
+			tone = kit.ToneDanger
+		} else if strings.HasPrefix(p.status, "请") || strings.Contains(p.status, "失败") || strings.Contains(p.status, "重新预览") {
+			tone = kit.ToneWarning
+		}
+		notice := kit.Alert(uiText(p.status)).Size(kit.AlertSizeSmall).Tone(tone).OnClose(func() { p.status = "" })
+		inset := float32(24)
+		if panelWidth >= 800 {
+			inset = 238
+		}
+		root.Child(el.Div().Pl(inset).Pr(24).Py(8).NoShrink().Child(notice.Render(cx)))
+	}
+	if panelWidth >= 800 {
+		root.Child(el.Div().Absolute().Left(210).Top(0).Bottom(0).W(el.Dp(1)).Bg(seamColor))
+	}
 	if p.section == "experimental" && p.workerSettingsDirty() {
 		root.Child(p.workerSettingsSaveBar(cx))
 	}
-	if p.section != "experimental" && p.section != "mobile" && p.section != "skills" || p.status != "" {
+	if p.section != "experimental" && p.section != "mobile" && p.section != "skills" && p.section != "workflows" || p.status != "" {
 		root.Child(p.settingsFooter(cx, p.section).(*el.DivEl).Px(24).Py(12).NoShrink())
 	}
+	root.Child(el.Div().Absolute().Top(16).Right(16).Child(iconAction(cx, "close-settings", "关闭设置", "x", func() {
+		if !p.saving {
+			a.closeSettings()
+		}
+	}, false)))
 	return root
 }
 
-var settingsSections = []struct{ ID, Label, Description string }{
-	{"", "外观", "语言、显示与主题"}, {"harness", "Harness", "配置各 Harness 的 Agent"}, {"skills", "Skills", "Skill 同步目标与目录"},
-	{"mobile", "手机连接", "把这台电脑作为手机端的远程 Worker"}, {"terminal", "终端", "配置 Shell 与终端外观"}, {"execution", "执行", "新流程默认值"}, {"security", "安全", "授权与诊断"}, {"storage", "存储与日志", "本机数据管理"},
-	{"experimental", "远端 Worker", "敬请期待"},
+var settingsSections = []struct{ ID, Label, Description, Category string }{
+	{"", "外观", "语言、显示与主题", "Settings"},
+	{"harness", "Harness", "配置各 Harness 的 Agent", "Settings"},
+	{"skills", "Skills", "Skill 同步目标与目录", "Settings"},
+	{"security", "安全", "授权与诊断", "Settings"},
+	{"storage", "存储与日志", "本机数据管理", "Settings"},
+	{"mobile", "手机连接", "把这台电脑作为手机端的远程 Worker", "远程连接"},
+	{"experimental", "远端 Worker", "敬请期待", "远程连接"},
+	{"execution", "执行", "新流程默认值", "工作流"},
+	{"workflows", "工作流管理", "创建、编辑与预览工作流", "工作流"},
 }
 
 func (p *settingsPage) text(id, hint, initial string) el.Element {
@@ -136,22 +214,27 @@ func (p *settingsPage) choice(cx *el.Context, id, value string, values []string)
 	s := p.selects[id]
 	if s == nil {
 		s = kit.Select("").Hint("默认").Appearance(false).Size(36)
-		var options []kit.SelectOption
-		for _, v := range values {
-			label := v
-			if v == "" {
-				label = "默认"
-				v = "__default"
-			}
-			options = append(options, kit.SelectOption{Value: v, Label: label})
+		if id == "default-sandbox" {
+			s = newAccessSelect().MenuAlign(el.End)
 		}
-		s.SetEntries(options...)
+
 		if value == "" {
 			value = "__default"
 		}
 		s.SetValue(value)
 		p.selects[id] = s
 	}
+	// Refresh labels when the interface language changes without resetting drafts.
+	var options []kit.SelectOption
+	for _, value := range values {
+		label := settingsOptionLabel(id, value)
+		if value == "" {
+			value = "__default"
+		}
+		options = append(options, kit.SelectOption{Value: value, Label: label})
+	}
+	s.SetEntries(options...)
+
 	return s.Render(cx)
 }
 func (p *settingsPage) value(id string, fallback string) string {
@@ -190,23 +273,9 @@ func (p *settingsPage) draftForSave() (domainsettings.Settings, error) {
 	}
 	switch p.section {
 	case "harness":
-		id := p.runtime.Value()
-		r := d.Runtimes[id]
-		r.Enabled = p.enabled.Value()
-		r.Binary = strings.TrimSpace(p.binary)
-		r.DefaultModel = strings.TrimSpace(p.model)
-		r.ReasoningEffort = p.selected("runtime-effort/"+id, r.ReasoningEffort)
-		r.Provider = p.selected("runtime-provider/"+id, r.Provider)
-		r.ServiceTier = p.selected("runtime-tier/"+id, r.ServiceTier)
-		r.Integration = p.selected("runtime-integration/"+id, r.Integration)
-		r.ConfigSource = p.selected("runtime-source/"+id, r.ConfigSource)
-		r.ConfigPath = p.value("runtime-config/"+id, r.ConfigPath)
-		r.RemoteFSEnabled = p.on("runtime-remotefs/"+id, r.RemoteFSEnabled)
-		r.MaxContextWindow = p.on("runtime-context/"+id, r.MaxContextWindow)
-		if v := p.fields["runtime-env/"+id]; v != nil {
-			r.EnvironmentAllowlist = strings.FieldsFunc(*v, func(c rune) bool { return c == ',' || c == '\n' || c == ' ' || c == '\t' })
+		for id := range d.Runtimes {
+			d.Runtimes[id] = p.runtimeDraft(id)
 		}
-		d.Runtimes[id] = r
 	case "terminal":
 		d.Terminal.Shell = p.value("shell", d.Terminal.Shell)
 		d.Terminal.Theme = p.selected("terminal-theme", d.Terminal.Theme)
@@ -250,7 +319,7 @@ func (p *settingsPage) saveSection() {
 	}
 	d, err := p.draftForSave()
 	if err != nil {
-		p.status = err.Error()
+		p.setStatusError(err)
 		return
 	}
 	section := p.section
@@ -285,7 +354,7 @@ func (p *settingsPage) saveSection() {
 			}
 			p.saving = false
 			if err != nil {
-				p.status = err.Error()
+				p.setStatusError(err)
 				return
 			}
 			p.draft = result
@@ -312,13 +381,14 @@ func (p *settingsPage) reload() {
 			}
 			p.saving = false
 			if err != nil {
-				p.status = err.Error()
+				p.setStatusError(err)
 				return
 			}
 			p.app.settings = value
 			p.draft = value
 			p.draft.Runtimes = maps.Clone(value.Runtimes)
 			p.fields, p.selects, p.switches = nil, nil, nil
+			p.currentRuntime = ""
 			p.selectRuntime(p.runtime.Value())
 			p.status = "已重新加载"
 		})
@@ -331,4 +401,38 @@ func (a *app) toggleTheme() {
 		mode = "light"
 	}
 	a.setAppearance(mode, a.ui.Preferences.Accent)
+}
+
+func settingsOptionLabel(id, value string) string {
+	if value == "" {
+		return uiText("默认")
+	}
+	if id == "default-sandbox" {
+		switch value {
+		case "read-only":
+			return uiText("只读")
+		case "workspace-write":
+			return uiText("工作区访问")
+		case "full":
+			return uiText("完全访问")
+		}
+	}
+	if id == "terminal-theme" {
+		switch value {
+		case "system":
+			return uiText("跟随系统")
+		case "paper":
+			return uiText("浅色")
+		case "midnight":
+			return uiText("深色")
+		case "contrast":
+			return uiText("高对比度")
+		}
+	}
+	return value
+}
+
+func (p *settingsPage) setStatusError(err error) {
+	p.status = err.Error()
+	p.statusError = p.status
 }

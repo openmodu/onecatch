@@ -243,3 +243,31 @@ func TestDiffBatchUsesLiteralPaths(t *testing.T) {
 		t.Fatalf("lightweight status: %+v %v", snapshot, err)
 	}
 }
+
+func TestFilePathsIncludesTrackedAndUntrackedOnce(t *testing.T) {
+	repo := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		if out, err := exec.Command("git", append([]string{"-C", repo}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+	}
+	run("init")
+	for name, data := range map[string]string{".gitignore": "ignored.txt\n", "tracked.go": "package main\n", "untracked.go": "package other\n", "ignored.txt": "skip"} {
+		if err := os.WriteFile(filepath.Join(repo, name), []byte(data), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	run("add", "tracked.go")
+	paths, err := gitrepo.New("").FilePaths(context.Background(), repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counts := map[string]int{}
+	for _, p := range paths {
+		counts[p]++
+	}
+	if counts["tracked.go"] != 1 || counts["untracked.go"] != 1 || counts["ignored.txt"] != 0 {
+		t.Fatalf("unexpected paths: %v", paths)
+	}
+}

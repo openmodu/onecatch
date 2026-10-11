@@ -55,10 +55,10 @@ func (a *app) sidebarPanel(cx *el.Context, height float32, peek bool) el.Element
 	var links []kit.SidebarItem
 	for _, item := range sidebarItems {
 		if slices.Contains(a.ui.Preferences.Navigation, item.ID) {
-			links = append(links, kit.SidebarItem{ID: item.ID, Label: item.Label, Icon: item.Icon})
+			links = append(links, kit.SidebarItem{ID: item.ID, Label: uiText(item.Label), Icon: item.Icon})
 		}
 	}
-	links = append(links, kit.SidebarItem{ID: "more", Label: "更多", Icon: kit.IconChevronDown, ContextMenu: a.ui.More})
+	links = append(links, kit.SidebarItem{ID: "more", Label: uiText("更多"), Icon: kit.IconChevronDown, ContextMenu: a.ui.More})
 	sections = append(sections, section{items: links})
 	var pinned, projects []kit.SidebarItem
 	var iconModel strings.Builder
@@ -237,7 +237,7 @@ func (a *app) sidebarPanelHeader(cx *el.Context, peek bool) el.Element {
 	// Status filtering sits beside the search it narrows.
 	search := el.Div().Row().Items(el.Center).Gap(4).Child(a.sidebarSearch(cx), a.ui.Filters.Render(cx))
 	// Match Sidebar's 10dp section-heading inset inside its outer padding.
-	heading := el.Div().Row().Items(el.Center).H(el.Dp(28)).Pl(10).Child(el.Text("项目管理").TextSize(theme.TextSm).TextColor(theme.Muted).Weight(sectionTitleWeight))
+	heading := el.Div().Row().Items(el.Center).H(el.Dp(28)).Pl(10).Child(el.Text(uiText("项目管理")).TextSize(theme.TextSm).TextColor(theme.Muted).Weight(sectionTitleWeight))
 	return el.Div().Gap(8).Child(title, search, heading)
 }
 
@@ -246,7 +246,7 @@ func (a *app) sidebarSearch(cx *el.Context) el.Element {
 	return el.Div().ID("task-search-box").Name("搜索任务").Role("button").Focusable(true).
 		Row().Items(el.Center).Gap(8).Grow().W(el.Dp(0)).H(el.Dp(32)).Px(10).Rounded(8).Bg(theme.Subtle).
 		CursorPointer().OnClick(a.focusTaskSearch).Hover(func(s *el.Style) { s.Bg(theme.SubtleHover) }).
-		Child(lucide(cx, "search", 16, theme.Muted), el.Text("搜索").TextColor(theme.Muted).Grow())
+		Child(lucide(cx, "search", 16, theme.Muted), el.Text(uiText("搜索")).TextColor(theme.Muted).Grow())
 }
 
 func (a *app) sidebarTask(t domaintasks.Task) kit.SidebarItem {
@@ -399,7 +399,7 @@ func (a *app) executorOptions(cx *el.Context) el.Element {
 	if _, viewport, content := cx.ScrollState("executor-options"); viewport > 0 && content > viewport {
 		column.Pr(12)
 	}
-	column.Child(el.Text("Agent").TextSize(11).TextColor(theme.Muted).Px(8).Py(4))
+	column.Child(el.Text(uiText("Agent")).TextSize(11).TextColor(theme.Muted).Px(8).Py(4))
 	for _, runtime := range a.runtimes {
 		r := runtime
 		column.Child(listOption(cx, "executor-runtime/"+r.ID, r.Name, runtimeMark(cx, r.ID, 16), func() { a.selectLocalConversation(r.ID, "single_agent") },
@@ -425,7 +425,7 @@ func (a *app) executorOptions(cx *el.Context) el.Element {
 		}
 	}
 	if a.task == nil {
-		column.Child(el.Div().H(el.Dp(1)).WFull().Bg(seamColor).My(6), el.Text("工作流").TextSize(11).TextColor(theme.Muted).Px(8))
+		column.Child(el.Div().H(el.Dp(1)).WFull().Bg(seamColor).My(6), el.Text(uiText("工作流")).TextSize(11).TextColor(theme.Muted).Px(8))
 		for _, definition := range a.definitions {
 			if definition.ID != "single_agent" {
 				d := definition

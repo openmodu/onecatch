@@ -406,3 +406,42 @@ func errorCode(err error) string {
 	}
 	return ""
 }
+
+func TestGlobalDefaultFullSandboxRequiresConfirmation(t *testing.T) {
+	app, _ := newStorageTestApp(t)
+	ctx := context.Background()
+	if err := app.InitializeSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	settings, err := app.GetSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Security.AllowFullSandbox = true
+	settings, err = app.UpdateSecuritySettings(ctx, settings.Security, settings.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Execution.DefaultSandbox = "full"
+	if _, err := app.UpdateExecutionSettings(ctx, settings.Execution, settings.Revision); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "full Agent", Prompt: "work outside the project", Harness: "codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := app.PreviewRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !preview.RequiresFullSandboxConfirmation || preview.ConfirmationToken == "" {
+		t.Fatalf("preview = %+v", preview)
+	}
+}

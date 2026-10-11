@@ -37,10 +37,12 @@ func (a *app) inspectorPanelHeader(cx *el.Context) *el.DivEl {
 	if w.MoreMenu == nil {
 		menu := kit.Menu().Width(1).Placement(el.Bottom, el.End)
 		for _, tab := range inspectorTabs {
+			if tab.ID != "status" && tab.ID != "events" {
+				continue
+			}
 			tab := tab
 			menu.ContentItem(tab.Label, "", menuIcon(tab.Icon, tab.Label), func() { w.Tab = tab.ID; a.loadInspector() })
 		}
-		menu.Separator().ContentItem("在独立窗口打开", "", menuIcon("square-arrow-out-up-right", "在独立窗口打开"), a.detachInspector)
 		menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 			return iconAction(cx, "inspector-more", "面板更多操作", "ellipsis-vertical", menu.Toggle, menu.Value())
 		}))
@@ -64,6 +66,8 @@ func (a *app) inspectorPanelHeader(cx *el.Context) *el.DivEl {
 	if w.Tab == "review" {
 		return a.reviewPanelHeader(cx, label, icon)
 
+	} else if w.Tab == "files" {
+		return a.filesPanelHeader(cx, label, icon)
 	} else {
 		bar.Child(el.Div().Grow())
 	}

@@ -29,6 +29,8 @@ type uiPreferences struct {
 	Collapsed         bool     `json:"collapsed"`
 	Theme             string   `json:"theme"`
 	Accent            string   `json:"accent"`
+	Language          string   `json:"language,omitempty"`
+	ChatFontSize      string   `json:"chatFontSize,omitempty"`
 	HideTableDividers bool     `json:"hideTableDividers,omitempty"`
 }
 
@@ -101,6 +103,7 @@ type uiState struct {
 	WorkflowRowMenus                map[string]*kit.MenuView
 	WorkflowNew                     *kit.MenuView
 	WorkflowSelects                 map[string]*kit.SelectView
+	WorkflowNumbers                 map[string]*kit.NumberInputView
 	WorkflowStepID                  string
 	WorkflowSignal                  string
 	WorkflowPolicy                  map[string]string
@@ -131,6 +134,12 @@ func normalizeUIPreferences(p uiPreferences) uiPreferences {
 	}
 	if !slices.Contains([]string{"forest", "ocean", "violet", "amber"}, p.Accent) {
 		p.Accent = "forest"
+	}
+	if p.Language != "en" {
+		p.Language = "zh-CN"
+	}
+	if !slices.Contains([]string{"small", "standard", "large", "extra-large"}, p.ChatFontSize) {
+		p.ChatFontSize = "standard"
 	}
 	return p
 }
@@ -434,9 +443,8 @@ func fullMenu(cx *el.Context, menu *kit.MenuView) el.Element {
 func (a *app) headerMore(cx *el.Context) el.Element {
 	if a.ui.HeaderMore == nil {
 		menu := kit.Menu().Width(1).Placement(el.Bottom, el.End)
-		menu.ContentItem("新建对话", "", menuIcon("plus", "新建对话"), func() { a.newTask(a.workspaceID) }).
-			ContentItem("搜索对话", "mod+k", menuIcon("search", "搜索对话"), a.focusTaskSearch).
-			Separator().ContentItem("设置", "mod+,", menuIcon("settings", "设置"), a.openSettings)
+		menu.ContentItem("Session 状态", "", menuIcon("activity", "Session 状态"), func() { a.toggleInspector("status") }).
+			ContentItem("事件时间轴", "", menuIcon("clock", "事件时间轴"), func() { a.toggleInspector("events") })
 		menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 			return iconAction(cx, "header-more", "更多操作", "ellipsis-vertical", menu.Toggle, menu.Value())
 		}))

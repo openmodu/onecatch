@@ -346,7 +346,7 @@ func (a *app) conversationDocument(cx *el.Context, e *entry, hug bool) el.Elemen
 		a.conversation.views[e.key] = v
 	}
 	return el.Widget(core.ViewportFunc(func(gtx core.C, visible image.Rectangle) core.D {
-		gtx.Metric.PxPerSp *= 14 / float32(theme.BodySize)
+		gtx.Metric.PxPerSp *= chatFontSize(a.ui.Preferences.ChatFontSize) / float32(theme.BodySize)
 		if hug {
 			gtx.Constraints.Min.X = 0
 			px := gtx.Sp(theme.BodySize)
