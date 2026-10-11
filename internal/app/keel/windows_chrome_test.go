@@ -3,6 +3,7 @@ package keeldesktop
 import (
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
+	"github.com/dyike/keel/ui/window"
 	"testing"
 )
 
@@ -43,5 +44,38 @@ func TestWindowsCaptionControls(t *testing.T) {
 		if len(w.calls) != 4 || w.calls[0] != "min" || w.calls[3] != "close" || w.maximized {
 			t.Fatalf("actions %v", w.calls)
 		}
+	}
+}
+
+func TestWindowsHeaderKeepsSidebarToggleBesideAppIcon(t *testing.T) {
+	a := alignmentFixture(t)
+	menu, err := window.NewMenuBar(window.MenuItem{Title: "OneCatch", Children: []window.MenuItem{{Title: "设置", OnSelect: func() {}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.applicationMenu = menu
+	for _, collapsed := range []bool{false, true} {
+		a.ui.Preferences.Collapsed = collapsed
+		root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element { return a.headerForPlatform(cx, "windows") }))
+		router, _, _ := alignmentRouter(root, 1000, 44, 1)
+		nodes := router.AppendSemantics(nil)
+		appIcon, ok := alignmentButton(nodes, "OneCatch 应用菜单")
+		if !ok {
+			t.Fatal("app icon menu missing")
+		}
+		label := "收起侧栏"
+		if collapsed {
+			label = "展开侧栏"
+		}
+		toggle, ok := alignmentButton(nodes, label)
+		if !ok || toggle.Bounds.Min.X < appIcon.Bounds.Max.X || toggle.Bounds.Max.Y > 44 {
+			t.Fatalf("toggle not next to app icon: %v %v", appIcon.Bounds, toggle.Bounds)
+		}
+	}
+	if got := sidebarContentHeight("windows", 600); got != 556 {
+		t.Fatalf("sidebar footer exceeds content area: %v", got)
+	}
+	if got := sidebarContentHeight("darwin", 600); got != 600 {
+		t.Fatalf("macOS sidebar changed: %v", got)
 	}
 }

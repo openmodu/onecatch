@@ -5,6 +5,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	"image/color"
 	"strings"
 )
 
@@ -26,7 +27,7 @@ func windowsWindowButtons(cx *el.Context) el.Element {
 			} else {
 				s.Bg(theme.SubtleHover)
 			}
-		}).Child(lucide(cx, icon, 12, ink))
+		}).Child(windowsCaptionGlyph(cx, icon, ink))
 	}
 	maxLabel, maxIcon := "最大化", "square"
 	if w.Maximized() {
@@ -55,7 +56,11 @@ func (a *app) windowsApplicationMenu(cx *el.Context) el.Element {
 			}
 		}
 		menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
-			return iconAction(cx, "windows-application-menu", "应用菜单", "menu", menu.Toggle, menu.Value())
+			trigger := el.Div().ID("windows-application-menu").Role("button").Name("OneCatch 应用菜单").Size(el.Dp(28)).Center().OnClick(menu.Toggle).Hover(func(s *el.Style) { s.Bg(theme.SubtleHover) })
+			if a.logo != nil {
+				trigger.Child(a.logo.Render(cx))
+			}
+			return trigger
 		}))
 		a.windowsMenu = menu
 	}
@@ -64,4 +69,21 @@ func (a *app) windowsApplicationMenu(cx *el.Context) el.Element {
 
 func windowsShortcutLabel(shortcut string) string {
 	return strings.NewReplacer("mod", "Ctrl", "shift", "Shift", "alt", "Alt", "enter", "Enter").Replace(shortcut)
+}
+
+// Caption symbols must not fall back to a document icon when an SVG is absent.
+func windowsCaptionGlyph(cx *el.Context, name string, ink color.NRGBA) el.Element {
+	switch name {
+	case "minus":
+		return el.Div().ID("caption-minimize-glyph").W(el.Dp(10)).H(el.Dp(1)).Bg(ink)
+	case "square":
+		return el.Div().Size(el.Dp(10)).Border(1, ink)
+	case "copy":
+		return el.Div().Size(el.Dp(12)).Child(
+			el.Div().Absolute().Left(3).Top(0).W(el.Dp(9)).H(el.Dp(1)).Bg(ink),
+			el.Div().Absolute().Left(11).Top(0).W(el.Dp(1)).H(el.Dp(9)).Bg(ink),
+			el.Div().Absolute().Left(0).Top(3).Size(el.Dp(9)).Border(1, ink))
+	default:
+		return lucide(cx, "x", 12, ink)
+	}
 }

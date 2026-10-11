@@ -194,7 +194,9 @@ func (a *app) Render(cx *el.Context) el.Element {
 	return root
 }
 
-func (a *app) header(cx *el.Context) el.Element {
+func (a *app) header(cx *el.Context) el.Element { return a.headerForPlatform(cx, runtime.GOOS) }
+
+func (a *app) headerForPlatform(cx *el.Context, platform string) el.Element {
 	title := "新建任务"
 	if a.page != "" {
 		for _, item := range sidebarItems {
@@ -216,21 +218,26 @@ func (a *app) header(cx *el.Context) el.Element {
 		}
 		left.Child(el.Div().Px(5).Py(2).Rounded(4).Bg(theme.Subtle).Child(el.Text(category).TextSize(10).TextColor(theme.Muted)))
 	}
-	if runtime.GOOS == "windows" {
+	if platform == "windows" {
 		if w := core.CurrentWindow(); w != nil {
 			left.OnDoubleClick(w.ToggleMaximize)
 		}
 	}
 	left.Child(el.Text(title).Grow().W(el.Dp(0)).MaxLines(1).Medium().TextSize(13))
 	bar := el.Div().Row().Items(el.Center).H(el.Dp(mainTitleBarHeight)).Px(18).Gap(4)
-	if a.sidebarCollapsed(cx) {
-		if runtime.GOOS == "darwin" {
+	if platform != "windows" && a.sidebarCollapsed(cx) {
+		if platform == "darwin" {
 			bar.Pl(macSidebarToggleLeft)
 		}
 		bar.Child(iconAction(cx, "show-sidebar", "展开侧栏", "panel-left", a.toggleSidebar, false))
 	}
-	if runtime.GOOS == "windows" {
+	if platform == "windows" {
 		bar.Child(a.windowsApplicationMenu(cx))
+		id, label := "hide-sidebar", "收起侧栏"
+		if a.sidebarCollapsed(cx) {
+			id, label = "show-sidebar", "展开侧栏"
+		}
+		bar.Child(iconAction(cx, id, label, "panel-left", a.toggleSidebar, false))
 	}
 	bar.Child(left)
 	if a.page == "" || a.page == "skills" {
@@ -246,7 +253,7 @@ func (a *app) header(cx *el.Context) el.Element {
 	if a.page == "skills" && !a.skills.Visible {
 		bar.Child(iconAction(cx, "show-skill-inspector", "展开检查面板", "panel-right-open", func() { a.openSkillInspector(a.skills.Tab) }, false))
 	}
-	if runtime.GOOS == "windows" {
+	if platform == "windows" {
 		bar.H(el.Dp(44)).Pr(0).Child(windowsWindowButtons(cx))
 	}
 	return bar

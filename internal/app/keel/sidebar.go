@@ -31,7 +31,7 @@ const (
 // menus. OneCatch supplies the model and calls its existing application actions.
 func (a *app) sidebar(cx *el.Context) el.Element {
 	_, height := cx.ViewportSize()
-	return a.sidebarPanel(cx, height, false)
+	return a.sidebarPanel(cx, sidebarContentHeight(runtime.GOOS, height), false)
 }
 
 func (a *app) sidebarPanel(cx *el.Context, height float32, peek bool) el.Element {
@@ -237,6 +237,9 @@ func (a *app) sidebarPanelHeader(cx *el.Context, peek bool) el.Element {
 	search := el.Div().Row().Items(el.Center).Gap(4).Child(a.sidebarSearch(cx), a.ui.Filters.Render(cx))
 	// Match Sidebar's 10dp section-heading inset inside its outer padding.
 	heading := el.Div().Row().Items(el.Center).H(el.Dp(28)).Pl(10).Child(el.Text(uiText("项目管理")).TextSize(theme.TextSm).TextColor(theme.Muted).Weight(sectionTitleWeight))
+	if runtime.GOOS == "windows" {
+		return el.Div().Gap(8).Child(search, heading)
+	}
 	return el.Div().Gap(8).Child(title, search, heading)
 }
 
@@ -516,4 +519,11 @@ func sidebarPanelColor(peek bool) color.NRGBA {
 		return theme.Surface
 	}
 	return sidebarColor
+}
+
+func sidebarContentHeight(platform string, height float32) float32 {
+	if platform == "windows" {
+		return max(float32(0), height-44)
+	}
+	return height
 }
