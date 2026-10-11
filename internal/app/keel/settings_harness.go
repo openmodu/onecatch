@@ -44,9 +44,7 @@ func (p *settingsPage) runtimeDraft(id string) domainsettings.RuntimeSettings {
 	}
 	return r
 }
-func (p *settingsPage) checkHarness() {
-	p.checkHarnessID(p.runtime.Value())
-}
+
 func (p *settingsPage) checkHarnessID(id string) {
 	input, ctx := p.runtimeDraft(id), p.workerContext()
 	p.settingsAction("harness", func() (func(), error) {

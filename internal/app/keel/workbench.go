@@ -628,7 +628,7 @@ func (a *app) saveActiveWorkspaceFile() {
 	id := a.workspaceContext()
 	a.saveFile(id, a.fileState(id).Active)
 }
-func pathBase(name string) string { return path.Base(name) }
+
 func (a *app) statusInspector(cx *el.Context) el.Element {
 	if a.detail == nil {
 		return inspectorNotice("任务开始后，这里会显示执行状态、工作流进度和用量。", false)

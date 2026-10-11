@@ -18,6 +18,9 @@ tasks:
     cmds: [go run ./cmd/keel]
   dev:keel:
     cmds: [{task: 'dev:desktop'}]
+  icons:
+    desc: Regenerate the compact runtime icon from the package artwork
+    cmds: [go run ./build/icon]
   build:
     desc: Build a compact native desktop executable
     cmds:

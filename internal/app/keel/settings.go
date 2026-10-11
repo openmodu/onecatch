@@ -412,14 +412,6 @@ func (p *settingsPage) reload() {
 	}()
 }
 
-func (a *app) toggleTheme() {
-	mode := "dark"
-	if a.dark {
-		mode = "light"
-	}
-	a.setAppearance(mode, a.ui.Preferences.Accent)
-}
-
 func settingsOptionLabel(id, value string) string {
 	if value == "" {
 		return uiText("默认")

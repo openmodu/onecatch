@@ -263,16 +263,3 @@ func (a *app) reviewFileList(cx *el.Context, s *reviewWorkspace, search bool) el
 	}
 	return list
 }
-
-func reviewAdditionLabel(f reviewFile) string {
-	if f.Deferred {
-		return ""
-	}
-	return fmt.Sprintf("+%d", f.Additions)
-}
-func reviewDeletionLabel(f reviewFile) string {
-	if f.Deferred {
-		return ""
-	}
-	return fmt.Sprintf("−%d", f.Deletions)
-}

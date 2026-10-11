@@ -1,14 +1,10 @@
 package keeldesktop
 
 import (
-	"fmt"
 	"strings"
 	"time"
 
 	"github.com/dyike/keel/ui/core"
-	"github.com/dyike/keel/ui/el"
-	"github.com/dyike/keel/ui/kit"
-	"github.com/dyike/keel/ui/theme"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
@@ -118,74 +114,3 @@ func (a *app) findDefinition(id string) (domainworkflows.Definition, bool) {
 }
 
 func isProjectWorkflow(id string) bool { return strings.HasPrefix(id, "repo-") }
-
-// openProjectWorkflowFile shows a workflow file in the files panel, at line
-// when it is the line to fix.
-func (a *app) openProjectWorkflowFile(file string, line int) {
-	a.closeSettings()
-	a.page = ""
-	a.workbench.Visible, a.workbench.Tab = true, "files"
-	a.openFileMatch(a.workspaceID, desktopservice.WorkspaceFileMatch{Path: file, Line: line})
-}
-
-func (a *app) exportWorkflowToProject(id string) {
-	workspaceID := a.workspaceID
-	if workspaceID == "" {
-		a.fail(fmt.Errorf("先打开一个项目，再把工作流导出到项目"))
-		return
-	}
-	go func() {
-		path, err := a.backend.service.ExportWorkflowToProject(a.ctx, workspaceID, id)
-		core.Update(func() {
-			if a.closed {
-				return
-			}
-			a.fail(err)
-			if err == nil {
-				a.projectWorkflows.signature = ""
-				a.loadProjectWorkflows()
-				a.errorText = ""
-				_ = path
-			}
-		})
-	}()
-}
-
-// projectWorkflowSection lists the open project's workflow files in the
-// workflow library, each drawn from its file.
-func (a *app) projectWorkflowSection(cx *el.Context) el.Element {
-	section := el.Div().Gap(4).Pb(12)
-	name := a.workspaceForID(a.workspaceID).Name
-	if a.workspaceID == "" {
-		return section.Child(el.Text("未选择项目").TextSize(12).TextColor(theme.Muted).Py(8))
-	}
-	if len(a.projectWorkflows.items) == 0 || a.projectWorkflows.workspaceID != a.workspaceID {
-		return section.Child(el.Text(name + " · 暂无项目工作流").TextSize(12).TextColor(theme.Muted))
-	}
-	section.Child(el.Text("项目工作流 · " + name).TextSize(13).Medium())
-	for _, item := range a.projectWorkflows.items {
-		item := item
-		content := el.Div().Grow().W(el.Dp(0)).Gap(6)
-		open := button("打开文件", func() { a.openProjectWorkflowFile(item.File, item.ErrorLine) }, kit.ButtonGhost).Size(30).Compact(true)
-		if item.Error != "" {
-			content.Child(el.Div().Row().Items(el.Center).Gap(8).Child(el.Text(item.File).Mono().TextSize(12).Medium(), el.Text("无法使用").TextSize(11).TextColor(theme.DangerText)))
-			message := item.Error
-			if item.ErrorLine > 0 {
-				message = fmt.Sprintf("第 %d 行：%s", item.ErrorLine, item.Error)
-			}
-			content.Child(el.Text(message).TextSize(12).TextColor(theme.DangerText).MaxLines(3))
-		} else {
-			d := item.Definition
-			content.Child(el.Div().Row().Items(el.Center).Gap(8).Child(el.Text(d.Name).Medium().TextSize(14).MaxLines(1), el.Text(item.File).Mono().TextSize(11).TextColor(theme.Muted).MaxLines(1)))
-			if d.Description != "" {
-				content.Child(el.Text(d.Description).TextSize(12).TextColor(theme.Muted).MaxLines(2))
-			}
-			content.Child(el.Text(workflowSummary(d)).TextSize(11).TextColor(theme.Muted).MaxLines(1),
-				el.Div().WFull().NoShrink().ScrollX().Pt(4).Child(flowChart(cx, d, flowChartOptions{ID: "project-chart/" + d.ID})))
-		}
-		section.Child(el.Div().Row().Items(el.Start).Gap(12).Py(14).Child(
-			el.Div().Size(el.Dp(32)).Rounded(8).Bg(theme.Subtle).Center().Child(lucide(cx, "file-code-2", 16, theme.Muted)),
-			content, open.Render(cx)), el.Div().H(el.Dp(1)).WFull().Bg(seamColor).NoShrink())
-	}
-	return section
-}

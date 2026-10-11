@@ -214,7 +214,6 @@ func (a *app) sidebarSelect(id string) {
 	}
 }
 
-func (a *app) sidebarHeader(cx *el.Context) el.Element { return a.sidebarPanelHeader(cx, false) }
 func (a *app) sidebarPanelHeader(cx *el.Context, peek bool) el.Element {
 	title := el.Div().H(el.Dp(sidebarHeaderRowHeight))
 	toolbar := el.Div().Row().Items(el.Center).H(el.Dp(sidebarHeaderRowHeight)).WFull()

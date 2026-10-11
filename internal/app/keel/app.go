@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"strings"
 	"sync"
 
@@ -860,32 +859,6 @@ func (a *app) saveWorkflow() {
 				a.ui.WorkflowSource = false
 				a.refresh()
 			}
-		})
-	}()
-}
-
-func (a *app) saveRuntime(id, binary, model string, enabled bool, done func(error)) {
-	// Persist only this runtime against a freshly read revision. Other settings
-	// sections (and credentials) remain in the existing repository.
-	go func() {
-		current, err := a.backend.service.GetSettings(a.ctx)
-		if err == nil {
-			runtimes := maps.Clone(current.Runtimes)
-			r := runtimes[id]
-			r.Binary, r.DefaultModel, r.Enabled = strings.TrimSpace(binary), strings.TrimSpace(model), enabled
-			runtimes[id] = r
-			_, err = a.backend.service.UpdateRuntimeSettings(a.ctx, runtimes, current.Revision)
-		}
-		if err == nil {
-			_, err = a.backend.service.CheckRuntime(id)
-		}
-		core.Update(func() {
-			if a.closed {
-				return
-			}
-			a.fail(err)
-			a.refresh()
-			done(err)
 		})
 	}()
 }
