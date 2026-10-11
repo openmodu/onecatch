@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 type Inspector struct {
@@ -276,7 +278,7 @@ func (i *Inspector) run(ctx context.Context, workspace string, args ...string) (
 		return i.runner.Run(ctx, workspace, args...)
 	}
 	commandArgs := append([]string{"-C", workspace}, args...)
-	output, err := exec.CommandContext(ctx, i.binary, commandArgs...).CombinedOutput()
+	output, err := processexec.CommandContext(ctx, i.binary, commandArgs...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
 	}

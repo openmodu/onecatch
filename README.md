@@ -42,12 +42,14 @@ Install Go 1.26.1, Git, and a configured Agent CLI or Modu provider. macOS needs
 
 ```bash
 go mod download
-go run ./cmd/keel
+go tool keel run -watch=false
 go build -trimpath -ldflags='-s -w' -o bin/onecatch ./cmd/app
 go test ./...
 ```
 
-Configure an Agent under Settings → Harness, add a project, then create a task or select a workflow. Data defaults to `~/.onecatch/`. Use `go run ./cmd/keel -data-dir /tmp/onecatch-preview` for a separate data directory.
+Configure an Agent under Settings → Harness, add a project, then create a task or select a workflow. Data defaults to `~/.onecatch/`. Use `go tool keel run -watch=false -- -data-dir /tmp/onecatch-preview` for a separate data directory.
+
+On Windows, use `go tool keel build -target windows -arch amd64 -o bin` and run `bin/onecatch-keel.exe`. Keel embeds the per-monitor DPI manifest, native control theme and icon; a bare `go build` does not. Development uses `go tool keel run -watch=false` for the same native resources. Windows keeps its system title bar and menu and loads installed Segoe UI, Consolas and Microsoft YaHei fonts.
 
 With Task installed, `task dev:desktop`, `task build`, and `task test` are equivalent shortcuts. The previous Wails desktop/mobile applications and React frontend have been removed.
 

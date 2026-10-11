@@ -19,6 +19,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 	"github.com/openmodu/onecatch/internal/sshcredentials"
 	"github.com/openmodu/onecatch/internal/sshendpoint"
 )
@@ -242,7 +243,7 @@ func (l *localExecutor) Run(ctx context.Context, cmd Command) (Outcome, error) {
 	status, cwdMark := newMarker("rc"), newMarker("cwd")
 	program := wrapped(cmd, status, cwdMark)
 	return runShell(ctx, cmd, func(c context.Context) *exec.Cmd {
-		return exec.CommandContext(c, "/bin/sh", "-c", program)
+		return processexec.CommandContext(c, "/bin/sh", "-c", program)
 	}, status, cwdMark, "local shell")
 }
 
@@ -270,14 +271,14 @@ func (s *sshExecutor) Run(ctx context.Context, cmd Command) (Outcome, error) {
 	args := append(s.sshArgs(endpoint.Port), endpoint.Host, program)
 	var authenticationEnvironment []string
 	if s.target.CredentialID != "" {
-		configured := exec.Command(binary)
+		configured := processexec.Command(binary)
 		if err := sshcredentials.ConfigureCommand(configured, s.target.CredentialID, s.target.AskPassBinary); err != nil {
 			return Outcome{}, fmt.Errorf("%w (ssh %s): configure password authentication: %v", ErrTransport, s.target.Host, err)
 		}
 		authenticationEnvironment = configured.Env
 	}
 	return runShell(ctx, cmd, func(c context.Context) *exec.Cmd {
-		process := exec.CommandContext(c, binary, args...)
+		process := processexec.CommandContext(c, binary, args...)
 		process.Env = authenticationEnvironment
 		return process
 	}, status, cwdMark, "ssh "+s.target.Host)
@@ -405,7 +406,7 @@ func CloseSSHControlMaster(ctx context.Context, t Target) error {
 	if username := strings.TrimSpace(t.Username); username != "" {
 		args = append(args, "-l", username)
 	}
-	return exec.CommandContext(ctx, binary, append(args, endpoint.Host)...).Run()
+	return processexec.CommandContext(ctx, binary, append(args, endpoint.Host)...).Run()
 }
 
 // --- shared ---------------------------------------------------------------

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 const (
@@ -57,7 +59,7 @@ func (r *ModuRunner) Run(ctx context.Context, req Request, sink Sink) (Result, e
 		}
 		return r.remoteRunner.Run(ctx, req, sink)
 	}
-	cmd := exec.CommandContext(ctx, r.binary, moduCommandArgs(req)...)
+	cmd := processexec.CommandContext(ctx, r.binary, moduCommandArgs(req)...)
 	cmd.Dir = req.Workspace
 	cmd.Env = moduEnvironment(req.Environment, req.Model, req.Provider)
 	if req.InterruptGrace > 0 {

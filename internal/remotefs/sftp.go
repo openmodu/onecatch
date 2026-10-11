@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 	"github.com/openmodu/onecatch/internal/sshcredentials"
 	"github.com/openmodu/onecatch/internal/sshendpoint"
 	"github.com/pkg/sftp"
@@ -134,7 +135,7 @@ func missingSFTPSubsystem(diagnostic string) bool {
 }
 
 func startSFTPBackend(ctx context.Context, config SFTPConfig, binary string, args []string) (*SFTPBackend, error) {
-	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd := processexec.CommandContext(ctx, binary, args...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, fmt.Errorf("open SSH stdout: %w", err)

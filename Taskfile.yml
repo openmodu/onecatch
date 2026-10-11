@@ -15,7 +15,7 @@ tasks:
     cmds: [git config core.hooksPath .githooks]
   dev:desktop:
     desc: Run the native Keel desktop
-    cmds: [go run ./cmd/keel]
+    cmds: [go tool keel run -watch=false]
   dev:keel:
     cmds: [{task: 'dev:desktop'}]
   icons:
@@ -24,7 +24,10 @@ tasks:
   build:
     desc: Build a compact native desktop executable
     cmds:
-      - go build -trimpath -ldflags='-s -w' -o '{{.BIN_DIR}}/onecatch{{.EXE_EXT}}' ./cmd/app
+      - cmd: go build -trimpath -ldflags='-s -w' -o '{{.BIN_DIR}}/onecatch{{.EXE_EXT}}' ./cmd/app
+        platforms: [darwin, linux]
+      - cmd: go tool keel build -target windows -o '{{.BIN_DIR}}'
+        platforms: [windows]
   build:desktop:
     cmds: [{task: build}]
   build:keel:

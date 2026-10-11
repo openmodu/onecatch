@@ -68,7 +68,7 @@ func applyAppPalette(dark bool, accent string) {
 	// half-black CSS overlay after conversion to display pixels.
 	p.Scrim = color.NRGBA{A: 0xc8}
 	theme.Apply(p)
-	theme.Material.Face = "SF Pro Text, SF Pro, .AppleSystemUIFont, Segoe UI, " + theme.Face
+	theme.Material.Face = platformUIFace(runtime.GOOS)
 }
 
 func button(label string, action func(), variant kit.ButtonVariant) *kit.ButtonView {

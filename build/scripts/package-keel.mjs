@@ -37,7 +37,13 @@ try {
   if (!os || !arch) throw new Error('Unsupported release platform');
   const basename = `OneCatch-${version}-${os}-${arch}`;
   if (os === 'darwin') {
-    run('ditto',['-c','-k','--keepParent',`bin/keel/${config.name}.app`,`dist/${basename}.zip`]);
+    const bundle = `bin/keel/${config.name}.app`;
+    run('go',['run','./build/icon','-optimize-icns',`${bundle}/Contents/Resources/icon.icns`]);
+    const signArgs = ['--force','--deep','--sign',process.env.SIGN_IDENTITY || '-'];
+    if (process.env.SIGN_IDENTITY) signArgs.push('--options','runtime','--timestamp');
+    run('codesign',[...signArgs,bundle]);
+    run('codesign',['--verify','--deep','--strict',bundle]);
+    run('ditto',['-c','-k','--zlibCompressionLevel','9','--keepParent',bundle,`dist/${basename}.zip`]);
   } else if (os === 'windows') {
     const exe = path.resolve(`bin/keel/${config.binary}.exe`);
     const dest = path.resolve(`dist/${basename}.zip`);

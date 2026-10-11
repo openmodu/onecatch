@@ -22,6 +22,7 @@ type Options struct{ DataRoot string }
 
 func Run(options Options) error {
 	prepareCommandEnvironment()
+	loadPlatformFonts()
 	b, err := openBackend(context.Background(), options.DataRoot)
 	if err != nil {
 		return err
@@ -50,13 +51,13 @@ func Run(options Options) error {
 	a.refresh()
 	// Overflowing views always show their thin scrollbar.
 	el.SetScrollbarDefault(el.ScrollbarAlways)
-	a.window = window.Open(window.Options{
+	a.window = window.Open(platformWindowOptions(runtime.GOOS, window.Options{
 		Title: "OneCatch · Keel", Width: 1120, Height: 760, MinWidth: 640, MinHeight: 480,
 		Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin",
 		TrafficLightLayout: &window.TrafficLightLayout{Height: mainTitleBarHeight, Left: 20},
 		Content:            el.Root(a), OnClose: a.close,
 		Shortcuts: map[string]func(){"mod+`": a.toggleTerminal, "mod+enter": a.send, "mod+shift+enter": a.sendSteering, "mod+s": a.saveActiveWorkspaceFile, "mod+k": a.focusTaskSearch, "mod+b": a.toggleSidebar, "mod+[": func() { a.goHistory(-1) }, "mod+]": func() { a.goHistory(1) }},
-	})
+	}))
 	// Window actions wait for the first native frame before applying.
 	core.Update(func() {
 		if !a.closed && !a.window.Maximized() {

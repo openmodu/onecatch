@@ -9,7 +9,6 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -17,6 +16,8 @@ import (
 
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 const (
@@ -498,7 +499,7 @@ func copyFileAtomic(source, destination string) error {
 func excludeLocalOneCatch(workspace string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, "git", "-C", workspace, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude").Output()
+	output, err := processexec.CommandContext(ctx, "git", "-C", workspace, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude").Output()
 	if err != nil {
 		return nil
 	} // ordinary non-Git workspace

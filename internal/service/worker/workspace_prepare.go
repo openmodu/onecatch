@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 func prepareGitWorkspace(ctx context.Context, path, remoteURL, revision string) *RemoteError {
@@ -31,7 +32,7 @@ func prepareGitWorkspace(ctx context.Context, path, remoteURL, revision string) 
 			return &RemoteError{Code: "worker_workspace_prepare_failed", Message: "could not create a temporary clone directory"}
 		}
 		defer os.RemoveAll(temporary)
-		command := exec.CommandContext(ctx, "git", "clone", "--quiet", "--no-checkout", "--", remoteURL, temporary)
+		command := processexec.CommandContext(ctx, "git", "clone", "--quiet", "--no-checkout", "--", remoteURL, temporary)
 		if output, err := command.CombinedOutput(); err != nil {
 			return &RemoteError{Code: "worker_workspace_clone_failed", Message: commandMessage(output, "could not clone the project on the worker")}
 		}
@@ -154,13 +155,13 @@ func normalizeRemoteURL(value string) string {
 }
 
 func gitRevisionExists(ctx context.Context, workspace, revision string) bool {
-	command := exec.CommandContext(ctx, "git", "cat-file", "-e", revision+"^{commit}")
+	command := processexec.CommandContext(ctx, "git", "cat-file", "-e", revision+"^{commit}")
 	command.Dir = workspace
 	return command.Run() == nil
 }
 
 func gitCombinedOutput(ctx context.Context, workspace string, args ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, "git", args...)
+	command := processexec.CommandContext(ctx, "git", args...)
 	command.Dir = workspace
 	return command.CombinedOutput()
 }

@@ -722,13 +722,13 @@ func (a *app) detachInspector() {
 		return
 	}
 	a.workbench.Visible = false
-	a.workbench.DetachedWindow = window.Open(window.Options{Title: "OneCatch · 检查面板", Width: 960, Height: 800, MinWidth: 640, MinHeight: 500, Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin", TrafficLightLayout: &window.TrafficLightLayout{Height: 52, Left: 20}, Content: el.Root(inspectorWindowView{a}), Shortcuts: map[string]func(){"mod+s": a.saveActiveWorkspaceFile}, OnClose: func() {
+	a.workbench.DetachedWindow = window.Open(platformWindowOptions(runtime.GOOS, window.Options{Title: "OneCatch · 检查面板", Width: 960, Height: 800, MinWidth: 640, MinHeight: 500, Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin", TrafficLightLayout: &window.TrafficLightLayout{Height: 52, Left: 20}, Content: el.Root(inspectorWindowView{a}), Shortcuts: map[string]func(){"mod+s": a.saveActiveWorkspaceFile}, OnClose: func() {
 		a.workbench.DetachedWindow = nil
 		if !a.closed {
 			a.workbench.Visible = true
 			a.loadInspector()
 		}
-	}})
+	}}))
 	a.loadInspector()
 }
 

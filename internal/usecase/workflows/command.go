@@ -13,6 +13,7 @@ import (
 
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
@@ -31,7 +32,7 @@ func (s *Usecase) runCommand(ctx context.Context, definition domainworkflows.Def
 	if runtime.GOOS == "windows" {
 		shell, flag = "cmd", "/C"
 	}
-	cmd := exec.CommandContext(stepCtx, shell, flag, step.Command)
+	cmd := processexec.CommandContext(stepCtx, shell, flag, step.Command)
 	cmd.Dir = workspace.Path
 	cmd.Env = append(os.Environ(), "ONECATCH_RUN_ID="+run.ID, "ONECATCH_STEP_ID="+step.ID, "ONECATCH_FEEDBACK="+messageTexts(run.Nodes[step.ID].Inbox))
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }

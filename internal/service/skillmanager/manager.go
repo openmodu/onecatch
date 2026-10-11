@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/openmodu/modu/pkg/utils"
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 	"github.com/openmodu/onecatch/pkg/localfile"
 )
 
@@ -216,7 +217,7 @@ func New(root string) (*Manager, error) {
 		now:          time.Now,
 		lookPath:     exec.LookPath,
 		run: func(ctx context.Context, name string, args ...string) ([]byte, error) {
-			return exec.CommandContext(ctx, name, args...).CombinedOutput()
+			return processexec.CommandContext(ctx, name, args...).CombinedOutput()
 		},
 	}
 	if err := os.MkdirAll(m.root, 0o700); err != nil {

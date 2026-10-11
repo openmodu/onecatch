@@ -2,6 +2,7 @@
 package main
 
 import (
+	"flag"
 	"image"
 	"image/png"
 	"log"
@@ -11,6 +12,15 @@ import (
 )
 
 func main() {
+	icns := flag.String("optimize-icns", "", "losslessly recompress PNG representations in an ICNS file")
+	flag.Parse()
+	if *icns != "" {
+		if err := optimizeICNSFile(*icns); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
+
 	source, err := os.Open("build/keel/appicon.png")
 	if err != nil {
 		log.Fatal(err)
