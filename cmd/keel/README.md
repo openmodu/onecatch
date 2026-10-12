@@ -1,6 +1,6 @@
 # OneCatch Keel desktop
 
-The native desktop uses Keel v0.1.11 and the pinned remote Gio/typesetting forks in `go.mod`. All interface code is Go; no local framework checkout or patch launcher is required.
+The native desktop uses Keel v0.1.12 and the pinned remote Gio/typesetting forks in `go.mod`. All interface code is Go; no local framework checkout or patch launcher is required.
 
 ## Run
 

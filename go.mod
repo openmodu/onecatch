@@ -9,7 +9,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/vt v0.0.0-20261008172826-faa4adf95555
 	github.com/creack/pty v1.1.24
-	github.com/dyike/keel v0.1.11
+	github.com/dyike/keel v0.1.12
 	github.com/go-chi/chi/v5 v5.3.0
 	github.com/go-text/typesetting v0.3.5
 	github.com/google/uuid v1.6.0
@@ -92,6 +92,6 @@ tool github.com/dyike/keel/cmd/keel
 // Keel draws with its own Gio and go-text copies (third_party): CoreText text
 // on macOS and other fixes. A replace applies only to the module writing it.
 replace (
-	gioui.org => github.com/dyike/keel/third_party/gio v0.0.0-20261011235851-037a63e01c6c
-	github.com/go-text/typesetting => github.com/dyike/keel/third_party/typesetting v0.0.0-20261011235851-037a63e01c6c
+	gioui.org => github.com/dyike/keel/third_party/gio v0.0.0-20261012002705-b2696a6089c4
+	github.com/go-text/typesetting => github.com/dyike/keel/third_party/typesetting v0.0.0-20261012002705-b2696a6089c4
 )
