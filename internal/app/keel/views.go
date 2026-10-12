@@ -124,10 +124,10 @@ func field(id, hint string, value *string) *el.InputEl {
 }
 
 func dragArea(cx *el.Context, d *el.DivEl) *el.DivEl {
-	if runtime.GOOS != "darwin" && runtime.GOOS != "windows" {
+	if runtime.GOOS != "darwin" && !usesDesktopHeader(runtime.GOOS) {
 		return d
 	}
-	if runtime.GOOS == "windows" {
+	if usesDesktopHeader(runtime.GOOS) {
 		return windowsDragArea(d)
 	}
 	return d.Decorate(func(gtx core.C, draw func()) {
@@ -169,7 +169,7 @@ func (a *app) Render(cx *el.Context) el.Element {
 			defer clip.Rect(image.Rectangle{Max: gtx.Constraints.Max}).Push(gtx.Ops).Pop()
 			draw()
 		})
-		if runtime.GOOS != "windows" {
+		if !usesDesktopHeader(runtime.GOOS) {
 			center.Child(a.header(cx))
 		}
 		if a.page != "" && a.page != "skills" || !a.terminal.Open || !a.terminal.Maximized {
@@ -191,7 +191,7 @@ func (a *app) Render(cx *el.Context) el.Element {
 		root.Child(a.skillResizeSeam("skill-inspector-resize", "调整 Skills 检查面板宽度", &a.skills.Width, 280, 820, true), a.skillInspector(cx))
 	}
 	root.Child(peekTrigger)
-	if runtime.GOOS == "windows" {
+	if usesDesktopHeader(runtime.GOOS) {
 		return el.Div().WFull().HFull().Bg(theme.Bg).Child(a.header(cx), root.Grow().H(el.Dp(0)))
 	}
 	return root
@@ -221,20 +221,20 @@ func (a *app) headerForPlatform(cx *el.Context, platform string) el.Element {
 		}
 		left.Child(el.Div().Px(5).Py(2).Rounded(4).Bg(theme.Subtle).Child(el.Text(category).TextSize(10).TextColor(theme.Muted)))
 	}
-	if platform == "windows" {
+	if usesDesktopHeader(platform) {
 		left = windowsDragArea(left)
 	} else {
 		left = dragArea(cx, left)
 	}
 	left.Child(el.Text(title).Grow().W(el.Dp(0)).MaxLines(1).Medium().TextSize(13))
 	bar := el.Div().Row().Items(el.Center).H(el.Dp(mainTitleBarHeight)).Px(18).Gap(4)
-	if platform != "windows" && a.sidebarCollapsed(cx) {
+	if !usesDesktopHeader(platform) && a.sidebarCollapsed(cx) {
 		if platform == "darwin" {
 			bar.Pl(macSidebarToggleLeft)
 		}
 		bar.Child(iconAction(cx, "show-sidebar", "展开侧栏", "panel-left", a.toggleSidebar, false))
 	}
-	if platform == "windows" {
+	if usesDesktopHeader(platform) {
 		bar.Px(0).Gap(0).NoShrink()
 		leading := el.Div().ID("windows-sidebar-header").Row().Items(el.Center).HFull().Px(18).Gap(4).NoShrink()
 		id, label := "hide-sidebar", "收起侧栏"
@@ -264,8 +264,8 @@ func (a *app) headerForPlatform(cx *el.Context, platform string) el.Element {
 	if a.page == "skills" && !a.skills.Visible {
 		bar.Child(iconAction(cx, "show-skill-inspector", "展开检查面板", "panel-right-open", func() { a.openSkillInspector(a.skills.Tab) }, false))
 	}
-	if platform == "windows" {
-		bar.H(el.Dp(44)).Pr(0).Child(windowsWindowButtons(cx))
+	if usesDesktopHeader(platform) {
+		bar.H(el.Dp(44)).Pr(0).Child(desktopWindowButtons(cx))
 	}
 	return bar
 }

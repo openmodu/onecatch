@@ -8,6 +8,7 @@ import (
 )
 
 func TestPlatformChrome(t *testing.T) {
+	t.Setenv("WAYLAND_DISPLAY", "")
 	for _, platform := range []string{"windows", "linux", "darwin"} {
 		opts := platformWindowOptions(platform, window.Options{Width: 900, TrafficLightLayout: &window.TrafficLightLayout{Height: 52}})
 		mac := platform == "darwin"
@@ -21,7 +22,7 @@ func TestPlatformChrome(t *testing.T) {
 }
 
 func expectedMenuDisplay(platform string) window.MenuDisplay {
-	if platform == "windows" {
+	if platform == "windows" || platform == "linux" {
 		return window.MenuDisplayHidden
 	}
 	return window.MenuDisplayAuto
@@ -35,5 +36,13 @@ func TestWindowsFontFamiliesAndShortcuts(t *testing.T) {
 	}
 	if got := windowsShortcutLabel("mod+shift+enter"); got != "Ctrl+Shift+Enter" {
 		t.Fatal(got)
+	}
+}
+
+func TestLinuxWaylandChrome(t *testing.T) {
+	t.Setenv("WAYLAND_DISPLAY", "wayland-0")
+	opts := platformWindowOptions("linux", window.Options{})
+	if !opts.Frameless || opts.NativeTrafficLights || opts.MenuDisplay != window.MenuDisplayHidden {
+		t.Fatalf("Wayland chrome: %+v", opts)
 	}
 }

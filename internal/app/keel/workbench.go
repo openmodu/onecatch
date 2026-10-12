@@ -716,8 +716,8 @@ func eventClock(value string) string {
 type inspectorWindowView struct{ app *app }
 
 func (v inspectorWindowView) Render(cx *el.Context) el.Element {
-	if runtime.GOOS == "windows" {
-		return el.Div().WFull().HFull().Child(el.Div().Row().Items(el.Center).H(el.Dp(44)).Child(dragArea(cx, el.Div().Grow().HFull().Px(12).Justify(el.Center).Child(el.Text("OneCatch · 检查面板").TextSize(13))), windowsWindowButtons(cx)), el.Div().Grow().H(el.Dp(0)).Child(v.app.inspector(cx)))
+	if usesDesktopHeader(runtime.GOOS) {
+		return el.Div().WFull().HFull().Child(el.Div().Row().Items(el.Center).H(el.Dp(44)).Child(dragArea(cx, el.Div().Grow().HFull().Px(12).Justify(el.Center).Child(el.Text("OneCatch · 检查面板").TextSize(13))), desktopWindowButtons(cx)), el.Div().Grow().H(el.Dp(0)).Child(v.app.inspector(cx)))
 	}
 	return v.app.inspector(cx)
 }

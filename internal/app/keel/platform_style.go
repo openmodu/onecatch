@@ -59,10 +59,12 @@ func loadPlatformFonts() {
 }
 
 func platformWindowOptions(platform string, options window.Options) window.Options {
-	options.Frameless = platform == "darwin" || platform == "windows"
+	// The pinned X11 backend lacks native move/resize gestures for undecorated
+	// windows. Retain its system frame; Wayland supports client-side chrome.
+	options.Frameless = platform == "darwin" || platform == "windows" || platform == "linux" && os.Getenv("WAYLAND_DISPLAY") != ""
 	options.NativeTrafficLights = platform == "darwin"
 	options.MenuDisplay = window.MenuDisplayAuto
-	if platform == "windows" {
+	if usesDesktopHeader(platform) {
 		options.MenuDisplay = window.MenuDisplayHidden
 	}
 	if platform != "darwin" {
@@ -76,4 +78,9 @@ func platformTerminalFace(platform string) font.Typeface {
 		return "Consolas, Microsoft YaHei, Microsoft YaHei UI, SimSun, Go Mono, Segoe UI Emoji"
 	}
 	return theme.MonoFace
+}
+
+// Linux and Windows share the app header; macOS uses native traffic lights.
+func usesDesktopHeader(platform string) bool {
+	return platform == "windows" || platform == "linux"
 }

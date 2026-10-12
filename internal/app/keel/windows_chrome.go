@@ -117,3 +117,11 @@ func windowsDragArea(d *el.DivEl) *el.DivEl {
 		draw()
 	})
 }
+
+// X11 retains its system frame because the pinned backend lacks caption gestures.
+func desktopWindowButtons(cx *el.Context) el.Element {
+	if w := core.CurrentWindow(); w != nil && !w.Frameless() {
+		return el.Div()
+	}
+	return windowsWindowButtons(cx)
+}
