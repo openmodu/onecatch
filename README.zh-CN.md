@@ -36,7 +36,7 @@ steps:
 
 ## 安装与开发
 
-桌面端使用 Keel v0.1.10，界面和业务代码均由 Go 构建。依赖来自远端版本，Gio 和 typesetting 使用 `go.mod` 中固定的 Keel 分支，不需要本地 Keel 仓库。
+桌面端使用 Keel v0.1.11，界面和业务代码均由 Go 构建。依赖来自远端版本，Gio 和 typesetting 使用 `go.mod` 中固定的 Keel 分支，不需要本地 Keel 仓库。
 
 需要 Go 1.26.1、Git，以及已配置的 Agent CLI 或 Modu provider。macOS 需要 Xcode Command Line Tools；Linux 的原生图形库可用 `go tool keel doctor` 检查。Node.js 仅用于打包和发布元数据，运行桌面端不需要 npm。
 

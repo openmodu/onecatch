@@ -1,6 +1,6 @@
 # Native desktop builds
 
-Keel v0.1.10 and its Gio/typesetting forks are pinned to remote modules in `go.mod`. No local checkout or backport patches are used.
+Keel v0.1.11 and its Gio/typesetting forks are pinned to remote modules in `go.mod`. No local checkout or backport patches are used.
 
 - Run: `go run ./cmd/keel`
 - Compact executable: `go build -trimpath -ldflags='-s -w' -o bin/onecatch ./cmd/keel`

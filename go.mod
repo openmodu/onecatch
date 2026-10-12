@@ -9,8 +9,9 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/vt v0.0.0-20261008172826-faa4adf95555
 	github.com/creack/pty v1.1.24
-	github.com/dyike/keel v0.1.10
+	github.com/dyike/keel v0.1.11
 	github.com/go-chi/chi/v5 v5.3.0
+	github.com/go-text/typesetting v0.3.5
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.7.0
 	github.com/gorilla/websocket v1.5.3
@@ -49,7 +50,6 @@ require (
 	github.com/dlclark/regexp2/v2 v2.2.1 // indirect
 	github.com/ebitengine/purego v0.11.1 // indirect
 	github.com/go-sql-driver/mysql v1.8.1 // indirect
-	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/google/subcommands v1.2.0 // indirect
@@ -92,6 +92,6 @@ tool github.com/dyike/keel/cmd/keel
 // Keel draws with its own Gio and go-text copies (third_party): CoreText text
 // on macOS and other fixes. A replace applies only to the module writing it.
 replace (
-	gioui.org => github.com/dyike/keel/third_party/gio v0.0.0-20261011115947-ac26cdd7a5af
-	github.com/go-text/typesetting => github.com/dyike/keel/third_party/typesetting v0.0.0-20261011115947-ac26cdd7a5af
+	gioui.org => github.com/dyike/keel/third_party/gio v0.0.0-20261011235851-037a63e01c6c
+	github.com/go-text/typesetting => github.com/dyike/keel/third_party/typesetting v0.0.0-20261011235851-037a63e01c6c
 )
