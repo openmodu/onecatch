@@ -431,18 +431,20 @@ func newConversationDocument(source string) *markdown.Doc {
 	return markdown.New(source)
 }
 
-func syncConversationSource(doc *markdown.Doc, text string, streaming bool) {
-	previous := doc.Source()
-	if text == previous {
-		return
-	}
-	// Streaming appends preserve the selected prefix. Replacing the source
-	// on every token clears selection, even while the user is copying it.
-	if (streaming || doc.Streaming()) && strings.HasPrefix(text, previous) {
+func (a *app) conversationSource(key, text string) *markdown.Doc {
+	doc := a.docs[key]
+	if doc == nil || !strings.HasPrefix(text, doc.Source()) {
+		// SetSource clears the entire SelectionGroup, including a selection
+		// in an unrelated reply. Replacing only this document lets SetDocuments
+		// retain endpoints in the other replies by their document identity.
+		doc = newConversationDocument(text).TableDividers(!a.ui.Preferences.HideTableDividers)
+		a.docs[key] = doc
+	} else if previous := doc.Source(); text != previous {
+		// Durable snapshots can append text without the streaming flag too.
+		// Both live tokens and those snapshots must preserve selected text.
 		doc.Append(text[len(previous):])
-	} else {
-		doc.SetSource(text)
 	}
+	return doc
 }
 
 type conversationDocView struct {
@@ -461,12 +463,7 @@ func (a *app) conversationDocument(cx *el.Context, e *entry, hug bool) el.Elemen
 	if a.conversation.views == nil {
 		a.conversation.views = map[string]*conversationDocView{}
 	}
-	doc := a.docs[e.key]
-	if doc == nil {
-		doc = newConversationDocument(e.text).TableDividers(!a.ui.Preferences.HideTableDividers)
-		a.docs[e.key] = doc
-	}
-	syncConversationSource(doc, e.text, e.streaming)
+	doc := a.conversationSource(e.key, e.text)
 	doc.OnLink(a.openConversationLink)
 	doc.SetStreaming(e.streaming && a.detail != nil && a.detail.Active)
 	v := a.conversation.views[e.key]

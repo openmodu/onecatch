@@ -469,33 +469,16 @@ func (a *app) syncMessages() {
 	var selectable []*markdown.Doc
 	for _, e := range a.entries {
 		if e.kind == "message" || e.kind == agentrun.KindError || e.user {
-			doc := a.docs[e.key]
-			if doc == nil {
-				doc = newConversationDocument(e.text).TableDividers(!a.ui.Preferences.HideTableDividers)
-				a.docs[e.key] = doc
-			}
-			syncConversationSource(doc, e.text, e.streaming)
+			doc := a.conversationSource(e.key, e.text)
 			doc.SetStreaming(e.streaming && a.detail != nil && a.detail.Active)
 			if out, ok := a.workflowMessageOutcome(e); ok {
 				if out.Prose != "" {
 					key := e.key + "/prose"
-					prose := a.docs[key]
-					if prose == nil {
-						prose = newConversationDocument(out.Prose).TableDividers(!a.ui.Preferences.HideTableDividers)
-						a.docs[key] = prose
-					} else {
-						syncConversationSource(prose, out.Prose, false)
-					}
+					prose := a.conversationSource(key, out.Prose)
 					selectable = append(selectable, prose)
 				}
 				key := e.key + "/readable"
-				readable := a.docs[key]
-				if readable == nil {
-					readable = newConversationDocument(workflowOutcomeText(out.Outcome))
-					a.docs[key] = readable
-				} else {
-					syncConversationSource(readable, workflowOutcomeText(out.Outcome), false)
-				}
+				readable := a.conversationSource(key, workflowOutcomeText(out.Outcome))
 				// Drag selection follows displayed prose; message copy retains
 				// the untouched raw JSON in the original document.
 				doc = readable

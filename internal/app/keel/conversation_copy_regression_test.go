@@ -12,6 +12,115 @@ import (
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
+func TestConversationCopiesWrappedRepliesBetweenLiveTools(t *testing.T) {
+	for _, scale := range []int{1, 2} {
+		t.Run(fmt.Sprint(scale), func(t *testing.T) {
+			a := conversationFixture(t)
+			a.detail.Active = true
+			a.transcript = newTranscript()
+			texts := []string{
+				"我先核对当前仓库已经解决了哪些问题、还剩哪些性能热点，再给你具体的优化方向。你提到的 `replace` 传递问题，仓库之前做过单模块迁移，我也会确认现在是否还受影响。",
+				"当前仓库的单模块迁移已经解决了 Fork 交付问题：`gio/` 和 `typesetting/` 都随 Keel 发布，不再靠应用补 `replace`。我也重新验证了 cgo 状态：macOS 的 `native/*` 可以无 cgo 构建，完整 UI 仍卡在 Gio GL 等绑定上。性能方面，仓库已有虚拟列表、文字缓存和 Metal 批处理；一个值得测量的新方向是 `core.Update` 每次都唤醒所有窗口，可能增加多窗口应用的布局工作。",
+			}
+			for i, text := range texts {
+				id := fmt.Sprintf("copy-reply-%d", i)
+				a.transcript.items[id] = &entry{key: id, kind: agentrun.KindMessage, text: text, seq: int64(i * 10), at: time.Unix(int64(i*10), 0)}
+			}
+			for i := range 7 {
+				id := fmt.Sprintf("tool-%d", i)
+				a.transcript.items[id] = &entry{key: id, kind: agentrun.KindToolUse, text: `{"command":"git status --short"}`, seq: int64(i + 1), at: time.Unix(int64(i+1), 0), settled: true}
+			}
+			live := &entry{key: "live-tool", kind: agentrun.KindToolResult, text: "处理中", seq: 12, at: time.Unix(12, 0), streaming: true}
+			a.transcript.items[live.key] = live
+			a.syncMessages()
+			a.scroller.SetFollow(false)
+			root := el.Root(a)
+			router, frame, _ := alignmentRouter(root, 1600, 1100, scale)
+			paint := func() {
+				live.text += "."
+				live.revision++
+				a.syncMessages()
+				frame()
+			}
+			for range 5 {
+				paint()
+			}
+			clock := time.Second
+			for attempt := range 8 {
+				index := attempt % 2
+				want := strings.ReplaceAll(texts[index], "`", "")
+				paragraph, ok := alignmentNode(router.AppendSemantics(nil), want, false)
+				if !ok {
+					t.Fatalf("reply %d not visible", index)
+				}
+				start := f32.Pt(float32(paragraph.Bounds.Min.X+1), float32(paragraph.Bounds.Min.Y+10*scale))
+				end := f32.Pt(float32(paragraph.Bounds.Max.X-1), float32(paragraph.Bounds.Max.Y-10*scale))
+				if attempt%4 >= 2 {
+					start, end = end, start
+				}
+				clock += time.Second
+				router.Queue(pointer.Event{Kind: pointer.Move, Source: pointer.Mouse, Position: start, Time: clock}, pointer.Event{Kind: pointer.Press, Source: pointer.Mouse, Buttons: pointer.ButtonPrimary, Position: start, Time: clock})
+				if attempt%3 != 0 {
+					paint()
+				}
+				clock += 100 * time.Millisecond
+				router.Queue(pointer.Event{Kind: pointer.Move, Source: pointer.Mouse, Buttons: pointer.ButtonPrimary, Position: end, Time: clock})
+				if attempt%3 != 0 {
+					paint()
+					paint()
+				}
+				router.Queue(pointer.Event{Kind: pointer.Release, Source: pointer.Mouse, Position: end, Time: clock + time.Millisecond})
+				paint()
+				paint()
+				selectionKey(router, paint, "C")
+				_, copied, ok := router.WriteClipboard()
+				if !ok || string(copied) != want {
+					t.Fatalf("attempt %d: selected reply copy = %q, want %q", attempt, copied, want)
+				}
+			}
+		})
+	}
+}
+
+func TestConversationCopySurvivesUnrelatedMessageSnapshot(t *testing.T) {
+	a := conversationFixture(t)
+	a.detail.Active = true
+	a.transcript = newTranscript()
+	want := "这段正文已完成，选择后仍应完整复制。"
+	a.transcript.items["selected"] = &entry{key: "selected", kind: agentrun.KindMessage, text: want, at: time.Unix(1, 0)}
+	tail := &entry{key: "background", kind: agentrun.KindMessage, text: "后台工具运行情况", at: time.Unix(2, 0)}
+	a.transcript.items[tail.key] = tail
+	a.syncMessages()
+	root := el.Root(a)
+	router, frame, _ := alignmentRouter(root, 1280, 800, 1)
+	paragraph, ok := alignmentNode(router.AppendSemantics(nil), want, false)
+	if !ok {
+		t.Fatal("missing selected paragraph")
+	}
+	start := f32.Pt(float32(paragraph.Bounds.Min.X+1), float32(paragraph.Bounds.Min.Y+paragraph.Bounds.Dy()/2))
+	end := f32.Pt(float32(paragraph.Bounds.Max.X-1), start.Y)
+	router.Queue(pointer.Event{Kind: pointer.Press, Source: pointer.Mouse, Buttons: pointer.ButtonPrimary, Position: start})
+	frame()
+	router.Queue(pointer.Event{Kind: pointer.Move, Source: pointer.Mouse, Buttons: pointer.ButtonPrimary, Position: end})
+	frame()
+	router.Queue(pointer.Event{Kind: pointer.Release, Source: pointer.Mouse, Position: end})
+	frame()
+	frame()
+	selected := a.docs["selected"]
+	for _, snapshot := range []string{tail.text + "：检查通过。", "后台检查结果已修正。", "后台检查结果已修正。追加完整说明。"} {
+		tail.text = snapshot
+		tail.revision++
+		a.syncMessages()
+		frame()
+		frame()
+		selectionKey(router, frame, "C")
+		_, copied, ok := router.WriteClipboard()
+		if !ok || string(copied) != want || a.docs["selected"] != selected || a.docs[tail.key].Source() != snapshot {
+			t.Fatalf("unrelated snapshot %q cleared/truncated selected reply: %q", snapshot, copied)
+		}
+	}
+}
+
 func TestConversationRepeatedDragCopyAfterScrolling(t *testing.T) {
 	a := conversationFixture(t)
 	a.transcript = newTranscript()

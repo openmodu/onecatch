@@ -89,7 +89,10 @@ func TestLongUserMessageDisclosureReflowAndFullCopy(t *testing.T) {
 			frame()
 			frame()
 			frame()
-			if _, ok := findSkillControl(router.AppendSemantics(nil), "显示更多"); ok || doc.IsClamped() {
+			// A replacement now has its own document, so it cannot clear a
+			// selection in another message through the old document's group.
+			current := a.docs[e.key]
+			if _, ok := findSkillControl(router.AppendSemantics(nil), "显示更多"); ok || current.IsClamped() || current.Source() != "short" {
 				t.Fatal("short bubble retained collapse UI")
 			}
 		})
