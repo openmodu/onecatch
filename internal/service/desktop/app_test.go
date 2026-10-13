@@ -1258,3 +1258,28 @@ func TestProjectWorkflowFileRunsAndExports(t *testing.T) {
 	}
 	t.Fatalf("exported workflow did not load: %+v", items)
 }
+
+func TestFoldRuntimeEventsKeepsOneQueueSnapshotAndToolPair(t *testing.T) {
+	at := time.Now()
+	items := []domainworkflows.RuntimeEvent{
+		runtimeEvent(t, 1, agentrun.Event{Kind: agentrun.KindQueueStatus, Text: `{"state":"waiting","position":8}`, At: at}),
+		runtimeEvent(t, 2, agentrun.Event{Kind: agentrun.KindToolUse, StreamID: "call", Text: "Read", At: at.Add(time.Second)}),
+		runtimeEvent(t, 3, agentrun.Event{Kind: agentrun.KindQueueStatus, Text: `{"state":"ready"}`, At: at.Add(2 * time.Second)}),
+		runtimeEvent(t, 4, agentrun.Event{Kind: agentrun.KindToolResult, StreamID: "call", Phase: agentrun.StreamEnd, Text: "file content", At: at.Add(3 * time.Second)}),
+	}
+	views, _ := foldRuntimeEventViews("step", items, false)
+	if len(views) != 3 || views[0].Text != `{"state":"ready"}` || views[0].Seq != 1 || views[0].At != at.Format(time.RFC3339Nano) {
+		t.Fatalf("queue snapshots inflated/reordered transcript: %+v", views)
+	}
+	if views[1].Kind != string(agentrun.KindToolUse) || views[2].Kind != string(agentrun.KindToolResult) || views[1].StreamID != views[2].StreamID {
+		t.Fatal("tool call/result collapsed together")
+	}
+}
+
+func TestRestoreTraeArgumentsUsesKnownCallIdentity(t *testing.T) {
+	views := []RuntimeEventView{{Kind: string(agentrun.KindStarted), Text: "thread"}, {Kind: string(agentrun.KindToolUse), StreamID: "trae-tool-read-a", Text: "Read", Revision: 1}, {Kind: string(agentrun.KindToolUse), Text: "Read"}, {Kind: string(agentrun.KindToolUse), StreamID: "trae-tool-read-b", Text: `Read {"file_path":"/existing"}`, Revision: 1}}
+	restoreTraeToolArguments(views, map[string]map[string]string{"thread": {"trae-tool-read-a": `Read {"file_path":"/repo/README.md"}`, "trae-tool-read-b": `Read {"file_path":"/wrong"}`}})
+	if views[1].Text != `Read {"file_path":"/repo/README.md"}` || views[1].Revision != 2 || views[2].Text != "Read" || views[3].Text != `Read {"file_path":"/existing"}` {
+		t.Fatalf("recovery guessed/overwrote parameters: %+v", views)
+	}
+}

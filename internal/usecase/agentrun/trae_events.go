@@ -9,8 +9,10 @@ import (
 )
 
 type traeTurnState struct {
-	result  Result
-	streams map[string]bool
+	result       Result
+	streams      map[string]bool
+	tools        map[string]string
+	toolVersions map[string]uint64
 }
 type traeTokens struct {
 	Input     int `json:"inputTokens"`
@@ -35,18 +37,21 @@ func (s *traeTurnState) update(f traeFrame, turnID string, sink Sink) (bool, err
 			Error  json.RawMessage `json:"error"`
 		} `json:"turn"`
 		Item struct {
-			ID               string          `json:"id"`
-			Type             string          `json:"type"`
-			Text             string          `json:"text"`
-			Command          string          `json:"command"`
-			Tool             string          `json:"tool"`
-			Status           string          `json:"status"`
-			AggregatedOutput string          `json:"aggregatedOutput"`
-			ExitCode         *int            `json:"exitCode"`
-			Summary          []string        `json:"summary"`
-			Content          json.RawMessage `json:"content"`
-			Result           json.RawMessage `json:"result"`
-			Error            json.RawMessage `json:"error"`
+			ID               string              `json:"id"`
+			Type             string              `json:"type"`
+			Text             string              `json:"text"`
+			Command          string              `json:"command"`
+			CommandActions   []traeCommandAction `json:"commandActions"`
+			Tool             string              `json:"tool"`
+			Arguments        json.RawMessage     `json:"arguments"`
+			Input            json.RawMessage     `json:"input"`
+			Status           string              `json:"status"`
+			AggregatedOutput string              `json:"aggregatedOutput"`
+			ExitCode         *int                `json:"exitCode"`
+			Summary          []string            `json:"summary"`
+			Content          json.RawMessage     `json:"content"`
+			Result           json.RawMessage     `json:"result"`
+			Error            json.RawMessage     `json:"error"`
 			Changes          []struct {
 				Path string `json:"path"`
 			} `json:"changes"`
@@ -68,10 +73,26 @@ func (s *traeTurnState) update(f traeFrame, turnID string, sink Sink) (bool, err
 	}
 	raw, _ := json.Marshal(f)
 	emit := func(kind EventKind, text string, phase StreamPhase, id string, failed bool) {
-		sink(Event{Kind: kind, Text: text, StreamID: id, Phase: phase, Failed: failed, Raw: string(raw), At: time.Now()})
+		revision := uint64(0)
+		if kind == KindToolUse && id != "" {
+			if s.tools == nil {
+				s.tools = map[string]string{}
+				s.toolVersions = map[string]uint64{}
+			}
+			if previous, ok := s.tools[id]; ok && previous == text {
+				return
+			}
+			s.tools[id] = text
+			s.toolVersions[id]++
+			revision = s.toolVersions[id]
+		}
+		sink(Event{Kind: kind, Text: text, StreamID: id, Revision: revision, Phase: phase, Failed: failed, Raw: string(raw), At: time.Now()})
 	}
 	stream := func(kind EventKind, id, text string, phase StreamPhase) {
 		key := "trae-" + string(kind) + "-" + id
+		if kind == KindToolResult {
+			key = traeToolID(id)
+		}
 		if phase == StreamStart {
 			if s.streams[key] {
 				return
@@ -114,9 +135,17 @@ func (s *traeTurnState) update(f traeFrame, turnID string, sink Sink) (bool, err
 		case "reasoning":
 			stream(KindReasoning, n.Item.ID, "", StreamStart)
 		case "commandExecution":
-			emit(KindToolUse, n.Item.Command, "", "", false)
+			emit(KindToolUse, traeCommandText(n.Item.Command, n.Item.CommandActions), "", traeToolID(n.Item.ID), false)
 		case "mcpToolCall", "dynamicToolCall":
-			emit(KindToolUse, n.Item.Tool, "", "", false)
+			args := n.Item.Arguments
+			if len(args) == 0 {
+				args = n.Item.Input
+			}
+			var encoded string
+			if json.Unmarshal(args, &encoded) == nil && json.Valid([]byte(encoded)) {
+				args = json.RawMessage(encoded)
+			}
+			emit(KindToolUse, moduToolText(n.Item.Tool, args), "", traeToolID(n.Item.ID), false)
 		}
 	case "item/completed":
 		failed := n.Item.Status == "failed" || n.Item.Status == "declined"
@@ -131,10 +160,13 @@ func (s *traeTurnState) update(f traeFrame, turnID string, sink Sink) (bool, err
 			}
 			stream(KindReasoning, n.Item.ID, text, StreamEnd)
 		case "commandExecution":
+			if n.Item.Command != "" {
+				emit(KindToolUse, traeCommandText(n.Item.Command, n.Item.CommandActions), "", traeToolID(n.Item.ID), false)
+			}
 			if n.Item.ExitCode != nil && *n.Item.ExitCode != 0 {
 				failed = true
 			}
-			id := "trae-" + string(KindToolResult) + "-" + n.Item.ID
+			id := traeToolID(n.Item.ID)
 			emit(KindToolResult, n.Item.AggregatedOutput, StreamEnd, id, failed)
 			delete(s.streams, id)
 		case "fileChange":
@@ -148,7 +180,11 @@ func (s *traeTurnState) update(f traeFrame, turnID string, sink Sink) (bool, err
 			if text == "" || text == "null" {
 				text = string(n.Item.Error)
 			}
-			emit(KindToolResult, text, "", "", failed)
+			var resultState struct {
+				IsError bool `json:"isError"`
+			}
+			_ = json.Unmarshal(n.Item.Result, &resultState)
+			emit(KindToolResult, traeToolResultText(text), "", traeToolID(n.Item.ID), failed || resultState.IsError)
 		case "contextCompaction":
 			emit(KindContextCompaction, "", "", "", false)
 		}
@@ -262,4 +298,56 @@ func traeContentText(raw json.RawMessage) string {
 		}
 	}
 	return strings.Join(text, "\n")
+}
+
+// Use one identity for the call and its output; event kind distinguishes them.
+func traeToolID(id string) string {
+	if id == "" {
+		return ""
+	}
+	return "trae-tool-" + id
+}
+
+func traeToolResultText(text string) string {
+	var plain string
+	if json.Unmarshal([]byte(text), &plain) == nil {
+		return plain
+	}
+	var result struct {
+		Content json.RawMessage `json:"content"`
+	}
+	if json.Unmarshal([]byte(text), &result) == nil && len(result.Content) > 0 {
+		if value := traeContentText(result.Content); value != "" {
+			return value
+		}
+	}
+	return text
+}
+
+type traeCommandAction struct {
+	Type  string `json:"type"`
+	Path  string `json:"path"`
+	Query string `json:"query"`
+}
+
+// TRAE represents built-in Read/Grep tools as commandExecution, rather than
+// dynamicToolCall. Their targets are carried by commandActions.
+func traeCommandText(command string, actions []traeCommandAction) string {
+	if strings.ContainsAny(strings.TrimSpace(command), " \t\n") {
+		return command
+	}
+	args := map[string]string{}
+	for _, action := range actions {
+		if action.Path != "" {
+			args["file_path"] = action.Path
+		}
+		if action.Query != "" {
+			args["query"] = action.Query
+		}
+	}
+	if len(args) == 0 {
+		return command
+	}
+	data, _ := json.Marshal(args)
+	return moduToolText(command, data)
 }

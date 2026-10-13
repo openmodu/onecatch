@@ -1409,12 +1409,14 @@ func (a *Service) GetRunDetail(ctx context.Context, runID string) (RunDetail, er
 	for _, event := range events {
 		detail.Events = append(detail.Events, WorkflowEventView{RunID: event.RunID, Seq: event.Seq, Type: event.Type, StepID: event.StepID, Payload: string(event.Payload), At: event.At.Format(time.RFC3339Nano)})
 	}
+	traeTools := map[string]map[string]string{}
 	for stepIndex, stepRun := range stepRuns {
 		items, listErr := a.store.Repos.Workflows.ListRuntimeEvents(ctx, runID, stepRun.ID, 0, 10_000)
 		if listErr != nil {
 			return RunDetail{}, listErr
 		}
 		views, usage := foldRuntimeEventViews(stepRun.ID, items, needsUsageBackfill(detail.StepRuns[stepIndex]))
+		restoreTraeToolArguments(views, traeTools)
 		applyUsageBackfill(&detail.StepRuns[stepIndex], usage)
 		detail.RuntimeEvents = append(detail.RuntimeEvents, views...)
 	}
@@ -1437,12 +1439,14 @@ func (a *Service) GetRunTranscript(ctx context.Context, runID string) ([]Runtime
 		return nil, err
 	}
 	out := []RuntimeEventView{}
+	traeTools := map[string]map[string]string{}
 	for _, stepRun := range stepRuns {
 		items, listErr := a.store.Repos.Workflows.ListRuntimeEvents(ctx, runID, stepRun.ID, 0, 10_000)
 		if listErr != nil {
 			return nil, listErr
 		}
 		views, _ := foldRuntimeEventViews(stepRun.ID, items, false)
+		restoreTraeToolArguments(views, traeTools)
 		out = append(out, views...)
 	}
 	return out, nil
@@ -1556,6 +1560,7 @@ func grokUsageFromRuntimeRaw(raw string) (agentrun.Usage, bool) {
 func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEvent, withUsage bool) ([]RuntimeEventView, agentrun.Usage) {
 	views := make([]RuntimeEventView, 0, len(items))
 	streamIndexes := make(map[string]int)
+	queueIndex := -1
 	var usage agentrun.Usage
 	for _, item := range items {
 		var event agentrun.Event
@@ -1576,6 +1581,16 @@ func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEven
 			at = event.At
 		}
 		view := RuntimeEventView{StepRunID: stepRunID, Seq: item.Seq, Kind: string(event.Kind), StreamID: event.StreamID, Revision: event.Revision, Text: event.Text, Failed: event.Failed, Permission: event.Permission, PermissionDecision: event.PermissionDecision, UserInput: event.UserInput, UserInputResponse: event.UserInputResponse, At: at.Format(time.RFC3339Nano)}
+		if event.Kind == agentrun.KindQueueStatus {
+			if queueIndex >= 0 {
+				view.At, view.Seq = views[queueIndex].At, views[queueIndex].Seq
+				views[queueIndex] = view
+			} else {
+				queueIndex = len(views)
+				views = append(views, view)
+			}
+			continue
+		}
 		if event.StreamID == "" || event.Phase == "" {
 			views = append(views, view)
 			continue
@@ -1749,5 +1764,36 @@ func builtinDefinitions() []domainworkflows.Definition {
 			},
 			Edges: []domainworkflows.Edge{{From: "security", To: "synthesis"}, {From: "tests", To: "synthesis"}},
 		},
+	}
+}
+
+func restoreTraeToolArguments(views []RuntimeEventView, cache map[string]map[string]string) {
+	session := ""
+	needed := false
+	for _, view := range views {
+		if view.Kind == string(agentrun.KindStarted) {
+			session = view.Text
+		}
+		if view.Kind == string(agentrun.KindToolUse) && strings.HasPrefix(view.StreamID, "trae-tool-") && !strings.ContainsAny(view.Text, " \n\t") {
+			needed = true
+		}
+	}
+	if !needed || session == "" {
+		return
+	}
+	tools, ok := cache[session]
+	if !ok {
+		tools = agentrun.ReadTraeToolHistory(session)
+		cache[session] = tools
+	}
+	for i := range views {
+		view := &views[i]
+		if view.Kind != string(agentrun.KindToolUse) || strings.ContainsAny(view.Text, " \n\t") {
+			continue
+		}
+		if text := tools[view.StreamID]; text != "" {
+			view.Text = text
+			view.Revision++
+		}
 	}
 }
