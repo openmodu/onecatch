@@ -11,6 +11,8 @@ import (
 
 	"gioui.org/font"
 	"gioui.org/io/pointer"
+	"gioui.org/op"
+	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
@@ -284,10 +286,15 @@ func (a *app) sidebarTask(t domaintasks.Task) kit.SidebarItem {
 				alpha = float32(.825 + .175*math.Cos(2*math.Pi*phase))
 				cx.Animating()
 			}
-			// Keep the light inside the icon viewport; negative offsets are
-			// clipped by Sidebar's fixed icon slot and disappear on screen.
-			icon.Child(el.Div().ID("task-running/" + t.ID).Role("image").Name("正在运行").Absolute().Right(0).Bottom(0).
-				Size(el.Dp(6)).Rounded(3).Bg(color.NRGBA{R: 34, G: 179, B: 99, A: 255}).Opacity(alpha))
+			// Paint the leading light outside Sidebar's clipped icon slot,
+			// preserving the original gap and the icon/title alignment.
+			icon.Child(el.Div().ID("task-running/" + t.ID).Role("image").Name("正在运行").Absolute().Left(-10).Top(5).
+				Size(el.Dp(6)).Rounded(3).Bg(color.NRGBA{R: 34, G: 179, B: 99, A: uint8(math.Round(float64(alpha) * 255))}).
+				Decorate(func(gtx core.C, draw func()) {
+					macro := op.Record(gtx.Ops)
+					draw()
+					op.Defer(gtx.Ops, macro.Stop())
+				}))
 		}
 		return icon
 	})

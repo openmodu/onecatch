@@ -30,6 +30,10 @@ func TestSidebarSingleAgentRunningLightPaints(t *testing.T) {
 					if !ok {
 						t.Fatal("missing running light")
 					}
+					icon, ok := alignmentNode(router.AppendSemantics(nil), "Agent 图标："+harness, false)
+					if !ok || light.Bounds.Max.X+4*scale != icon.Bounds.Min.X || light.Bounds.Min.Y != icon.Bounds.Min.Y+5*scale {
+						t.Fatalf("running light moved from the leading gutter: light=%v icon=%v", light.Bounds, icon.Bounds)
+					}
 					pixels := interactionPixelsScaled(t, root, router, 1120*scale, 900*scale, float32(scale))
 					green := 0
 					for y := light.Bounds.Min.Y; y < light.Bounds.Max.Y; y++ {
