@@ -69,6 +69,13 @@ The integrated `worker`, SSH askpass and shell process roles also remain availab
 - Choose/paste/remove attachments, preview image thumbnails and send files in a
   new task or continuation. Persisted follow-ups are retained even when resume
   fails, so retrying does not duplicate the instruction or attachment copies.
+- Keel v0.2.3 native tray: show/hide the main window, create a task, open settings,
+  quit, and open the five most recently active sessions across visible projects.
+  Running sessions sort first; project names and titles have separate display
+  width limits. Closing the main window retains the session, draft and backend
+  while the tray is available. Quit from the tray, application menu, Cmd/Ctrl+Q,
+  or updater exits the application. If the tray cannot initialize, closing the
+  main window retains the previous shutdown behavior. See [tray lifecycle notes](../../docs/keel-tray.md).
 - Stream Markdown, code blocks, tool activity and errors; interrupt execution,
   continue a finished conversation, or queue a follow-up while it is running.
 - Pending messages appear above the composer with remove and immediate-steering

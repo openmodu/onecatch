@@ -22,6 +22,7 @@ func (a *app) setLanguage(value string) {
 	a.ui.Preferences.Language = value
 	a.ui.Preferences = normalizeUIPreferences(a.ui.Preferences)
 	a.applyLanguage()
+	a.refreshTrayMenu()
 	if a.window != nil {
 		a.fail(a.installApplicationMenu())
 	}
@@ -54,11 +55,16 @@ func (p *settingsPage) languageSetting() kit.SettingItem {
 }
 
 var englishUI = map[string]string{
-	"项目工作流 · ": "Project workflows · ",
-	"应用内工作流":   "App workflows",
-	"打开文件":     "Open file",
-	"无法使用":     "Unusable",
-	"导出到项目":    "Export to project",
+	"显示 OneCatch":   "Show OneCatch",
+	"隐藏窗口":          "Hide window",
+	"最近活跃的 Session": "Recent sessions",
+	"暂无会话":          "No sessions",
+	"未命名会话":         "Untitled session",
+	"项目工作流 · ":      "Project workflows · ",
+	"应用内工作流":        "App workflows",
+	"打开文件":          "Open file",
+	"无法使用":          "Unusable",
+	"导出到项目":         "Export to project",
 	"打开一个项目后，这里显示它 .onecatch/workflows 里的工作流文件。": "Open a project to see the workflow files in its .onecatch/workflows.",
 	"这个项目还没有工作流文件。用下面工作流右侧的「导出到项目」生成一个，再按需修改。":   "This project has no workflow files yet. Use Export to project on a workflow below to create one, then edit it.",
 	"选择工作流":                  "Choose a workflow",

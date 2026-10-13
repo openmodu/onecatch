@@ -50,6 +50,8 @@ github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14 h1:3U8dTgyNBhEQ
 github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14/go.mod h1:Tb7Xxye4LX7cT3i8YLvmPMGCV92IOi4CDZvm/V8ylc0=
 github.com/dyike/keel v0.2.2 h1:PsZIkaLp2zBUgXtXF7WDdMA/S2EAISUmZsRNdRKaiSk=
 github.com/dyike/keel v0.2.2/go.mod h1:B1Tan5QRC9spUWHIOBAdKGLRp53EWX1OFO28vqu7mxM=
+github.com/dyike/keel v0.2.3 h1:766gcHPkxBjDD3lQgL8lA5OsNvPKU3e50NePVWKmCTc=
+github.com/dyike/keel v0.2.3/go.mod h1:B1Tan5QRC9spUWHIOBAdKGLRp53EWX1OFO28vqu7mxM=
 github.com/ebitengine/purego v0.11.1 h1:2zpWRSQNVKN4eKsKO9eM1ILDgWfYMY9GwqRmK6XeQ/0=
 github.com/ebitengine/purego v0.11.1/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
 github.com/go-chi/chi/v5 v5.3.0 h1:halUjDxhshgXHMrao5bB8eNBXo/rnzwr8m5m36glehM=

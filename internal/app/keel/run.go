@@ -51,19 +51,11 @@ func Run(options Options) error {
 	a.refresh()
 	// Overflowing views always show their thin scrollbar.
 	el.SetScrollbarDefault(el.ScrollbarAlways)
-	a.window = window.Open(platformWindowOptions(runtime.GOOS, window.Options{
-		Title: "OneCatch · Keel", Width: 1120, Height: 760, MinWidth: 640, MinHeight: 480,
-		Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin",
-		TrafficLightLayout: &window.TrafficLightLayout{Height: mainTitleBarHeight, Left: 20},
-		Content:            el.Root(a), OnClose: a.close,
-		Shortcuts: map[string]func(){"mod+`": a.toggleTerminal, "mod+enter": a.send, "mod+shift+enter": a.sendSteering, "mod+s": a.saveActiveWorkspaceFile, "mod+k": a.focusTaskSearch, "mod+b": a.toggleSidebar, "mod+[": func() { a.goHistory(-1) }, "mod+]": func() { a.goHistory(1) }},
-	}))
-	// Window actions wait for the first native frame before applying.
-	core.Update(func() {
-		if !a.closed && !a.window.Maximized() {
-			a.window.ToggleMaximize()
-		}
-	})
+	// Tray creation must happen before Main, outside the UI frame lock.
+	if err := a.installTray(icon); err != nil {
+		a.errorText = "初始化托盘失败：" + err.Error()
+	}
+	a.showMainWindow()
 	if err := a.installApplicationMenu(); err != nil {
 		a.close()
 		a.window.Close()
@@ -71,20 +63,60 @@ func Run(options Options) error {
 	}
 	a.initUpdates()
 	core.Update(func() { a.fail(appupdate.SignalReadyFromEnvironment()) })
-	window.Main()
+	window.MainWithOptions(window.MainOptions{KeepAlive: a.tray.icon != nil, OnQuit: a.close})
 	return nil
+}
+
+func (a *app) showMainWindow() {
+	if a.closed {
+		return
+	}
+	if a.window != nil && !a.window.Closed() {
+		a.window.Raise()
+		return
+	}
+	if a.tray.root == nil {
+		a.tray.root = el.Root(a)
+	}
+	w := window.Open(platformWindowOptions(runtime.GOOS, window.Options{
+		Title: "OneCatch · Keel", Width: 1120, Height: 760, MinWidth: 640, MinHeight: 480,
+		Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin",
+		TrafficLightLayout: &window.TrafficLightLayout{Height: mainTitleBarHeight, Left: 20},
+		Content:            a.tray.root, OnClose: a.mainWindowClosed,
+		Shortcuts: map[string]func(){"mod+`": a.toggleTerminal, "mod+enter": a.send, "mod+shift+enter": a.sendSteering, "mod+s": a.saveActiveWorkspaceFile, "mod+k": a.focusTaskSearch, "mod+b": a.toggleSidebar, "mod+[": func() { a.goHistory(-1) }, "mod+]": func() { a.goHistory(1) }},
+	}))
+	a.window = w
+	// Retain the root's scroll, input and focus state across native windows.
+	core.Update(func() {
+		if !a.closed && !w.Closed() && !w.Maximized() {
+			w.ToggleMaximize()
+		}
+	})
+}
+
+func (a *app) mainWindowClosed() {
+	a.window = nil
+	if a.tray.icon == nil {
+		a.close()
+	}
+}
+
+func (a *app) hideMainWindow() {
+	if a.tray.icon != nil && a.window != nil {
+		a.window.Close()
+	}
 }
 
 func (a *app) installApplicationMenu() error {
 	menu, err := window.NewMenuBar(
 		window.MenuItem{Title: "OneCatch", Role: window.MenuApplication, Children: []window.MenuItem{
-			{Title: uiText("设置…"), Shortcut: "mod+,", OnSelect: a.openSettings},
+			{Title: uiText("设置…"), Shortcut: "mod+,", OnSelect: func() { a.showMainWindow(); a.openSettings() }},
 			{Separator: true},
-			{Title: uiText("退出 OneCatch"), Shortcut: "mod+q", OnSelect: a.window.Close},
+			{Title: uiText("退出 OneCatch"), Shortcut: "mod+q", OnSelect: window.Quit},
 		}},
 		window.MenuItem{Title: uiText("文件菜单"), Children: []window.MenuItem{
-			{Title: uiText("新建任务"), Shortcut: "mod+n", OnSelect: func() { a.newTask(a.workspaceID) }},
-			{Title: uiText("添加项目…"), Shortcut: "mod+o", OnSelect: a.newProject},
+			{Title: uiText("新建任务"), Shortcut: "mod+n", OnSelect: func() { a.showMainWindow(); a.newTask(a.workspaceID) }},
+			{Title: uiText("添加项目…"), Shortcut: "mod+o", OnSelect: func() { a.showMainWindow(); a.newProject() }},
 		}},
 		window.MenuItem{Title: uiText("编辑"), Role: window.MenuEdit, Children: []window.MenuItem{
 			{Title: uiText("撤销"), Shortcut: "mod+z", Action: window.MenuUndo},

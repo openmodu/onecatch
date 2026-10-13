@@ -24,6 +24,7 @@ import (
 )
 
 type app struct {
+	tray                                                                                    trayState
 	applicationMenu                                                                         *window.MenuBar
 	windowsMenu                                                                             *kit.MenuView
 	promptTokenNext                                                                         uint64
@@ -171,7 +172,14 @@ func newApp(b *backend) *app {
 }
 
 func (a *app) close() {
+	if a.closed {
+		return
+	}
 	a.closed = true
+	if a.tray.icon != nil {
+		_ = a.tray.icon.Close()
+		a.tray.icon = nil
+	}
 	if a.updates.service != nil {
 		go a.updates.service.Close()
 	}
@@ -238,6 +246,7 @@ func (a *app) refresh() {
 					a.attachQueuedRun(task.ID)
 				}
 			}
+			a.refreshTrayMenu()
 		})
 	}()
 }

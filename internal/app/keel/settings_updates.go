@@ -2,6 +2,7 @@ package keeldesktop
 
 import (
 	"github.com/dyike/keel/ui/core"
+	"github.com/dyike/keel/ui/window"
 	"github.com/openmodu/onecatch/internal/service/appupdate"
 )
 
@@ -15,11 +16,7 @@ type appUpdates struct {
 type nativeUpdateHost struct{ app *app }
 
 func (h nativeUpdateHost) Quit() {
-	core.Update(func() {
-		if h.app.window != nil {
-			h.app.window.Close()
-		}
-	})
+	window.Quit()
 }
 func (a *app) initUpdates() {
 	host := nativeUpdateHost{a}
