@@ -40,6 +40,9 @@ func (a *app) workflowNodeHeading(cx *el.Context, e *entry, result bool) el.Elem
 		}
 		return el.Div().Pl(2).Pt(10).Pb(6).Gap(4).Child(el.Text(e.stepLabel).TextSize(14).Bold(), el.Text(e.stepContext).TextSize(12).TextColor(theme.Muted))
 	}
+	if run.Runtime != "" {
+		step.Runtime, step.Model, step.Sandbox = run.Runtime, run.Model, run.Sandbox
+	}
 	title := el.Div().Row().Wrap().Items(el.Center).Gap(8).Child(
 		el.Text(fmt.Sprintf("节点 %02d", index+1)).TextSize(10).Medium().TextColor(theme.Info).Px(7).Py(4).Rounded(5).Bg(mixColor(theme.Info, theme.Surface, .10)),
 		el.Text(step.Name).TextSize(15).Bold().TextColor(theme.Text),
@@ -48,12 +51,18 @@ func (a *app) workflowNodeHeading(cx *el.Context, e *entry, result bool) el.Elem
 		title.Child(el.Text("执行结果").TextSize(11).TextColor(theme.Muted))
 	}
 	meta := []string{}
+	if run.LoopRound > 0 {
+		meta = append(meta, fmt.Sprintf("第 %d 轮", run.LoopRound))
+	}
 	if run.Attempt > 0 {
 		meta = append(meta, fmt.Sprintf("第 %d 次执行", run.Attempt))
 	}
 	meta = append(meta, stepAgentLabel(step))
 	if !result {
 		status := runStatus(string(run.Status))
+		if run.Status == domainworkflows.StepRunInterrupted {
+			status = "已中断"
+		}
 		if run.Status == domainworkflows.StepRunSucceeded {
 			status = "已完成"
 		}

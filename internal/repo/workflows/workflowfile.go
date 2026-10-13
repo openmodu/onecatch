@@ -154,6 +154,12 @@ func ParseWorkflowFile(stem string, data []byte) (domainworkflows.Definition, *F
 			def.Name, err = scalar(value)
 		case "description":
 			def.Description, err = scalar(value)
+		case "loop":
+			if value.Kind != yaml.ScalarNode || value.Tag != "!!bool" {
+				err = &FileError{Line: value.Line, Message: "loop must be true or false"}
+			} else {
+				def.LoopEnabled = strings.EqualFold(value.Value, "true")
+			}
 		case "max_rework":
 			def.Policy.MaxReworkRounds, err = integer(value)
 		case "max_failures":
@@ -163,7 +169,7 @@ func ParseWorkflowFile(stem string, data []byte) (domainworkflows.Definition, *F
 		case "steps":
 			stepsNode = value
 		default:
-			err = &FileError{Line: key.Line, Message: fmt.Sprintf("unknown key %q; use name, description, max_rework, max_failures, timeout or steps", key.Value)}
+			err = &FileError{Line: key.Line, Message: fmt.Sprintf("unknown key %q; use name, description, loop, max_rework, max_failures, timeout or steps", key.Value)}
 		}
 		if err != nil {
 			return domainworkflows.Definition{}, err

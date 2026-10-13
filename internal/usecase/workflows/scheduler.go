@@ -35,7 +35,7 @@ type stepResult struct {
 // drive schedules a running Run until it completes, pauses or ctx ends. Steps
 // start as soon as their dependencies pass, up to the concurrency limit, and
 // every verdict is persisted before the next scheduling decision.
-func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, definition domainworkflows.Definition, run domainworkflows.Run) (domainworkflows.Run, error) {
+func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, definition domainworkflows.Definition, run domainworkflows.Run, preserveSteps ...string) (domainworkflows.Run, error) {
 	run = domainworkflows.CloneRun(run)
 	if run.Sessions == nil {
 		run.Sessions = make(map[string]string)
@@ -66,13 +66,38 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 				stepCtx, cancel = context.WithCancel(ctx)
 				cancelSteps = cancel
 			}
-			if err := s.startReadySteps(ctx, stepCtx, task, workspace, definition, &run, inflight, results); err != nil {
+			if err := s.startReadySteps(ctx, stepCtx, task, workspace, &definition, &run, inflight, results, preserveSteps); err != nil {
 				cancelSteps()
 				s.drain(results, inflight)
+				if errors.Is(err, errExecutionSettings) {
+					return s.pause(context.Background(), &task, definition, run, "execution_settings_invalid", err.Error())
+				}
 				return run, err
 			}
 		}
 		if len(inflight) == 0 {
+			// The outer loop advances only after a successful complete round.
+			if run.Status == domainworkflows.RunCompleted && run.LoopEnabled && pauseReason == "" && ctx.Err() == nil {
+				refreshed, err := s.refreshLoopDefinition(ctx, task, definition, &run)
+				if err != nil {
+					run.Status = domainworkflows.RunRunning
+					return s.pause(context.Background(), &task, definition, run, "execution_settings_invalid", err.Error())
+				}
+				definition = refreshed
+				next, err := domainworkflows.NextLoopRound(definition, run, s.now())
+				if err != nil {
+					return run, err
+				}
+				updated, err := s.workflows.UpdateRun(context.Background(), next, run.Revision)
+				if err != nil {
+					return run, err
+				}
+				run = updated
+				if err := s.appendEvent(context.Background(), run.ID, "loop.round.started", "", map[string]any{"round": run.LoopRound}); err != nil {
+					return run, err
+				}
+				continue
+			}
 			// A run the last verdict just completed may still hold messages.
 			if (run.Status == domainworkflows.RunRunning || run.Status == domainworkflows.RunCompleted) && pauseReason == "" && ctx.Err() == nil {
 				reopened, err := s.reopenForMessages(ctx, definition, &run)
@@ -103,6 +128,13 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 
 	switch {
 	case ctx.Err() != nil:
+		if run.LoopEnabled && run.Status == domainworkflows.RunCompleted {
+			next, err := domainworkflows.NextLoopRound(definition, run, s.now())
+			if err != nil {
+				return run, err
+			}
+			run = next
+		}
 		return s.pause(context.Background(), &task, definition, run, PauseReasonInterrupted, ctx.Err().Error())
 	case pauseReason != "":
 		return s.pause(ctx, &task, definition, run, pauseReason, pauseMessage)
@@ -137,7 +169,8 @@ func (s *Usecase) drain(results chan stepResult, inflight map[string]bool) {
 
 // startReadySteps claims queued human instructions, delivers them, and starts
 // every ready step that fits under the concurrency limit.
-func (s *Usecase) startReadySteps(ctx, stepCtx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, definition domainworkflows.Definition, run *domainworkflows.Run, inflight map[string]bool, results chan<- stepResult) error {
+func (s *Usecase) startReadySteps(ctx, stepCtx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, currentDefinition *domainworkflows.Definition, run *domainworkflows.Run, inflight map[string]bool, results chan<- stepResult, preserveSteps []string) error {
+	definition := *currentDefinition
 	var ready []domainworkflows.Step
 	for _, step := range domainworkflows.ReadySteps(definition, *run) {
 		if !inflight[step.ID] {
@@ -156,6 +189,15 @@ func (s *Usecase) startReadySteps(ctx, stepCtx context.Context, task domaintasks
 			return nil
 		}
 		ready = ready[:room]
+	}
+	refreshed, err := s.refreshStartingSettings(ctx, task, definition, run, ready, preserveSteps)
+	if err != nil {
+		return err
+	}
+	definition = refreshed
+	*currentDefinition = refreshed
+	for i, step := range ready {
+		ready[i], _ = domainworkflows.FindStep(refreshed, step.ID)
 	}
 	if err := s.deliverInstructions(ctx, definition, run, ready); err != nil {
 		return err
@@ -341,7 +383,7 @@ func (s *Usecase) executeStep(ctx context.Context, task domaintasks.Task, worksp
 			return stepResult{step: step, err: err, pause: "storage_error"}
 		}
 	}
-	stepRun := domainworkflows.StepRun{ID: s.newID("step"), RunID: run.ID, StepID: step.ID, Attempt: attempt, Status: domainworkflows.StepRunRunning, SessionIDBefore: resumeSessionID, StartedAt: s.now()}
+	stepRun := domainworkflows.StepRun{ID: s.newID("step"), RunID: run.ID, StepID: step.ID, Attempt: attempt, LoopRound: run.LoopRound, Runtime: step.Runtime, Model: step.Model, Sandbox: step.Sandbox, Status: domainworkflows.StepRunRunning, SessionIDBefore: resumeSessionID, StartedAt: s.now()}
 	if err := s.workflows.SaveStepRun(ctx, stepRun); err != nil {
 		return stepResult{step: step, err: err, pause: "storage_error"}
 	}

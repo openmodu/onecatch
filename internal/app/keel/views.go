@@ -292,6 +292,9 @@ func (a *app) content(cx *el.Context) el.Element {
 		column.Child(el.Div().Px(32).Py(8).Child(el.Text("正在读取对话…").TextColor(theme.Muted).TextSize(12)))
 	}
 
+	if a.detail != nil && a.detail.Workflow.ID != "single_agent" && len(a.detail.Workflow.Steps) > 1 {
+		column.Child(el.Div().Items(el.Center).Px(24).Py(8).Child(a.workflowLoopBar(cx)))
+	}
 	column.Child(a.conversationScroll(cx), el.Div().Center().Px(24).Pt(8).Pb(14).Child(el.Div().WFull().MaxW(el.Dp(920)).Gap(10).Child(a.errorBanner(cx), a.composerContext(cx), a.composer(cx), a.workspaceCaption(cx))))
 	return column
 }

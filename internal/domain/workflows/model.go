@@ -38,6 +38,7 @@ type Definition struct {
 	Steps       []Step    `json:"steps"`
 	Edges       []Edge    `json:"edges,omitempty"`
 	Policy      Policy    `json:"policy"`
+	LoopEnabled bool      `json:"loopEnabled,omitempty"`
 	Layout      Layout    `json:"layout,omitempty"`
 	CreatedAt   time.Time `json:"createdAt,omitempty"`
 	UpdatedAt   time.Time `json:"updatedAt,omitempty"`
@@ -103,6 +104,8 @@ type Run struct {
 	ID                    string                             `json:"id"`
 	TaskID                string                             `json:"taskId"`
 	WorkflowID            string                             `json:"workflowId"`
+	LoopEnabled           bool                               `json:"loopEnabled,omitempty"`
+	LoopRound             int                                `json:"loopRound,omitempty"`
 	Revision              int64                              `json:"revision"`
 	Status                RunStatus                          `json:"status"`
 	CurrentStepID         string                             `json:"currentStepId"`
@@ -209,6 +212,10 @@ type StepRun struct {
 	RunID                    string        `json:"runId"`
 	StepID                   string        `json:"stepId"`
 	Attempt                  int           `json:"attempt"`
+	LoopRound                int           `json:"loopRound,omitempty"`
+	Runtime                  string        `json:"runtime,omitempty"`
+	Model                    string        `json:"model,omitempty"`
+	Sandbox                  string        `json:"sandbox,omitempty"`
 	Status                   StepRunStatus `json:"status"`
 	Verdict                  string        `json:"verdict,omitempty"`
 	Summary                  string        `json:"summary,omitempty"`

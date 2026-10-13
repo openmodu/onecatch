@@ -131,3 +131,13 @@ func TestListProjectWorkflows(t *testing.T) {
 		t.Fatalf("GetProjectWorkflow = %+v, %v", got, err)
 	}
 }
+
+func TestProjectWorkflowSupportsOuterLoop(t *testing.T) {
+	def, err := ParseWorkflowFile("design_to_pr", []byte("loop: true\n"+designToPR))
+	if err != nil || !def.LoopEnabled {
+		t.Fatalf("loop config: %+v %v", def, err)
+	}
+	if _, err := ParseWorkflowFile("design_to_pr", []byte("loop: forever\n"+designToPR)); err == nil {
+		t.Fatal("invalid loop value accepted")
+	}
+}

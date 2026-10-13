@@ -40,6 +40,8 @@ func NewRun(input Definition, runID string, now time.Time) (Run, error) {
 	}
 	run := Run{
 		ID:            runID,
+		LoopEnabled:   def.LoopEnabled,
+		LoopRound:     1,
 		WorkflowID:    def.ID,
 		Status:        RunReady,
 		CurrentStepID: EntrySteps(def)[0],
@@ -48,6 +50,9 @@ func NewRun(input Definition, runID string, now time.Time) (Run, error) {
 		Nodes:         make(map[string]NodeState, len(def.Steps)),
 		StartedAt:     now,
 		UpdatedAt:     now,
+	}
+	if !def.LoopEnabled {
+		run.LoopRound = 0
 	}
 	for _, step := range def.Steps {
 		run.Nodes[step.ID] = NodeState{StepID: step.ID, Status: NodePending}

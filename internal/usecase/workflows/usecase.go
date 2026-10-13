@@ -122,18 +122,19 @@ type ResumeProfile struct {
 }
 
 type Usecase struct {
-	resolveWorkspace  func(context.Context, domaintasks.Task) (domainworkspaces.Workspace, error)
-	resolveDefinition func(context.Context, domaintasks.Task) (domainworkflows.Definition, error)
-	tasks             TaskRepository
-	workflows         WorkflowRepository
-	engine            Engine
-	locker            WorkspaceLocker
-	git               GitInspector
-	now               func() time.Time
-	newID             IDGenerator
-	remote            RemoteExecutor
-	runtimePublisher  RuntimeEventPublisher
-	maxConcurrency    atomic.Int64
+	resolveWorkspace         func(context.Context, domaintasks.Task) (domainworkspaces.Workspace, error)
+	resolveDefinition        func(context.Context, domaintasks.Task) (domainworkflows.Definition, error)
+	resolveExecutionSettings func(context.Context, domaintasks.Task, domainworkflows.Definition) (domainworkflows.Definition, map[string]domainworkflows.ResolvedRuntimeSettings, error)
+	tasks                    TaskRepository
+	workflows                WorkflowRepository
+	engine                   Engine
+	locker                   WorkspaceLocker
+	git                      GitInspector
+	now                      func() time.Time
+	newID                    IDGenerator
+	remote                   RemoteExecutor
+	runtimePublisher         RuntimeEventPublisher
+	maxConcurrency           atomic.Int64
 }
 
 func (s *Usecase) SetRemoteExecutor(remote RemoteExecutor) { s.remote = remote }
@@ -357,7 +358,22 @@ func (s *Usecase) ResumeRunWithProfile(ctx context.Context, runID, instruction s
 		}
 	}
 	if latest != nil {
-		updated := RefreshStepModels(definition, *latest)
+		updated := RefreshRunDefinition(definition, *latest)
+		changedSession := false
+		for _, old := range definition.Steps {
+			step, exists := domainworkflows.FindStep(updated, old.ID)
+			if !exists || step.Runtime != old.Runtime || step.WorkerID != old.WorkerID || step.Kind != old.Kind {
+				delete(run.Sessions, old.ID)
+				changedSession = true
+			}
+		}
+		if changedSession {
+			saved, err := s.workflows.UpdateRun(ctx, run, run.Revision)
+			if err != nil {
+				return run, err
+			}
+			run = saved
+		}
 		if err := s.workflows.UpdateRunDefinition(ctx, run.ID, updated); err != nil {
 			return run, err
 		}
@@ -377,7 +393,16 @@ func (s *Usecase) ResumeRunWithProfile(ctx context.Context, runID, instruction s
 		return run, ErrRetiredRun
 	}
 	fromStepID := strings.TrimSpace(profile.FromStepID)
-	resumed, err := domainworkflows.Resume(definition, run, fromStepID, instruction, s.now())
+	resumeBase := run
+	if run.LoopEnabled && run.Status == domainworkflows.RunCompleted && fromStepID == "" {
+		resumeBase, err = domainworkflows.NextLoopRound(definition, run, s.now())
+		if err != nil {
+			return run, err
+		}
+		// Resume delivers the human instruction to the newly pending roots.
+		resumeBase.Status = domainworkflows.RunPaused
+	}
+	resumed, err := domainworkflows.Resume(definition, resumeBase, fromStepID, instruction, s.now())
 	if err != nil {
 		return run, err
 	}
@@ -392,7 +417,14 @@ func (s *Usecase) ResumeRunWithProfile(ctx context.Context, runID, instruction s
 	if err := s.appendEvent(ctx, run.ID, "run.resumed", fromStepID, map[string]any{"hasInstruction": trimmedInstruction != "", "instruction": trimmedInstruction, "fromStepId": fromStepID}); err != nil {
 		return resumed, err
 	}
-	return s.drive(ctx, task, workspace, definition, resumed)
+	preserveStep := ""
+	if profile.Harness != "" {
+		preserveStep = profile.StepID
+		if preserveStep == "" {
+			preserveStep = resumed.CurrentStepID
+		}
+	}
+	return s.drive(ctx, task, workspace, definition, resumed, preserveStep)
 }
 
 func (s *Usecase) applyResumeProfile(ctx context.Context, definition domainworkflows.Definition, run domainworkflows.Run, profile ResumeProfile) (domainworkflows.Definition, domainworkflows.Run, error) {

@@ -268,6 +268,7 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 	}
 	orchestrator.SetWorkspaceResolver(app.resolveTaskWorkspace)
 	orchestrator.SetDefinitionResolver(app.taskDefinition)
+	orchestrator.SetExecutionSettingsResolver(app.resolveExecutionSettings)
 	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
 	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, preparations: newRemotePreparationRegistry()})
 	app.accountUsageWG.Add(1)
@@ -1238,7 +1239,7 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 				}
 			}
 			modelDefinition = &latest
-			definition = workflowuc.RefreshStepModels(definition, latest)
+			definition = workflowuc.RefreshRunDefinition(definition, latest)
 		}
 	}
 	if err := validateDefinitionSettings(definition, settings); err != nil {
@@ -1283,6 +1284,26 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 		return a.orchestrator.ResumeRunWithProfile(runCtx, run.ID, input.Instruction, profile)
 	})
 	return run, nil
+}
+
+// SetRunLoop changes only the outer execution mode, while the run is stopped.
+func (a *Service) SetRunLoop(ctx context.Context, runID string, enabled bool) (domainworkflows.Run, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.active[runID] != nil {
+		return domainworkflows.Run{}, coded("run_invalid_state", "pause the run before changing loop mode")
+	}
+	run, err := a.store.Repos.Workflows.GetRun(ctx, runID)
+	if err != nil {
+		return run, mapError(err)
+	}
+	if run.Status != domainworkflows.RunPaused && run.Status != domainworkflows.RunCompleted && run.Status != domainworkflows.RunReady {
+		return run, coded("run_invalid_state", "loop mode can only change while stopped")
+	}
+	run.LoopEnabled = enabled
+	run.LoopRound = max(1, run.LoopRound)
+	run.UpdatedAt = time.Now()
+	return a.store.Repos.Workflows.UpdateRun(ctx, run, run.Revision)
 }
 
 func (a *Service) InterruptRun(ctx context.Context, runID string) (domainworkflows.Run, error) {

@@ -53,7 +53,8 @@ func (a *app) dagConnectToggle(cx *el.Context) el.Element {
 func (a *app) dagEditor(cx *el.Context) el.Element {
 	d := &a.ui.WorkflowDraft
 	a.workflowEditor.SoftWrap(true).OnChange(a.applyWorkflowSource)
-	top := el.Div().Row().Wrap().Items(el.Center).MinH(el.Dp(32)).Gap(8).Child(el.Div().Grow(),
+	top := el.Div().Row().Wrap().Items(el.Center).MinH(el.Dp(32)).Gap(8).Child(
+		dagAction(cx, "workflow-loop-toggle", map[bool]string{true: "循环运行 · 开", false: "循环运行 · 关"}[d.LoopEnabled], "rotate-ccw", false, false, func() { d.LoopEnabled = !d.LoopEnabled; a.syncWorkflowDocument() }, d.LoopEnabled), el.Div().Grow(),
 		dagAction(cx, "dag-fullscreen", map[bool]string{true: "退出全屏", false: "全屏"}[a.ui.WorkflowFullscreen], map[bool]string{true: "minimize-2", false: "maximize-2"}[a.ui.WorkflowFullscreen], false, false, func() { a.ui.WorkflowFullscreen = !a.ui.WorkflowFullscreen }),
 		dagAction(cx, "dag-save", map[bool]string{true: "保存中…", false: "保存"}[a.busy], "save", true, a.busy || a.ui.DAG.SourceError != "" || a.ui.DAG.IDError != "" || a.editingWorkflow == "single_agent", a.saveWorkflow))
 	rounds := make([]kit.SelectOption, 0, 10)

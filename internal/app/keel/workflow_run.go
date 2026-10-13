@@ -56,6 +56,7 @@ func (a *app) workflowProgress(cx *el.Context) el.Element {
 	}
 	// The chart shows the whole graph; clicking a step narrows the cards below
 	// to that step, and clicking it again shows them all.
+	section.Child(a.workflowLoopControls(cx))
 	section.Child(el.Div().WFull().NoShrink().Child(flowChart(cx, d.Workflow, flowChartOptions{ID: "run-chart", Vertical: true, Width: width, Nodes: d.Run.Nodes, Rounds: d.Run.ReworkRounds, Selected: a.workbench.StepFocus, OnSelect: func(id string) {
 		if a.workbench.StepFocus == id {
 			id = ""
@@ -174,4 +175,76 @@ func (a *app) submitStepAction() {
 			a.reloadRun(runID)
 		})
 	}()
+}
+
+func (a *app) workflowLoopControls(cx *el.Context) el.Element {
+	d := a.detail
+	box := el.Div().ID("workflow-loop").WFull().Gap(8).P(10).Rounded(10).Bg(mixColor(theme.Info, theme.Surface, .06)).Child(a.workflowLoopBar(cx))
+	hint := "全部通过后结束。开启 Loop 可持续推进。"
+	if d.Run.LoopEnabled {
+		hint = "整轮通过后开始下一轮；返工或人工确认仍按原规则暂停。"
+	}
+	if !d.Active && d.Run.Status == domainworkflows.RunPaused {
+		hint = "在消息框补充指令后继续，当前轮进度和会话保留。"
+	}
+	if d.Active {
+		hint += " 暂停后可切换循环模式。"
+	}
+	return box.Child(el.Text(hint).TextSize(11).TextColor(theme.Muted))
+}
+
+func (a *app) setRunLoop(enabled bool) {
+	if a.detail == nil || a.detail.Active || a.busy || a.backend == nil {
+		return
+	}
+	id, version := a.runID, a.selection
+	a.busy = true
+	go func() {
+		_, err := a.backend.service.SetRunLoop(a.ctx, id, enabled)
+		core.Update(func() {
+			if a.closed {
+				return
+			}
+			a.busy = false
+			if version != a.selection {
+				return
+			}
+			a.fail(err)
+			if err == nil {
+				a.reloadRun(id)
+			}
+		})
+	}()
+}
+
+func (a *app) workflowLoopBar(cx *el.Context) el.Element {
+	d := a.detail
+	toggle := button(map[bool]string{true: "循环运行 · 开", false: "循环运行 · 关"}[d.Run.LoopEnabled], func() { a.setRunLoop(!d.Run.LoopEnabled) }, kit.ButtonSecondary).ID("conversation-loop-toggle").Selected(d.Run.LoopEnabled).Compact(true).Size(30)
+	toggle.SetDisabled(d.Active || a.busy)
+	row := el.Div().WFull().MaxW(el.Dp(920)).Row().Wrap().Items(el.Center).Gap(10).Px(12).Py(8).Rounded(9).Bg(mixColor(theme.Info, theme.Surface, .05)).Child(lucide(cx, "rotate-ccw", 15, theme.Info), toggle.Render(cx))
+	if d.Run.LoopEnabled {
+		state := "已暂停"
+		if d.Active {
+			state = "循环中"
+		}
+		row.Child(el.Text(fmt.Sprintf("第 %d 轮 · %s", max(1, d.Run.LoopRound), state)).TextSize(12).Medium().TextColor(theme.Info))
+	} else {
+		row.Child(el.Text("执行一轮后结束").TextSize(11).TextColor(theme.Muted))
+	}
+	row.Child(el.Div().Grow())
+	if d.Active {
+		pause := button("暂停", a.stop, kit.ButtonSecondary).ID("conversation-loop-pause").Compact(true).Size(30)
+		pause.SetDisabled(a.busy)
+		row.Child(pause.Render(cx))
+	} else if d.Run.Status == domainworkflows.RunPaused || d.Run.Status == domainworkflows.RunCompleted {
+		resume := button("继续", func() {
+			if strings.TrimSpace(a.prompt) == "" {
+				a.prompt = "继续当前工作流，保留原有目标与约束。"
+			}
+			a.send()
+		}, kit.ButtonPrimary).ID("conversation-loop-resume").Compact(true).Size(30)
+		resume.SetDisabled(a.busy)
+		row.Child(resume.Render(cx))
+	}
+	return row
 }
