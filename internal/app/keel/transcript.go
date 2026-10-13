@@ -14,23 +14,24 @@ import (
 )
 
 type entry struct {
-	key          string
-	step, stream string
-	seq          int64
-	kind         agentrun.EventKind
-	text         string
-	at           time.Time
-	revision     uint64
-	streaming    bool
-	failed       bool
-	user         bool
-	permission   *agentrun.PermissionRequest
-	question     *agentrun.UserInputRequest
-	process      []*entry
-	details      []*entry
-	settled      bool
-	transition   *workflowTransition
-	recipient    string
+	key            string
+	step, stream   string
+	seq            int64
+	kind           agentrun.EventKind
+	text           string
+	at             time.Time
+	queueUpdatedAt time.Time
+	revision       uint64
+	streaming      bool
+	failed         bool
+	user           bool
+	permission     *agentrun.PermissionRequest
+	question       *agentrun.UserInputRequest
+	process        []*entry
+	details        []*entry
+	settled        bool
+	transition     *workflowTransition
+	recipient      string
 	// stepLabel names the workflow step that produced this row; it is set on
 	// the first row of each run of output from one step.
 	columns     []*entry
@@ -98,7 +99,8 @@ func (t *transcript) frame(f runstream.Frame) bool {
 func (t *transcript) history(events []desktopservice.RuntimeEventView) {
 	for _, v := range events {
 		at, _ := time.Parse(time.RFC3339Nano, v.At)
-		t.merge(entry{key: eventKey(v.StepRunID, v.StreamID, v.Seq, agentrun.EventKind(v.Kind)), step: v.StepRunID, stream: v.StreamID, seq: v.Seq, kind: agentrun.EventKind(v.Kind), text: v.Text, at: at, revision: v.Revision, streaming: v.Streaming, failed: v.Failed, permission: v.Permission, question: v.UserInput}, false)
+		queueUpdatedAt, _ := time.Parse(time.RFC3339Nano, v.QueueUpdatedAt)
+		t.merge(entry{key: eventKey(v.StepRunID, v.StreamID, v.Seq, agentrun.EventKind(v.Kind)), step: v.StepRunID, stream: v.StreamID, seq: v.Seq, kind: agentrun.EventKind(v.Kind), text: v.Text, at: at, queueUpdatedAt: queueUpdatedAt, revision: v.Revision, streaming: v.Streaming, failed: v.Failed, permission: v.Permission, question: v.UserInput}, false)
 	}
 }
 

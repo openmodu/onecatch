@@ -2,8 +2,14 @@ package keeldesktop
 
 import (
 	"fmt"
+	"image"
+	"math"
 	"strings"
 
+	"gioui.org/f32"
+	"gioui.org/op/clip"
+	"gioui.org/op/paint"
+	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
@@ -57,10 +63,33 @@ func (a *app) workflowNodeHeading(cx *el.Context, e *entry, result bool) el.Elem
 	if result {
 		box.Pb(12).Child(el.Div().WFull().H(el.Dp(1)).Bg(seamColor).Mt(5))
 	} else {
-		box.Mt(12).Mb(8).Px(12).Py(10).Rounded(8).Bg(mixColor(theme.Info, theme.Surface, .045))
+		box.Px(12).Py(10).Rounded(8).Bg(mixColor(theme.Info, theme.Surface, .045))
 		if a.detail.Workflow.Name != "" {
 			box.Child(el.Text(a.detail.Workflow.Name).TextSize(10).TextColor(theme.Muted))
 		}
+		return el.Div().WFull().Mt(12).Mb(8).Child(workflowHeadingWave(), box)
 	}
 	return box
+}
+
+// Draw in the available width so the separator also fits parallel lanes.
+func workflowHeadingWave() el.Element {
+	return el.Widget(core.Func(func(gtx core.C) core.D {
+		scale := gtx.Metric.PxPerDp
+		height := int(math.Ceil(float64(7 * scale)))
+		width := gtx.Constraints.Max.X
+		var path clip.Path
+		path.Begin(gtx.Ops)
+		for x := 0; x <= width; x++ {
+			y := 3.5*scale + 1.8*scale*float32(math.Sin(float64(x)/(float64(scale)*24)*2*math.Pi))
+			point := f32.Pt(float32(x), y)
+			if x == 0 {
+				path.MoveTo(point)
+			} else {
+				path.LineTo(point)
+			}
+		}
+		paint.FillShape(gtx.Ops, mixColor(theme.Info, theme.Surface, .30), clip.Stroke{Path: path.End(), Width: 2.5 * scale}.Op())
+		return core.D{Size: image.Pt(width, height)}
+	})).WFull().H(el.Dp(7))
 }

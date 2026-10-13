@@ -83,7 +83,7 @@ func (a *app) toolCodeSection(cx *el.Context, content toolCodeContent, id string
 	doc := a.conversation.toolDocs[id]
 	source := toolCodeSource(content.language, content.text)
 	if doc == nil {
-		doc = markdown.New(source)
+		doc = markdown.New(source).CodeBlockWrap(true)
 		a.conversation.toolDocs[id] = doc
 	} else if doc.Source() != source {
 		if strings.HasPrefix(source, doc.Source()) {

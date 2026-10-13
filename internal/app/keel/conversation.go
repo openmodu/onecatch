@@ -51,6 +51,10 @@ func buildConversationEntries(raw []*entry) []*entry {
 			// per step run at its original position while its status updates.
 			if previous := queues[e.step]; previous != nil {
 				previous.text, previous.revision = e.text, e.revision
+				previous.queueUpdatedAt = e.queueUpdatedAt
+				if previous.queueUpdatedAt.IsZero() {
+					previous.queueUpdatedAt = e.at
+				}
 				continue
 			}
 			e.key = "queue/" + e.step
@@ -133,9 +137,24 @@ func queueStatusLabel(text string) string {
 	return label
 }
 
+// A folded history row keeps its first timestamp for stable placement and its
+// latest timestamp for the completed wait. Never invent timing for old records.
+func queueEntryLabel(e *entry) string {
+	label := queueStatusLabel(e.text)
+	if label == "排队结束" && !e.at.IsZero() && e.queueUpdatedAt.After(e.at) {
+		seconds := int(e.queueUpdatedAt.Sub(e.at).Round(time.Second).Seconds())
+		duration := fmt.Sprintf("%d秒", seconds)
+		if seconds >= 60 {
+			duration = fmt.Sprintf("%d分%d秒", seconds/60, seconds%60)
+		}
+		label += " · 等待 " + duration
+	}
+	return label
+}
+
 func (a *app) queueStatus(cx *el.Context, e *entry) el.Element {
 	return el.Div().ID("message/"+e.key).Role("status").Row().Items(el.Center).Gap(8).Px(2).Py(8).
-		Child(lucide(cx, "clock", 16, theme.Muted), el.Text(queueStatusLabel(e.text)).TextSize(13).Medium().TextColor(theme.Muted))
+		Child(lucide(cx, "clock", 16, theme.Muted), el.Text(queueEntryLabel(e)).TextSize(13).Medium().TextColor(theme.Muted))
 }
 
 func (a *app) conversationOpen(key string, active bool) bool {
@@ -342,11 +361,16 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 		titleColor = theme.Text
 	}
 	heading.Child(el.Text(title).TextSize(13).Medium().TextColor(titleColor).MaxLines(1).Grow().W(el.Dp(0)))
-	meta := e.at.Local().Format("15:04")
-	if d := toolDuration(e, running); d != "" {
-		meta += " · " + d
+	calledAt := ""
+	if !e.at.IsZero() {
+		calledAt = e.at.Local().Format("15:04")
 	}
-	heading.Child(el.Text(meta).TextSize(11).TextColor(mixColor(muted, theme.Surface, .82)).NoShrink())
+	metadataColor := mixColor(muted, theme.Surface, .82)
+	// Fixed slots stay present even when historical records lack metadata.
+	metadata := el.Div().Row().Items(el.Center).Gap(8).NoShrink().Child(
+		el.Div().W(el.Dp(40)).NoShrink().Items(el.End).Child(el.Text(calledAt).TextSize(11).TextColor(metadataColor)),
+		el.Div().W(el.Dp(66)).NoShrink().Items(el.End).Child(el.Text(toolDuration(e, running)).TextSize(11).TextColor(metadataColor)),
+	)
 	stateIcon, stateColor, stateName := "", muted, "完成"
 	switch {
 	case e.failed:
@@ -360,7 +384,7 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 	if stateIcon != "" {
 		state.Child(lucide(cx, stateIcon, 13, stateColor))
 	}
-	summary := row(title).Child(iconBox(icon, 16, muted), heading, state, el.Div().Opacity(.7).Child(lucide(cx, caret, 15, muted)))
+	summary := row(title).Child(iconBox(icon, 16, muted), heading, state, metadata, el.Div().W(el.Dp(16)).Center().NoShrink().Opacity(.7).Child(lucide(cx, caret, 15, muted)))
 	item := el.Div().WFull().Child(summary)
 	switch {
 	case e.failed:

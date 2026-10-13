@@ -538,6 +538,7 @@ func rowSignature(e *entry, active, last bool) string {
 		fmt.Fprintf(&b, "recipient:%q|", e.recipient)
 		if e.kind == agentrun.KindQueueStatus {
 			b.WriteString(e.text)
+			fmt.Fprintf(&b, "|queueUpdatedAt:%d|", e.queueUpdatedAt.UnixNano())
 		}
 		if e.transition != nil {
 			fmt.Fprintf(&b, "%q|%q|%q|%q|%q|", e.transition.verdict, e.transition.source, e.transition.target, e.transition.summary, e.transition.feedback)

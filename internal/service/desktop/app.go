@@ -185,6 +185,7 @@ type RuntimeEventView struct {
 	UserInput          *agentrun.UserInputRequest  `json:"userInput,omitempty"`
 	UserInputResponse  *agentrun.UserInputResponse `json:"userInputResponse,omitempty"`
 	At                 string                      `json:"at"`
+	QueueUpdatedAt     string                      `json:"queueUpdatedAt,omitempty"`
 }
 
 type RunDetail struct {
@@ -1595,6 +1596,7 @@ func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEven
 		}
 		view := RuntimeEventView{StepRunID: stepRunID, Seq: item.Seq, Kind: string(event.Kind), StreamID: event.StreamID, Revision: event.Revision, Text: event.Text, Failed: event.Failed, Permission: event.Permission, PermissionDecision: event.PermissionDecision, UserInput: event.UserInput, UserInputResponse: event.UserInputResponse, At: at.Format(time.RFC3339Nano)}
 		if event.Kind == agentrun.KindQueueStatus {
+			view.QueueUpdatedAt = view.At
 			if queueIndex >= 0 {
 				view.At, view.Seq = views[queueIndex].At, views[queueIndex].Seq
 				views[queueIndex] = view

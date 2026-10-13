@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/dyike/keel/ui/el"
+	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
@@ -36,6 +37,9 @@ func TestQueueStatusCoalescesHistoryAndLiveUpdates(t *testing.T) {
 	if len(rows) != 3 || rows[0].key != key || rows[0].at != started || queueStatusLabel(rows[0].text) != "排队结束" || len(rows[1].process) != 1 || rows[2].kind != agentrun.KindQueueStatus {
 		t.Fatalf("queue update reordered or mixed step runs: %+v", rows)
 	}
+	if got := queueEntryLabel(rows[0]); got != "排队结束 · 等待 1分20秒" {
+		t.Fatalf("completed live wait lost duration: %s", got)
+	}
 }
 
 func TestQueueStatusRendersOutsideToolCards(t *testing.T) {
@@ -52,5 +56,19 @@ func TestQueueStatusRendersOutsideToolCards(t *testing.T) {
 	}
 	if queueStatusLabel(`{"state":"queued","position":0,"operation":"contextCompaction"}`) != "上下文压缩排队中 · 当前第 0 位" || queueStatusLabel(`{"state":"waiting"}`) != "排队中" {
 		t.Fatal("optional queue fields lost")
+	}
+}
+
+func TestQueueDurationSurvivesHistoryReload(t *testing.T) {
+	at := time.Date(2026, 10, 13, 13, 0, 0, 0, time.UTC)
+	tx := newTranscript()
+	tx.history([]desktopservice.RuntimeEventView{{StepRunID: "step", Seq: 1, Kind: string(agentrun.KindQueueStatus), Text: `{"state":"ready"}`, At: at.Format(time.RFC3339Nano), QueueUpdatedAt: at.Add(125 * time.Second).Format(time.RFC3339Nano)}})
+	row := buildConversationEntries(tx.visible())[0]
+	if got := queueEntryLabel(row); got != "排队结束 · 等待 2分5秒" {
+		t.Fatalf("history wait: %s", got)
+	}
+	row.queueUpdatedAt = time.Time{}
+	if got := queueEntryLabel(row); got != "排队结束" {
+		t.Fatalf("invented historical timing: %s", got)
 	}
 }

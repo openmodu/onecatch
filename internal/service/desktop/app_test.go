@@ -1271,6 +1271,9 @@ func TestFoldRuntimeEventsKeepsOneQueueSnapshotAndToolPair(t *testing.T) {
 	if len(views) != 3 || views[0].Text != `{"state":"ready"}` || views[0].Seq != 1 || views[0].At != at.Format(time.RFC3339Nano) {
 		t.Fatalf("queue snapshots inflated/reordered transcript: %+v", views)
 	}
+	if views[0].QueueUpdatedAt != at.Add(2*time.Second).Format(time.RFC3339Nano) {
+		t.Fatalf("lost queue end time: %+v", views[0])
+	}
 	if views[1].Kind != string(agentrun.KindToolUse) || views[2].Kind != string(agentrun.KindToolResult) || views[1].StreamID != views[2].StreamID {
 		t.Fatal("tool call/result collapsed together")
 	}
