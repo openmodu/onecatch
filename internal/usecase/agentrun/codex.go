@@ -522,6 +522,8 @@ type codexAppItem struct {
 	ExitCode         *int            `json:"exitCode"`
 	Arguments        json.RawMessage `json:"arguments"`
 	Result           json.RawMessage `json:"result"`
+	ContentItems     json.RawMessage `json:"contentItems"`
+	Success          *bool           `json:"success"`
 	Error            json.RawMessage `json:"error"`
 	Server           string          `json:"server"`
 	Tool             string          `json:"tool"`
@@ -543,10 +545,12 @@ type codexAppState struct {
 	messageOpen   map[string]bool
 	reasoningOpen map[string]bool
 	toolOpen      map[string]bool
+	toolCalls     map[string]string
+	toolVersions  map[string]uint64
 }
 
 func newCodexAppState() *codexAppState {
-	return &codexAppState{messageOpen: make(map[string]bool), reasoningOpen: make(map[string]bool), toolOpen: make(map[string]bool)}
+	return &codexAppState{messageOpen: make(map[string]bool), reasoningOpen: make(map[string]bool), toolOpen: make(map[string]bool), toolCalls: make(map[string]string), toolVersions: make(map[string]uint64)}
 }
 
 func (r *CodexRunner) runAppServer(ctx context.Context, req Request, sink Sink) (Result, error) {
@@ -1120,9 +1124,9 @@ func (s *codexAppState) handleItemStarted(item codexAppItem, line string, at tim
 		s.reasoningOpen[item.ID] = true
 		sink(Event{Kind: KindReasoning, StreamID: id, Phase: StreamStart, Raw: line, At: at})
 	case "commandExecution":
-		sink(Event{Kind: KindToolUse, Text: item.Command, Raw: line, At: at})
+		s.emitToolCall(item, item.Command, line, at, sink)
 	case "mcpToolCall", "dynamicToolCall":
-		sink(Event{Kind: KindToolUse, Text: codexAppToolText(item), Raw: line, At: at})
+		s.emitToolCall(item, codexAppToolText(item), line, at, sink)
 	}
 }
 
@@ -1148,6 +1152,7 @@ func (s *codexAppState) handleItemCompleted(item codexAppItem, line string, at t
 			sink(Event{Kind: KindReasoning, Text: text, Raw: line, At: at})
 		}
 	case "commandExecution":
+		s.emitToolCall(item, item.Command, line, at, sink)
 		output := ""
 		if item.AggregatedOutput != nil {
 			output = *item.AggregatedOutput
@@ -1157,7 +1162,7 @@ func (s *codexAppState) handleItemCompleted(item codexAppItem, line string, at t
 			sink(Event{Kind: KindToolResult, StreamID: codexStreamID("tool-output", item.ID), Phase: StreamEnd, Text: output, Failed: failed, Raw: line, At: at})
 			delete(s.toolOpen, item.ID)
 		} else {
-			sink(Event{Kind: KindToolResult, Text: output, Failed: failed, Raw: line, At: at})
+			sink(Event{Kind: KindToolResult, StreamID: codexToolID(item.ID), Text: output, Failed: failed, Raw: line, At: at})
 		}
 	case "fileChange":
 		paths := make([]string, 0, len(item.Changes))
@@ -1170,15 +1175,54 @@ func (s *codexAppState) handleItemCompleted(item codexAppItem, line string, at t
 	case "contextCompaction":
 		sink(Event{Kind: KindContextCompaction, Raw: line, At: at})
 	case "mcpToolCall", "dynamicToolCall":
-		text := codexRawText(item.Result)
+		if len(item.Arguments) > 0 || s.toolCalls[item.ID] == "" {
+			s.emitToolCall(item, codexAppToolText(item), line, at, sink)
+		}
+		text := codexToolResultText(item.Result)
+		if text == "" {
+			text = traeContentText(item.ContentItems)
+		}
 		if text == "" {
 			text = codexRawText(item.Error)
 		}
-		sink(Event{Kind: KindToolResult, Text: text, Failed: item.Status == "failed", Raw: line, At: at})
+		failed := item.Status == "failed" || item.Status == "declined" || (item.Success != nil && !*item.Success)
+		sink(Event{Kind: KindToolResult, StreamID: codexToolID(item.ID), Text: text, Failed: failed, Raw: line, At: at})
 	}
 }
 
 func codexStreamID(kind, itemID string) string { return "codex-" + kind + "-" + itemID }
+
+// Keep the existing output stream identity for compatibility. Event kind
+// distinguishes the call from its output in live and durable transcripts.
+func codexToolID(itemID string) string {
+	if itemID == "" {
+		return ""
+	}
+	return codexStreamID("tool-output", itemID)
+}
+
+func (s *codexAppState) emitToolCall(item codexAppItem, text, line string, at time.Time, sink Sink) {
+	if text == "" || (s.toolCalls[item.ID] == text && item.ID != "") {
+		return
+	}
+	if item.ID != "" {
+		s.toolCalls[item.ID] = text
+		s.toolVersions[item.ID]++
+	}
+	sink(Event{Kind: KindToolUse, StreamID: codexToolID(item.ID), Revision: s.toolVersions[item.ID], Text: text, Raw: line, At: at})
+}
+
+func codexToolResultText(raw json.RawMessage) string {
+	var result struct {
+		Content json.RawMessage `json:"content"`
+	}
+	if json.Unmarshal(raw, &result) == nil && len(result.Content) > 0 {
+		if text := traeContentText(result.Content); text != "" {
+			return text
+		}
+	}
+	return codexRawText(raw)
+}
 
 func codexAppToolText(item codexAppItem) string {
 	name := item.Tool

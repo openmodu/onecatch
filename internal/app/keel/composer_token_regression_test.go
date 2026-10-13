@@ -23,6 +23,12 @@ func TestInstructionRecipientSurvivesHistoryReplay(t *testing.T) {
 		transcript := newTranscript()
 		transcript.detail(*a.detail)
 		message := transcript.items["instruction/targeted"]
+		if status == domainworkflows.InstructionPending {
+			if message != nil {
+				t.Fatal("pending targeted message appeared in the conversation")
+			}
+			continue
+		}
 		if message == nil || message.recipient != "方案实现" || message.text != "补上测试" {
 			t.Fatalf("history lost recipient or altered instruction: %+v", message)
 		}

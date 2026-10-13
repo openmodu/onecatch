@@ -504,7 +504,12 @@ func (a *app) messageEntry(cx *el.Context, e *entry, index int) el.Element {
 				el.Div().Row().Items(el.Center).Gap(6).Child(el.Text("发给").TextSize(10).TextColor(theme.Muted), el.Text("@"+e.recipient).TextSize(12).Medium().TextColor(theme.Info)),
 			)
 		}
-		bubble.Child(a.userMessageContent(cx, e))
+		if e.text != "" {
+			bubble.Child(a.userMessageContent(cx, e))
+		}
+		if len(e.attachments) > 0 {
+			bubble.Gap(10).Child(a.conversationAttachments(cx, e.attachments, e.key, false))
+		}
 		wrapper := el.Div().ID("message/"+e.key).Child(bubble, a.messageActions(cx, e, true))
 		content.Items(el.End).Child(wrapper)
 	} else if outcome, ok := a.workflowMessageOutcome(e); ok {

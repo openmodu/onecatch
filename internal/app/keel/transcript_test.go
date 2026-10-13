@@ -48,11 +48,20 @@ func TestTranscriptRestoresLegacyUserBubblesWithoutDuplicatingRefreshes(t *testi
 	assertUserMessages(t, tx, "initial", "hello", "hello")
 }
 
-func TestTranscriptRemovesDeletedQueuedBubbles(t *testing.T) {
+func TestTranscriptShowsInstructionsOnlyAfterApplication(t *testing.T) {
 	tx := newTranscript()
 	detail := desktopservice.RunDetail{Task: domaintasks.Task{Prompt: "initial"}, Instructions: []domainworkflows.Instruction{{ID: "queued", Content: "remove me", Status: domainworkflows.InstructionPending, CreatedAt: time.Now()}}}
 	tx.detail(detail)
+	assertUserMessages(t, tx, "initial")
+	detail.Instructions[0].Status = domainworkflows.InstructionApplied
+	detail.Instructions[0].AppliedAt = time.Now().Add(time.Second)
+	tx.detail(detail)
+	tx.detail(detail)
 	assertUserMessages(t, tx, "initial", "remove me")
+	// A pending snapshot must also remove a bubble from an earlier snapshot.
+	detail.Instructions[0].Status = domainworkflows.InstructionPending
+	tx.detail(detail)
+	assertUserMessages(t, tx, "initial")
 	detail.Instructions[0].Status = domainworkflows.InstructionRemoved
 	tx.detail(detail)
 	assertUserMessages(t, tx, "initial")

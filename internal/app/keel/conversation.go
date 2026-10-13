@@ -31,6 +31,8 @@ type conversationState struct {
 	overridden  map[string]bool
 	views       map[string]*conversationDocView
 	toolDocs    map[string]*markdown.Doc
+	toolResults map[string]*toolResultView
+	images      map[string]*kit.ImageView
 	copyButtons map[string]*kit.CopyButtonView
 	messages    map[string]*kit.MessageView
 }
@@ -267,9 +269,9 @@ func toolDisplay(e *entry) (title, body, icon string) {
 	}
 	action := "调用工具"
 	switch {
-	case lower == "read" || strings.HasSuffix(lower, "/read"):
+	case lower == "read" || strings.HasSuffix(lower, "/read") || strings.HasSuffix(lower, ".read"):
 		action, icon = "读取文件", "book-open"
-	case lower == "write" || lower == "edit" || strings.HasSuffix(lower, "/edit"):
+	case lower == "write" || lower == "edit" || strings.HasSuffix(lower, "/edit") || strings.HasSuffix(lower, ".edit"):
 		action, icon = "修改文件", "file-diff"
 	case lower == "grep" || lower == "glob" || lower == "search":
 		action, icon = "搜索", "search"

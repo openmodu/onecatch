@@ -19,6 +19,7 @@ type entry struct {
 	seq            int64
 	kind           agentrun.EventKind
 	text           string
+	attachments    []conversationAttachment
 	at             time.Time
 	queueUpdatedAt time.Time
 	revision       uint64
@@ -105,7 +106,11 @@ func (t *transcript) history(events []desktopservice.RuntimeEventView) {
 }
 
 func (t *transcript) detail(d desktopservice.RunDetail) {
-	t.items["prompt"] = &entry{key: "prompt", text: d.Task.Prompt, user: true, at: d.Task.CreatedAt}
+	attachments := make([]conversationAttachment, 0, len(d.Task.Attachments))
+	for _, item := range d.Task.Attachments {
+		attachments = append(attachments, conversationAttachment{Path: item.StoredPath, Name: item.Name, MIMEType: item.MIMEType})
+	}
+	t.items["prompt"] = &entry{key: "prompt", text: d.Task.Prompt, attachments: attachments, user: true, at: d.Task.CreatedAt}
 	// Older, text-only continuations are stored as workflow events rather
 	// than queued instructions. They must be part of the conversation too.
 	for _, event := range d.Events {
@@ -122,15 +127,15 @@ func (t *transcript) detail(d desktopservice.RunDetail) {
 		key := fmt.Sprintf("resume/%d", event.Seq)
 		t.items[key] = &entry{key: key, text: payload.Instruction, user: true, at: at}
 	}
-	// Instructions are a complete snapshot. Remove stale/removed entries so
-	// deleting a queued message does not leave a ghost bubble behind.
+	// Instructions are a complete snapshot. Rebuild applied turns only;
+	// pending guidance belongs to the composer's queue until it is consumed.
 	for key := range t.items {
 		if strings.HasPrefix(key, "instruction/") {
 			delete(t.items, key)
 		}
 	}
 	for _, i := range d.Instructions {
-		if i.Status == domainworkflows.InstructionRemoved {
+		if i.Status != domainworkflows.InstructionApplied {
 			continue
 		}
 		key := "instruction/" + i.ID
@@ -142,7 +147,7 @@ func (t *transcript) detail(d desktopservice.RunDetail) {
 		if step, ok := domainworkflows.FindStep(d.Workflow, i.StepID); ok {
 			recipient = step.Name
 		}
-		t.items[key] = &entry{key: key, text: i.Content, user: true, at: at, recipient: recipient}
+		t.items[key] = &entry{key: key, text: i.Content, attachments: instructionAttachments(i.Attachments), user: true, at: at, recipient: recipient}
 	}
 	t.transitions(d)
 	t.history(d.RuntimeEvents)
@@ -203,7 +208,7 @@ func (t *transcript) visible() []*entry {
 		if e.permission != nil && t.resolvedPermissions[requestKey(e.step, e.permission.ID)] || e.question != nil && t.resolvedQuestions[requestKey(e.step, e.question.ID)] {
 			continue
 		}
-		if e.text == "" && e.permission == nil && e.question == nil && e.kind != agentrun.KindToolResult {
+		if e.text == "" && len(e.attachments) == 0 && e.permission == nil && e.question == nil && e.kind != agentrun.KindToolResult {
 			continue
 		}
 		out = append(out, e)

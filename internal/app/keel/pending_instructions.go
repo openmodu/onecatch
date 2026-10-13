@@ -104,7 +104,14 @@ func (a *app) pendingInstructionList(cx *el.Context) el.Element {
 		if count == 0 {
 			row.RoundedCorners(18, 18, 0, 0)
 		}
-		list.Child(row)
+		if len(instruction.Attachments) > 0 {
+			list.Child(el.Div().ID("pending-content/"+instruction.ID).Bg(mixColor(theme.Surface, theme.Subtle, .96)).RoundedCorners(18, 18, 0, 0).Child(
+				row,
+				el.Div().Pl(40).Pr(10).Pb(8).Child(a.conversationAttachments(cx, instructionAttachments(instruction.Attachments), "pending/"+instruction.ID, true)),
+			))
+		} else {
+			list.Child(row)
+		}
 		count++
 	}
 	return list.Hidden(count == 0)

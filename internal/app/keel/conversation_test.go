@@ -257,3 +257,29 @@ func TestLegacyParallelToolsDoNotGuessResultOwnership(t *testing.T) {
 		t.Fatal("later sequential call lost its result")
 	}
 }
+
+func TestCodexParallelCommandOutputsShowParametersOnTheirCalls(t *testing.T) {
+	at := time.Unix(100, 0)
+	rows := buildConversationEntries([]*entry{
+		{key: "a", step: "impl", kind: agentrun.KindToolUse, stream: "codex-tool-output-a", text: "go test ./...", at: at},
+		{key: "b", step: "impl", kind: agentrun.KindToolUse, stream: "codex-tool-output-b", text: `files.Read {"file_path":"/repo/a.go","offset":65}`, at: at},
+		{key: "rb", step: "impl", kind: agentrun.KindToolResult, stream: "codex-tool-output-b", text: "65 func example()", at: at.Add(time.Second)},
+		{key: "ra", step: "impl", kind: agentrun.KindToolResult, stream: "codex-tool-output-a", text: "test failed", failed: true, at: at.Add(2 * time.Second)},
+	})
+	if len(rows) != 1 || len(rows[0].process) != 2 {
+		t.Fatalf("orphaned Codex results: %+v", rows)
+	}
+	command, read := rows[0].process[0], rows[0].process[1]
+	if len(command.details) != 1 || command.details[0].text != "test failed" || !command.failed || len(read.details) != 1 || read.details[0].text != "65 func example()" || read.failed {
+		t.Fatal("parallel results paired to wrong calls")
+	}
+	_, body, _ := toolDisplay(command)
+	sections := toolCodeSections(command, "命令", body)
+	if len(sections) != 1 || sections[0].language != "bash" || sections[0].text != "go test ./..." {
+		t.Fatal("command parameters not available")
+	}
+	_, body, _ = toolDisplay(read)
+	if !strings.Contains(body, `"offset": 65`) || !strings.Contains(body, "/repo/a.go") {
+		t.Fatalf("read parameters missing: %s", body)
+	}
+}

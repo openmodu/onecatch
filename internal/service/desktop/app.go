@@ -1445,6 +1445,7 @@ func (a *Service) GetRunDetail(ctx context.Context, runID string) (RunDetail, er
 		detail.Events = append(detail.Events, WorkflowEventView{RunID: event.RunID, Seq: event.Seq, Type: event.Type, StepID: event.StepID, Payload: string(event.Payload), At: event.At.Format(time.RFC3339Nano)})
 	}
 	traeTools := map[string]map[string]string{}
+	codexTools := map[string][]agentrun.CodexToolHistory{}
 	for stepIndex, stepRun := range stepRuns {
 		items, listErr := a.store.Repos.Workflows.ListRuntimeEvents(ctx, runID, stepRun.ID, 0, 10_000)
 		if listErr != nil {
@@ -1452,6 +1453,7 @@ func (a *Service) GetRunDetail(ctx context.Context, runID string) (RunDetail, er
 		}
 		views, usage := foldRuntimeEventViews(stepRun.ID, items, needsUsageBackfill(detail.StepRuns[stepIndex]))
 		restoreTraeToolArguments(views, traeTools)
+		restoreCodexToolCalls(views, codexTools)
 		applyUsageBackfill(&detail.StepRuns[stepIndex], usage)
 		detail.RuntimeEvents = append(detail.RuntimeEvents, views...)
 	}
@@ -1475,6 +1477,7 @@ func (a *Service) GetRunTranscript(ctx context.Context, runID string) ([]Runtime
 	}
 	out := []RuntimeEventView{}
 	traeTools := map[string]map[string]string{}
+	codexTools := map[string][]agentrun.CodexToolHistory{}
 	for _, stepRun := range stepRuns {
 		items, listErr := a.store.Repos.Workflows.ListRuntimeEvents(ctx, runID, stepRun.ID, 0, 10_000)
 		if listErr != nil {
@@ -1482,6 +1485,7 @@ func (a *Service) GetRunTranscript(ctx context.Context, runID string) ([]Runtime
 		}
 		views, _ := foldRuntimeEventViews(stepRun.ID, items, false)
 		restoreTraeToolArguments(views, traeTools)
+		restoreCodexToolCalls(views, codexTools)
 		out = append(out, views...)
 	}
 	return out, nil
@@ -1623,6 +1627,17 @@ func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEven
 				views[queueIndex] = view
 			} else {
 				queueIndex = len(views)
+				views = append(views, view)
+			}
+			continue
+		}
+		if event.StreamID != "" && event.Kind == agentrun.KindToolUse && event.Phase == "" {
+			key := string(event.Kind) + "/" + event.StreamID
+			if index, exists := streamIndexes[key]; exists {
+				view.At, view.Seq = views[index].At, views[index].Seq
+				views[index] = view
+			} else {
+				streamIndexes[key] = len(views)
 				views = append(views, view)
 			}
 			continue

@@ -105,7 +105,9 @@ func TestCodexRunnerStreamsAppServerMessagesAndCommandOutput(t *testing.T) {
 		case "codex-message-message-1":
 			messages = append(messages, event)
 		case "codex-tool-output-command-1":
-			outputs = append(outputs, event)
+			if event.Kind == KindToolResult {
+				outputs = append(outputs, event)
+			}
 		}
 	}
 	if len(messages) != 4 || messages[0].Phase != StreamStart || messages[1].Text != "Hel" || messages[2].Text != "lo" || messages[3].Phase != StreamEnd || messages[3].Text != "Hello" {

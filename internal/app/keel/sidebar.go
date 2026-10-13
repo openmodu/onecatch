@@ -280,10 +280,13 @@ func (a *app) sidebarTask(t domaintasks.Task) kit.SidebarItem {
 			alpha := float32(1)
 			if !el.ReducedMotion() {
 				phase := float64(cx.Now().UnixMilli()%2000) / 2000
-				alpha = float32(.65 + .35*math.Cos(2*math.Pi*phase))
+				// Stay visible on light backgrounds throughout the pulse.
+				alpha = float32(.825 + .175*math.Cos(2*math.Pi*phase))
 				cx.Animating()
 			}
-			icon.Child(el.Div().ID("task-running/" + t.ID).Role("image").Name("正在运行").Absolute().Left(-10).Top(5).
+			// Keep the light inside the icon viewport; negative offsets are
+			// clipped by Sidebar's fixed icon slot and disappear on screen.
+			icon.Child(el.Div().ID("task-running/" + t.ID).Role("image").Name("正在运行").Absolute().Right(0).Bottom(0).
 				Size(el.Dp(6)).Rounded(3).Bg(color.NRGBA{R: 34, G: 179, B: 99, A: 255}).Opacity(alpha))
 		}
 		return icon

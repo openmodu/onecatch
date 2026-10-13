@@ -141,7 +141,7 @@ func newApp(b *backend) *app {
 			}
 			a.detail.Run, a.detail.StepRuns, a.detail.Instructions, a.detail.Active = v.Run, v.StepRuns, v.Instructions, v.Active
 			a.followActiveInspectorSource()
-			a.transcript.detail(desktopservice.RunDetail{Task: a.detail.Task, Instructions: v.Instructions})
+			a.transcript.detail(desktopservice.RunDetail{Task: a.detail.Task, Workflow: a.detail.Workflow, Instructions: v.Instructions})
 			a.syncMessages()
 		})
 	})
@@ -536,6 +536,9 @@ func rowSignature(e *entry, active, last bool) string {
 	write = func(e *entry) {
 		fmt.Fprintf(&b, "%s|%s|%t|%d|%d|%t|%t|%t|%s|", e.key, e.kind, e.user, e.revision, len(e.text), e.streaming, e.failed, e.settled, e.stepLabel+"|"+e.stepContext)
 		fmt.Fprintf(&b, "recipient:%q|", e.recipient)
+		for _, attachment := range e.attachments {
+			fmt.Fprintf(&b, "attachment:%q:%q:%q|", attachment.Path, attachment.Name, attachment.MIMEType)
+		}
 		if e.kind == agentrun.KindQueueStatus {
 			b.WriteString(e.text)
 			fmt.Fprintf(&b, "|queueUpdatedAt:%d|", e.queueUpdatedAt.UnixNano())
