@@ -54,7 +54,7 @@ func TestProcessCardClipsStatusAndHoverToRoundedCorners(t *testing.T) {
 							ops.Reset()
 							root.Layout(pre)
 							router.Frame(&ops)
-							if r, ok := findSkillControl(router.AppendSemantics(nil), "检查文件"); ok {
+							if r, ok := findSkillControl(router.AppendSemantics(nil), "执行命令 · 检查文件"); ok {
 								row = r
 							}
 							if state == "hover" && !row.Empty() {

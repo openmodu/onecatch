@@ -20,6 +20,7 @@ import (
 	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
 	workerservice "github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type app struct {
@@ -60,6 +61,7 @@ type app struct {
 	stateView                                                                               *runstate.View
 	transcript                                                                              *transcript
 	entries                                                                                 []*entry
+	conversationRows                                                                        []*entry
 	docs                                                                                    map[string]*markdown.Doc
 	conversation                                                                            conversationState
 	profile                                                                                 runtimeProfileState
@@ -408,6 +410,11 @@ func (a *app) applyRunDetail(detail desktopservice.RunDetail, snapshot []runstre
 	}
 	a.syncMessages()
 	a.followActiveInspectorSource()
+	// A workflow timeline needs its earlier lanes even if queue snapshots
+	// made the initial window too short to scroll to the history trigger.
+	if len(a.detail.Workflow.Steps) > 1 && a.backend != nil && a.backend.service != nil {
+		a.loadFullHistory()
+	}
 }
 
 // receiveFrame queues a run-stream frame from the publishing goroutine and
@@ -454,21 +461,38 @@ func (a *app) applyLiveFrames() {
 func (a *app) syncMessages() {
 	a.entries = buildConversationEntries(a.transcript.visible())
 	a.labelWorkflowSteps()
-	keys := make([]string, len(a.entries))
-	for i, e := range a.entries {
-		keys[i] = e.key
-		if e.kind == "message" || e.user {
+	a.conversationRows = buildWorkflowTimeline(a.entries, a.detail)
+	keys := make([]string, len(a.conversationRows))
+	var selectable []*markdown.Doc
+	for _, e := range a.entries {
+		if e.kind == "message" || e.kind == agentrun.KindError || e.user {
 			doc := a.docs[e.key]
 			if doc == nil {
 				doc = newConversationDocument(e.text).TableDividers(!a.ui.Preferences.HideTableDividers)
 				a.docs[e.key] = doc
 			}
-			if doc.Source() != e.text {
-				doc.SetSource(e.text)
-			}
+			syncConversationSource(doc, e.text, e.streaming)
 			doc.SetStreaming(e.streaming && a.detail != nil && a.detail.Active)
+			if out, ok := a.workflowMessageOutcome(e); ok {
+				key := e.key + "/readable"
+				readable := a.docs[key]
+				if readable == nil {
+					readable = newConversationDocument(workflowOutcomeText(out))
+					a.docs[key] = readable
+				} else {
+					syncConversationSource(readable, workflowOutcomeText(out), false)
+				}
+				// Drag selection follows displayed prose; message copy retains
+				// the untouched raw JSON in the original document.
+				doc = readable
+			}
+			selectable = append(selectable, doc)
 		}
 	}
+	for i, e := range a.conversationRows {
+		keys[i] = e.key
+	}
+	a.conversation.selection.SetDocuments(selectable...)
 	a.scroller.SetKeys(keys)
 	// Re-measure only rows whose content changed: a streaming token touches
 	// one row, and re-measuring every row's Markdown made long runs stutter.
@@ -478,8 +502,8 @@ func (a *app) syncMessages() {
 	active := a.detail != nil && a.detail.Active
 	seen := make(map[string]bool, len(a.entries))
 	var changed []string
-	for i, e := range a.entries {
-		sig := rowSignature(e, active, i == len(a.entries)-1)
+	for i, e := range a.conversationRows {
+		sig := rowSignature(e, active, i == len(a.conversationRows)-1)
 		seen[e.key] = true
 		if a.rowSigs[e.key] != sig {
 			a.rowSigs[e.key] = sig
@@ -494,6 +518,13 @@ func (a *app) syncMessages() {
 	if len(changed) > 0 {
 		a.scroller.Invalidate(changed...)
 	}
+	parallel := false
+	for _, row := range a.conversationRows {
+		parallel = parallel || len(row.columns) > 0
+	}
+	if !parallel {
+		a.conversationRows = nil
+	}
 }
 
 // rowSignature identifies what a conversation row draws: its records'
@@ -503,12 +534,29 @@ func rowSignature(e *entry, active, last bool) string {
 	var b strings.Builder
 	var write func(*entry)
 	write = func(e *entry) {
-		fmt.Fprintf(&b, "%s|%s|%t|%d|%d|%t|%t|%t|%s|", e.key, e.kind, e.user, e.revision, len(e.text), e.streaming, e.failed, e.settled, e.stepLabel)
+		fmt.Fprintf(&b, "%s|%s|%t|%d|%d|%t|%t|%t|%s|", e.key, e.kind, e.user, e.revision, len(e.text), e.streaming, e.failed, e.settled, e.stepLabel+"|"+e.stepContext)
+		fmt.Fprintf(&b, "recipient:%q|", e.recipient)
+		if e.kind == agentrun.KindQueueStatus {
+			b.WriteString(e.text)
+		}
+		if e.transition != nil {
+			fmt.Fprintf(&b, "%q|%q|%q|%q|%q|", e.transition.verdict, e.transition.source, e.transition.target, e.transition.summary, e.transition.feedback)
+		}
 		if e.permission != nil {
 			b.WriteString("p:" + e.permission.ID + "|")
 		}
 		if e.question != nil {
 			b.WriteString("q:" + e.question.ID + "|")
+		}
+		for _, child := range e.stack {
+			write(child)
+		}
+		for _, cell := range e.columns {
+			if cell != nil {
+				write(cell)
+			} else {
+				b.WriteString("empty|")
+			}
 		}
 		for _, d := range e.details {
 			write(d)
@@ -522,7 +570,7 @@ func rowSignature(e *entry, active, last bool) string {
 	// Run activity only changes a process group's label and a streaming
 	// message's caret; re-estimating every row when a run ends lost the
 	// view's place at the bottom.
-	if len(e.process) > 0 || e.streaming {
+	if len(e.process) > 0 || e.streaming || len(e.columns) > 0 {
 		fmt.Fprintf(&b, "%t|%t", active, last)
 	}
 	return b.String()
@@ -734,7 +782,7 @@ func (a *app) stop() {
 
 func (a *app) loadFullHistory() {
 	id, version := a.runID, a.selection
-	if id == "" || a.loading || a.detail == nil || a.detail.RuntimeEventsTotal <= len(a.detail.RuntimeEvents) || a.historyLoading[id] {
+	if id == "" || a.loading || a.detail == nil || a.transcript.complete || a.detail.RuntimeEventsTotal <= len(a.detail.RuntimeEvents) || a.historyLoading[id] {
 		return
 	}
 	if a.historyLoading == nil {
@@ -751,6 +799,7 @@ func (a *app) loadFullHistory() {
 			a.fail(err)
 			if err == nil {
 				a.transcript.history(events)
+				a.transcript.complete = true
 				if a.detail != nil {
 					a.detail.RuntimeEventsTotal = len(events)
 					a.detail.RuntimeEvents = events

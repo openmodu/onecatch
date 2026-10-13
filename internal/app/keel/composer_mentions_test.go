@@ -159,6 +159,9 @@ func TestConversationLabelsStepsAndShowsHandOffs(t *testing.T) {
 		if e.user {
 			continue
 		}
+		if e.stepLabel != "" && !strings.Contains(e.stepContext, detail.Workflow.Name) {
+			t.Fatalf("workflow name missing: %q", e.stepContext)
+		}
 		got = append(got, e.stepLabel+"|"+e.text)
 	}
 	want := []string{"实现 · codex|实现完成", "代码审查 · claude · sonnet|缺少并发测试", "|↩ 「代码审查」退回给「实现」：补上并发测试 …", "实现 · codex|已补测试"}

@@ -7,6 +7,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -27,6 +28,48 @@ import (
 	workspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
+
+func TestKeelSidebarRecentActivityPreservesPinsAndUpdatesRunningLight(t *testing.T) {
+	a := conversationFixture(t)
+	base := time.Now()
+	a.tasks["modu"] = []domaintasks.Task{
+		{ID: "old", Title: "Old", UpdatedAt: base.Add(-time.Hour)},
+		{ID: "pin", Title: "Pinned", Pinned: true, UpdatedAt: base.Add(-2 * time.Hour)},
+		{ID: "new", Title: "New", UpdatedAt: base},
+		{ID: "middle", Title: "Middle", UpdatedAt: base.Add(-time.Minute)},
+		{ID: "oldest", Title: "Oldest", UpdatedAt: base.Add(-3 * time.Hour)},
+	}
+	router, frame, _ := alignmentRouter(el.Root(a), 1120, 900, 1)
+	var hasLight func([]input.SemanticNode) bool
+	hasLight = func(nodes []input.SemanticNode) bool {
+		for _, node := range nodes {
+			if node.Desc.Label == "正在运行" || hasLight(node.Children) {
+				return true
+			}
+		}
+		return false
+	}
+	if !slices.Equal(a.ui.SidebarVisibleTasks, []string{"pin", "new", "middle", "old"}) {
+		t.Fatalf("initial order: %v", a.ui.SidebarVisibleTasks)
+	}
+	nav := a.ui.SidebarNav
+	a.tasks["modu"][4].UpdatedAt = base.Add(time.Minute)
+	a.tasks["modu"][4].Status = domaintasks.StatusRunning
+	frame()
+	frame()
+	if !slices.Equal(a.ui.SidebarVisibleTasks, []string{"pin", "oldest", "new", "middle"}) || a.ui.SidebarNav != nav {
+		t.Fatalf("latest activity did not promote task while retaining pin/navigation: %v", a.ui.SidebarVisibleTasks)
+	}
+	if !hasLight(router.AppendSemantics(nil)) {
+		t.Fatal("running task has no status light")
+	}
+	a.tasks["modu"][4].Status = domaintasks.StatusCompleted
+	frame()
+	frame()
+	if hasLight(router.AppendSemantics(nil)) {
+		t.Fatal("completed task retained status light")
+	}
+}
 
 func TestKeelSidebarNativeProjectActionsAndExpansion(t *testing.T) {
 	applyPalette(false)

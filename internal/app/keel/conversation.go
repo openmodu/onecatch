@@ -17,18 +17,20 @@ import (
 	"gioui.org/unit"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
+	_ "github.com/dyike/keel/ui/highlight"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/markdown"
 	"github.com/dyike/keel/ui/theme"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
-	"github.com/yuin/goldmark/ast"
 	"golang.org/x/image/math/fixed"
 )
 
 type conversationState struct {
+	selection   markdown.SelectionGroup
 	open        map[string]bool
 	overridden  map[string]bool
 	views       map[string]*conversationDocView
+	toolDocs    map[string]*markdown.Doc
 	copyButtons map[string]*kit.CopyButtonView
 	messages    map[string]*kit.MessageView
 }
@@ -38,33 +40,61 @@ type conversationState struct {
 func buildConversationEntries(raw []*entry) []*entry {
 	items := make([]*entry, 0, len(raw))
 	calls := map[string]*entry{}
-	last := map[string]*entry{}
+	legacy := map[string][]*entry{}
+	ambiguous := map[string]bool{}
+	queues := map[string]*entry{}
 	for _, original := range raw {
 		e := *original
 		e.details = nil
+		if e.kind == agentrun.KindQueueStatus {
+			// Queue notifications are snapshots, not tool calls. Keep one row
+			// per step run at its original position while its status updates.
+			if previous := queues[e.step]; previous != nil {
+				previous.text, previous.revision = e.text, e.revision
+				continue
+			}
+			e.key = "queue/" + e.step
+			queues[e.step] = &e
+		}
 		if e.kind == agentrun.KindToolResult {
 			target := calls[e.step+"/"+e.stream]
-			if e.stream == "" {
-				target = last[e.step]
+			if target == nil && len(legacy[e.step]) == 1 && !ambiguous[e.step] {
+				target = legacy[e.step][0]
+			}
+			// A parallel legacy batch has no IDs on its calls: do not guess
+			// which command produced an output. Finish the batch without pairing.
+			if !e.streaming && len(legacy[e.step]) > 0 && (target == nil || target.stream == "") {
+				legacy[e.step] = legacy[e.step][1:]
+				if len(legacy[e.step]) == 0 {
+					delete(ambiguous, e.step)
+				}
 			}
 			if target != nil {
 				target.details = append(target.details, &e)
 				target.settled = !e.streaming
 				target.failed = target.failed || e.failed
+				if e.stream != "" {
+					calls[e.step+"/"+e.stream] = target
+				}
 				continue
 			}
 		}
 		if e.kind == agentrun.KindToolUse {
-			calls[e.step+"/"+e.stream] = &e
-			last[e.step] = &e
+			if e.stream != "" {
+				calls[e.step+"/"+e.stream] = &e
+			} else {
+				legacy[e.step] = append(legacy[e.step], &e)
+				ambiguous[e.step] = ambiguous[e.step] || len(legacy[e.step]) > 1
+			}
 		} else if e.kind == agentrun.KindMessage || e.user || e.question != nil || e.permission != nil {
-			delete(last, e.step)
+			delete(legacy, e.step)
+			delete(ambiguous, e.step)
 		}
 		items = append(items, &e)
 	}
 	out := make([]*entry, 0, len(items))
 	for _, e := range items {
-		process := !e.user && e.kind != agentrun.KindMessage && e.kind != agentrun.KindError && e.kind != kindTransition
+		process := !e.user && e.kind != agentrun.KindMessage && e.kind != agentrun.KindError && e.kind != kindTransition && e.kind != agentrun.KindQueueStatus
 		if !process {
 			out = append(out, e)
 			continue
@@ -81,6 +111,33 @@ func buildConversationEntries(raw []*entry) []*entry {
 	return out
 }
 
+func queueStatusLabel(text string) string {
+	var status struct {
+		State     string  `json:"state"`
+		Position  *uint32 `json:"position"`
+		Operation string  `json:"operation"`
+	}
+	if json.Unmarshal([]byte(text), &status) != nil {
+		return "等待运行"
+	}
+	if status.State == "ready" {
+		return "排队结束"
+	}
+	label := "排队中"
+	if status.Operation == "contextCompaction" {
+		label = "上下文压缩排队中"
+	}
+	if status.Position != nil {
+		label += fmt.Sprintf(" · 当前第 %d 位", *status.Position)
+	}
+	return label
+}
+
+func (a *app) queueStatus(cx *el.Context, e *entry) el.Element {
+	return el.Div().ID("message/"+e.key).Role("status").Row().Items(el.Center).Gap(8).Px(2).Py(8).
+		Child(lucide(cx, "clock", 16, theme.Muted), el.Text(queueStatusLabel(e.text)).TextSize(13).Medium().TextColor(theme.Muted))
+}
+
 func (a *app) conversationOpen(key string, active bool) bool {
 	s := &a.conversation
 	if s.open == nil {
@@ -95,11 +152,26 @@ func (a *app) conversationOpen(key string, active bool) bool {
 func (a *app) toggleConversation(key string, active bool) {
 	next := !a.conversationOpen(key, active)
 	a.conversation.open[key], a.conversation.overridden[key] = next, true
-	a.scroller.Invalidate(key)
+	a.invalidateConversationEntry(key)
 }
 
 func (a *app) processGroup(cx *el.Context, e *entry) el.Element {
-	active := a.detail != nil && a.detail.Active && len(a.entries) > 0 && a.entries[len(a.entries)-1].key == e.key
+	active := false
+	if a.detail != nil && a.detail.Active {
+		for i := len(a.entries) - 1; i >= 0; i-- {
+			item := a.entries[i]
+			if item.step != e.step || item.kind == agentrun.KindQueueStatus {
+				continue
+			}
+			active = item.key == e.key
+			break
+		}
+		for _, run := range a.detail.StepRuns {
+			if run.ID == e.step && run.Status != "running" {
+				active = false
+			}
+		}
+	}
 	count, thoughts := 0, 0
 	urgent := false
 	for _, item := range e.process {
@@ -149,31 +221,53 @@ func (a *app) processGroup(cx *el.Context, e *entry) el.Element {
 
 func toolDisplay(e *entry) (title, body, icon string) {
 	body = strings.TrimSpace(e.text)
-	if start := strings.Index(body, " {"); start > 0 {
-		var envelope map[string]any
-		if json.Unmarshal([]byte(body[start+1:]), &envelope) == nil {
-			for _, key := range []string{"command", "cmd", "path", "file_path", "query", "url", "prompt"} {
-				if value, ok := envelope[key].(string); ok && strings.TrimSpace(value) != "" {
-					body = value
-					break
-				}
-			}
-			title, _ = envelope["description"].(string)
-		}
-	}
-	if title == "" {
-		title = strings.Split(strings.TrimSpace(body), "\n")[0]
-	}
 	icon = "wrench"
-	lower := strings.ToLower(title + " " + body)
+	if e.kind == agentrun.KindToolResult {
+		return "工具结果 · 未找到对应调用", body, icon
+	}
 	if e.kind == agentrun.KindFileChange {
-		icon = "file-diff"
-	} else if strings.Contains(lower, "search") || strings.Contains(lower, "rg ") || strings.Contains(lower, "搜索") {
-		icon = "search"
-	} else if strings.Contains(lower, "read") || strings.Contains(lower, "cat ") || strings.Contains(lower, "读取") {
-		icon = "book-open"
-	} else if strings.Contains(lower, "bash") || strings.Contains(lower, "zsh") || strings.Contains(lower, "git ") || strings.Contains(lower, "运行") {
-		icon = "square-terminal"
+		return "修改文件 · " + firstLine(body), body, "file-diff"
+	}
+	name, target, description := "", "", ""
+	var args map[string]any
+	if start := strings.Index(body, " {"); start > 0 && json.Unmarshal([]byte(body[start+1:]), &args) == nil {
+		name = strings.TrimSpace(body[:start])
+		description, _ = args["description"].(string)
+		for _, key := range []string{"command", "cmd", "file_path", "filePath", "path", "query", "url", "prompt"} {
+			if value, ok := args[key].(string); ok && strings.TrimSpace(value) != "" {
+				target = value
+				break
+			}
+		}
+		data, _ := json.MarshalIndent(args, "", "  ")
+		body = string(data)
+	}
+	lower := strings.ToLower(name)
+	if name == "" {
+		lower = strings.ToLower(strings.TrimSpace(e.text))
+	}
+	action := "调用工具"
+	switch {
+	case lower == "read" || strings.HasSuffix(lower, "/read"):
+		action, icon = "读取文件", "book-open"
+	case lower == "write" || lower == "edit" || strings.HasSuffix(lower, "/edit"):
+		action, icon = "修改文件", "file-diff"
+	case lower == "grep" || lower == "glob" || lower == "search":
+		action, icon = "搜索", "search"
+	case lower == "bash" || lower == "shell" || lower == "exec_command" || name == "":
+		action, icon = "执行命令", "square-terminal"
+	}
+	if name == "" && (lower == "read" || lower == "write" || lower == "edit" || lower == "grep" || lower == "glob" || lower == "bash") {
+		return action + " · 参数未保存", body, icon
+	}
+	if description != "" {
+		title = action + " · " + description
+	} else if target != "" {
+		title = action + " · " + firstLine(target)
+	} else if name != "" {
+		title = action + " · " + name
+	} else {
+		title = action + " · " + firstLine(body)
 	}
 	return
 }
@@ -277,19 +371,27 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 		item.Bg(mixColor(theme.Subtle, theme.Surface, .28))
 	}
 	if open {
-		label := "命令"
+		label := "参数"
+		if icon == "square-terminal" {
+			label = "命令"
+		}
+		if e.kind == agentrun.KindToolResult {
+			label = "结果"
+		}
 		if e.kind == agentrun.KindFileChange {
 			label = "路径"
 		}
-		section := func(name, text string) el.Element {
-			return el.Div().Gap(5).Child(
-				el.Text(name).TextSize(10).Weight(font.SemiBold).TextColor(muted),
-				el.Div().MaxH(el.Dp(220)).ScrollY().Rounded(8).Bg(theme.Subtle).Px(10).Py(9).Child(el.Text(text).Mono().TextSize(12).LineHeight(1.55).TextColor(muted)))
+		content := el.Div().Gap(12).Pt(11).Pr(12).Pb(13).Pl(40)
+		if e.kind == agentrun.KindToolUse && strings.HasSuffix(title, "参数未保存") {
+			content.Child(el.Text("这条记录未保存工具参数").TextSize(12).TextColor(muted))
+		} else {
+			for i, section := range toolCodeSections(e, label, body) {
+				content.Child(a.toolCodeSection(cx, section, fmt.Sprintf("%s/command/%d", e.key, i)))
+			}
 		}
-		content := el.Div().Gap(12).Pt(11).Pr(12).Pb(13).Pl(40).Child(section(label, body))
-		for _, detail := range e.details {
+		for i, detail := range e.details {
 			if strings.TrimSpace(detail.text) != "" {
-				content.Child(section("结果", detail.text))
+				content.Child(a.toolCodeSection(cx, toolCodeContent{"结果", toolResultLanguage(e, detail.text), detail.text}, fmt.Sprintf("%s/result/%d", e.key, i)))
 			}
 		}
 		item.Child(el.Div().H(el.Dp(1)).WFull().Bg(seamColor), content)
@@ -298,18 +400,22 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 }
 
 func newConversationDocument(source string) *markdown.Doc {
-	// Emoji are ordinary text: Markdown paints color glyphs on the text
-	// baseline. Local: headings and quotes render per block, so the answer
-	// keeps blank-line chunks and a token reparses only the last one.
-	return markdown.New(source).Plugins(markdown.Plugin{Local: true, Blocks: map[ast.NodeKind]func(ast.Node, []byte) el.View{
-		ast.KindBlockquote: conversationQuote,
-		ast.KindHeading: func(node ast.Node, source []byte) el.View {
-			value := string(node.Text(source))
-			return el.ViewFunc(func(cx *el.Context) el.Element {
-				return el.Div().Pt(6).Child(el.Text(value).TextSize(15).Bold().LineHeight(1.3))
-			})
-		},
-	}})
+	// Keep headings, quotes and body text in one selection controller.
+	return markdown.New(source)
+}
+
+func syncConversationSource(doc *markdown.Doc, text string, streaming bool) {
+	previous := doc.Source()
+	if text == previous {
+		return
+	}
+	// Streaming appends preserve the selected prefix. Replacing the source
+	// on every token clears selection, even while the user is copying it.
+	if (streaming || doc.Streaming()) && strings.HasPrefix(text, previous) {
+		doc.Append(text[len(previous):])
+	} else {
+		doc.SetSource(text)
+	}
 }
 
 type conversationDocView struct {
@@ -333,9 +439,7 @@ func (a *app) conversationDocument(cx *el.Context, e *entry, hug bool) el.Elemen
 		doc = newConversationDocument(e.text).TableDividers(!a.ui.Preferences.HideTableDividers)
 		a.docs[e.key] = doc
 	}
-	if doc.Source() != e.text {
-		doc.SetSource(e.text)
-	}
+	syncConversationSource(doc, e.text, e.streaming)
 	doc.SetStreaming(e.streaming && a.detail != nil && a.detail.Active)
 	v := a.conversation.views[e.key]
 	if v == nil || v.doc != doc {
@@ -363,10 +467,10 @@ func (a *app) conversationDocument(cx *el.Context, e *entry, hug bool) el.Elemen
 			}
 			gtx.Constraints.Max.X = min(gtx.Constraints.Max.X, v.hugWidth+gtx.Dp(2))
 		}
-		dims := v.root.LayoutViewport(gtx, visible)
+		dims := v.root.LayoutIn(gtx, visible, cx)
 		if hug && !v.expanded && v.overflow != doc.IsClamped() {
 			v.overflow = doc.IsClamped()
-			a.scroller.Invalidate(e.key)
+			a.invalidateConversationEntry(e.key)
 			gtx.Execute(op.InvalidateCmd{})
 		}
 		return dims
@@ -406,7 +510,7 @@ func (a *app) userMessageContent(cx *el.Context, e *entry) el.Element {
 		}
 		disclosure := el.Div().ID("message/"+e.key+"/disclosure").Name(label).Role("button").Focusable(true).CursorPointer().Row().Items(el.Center).Gap(5).H(el.Dp(32)).Px(2).Rounded(6).
 			FocusStyle(neutralFocus).Hover(func(s *el.Style) { s.Bg(theme.SubtleHover) }).
-			OnClick(func() { v.expanded = !v.expanded; a.scroller.Invalidate(e.key) }).
+			OnClick(func() { v.expanded = !v.expanded; a.invalidateConversationEntry(e.key) }).
 			Child(el.Text(label).TextSize(13).TextColor(theme.Muted), lucide(cx, caret, 15, theme.Muted))
 		body.Child(el.Div().Row().Items(el.Center).Pt(5).Child(disclosure))
 	}
@@ -423,6 +527,9 @@ func (a *app) messageActions(cx *el.Context, e *entry, user bool) el.Element {
 		key := e.key
 		copyButton = kit.CopyButton(func() string {
 			if doc := a.docs[key]; doc != nil {
+				if e.recipient != "" {
+					return "@" + e.recipient + "\n" + doc.Source()
+				}
 				return doc.Source()
 			}
 			return ""

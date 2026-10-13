@@ -29,9 +29,14 @@ type entry struct {
 	process      []*entry
 	details      []*entry
 	settled      bool
+	transition   *workflowTransition
+	recipient    string
 	// stepLabel names the workflow step that produced this row; it is set on
 	// the first row of each run of output from one step.
-	stepLabel string
+	columns     []*entry
+	stack       []*entry
+	stepLabel   string
+	stepContext string
 }
 
 // kindTransition is a workflow event shown in the conversation: a step
@@ -42,6 +47,7 @@ const kindTransition agentrun.EventKind = "workflow_transition"
 // revision. Subscribe before loading history; merge rather than replace so a
 // late disk read never rolls a live response back.
 type transcript struct {
+	complete            bool
 	items               map[string]*entry
 	resolvedPermissions map[string]bool
 	resolvedQuestions   map[string]bool
@@ -130,7 +136,11 @@ func (t *transcript) detail(d desktopservice.RunDetail) {
 		if !i.AppliedAt.IsZero() {
 			at = i.AppliedAt
 		}
-		t.items[key] = &entry{key: key, text: i.Content, user: true, at: at}
+		recipient := i.StepID
+		if step, ok := domainworkflows.FindStep(d.Workflow, i.StepID); ok {
+			recipient = step.Name
+		}
+		t.items[key] = &entry{key: key, text: i.Content, user: true, at: at, recipient: recipient}
 	}
 	t.transitions(d)
 	t.history(d.RuntimeEvents)
@@ -169,7 +179,7 @@ func (t *transcript) transitions(d desktopservice.RunDetail) {
 		}
 		at, _ := time.Parse(time.RFC3339Nano, event.At)
 		key := fmt.Sprintf("transition/%d", event.Seq)
-		t.items[key] = &entry{key: key, kind: kindTransition, text: text, at: at}
+		t.items[key] = &entry{key: key, kind: kindTransition, text: text, at: at, transition: &workflowTransition{verdict: payload.Verdict, source: name(event.StepID), target: name(payload.Target), feedback: payload.Feedback, summary: payload.Summary}}
 	}
 }
 

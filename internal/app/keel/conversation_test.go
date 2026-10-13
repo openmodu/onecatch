@@ -19,6 +19,7 @@ import (
 	"image"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -111,7 +112,7 @@ func TestConversationNativeDisclosure(t *testing.T) {
 		frame()
 	}
 	click(box)
-	tool, ok := findSkillControl(router.AppendSemantics(nil), "date +%F")
+	tool, ok := findSkillControl(router.AppendSemantics(nil), "执行命令 · date +%F")
 	if !ok {
 		t.Fatal("process did not expose tool")
 	}
@@ -212,5 +213,47 @@ func TestConversationCopyReadsLatestAndClearsFeedback(t *testing.T) {
 	frame()
 	if a.conversation.copyButtons[e.key].Copied() {
 		t.Fatal("custom styling broke the native CopyButton feedback timer")
+	}
+}
+
+func TestLegacyTraeOutputAttachesToCallInsteadOfBecomingCommand(t *testing.T) {
+	at := time.Now()
+	entries := buildConversationEntries([]*entry{
+		{key: "read", step: "a", kind: agentrun.KindToolUse, text: "Read", at: at},
+		{key: "read-result", step: "a", kind: agentrun.KindToolResult, stream: "trae-tool_result-call_a", text: "65 func example()", at: at.Add(time.Second)},
+		{key: "other", step: "b", kind: agentrun.KindToolUse, stream: "modern", text: "pwd", at: at},
+		{key: "unmatched", step: "b", kind: agentrun.KindToolResult, stream: "different", text: "other output", at: at},
+	})
+	if len(entries[0].process) != 1 || len(entries[0].process[0].details) != 1 || !entries[0].process[0].settled {
+		t.Fatal("legacy output should settle its own call")
+	}
+	if len(entries[1].process) != 2 || len(entries[1].process[0].details) != 0 {
+		t.Fatal("mismatched modern IDs must not pair")
+	}
+	title, body, _ := toolDisplay(&entry{kind: agentrun.KindToolUse, text: `Read {"file_path":"/repo/a.go","offset":65,"limit":10}`})
+	if !strings.Contains(title, "读取文件") || !strings.Contains(title, "/repo/a.go") || !strings.Contains(body, `"offset": 65`) {
+		t.Fatalf("unreadable tool display: %q, %q", title, body)
+	}
+	title, _, _ = toolDisplay(&entry{kind: agentrun.KindToolResult, text: "65 func example()"})
+	if title != "工具结果 · 未找到对应调用" {
+		t.Fatalf("orphan result presented as command: %q", title)
+	}
+}
+
+func TestLegacyParallelToolsDoNotGuessResultOwnership(t *testing.T) {
+	rows := buildConversationEntries([]*entry{
+		{key: "a", step: "s", kind: agentrun.KindToolUse, text: "read a"},
+		{key: "b", step: "s", kind: agentrun.KindToolUse, text: "read b"},
+		{key: "ra", step: "s", kind: agentrun.KindToolResult, stream: "legacy-result-a", text: "a content"},
+		{key: "rb", step: "s", kind: agentrun.KindToolResult, stream: "legacy-result-b", text: "b content"},
+		{key: "c", step: "s", kind: agentrun.KindToolUse, text: "read c"},
+		{key: "rc", step: "s", kind: agentrun.KindToolResult, stream: "legacy-result-c", text: "c content"},
+	})
+	items := rows[0].process
+	if len(items) != 5 || len(items[0].details) != 0 || len(items[1].details) != 0 || len(items[4].details) != 1 {
+		t.Fatalf("ambiguous legacy output assigned to wrong command: %+v", items)
+	}
+	if items[4].details[0].text != "c content" {
+		t.Fatal("later sequential call lost its result")
 	}
 }

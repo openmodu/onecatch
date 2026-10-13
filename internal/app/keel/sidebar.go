@@ -3,6 +3,7 @@ package keeldesktop
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"runtime"
 	"slices"
 	"strings"
@@ -91,6 +92,11 @@ func (a *app) sidebarPanel(cx *el.Context, height float32, peek bool) el.Element
 			}
 			tasks = append(tasks, task)
 		}
+		// Sort before limiting the collapsed project to three tasks. Pinned
+		// tasks stay in their separate section, preserving their order.
+		slices.SortStableFunc(tasks, func(a, b domaintasks.Task) int {
+			return sidebarTaskActivity(b).Compare(sidebarTaskActivity(a))
+		})
 		visible := len(tasks)
 		if !a.ui.ShowAll[w.ID] && query == "" && a.ui.Filter == "" {
 			visible = min(3, visible)
@@ -257,14 +263,39 @@ func (a *app) sidebarTask(t domaintasks.Task) kit.SidebarItem {
 		Suffix: el.ViewFunc(func(cx *el.Context) el.Element {
 			return a.sidebarTaskActions(cx, t.ID)
 		})}
-	if t.WorkflowID == "single_agent" || t.WorkflowID == "" && t.Harness != "" {
-		item.IconView = el.ViewFunc(func(cx *el.Context) el.Element {
-			return el.Div().Role("image").Name("Agent 图标：" + t.Harness).Size(el.Dp(16)).Center().Child(runtimeMark(cx, t.Harness, 16))
-		})
-	} else {
-		item.Icon = kit.IconArchive
-	}
+	item.IconView = el.ViewFunc(func(cx *el.Context) el.Element {
+		icon := el.Div().Size(el.Dp(16)).Center()
+		if t.WorkflowID == "single_agent" || t.WorkflowID == "" && t.Harness != "" {
+			icon.Role("image").Name("Agent 图标：" + t.Harness).Child(runtimeMark(cx, t.Harness, 16))
+		} else {
+			icon.Child(kit.Icon(kit.IconArchive).Size(16).Color(theme.Muted).Render(cx))
+		}
+		// The cached Sidebar keeps its icon closures across status updates.
+		// Read the current task so starting/stopping updates the light at once.
+		current := t
+		if updated, ok := a.cachedTask(t.ID); ok {
+			current = updated
+		}
+		if current.Status == domaintasks.StatusRunning {
+			alpha := float32(1)
+			if !el.ReducedMotion() {
+				phase := float64(cx.Now().UnixMilli()%2000) / 2000
+				alpha = float32(.65 + .35*math.Cos(2*math.Pi*phase))
+				cx.Animating()
+			}
+			icon.Child(el.Div().ID("task-running/" + t.ID).Role("image").Name("正在运行").Absolute().Left(-10).Top(5).
+				Size(el.Dp(6)).Rounded(3).Bg(color.NRGBA{R: 34, G: 179, B: 99, A: 255}).Opacity(alpha))
+		}
+		return icon
+	})
 	return item
+}
+
+func sidebarTaskActivity(task domaintasks.Task) time.Time {
+	if task.UpdatedAt.IsZero() {
+		return task.CreatedAt
+	}
+	return task.UpdatedAt
 }
 
 // Menu triggers outside Sidebar also use the standard Keel button behavior.

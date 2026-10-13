@@ -99,6 +99,10 @@ func (a *app) labelWorkflowSteps() {
 			steps[run.ID] = step
 		}
 	}
+	runs := make(map[string]domainworkflows.StepRun, len(a.detail.StepRuns))
+	for _, run := range a.detail.StepRuns {
+		runs[run.ID] = run
+	}
 	previous := ""
 	for _, e := range a.entries {
 		if e.user || e.kind == kindTransition {
@@ -106,10 +110,29 @@ func (a *app) labelWorkflowSteps() {
 			continue
 		}
 		step, ok := steps[e.step]
-		if !ok || step.ID == previous {
+		if !ok || e.step == previous {
 			continue
 		}
 		e.stepLabel = step.Name + " · " + stepAgentLabel(step)
-		previous = step.ID
+		context := []string{}
+		if a.detail.Workflow.Name != "" {
+			context = append(context, "工作流："+a.detail.Workflow.Name)
+		}
+		run := runs[e.step]
+		if run.Attempt > 0 {
+			context = append(context, fmt.Sprintf("第 %d 次执行", run.Attempt))
+		}
+		if run.Status != "" {
+			status := runStatus(string(run.Status))
+			if run.Status == domainworkflows.StepRunSucceeded {
+				status = "已完成"
+			}
+			if run.Status == domainworkflows.StepRunInterrupted {
+				status = "已中断"
+			}
+			context = append(context, status)
+		}
+		e.stepContext = strings.Join(context, " · ")
+		previous = e.step
 	}
 }

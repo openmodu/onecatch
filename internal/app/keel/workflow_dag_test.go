@@ -56,7 +56,9 @@ func TestDAGNativeCanvasInteractions(t *testing.T) {
 	root := el.Root(workflowView{a})
 	var router input.Router
 	var ops op.Ops
-	size := image.Pt(1040, 760)
+	// Leave room for both the fixed canvas toolbar and the graph's test
+	// connections; narrow viewport checks below verify toolbar wrapping.
+	size := image.Pt(1040, 900)
 	frame := func() {
 		ops.Reset()
 		root.Layout(layout.Context{Ops: &ops, Now: time.Now(), Source: router.Source(), Constraints: layout.Exact(size), Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}})
@@ -188,6 +190,12 @@ func TestDAGNativeCanvasInteractions(t *testing.T) {
 		if !b.In(image.Rectangle{Max: size}) {
 			t.Fatalf("validation clipped at %v: %v", size, b)
 		}
+		for _, label := range []string{"步骤", "连线类型 依赖", "连线类型 返工", "自动布局", "节点配置"} {
+			b := box(label)
+			if !b.In(image.Rectangle{Max: size}) || a.ui.DAG.InspectorOpen && b.Max.X > size.X-320 {
+				t.Fatalf("canvas toolbar %q is clipped or covered by inspector at %v: %v", label, size, b)
+			}
+		}
 	}
 }
 
@@ -281,8 +289,9 @@ func TestRenderDAGPreview(t *testing.T) {
 	a.ui.WorkflowDraft = preview
 	a.resetWorkflowForm()
 	a.syncWorkflowDocument()
-	for _, state := range []string{"default", "connected", "layout", "narrow", "dark"} {
+	for _, state := range []string{"default", "connected", "layout", "narrow", "inspector", "dark"} {
 		w, h := 1040, 760
+		a.ui.DAG.InspectorOpen = state == "inspector"
 		switch state {
 		case "connected":
 			a.ui.DAG.ConnectFrom = "review"
@@ -290,6 +299,8 @@ func TestRenderDAGPreview(t *testing.T) {
 			a.ui.DAG.ConnectFrom = ""
 			a.layoutDAG()
 		case "narrow":
+			w, h = 860, 600
+		case "inspector":
 			w, h = 860, 600
 		case "dark":
 			applyPalette(true)

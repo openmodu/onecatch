@@ -136,7 +136,7 @@ func (a *app) renderReasoningPicker(cx *el.Context) el.Element {
 
 	// Open the model catalog directly from the model name.
 	a.profile.menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
-		return el.Div().WFull().ID("reasoning-model").Name("选择模型").Role("button").Focusable(true).CursorPointer().OnClick(a.profile.menu.Toggle).FocusStyle(neutralFocus).
+		return el.Div().WFull().ID("reasoning-model").Name("选择模型").Role("button").Focusable(true).CursorPointer().OnClick(a.toggleRuntimeProfileMenu).FocusStyle(neutralFocus).
 			Row().Justify(el.Center).Items(el.Center).Gap(4).H(el.Dp(28)).Rounded(8).
 			Child(el.Text(a.profileModelLabel(a.model, false)).MaxLines(1).TextSize(13).TextColor(theme.Muted), lucide(cx, "chevron-right", 12, theme.Muted))
 	}))
@@ -313,12 +313,7 @@ func (a *app) buildRuntimeProfileMenu() {
 	menu := kit.Menu().Width(300).CheckSide(el.Right).Placement(el.Top, el.End).Offset(8).Label("选择模型")
 	a.profile.menu, a.profile.menuKey = menu, key
 	menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
-		return a.runtimeProfileTrigger(cx, func() {
-			a.profile.menu.Toggle()
-			if a.profile.menu.Value() {
-				a.loadRuntimeProfile()
-			}
-		})
+		return a.runtimeProfileTrigger(cx, a.toggleRuntimeProfileMenu)
 	}))
 	inheritedDescription := "跟随运行环境配置"
 	if a.runtime.Value() == "codex" {
@@ -332,7 +327,7 @@ func (a *app) buildRuntimeProfileMenu() {
 	for _, model := range a.profileConfiguration().Models {
 		model := model
 		label := firstProfileValue(model.DisplayName, model.Model)
-		addProfileChoice(menu, label, "", a.model == model.Model, func() { a.setProfileModel(model.Model) })
+		addProfileChoice(menu, label, modelCapacityDescription(model.Load), a.model == model.Model, func() { a.setProfileModel(model.Model) })
 		menu.SetItemDisabled(label, disabled || a.profile.loading)
 	}
 	if a.profile.loading {
@@ -343,6 +338,39 @@ func (a *app) buildRuntimeProfileMenu() {
 	}
 	menu.SetValue(open)
 }
+
+func (a *app) toggleRuntimeProfileMenu() {
+	a.profile.menu.Toggle()
+	if !a.profile.menu.Value() {
+		return
+	}
+	// Trae's load and queue lengths change independently of saved settings.
+	// Refresh on an explicit menu open; there is no background polling.
+	if a.runtime.Value() == "trae" && !a.profile.loading {
+		a.profile.key = ""
+	}
+	a.loadRuntimeProfile()
+}
+
+// Capacity is a provider snapshot, distinct from this run's queue position.
+func modelCapacityDescription(load *agentrun.HarnessModelLoad) string {
+	if load == nil {
+		return ""
+	}
+	var details []string
+	if load.Percent != nil {
+		details = append(details, fmt.Sprintf("负载 %d%%", *load.Percent))
+	}
+	if load.QueueSize != nil {
+		if *load.QueueSize == 0 {
+			details = append(details, "暂无排队")
+		} else {
+			details = append(details, fmt.Sprintf("排队 %d 人", *load.QueueSize))
+		}
+	}
+	return strings.Join(details, " · ")
+}
+
 func addProfileChoice(menu *kit.MenuView, label, description string, selected bool, selectOption func()) {
 	menu.CheckItem(label, "", selected, func(bool) { selectOption() })
 	menu.SetItemContent(label, el.ViewFunc(func(*el.Context) el.Element {

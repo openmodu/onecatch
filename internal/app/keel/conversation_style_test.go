@@ -98,7 +98,7 @@ func TestConversationTableDividersAndComposerSurface(t *testing.T) {
 						t.Fatal("missing last table row")
 					}
 					// A single internal divider must cross the whole header and all
-					// body rows, including the row that wraps onto multiple lines.
+					// body rows, within the horizontal viewport of a wide table.
 					dividerX := -1
 					for x := header.Bounds.Min.X + 2*scale; x < header.Bounds.Max.X-2*scale; x++ {
 						if at(x, header.Bounds.Min.Y+scale) == seamColor {
@@ -110,7 +110,7 @@ func TestConversationTableDividersAndComposerSurface(t *testing.T) {
 						if dividerX >= 0 {
 							t.Fatal("disabled column divider is still visible")
 						}
-						for x := header.Bounds.Min.X; x < header.Bounds.Max.X; x++ {
+						for x := header.Bounds.Min.X; x < min(header.Bounds.Max.X, 600*scale); x++ {
 							if at(x, header.Bounds.Max.Y) == seamColor {
 								t.Fatal("disabled row divider is still visible")
 							}
@@ -133,7 +133,7 @@ func TestConversationTableDividersAndComposerSurface(t *testing.T) {
 							if !ok {
 								t.Fatalf("missing row %q", label)
 							}
-							for x := row.Bounds.Min.X; x < row.Bounds.Max.X; x++ {
+							for x := row.Bounds.Min.X; x < min(row.Bounds.Max.X, 600*scale); x++ {
 								if at(x, row.Bounds.Min.Y-1) != seamColor {
 									t.Fatalf("horizontal divider missing at %d,%d", x, row.Bounds.Min.Y-1)
 								}

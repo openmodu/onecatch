@@ -312,7 +312,7 @@ func (a *app) composer(cx *el.Context) el.Element {
 			hint = strings.TrimSuffix(hint, "…") + "，@ 某个步骤只发给它…"
 		}
 	}
-	input := el.TextArea().PasteReader(readClipboard).OnPaste(a.pasteTaskAttachments).OnPasteError(a.fail).ID("prompt").Name("任务指令").Document(&a.promptDocument).OnChange(func(text string) { a.prompt = text }).TokenRenderer(renderComposerSkillToken).Placeholder(hint).AutoGrow(4, 10).Scrollbars(el.ScrollbarAlways).Border(0, color.NRGBA{}).Bg(color.NRGBA{}).Px(2).Py(2).TextSize(14).Weight(font.Normal).LineHeight(1.6).WFull()
+	input := el.TextArea().PasteReader(readClipboard).OnPaste(a.pasteTaskAttachments).OnPasteError(a.fail).ID("prompt").Name("任务指令").Document(&a.promptDocument).OnChange(func(text string) { a.prompt = text }).Placeholder(hint).AutoGrow(4, 10).Scrollbars(el.ScrollbarAlways).Border(0, color.NRGBA{}).Bg(color.NRGBA{}).Px(2).Py(2).TextSize(14).Weight(font.Normal).LineHeight(1.6).WFull()
 	// As in the Wails client: Enter sends, Shift+Enter breaks the line, and
 	// an input method composing text keeps Enter to confirm its candidate.
 	input.CaptureKeys(string(key.NameReturn), string(key.NameEnter)).OnKey(func(e el.KeyEvent) bool {
@@ -408,6 +408,9 @@ func (a *app) composer(cx *el.Context) el.Element {
 	// transparent on focus too; the global frameless focus fill is for controls.
 	inputPalette := theme.Current()
 	inputPalette.Frameless = false
+	// Keel renders the native reference pill, including its ink bounds and
+	// baseline; OneCatch only selects the background color.
+	inputPalette.Subtle = mixColor(theme.Info, composerBg, .20)
 	box.Child(cx.Themed(inputPalette, el.ViewFunc(func(*el.Context) el.Element { return input })).WFull(), controls)
 	if a.task == nil && !a.conversationWorkerReady() {
 		box.Child(el.Text(uiText("所选 Worker 不可用，或不支持当前 Agent。请选择可用的执行位置。")).TextSize(12).TextColor(theme.Danger))
@@ -423,32 +426,65 @@ func (a *app) errorBanner(cx *el.Context) el.Element {
 }
 
 func (a *app) message(cx *el.Context, index int) el.Element {
-	if index >= len(a.entries) {
+	rows := a.displayedConversationRows()
+	if index >= len(rows) {
 		return el.Div()
 	}
-	e := a.entries[index]
-	content := el.Div().WFull().MaxW(el.Dp(920)).Py(4)
+	e := rows[index]
+	if len(e.columns) > 0 {
+		row := el.Div().WFull().NoShrink().MaxW(el.Dp(920)).Row().Items(el.Stretch).Gap(16).Py(4)
+		for i, cell := range e.columns {
+			if i > 0 {
+				row.Child(el.Div().W(el.Dp(1)).NoShrink().Child(el.Div().Absolute().Top(-13).Bottom(-13).W(el.Dp(1)).Bg(seamColor)))
+			}
+			column := el.Div().Grow().W(el.Dp(0))
+			if cell != nil {
+				column.Child(a.messageEntry(cx, cell, -1))
+			}
+			row.Child(column)
+		}
+		return el.Div().NoShrink().Items(el.Center).Child(row)
+	}
+	return a.messageEntry(cx, e, index)
+}
+
+func (a *app) messageEntry(cx *el.Context, e *entry, index int) el.Element {
+	if len(e.stack) > 0 {
+		column := el.Div().WFull().NoShrink().Gap(4)
+		for _, child := range e.stack {
+			column.Child(a.messageEntry(cx, child, -1))
+		}
+		return column
+	}
+	rows := a.displayedConversationRows()
+	content := el.Div().WFull().NoShrink().MaxW(el.Dp(920)).Py(4)
 	if index == 0 {
 		content.Pt(19)
 	}
-	if index == len(a.entries)-1 {
+	if index == len(rows)-1 {
 		content.Pb(20)
 	}
 	if e.stepLabel != "" {
-		content.Child(el.Div().Px(16).Pt(10).Pb(2).Row().Items(el.Center).Gap(6).Child(el.Div().Size(el.Dp(6)).Rounded(3).Bg(theme.Info), el.Text(e.stepLabel).TextSize(11).Medium().TextColor(theme.Muted)))
+		content.Child(a.workflowNodeHeading(cx, e, false))
+	}
+	if e.kind == kindTimelineHeader {
+		content.Px(14)
+		return content
 	}
 	if e.kind == kindTransition {
-		content.Px(14).Child(el.Div().ID("message/" + e.key).Row().Items(el.Center).Gap(8).Px(12).Py(8).Rounded(10).Bg(theme.Subtle).Child(el.Text(e.text).TextSize(12).TextColor(theme.Warning).MaxLines(3)))
+		content.Px(14).Child(a.workflowTransitionCard(cx, e))
+	} else if e.kind == agentrun.KindQueueStatus {
+		content.Px(14).Child(a.queueStatus(cx, e))
 	} else if len(e.process) > 0 {
 		content.Px(14)
-		if index > 0 && a.entries[index-1].user {
+		if index > 0 && rows[index-1].user {
 			content.Pt(26)
 		}
 		content.Child(a.processGroup(cx, e))
 	} else if e.user {
 		// Align the bubble with the composer's edge, clear of the scrollbar.
 		content.Px(4)
-		if index > 0 && !a.entries[index-1].user {
+		if index > 0 && !rows[index-1].user {
 			content.Pt(27)
 		}
 		width, _ := cx.ViewportSize()
@@ -459,12 +495,20 @@ func (a *app) message(cx *el.Context, index int) el.Element {
 			width -= a.workbench.Width + 1
 		}
 		maxWidth := min(float32(680), max(float32(160), min(float32(920), width-40)*.72))
-		bubble := el.Div().Role("article").Name("用户消息：" + e.text).MaxW(el.Dp(maxWidth)).Px(16).Py(11).Rounded(18).Bg(theme.Subtle).Child(a.userMessageContent(cx, e))
+		bubble := el.Div().Role("article").Name("用户消息：" + e.text).MaxW(el.Dp(maxWidth)).Px(16).Py(11).Rounded(18).Bg(theme.Subtle)
+		if e.recipient != "" {
+			bubble.Name("发给 " + e.recipient + "：" + e.text).Gap(8).Child(
+				el.Div().Row().Items(el.Center).Gap(6).Child(el.Text("发给").TextSize(10).TextColor(theme.Muted), el.Text("@"+e.recipient).TextSize(12).Medium().TextColor(theme.Info)),
+			)
+		}
+		bubble.Child(a.userMessageContent(cx, e))
 		wrapper := el.Div().ID("message/"+e.key).Child(bubble, a.messageActions(cx, e, true))
 		content.Items(el.End).Child(wrapper)
+	} else if outcome, ok := a.workflowMessageOutcome(e); ok {
+		content.Px(14).Child(a.workflowOutcomeCard(cx, e, outcome))
 	} else if e.kind == agentrun.KindMessage || e.kind == agentrun.KindError {
 		content.Px(14)
-		if index > 0 && a.entries[index-1].user {
+		if index > 0 && rows[index-1].user {
 			content.Pt(26)
 		}
 		if a.conversation.messages == nil {
@@ -480,7 +524,7 @@ func (a *app) message(cx *el.Context, index int) el.Element {
 	} else {
 		content.Child(a.requestMessage(cx, e))
 	}
-	return el.Div().Items(el.Center).Child(content)
+	return el.Div().NoShrink().Items(el.Center).Child(content)
 }
 
 func (a *app) requestMessage(cx *el.Context, e *entry) el.Element {
@@ -542,6 +586,7 @@ func mixColor(foreground, background color.NRGBA, amount float32) color.NRGBA {
 // scrolled away from the newest message.
 func (a *app) conversationScroll(cx *el.Context) el.Element {
 	area := el.Div().Grow().H(el.Dp(0)).Items(el.Stretch).Child(a.scroller.Render(cx))
+	a.conversation.selection.Decorate(cx, area)
 	if a.historyLoading[a.runID] {
 		area.Child(el.Div().Absolute().Top(8).Left(0).Right(0).Row().Justify(el.Center).Child(el.Text("正在加载更早的记录…").TextSize(12).TextColor(theme.Muted).Bg(theme.Surface).Rounded(8).Px(12).Py(6)))
 	}

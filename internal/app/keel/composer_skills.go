@@ -7,16 +7,10 @@ import (
 	"unicode"
 
 	"gioui.org/io/key"
-	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
-	"gioui.org/widget/material"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
-	"image"
 )
 
 type composerSkillState struct {
@@ -213,25 +207,4 @@ func (a *app) composerSkillKey(cx *el.Context, e el.KeyEvent) bool {
 		return false
 	}
 	return true
-}
-
-func renderComposerSkillToken(gtx core.C, token el.InputToken) core.D {
-	fg := theme.RGB(0x2563b0)
-	bg := theme.RGB(0xdceafa)
-	if theme.Text.R > 128 {
-		fg = theme.RGB(0x9ecbff)
-		bg = theme.RGB(0x29405c)
-	}
-	recording := op.Record(gtx.Ops)
-	dims := layout.Inset{Left: 3, Right: 3}.Layout(gtx, func(gtx layout.Context) layout.Dimensions {
-		label := material.Label(theme.Material, 14, token.Label)
-		label.Color = fg
-		label.MaxLines = 1
-		return label.Layout(gtx)
-	})
-	call := recording.Stop()
-	radius := gtx.Dp(4)
-	paint.FillShape(gtx.Ops, bg, clip.RRect{Rect: image.Rectangle{Max: dims.Size}, NE: radius, NW: radius, SE: radius, SW: radius}.Op(gtx.Ops))
-	call.Add(gtx.Ops)
-	return dims
 }

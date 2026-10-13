@@ -14,12 +14,15 @@ import (
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
-func dagAction(cx *el.Context, id, label, icon string, primary bool, disabled bool, action func()) el.Element {
+func dagAction(cx *el.Context, id, label, icon string, primary bool, disabled bool, action func(), selected ...bool) el.Element {
 	variant, fg := kit.ButtonSecondary, theme.Text
 	if primary {
 		variant, fg = kit.ButtonPrimary, theme.OnColor
 	}
 	b := button(label, action, variant).ID(id).Name(label).Size(32).Compact(true)
+	if len(selected) > 0 {
+		b.Selected(selected[0])
+	}
 	b.SetDisabled(disabled)
 	b.Content(el.ViewFunc(func(cx *el.Context) el.Element {
 		return el.Div().Row().Items(el.Center).Gap(6).Child(lucide(cx, icon, 14, fg), el.Text(label).TextSize(12).MaxLines(1))
@@ -50,10 +53,7 @@ func (a *app) dagConnectToggle(cx *el.Context) el.Element {
 func (a *app) dagEditor(cx *el.Context) el.Element {
 	d := &a.ui.WorkflowDraft
 	a.workflowEditor.SoftWrap(true).OnChange(a.applyWorkflowSource)
-	top := el.Div().Row().Wrap().Items(el.Center).MinH(el.Dp(32)).Gap(8).Child(el.Text("连线").TextSize(12).TextColor(theme.Muted), a.dagConnectToggle(cx), el.Div().Grow(),
-		dagAction(cx, "dag-layout", "自动布局", "layout-grid", false, a.busy, a.layoutDAG),
-		dagAction(cx, "dag-inspector-toggle", "节点配置", "settings-2", false, false, func() { a.ui.DAG.InspectorOpen = !a.ui.DAG.InspectorOpen }),
-		dagAction(cx, "dag-add", "步骤", "plus", false, a.busy, a.addDAGNode),
+	top := el.Div().Row().Wrap().Items(el.Center).MinH(el.Dp(32)).Gap(8).Child(el.Div().Grow(),
 		dagAction(cx, "dag-fullscreen", map[bool]string{true: "退出全屏", false: "全屏"}[a.ui.WorkflowFullscreen], map[bool]string{true: "minimize-2", false: "maximize-2"}[a.ui.WorkflowFullscreen], false, false, func() { a.ui.WorkflowFullscreen = !a.ui.WorkflowFullscreen }),
 		dagAction(cx, "dag-save", map[bool]string{true: "保存中…", false: "保存"}[a.busy], "save", true, a.busy || a.ui.DAG.SourceError != "" || a.ui.DAG.IDError != "" || a.editingWorkflow == "single_agent", a.saveWorkflow))
 	rounds := make([]kit.SelectOption, 0, 10)
@@ -80,7 +80,13 @@ func (a *app) dagEditor(cx *el.Context) el.Element {
 		sourceFraction = .26
 	}
 	source := el.Div().ID("dag-source-pane").W(el.Frac(sourceFraction)).NoShrink().HFull().Child(el.Text("源码 · JSON").TextSize(12).Medium().Px(12).Py(8), a.workflowEditor.Render(cx))
-	canvas := el.Div().ID("dag-canvas").Grow().W(el.Dp(0)).HFull().Child(el.Text("画布").TextSize(12).Medium().Px(12).Py(8), el.Div().ID("dag-scroll").Grow().H(el.Dp(0)).WFull().ScrollX().ScrollY().Child(a.dagCanvas(cx)), el.Text(hint).TextSize(11).TextColor(theme.Muted).Px(12).Py(8))
+	// Connection controls belong to the canvas viewport, rather than the
+	// scrollable graph, so they stay reachable while panning either axis.
+	viewport := el.Div().ID("dag-viewport").Grow().H(el.Dp(0)).WFull().Child(
+		el.Div().Px(12).Py(12).NoShrink().Child(a.dagCanvasToolbar(cx)),
+		el.Div().ID("dag-scroll").WFull().Grow().H(el.Dp(0)).ScrollX().ScrollY().Child(a.dagCanvas(cx)),
+	)
+	canvas := el.Div().ID("dag-canvas").Grow().W(el.Dp(0)).HFull().Child(el.Text("画布").TextSize(12).Medium().Px(12).Py(8), viewport, el.Text(hint).TextSize(11).TextColor(theme.Muted).Px(12).Py(8))
 	main := el.Div().Row().Grow().H(el.Dp(0)).Child(source, el.Div().W(el.Dp(1)).HFull().NoShrink().Bg(seamColor), canvas)
 
 	// Keep node configuration accessible alongside the live preview.
@@ -100,6 +106,22 @@ func (a *app) dagEditor(cx *el.Context) el.Element {
 	}
 	footer.Child(notes)
 	return el.Div().ID("dag-editor").Grow().H(el.Dp(0)).Disabled(a.busy).Child(header, el.Div().Px(20).Child(a.errorBanner(cx)), main, footer)
+}
+
+func (a *app) dagCanvasToolbar(cx *el.Context) el.Element {
+	// Wrap whole groups on narrow canvases: never separate the connection
+	// label from its modes or hide actions behind the inspector.
+	edit := el.Div().Row().Items(el.Center).Gap(8).NoShrink().Child(
+		dagAction(cx, "dag-add", "步骤", "plus", false, a.busy, a.addDAGNode),
+		el.Div().W(el.Dp(1)).H(el.Dp(20)).NoShrink().Bg(seamColor),
+		el.Text("连线").TextSize(12).TextColor(theme.Muted), a.dagConnectToggle(cx),
+	)
+	arrange := el.Div().Row().Items(el.Center).Gap(6).NoShrink().Child(
+		dagAction(cx, "dag-layout", "自动布局", "layout-grid", false, a.busy, a.layoutDAG),
+		dagAction(cx, "dag-inspector-toggle", "节点配置", "settings-2", false, false, func() { a.ui.DAG.InspectorOpen = !a.ui.DAG.InspectorOpen }, a.ui.DAG.InspectorOpen),
+	)
+	return el.Div().ID("dag-connect-toolbar").WFull().MaxW(el.Dp(520)).
+		Row().Wrap().Items(el.Center).Gap(10).P(6).Rounded(9).Bg(theme.Surface).Shadow(theme.ElevationSm).Child(edit, arrange)
 }
 
 func (a *app) dagCanvas(cx *el.Context) el.Element {
