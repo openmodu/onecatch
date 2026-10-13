@@ -18,7 +18,7 @@ type workflowTransition struct {
 
 func (a *app) workflowMessageOutcome(e *entry) (domainworkflows.Outcome, bool) {
 	var out domainworkflows.Outcome
-	if e.user || e.streaming || e.kind != agentrun.KindMessage || e.step == "" || a.detail == nil || a.detail.Workflow.ID == "single_agent" {
+	if e.user || e.kind != agentrun.KindMessage || e.step == "" || a.detail == nil || a.detail.Workflow.ID == "single_agent" {
 		return out, false
 	}
 	text := strings.TrimSpace(e.text)

@@ -105,3 +105,33 @@ func TestRenderWorkflowOutcomeCards(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestWorkflowOutcomeRendersCompleteLiveJSON(t *testing.T) {
+	a, e := outcomeFixture(t)
+	e.streaming = true
+	a.detail.Active = true
+	a.detail.StepRuns[0].Status = domainworkflows.StepRunRunning
+	source := e.text
+	e.text = strings.TrimSuffix(source, "}")
+	if _, ok := a.workflowMessageOutcome(e); ok {
+		t.Fatal("partial stream rendered a verdict")
+	}
+	e.text = source
+	if _, ok := a.workflowMessageOutcome(e); !ok {
+		t.Fatal("complete live JSON did not render outcome")
+	}
+	a.transcript = newTranscript()
+	a.transcript.items[e.key] = e
+	a.syncMessages()
+	root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element {
+		return el.Div().WFull().HFull().Child(a.messageEntry(cx, a.entries[0], 0))
+	}))
+	router, frame, _ := alignmentRouter(root, 800, 900, 1)
+	frame()
+	if _, ok := alignmentNode(router.AppendSemantics(nil), "需要返工", false); !ok {
+		t.Fatal("live message missing result card")
+	}
+	if a.docs[e.key].Source() != source {
+		t.Fatal("live result discarded original JSON")
+	}
+}
