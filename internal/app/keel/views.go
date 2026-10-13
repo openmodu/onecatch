@@ -7,10 +7,10 @@ import (
 	"runtime"
 	"strings"
 
-	"gioui.org/font"
-	"gioui.org/io/key"
-	"gioui.org/io/system"
-	"gioui.org/op/clip"
+	"github.com/dyike/keel/gio/font"
+	"github.com/dyike/keel/gio/io/key"
+	"github.com/dyike/keel/gio/io/system"
+	"github.com/dyike/keel/gio/op/clip"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
@@ -292,9 +292,6 @@ func (a *app) content(cx *el.Context) el.Element {
 		column.Child(el.Div().Px(32).Py(8).Child(el.Text("正在读取对话…").TextColor(theme.Muted).TextSize(12)))
 	}
 
-	if a.detail != nil && a.detail.Workflow.ID != "single_agent" && len(a.detail.Workflow.Steps) > 1 {
-		column.Child(el.Div().Items(el.Center).Px(24).Py(8).Child(a.workflowLoopBar(cx)))
-	}
 	column.Child(a.conversationScroll(cx), el.Div().Center().Px(24).Pt(8).Pb(14).Child(el.Div().WFull().MaxW(el.Dp(920)).Gap(10).Child(a.errorBanner(cx), a.composerContext(cx), a.composer(cx), a.workspaceCaption(cx))))
 	return column
 }
@@ -302,6 +299,16 @@ func (a *app) content(cx *el.Context) el.Element {
 func (a *app) composer(cx *el.Context) el.Element {
 	if a.promptDocument.Content().Text() != a.prompt {
 		_ = a.promptDocument.SetText(a.prompt)
+	}
+	if a.attachments.FocusPrompt {
+		end := len([]rune(a.prompt))
+		cx.Focus("prompt")
+		cx.SelectInput("prompt", end, end)
+		// Keep the request until the editor has applied both focus and caret;
+		// attachment completion can arrive before an editor's first paint.
+		if edit, ok := cx.InputSelection("prompt"); ok && cx.FocusWithin("prompt") && edit.Start == end && edit.End == end && edit.Text == a.prompt {
+			a.attachments.FocusPrompt = false
+		}
 	}
 	a.composerSkills(cx)
 	a.composerMentions(cx)
@@ -403,7 +410,10 @@ func (a *app) composer(cx *el.Context) el.Element {
 		controls.Child(sendControl)
 	}
 	composerBg := theme.Subtle
-	box := el.Div().WFull().Px(12).Py(10).Gap(8).Rounded(20).Bg(composerBg)
+	box := el.Div().ID("composer-input").Role("group").Name("消息输入框").WFull().Px(12).Py(10).Gap(8).Rounded(20).Bg(composerBg)
+	if loop := a.composerLoopControl(cx); loop != nil {
+		box.Child(loop)
+	}
 	if len(a.attachments.Items) > 0 || a.attachments.Loading {
 		box.Child(a.attachmentStrip(cx))
 	}

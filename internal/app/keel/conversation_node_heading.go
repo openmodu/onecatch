@@ -6,9 +6,9 @@ import (
 	"math"
 	"strings"
 
-	"gioui.org/f32"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
+	"github.com/dyike/keel/gio/f32"
+	"github.com/dyike/keel/gio/op/clip"
+	"github.com/dyike/keel/gio/op/paint"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"

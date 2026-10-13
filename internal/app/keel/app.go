@@ -31,6 +31,7 @@ type app struct {
 	skillPicker                                                                             composerSkillState
 	projectWorkflows                                                                        projectWorkflowState
 	mentionPicker                                                                           composerMentionState
+	composerLoop                                                                            composerLoopState
 	ui                                                                                      uiState
 	updates                                                                                 appUpdates
 	library                                                                                 libraryState
@@ -43,6 +44,7 @@ type app struct {
 	ctx                                                                                     context.Context
 	cancel                                                                                  context.CancelFunc
 	closed                                                                                  bool
+	openURL                                                                                 func(string) error
 	unsubscribe                                                                             func()
 	window                                                                                  *window.Window
 	settingsPanel                                                                           *settingsPage
@@ -298,6 +300,7 @@ func (a *app) resetTask(workspaceID string) {
 		}
 	}
 	a.taskID, a.runID, a.page, a.prompt, a.errorText = "", "", "", "", ""
+	a.composerLoop = composerLoopState{}
 	a.resetProfileSelection()
 	a.workerID = ""
 	a.updateWorkerSandbox()
@@ -474,13 +477,24 @@ func (a *app) syncMessages() {
 			syncConversationSource(doc, e.text, e.streaming)
 			doc.SetStreaming(e.streaming && a.detail != nil && a.detail.Active)
 			if out, ok := a.workflowMessageOutcome(e); ok {
+				if out.Prose != "" {
+					key := e.key + "/prose"
+					prose := a.docs[key]
+					if prose == nil {
+						prose = newConversationDocument(out.Prose).TableDividers(!a.ui.Preferences.HideTableDividers)
+						a.docs[key] = prose
+					} else {
+						syncConversationSource(prose, out.Prose, false)
+					}
+					selectable = append(selectable, prose)
+				}
 				key := e.key + "/readable"
 				readable := a.docs[key]
 				if readable == nil {
-					readable = newConversationDocument(workflowOutcomeText(out))
+					readable = newConversationDocument(workflowOutcomeText(out.Outcome))
 					a.docs[key] = readable
 				} else {
-					syncConversationSource(readable, workflowOutcomeText(out), false)
+					syncConversationSource(readable, workflowOutcomeText(out.Outcome), false)
 				}
 				// Drag selection follows displayed prose; message copy retains
 				// the untouched raw JSON in the original document.
@@ -684,6 +698,17 @@ func (a *app) sendWithMode(steer bool) {
 		return
 	}
 	queued := a.task == nil && a.library.Queue
+	var loop *bool
+	if _, ok := a.composerWorkflow(); ok {
+		a.syncComposerLoop()
+		enabled := a.composerLoop.enabled
+		loop = &enabled
+	}
+	if queued && loop != nil && *loop {
+		a.busy = false
+		a.errorText = "循环工作流请直接发送运行；关闭循环后可加入任务队列。"
+		return
+	}
 	input := a.createTaskInput(prompt)
 	var existing string
 	if a.task != nil {
@@ -725,7 +750,7 @@ func (a *app) sendWithMode(steer bool) {
 				if queued {
 					a.enqueueTask(task.ID, token)
 				} else {
-					a.start(task.ID, token)
+					a.startWithLoop(task.ID, token, loop)
 				}
 			}
 			if preview.RequiresFullSandboxConfirmation {
@@ -738,10 +763,20 @@ func (a *app) sendWithMode(steer bool) {
 }
 
 func (a *app) start(taskID, token string) {
+	a.startWithLoop(taskID, token, nil)
+}
+
+func (a *app) startWithLoop(taskID, token string, loop *bool) {
 	a.busy = true
 	version := a.selection
 	go func() {
-		run, err := a.backend.service.StartRunConfirmed(a.ctx, taskID, token)
+		var run domainworkflows.Run
+		var err error
+		if loop != nil {
+			run, err = a.backend.service.StartRunLoopConfirmed(a.ctx, taskID, token, *loop)
+		} else {
+			run, err = a.backend.service.StartRunConfirmed(a.ctx, taskID, token)
+		}
 		core.Update(func() {
 			if a.closed {
 				return

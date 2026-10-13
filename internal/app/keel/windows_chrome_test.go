@@ -1,8 +1,8 @@
 package keeldesktop
 
 import (
-	"gioui.org/f32"
-	"gioui.org/io/system"
+	"github.com/dyike/keel/gio/f32"
+	"github.com/dyike/keel/gio/io/system"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/window"

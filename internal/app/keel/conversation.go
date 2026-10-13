@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"gioui.org/f32"
-	"gioui.org/font"
-	"gioui.org/op"
-	"gioui.org/op/clip"
-	"gioui.org/op/paint"
-	"gioui.org/text"
-	"gioui.org/unit"
+	"github.com/dyike/keel/gio/f32"
+	"github.com/dyike/keel/gio/font"
+	"github.com/dyike/keel/gio/op"
+	"github.com/dyike/keel/gio/op/clip"
+	"github.com/dyike/keel/gio/op/paint"
+	"github.com/dyike/keel/gio/text"
+	"github.com/dyike/keel/gio/unit"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	_ "github.com/dyike/keel/ui/highlight"
@@ -26,15 +26,16 @@ import (
 )
 
 type conversationState struct {
-	selection   markdown.SelectionGroup
-	open        map[string]bool
-	overridden  map[string]bool
-	views       map[string]*conversationDocView
-	toolDocs    map[string]*markdown.Doc
-	toolResults map[string]*toolResultView
-	images      map[string]*kit.ImageView
-	copyButtons map[string]*kit.CopyButtonView
-	messages    map[string]*kit.MessageView
+	selection     markdown.SelectionGroup
+	open          map[string]bool
+	overridden    map[string]bool
+	views         map[string]*conversationDocView
+	toolDocs      map[string]*markdown.Doc
+	toolResults   map[string]*toolResultView
+	images        map[string]*kit.ImageView
+	imagePreviews map[string]*attachmentImagePreview
+	copyButtons   map[string]*kit.CopyButtonView
+	messages      map[string]*kit.MessageView
 }
 
 // Pair tool returns before grouping adjacent process records. A call ID is
@@ -466,6 +467,7 @@ func (a *app) conversationDocument(cx *el.Context, e *entry, hug bool) el.Elemen
 		a.docs[e.key] = doc
 	}
 	syncConversationSource(doc, e.text, e.streaming)
+	doc.OnLink(a.openConversationLink)
 	doc.SetStreaming(e.streaming && a.detail != nil && a.detail.Active)
 	v := a.conversation.views[e.key]
 	if v == nil || v.doc != doc {

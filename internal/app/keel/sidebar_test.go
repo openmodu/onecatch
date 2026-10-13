@@ -11,13 +11,13 @@ import (
 	"testing"
 	"time"
 
-	"gioui.org/f32"
-	"gioui.org/io/input"
-	"gioui.org/io/key"
-	"gioui.org/io/pointer"
-	"gioui.org/layout"
-	"gioui.org/op"
-	"gioui.org/unit"
+	"github.com/dyike/keel/gio/f32"
+	"github.com/dyike/keel/gio/io/input"
+	"github.com/dyike/keel/gio/io/key"
+	"github.com/dyike/keel/gio/io/pointer"
+	"github.com/dyike/keel/gio/layout"
+	"github.com/dyike/keel/gio/op"
+	"github.com/dyike/keel/gio/unit"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
@@ -69,6 +69,69 @@ func TestKeelSidebarRecentActivityPreservesPinsAndUpdatesRunningLight(t *testing
 	if hasLight(router.AppendSemantics(nil)) {
 		t.Fatal("completed task retained status light")
 	}
+}
+
+func TestKeelSidebarPromotesRunningSessionsAndProjectsWithoutTimestampChanges(t *testing.T) {
+	a := conversationFixture(t)
+	base := time.Now()
+	a.workspaces = append(a.workspaces,
+		workspaces.Workspace{ID: "older", Name: "Older project"},
+		workspaces.Workspace{ID: "newer", Name: "Newer project"},
+	)
+	a.tasks["modu"] = []domaintasks.Task{
+		{ID: "pin-first", Title: "Pinned first", Pinned: true},
+		{ID: "recent", Title: "Recent inactive", UpdatedAt: base},
+	}
+	a.tasks["older"] = []domaintasks.Task{
+		{ID: "pin-second", Title: "Pinned second", Pinned: true},
+		{ID: "old-new", Title: "Old project recent", UpdatedAt: base},
+		{ID: "old-middle", Title: "Old project middle", UpdatedAt: base.Add(-time.Minute)},
+		{ID: "old-older", Title: "Old project older", UpdatedAt: base.Add(-time.Hour)},
+		{ID: "old-running", Title: "Old project running", CreatedAt: base.Add(-2 * time.Hour)},
+	}
+	a.tasks["newer"] = []domaintasks.Task{
+		{ID: "new-new", Title: "New project recent", UpdatedAt: base},
+		{ID: "new-running", Title: "New project running", UpdatedAt: base.Add(-time.Hour)},
+	}
+	a.ui.Expanded["older"], a.ui.Expanded["newer"] = true, true
+	router, frame, _ := alignmentRouter(el.Root(a), 1120, 1000, 1)
+	nav := a.ui.SidebarNav
+	assertOrder := func(want ...string) {
+		t.Helper()
+		frame()
+		frame()
+		if !slices.Equal(a.ui.SidebarVisibleTasks, want) || a.ui.SidebarNav != nav {
+			t.Fatalf("visible sessions = %v, want %v, stable navigation=%v", a.ui.SidebarVisibleTasks, want, a.ui.SidebarNav == nav)
+		}
+	}
+	assertOrder("pin-first", "pin-second", "recent", "old-new", "old-middle", "old-older", "new-new", "new-running")
+	a.tasks["older"][4].Status = domaintasks.StatusRunning
+	a.tasks["newer"][1].Status = domaintasks.StatusRunning
+	assertOrder("pin-first", "pin-second", "new-running", "new-new", "old-running", "old-new", "old-middle", "recent")
+	if dir := os.Getenv("ONECATCH_KEEL_PREVIEWS"); dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := window.Screenshot(screenshotRoot{core.Func(el.Root(a).Layout)}, 1120, 1000, filepath.Join(dir, "sidebar-active-sessions-first.png")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Project groups move with their active sessions; expanded state and the
+	// persisted workspace/task order stay unchanged.
+	newer, okNewer := findSkillControl(router.AppendSemantics(nil), "Newer project")
+	older, okOlder := findSkillControl(router.AppendSemantics(nil), "Older project")
+	modu, okModu := findSkillControl(router.AppendSemantics(nil), "modu")
+	if !okNewer || !okOlder || !okModu || newer.Min.Y >= older.Min.Y || older.Min.Y >= modu.Min.Y {
+		t.Fatalf("projects did not move with sessions: newer=%v older=%v modu=%v", newer, older, modu)
+	}
+	if !a.ui.SidebarNav.Expanded("project/older") || !a.ui.SidebarNav.Expanded("project/newer") || a.workspaces[0].ID != "modu" || a.tasks["older"][4].ID != "old-running" {
+		t.Fatal("sorting changed stored order or expansion")
+	}
+	// Another status update reorders automatically, without UpdatedAt moving.
+	a.tasks["newer"][1].Status = domaintasks.StatusCompleted
+	assertOrder("pin-first", "pin-second", "old-running", "old-new", "old-middle", "recent", "new-new", "new-running")
+	a.tasks["older"][4].Status = domaintasks.StatusPaused
+	assertOrder("pin-first", "pin-second", "recent", "old-new", "old-middle", "old-older", "new-new", "new-running")
 }
 
 func TestKeelSidebarNativeProjectActionsAndExpansion(t *testing.T) {

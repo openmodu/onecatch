@@ -2,8 +2,8 @@ package keeldesktop
 
 import (
 	"fmt"
-	"gioui.org/io/key"
-	"gioui.org/layout"
+	"github.com/dyike/keel/gio/io/key"
+	"github.com/dyike/keel/gio/layout"
 	"math"
 	"os"
 	"path/filepath"

@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"gioui.org/io/pointer"
+	"github.com/dyike/keel/gio/io/pointer"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"

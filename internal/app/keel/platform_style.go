@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"gioui.org/font"
+	"github.com/dyike/keel/gio/font"
 	"github.com/dyike/keel/ui/theme"
 	"github.com/dyike/keel/ui/window"
 )

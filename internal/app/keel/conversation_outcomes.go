@@ -16,23 +16,13 @@ type workflowTransition struct {
 	verdict, source, target, feedback, summary string
 }
 
-func (a *app) workflowMessageOutcome(e *entry) (domainworkflows.Outcome, bool) {
-	var out domainworkflows.Outcome
+func (a *app) workflowMessageOutcome(e *entry) (domainworkflows.OutcomeMessage, bool) {
+	var out domainworkflows.OutcomeMessage
 	if e.user || e.kind != agentrun.KindMessage || e.step == "" || a.detail == nil || a.detail.Workflow.ID == "single_agent" {
 		return out, false
 	}
-	text := strings.TrimSpace(e.text)
-	if strings.HasPrefix(text, "```json\n") && strings.HasSuffix(text, "```") {
-		text = strings.TrimSuffix(strings.TrimPrefix(text, "```json\n"), "```")
-	}
-	if json.Unmarshal([]byte(text), &out) != nil || strings.TrimSpace(out.Summary) == "" {
-		return out, false
-	}
-	switch out.Verdict {
-	case domainworkflows.VerdictPass, domainworkflows.VerdictRework, domainworkflows.VerdictAskHuman:
-		return out, true
-	}
-	return out, false
+	out, err := domainworkflows.ParseOutcomeMessage(e.text)
+	return out, err == nil
 }
 
 func outcomeStyle(verdict string) (string, string, color.NRGBA) {
@@ -62,7 +52,7 @@ func (a *app) workflowStepName(id string) string {
 	return id
 }
 
-func (a *app) workflowOutcomeCard(cx *el.Context, e *entry, out domainworkflows.Outcome) el.Element {
+func (a *app) workflowOutcomeCard(cx *el.Context, e *entry, out domainworkflows.OutcomeMessage) el.Element {
 	label, icon, tone := outcomeStyle(out.Verdict)
 	header := el.Div().Row().Wrap().Items(el.Center).Gap(10).Child(
 		el.Div().Row().Items(el.Center).Gap(6).Px(9).Py(5).Rounded(7).Bg(mixColor(tone, theme.Surface, .10)).
@@ -71,11 +61,11 @@ func (a *app) workflowOutcomeCard(cx *el.Context, e *entry, out domainworkflows.
 	if out.Target != "" {
 		header.Child(el.Text("交给 " + a.workflowStepName(out.Target)).TextSize(12).Medium().TextColor(theme.Text))
 	}
-	body := workflowOutcomeText(out)
+	body := workflowOutcomeText(out.Outcome)
 	card := el.Div().WFull().P(16).Gap(14).Rounded(12).Bg(mixColor(theme.Subtle, theme.Surface, .4)).Child(
 		a.workflowNodeHeading(cx, e, true), header, a.conversationDocument(cx, &entry{key: e.key + "/readable", text: body}, false),
 	)
-	return a.workflowOutcomeDetails(cx, e, card)
+	return a.workflowOutcomeDetails(cx, e, card, out)
 }
 
 func workflowOutcomeText(out domainworkflows.Outcome) string {
@@ -90,7 +80,7 @@ func workflowOutcomeText(out domainworkflows.Outcome) string {
 	return body
 }
 
-func (a *app) workflowOutcomeDetails(cx *el.Context, e *entry, card *el.DivEl) el.Element {
+func (a *app) workflowOutcomeDetails(cx *el.Context, e *entry, card *el.DivEl, out domainworkflows.OutcomeMessage) el.Element {
 	key := e.key + "/raw"
 	open := a.conversationOpen(key, false)
 	caret := "chevron-right"
@@ -104,14 +94,18 @@ func (a *app) workflowOutcomeDetails(cx *el.Context, e *entry, card *el.DivEl) e
 	)
 	if open {
 		var value any
-		text := e.text
+		text := out.JSON
 		if json.Unmarshal([]byte(text), &value) == nil {
 			formatted, _ := json.MarshalIndent(value, "", "  ")
 			text = string(formatted)
 		}
 		card.Child(a.toolCodeSection(cx, toolCodeContent{"原始结果", "json", text}, key+"/code"))
 	}
-	return el.Div().ID("message/"+e.key).WFull().Child(card, a.messageActions(cx, e, false))
+	message := el.Div().ID("message/" + e.key).WFull().Gap(14)
+	if out.Prose != "" {
+		message.Child(a.conversationDocument(cx, &entry{key: e.key + "/prose", text: out.Prose}, false))
+	}
+	return message.Child(card, a.messageActions(cx, e, false))
 }
 
 func (a *app) workflowTransitionCard(cx *el.Context, e *entry) el.Element {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"unicode"
 
-	"gioui.org/io/key"
+	"github.com/dyike/keel/gio/io/key"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"

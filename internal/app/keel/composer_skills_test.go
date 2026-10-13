@@ -1,7 +1,7 @@
 package keeldesktop
 
 import (
-	"gioui.org/io/key"
+	"github.com/dyike/keel/gio/io/key"
 	"github.com/dyike/keel/ui/el"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	"testing"

@@ -3,18 +3,17 @@ module github.com/openmodu/onecatch
 go 1.26.1
 
 require (
-	gioui.org v0.10.3
 	github.com/UserExistsError/conpty v0.1.4
 	github.com/charmbracelet/ultraviolet v0.0.0-20260703014108-f5a850f9c2b7
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/vt v0.0.0-20261008172826-faa4adf95555
 	github.com/creack/pty v1.1.24
-	github.com/dyike/keel v0.2.2-0.20261013054002-9c82701e8f8b
+	github.com/dyike/keel v0.2.2
 	github.com/go-chi/chi/v5 v5.3.0
-	github.com/go-text/typesetting v0.3.5
 	github.com/google/uuid v1.6.0
 	github.com/google/wire v0.7.0
 	github.com/gorilla/websocket v1.5.3
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51
 	github.com/libp2p/zeroconf/v2 v2.2.0
 	github.com/mattn/go-runewidth v0.0.23
 	github.com/openmodu/modu v0.0.9-0.20260918064809-0f6a71287626
@@ -56,7 +55,6 @@ require (
 	github.com/jezek/xgb v1.3.1 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kr/fs v0.1.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
@@ -88,10 +86,3 @@ require (
 )
 
 tool github.com/dyike/keel/cmd/keel
-
-// Keel draws with its own Gio and go-text copies (third_party): CoreText text
-// on macOS and other fixes. A replace applies only to the module writing it.
-replace (
-	gioui.org => github.com/dyike/keel/third_party/gio v0.0.0-20261013040631-8d59576485e5
-	github.com/go-text/typesetting => github.com/dyike/keel/third_party/typesetting v0.0.0-20261013040631-8d59576485e5
-)

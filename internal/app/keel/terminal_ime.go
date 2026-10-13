@@ -1,6 +1,6 @@
 package keeldesktop
 
-import "gioui.org/io/key"
+import "github.com/dyike/keel/gio/io/key"
 
 // Keep preedit text local until CompositionEvent ends. Sending every EditEvent
 // directly to the PTY would print the Latin spelling and then the Chinese result.

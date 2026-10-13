@@ -1,6 +1,7 @@
 package keeldesktop
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -90,7 +91,7 @@ func TestRenderWorkflowOutcomeCards(t *testing.T) {
 			el.Text("Review 实现").TextSize(15).Bold(), a.workflowOutcomeCard(cx, e, out),
 			a.workflowTransitionCard(cx, transition),
 			el.Text("设计迁移方案").TextSize(15).Bold(),
-			a.workflowOutcomeCard(cx, &entry{key: "pass-example", text: `{"verdict":"pass","summary":"验收要求已逐项补全"}`}, domainworkflows.Outcome{Verdict: "pass", Summary: "验收要求已逐项补全。本轮只修改方案，文档检查通过，交给实现步骤继续。"}),
+			a.workflowOutcomeCard(cx, &entry{key: "pass-example", text: `{"verdict":"pass","summary":"验收要求已逐项补全"}`}, domainworkflows.OutcomeMessage{Outcome: domainworkflows.Outcome{Verdict: "pass", Summary: "验收要求已逐项补全。本轮只修改方案，文档检查通过，交给实现步骤继续。"}, JSON: `{"verdict":"pass","summary":"验收要求已逐项补全"}`}),
 		)
 	}))
 	if err := window.Screenshot(screenshotRoot{core.Func(root.Layout)}, 860, 1000, filepath.Join(dir, "workflow-outcomes.png")); err != nil {
@@ -133,5 +134,56 @@ func TestWorkflowOutcomeRendersCompleteLiveJSON(t *testing.T) {
 	}
 	if a.docs[e.key].Source() != source {
 		t.Fatal("live result discarded original JSON")
+	}
+}
+
+func TestWorkflowOutcomeAfterReportRendersCardAndKeepsReportSelectable(t *testing.T) {
+	for _, fenced := range []bool{false, true} {
+		t.Run(fmt.Sprintf("fenced=%v", fenced), func(t *testing.T) {
+			a, e := outcomeFixture(t)
+			prose := "已提交并推送本轮改动。\n\n- 测试通过\n- 工作树干净\n\n未执行部署。"
+			raw := e.text
+			if fenced {
+				raw = "```json\n" + raw + "\n```"
+			}
+			e.text = prose + "\n\n" + raw
+			a.transcript = newTranscript()
+			a.transcript.items[e.key] = e
+			a.syncMessages()
+			root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element {
+				return a.conversation.selection.Decorate(cx, el.Div().WFull().HFull().P(20).ScrollY().Child(a.messageEntry(cx, a.entries[0], 0)))
+			}))
+			router, frame, click := alignmentRouter(root, 800, 1200, 1)
+			if dir := os.Getenv("ONECATCH_KEEL_PREVIEWS"); dir != "" && !fenced {
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := window.Screenshot(screenshotRoot{core.Func(root.Layout)}, 800, 1200, filepath.Join(dir, "workflow-outcome-after-report.png")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, label := range []string{"需要返工", "已提交并推送本轮改动。", "未执行部署。"} {
+				if _, ok := alignmentNode(router.AppendSemantics(nil), label, false); !ok {
+					t.Fatalf("mixed outcome omitted %q", label)
+				}
+			}
+			paragraph, _ := alignmentNode(router.AppendSemantics(nil), "已提交并推送本轮改动。", false)
+			click(paragraph.Bounds)
+			selectionKey(router, frame, "A")
+			selectionKey(router, frame, "C")
+			_, copied, wrote := router.WriteClipboard()
+			if !wrote || !strings.Contains(string(copied), "未执行部署。") || !strings.Contains(string(copied), "实现审阅已完成") || strings.Contains(string(copied), `"verdict"`) {
+				t.Fatalf("mixed outcome copied hidden JSON or lost prose/card: %q", copied)
+			}
+			disclosure, ok := findSkillControl(router.AppendSemantics(nil), "查看原始结果")
+			if !ok {
+				t.Fatal("missing disclosure")
+			}
+			click(disclosure)
+			jsonDoc := a.conversation.toolDocs[e.key+"/raw/code"]
+			if jsonDoc == nil || !strings.Contains(jsonDoc.Source(), `"extra": "retained"`) || strings.Contains(jsonDoc.Source(), "未执行部署。") || a.docs[e.key].Source() != e.text {
+				t.Fatal("raw JSON lost fields, included report, or altered message copy source")
+			}
+		})
 	}
 }

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"gioui.org/io/key"
+	"github.com/dyike/keel/gio/io/key"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/window"
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"

@@ -7,7 +7,7 @@ import (
 	"slices"
 	"strings"
 
-	"gioui.org/font"
+	"github.com/dyike/keel/gio/font"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"

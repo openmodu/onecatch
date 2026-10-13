@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"gioui.org/font"
-	"gioui.org/io/pointer"
-	"gioui.org/op"
+	"github.com/dyike/keel/gio/font"
+	"github.com/dyike/keel/gio/io/pointer"
+	"github.com/dyike/keel/gio/op"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
@@ -64,6 +64,7 @@ func (a *app) sidebarPanel(cx *el.Context, height float32, peek bool) el.Element
 	links = append(links, kit.SidebarItem{ID: "more", Label: uiText("更多"), Icon: kit.IconChevronDown, ContextMenu: a.ui.More})
 	sections = append(sections, section{items: links})
 	var pinned, projects []kit.SidebarItem
+	activeProjects := map[string]time.Time{}
 	var iconModel strings.Builder
 	query := strings.ToLower(strings.TrimSpace(a.query))
 	for _, w := range a.workspaces {
@@ -85,6 +86,12 @@ func (a *app) sidebarPanel(cx *el.Context, height float32, peek bool) el.Element
 		var tasks []domaintasks.Task
 		for _, task := range a.tasks[w.ID] {
 			fmt.Fprintf(&iconModel, "%q/%q/%q;", task.ID, task.Harness, task.WorkflowID)
+			if task.Status == domaintasks.StatusRunning {
+				activity := sidebarTaskActivity(task)
+				if previous, ok := activeProjects[project.ID]; !ok || activity.After(previous) {
+					activeProjects[project.ID] = activity
+				}
+			}
 			if task.Pinned {
 				pinned = append(pinned, a.sidebarTask(task))
 				continue
@@ -97,6 +104,12 @@ func (a *app) sidebarPanel(cx *el.Context, height float32, peek bool) el.Element
 		// Sort before limiting the collapsed project to three tasks. Pinned
 		// tasks stay in their separate section, preserving their order.
 		slices.SortStableFunc(tasks, func(a, b domaintasks.Task) int {
+			if runningA, runningB := a.Status == domaintasks.StatusRunning, b.Status == domaintasks.StatusRunning; runningA != runningB {
+				if runningA {
+					return -1
+				}
+				return 1
+			}
 			return sidebarTaskActivity(b).Compare(sidebarTaskActivity(a))
 		})
 		visible := len(tasks)
@@ -115,6 +128,22 @@ func (a *app) sidebarPanel(cx *el.Context, height float32, peek bool) el.Element
 		}
 		projects = append(projects, project)
 	}
+	// Promote projects with running sessions as well, so an active session
+	// cannot stay buried underneath several inactive project groups.
+	slices.SortStableFunc(projects, func(a, b kit.SidebarItem) int {
+		activityA, runningA := activeProjects[a.ID]
+		activityB, runningB := activeProjects[b.ID]
+		if runningA != runningB {
+			if runningA {
+				return -1
+			}
+			return 1
+		}
+		if runningA {
+			return activityB.Compare(activityA)
+		}
+		return 0
+	})
 	if len(pinned) > 0 {
 		sections = append(sections, section{title: "置顶", items: pinned})
 	}

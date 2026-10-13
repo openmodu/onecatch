@@ -43,6 +43,7 @@ type attachmentState struct {
 	Images           map[string]*kit.ImageView
 	Version          uint64
 	Loading, Picking bool
+	FocusPrompt      bool
 }
 
 func validateAttachmentFiles(paths []string, existing []selectedAttachment) ([]selectedAttachment, error) {
@@ -247,18 +248,7 @@ func (a *app) pasteTaskAttachments(data core.ClipboardData) bool {
 		applied := make(chan struct{})
 		core.Update(func() {
 			defer close(applied)
-			if a.closed || selection != a.selection || version != a.attachments.Version {
-				discardNewAttachments(a.backend.service, items, existing)
-				return
-			}
-			a.attachments.Loading = false
-			a.fail(err)
-			if err == nil {
-				a.attachments.Items = items
-				if data.Text != "" {
-					a.prompt += data.Text
-				}
-			}
+			a.applyPastedAttachments(selection, version, data, items, existing, err)
 		})
 		select {
 		case <-a.ctx.Done():
@@ -267,6 +257,22 @@ func (a *app) pasteTaskAttachments(data core.ClipboardData) bool {
 		}
 	}()
 	return true
+}
+
+func (a *app) applyPastedAttachments(selection, version uint64, data core.ClipboardData, items, existing []selectedAttachment, err error) {
+	if a.closed || selection != a.selection || version != a.attachments.Version {
+		discardNewAttachments(a.backend.service, items, existing)
+		return
+	}
+	a.attachments.Loading = false
+	a.fail(err)
+	if err == nil {
+		a.attachments.Items = items
+		if data.Text != "" {
+			a.prompt += data.Text
+		}
+		a.attachments.FocusPrompt = true
+	}
 }
 func discardNewAttachments(service *desktopservice.Service, items, existing []selectedAttachment) {
 	seen := map[string]bool{}
@@ -296,6 +302,7 @@ func (a *app) clearAttachments() {
 	a.attachments.Items = nil
 	a.attachments.Loading = false
 	a.attachments.Images = nil
+	a.attachments.FocusPrompt = false
 }
 func (a *app) removeAttachment(path string) {
 	if !a.attachmentsEnabled() {

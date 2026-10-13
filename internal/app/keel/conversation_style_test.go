@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"gioui.org/io/input"
-	"gioui.org/op"
+	"github.com/dyike/keel/gio/io/input"
+	"github.com/dyike/keel/gio/op"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/locale"

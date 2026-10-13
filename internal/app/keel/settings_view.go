@@ -2,7 +2,7 @@ package keeldesktop
 
 import (
 	"fmt"
-	"gioui.org/io/key"
+	"github.com/dyike/keel/gio/io/key"
 	"strconv"
 	"strings"
 

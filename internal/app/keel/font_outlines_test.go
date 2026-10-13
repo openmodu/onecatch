@@ -3,8 +3,8 @@ package keeldesktop
 import (
 	"bytes"
 	"encoding/binary"
-	gotext "github.com/go-text/typesetting/font"
-	ot "github.com/go-text/typesetting/font/opentype"
+	gotext "github.com/dyike/keel/typesetting/font"
+	ot "github.com/dyike/keel/typesetting/font/opentype"
 	"golang.org/x/image/font/gofont/gomono"
 	"slices"
 	"testing"

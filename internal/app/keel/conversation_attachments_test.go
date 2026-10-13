@@ -3,16 +3,18 @@ package keeldesktop
 import (
 	"image"
 	"image/color"
+	"image/draw"
 	"image/png"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"gioui.org/io/input"
-	"gioui.org/io/key"
+	"github.com/dyike/keel/gio/io/input"
+	"github.com/dyike/keel/gio/io/key"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
+	"github.com/dyike/keel/ui/locale"
 	"github.com/dyike/keel/ui/theme"
 	"github.com/dyike/keel/ui/window"
 	tasks "github.com/openmodu/onecatch/internal/domain/tasks"
@@ -171,5 +173,96 @@ func TestRenderConversationAttachments(t *testing.T) {
 	}
 	if err := window.Screenshot(screenshotRoot{core.Func(root.Layout)}, 800, 500, filepath.Join(dir, "conversation-attachments.png")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func previewPanelBounds(nodes []input.SemanticNode) (image.Rectangle, bool) {
+	for _, node := range nodes {
+		if node.Desc.Description == "dialog" && node.Desc.Label == "screenshot.png" {
+			return node.Desc.Bounds, true
+		}
+		if bounds, ok := previewPanelBounds(node.Children); ok {
+			return bounds, true
+		}
+	}
+	return image.Rectangle{}, false
+}
+
+func TestAttachmentImagePreviewFitsContent(t *testing.T) {
+	for _, tc := range []struct {
+		name                 string
+		size                 image.Point
+		width, height, scale int
+	}{
+		{"landscape", image.Pt(2048, 1072), 1120, 760, 1},
+		{"portrait", image.Pt(800, 1600), 700, 760, 2},
+		{"small", image.Pt(48, 48), 640, 480, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, path, root := conversationImageFixture(t)
+			img := image.NewNRGBA(image.Rectangle{Max: tc.size})
+			draw.Draw(img, img.Bounds(), image.NewUniform(color.NRGBA{R: 220, G: 40, B: 80, A: 255}), image.Point{}, draw.Src)
+			file, err := os.Create(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = png.Encode(file, img)
+			file.Close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			router, frame, click := alignmentRouter(root, tc.width, tc.height, tc.scale)
+			completeConversationImageLoads(t, a, path, frame)
+			thumb, ok := alignmentNode(router.AppendSemantics(nil), "screenshot.png", true)
+			if !ok {
+				t.Fatal("missing image thumbnail")
+			}
+			click(thumb.Bounds)
+			frame()
+			panel, ok := previewPanelBounds(router.AppendSemantics(nil))
+			if !ok {
+				t.Fatal("preview did not open")
+			}
+			photo, ok := alignmentNode(router.AppendSemantics(nil), "预览图片：screenshot.png", false)
+			if !ok {
+				t.Fatal("preview image is missing")
+			}
+			if !photo.Bounds.In(panel) || panel.Dy()-photo.Bounds.Dy() > 100*tc.scale {
+				t.Fatalf("preview has excessive blank height: panel=%v image=%v", panel, photo.Bounds)
+			}
+			if abs(photo.Bounds.Dx()*tc.size.Y-photo.Bounds.Dy()*tc.size.X) > tc.size.X+tc.size.Y {
+				t.Fatalf("image aspect ratio changed: %v, natural=%v", photo.Bounds, tc.size)
+			}
+			if photo.Bounds.Dx() > tc.size.X*tc.scale || photo.Bounds.Dy() > tc.size.Y*tc.scale {
+				t.Fatal("small image was enlarged unnecessarily")
+			}
+			pixels := interactionPixelsScaled(t, root, router, tc.width*tc.scale, tc.height*tc.scale, float32(tc.scale))
+			for _, point := range []image.Point{photo.Bounds.Min.Add(image.Pt(2, 2)), photo.Bounds.Max.Sub(image.Pt(3, 3)), photo.Bounds.Min.Add(photo.Bounds.Size().Div(2))} {
+				c := color.NRGBAModel.Convert(pixels.At(point.X, point.Y)).(color.NRGBA)
+				if c.R < 180 || c.G > 80 || c.B > 120 {
+					t.Fatalf("preview viewport contains blank space at %v: %v", point, c)
+				}
+			}
+			if dir := os.Getenv("ONECATCH_KEEL_PREVIEWS"); dir != "" {
+				if err := os.MkdirAll(dir, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := window.ScreenshotAtScale(screenshotRoot{core.Func(root.Layout)}, tc.width, tc.height, float32(tc.scale), filepath.Join(dir, "attachment-preview-"+tc.name+".png")); err != nil {
+					t.Fatal(err)
+				}
+			}
+			close, ok := alignmentNode(router.AppendSemantics(nil), locale.Current().Close, true)
+			if !ok {
+				t.Fatal("preview has no close button")
+			}
+			click(close.Bounds)
+			frame()
+			if _, ok := previewPanelBounds(router.AppendSemantics(nil)); ok {
+				t.Fatal("close button left the preview open")
+			}
+			if _, ok := alignmentNode(router.AppendSemantics(nil), "screenshot.png", true); !ok {
+				t.Fatal("preview changed the thumbnail")
+			}
+		})
 	}
 }
