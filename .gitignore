@@ -13,3 +13,5 @@
 /keel
 /internal/buildinfo/zz_release_generated.go
 /build/keel/.package-lock/
+/go.work
+/go.work.sum

@@ -36,7 +36,7 @@ The first launch includes Single Agent, Implement and Review, Design to PR (Opus
 
 ## Installation and development
 
-The desktop uses Keel v0.1.12 with a Go-rendered interface. Dependencies come from pinned remote modules, including the Keel Gio and typesetting forks in `go.mod`; no local Keel checkout is needed.
+The desktop uses Keel v0.2.1 with a Go-rendered interface. Dependencies come from pinned remote modules, including the Keel Gio and typesetting forks in `go.mod`; no local Keel checkout is needed.
 
 Install Go 1.26.1, Git, and a configured Agent CLI or Modu provider. macOS needs Xcode Command Line Tools. Run `go tool keel doctor` to check native graphics libraries on Linux. Node.js is only needed for packaging and release metadata; desktop development does not require npm.
 
