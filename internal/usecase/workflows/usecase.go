@@ -109,8 +109,11 @@ type RunResolution struct {
 // ResumeProfile shapes a resume. FromStepID reruns that step and everything
 // after it. Harness overrides the runtime of StepID (default CurrentStepID);
 // a runtime change starts a fresh session for that step while the rest of the
-// run keeps its sessions and results.
+// run keeps its sessions and results. ModelDefinition supplies the latest
+// template model choices, resolved and validated by the caller; an explicit
+// step profile takes precedence over those choices.
 type ResumeProfile struct {
+	ModelDefinition *domainworkflows.Definition
 	FromStepID      string
 	StepID          string
 	Harness         string
@@ -336,15 +339,35 @@ func (s *Usecase) ResumeRunWithProfile(ctx context.Context, runID, instruction s
 	if err != nil {
 		return run, err
 	}
+	task, err := s.tasks.GetTask(ctx, run.TaskID)
+	if err != nil {
+		return run, err
+	}
+	latest := profile.ModelDefinition
+	if latest == nil && definition.ID != directAgentWorkflowID {
+		resolve := s.resolveDefinition
+		if resolve == nil {
+			resolve = func(ctx context.Context, task domaintasks.Task) (domainworkflows.Definition, error) {
+				return s.workflows.GetDefinition(ctx, task.WorkflowID)
+			}
+		}
+		// A removed template remains resumable from its durable snapshot.
+		if current, loadErr := resolve(ctx, task); loadErr == nil {
+			latest = &current
+		}
+	}
+	if latest != nil {
+		updated := RefreshStepModels(definition, *latest)
+		if err := s.workflows.UpdateRunDefinition(ctx, run.ID, updated); err != nil {
+			return run, err
+		}
+		definition = updated
+	}
 	if strings.TrimSpace(profile.Harness) != "" {
 		definition, run, err = s.applyResumeProfile(ctx, definition, run, profile)
 		if err != nil {
 			return run, err
 		}
-	}
-	task, err := s.tasks.GetTask(ctx, run.TaskID)
-	if err != nil {
-		return run, err
 	}
 	workspace, err := s.taskWorkspace(ctx, task)
 	if err != nil {

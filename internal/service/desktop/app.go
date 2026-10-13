@@ -1227,6 +1227,19 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 	if err != nil {
 		return run, mapSettingsError(err)
 	}
+	var modelDefinition *domainworkflows.Definition
+	if definition.ID != directAgentWorkflowID {
+		if latest, loadErr := a.taskDefinition(ctx, task); loadErr == nil {
+			latest.Steps = append([]domainworkflows.Step(nil), latest.Steps...)
+			for i := range latest.Steps {
+				if latest.Steps[i].Model == "" {
+					latest.Steps[i].Model = settings.Runtimes[latest.Steps[i].Runtime].DefaultModel
+				}
+			}
+			modelDefinition = &latest
+			definition = workflowuc.RefreshStepModels(definition, latest)
+		}
+	}
 	if err := validateDefinitionSettings(definition, settings); err != nil {
 		return run, err
 	}
@@ -1243,7 +1256,7 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 			return run, coded("workflow_step_not_found", "the workflow step was not found")
 		}
 	}
-	profile := workflowuc.ResumeProfile{FromStepID: fromStepID}
+	profile := workflowuc.ResumeProfile{FromStepID: fromStepID, ModelDefinition: modelDefinition}
 	if harness := strings.TrimSpace(input.Harness); harness != "" {
 		runtime := agentrun.Runtime(harness)
 		if !runtime.Valid() {
@@ -1263,7 +1276,7 @@ func (a *Service) ResumeRunConfigured(ctx context.Context, runID string, input R
 		if model == "" {
 			model = settings.Runtimes[harness].DefaultModel
 		}
-		profile = workflowuc.ResumeProfile{FromStepID: fromStepID, StepID: strings.TrimSpace(input.StepID), Harness: harness, Model: model, RuntimeSettings: resolved}
+		profile = workflowuc.ResumeProfile{FromStepID: fromStepID, ModelDefinition: modelDefinition, StepID: strings.TrimSpace(input.StepID), Harness: harness, Model: model, RuntimeSettings: resolved}
 	}
 	a.dispatch(run.ID, func(runCtx context.Context) (domainworkflows.Run, error) {
 		return a.orchestrator.ResumeRunWithProfile(runCtx, run.ID, input.Instruction, profile)
