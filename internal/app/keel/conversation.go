@@ -26,6 +26,8 @@ import (
 )
 
 type conversationState struct {
+	lanes         map[string]*conversationLane
+	renderedRows  map[string]bool
 	selection     markdown.SelectionGroup
 	open          map[string]bool
 	overridden    map[string]bool

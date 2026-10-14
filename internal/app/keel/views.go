@@ -2,6 +2,7 @@ package keeldesktop
 
 import (
 	"encoding/json"
+	"fmt"
 	"image"
 	"image/color"
 	"runtime"
@@ -444,6 +445,10 @@ func (a *app) message(cx *el.Context, index int) el.Element {
 		return el.Div()
 	}
 	e := rows[index]
+	if a.conversation.renderedRows == nil {
+		a.conversation.renderedRows = make(map[string]bool)
+	}
+	a.conversation.renderedRows[e.key] = true
 	if len(e.columns) > 0 {
 		row := el.Div().WFull().NoShrink().MaxW(el.Dp(920)).Row().Items(el.Stretch).Gap(16).Py(4)
 		for i, cell := range e.columns {
@@ -451,7 +456,13 @@ func (a *app) message(cx *el.Context, index int) el.Element {
 				row.Child(el.Div().W(el.Dp(1)).NoShrink().Child(el.Div().Absolute().Top(-13).Bottom(-13).W(el.Dp(1)).Bg(seamColor)))
 			}
 			column := el.Div().Grow().W(el.Dp(0))
-			if cell != nil {
+			if isParallelBody(e) {
+				column.H(el.Dp(parallelLaneHeight)).NoShrink().ID(parallelLaneID(e, i)).Name(fmt.Sprintf("并行任务 %d", i+1))
+				if lane := a.conversation.lanes[parallelLaneID(e, i)]; lane != nil {
+					clear(lane.rendered)
+					column.Child(lane.scroller.Render(cx))
+				}
+			} else if cell != nil {
 				column.Child(a.messageEntry(cx, cell, -1))
 			}
 			row.Child(column)
@@ -603,6 +614,7 @@ func mixColor(foreground, background color.NRGBA, amount float32) color.NRGBA {
 // control: a round arrow centred 12dp above the composer while the reader is
 // scrolled away from the newest message.
 func (a *app) conversationScroll(cx *el.Context) el.Element {
+	clear(a.conversation.renderedRows)
 	area := el.Div().Grow().H(el.Dp(0)).Items(el.Stretch).Child(a.scroller.Render(cx))
 	a.conversation.selection.Decorate(cx, area)
 	if a.historyLoading[a.runID] {

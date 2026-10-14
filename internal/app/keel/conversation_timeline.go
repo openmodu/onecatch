@@ -75,7 +75,7 @@ func buildWorkflowTimeline(entries []*entry, detail *desktop.RunDetail) []*entry
 		// Each lane keeps chronological flow within this parallel segment.
 		// A finished lane leaves blank space at its end, not between records.
 		if current != lanes[0] {
-			header := &entry{key: "timeline-header/" + e.key, at: e.at, columns: make([]*entry, len(lanes))}
+			header := &entry{kind: kindTimelineHeader, key: "timeline-header/" + e.key, at: e.at, columns: make([]*entry, len(lanes))}
 			for i, id := range lanes {
 				header.columns[i] = headers[id]
 			}
@@ -121,12 +121,26 @@ func (a *app) invalidateConversationEntry(key string) {
 	for _, row := range a.conversationRows {
 		for _, cell := range row.columns {
 			if cell != nil && contains(cell) {
-				a.scroller.Invalidate(row.key)
+				if isParallelBody(row) {
+					for i := range row.columns {
+						if lane := a.conversation.lanes[parallelLaneID(row, i)]; lane != nil {
+							for _, item := range lane.entries {
+								if contains(item) && !lane.rendered[item.key] {
+									lane.scroller.Invalidate(item.key)
+								}
+							}
+						}
+					}
+				} else {
+					a.scroller.Invalidate(row.key)
+				}
 				return
 			}
 		}
 	}
-	a.scroller.Invalidate(key)
+	if !a.conversation.renderedRows[key] {
+		a.scroller.Invalidate(key)
+	}
 }
 
 func (a *app) displayedConversationRows() []*entry {

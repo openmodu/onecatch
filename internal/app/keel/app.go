@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 
@@ -69,6 +70,7 @@ type app struct {
 	conversation                                                                            conversationState
 	profile                                                                                 runtimeProfileState
 	scroller                                                                                *kit.MessageScrollerView
+	scrollerKeys                                                                            []string
 	historyLoading                                                                          map[string]bool
 	prompt, query, model, reasoningEffort, serviceTier, projectPath, projectName, errorText string
 	busy, loading                                                                           bool
@@ -499,7 +501,11 @@ func (a *app) syncMessages() {
 		keys[i] = e.key
 	}
 	a.conversation.selection.SetDocuments(selectable...)
-	a.scroller.SetKeys(keys)
+	if !slices.Equal(a.scrollerKeys, keys) {
+		a.scroller.SetKeys(keys)
+		a.scrollerKeys = keys
+	}
+	a.syncParallelLanes()
 	// Re-measure only rows whose content changed: a streaming token touches
 	// one row, and re-measuring every row's Markdown made long runs stutter.
 	if a.rowSigs == nil {
@@ -509,11 +515,22 @@ func (a *app) syncMessages() {
 	seen := make(map[string]bool, len(a.entries))
 	var changed []string
 	for i, e := range a.conversationRows {
-		sig := rowSignature(e, active, i == len(a.conversationRows)-1)
+		var sig string
+		if isParallelBody(e) {
+			// Lane contents scroll inside a fixed-height viewport. Their growth
+			// must not reset the outer row to its estimated height.
+			sig = fmt.Sprintf("parallel:%d", len(e.columns))
+		} else {
+			sig = rowSignature(e, active, i == len(a.conversationRows)-1)
+		}
 		seen[e.key] = true
 		if a.rowSigs[e.key] != sig {
 			a.rowSigs[e.key] = sig
-			changed = append(changed, e.key)
+			// Mounted rows are measured by Keel every frame. Resetting their
+			// height to 140 dp can clamp a reader deep inside a long reply.
+			if !a.conversation.renderedRows[e.key] {
+				changed = append(changed, e.key)
+			}
 		}
 	}
 	for key := range a.rowSigs {

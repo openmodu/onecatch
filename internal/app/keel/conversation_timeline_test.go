@@ -136,3 +136,19 @@ func TestWorkflowTimelineLiveOutputDoesNotAddBlankRows(t *testing.T) {
 		t.Fatal("live updates added empty time rows instead of appending in each lane")
 	}
 }
+
+func TestRenderFixedParallelLanes(t *testing.T) {
+	dir := os.Getenv("ONECATCH_KEEL_PREVIEWS")
+	if dir == "" {
+		t.Skip("optional preview")
+	}
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	a := parallelConversationFixture(t, 4)
+	a.scroller.SetFollow(false)
+	root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element { return el.Div().WFull().HFull().P(20).Child(a.conversationScroll(cx)) }))
+	if err := window.Screenshot(screenshotRoot{core.Func(root.Layout)}, 1100, 700, filepath.Join(dir, "parallel-fixed-lanes.png")); err != nil {
+		t.Fatal(err)
+	}
+}
