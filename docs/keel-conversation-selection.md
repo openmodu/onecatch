@@ -140,3 +140,13 @@ Regular 修复的离屏 Metal 截图已检查：正文与 Markdown 加粗可区�
 项目工作流每两秒调用 `core.Update`，即使签名未改变，也请求整窗绘制；工作区 Git 检查也会因无变化结果重绘。本次改为 `core.UpdateIf`，后台仍在同一帧锁下读写状态，只有可见结果改变才请求绘制。运行状态灯改为静态绿点，状态切换仍更新。
 
 这修复的是无变化轮询带来的绘制和内存回收延迟，不能据此认定所有后台重绘都会破坏选区。工作流文件变更仍应及时显示；签名不变时保留文档、滚动与选区。现有对话选区测试通过，真实客户端另行验证滚动后内容和回收情况，见 `keel-memory.md`。
+
+## 混合字体标签末字缺失（2026-10-14）
+
+用户截图中“运行了 1 个工具”只显示到“工”。本机用 Helvetica Neue + PingFang SC、13sp 复现：排版器拿不到苹方的轮廓尺寸，`GlyphExtents` 返回失败，而 `trimTrailingWhitespace` 把零墨迹宽度当成空白，将“具”的前进宽度清零。2× 时标签自然宽度仅 164px，绘制末字超出控件宽度后被裁掉；语义标签仍保留完整字符串，因此只检查文本或点击不能发现。
+
+Keel 的行尾裁剪现在核对源字簇，只有全为空白时才允许清零；多字体单行快速路径与普通换行路径都应用这个条件。没有修改 Regular 字重或给具体标签硬加宽度。`TestMixedLabelNaturalWidth` 覆盖 1×、1.5×、2× 下中文、英文、数字混排，检查非零前进宽度及自然宽度与宽画布的原生渲染像素一致。临时撤销补丁后该回归失败。合成测试另覆盖 LTR、RTL、纵排、真正空白和含组合标记的字簇。
+
+Keel 的 `TestDefaultInputTokenCentersInkWithLineLeading` 在补丁前后均有垂直居中失败，不能报告整个 el 包通过。当前补丁通过本地 `go.work` 接入，尚未发布；离屏验证不能代替用户正在运行的客户端验证。
+
+缺字补丁现已通过 [Keel PR #25](https://github.com/dyike/keel/pull/25) 合入，并发布为 [v0.2.6](https://github.com/dyike/keel/releases/tag/v0.2.6)。OneCatch 的 go.mod/go.sum 已升级到该版本；发布依赖验证使用 `GOWORK=off`，不把相邻 Keel 工作区的其他改动算入本次发布。
