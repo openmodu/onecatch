@@ -215,11 +215,11 @@ func TestSteeringContinuationKeepsFailedInsertAvailable(t *testing.T) {
 	b, _, run, engine := instructionTestRun(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	persisted, err := submitContinuationMode(ctx, b.service, run.ID, desktopservice.ResumeRunInput{Instruction: "retry this"}, nil, true, true)
+	persisted, err := b.service.SubmitRunMessage(ctx, run.ID, desktopservice.RunMessageInput{Resume: desktopservice.ResumeRunInput{Instruction: "retry this"}, Steer: true})
 	if err == nil || persisted {
 		t.Fatal("failed steering cleared a retryable draft")
 	}
-	persisted, err = submitContinuationMode(context.Background(), b.service, run.ID, desktopservice.ResumeRunInput{Instruction: "correct direction"}, nil, true, true)
+	persisted, err = b.service.SubmitRunMessage(context.Background(), run.ID, desktopservice.RunMessageInput{Resume: desktopservice.ResumeRunInput{Instruction: "correct direction"}, Steer: true})
 	if err != nil || !persisted {
 		t.Fatalf("steering submit: %v %v", persisted, err)
 	}

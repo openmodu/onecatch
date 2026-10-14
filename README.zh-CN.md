@@ -111,23 +111,20 @@ macOS 默认 ad-hoc 签名，可通过 `SIGN_IDENTITY` 指定 Developer ID；公
 
 ```text
 cmd/
-└── app/                桌面、Worker、内部辅助进程与移动端统一入口
+└── app/                桌面、Worker 与内部辅助进程统一入口
 internal/
-├── app/                Desktop、Mobile 和 Worker 启动装配
+├── app/                桌面、Worker 与辅助进程装配
 ├── domain/             领域模型与业务规则
 ├── repo/               文件、Git 和历史数据访问
 ├── usecase/            Agent 适配器与工作流用例
-├── service/            Desktop、Mobile 和 Worker 服务
-└── transport/          HTTP 适配
-clients/onecatch/        OneCatch Go HTTP SDK
+└── service/            桌面、Worker 等功能服务
 pkg/                    可供仓库外引用的通用 Go 包
 build/                  原生桌面构建与打包配置
 deploy/                 Worker 的 launchd、systemd 部署模板
 docs/                   Harness 等开发文档
-tools/                  Go 工具依赖声明
 ```
 
-仓库只维护一个根 `go.mod`。`cmd` 只保留进程入口；仓库内共享代码放在 `internal`，确实需要向外暴露的包才放进 `pkg` 或 `clients`。桌面界面位于 `internal/app/keel`。分层边界和新代码归类判据见 [`internal/README.md`](internal/README.md)。
+仓库只维护一个根 `go.mod`。`cmd` 只保留进程入口；仓库内共享代码放在 `internal`，确实需要向外暴露的包才放进 `pkg`。桌面界面位于 `internal/app/keel`。分层边界和新代码归类判据见 [`internal/README.md`](internal/README.md)。
 
 ## 参与贡献
 

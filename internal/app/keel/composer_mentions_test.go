@@ -36,14 +36,11 @@ func TestMentionTrigger(t *testing.T) {
 	}
 }
 
-func TestSplitStepMentionsAndEarliestStep(t *testing.T) {
+func TestSplitStepMentions(t *testing.T) {
 	d := starterWorkflow("design_to_pr")
 	steps, rest := splitStepMentions(d, "@review @implement 补上并发测试，见 a@b.com @nobody")
 	if !reflect.DeepEqual(steps, []string{"review", "implement"}) || rest != "补上并发测试，见 a@b.com @nobody" {
 		t.Fatalf("steps=%v rest=%q", steps, rest)
-	}
-	if got := earliestStep(d, steps); got != "implement" {
-		t.Fatalf("earliest = %q, want implement", got)
 	}
 }
 

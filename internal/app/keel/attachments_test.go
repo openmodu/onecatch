@@ -122,7 +122,7 @@ func TestAttachmentContinuationPersistsOnceWhenResumeIsRejected(t *testing.T) {
 	if err = os.WriteFile(note, []byte("Follow-up note"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	persisted, err := submitContinuation(ctx, b.service, run.ID, desktopservice.ResumeRunInput{Instruction: "Read this", Harness: "claude"}, []string{note}, false)
+	persisted, err := b.service.SubmitRunMessage(ctx, run.ID, desktopservice.RunMessageInput{Resume: desktopservice.ResumeRunInput{Instruction: "Read this", Harness: "claude"}, AttachmentPaths: []string{note}})
 	if !persisted || err == nil {
 		t.Fatalf("resume rejection should retain persisted instruction: %v, %v", persisted, err)
 	}
@@ -139,7 +139,7 @@ func TestAttachmentContinuationPersistsOnceWhenResumeIsRejected(t *testing.T) {
 	}
 	// Retrying the persisted turn uses the empty instruction path; it must not
 	// enqueue another instruction or duplicate the attachment.
-	if _, err = submitContinuation(ctx, b.service, run.ID, desktopservice.ResumeRunInput{}, nil, false); err != nil {
+	if _, err = b.service.SubmitRunMessage(ctx, run.ID, desktopservice.RunMessageInput{}); err != nil {
 		t.Fatal(err)
 	}
 	waitCompleted(t, finished, detail.Run.Revision)

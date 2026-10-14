@@ -678,13 +678,9 @@ func (a *app) sendWithMode(steer bool) {
 			return
 		}
 		go func() {
-			var persisted bool
-			var err error
-			if len(steps) > 0 {
-				persisted, err = submitStepMessages(a.ctx, a.backend.service, runID, definition, steps, input.Instruction, attachments, active, steer)
-			} else {
-				persisted, err = submitContinuationMode(a.ctx, a.backend.service, runID, input, attachments, active, steer)
-			}
+			persisted, err := a.backend.service.SubmitRunMessage(a.ctx, runID, desktopservice.RunMessageInput{
+				Resume: input, AttachmentPaths: attachments, StepIDs: steps, Steer: steer,
+			})
 			core.Update(func() {
 				if a.closed {
 					return

@@ -348,35 +348,6 @@ func (a *app) attachmentStrip(cx *el.Context) el.Element {
 	return row
 }
 
-// Persist a paused/completed run's message before dispatching the next turn.
-// The state emitter can then display it even before run.resumed is written.
-// Returning persisted separately prevents a resume failure from inviting the
-// UI to enqueue the same message and attachment copies a second time.
-func submitContinuation(ctx context.Context, service *desktopservice.Service, runID string, input desktopservice.ResumeRunInput, paths []string, active bool) (persisted bool, err error) {
-	return submitContinuationMode(ctx, service, runID, input, paths, active, false)
-}
-
-func submitContinuationMode(ctx context.Context, service *desktopservice.Service, runID string, input desktopservice.ResumeRunInput, paths []string, active, steer bool) (persisted bool, err error) {
-	if active {
-		if steer {
-			_, err := service.InterruptAndInsert(ctx, runID, desktopservice.InstructionInput{Content: input.Instruction, AttachmentPaths: paths})
-			// Failed inserts roll back the instruction. Keep the draft available.
-			return err == nil, err
-		}
-		instruction, err := service.QueueFollowUp(ctx, runID, desktopservice.InstructionInput{Content: input.Instruction, AttachmentPaths: paths})
-		return instruction.ID != "", err
-	}
-	if strings.TrimSpace(input.Instruction) != "" || len(paths) > 0 {
-		instruction, enqueueErr := service.EnqueueInstruction(ctx, runID, desktopservice.InstructionInput{Content: input.Instruction, AttachmentPaths: paths})
-		if enqueueErr != nil {
-			return instruction.ID != "", enqueueErr
-		}
-		persisted = true
-		input.Instruction = ""
-	}
-	_, err = service.ResumeRunConfigured(ctx, runID, input)
-	return persisted || err == nil, err
-}
 func (a *app) continuationHarness() string {
 	if a.detail != nil && a.task != nil && a.task.WorkflowID != "single_agent" {
 		id := a.detail.Run.CurrentStepID

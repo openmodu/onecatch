@@ -2,12 +2,6 @@ package keeldesktop
 
 import (
 	"context"
-	_ "embed"
-	"encoding/json"
-	"errors"
-	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -16,31 +10,19 @@ import (
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
 	"github.com/google/uuid"
+	templates "github.com/openmodu/onecatch/internal/domain/prompttemplates"
 	"github.com/openmodu/onecatch/internal/service/skillmanager"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
-//go:embed templates.json
-var templateCatalog []byte
-
-type promptTemplate struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Body    string `json:"body"`
-	Builtin bool   `json:"builtin,omitempty"`
-}
-type templateLibrary struct {
-	Version   int              `json:"version"`
-	Templates []promptTemplate `json:"templates"`
-}
 type libraryState struct {
 	Queue                                bool
-	Templates                            []promptTemplate
+	Templates                            []templates.Template
 	TemplateID, TemplateSearch, Material string
 	TemplateArgs                         map[string]string
-	TemplateEditing                      *promptTemplate
+	TemplateEditing                      *templates.Template
 	TemplateLoadError                    error
-	TemplateOriginal                     []byte
+	TemplateRevision                     string
 	Skills                               []skillmanager.Skill
 	SkillSearch, SkillName               string
 	SkillDoc                             *skillmanager.SkillDocument
@@ -59,31 +41,14 @@ type libraryState struct {
 func (a *app) initLibrary() {
 	a.library.TemplateArgs = map[string]string{}
 	a.library.UsageErrors = map[string]string{}
-	var builtin []promptTemplate
-	_ = json.Unmarshal(templateCatalog, &builtin)
-	a.library.Templates = builtin
+	result, err := a.backend.service.LoadPromptTemplates(a.ctx)
+	a.library.Templates = result.Templates
+	a.library.TemplateRevision = result.Revision
+	a.library.TemplateLoadError = err
 	a.library.TemplateID = "builtin-explain"
-	data, err := os.ReadFile(filepath.Join(a.backend.service.DataRoot(), "keel-prompt-templates.json"))
-	if errors.Is(err, os.ErrNotExist) {
-		return
-	}
-	if err != nil {
-		a.library.TemplateLoadError = err
-		return
-	}
-	a.library.TemplateOriginal = data
-	var saved templateLibrary
-	if err = json.Unmarshal(data, &saved); err != nil || saved.Version != 1 {
-		a.library.TemplateLoadError = fmt.Errorf("模板库格式无效")
-		return
-	}
-	if err = validateTemplates(saved.Templates); err != nil {
-		a.library.TemplateLoadError = err
-		return
-	}
-	a.library.Templates = append(a.library.Templates, saved.Templates...)
 }
-func (a *app) selectedTemplate() promptTemplate {
+
+func (a *app) selectedTemplate() templates.Template {
 	for _, item := range a.library.Templates {
 		if item.ID == a.library.TemplateID {
 			return item
@@ -107,7 +72,7 @@ func (a *app) templatesPage(cx *el.Context) el.Element {
 	item := a.selectedTemplate()
 	list := el.Div().W(el.Dp(240)).NoShrink().HFull().Bg(sidebarColor).Px(16).Py(16).Gap(12)
 	list.Child(el.Div().Row().Items(el.Center).Child(el.Text("模板库").Grow().Medium().TextSize(14), iconAction(cx, "new-template", "新建模板", "plus", func() {
-		a.library.TemplateEditing = &promptTemplate{ID: "custom-" + uuid.NewString(), Body: "{{selection}}"}
+		a.library.TemplateEditing = &templates.Template{ID: "custom-" + uuid.NewString(), Body: "{{selection}}"}
 	}, false)), field("template-search", "搜索模板", &a.library.TemplateSearch))
 	rows := el.Div().ID("template-list").ScrollY().Grow().H(el.Dp(0)).Gap(4)
 	for _, t := range a.library.Templates {
@@ -146,9 +111,9 @@ func (a *app) templatesPage(cx *el.Context) el.Element {
 			}
 			a.library.TemplateEditing = &draft
 		}, kit.ButtonGhost, kit.IconEdit).Render(cx)))
-		args, err := templateArguments(item, a.library.Templates)
+		args, err := a.backend.service.PromptTemplateArguments(item, a.library.Templates)
 		a.fail(err)
-		preview, previewErr := renderTemplate(item, a.library.Templates, a.templateContext(), a.library.TemplateArgs)
+		preview, previewErr := a.backend.service.RenderPromptTemplate(item, a.library.Templates, a.templateContext(), a.library.TemplateArgs)
 		inputs := el.Div().Grow().W(el.Dp(0)).Gap(10).Child(el.Text("1  输入材料").Medium().TextSize(13), el.TextArea().ID("template-material").Name("待处理材料").Bind(&a.library.Material).AutoGrow(7, 15).Border(0, theme.Border).Bg(theme.Subtle).Rounded(8).P(12).TextSize(13))
 		for _, name := range args {
 			n := name
@@ -182,68 +147,18 @@ func (a *app) saveTemplate() {
 	if draft == nil || a.library.TemplateLoadError != nil {
 		return
 	}
-	custom := []promptTemplate{}
-	for _, p := range a.library.Templates {
-		if !p.Builtin && p.ID != draft.ID {
-			custom = append(custom, p)
-		}
-	}
-	custom = append(custom, *draft)
-	if err := validateTemplates(custom); err != nil {
+	result, err := a.backend.service.SavePromptTemplate(a.ctx, *draft, a.library.TemplateRevision)
+	if err != nil {
 		a.fail(err)
 		return
 	}
-	library := []promptTemplate{}
-	for _, p := range a.library.Templates {
-		if p.Builtin {
-			library = append(library, p)
-		}
-	}
-	library = append(library, custom...)
-	if _, err := templateArguments(*draft, library); err != nil {
-		a.fail(err)
-		return
-	}
-	path := filepath.Join(a.backend.service.DataRoot(), "keel-prompt-templates.json")
-	current, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		a.fail(err)
-		return
-	}
-	if string(current) != string(a.library.TemplateOriginal) {
-		a.fail(fmt.Errorf("模板库已被其他窗口修改，请重新打开后保存"))
-		return
-	}
-	data, _ := json.MarshalIndent(templateLibrary{1, custom}, "", "  ")
-	if err := writeAtomic(path, data); err != nil {
-		a.fail(err)
-		return
-	}
-	a.library.TemplateOriginal = data
-	a.library.Templates = library
+	a.library.TemplateRevision = result.Revision
+	a.library.Templates = result.Templates
 	a.library.TemplateID = draft.ID
 	a.library.TemplateEditing = nil
 	a.errorText = ""
 }
-func writeAtomic(path string, data []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), ".keel-write-*")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(f.Name())
-	_, err = f.Write(data)
-	if err == nil {
-		err = f.Sync()
-	}
-	closeErr := f.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	return os.Rename(f.Name(), path)
-}
+
 func (a *app) loadUsage(refresh bool) {
 	if a.library.UsageLoading {
 		return

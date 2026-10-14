@@ -89,7 +89,7 @@ func TestKeelBackendRunsAndReopensExistingOneCatchData(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		persisted, err := submitContinuation(ctx, b.service, run.ID, desktopservice.ResumeRunInput{Instruction: "再说一次"}, nil, false)
+		persisted, err := b.service.SubmitRunMessage(ctx, run.ID, desktopservice.RunMessageInput{Resume: desktopservice.ResumeRunInput{Instruction: "再说一次"}})
 		if err != nil || !persisted {
 			t.Fatalf("send: persisted=%v, err=%v", persisted, err)
 		}

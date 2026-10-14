@@ -111,21 +111,18 @@ macOS uses ad-hoc signing unless `SIGN_IDENTITY` specifies a Developer ID; notar
 cmd/
 └── app/                Unified native desktop, worker, and helper entry point
 internal/
-├── app/                Desktop, Mobile, and Worker assembly
+├── app/                Desktop, Worker, and helper process assembly
 ├── domain/             Domain models and business rules
 ├── repo/               File, Git, and historical data access
 ├── usecase/            Agent adapters and workflow use cases
-├── service/            Desktop, Mobile, and Worker services
-└── transport/          HTTP adapters
-clients/onecatch/        OneCatch Go HTTP SDK
+└── service/            Desktop, Worker, and supporting services
 pkg/                    General Go packages exposed outside this repository
 build/                  Native desktop build and packaging files
 deploy/                 Worker launchd and systemd templates
 docs/                   Harness and other development documentation
-tools/                  Go tool dependency declarations
 ```
 
-The repository has one root `go.mod`. Packages under `cmd` contain process entry points only. Shared repository code belongs under `internal`; only packages that must be imported by external projects belong under `pkg` or `clients`. The desktop UI lives in `internal/app/keel`. See [`internal/README.md`](internal/README.md) for layer boundaries and placement rules.
+The repository has one root `go.mod`. Packages under `cmd` contain process entry points only. Shared repository code belongs under `internal`; only packages that must be imported by external projects belong under `pkg`. The desktop UI lives in `internal/app/keel`. See [`internal/README.md`](internal/README.md) for layer boundaries and placement rules.
 
 ## Contributing
 

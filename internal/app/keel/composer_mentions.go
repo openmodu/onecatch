@@ -1,7 +1,6 @@
 package keeldesktop
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"strings"
@@ -11,7 +10,6 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
-	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
 
 // The composer's @ picker. Before a conversation starts it suggests
@@ -226,50 +224,4 @@ func splitStepMentions(d domainworkflows.Definition, text string) ([]string, str
 		return groups[1]
 	})
 	return steps, strings.TrimSpace(rest)
-}
-
-// earliestStep picks the addressed step that none of the others precede, so a
-// rerun from it reaches every addressed step.
-func earliestStep(d domainworkflows.Definition, steps []string) string {
-	for _, candidate := range steps {
-		upstream := false
-		for _, other := range steps {
-			if other != candidate && domainworkflows.Descendants(d, other)[candidate] {
-				upstream = true
-				break
-			}
-		}
-		if !upstream {
-			return candidate
-		}
-	}
-	return ""
-}
-
-// submitStepMessages delivers text to named steps. During a turn each step
-// gets it on its next run (an interrupting send also stops the current turn);
-// on a paused or finished run the run resumes from the earliest named step.
-func submitStepMessages(ctx context.Context, service *desktopservice.Service, runID string, d domainworkflows.Definition, steps []string, text string, paths []string, active, steer bool) (bool, error) {
-	persisted := false
-	for i, step := range steps {
-		input := desktopservice.InstructionInput{StepID: step, Content: text}
-		if i == 0 {
-			input.AttachmentPaths = paths
-		}
-		var err error
-		if active && steer && i == 0 {
-			_, err = service.InterruptAndInsert(ctx, runID, input)
-		} else {
-			_, err = service.EnqueueInstruction(ctx, runID, input)
-		}
-		if err != nil {
-			return persisted, err
-		}
-		persisted = true
-	}
-	if active {
-		return persisted, nil
-	}
-	_, err := service.ResumeRunConfigured(ctx, runID, desktopservice.ResumeRunInput{FromStepID: earliestStep(d, steps)})
-	return persisted, err
 }

@@ -26,6 +26,7 @@ import (
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	"github.com/openmodu/onecatch/internal/remotefs"
 	"github.com/openmodu/onecatch/internal/repo/git"
+	templatesrepo "github.com/openmodu/onecatch/internal/repo/prompttemplates"
 	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
 	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
 	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
@@ -38,6 +39,7 @@ import (
 	"github.com/openmodu/onecatch/internal/sshendpoint"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	agentrunseam "github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
+	templatesuc "github.com/openmodu/onecatch/internal/usecase/prompttemplates"
 	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
 	"github.com/openmodu/onecatch/pkg/localfile"
 )
@@ -211,6 +213,7 @@ type RunDetail struct {
 const runtimeTranscriptWindow = 400
 
 type Service struct {
+	promptTemplates   *templatesuc.Usecase
 	store             *localdata.Store
 	orchestrator      *workflowuc.Usecase
 	runtimes          *RuntimeRegistry
@@ -254,7 +257,8 @@ type Service struct {
 func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitrepo.Inspector) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	app := &Service{
-		store: store, orchestrator: orchestrator, runtimes: runtimes, git: git,
+		promptTemplates: templatesuc.NewUsecase(templatesrepo.New(store.Data.Paths.Root)),
+		store:           store, orchestrator: orchestrator, runtimes: runtimes, git: git,
 		rootCtx: ctx, rootCancel: cancel, active: make(map[string]context.CancelFunc), lastErrors: make(map[string]string),
 		workers: worker.NewRegistry(filepath.Join(store.Data.Paths.Root, "workers.json")), workerClient: worker.NewClient(),
 		settings:          settingsrepo.NewSettingsRepo(store.Data.Paths.Root),
