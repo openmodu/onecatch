@@ -88,16 +88,22 @@ func (a *app) toolCodeSection(cx *el.Context, content toolCodeContent, id string
 		a.conversation.toolDocs = map[string]*markdown.Doc{}
 	}
 	doc := a.conversation.toolDocs[id]
-	source := toolCodeSource(content.language, content.text)
-	if doc == nil {
-		doc = markdown.New(source).CodeBlockWrap(true)
-		a.conversation.toolDocs[id] = doc
-	} else if doc.Source() != source {
-		if strings.HasPrefix(source, doc.Source()) {
-			doc.Append(source[len(doc.Source()):])
-		} else {
-			doc.SetSource(source)
+	if doc == nil || a.conversation.toolDocContent[id] != content {
+		source := toolCodeSource(content.language, content.text)
+		if doc == nil {
+			doc = markdown.New(source).CodeBlockWrap(true)
+			a.conversation.toolDocs[id] = doc
+		} else if doc.Source() != source {
+			if strings.HasPrefix(source, doc.Source()) {
+				doc.Append(source[len(doc.Source()):])
+			} else {
+				doc.SetSource(source)
+			}
 		}
+		if a.conversation.toolDocContent == nil {
+			a.conversation.toolDocContent = map[string]toolCodeContent{}
+		}
+		a.conversation.toolDocContent[id] = content
 	}
 	// Keep the document identity across frames: syntax colors, selection,
 	// keyboard copy and code-card copy all share Keel's code renderer.
@@ -107,10 +113,57 @@ func (a *app) toolCodeSection(cx *el.Context, content toolCodeContent, id string
 	)
 }
 
+// toolMemo keeps what a tool row derives from its records' text. Rows are
+// built every frame; parsing arguments and checking each result as JSON there
+// copied every visible tool's full output once per frame.
+type toolMemo struct {
+	text, title, body, icon string
+	label                   string
+	sections                []toolCodeContent
+	results                 map[string]toolResultMemo
+}
+
+type toolResultMemo struct{ text, language string }
+
+func (a *app) toolMemo(e *entry) *toolMemo {
+	if a.conversation.tools == nil {
+		a.conversation.tools = map[string]*toolMemo{}
+	}
+	m := a.conversation.tools[e.key]
+	if m == nil || m.text != e.text {
+		m = &toolMemo{text: e.text}
+		m.title, m.body, m.icon = toolDisplay(e)
+		a.conversation.tools[e.key] = m
+	}
+	return m
+}
+
+func (a *app) toolSections(e *entry, label string) []toolCodeContent {
+	m := a.toolMemo(e)
+	if m.sections == nil || m.label != label {
+		m.label, m.sections = label, toolCodeSections(e, label, m.body)
+	}
+	return m.sections
+}
+
+func (a *app) toolResultLanguage(e, result *entry) string {
+	m := a.toolMemo(e)
+	if r, ok := m.results[result.key]; ok && r.text == result.text {
+		return r.language
+	}
+	if m.results == nil {
+		m.results = map[string]toolResultMemo{}
+	}
+	language := toolResultLanguage(e, result.text)
+	m.results[result.key] = toolResultMemo{result.text, language}
+	return language
+}
+
 const toolResultMaxHeight = 320
 
 type toolResultView struct {
 	text     string
+	synced   bool
 	document el.InputDocument
 	copy     *kit.CopyButtonView
 }
@@ -133,14 +186,17 @@ func (a *app) toolResultSection(cx *el.Context, content toolCodeContent, id stri
 	}
 	// Gio's editor paints tabs as missing glyphs. Match the code renderer's
 	// four-space indentation while retaining the original output for full copy.
-	display := strings.ReplaceAll(content.text, "\t", "    ")
-	view.text = content.text
-	if view.document.Content().Text() != display {
-		selection := view.document.Selection()
-		appended := strings.HasPrefix(display, view.document.Content().Text())
-		_ = view.document.SetText(display)
-		if appended {
-			_ = view.document.Select(selection)
+	// Unchanged output skips the comparison, which copied it every frame.
+	if !view.synced || view.text != content.text {
+		display := strings.ReplaceAll(content.text, "\t", "    ")
+		view.text, view.synced = content.text, true
+		if current := view.document.Content().Text(); current != display {
+			selection := view.document.Selection()
+			appended := strings.HasPrefix(display, current)
+			_ = view.document.SetText(display)
+			if appended {
+				_ = view.document.Select(selection)
+			}
 		}
 	}
 	label := content.language

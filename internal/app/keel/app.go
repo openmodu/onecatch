@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"hash/maphash"
 	"slices"
 	"strings"
 	"sync"
@@ -93,7 +94,7 @@ type app struct {
 	postUpdate func(func())
 	// rowSigs records each conversation row's content at its last measure,
 	// so a token re-measures only the rows it changed.
-	rowSigs map[string]string
+	rowSigs map[string]uint64
 }
 
 // liveFrames batches run-stream frames. A provider may deliver dozens of
@@ -442,39 +443,45 @@ func (a *app) receiveFrame(f runstream.Frame) {
 	schedule := !q.scheduled
 	q.scheduled = true
 	q.mu.Unlock()
-	if schedule {
-		post := a.postUpdate
-		if post == nil {
-			post = core.Update
-		}
-		post(a.applyLiveFrames)
+	if !schedule {
+		return
 	}
+	if a.postUpdate != nil {
+		a.postUpdate(func() { a.applyLiveFrames() })
+		return
+	}
+	core.UpdateIf(a.applyLiveFrames)
 }
 
 // applyLiveFrames merges the queued frames of the open run and rebuilds the
-// conversation once.
-func (a *app) applyLiveFrames() {
+// conversation once. It reports whether the window needs a redraw: frames that
+// only touch hidden content, such as a folded tool's streaming output, update
+// the conversation's data without repainting the window.
+func (a *app) applyLiveFrames() bool {
 	q := &a.live
 	q.mu.Lock()
 	frames := q.frames
 	q.frames, q.scheduled = nil, false
 	q.mu.Unlock()
 	if a.closed {
-		return
+		return false
 	}
+	before := a.visibleConversationSignature()
 	changed := false
 	for _, f := range frames {
 		if f.RunID == a.runID && a.transcript.frame(f) {
 			changed = true
 		}
 	}
-	if changed {
-		a.syncMessages()
+	if !changed {
+		return false
 	}
+	a.syncMessages()
+	return a.liveFramesNeedRedraw(before)
 }
 
 func (a *app) syncMessages() {
-	a.entries = buildConversationEntries(a.transcript.visible())
+	a.entries = buildConversationEntriesWith(a.transcript.visible(), &a.conversation.copies)
 	a.labelWorkflowSteps()
 	a.conversationRows = buildWorkflowTimeline(a.entries, a.detail)
 	keys := make([]string, len(a.conversationRows))
@@ -510,17 +517,17 @@ func (a *app) syncMessages() {
 	// Re-measure only rows whose content changed: a streaming token touches
 	// one row, and re-measuring every row's Markdown made long runs stutter.
 	if a.rowSigs == nil {
-		a.rowSigs = map[string]string{}
+		a.rowSigs = map[string]uint64{}
 	}
 	active := a.detail != nil && a.detail.Active
 	seen := make(map[string]bool, len(a.entries))
 	var changed []string
 	for i, e := range a.conversationRows {
-		var sig string
+		var sig uint64
 		if isParallelBody(e) {
 			// Lane contents scroll inside a fixed-height viewport. Their growth
 			// must not reset the outer row to its estimated height.
-			sig = fmt.Sprintf("parallel:%d", len(e.columns))
+			sig = uint64(len(e.columns))
 		} else {
 			sig = rowSignature(e, active, i == len(a.conversationRows)-1)
 		}
@@ -554,42 +561,78 @@ func (a *app) syncMessages() {
 // rowSignature identifies what a conversation row draws: its records'
 // revisions and text, streaming and outcome flags, and, for process groups
 // and streaming messages, whether the run is active and the row is last.
-func rowSignature(e *entry, active, last bool) string {
-	var b strings.Builder
+// It is a hash rather than a string: every live frame signs every row, and
+// building those strings grew with the whole run's history.
+func rowSignature(e *entry, active, last bool) uint64 {
+	var h maphash.Hash
+	h.SetSeed(rowSignatureSeed)
+	str := func(s string) {
+		h.WriteString(s)
+		h.WriteByte(0)
+	}
+	num := func(n uint64) { writeSignatureNumber(&h, n) }
+	flag := func(v bool) {
+		if v {
+			h.WriteByte(1)
+		} else {
+			h.WriteByte(0)
+		}
+	}
 	var write func(*entry)
 	write = func(e *entry) {
-		fmt.Fprintf(&b, "%s|%s|%t|%d|%d|%t|%t|%t|%s|", e.key, e.kind, e.user, e.revision, len(e.text), e.streaming, e.failed, e.settled, e.stepLabel+"|"+e.stepContext)
-		fmt.Fprintf(&b, "recipient:%q|", e.recipient)
+		str(e.key)
+		str(string(e.kind))
+		flag(e.user)
+		num(e.revision)
+		num(uint64(len(e.text)))
+		flag(e.streaming)
+		flag(e.failed)
+		flag(e.settled)
+		str(e.stepLabel)
+		str(e.stepContext)
+		str(e.recipient)
+		num(uint64(len(e.attachments)))
 		for _, attachment := range e.attachments {
-			fmt.Fprintf(&b, "attachment:%q:%q:%q|", attachment.Path, attachment.Name, attachment.MIMEType)
+			str(attachment.Path)
+			str(attachment.Name)
+			str(attachment.MIMEType)
 		}
 		if e.kind == agentrun.KindQueueStatus {
-			b.WriteString(e.text)
-			fmt.Fprintf(&b, "|queueUpdatedAt:%d|", e.queueUpdatedAt.UnixNano())
+			str(e.text)
+			num(uint64(e.queueUpdatedAt.UnixNano()))
 		}
+		flag(e.transition != nil)
 		if e.transition != nil {
-			fmt.Fprintf(&b, "%q|%q|%q|%q|%q|", e.transition.verdict, e.transition.source, e.transition.target, e.transition.summary, e.transition.feedback)
+			str(e.transition.verdict)
+			str(e.transition.source)
+			str(e.transition.target)
+			str(e.transition.summary)
+			str(e.transition.feedback)
 		}
+		flag(e.permission != nil)
 		if e.permission != nil {
-			b.WriteString("p:" + e.permission.ID + "|")
+			str(e.permission.ID)
 		}
+		flag(e.question != nil)
 		if e.question != nil {
-			b.WriteString("q:" + e.question.ID + "|")
+			str(e.question.ID)
 		}
+		num(uint64(len(e.stack)))
 		for _, child := range e.stack {
 			write(child)
 		}
+		num(uint64(len(e.columns)))
 		for _, cell := range e.columns {
+			flag(cell != nil)
 			if cell != nil {
 				write(cell)
-			} else {
-				b.WriteString("empty|")
 			}
 		}
+		num(uint64(len(e.details)))
 		for _, d := range e.details {
 			write(d)
 		}
-		b.WriteString(";")
+		num(uint64(len(e.process)))
 		for _, p := range e.process {
 			write(p)
 		}
@@ -599,10 +642,13 @@ func rowSignature(e *entry, active, last bool) string {
 	// message's caret; re-estimating every row when a run ends lost the
 	// view's place at the bottom.
 	if len(e.process) > 0 || e.streaming || len(e.columns) > 0 {
-		fmt.Fprintf(&b, "%t|%t", active, last)
+		flag(active)
+		flag(last)
 	}
-	return b.String()
+	return h.Sum64()
 }
+
+var rowSignatureSeed = maphash.MakeSeed()
 
 func (a *app) send() {
 	if a.page == "skills" {

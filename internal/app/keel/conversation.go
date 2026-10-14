@@ -27,32 +27,105 @@ import (
 )
 
 type conversationState struct {
-	lanes         map[string]*conversationLane
-	pages         map[string]int
-	renderedRows  map[string]bool
-	selection     markdown.SelectionGroup
-	open          map[string]bool
-	overridden    map[string]bool
-	views         map[string]*conversationDocView
-	toolDocs      map[string]*markdown.Doc
-	toolResults   map[string]*toolResultView
-	images        map[string]*kit.ImageView
-	imagePreviews map[string]*attachmentImagePreview
-	copyButtons   map[string]*kit.CopyButtonView
-	messages      map[string]*kit.MessageView
+	lanes        map[string]*conversationLane
+	pages        map[string]int
+	renderedRows map[string]bool
+	selection    markdown.SelectionGroup
+	open         map[string]bool
+	overridden   map[string]bool
+	views        map[string]*conversationDocView
+	toolDocs     map[string]*markdown.Doc
+	// toolDocContent is the content each tool document was last synced to.
+	toolDocContent map[string]toolCodeContent
+	tools          map[string]*toolMemo
+	copies         entryCopies
+	toolResults    map[string]*toolResultView
+	images         map[string]*kit.ImageView
+	imagePreviews  map[string]*attachmentImagePreview
+	copyButtons    map[string]*kit.CopyButtonView
+	messages       map[string]*kit.MessageView
 }
+
+// entryCopies reuses the conversation's copies of transcript records between
+// rebuilds. Every live frame rebuilds the whole list; allocating a fresh copy
+// of each record made each frame's garbage grow with the run's history. A
+// record replaced in the transcript gets a new copy; the others keep theirs.
+type entryCopies struct {
+	copies, groups map[*entry]*entry
+	next, nextG    map[*entry]*entry
+}
+
+func (c *entryCopies) record(original *entry) *entry {
+	if c == nil {
+		e := *original
+		e.details = nil
+		return &e
+	}
+	e := c.copies[original]
+	if e == nil {
+		e = new(entry)
+	}
+	details := e.details
+	clear(details)
+	*e = *original
+	e.details = details[:0]
+	c.next[original] = e
+	return e
+}
+
+func (c *entryCopies) group(first *entry) *entry {
+	if c == nil {
+		return &entry{key: "process/" + first.key, step: first.step, at: first.at, process: []*entry{first}}
+	}
+	// A copy always stands for the same transcript record, so a group
+	// found by its first copy keeps the same key.
+	g := c.groups[first]
+	if g == nil {
+		g = &entry{key: "process/" + first.key}
+	}
+	process := g.process
+	clear(process)
+	*g = entry{key: g.key, step: first.step, at: first.at, process: append(process[:0], first)}
+	c.nextG[first] = g
+	return g
+}
+
+func (c *entryCopies) begin() {
+	if c == nil {
+		return
+	}
+	if c.next == nil {
+		c.next, c.nextG = map[*entry]*entry{}, map[*entry]*entry{}
+	}
+	clear(c.next)
+	clear(c.nextG)
+}
+
+func (c *entryCopies) finish() {
+	if c != nil {
+		c.copies, c.next = c.next, c.copies
+		c.groups, c.nextG = c.nextG, c.groups
+	}
+}
+
+type toolCallKey struct{ step, stream string }
 
 // Pair tool returns before grouping adjacent process records. A call ID is
 // local to its step; parallel calls must never steal each other's results.
 func buildConversationEntries(raw []*entry) []*entry {
+	return buildConversationEntriesWith(raw, nil)
+}
+
+func buildConversationEntriesWith(raw []*entry, copies *entryCopies) []*entry {
+	copies.begin()
+	defer copies.finish()
 	items := make([]*entry, 0, len(raw))
-	calls := map[string]*entry{}
+	calls := map[toolCallKey]*entry{}
 	legacy := map[string][]*entry{}
 	ambiguous := map[string]bool{}
 	queues := map[string]*entry{}
 	for _, original := range raw {
-		e := *original
-		e.details = nil
+		e := copies.record(original)
 		if e.kind == agentrun.KindQueueStatus {
 			// Queue notifications are snapshots, not tool calls. Keep one row
 			// per step run at its original position while its status updates.
@@ -65,10 +138,10 @@ func buildConversationEntries(raw []*entry) []*entry {
 				continue
 			}
 			e.key = "queue/" + e.step
-			queues[e.step] = &e
+			queues[e.step] = e
 		}
 		if e.kind == agentrun.KindToolResult {
-			target := calls[e.step+"/"+e.stream]
+			target := calls[toolCallKey{e.step, e.stream}]
 			if target == nil && len(legacy[e.step]) == 1 && !ambiguous[e.step] {
 				target = legacy[e.step][0]
 			}
@@ -81,27 +154,27 @@ func buildConversationEntries(raw []*entry) []*entry {
 				}
 			}
 			if target != nil {
-				target.details = append(target.details, &e)
+				target.details = append(target.details, e)
 				target.settled = !e.streaming
 				target.failed = target.failed || e.failed
 				if e.stream != "" {
-					calls[e.step+"/"+e.stream] = target
+					calls[toolCallKey{e.step, e.stream}] = target
 				}
 				continue
 			}
 		}
 		if e.kind == agentrun.KindToolUse {
 			if e.stream != "" {
-				calls[e.step+"/"+e.stream] = &e
+				calls[toolCallKey{e.step, e.stream}] = e
 			} else {
-				legacy[e.step] = append(legacy[e.step], &e)
+				legacy[e.step] = append(legacy[e.step], e)
 				ambiguous[e.step] = ambiguous[e.step] || len(legacy[e.step]) > 1
 			}
 		} else if e.kind == agentrun.KindMessage || e.user || e.question != nil || e.permission != nil {
 			delete(legacy, e.step)
 			delete(ambiguous, e.step)
 		}
-		items = append(items, &e)
+		items = append(items, e)
 	}
 	out := make([]*entry, 0, len(items))
 	for _, e := range items {
@@ -117,7 +190,7 @@ func buildConversationEntries(raw []*entry) []*entry {
 				continue
 			}
 		}
-		out = append(out, &entry{key: "process/" + e.key, step: e.step, at: e.at, process: []*entry{e}})
+		out = append(out, copies.group(e))
 	}
 	return out
 }
@@ -181,8 +254,9 @@ func (a *app) toggleConversation(key string, active bool) {
 	a.invalidateConversationEntry(key)
 }
 
-func (a *app) processGroup(cx *el.Context, e *entry) el.Element {
-	active := false
+// processState is what a process group's header draws from: whether the
+// group is the step's live one, and how many tools and thoughts it holds.
+func (a *app) processState(e *entry) (active bool, count, thoughts int) {
 	if a.detail != nil && a.detail.Active {
 		for i := len(a.entries) - 1; i >= 0; i-- {
 			item := a.entries[i]
@@ -198,7 +272,6 @@ func (a *app) processGroup(cx *el.Context, e *entry) el.Element {
 			}
 		}
 	}
-	count, thoughts := 0, 0
 	urgent := false
 	for _, item := range e.process {
 		if item.kind == agentrun.KindToolUse {
@@ -209,7 +282,11 @@ func (a *app) processGroup(cx *el.Context, e *entry) el.Element {
 		}
 		urgent = urgent || item.permission != nil || item.question != nil
 	}
-	active = active || urgent
+	return active || urgent, count, thoughts
+}
+
+func (a *app) processGroup(cx *el.Context, e *entry) el.Element {
+	active, count, thoughts := a.processState(e)
 	label := "已处理"
 	if active {
 		label = "处理中…"
@@ -298,18 +375,15 @@ func toolDisplay(e *entry) (title, body, icon string) {
 	return
 }
 
-// toolDuration is a call's time to its last result, as the Wails client shows.
-func toolDuration(e *entry, running bool) string {
-	if e.kind != agentrun.KindToolUse || e.at.IsZero() {
+// toolDuration is a finished call's time to its last result. A running call
+// shows none: a ticking clock would repaint the whole window every second and
+// keep it from going idle while the call's output is folded.
+func toolDuration(e *entry) string {
+	if e.kind != agentrun.KindToolUse || e.at.IsZero() || !e.settled || len(e.details) == 0 {
 		return ""
 	}
-	end := time.Time{}
-	if running {
-		end = time.Now()
-	} else if len(e.details) > 0 && e.settled {
-		end = e.details[len(e.details)-1].at
-	}
-	if end.IsZero() || end.Before(e.at) {
+	end := e.details[len(e.details)-1].at
+	if end.Before(e.at) {
 		return ""
 	}
 	d := end.Sub(e.at)
@@ -361,7 +435,8 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 		}
 		return item
 	}
-	title, body, icon := toolDisplay(e)
+	memo := a.toolMemo(e)
+	title, icon := memo.title, memo.icon
 	heading := el.Div().Grow().W(el.Dp(0)).Row().Items(el.Center).Gap(12)
 	titleColor := muted
 	if open {
@@ -376,7 +451,7 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 	// Fixed slots stay present even when historical records lack metadata.
 	metadata := el.Div().Row().Items(el.Center).Gap(8).NoShrink().Child(
 		el.Div().W(el.Dp(40)).NoShrink().Items(el.End).Child(el.Text(calledAt).TextSize(11).TextColor(metadataColor)),
-		el.Div().W(el.Dp(66)).NoShrink().Items(el.End).Child(el.Text(toolDuration(e, running)).TextSize(11).TextColor(metadataColor)),
+		el.Div().W(el.Dp(66)).NoShrink().Items(el.End).Child(el.Text(toolDuration(e)).TextSize(11).TextColor(metadataColor)),
 	)
 	stateIcon, stateColor, stateName := "", muted, "完成"
 	switch {
@@ -416,13 +491,13 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 		if e.kind == agentrun.KindToolUse && strings.HasSuffix(title, "参数未保存") {
 			content.Child(el.Text("这条记录未保存工具参数").TextSize(12).TextColor(muted))
 		} else {
-			for i, section := range toolCodeSections(e, label, body) {
+			for i, section := range a.toolSections(e, label) {
 				content.Child(a.toolCodeSection(cx, section, fmt.Sprintf("%s/command/%d", e.key, i)))
 			}
 		}
 		for i, detail := range e.details {
 			if strings.TrimSpace(detail.text) != "" {
-				content.Child(a.toolCodeSection(cx, toolCodeContent{"结果", toolResultLanguage(e, detail.text), detail.text}, fmt.Sprintf("%s/result/%d", e.key, i)))
+				content.Child(a.toolCodeSection(cx, toolCodeContent{"结果", a.toolResultLanguage(e, detail), detail.text}, fmt.Sprintf("%s/result/%d", e.key, i)))
 			}
 		}
 		item.Child(el.Div().H(el.Dp(1)).WFull().Bg(seamColor), content)
