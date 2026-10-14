@@ -30,7 +30,10 @@ func (a *app) watchProjectWorkflows() {
 			case <-a.ctx.Done():
 				return
 			case <-ticker.C:
-				core.Update(a.loadProjectWorkflows)
+				core.Update(func() {
+					a.loadProjectWorkflows()
+					a.checkSessionWorkflow(false)
+				})
 			}
 		}
 	}()

@@ -24,8 +24,9 @@ import (
 // All view state belongs to the serialized UI queue. Files are cached by their
 // execution context so a tab switch or task navigation cannot discard a draft.
 type workbenchState struct {
-	Events       eventNavigator
-	StatusCopies map[string]*kit.CopyButtonView
+	Events        eventNavigator
+	StatusCopies  map[string]*kit.CopyButtonView
+	WorkflowCheck *sessionWorkflowState
 
 	Visible, Maximized                bool
 	Resizing                          bool
@@ -636,6 +637,9 @@ func (a *app) statusInspector(cx *el.Context) el.Element {
 	d := a.detail
 	column := el.Div().ScrollY().Grow().H(el.Dp(0)).P(14).Gap(12)
 	column.Child(kit.StatusMarker(runStatus(string(d.Run.Status))).ID("session-run-status").Render(cx))
+	if d.Run.ID != "" && d.Workflow.ID != "" && d.Workflow.ID != "single_agent" {
+		column.Child(a.sessionWorkflowConfig(cx))
+	}
 	var input, output, cached, created, reasoning int
 	duration := sessionDuration(d, time.Now())
 	for _, step := range d.StepRuns {

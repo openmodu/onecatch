@@ -124,7 +124,7 @@ type ResumeProfile struct {
 type Usecase struct {
 	resolveWorkspace         func(context.Context, domaintasks.Task) (domainworkspaces.Workspace, error)
 	resolveDefinition        func(context.Context, domaintasks.Task) (domainworkflows.Definition, error)
-	resolveExecutionSettings func(context.Context, domaintasks.Task, domainworkflows.Definition) (domainworkflows.Definition, map[string]domainworkflows.ResolvedRuntimeSettings, error)
+	resolveExecutionSettings func(context.Context, domaintasks.Task, domainworkflows.Definition) (domainworkflows.Definition, RunResolution, error)
 	tasks                    TaskRepository
 	workflows                WorkflowRepository
 	engine                   Engine

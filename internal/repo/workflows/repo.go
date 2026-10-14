@@ -36,6 +36,7 @@ type WorkflowsRepo interface {
 	GetRun(context.Context, string) (domainworkflows.Run, error)
 	GetRunDefinition(context.Context, string) (domainworkflows.Definition, error)
 	UpdateRunDefinition(context.Context, string, domainworkflows.Definition) error
+	UpdatePausedRunWorkflow(context.Context, domainworkflows.Run, domainworkflows.Definition, int64) (domainworkflows.Run, error)
 	ListRunsByTask(context.Context, string) ([]domainworkflows.Run, error)
 	ListRuns(context.Context, domainworkflows.RunListQuery) (domainworkflows.RunPage, error)
 	UpdateRun(context.Context, domainworkflows.Run, int64) (domainworkflows.Run, error)

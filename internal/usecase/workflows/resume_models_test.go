@@ -48,7 +48,7 @@ func TestResumeUsesLatestWorkflowModelAndKeepsSession(t *testing.T) {
 	}
 }
 
-func TestRefreshStepModelsSkipsIncompatibleAndDirectSteps(t *testing.T) {
+func TestRefreshStepSettingsSkipsIncompatibleAndDirectSteps(t *testing.T) {
 	original := oneStepPauseWorkflow()
 	original.Steps[0].Model = "old"
 	for _, change := range []func(*domainworkflows.Definition){
@@ -59,7 +59,7 @@ func TestRefreshStepModelsSkipsIncompatibleAndDirectSteps(t *testing.T) {
 		latest.Steps = append([]domainworkflows.Step(nil), original.Steps...)
 		latest.Steps[0].Model = "new"
 		change(&latest)
-		if got := RefreshStepModels(original, latest); got.Steps[0].Model != "old" {
+		if got := RefreshStepSettings(original, latest); got.Steps[0].Model != "old" {
 			t.Fatal("incompatible step changed")
 		}
 	}
@@ -67,7 +67,7 @@ func TestRefreshStepModelsSkipsIncompatibleAndDirectSteps(t *testing.T) {
 	latest := original
 	latest.Steps = append([]domainworkflows.Step(nil), original.Steps...)
 	latest.Steps[0].Model = "new"
-	if got := RefreshStepModels(original, latest); got.Steps[0].Model != "old" {
+	if got := RefreshStepSettings(original, latest); got.Steps[0].Model != "old" {
 		t.Fatal("direct conversation model changed")
 	}
 }

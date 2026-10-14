@@ -2,20 +2,30 @@ package workflows
 
 import domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 
-// RefreshStepModels refreshes execution settings for matching Agent nodes.
-// Graphs, prompts and rework policies stay in the durable run snapshot.
-func RefreshStepModels(snapshot, latest domainworkflows.Definition) domainworkflows.Definition {
+// RefreshStepSettings updates every field of existing nodes and execution
+// policies. Topology changes are adopted on resume or at the next loop round,
+// when no old graph nodes are in flight.
+func RefreshStepSettings(snapshot, latest domainworkflows.Definition) domainworkflows.Definition {
 	if snapshot.ID != latest.ID || snapshot.ID == directAgentWorkflowID {
 		return snapshot
 	}
+	latest = domainworkflows.Normalize(latest)
+	snapshot.Name, snapshot.Description = latest.Name, latest.Description
+	snapshot.Policy = latest.Policy
 	snapshot.Steps = append([]domainworkflows.Step(nil), snapshot.Steps...)
-	for i := range snapshot.Steps {
-		step := &snapshot.Steps[i]
-		current, ok := domainworkflows.FindStep(latest, step.ID)
-		if !ok || step.Kind == domainworkflows.StepCommand || current.Kind != step.Kind {
-			continue
+	for i, step := range snapshot.Steps {
+		if current, ok := domainworkflows.FindStep(latest, step.ID); ok {
+			snapshot.Steps[i] = current
 		}
-		step.Runtime, step.Model, step.Sandbox, step.WorkerID = current.Runtime, current.Model, current.Sandbox, current.WorkerID
+	}
+	snapshot.Edges = append([]domainworkflows.Edge(nil), snapshot.Edges...)
+	for i, edge := range snapshot.Edges {
+		for _, current := range latest.Edges {
+			if edge.From == current.From && edge.To == current.To && edge.Kind == current.Kind {
+				snapshot.Edges[i] = current
+				break
+			}
+		}
 	}
 	return snapshot
 }

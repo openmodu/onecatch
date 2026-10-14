@@ -180,6 +180,12 @@ func (s *Usecase) startReadySteps(ctx, stepCtx context.Context, task domaintasks
 	if len(ready) == 0 {
 		return nil
 	}
+	refreshed, err := s.refreshStartingSettings(ctx, task, definition, run, ready, preserveSteps)
+	if err != nil {
+		return err
+	}
+	definition = refreshed
+	*currentDefinition = refreshed
 	limit := run.MaxConcurrency
 	if limit < 1 {
 		limit = int(s.maxConcurrency.Load())
@@ -190,12 +196,6 @@ func (s *Usecase) startReadySteps(ctx, stepCtx context.Context, task domaintasks
 		}
 		ready = ready[:room]
 	}
-	refreshed, err := s.refreshStartingSettings(ctx, task, definition, run, ready, preserveSteps)
-	if err != nil {
-		return err
-	}
-	definition = refreshed
-	*currentDefinition = refreshed
 	for i, step := range ready {
 		ready[i], _ = domainworkflows.FindStep(refreshed, step.ID)
 	}

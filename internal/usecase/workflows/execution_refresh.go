@@ -13,16 +13,13 @@ import (
 
 var errExecutionSettings = errors.New("execution settings are invalid")
 
-func (s *Usecase) SetExecutionSettingsResolver(fn func(context.Context, domaintasks.Task, workflows.Definition) (workflows.Definition, map[string]workflows.ResolvedRuntimeSettings, error)) {
+func (s *Usecase) SetExecutionSettingsResolver(fn func(context.Context, domaintasks.Task, workflows.Definition) (workflows.Definition, RunResolution, error)) {
 	s.resolveExecutionSettings = fn
 }
 
 // Refresh only nodes about to start. In-flight calls retain their immutable
-// snapshots; graph, prompt and rework edits never leak into an existing run.
+// snapshots; topology edits wait for resume or the next loop round.
 func (s *Usecase) refreshStartingSettings(ctx context.Context, task domaintasks.Task, definition workflows.Definition, run *workflows.Run, ready []workflows.Step, preserve []string) (workflows.Definition, error) {
-	if definition.ID == directAgentWorkflowID {
-		return definition, nil
-	}
 	resolve := s.resolveDefinition
 	if resolve == nil {
 		resolve = func(ctx context.Context, task domaintasks.Task) (workflows.Definition, error) {
@@ -31,9 +28,9 @@ func (s *Usecase) refreshStartingSettings(ctx context.Context, task domaintasks.
 	}
 	latest, err := resolve(ctx, task)
 	if err != nil {
-		return definition, nil
-	} // Removed templates stay resumable.
-	candidate := RefreshStepModels(definition, latest)
+		latest = definition
+	} // Removed templates retain their nodes but still refresh runtime settings.
+	candidate := RefreshStepSettings(definition, latest)
 	for i, step := range candidate.Steps {
 		starting := false
 		for _, r := range ready {
@@ -42,13 +39,17 @@ func (s *Usecase) refreshStartingSettings(ctx context.Context, task domaintasks.
 				break
 			}
 		}
-		if !starting || slices.Contains(preserve, step.ID) {
+		if !starting {
 			candidate.Steps[i] = definition.Steps[i]
+		} else if slices.Contains(preserve, step.ID) {
+			// A profile explicitly selected for this resume wins over defaults.
+			old := definition.Steps[i]
+			candidate.Steps[i].Runtime, candidate.Steps[i].Model = old.Runtime, old.Model
 		}
 	}
-	var settings map[string]workflows.ResolvedRuntimeSettings
+	var resolution RunResolution
 	if s.resolveExecutionSettings != nil {
-		candidate, settings, err = s.resolveExecutionSettings(ctx, task, candidate)
+		candidate, resolution, err = s.resolveExecutionSettings(ctx, task, candidate)
 		if err != nil {
 			return definition, fmt.Errorf("%w: %v", errExecutionSettings, err)
 		}
@@ -59,19 +60,12 @@ func (s *Usecase) refreshStartingSettings(ctx context.Context, task domaintasks.
 	changedSession := false
 	for _, step := range candidate.Steps {
 		old, _ := workflows.FindStep(definition, step.ID)
-		if old.Runtime != step.Runtime || old.WorkerID != step.WorkerID {
+		if old.Runtime != step.Runtime || old.WorkerID != step.WorkerID || old.Kind != step.Kind {
 			delete(run.Sessions, step.ID)
 			changedSession = true
 		}
 	}
-	if len(settings) > 0 {
-		if run.RuntimeSettings == nil {
-			run.RuntimeSettings = map[string]workflows.ResolvedRuntimeSettings{}
-		}
-		for id, value := range settings {
-			run.RuntimeSettings[id] = value
-		}
-	}
+	applyRunResolution(run, resolution)
 	if changedSession {
 		saved, err := s.workflows.UpdateRun(ctx, *run, run.Revision)
 		if err != nil {
@@ -101,17 +95,12 @@ func (s *Usecase) refreshLoopDefinition(ctx context.Context, task domaintasks.Ta
 	}
 	candidate := RefreshRunDefinition(definition, latest)
 	if s.resolveExecutionSettings != nil {
-		var settings map[string]workflows.ResolvedRuntimeSettings
-		candidate, settings, err = s.resolveExecutionSettings(ctx, task, candidate)
+		var resolution RunResolution
+		candidate, resolution, err = s.resolveExecutionSettings(ctx, task, candidate)
 		if err != nil {
 			return definition, err
 		}
-		if run.RuntimeSettings == nil {
-			run.RuntimeSettings = map[string]workflows.ResolvedRuntimeSettings{}
-		}
-		for id, value := range settings {
-			run.RuntimeSettings[id] = value
-		}
+		applyRunResolution(run, resolution)
 	}
 	for _, old := range definition.Steps {
 		next, ok := workflows.FindStep(candidate, old.ID)
@@ -133,4 +122,20 @@ func (s *Usecase) refreshLoopDefinition(ctx context.Context, task domaintasks.Ta
 		}
 	}
 	return candidate, nil
+}
+
+// Zero scalar values mean no resolver override (e.g. standalone usecase tests).
+func applyRunResolution(run *workflows.Run, resolution RunResolution) {
+	if resolution.MaxConcurrency > 0 {
+		run.MaxConcurrency = resolution.MaxConcurrency
+	}
+	if resolution.InterruptGraceSeconds > 0 {
+		run.InterruptGraceSeconds = resolution.InterruptGraceSeconds
+	}
+	if run.RuntimeSettings == nil {
+		run.RuntimeSettings = map[string]workflows.ResolvedRuntimeSettings{}
+	}
+	for id, value := range resolution.RuntimeSettings {
+		run.RuntimeSettings[id] = value
+	}
 }
