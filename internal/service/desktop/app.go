@@ -24,19 +24,19 @@ import (
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
-	"github.com/openmodu/onecatch/internal/remotefs"
+	"github.com/openmodu/onecatch/internal/platform/remotefs"
 	"github.com/openmodu/onecatch/internal/repo/git"
 	templatesrepo "github.com/openmodu/onecatch/internal/repo/prompttemplates"
 	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
 	"github.com/openmodu/onecatch/internal/service/skillmanager"
 	"github.com/openmodu/onecatch/internal/service/worker"
-	"github.com/openmodu/onecatch/internal/sshcredentials"
-	"github.com/openmodu/onecatch/internal/sshendpoint"
+	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
+	"github.com/openmodu/onecatch/internal/platform/sshendpoint"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	agentrunseam "github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 	templatesuc "github.com/openmodu/onecatch/internal/usecase/prompttemplates"
@@ -214,7 +214,7 @@ const runtimeTranscriptWindow = 400
 
 type Service struct {
 	promptTemplates   *templatesuc.Usecase
-	store             *localdata.Store
+	store             *localstore.Store
 	orchestrator      *workflowuc.Usecase
 	runtimes          *RuntimeRegistry
 	git               *gitrepo.Inspector
@@ -254,7 +254,7 @@ type Service struct {
 	accountUsageWG    sync.WaitGroup
 }
 
-func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitrepo.Inspector) *Service {
+func NewService(store *localstore.Store, orchestrator *workflowuc.Usecase, runtimes *RuntimeRegistry, git *gitrepo.Inspector) *Service {
 	ctx, cancel := context.WithCancel(context.Background())
 	app := &Service{
 		promptTemplates: templatesuc.NewUsecase(templatesrepo.New(store.Data.Paths.Root)),

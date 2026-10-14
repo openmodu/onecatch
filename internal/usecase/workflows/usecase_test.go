@@ -15,7 +15,7 @@ import (
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
@@ -258,7 +258,7 @@ func TestResumeRunUsesSnapshotSessionAndHumanInstruction(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := localdata.OpenStore(root)
+	reopened, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,10 +491,10 @@ func TestUnavailableRuntimePausesWithoutFallback(t *testing.T) {
 	}
 }
 
-func setupUsecase(t *testing.T, definition domainworkflows.Definition, engine Engine) (*Usecase, *localdata.Store, domaintasks.Task) {
+func setupUsecase(t *testing.T, definition domainworkflows.Definition, engine Engine) (*Usecase, *localstore.Store, domaintasks.Task) {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), ".onecatch")
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}

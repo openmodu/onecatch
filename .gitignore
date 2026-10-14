@@ -11,7 +11,8 @@
 /dist/
 /cmd/keel/*.syso
 /keel
-/internal/buildinfo/zz_release_generated.go
+/app
+/internal/platform/buildinfo/zz_release_generated.go
 /build/keel/.package-lock/
 /go.work
 /go.work.sum

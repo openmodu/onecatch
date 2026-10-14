@@ -19,6 +19,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	"github.com/openmodu/onecatch/internal/app/keel/filepicker"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 	_ "golang.org/x/image/bmp"
@@ -323,7 +324,7 @@ func (a *app) attachmentStrip(cx *el.Context) el.Element {
 	row := el.Div().Row().Wrap().Gap(6).Px(4)
 	for _, item := range a.attachments.Items {
 		entry := item
-		remove := button("", func() { a.removeAttachment(entry.Path) }, kit.ButtonGhost).ID("remove-attachment/" + item.Path).Name("移除附件 " + item.Name).Size(18).Compact(true).Content(el.ViewFunc(func(cx *el.Context) el.Element { return lucide(cx, "x", 13, theme.Muted) }))
+		remove := button("", func() { a.removeAttachment(entry.Path) }, kit.ButtonGhost).ID("remove-attachment/" + item.Path).Name("移除附件 " + item.Name).Size(18).Compact(true).Content(el.ViewFunc(func(cx *el.Context) el.Element { return uiassets.Lucide(cx, "x", 13, theme.Muted) }))
 		removeControl := remove.Render(cx)
 		if buttonBox, ok := removeControl.(*el.DivEl); ok {
 			buttonBox.W(el.Dp(18)).Px(0).Rounded(5)

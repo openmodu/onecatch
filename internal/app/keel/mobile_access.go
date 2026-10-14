@@ -10,6 +10,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	"github.com/openmodu/onecatch/internal/service/worker/hosting"
 )
 
@@ -176,7 +177,7 @@ func (p *settingsPage) mobileCopyButton(cx *el.Context, key, label, value string
 		icon = "check"
 	}
 	control := button("", func() { p.copyMobileValue(key, value) }, kit.ButtonSecondary).Name(label).Size(28).Compact(true).Content(el.ViewFunc(func(cx *el.Context) el.Element {
-		return lucide(cx, icon, 14, theme.Muted)
+		return uiassets.Lucide(cx, icon, 14, theme.Muted)
 	})).Render(cx)
 	if row, ok := control.(*el.DivEl); ok {
 		row.Size(el.Dp(28)).P(0).NoShrink().Rounded(8)
@@ -209,7 +210,7 @@ func (p *settingsPage) mobileAccess(cx *el.Context) el.Element {
 	heading := mobileSectionHeading("作为远程 Worker", "开启后，同一局域网里的 OneCatch 手机端可以连上这台电脑，使用这里配置好的 Harness 跑任务。连接走 HTTPS，手机在配对时会记住这台电脑的证书指纹。")
 	header := el.Div().Row().Items(el.Start).Gap(24).Child(heading.Grow().W(el.Dp(0)))
 	if s.status.Running {
-		header.Child(el.Div().Row().Items(el.Center).Gap(6).Px(8).Py(3).Child(lucide(cx, "smartphone", 12, theme.Text), el.Text("已开启").TextSize(12)))
+		header.Child(el.Div().Row().Items(el.Center).Gap(6).Px(8).Py(3).Child(uiassets.Lucide(cx, "smartphone", 12, theme.Text), el.Text("已开启").TextSize(12)))
 	}
 	root := el.Div().Gap(24)
 	root.Child(el.Div().Gap(14).Child(header, workerSwitch(cx, "允许手机连接", fmt.Sprintf("在端口 %d 上监听局域网连接。默认关闭，关掉后已配对的手机也连不上。", port), s.toggle)))
@@ -243,7 +244,7 @@ func (p *settingsPage) mobileAccess(cx *el.Context) el.Element {
 		action = "换一个配对码"
 	}
 	newCode := button(action, func() { p.runMobileAccess("pair") }, kit.ButtonSecondary).Name(action).Size(24).Compact(true).Content(el.ViewFunc(func(cx *el.Context) el.Element {
-		return el.Div().Row().Items(el.Center).Gap(6).Child(lucide(cx, "refresh-cw", 12, theme.Text), el.Text(action).TextSize(12).Medium())
+		return el.Div().Row().Items(el.Center).Gap(6).Child(uiassets.Lucide(cx, "refresh-cw", 12, theme.Text), el.Text(action).TextSize(12).Medium())
 	}))
 	newCode.SetDisabled(s.busy != "")
 	codes := el.Div().Gap(8).Child(el.Div().Row().Items(el.Center).Justify(el.SpaceBetween).Child(mobileKicker("配对码"), newCode.Render(cx)))
@@ -263,7 +264,7 @@ func (p *settingsPage) mobileAccess(cx *el.Context) el.Element {
 		if len(fingerprint) > 16 {
 			fingerprint = fingerprint[:16]
 		}
-		content.Child(el.Div().Gap(12).Child(el.Div().H(el.Dp(1)).Bg(seamColor), el.Div().Row().Items(el.Start).Gap(8).Child(lucide(cx, "fingerprint", 14, theme.Muted), el.Text("证书指纹 "+strings.ToUpper(fingerprint)+"…").TextSize(12).TextColor(theme.Muted))))
+		content.Child(el.Div().Gap(12).Child(el.Div().H(el.Dp(1)).Bg(seamColor), el.Div().Row().Items(el.Start).Gap(8).Child(uiassets.Lucide(cx, "fingerprint", 14, theme.Muted), el.Text("证书指纹 "+strings.ToUpper(fingerprint)+"…").TextSize(12).TextColor(theme.Muted))))
 	}
 	root.Child(pairSection.Child(content))
 	return root

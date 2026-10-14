@@ -11,6 +11,7 @@ import (
 	_ "github.com/dyike/keel/ui/highlight"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
 
@@ -51,7 +52,7 @@ func fileGlyph(cx *el.Context, name string) el.Element {
 	if label != "" {
 		return el.Div().W(el.Dp(16)).NoShrink().Items(el.Center).Child(el.Text(label).TextSize(9).Medium().TextColor(fg))
 	}
-	return lucide(cx, "file-text", 14, theme.Muted)
+	return uiassets.Lucide(cx, "file-text", 14, theme.Muted)
 }
 func (a *app) filesPanelHeader(cx *el.Context, maximizeLabel, maximizeIcon string) *el.DivEl {
 	id := a.workspaceContext()
@@ -221,7 +222,7 @@ func (a *app) fileInspector(cx *el.Context) el.Element {
 		palette.CodeBg = theme.Surface
 		editor.Child(cx.Themed(palette, el.ViewFunc(func(cx *el.Context) el.Element { return b.Editor.Render(cx) })).Grow().H(el.Dp(0)))
 	} else {
-		editor.Child(el.Div().Grow().WFull().Items(el.Center).Justify(el.Center).Gap(8).Child(lucide(cx, "folder", 24, theme.Muted), el.Text("打开的文件会显示在这里").TextSize(12), el.Text("从文件树中选择文件").TextSize(11).TextColor(theme.Muted)))
+		editor.Child(el.Div().Grow().WFull().Items(el.Center).Justify(el.Center).Gap(8).Child(uiassets.Lucide(cx, "folder", 24, theme.Muted), el.Text("打开的文件会显示在这里").TextSize(12), el.Text("从文件树中选择文件").TextSize(11).TextColor(theme.Muted)))
 	}
 	if s.Loading {
 		editor.Child(el.Text("正在打开文件…").TextSize(11).TextColor(theme.Muted).P(6))
@@ -260,7 +261,7 @@ func (a *app) fileInspector(cx *el.Context) el.Element {
 			cx.ScrollIntoView("files-results", float32(max(0, s.SearchIndex)*28), float32((max(0, s.SearchIndex)+1)*28))
 			return true
 		})
-		tree.Child(el.Div().Row().Items(el.Center).Gap(3).Child(lucide(cx, "search", 12, theme.Muted), filter.Grow().W(el.Dp(0))))
+		tree.Child(el.Div().Row().Items(el.Center).Gap(3).Child(uiassets.Lucide(cx, "search", 12, theme.Muted), filter.Grow().W(el.Dp(0))))
 		if s.Error != "" {
 			tree.Child(inspectorNotice(s.Error, true))
 		}
@@ -317,7 +318,7 @@ func (a *app) fileInspector(cx *el.Context) el.Element {
 				if s.Expanded[entry.Path] {
 					icon = "chevron-down"
 				}
-				row.Child(lucide(cx, icon, 12, theme.Muted))
+				row.Child(uiassets.Lucide(cx, icon, 12, theme.Muted))
 			} else {
 				row.Child(fileGlyph(cx, entry.Path))
 			}

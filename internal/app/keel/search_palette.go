@@ -6,6 +6,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 )
 
@@ -21,7 +22,7 @@ func (a *app) openSearchPalette() {
 					if item.Group == "操作" {
 						icon = "plus"
 					}
-					return el.Div().Row().Items(el.Center).Gap(10).Child(lucide(cx, icon, 17, theme.Muted), el.Text(item.Title).Grow().MaxLines(1))
+					return el.Div().Row().Items(el.Center).Gap(10).Child(uiassets.Lucide(cx, icon, 17, theme.Muted), el.Text(item.Title).Grow().MaxLines(1))
 				})
 			}).
 			PanelStyle(func(panel *el.DivEl) { panel.W(el.Dp(620)).Rounded(16) }).

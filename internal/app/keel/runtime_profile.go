@@ -12,6 +12,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	"github.com/openmodu/onecatch/internal/domain/harnesses"
 	workflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
@@ -64,7 +65,7 @@ func (a *app) runtimeProfileTrigger(cx *el.Context, toggle func()) el.Element {
 	label := a.runtimeProfileLabel()
 	return el.Div().ID("runtime-profile").Role("button").Name("模型设置："+label).Focusable(true).CursorPointer().Row().Items(el.Center).Gap(5).H(el.Dp(28)).MaxW(el.Dp(190)).Px(10).Rounded(14).Bg(theme.SubtleHover).
 		Hover(func(s *el.Style) { s.Bg(mixColor(theme.Text, theme.SubtleHover, .04)) }).FocusStyle(neutralFocus).OnClick(toggle).
-		Child(el.Text(label).TextSize(12).Weight(font.Normal).MaxLines(1), lucide(cx, "chevron-down", 12, theme.Muted))
+		Child(el.Text(label).TextSize(12).Weight(font.Normal).MaxLines(1), uiassets.Lucide(cx, "chevron-down", 12, theme.Muted))
 }
 
 func (a *app) renderReasoningPicker(cx *el.Context) el.Element {
@@ -138,7 +139,7 @@ func (a *app) renderReasoningPicker(cx *el.Context) el.Element {
 	a.profile.menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 		return el.Div().WFull().ID("reasoning-model").Name("选择模型").Role("button").Focusable(true).CursorPointer().OnClick(a.toggleRuntimeProfileMenu).FocusStyle(neutralFocus).
 			Row().Justify(el.Center).Items(el.Center).Gap(4).H(el.Dp(28)).Rounded(8).
-			Child(el.Text(a.profileModelLabel(a.model, false)).MaxLines(1).TextSize(13).TextColor(theme.Muted), lucide(cx, "chevron-right", 12, theme.Muted))
+			Child(el.Text(a.profileModelLabel(a.model, false)).MaxLines(1).TextSize(13).TextColor(theme.Muted), uiassets.Lucide(cx, "chevron-right", 12, theme.Muted))
 	}))
 	fraction := float32(0)
 	if len(values) > 1 {

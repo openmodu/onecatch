@@ -10,6 +10,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	"github.com/openmodu/onecatch/internal/service/skillmanager"
 )
 
@@ -211,7 +212,7 @@ func (a *app) skillFilesInspector(cx *el.Context) el.Element {
 		editor.Child(el.TextArea().ID("skill-file-editor").Name(s.Active).Bind(&b.Draft).Mono().TextSize(11.5).LineHeight(1.7).Border(0, color.NRGBA{}).FocusStyle(func(style *el.Style) { style.BorderColor(color.NRGBA{}) }).Bg(mixColor(theme.Subtle, theme.Bg, .6)).Px(12).Py(6).Grow().H(el.Dp(0)), el.Text("输入时中间的预览会同步更新 · "+skillSize(int64(len(b.Draft)))).TextSize(10).TextColor(theme.Muted).Px(12).Py(6))
 	}
 	listing := el.Div().NoShrink().HFull()
-	header := el.Div().Row().Items(el.Center).H(el.Dp(44)).Px(8).Gap(4).Child(lucide(cx, "folder", 13, theme.Muted), el.Text("~/.onecatch/skills").Mono().TextSize(10).TextColor(theme.Muted).MaxLines(1).Grow().W(el.Dp(0)), iconAction(cx, "refresh-skill-files", "刷新文件", "refresh-cw", a.refreshSkillTree, false), iconAction(cx, "collapse-skill-tree", "切换文件树", "panel-right-close", func() { s.TreeCollapsed = !s.TreeCollapsed }, s.TreeCollapsed))
+	header := el.Div().Row().Items(el.Center).H(el.Dp(44)).Px(8).Gap(4).Child(uiassets.Lucide(cx, "folder", 13, theme.Muted), el.Text("~/.onecatch/skills").Mono().TextSize(10).TextColor(theme.Muted).MaxLines(1).Grow().W(el.Dp(0)), iconAction(cx, "refresh-skill-files", "刷新文件", "refresh-cw", a.refreshSkillTree, false), iconAction(cx, "collapse-skill-tree", "切换文件树", "panel-right-close", func() { s.TreeCollapsed = !s.TreeCollapsed }, s.TreeCollapsed))
 	if s.TreeCollapsed {
 		listing.W(el.Dp(36)).Child(iconAction(cx, "expand-skill-tree", "展开文件树", "panel-right-open", func() { s.TreeCollapsed = false }, false))
 	} else {
@@ -258,9 +259,9 @@ func (a *app) appendSkillTree(cx *el.Context, root *el.DivEl, dir string, depth 
 			if expanded {
 				chevron = "chevron-down"
 			}
-			row.Child(lucide(cx, chevron, 12, theme.Muted))
+			row.Child(uiassets.Lucide(cx, chevron, 12, theme.Muted))
 		}
-		row.Child(lucide(cx, icon, 13, theme.Muted), el.Text(entry.Name).TextSize(11).MaxLines(1))
+		row.Child(uiassets.Lucide(cx, icon, 13, theme.Muted), el.Text(entry.Name).TextSize(11).MaxLines(1))
 		root.Child(row)
 		if entry.Directory && expanded {
 			a.appendSkillTree(cx, root, entry.Path, depth+1)

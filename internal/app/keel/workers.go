@@ -11,6 +11,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 	"github.com/openmodu/onecatch/internal/service/worker"
 )
@@ -500,7 +501,7 @@ func (p *settingsPage) workerDisclosure(cx *el.Context, label string, open *bool
 		icon = "chevron-down"
 	}
 	control := button(label, func() { *open = !*open }, kit.ButtonGhost).Name(label).Size(20).Compact(true).Content(el.ViewFunc(func(cx *el.Context) el.Element {
-		return el.Div().Row().Items(el.Center).Gap(6).Child(lucide(cx, icon, 12, theme.Muted), el.Text(label).TextSize(12).TextColor(theme.Muted))
+		return el.Div().Row().Items(el.Center).Gap(6).Child(uiassets.Lucide(cx, icon, 12, theme.Muted), el.Text(label).TextSize(12).TextColor(theme.Muted))
 	})).Render(cx)
 	if row, ok := control.(*el.DivEl); ok {
 		row.Justify(el.Start).Px(0)

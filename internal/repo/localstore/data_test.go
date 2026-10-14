@@ -1,17 +1,17 @@
-package localdata_test
+package localstore_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 )
 
 func TestDefaultRootUsesDotOneCatchInHome(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	root, err := localdata.DefaultRoot()
+	root, err := localstore.DefaultRoot()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestOpenAdoptsPreRenameDataRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err := localdata.Open("")
+	data, err := localstore.Open("")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestOpenNeverOverwritesAnExistingRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := localdata.Open(""); err != nil {
+	if _, err := localstore.Open(""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -90,7 +90,7 @@ func TestOpenLeavesAnExplicitRootAlone(t *testing.T) {
 	}
 	explicit := filepath.Join(t.TempDir(), "custom")
 
-	data, err := localdata.Open(explicit)
+	data, err := localstore.Open(explicit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestOpenLeavesAnExplicitRootAlone(t *testing.T) {
 
 func TestOpenCreatesSecureFileLayout(t *testing.T) {
 	root := filepath.Join(t.TempDir(), ".onecatch")
-	data, err := localdata.Open(root)
+	data, err := localstore.Open(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestOpenCreatesSecureFileLayout(t *testing.T) {
 }
 
 func TestResolvePathsRejectsNamedHome(t *testing.T) {
-	if _, err := localdata.ResolvePaths("~someone/.onecatch"); err == nil {
+	if _, err := localstore.ResolvePaths("~someone/.onecatch"); err == nil {
 		t.Fatal("ResolvePaths() accepted a named home path")
 	}
 }

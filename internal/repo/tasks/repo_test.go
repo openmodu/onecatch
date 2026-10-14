@@ -10,14 +10,14 @@ import (
 
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	taskrepo "github.com/openmodu/onecatch/internal/repo/tasks"
 )
 
 func TestTasksRepoPersistsAcrossReopen(t *testing.T) {
 	ctx := context.Background()
 	root := filepath.Join(t.TempDir(), ".onecatch")
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestTasksRepoPersistsAcrossReopen(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reopened, err := localdata.OpenStore(root)
+	reopened, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestTasksRepoPersistsAcrossReopen(t *testing.T) {
 
 func TestWorkspaceListPrioritizesPinnedThenRecent(t *testing.T) {
 	ctx := context.Background()
-	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
+	store, err := localstore.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestWorkspaceListPrioritizesPinnedThenRecent(t *testing.T) {
 }
 
 func TestWorkspaceRemoteLocationIncludesSSHHost(t *testing.T) {
-	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
+	store, err := localstore.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
 	if err != nil {
 		t.Fatal(err)
 	}

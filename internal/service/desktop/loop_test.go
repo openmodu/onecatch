@@ -3,7 +3,7 @@ package desktop
 import (
 	"context"
 	workflows "github.com/openmodu/onecatch/internal/domain/workflows"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	"path/filepath"
 	"testing"
@@ -12,7 +12,7 @@ import (
 
 func TestSetRunLoopPersistsAndRejectsActiveRun(t *testing.T) {
 	ctx := context.Background()
-	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
+	store, err := localstore.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
 	if err != nil {
 		t.Fatal(err)
 	}

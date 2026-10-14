@@ -9,6 +9,7 @@ import (
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
@@ -96,11 +97,11 @@ func (a *app) pendingInstructionList(cx *el.Context) el.Element {
 		remove.Disabled(busy)
 		actions := el.Div().Row().Items(el.Center).Gap(2)
 		if instruction.FollowUp {
-			steer := el.Div().ID("steer-instruction/"+instruction.ID).Role("button").Name("调整方向").Focusable(true).CursorPointer().Row().Items(el.Center).Gap(5).H(el.Dp(28)).Px(6).Rounded(6).Disabled(busy || a.detail.Run.Status != domainworkflows.RunRunning).OnClick(func() { a.actOnInstruction(instruction.ID, "steer") }).Hover(func(s *el.Style) { s.Bg(theme.Highlight) }).FocusStyle(neutralFocus).Child(lucide(cx, "corner-down-right", 16, theme.Muted), el.Text("调整方向").TextSize(12).Medium().TextColor(theme.Muted))
+			steer := el.Div().ID("steer-instruction/"+instruction.ID).Role("button").Name("调整方向").Focusable(true).CursorPointer().Row().Items(el.Center).Gap(5).H(el.Dp(28)).Px(6).Rounded(6).Disabled(busy || a.detail.Run.Status != domainworkflows.RunRunning).OnClick(func() { a.actOnInstruction(instruction.ID, "steer") }).Hover(func(s *el.Style) { s.Bg(theme.Highlight) }).FocusStyle(neutralFocus).Child(uiassets.Lucide(cx, "corner-down-right", 16, theme.Muted), el.Text("调整方向").TextSize(12).Medium().TextColor(theme.Muted))
 			actions.Child(steer)
 		}
 		actions.Child(remove)
-		row := el.Div().Role("listitem").Name(content).ID("pending-instruction/"+instruction.ID).Row().Items(el.Center).Gap(10).MinH(el.Dp(52)).Pl(14).Pr(10).Pb(8).RoundedCorners(10, 10, 0, 0).Bg(mixColor(theme.Surface, theme.Subtle, .96)).Child(lucide(cx, "list-end", 16, theme.Muted), el.Text(content).TextSize(14).LineHeight(1.45).MaxLines(1).Grow().W(el.Dp(0)), actions)
+		row := el.Div().Role("listitem").Name(content).ID("pending-instruction/"+instruction.ID).Row().Items(el.Center).Gap(10).MinH(el.Dp(52)).Pl(14).Pr(10).Pb(8).RoundedCorners(10, 10, 0, 0).Bg(mixColor(theme.Surface, theme.Subtle, .96)).Child(uiassets.Lucide(cx, "list-end", 16, theme.Muted), el.Text(content).TextSize(14).LineHeight(1.45).MaxLines(1).Grow().W(el.Dp(0)), actions)
 		if count == 0 {
 			row.RoundedCorners(18, 18, 0, 0)
 		}

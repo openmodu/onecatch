@@ -6,6 +6,7 @@ import (
 
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 )
 
 // Filled choices remain visible when decorative borders are disabled. Deferred
@@ -34,7 +35,7 @@ func (v *filledToggle) Render(cx *el.Context) el.Element {
 		role = "checkbox"
 		box := el.Div().Size(el.Dp(18)).NoShrink().Rounded(5).Bg(track).Center()
 		if v.value {
-			box.Child(lucide(cx, "check", 14, theme.OnColor))
+			box.Child(uiassets.Lucide(cx, "check", 14, theme.OnColor))
 		}
 		mark = box
 	} else {

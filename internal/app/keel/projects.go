@@ -9,6 +9,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	"github.com/openmodu/onecatch/internal/app/keel/filepicker"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
@@ -272,9 +273,9 @@ func (a *app) buildWorktreeMenu() {
 	menu := kit.Menu().Width(300).Placement(el.Top, el.Start).Label("选择工作目录")
 	item := func(label, description, mode string, entry *domainworkspaces.Worktree, checked bool) {
 		content := el.ViewFunc(func(cx *el.Context) el.Element {
-			row := el.Div().Row().Items(el.Center).Gap(10).Child(lucide(cx, "git-fork", 15, theme.Muted), el.Div().Gap(3).Grow().W(el.Dp(0)).Child(el.Text(label).TextSize(12).Medium().MaxLines(1), el.Text(description).TextSize(11).TextColor(theme.Muted).MaxLines(1)))
+			row := el.Div().Row().Items(el.Center).Gap(10).Child(uiassets.Lucide(cx, "git-fork", 15, theme.Muted), el.Div().Gap(3).Grow().W(el.Dp(0)).Child(el.Text(label).TextSize(12).Medium().MaxLines(1), el.Text(description).TextSize(11).TextColor(theme.Muted).MaxLines(1)))
 			if checked {
-				row.Child(lucide(cx, "check", 14, theme.Text))
+				row.Child(uiassets.Lucide(cx, "check", 14, theme.Text))
 			}
 			return row
 		})
@@ -354,7 +355,7 @@ func (a *app) workspaceCaption(cx *el.Context) el.Element {
 	if workspace.RemoteFS != nil {
 		location = "远端"
 	}
-	row.Child(el.Div().Row().Items(el.Center).Gap(5).Px(8).Py(4).Rounded(14).Bg(theme.Subtle).Child(lucide(cx, "hard-drive", 12, theme.Success), el.Text(location).TextSize(12).TextColor(theme.Success)))
+	row.Child(el.Div().Row().Items(el.Center).Gap(5).Px(8).Py(4).Rounded(14).Bg(theme.Subtle).Child(uiassets.Lucide(cx, "hard-drive", 12, theme.Success), el.Text(location).TextSize(12).TextColor(theme.Success)))
 	if w, ok := a.selectedWorker(); a.remoteConversation() && ok && w.SyncLocal {
 		row.Child(el.Text("按轮同步").TextSize(12).TextColor(theme.Muted))
 	}
@@ -366,13 +367,13 @@ func (a *app) workspaceCaption(cx *el.Context) el.Element {
 	if a.task == nil && a.effectiveWorktreeMode() == "new" {
 		branch = "基于 " + branch
 	}
-	row.Child(el.Div().W(el.Dp(1)).H(el.Dp(14)).Bg(seamColor), lucide(cx, "git-branch", 13, theme.Muted), el.Text(branch).MaxLines(1).TextSize(12).TextColor(theme.Muted))
+	row.Child(el.Div().W(el.Dp(1)).H(el.Dp(14)).Bg(seamColor), uiassets.Lucide(cx, "git-branch", 13, theme.Muted), el.Text(branch).MaxLines(1).TextSize(12).TextColor(theme.Muted))
 	if workspace.RemoteFS == nil && !a.remoteConversation() {
 		if a.task == nil {
 			a.workbench.WorktreeMenu.SetDisabled(a.busy || a.loading)
 			row.Child(a.workbench.WorktreeMenu.Render(cx))
 		} else if a.task.Worktree != nil {
-			row.Child(lucide(cx, "git-fork", 13, theme.Muted), el.Text(a.worktreeLabel()).TextSize(12).TextColor(theme.Muted))
+			row.Child(uiassets.Lucide(cx, "git-fork", 13, theme.Muted), el.Text(a.worktreeLabel()).TextSize(12).TextColor(theme.Muted))
 		}
 	}
 	if a.task != nil || a.effectiveWorktreeMode() != "new" {

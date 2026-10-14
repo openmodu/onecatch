@@ -1,4 +1,4 @@
-package keeldesktop
+package assets
 
 import (
 	"strings"

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/dyike/keel/ui/window"
+	"github.com/openmodu/onecatch/internal/app/keel/terminalview"
 )
 
 func TestPlatformChrome(t *testing.T) {
@@ -30,7 +31,7 @@ func expectedMenuDisplay(platform string) window.MenuDisplay {
 
 func TestWindowsFontFamiliesAndShortcuts(t *testing.T) {
 	for _, family := range []string{"Microsoft YaHei UI", "SimSun"} {
-		if !strings.Contains(string(platformUIFace("windows")), family) || !strings.Contains(string(platformTerminalFace("windows")), family) {
+		if !strings.Contains(string(platformUIFace("windows")), family) || !strings.Contains(string(terminalview.Typeface("windows")), family) {
 			t.Fatal("missing Chinese fallback", family)
 		}
 	}

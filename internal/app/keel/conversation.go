@@ -21,6 +21,7 @@ import (
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/markdown"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	"golang.org/x/image/math/fixed"
 )
@@ -159,7 +160,7 @@ func queueEntryLabel(e *entry) string {
 
 func (a *app) queueStatus(cx *el.Context, e *entry) el.Element {
 	return el.Div().ID("message/"+e.key).Role("status").Row().Items(el.Center).Gap(8).Px(2).Py(8).
-		Child(lucide(cx, "clock", 16, theme.Muted), el.Text(queueEntryLabel(e)).TextSize(13).Medium().TextColor(theme.Muted))
+		Child(uiassets.Lucide(cx, "clock", 16, theme.Muted), el.Text(queueEntryLabel(e)).TextSize(13).Medium().TextColor(theme.Muted))
 }
 
 func (a *app) conversationOpen(key string, active bool) bool {
@@ -221,7 +222,7 @@ func (a *app) processGroup(cx *el.Context, e *entry) el.Element {
 	if open {
 		caret = "chevron-down"
 	}
-	row := el.Div().ID(e.key).Name(label).Role("button").Focusable(true).CursorPointer().Row().Items(el.Center).Gap(6).MinH(el.Dp(32)).Pt(2).Pb(6).Px(2).OnClick(func() { a.toggleConversation(e.key, active) }).FocusStyle(neutralFocus).Child(el.Text(label).TextSize(13).TextColor(theme.Muted), lucide(cx, caret, 14, mixColor(theme.Muted, theme.Bg, .72)))
+	row := el.Div().ID(e.key).Name(label).Role("button").Focusable(true).CursorPointer().Row().Items(el.Center).Gap(6).MinH(el.Dp(32)).Pt(2).Pb(6).Px(2).OnClick(func() { a.toggleConversation(e.key, active) }).FocusStyle(neutralFocus).Child(el.Text(label).TextSize(13).TextColor(theme.Muted), uiassets.Lucide(cx, caret, 14, mixColor(theme.Muted, theme.Bg, .72)))
 	group := el.Div().WFull().Child(row)
 	if open {
 		// As in the Wails client: one bordered card, rows divided by hairlines.
@@ -341,7 +342,7 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 			OnClick(toggle).Hover(func(s *el.Style) { s.Bg(mixColor(theme.Subtle, theme.Surface, .58)) }).FocusStyle(neutralFocus)
 	}
 	iconBox := func(name string, size float32, c color.NRGBA) el.Element {
-		return el.Div().Size(el.Dp(20)).Center().NoShrink().Child(lucide(cx, name, size, c))
+		return el.Div().Size(el.Dp(20)).Center().NoShrink().Child(uiassets.Lucide(cx, name, size, c))
 	}
 	if e.kind == agentrun.KindReasoning {
 		preview := strings.Join(strings.Fields(e.text), " ")
@@ -351,7 +352,7 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 		summary := row("思考过程："+preview).Child(
 			iconBox("brain-circuit", 15, mixColor(muted, theme.Surface, .7)),
 			el.Text(preview).TextSize(13).Italic().TextColor(muted).MaxLines(1).Grow().W(el.Dp(0)),
-			el.Div().Opacity(.55).Child(lucide(cx, caret, 15, muted)))
+			el.Div().Opacity(.55).Child(uiassets.Lucide(cx, caret, 15, muted)))
 		item := el.Div().WFull().Child(summary)
 		if open {
 			item.Bg(mixColor(theme.Subtle, theme.Surface, .2))
@@ -387,9 +388,9 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 	}
 	state := el.Div().W(el.Dp(18)).H(el.Dp(20)).Center().NoShrink().Role("status").Name(stateName)
 	if stateIcon != "" {
-		state.Child(lucide(cx, stateIcon, 13, stateColor))
+		state.Child(uiassets.Lucide(cx, stateIcon, 13, stateColor))
 	}
-	summary := row(title).Child(iconBox(icon, 16, muted), heading, state, metadata, el.Div().W(el.Dp(16)).Center().NoShrink().Opacity(.7).Child(lucide(cx, caret, 15, muted)))
+	summary := row(title).Child(iconBox(icon, 16, muted), heading, state, metadata, el.Div().W(el.Dp(16)).Center().NoShrink().Opacity(.7).Child(uiassets.Lucide(cx, caret, 15, muted)))
 	item := el.Div().WFull().Child(summary)
 	switch {
 	case e.failed:
@@ -538,7 +539,7 @@ func (a *app) userMessageContent(cx *el.Context, e *entry) el.Element {
 		disclosure := el.Div().ID("message/"+e.key+"/disclosure").Name(label).Role("button").Focusable(true).CursorPointer().Row().Items(el.Center).Gap(5).H(el.Dp(32)).Px(2).Rounded(6).
 			FocusStyle(neutralFocus).Hover(func(s *el.Style) { s.Bg(theme.SubtleHover) }).
 			OnClick(func() { v.expanded = !v.expanded; a.invalidateConversationEntry(e.key) }).
-			Child(el.Text(label).TextSize(13).TextColor(theme.Muted), lucide(cx, caret, 15, theme.Muted))
+			Child(el.Text(label).TextSize(13).TextColor(theme.Muted), uiassets.Lucide(cx, caret, 15, theme.Muted))
 		body.Child(el.Div().Row().Items(el.Center).Pt(5).Child(disclosure))
 	}
 	return body
@@ -567,7 +568,7 @@ func (a *app) messageActions(cx *el.Context, e *entry, user bool) el.Element {
 			if copyButton.Copied() {
 				icon = "check"
 			}
-			return lucide(cx, icon, 12, theme.Muted)
+			return uiassets.Lucide(cx, icon, 12, theme.Muted)
 		}))
 	}
 	copied := copyButton.Copied()

@@ -5,8 +5,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/openmodu/onecatch/internal/sshcredentials"
-	"github.com/openmodu/onecatch/internal/sshendpoint"
+	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
+	"github.com/openmodu/onecatch/internal/platform/sshendpoint"
 )
 
 // remoteSSHInvocation builds the interactive SSH process hosted by the local

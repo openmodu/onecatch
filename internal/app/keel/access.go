@@ -4,6 +4,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 )
 
 // newAccessSelect shares permission presentation while keeping each control's state independent.
@@ -27,7 +28,7 @@ func newAccessSelect() *kit.SelectView {
 			row.Bg(background).Rounded(6).Px(6)
 		}
 		return row.Child(
-			lucide(cx, icon, 17, tint),
+			uiassets.Lucide(cx, icon, 17, tint),
 			el.Div().Grow().W(el.Dp(0)).Gap(2).Child(
 				el.Text(item.Option.Label).TextColor(tint).MaxLines(1),
 				el.Text(description).TextSize(11).TextColor(secondary).MaxLines(1),
@@ -51,5 +52,5 @@ func accessValue(cx *el.Context, value, label string) el.Element {
 		background.A = 24
 		row.Bg(background).Rounded(14).Px(8)
 	}
-	return row.Child(lucide(cx, icon, 16, tint), el.Text(label).TextColor(tint).MaxLines(1))
+	return row.Child(uiassets.Lucide(cx, icon, 16, tint), el.Text(label).TextColor(tint).MaxLines(1))
 }

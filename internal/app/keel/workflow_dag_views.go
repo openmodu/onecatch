@@ -11,6 +11,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
@@ -25,7 +26,7 @@ func dagAction(cx *el.Context, id, label, icon string, primary bool, disabled bo
 	}
 	b.SetDisabled(disabled)
 	b.Content(el.ViewFunc(func(cx *el.Context) el.Element {
-		return el.Div().Row().Items(el.Center).Gap(6).Child(lucide(cx, icon, 14, fg), el.Text(label).TextSize(12).MaxLines(1))
+		return el.Div().Row().Items(el.Center).Gap(6).Child(uiassets.Lucide(cx, icon, 14, fg), el.Text(label).TextSize(12).MaxLines(1))
 	}))
 	return el.Div().NoShrink().MinW(el.Dp(float32(len([]rune(label))*14 + 38))).Child(b.Render(cx))
 }
@@ -45,7 +46,7 @@ func (a *app) dagConnectToggle(cx *el.Context) el.Element {
 		}
 		group.Child(el.Div().ID("dag-connect/"+option.Kind).Role("button").Name("连线类型 "+option.Label).Selected(active).Focusable(true).CursorPointer().
 			Row().Items(el.Center).Gap(5).Px(9).H(el.Dp(26)).Rounded(5).Bg(bg).OnClick(func() { a.setDAGConnectKind(option.Kind) }).
-			Child(lucide(cx, option.Icon, 12, fg), el.Text(option.Label).TextSize(12).TextColor(fg)))
+			Child(uiassets.Lucide(cx, option.Icon, 12, fg), el.Text(option.Label).TextSize(12).TextColor(fg)))
 	}
 	return group
 }
@@ -142,7 +143,7 @@ func (a *app) dagCanvas(cx *el.Context) el.Element {
 		if e.Kind == domainworkflows.EdgeRework {
 			label = "删除返工 "
 		}
-		content.Child(el.Div().Absolute().Left(m.X - 11).Top(m.Y - 23).Size(el.Dp(22)).Center().ID(id).Name(label + e.Source + " → " + e.Target).Role("button").Focusable(true).CursorPointer().OnClick(func() { a.removeDAGEdge(e.Source, e.Target, e.Kind) }).Hover(func(st *el.Style) { st.Bg(theme.Highlight) }).FocusStyle(func(st *el.Style) { st.BorderColor(color.NRGBA{}).Bg(theme.Highlight) }).Rounded(5).Child(el.Div().Opacity(alpha).Child(lucide(cx, "x", 12, theme.DangerText))))
+		content.Child(el.Div().Absolute().Left(m.X - 11).Top(m.Y - 23).Size(el.Dp(22)).Center().ID(id).Name(label + e.Source + " → " + e.Target).Role("button").Focusable(true).CursorPointer().OnClick(func() { a.removeDAGEdge(e.Source, e.Target, e.Kind) }).Hover(func(st *el.Style) { st.Bg(theme.Highlight) }).FocusStyle(func(st *el.Style) { st.BorderColor(color.NRGBA{}).Bg(theme.Highlight) }).Rounded(5).Child(el.Div().Opacity(alpha).Child(uiassets.Lucide(cx, "x", 12, theme.DangerText))))
 	}
 	for _, step := range d.Steps {
 		s := step
@@ -282,7 +283,7 @@ func (a *app) dagInspector(cx *el.Context) el.Element {
 	s := &d.Steps[i]
 	remove := iconButton("", func() { a.removeWorkflowStep(i) }, kit.ButtonGhost, kit.IconTrash).ID("dag-delete").Name("删除步骤").Size(28).Compact(true)
 	remove.SetDisabled(len(d.Steps) <= 1)
-	remove.Content(el.ViewFunc(func(cx *el.Context) el.Element { return lucide(cx, "trash-2", 14, theme.DangerText) }))
+	remove.Content(el.ViewFunc(func(cx *el.Context) el.Element { return uiassets.Lucide(cx, "trash-2", 14, theme.DangerText) }))
 	panel.Child(el.Div().Row().Items(el.Start).Px(16).Py(14).H(el.Dp(77)).NoShrink().Gap(12).Child(el.Div().Grow().W(el.Dp(0)).Gap(4).Child(el.Text("步骤").TextSize(11).TextColor(theme.Muted).Medium(), el.Text(s.Name).TextSize(14).Bold().MaxLines(1)), remove.Render(cx), el.Div().Absolute().Left(0).Right(0).Bottom(0).H(el.Dp(1)).Bg(seamColor)))
 	fields := el.Div().ID("dag-fields").Grow().H(el.Dp(0)).ScrollY().P(16).Gap(16)
 	fields.Child(dagField("名称", a.dagText("dag-node-name", "步骤名称", &s.Name)), dagField("ID", field("dag-node-id", "步骤 ID", &a.ui.WorkflowStepID).Mono().TextSize(14).H(el.Dp(36)).WFull().OnChange(func(id string) {
@@ -362,7 +363,7 @@ func (a *app) dagEdgeList(cx *el.Context, id string) el.Element {
 			text = "等待 " + e.From + " 完成"
 		}
 		del := iconButton("", func() { a.removeDAGEdge(e.From, e.To, e.Kind) }, kit.ButtonGhost, kit.IconTrash).ID("dag-edge-delete/" + e.Kind + "/" + e.From + "/" + e.To).Name("删除连线").Size(24).Compact(true)
-		del.Content(el.ViewFunc(func(cx *el.Context) el.Element { return lucide(cx, "x", 12, theme.Muted) }))
+		del.Content(el.ViewFunc(func(cx *el.Context) el.Element { return uiassets.Lucide(cx, "x", 12, theme.Muted) }))
 		fg := theme.Text
 		if e.Kind == domainworkflows.EdgeRework {
 			fg = theme.Warning

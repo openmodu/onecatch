@@ -14,7 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/openmodu/onecatch/internal/sshendpoint"
+	"github.com/openmodu/onecatch/internal/platform/sshendpoint"
 )
 
 const (

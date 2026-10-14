@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/openmodu/onecatch/internal/sshcredentials"
+	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
 )
 
 func TestRunPrintsPasswordFromCredentialStore(t *testing.T) {

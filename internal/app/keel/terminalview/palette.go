@@ -1,18 +1,19 @@
-package keeldesktop
+package terminalview
 
 import (
-	"github.com/dyike/keel/ui/theme"
 	"image/color"
 	"math"
+
+	"github.com/dyike/keel/ui/theme"
 )
 
-type terminalPalette struct {
+type Palette struct {
 	Background, Foreground, Cursor, Selection color.NRGBA
 	Colors                                    [16]color.NRGBA
 }
 
-func resolveNativeTerminalPalette(id string, dark bool) terminalPalette {
-	p := terminalPalette{Background: theme.Surface, Foreground: theme.Text, Cursor: theme.Primary, Selection: theme.SubtleHover}
+func ResolvePalette(id string, dark bool) Palette {
+	p := Palette{Background: theme.Surface, Foreground: theme.Text, Cursor: theme.Primary, Selection: theme.SubtleHover}
 	base := [16]uint32{0x000000, 0xcd0000, 0x00cd00, 0xcdcd00, 0x0000ee, 0xcd00cd, 0x00cdcd, 0xe5e5e5, 0x7f7f7f, 0xff0000, 0x00ff00, 0xffff00, 0x5c5cff, 0xff00ff, 0x00ffff, 0xffffff}
 	if !dark {
 		base = [16]uint32{0x202020, 0xb42318, 0x168329, 0x927500, 0x006bd6, 0x8b43b5, 0x007f87, 0x707070, 0x666666, 0xcf3434, 0x189b32, 0xa18300, 0x0875e1, 0x9957c1, 0x008d96, 0x888888}

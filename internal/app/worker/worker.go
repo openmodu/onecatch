@@ -19,7 +19,7 @@ import (
 	"time"
 
 	domainharnesses "github.com/openmodu/onecatch/internal/domain/harnesses"
-	"github.com/openmodu/onecatch/internal/landiscovery"
+	"github.com/openmodu/onecatch/internal/platform/landiscovery"
 	"github.com/openmodu/onecatch/internal/repo/git"
 	"github.com/openmodu/onecatch/internal/service/worker"
 	"github.com/openmodu/onecatch/internal/service/worker/daemon"

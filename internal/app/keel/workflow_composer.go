@@ -7,6 +7,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
@@ -17,7 +18,7 @@ func (a *app) composerContext(cx *el.Context) el.Element {
 	if a.task == nil && !a.remoteConversation() && a.workflow.Value() != "single_agent" {
 		if d, ok := a.findDefinition(a.workflow.Value()); ok {
 			clear := iconAction(cx, "composer-workflow-clear", "改为单 Agent", "x", func() { a.selectLocalConversation(a.runtime.Value(), "single_agent") }, false)
-			head := el.Div().Row().Items(el.Center).Gap(8).Child(lucide(cx, "workflow", 14, theme.Muted), el.Text("将按「"+d.Name+"」运行").TextSize(12).Medium(), el.Text(workflowSummary(d)).TextSize(11).TextColor(theme.Muted).Grow().MaxLines(1), clear)
+			head := el.Div().Row().Items(el.Center).Gap(8).Child(uiassets.Lucide(cx, "workflow", 14, theme.Muted), el.Text("将按「"+d.Name+"」运行").TextSize(12).Medium(), el.Text(workflowSummary(d)).TextSize(11).TextColor(theme.Muted).Grow().MaxLines(1), clear)
 			return el.Div().ID("composer-workflow").WFull().P(12).Gap(10).Rounded(14).Bg(theme.Subtle).Child(head,
 				el.Div().WFull().NoShrink().ScrollX().Child(flowChart(cx, d, flowChartOptions{ID: "composer-chart"})))
 		}

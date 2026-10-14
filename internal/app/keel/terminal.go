@@ -10,13 +10,14 @@ import (
 
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/kit"
+	"github.com/openmodu/onecatch/internal/app/keel/terminalview"
 	terminalservice "github.com/openmodu/onecatch/internal/service/terminal"
 )
 
 type terminalPane struct {
 	ID, Context, Title, Error  string
 	Session                    terminalservice.Session
-	Screen                     *terminalScreen
+	Screen                     *terminalview.Screen
 	Starting, Running, Removed bool
 	ExitCode                   int
 	Rows, Cols                 int
@@ -87,7 +88,7 @@ func (a *app) terminalEvent(name string, payload any) {
 	}
 	if p := s.Panes[s.Sessions[id]]; p != nil {
 		if len(data) > 0 {
-			p.Screen.write(data)
+			p.Screen.Write(data)
 		}
 		if exit != nil {
 			p.Starting, p.Running = false, false
@@ -146,7 +147,7 @@ func (a *app) activeTerminal() *terminalPane { return a.terminal.Panes[a.termina
 func (a *app) focusTerminal(id string) {
 	if p := a.terminal.Panes[id]; p != nil {
 		a.terminal.Focused = id
-		p.Screen.focusNext = true
+		p.Screen.RequestFocus()
 	}
 }
 func (a *app) selectTerminalTab(tab *terminalTab) {
@@ -178,7 +179,7 @@ func (a *app) createTerminalCommand(direction, command string) {
 		direction = ""
 	}
 	p := &terminalPane{ID: id, Context: contextID, Title: "终端", Starting: true, Rows: 24, Cols: 80}
-	p.Screen = newTerminalScreen(func(sessionID string, data []byte) error {
+	p.Screen = terminalview.New(func(sessionID string, data []byte) error {
 		return a.backend.terminal.Write(sessionID, base64.StdEncoding.EncodeToString(data))
 	})
 	p.Screen.OnActivate = func() { s.Focused = id }
@@ -220,7 +221,7 @@ func (a *app) createTerminalCommand(direction, command string) {
 		parent.Root.split(focused, id, direction, fmt.Sprintf("split-%d", s.Next))
 	}
 	s.Focused, s.SearchOpen = id, false
-	p.Screen.focusNext = true
+	p.Screen.RequestFocus()
 	s.Creating++
 	config := a.settings.Terminal
 	go func() {
@@ -248,7 +249,7 @@ func (a *app) createTerminalCommand(direction, command string) {
 			if err != nil {
 				p.Error = err.Error()
 				p.Screen.Writable = false
-				p.Screen.attachSession("")
+				p.Screen.AttachSession("")
 				return
 			}
 			p.Session, p.Running = session, true
@@ -265,10 +266,10 @@ func (a *app) createTerminalCommand(direction, command string) {
 			if p.Title == "." || p.Title == "" {
 				p.Title = "终端"
 			}
-			p.Screen.attachSession(session.ID)
+			p.Screen.AttachSession(session.ID)
 			if pending := s.Pending[session.ID]; pending != nil {
 				for _, data := range pending.Data {
-					p.Screen.write(data)
+					p.Screen.Write(data)
 				}
 				if pending.Exit != nil {
 					a.terminalEvent(terminalservice.ExitEvent, *pending.Exit)
@@ -281,7 +282,7 @@ func (a *app) createTerminalCommand(direction, command string) {
 			}
 			a.resizeTerminal(p)
 			if command != "" && p.Running {
-				p.Screen.paste(command)
+				p.Screen.Paste(command)
 			}
 		})
 	}()
@@ -308,7 +309,7 @@ func (a *app) disposeTerminal(p *terminalPane) {
 	}
 	p.Removed = true
 	p.ResizeVersion++
-	p.Screen.close()
+	p.Screen.Close()
 	delete(a.terminal.Panes, p.ID)
 	if id := p.Session.ID; id != "" {
 		delete(a.terminal.Sessions, id)
@@ -376,7 +377,7 @@ func (a *app) openTerminalSearch() {
 }
 func (a *app) searchTerminal(backward bool) {
 	if p := a.activeTerminal(); p != nil {
-		a.terminal.SearchFound = p.Screen.search(a.terminal.Query, backward)
+		a.terminal.SearchFound = p.Screen.Search(a.terminal.Query, backward)
 	}
 }
 

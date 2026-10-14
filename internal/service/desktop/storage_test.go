@@ -14,7 +14,7 @@ import (
 	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	"github.com/openmodu/onecatch/internal/repo/git"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
 	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
@@ -386,7 +386,7 @@ func TestFullSandboxRequiresGrantConfirmationAndBlocksResumeAfterDowngrade(t *te
 func newStorageTestApp(t *testing.T) (*Service, *workflowuc.Usecase) {
 	t.Helper()
 	root := t.TempDir()
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}

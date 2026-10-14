@@ -1,7 +1,7 @@
-// Package localdata owns local embedded resources and their lifecycle. It
+// Package localstore owns local embedded resources and their lifecycle. It
 // creates ~/.onecatch by default and exposes paths used by atomic snapshots,
 // append-only event storage and workspace locks.
-package localdata
+package localstore
 
 import (
 	"errors"

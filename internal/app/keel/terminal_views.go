@@ -2,13 +2,15 @@ package keeldesktop
 
 import (
 	"fmt"
+	"image/color"
+
 	"github.com/dyike/keel/gio/io/key"
 	"github.com/dyike/keel/gio/io/pointer"
 	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
-	"image/color"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 )
 
 func (a *app) buildTerminalSplitMenu() {
@@ -75,7 +77,7 @@ func (a *app) terminalDock(cx *el.Context) el.Element {
 		}))
 	}
 	bar := el.Div().Row().Items(el.Center).H(el.Dp(36)).Px(8).Gap(6).NoShrink().Bg(mixColor(theme.Subtle, theme.Bg, .34))
-	label := el.Div().Row().Items(el.Center).Gap(7).Px(6).H(el.Dp(26)).Rounded(6).ID("terminal-title").Role("button").Name("聚焦终端").Focusable(true).OnClick(func() { a.focusTerminal(s.Focused) }).CursorPointer().Hover(func(st *el.Style) { st.Bg(theme.Highlight) }).Child(lucide(cx, "square-terminal", 14, theme.Muted), el.Text("终端").TextSize(12).Medium())
+	label := el.Div().Row().Items(el.Center).Gap(7).Px(6).H(el.Dp(26)).Rounded(6).ID("terminal-title").Role("button").Name("聚焦终端").Focusable(true).OnClick(func() { a.focusTerminal(s.Focused) }).CursorPointer().Hover(func(st *el.Style) { st.Bg(theme.Highlight) }).Child(uiassets.Lucide(cx, "square-terminal", 14, theme.Muted), el.Text("终端").TextSize(12).Medium())
 	dot := theme.Muted
 	if tab := a.terminalTab(); tab != nil {
 		for _, id := range tab.Root.panes() {
@@ -172,7 +174,7 @@ func (a *app) terminalDock(cx *el.Context) el.Element {
 		body.Child(a.terminalSplitView(cx, tab.Root))
 	} else {
 		body.Center().Child(button("", func() { a.createTerminal("") }, kit.ButtonSecondary).Size(30).Content(el.ViewFunc(func(cx *el.Context) el.Element {
-			return el.Div().Row().Items(el.Center).Gap(7).Child(lucide(cx, "plus", 14, theme.Muted), el.Text("启动当前工作区终端").TextSize(11).TextColor(theme.Muted))
+			return el.Div().Row().Items(el.Center).Gap(7).Child(uiassets.Lucide(cx, "plus", 14, theme.Muted), el.Text("启动当前工作区终端").TextSize(11).TextColor(theme.Muted))
 		})).Render(cx))
 	}
 	if s.SearchOpen {
@@ -201,13 +203,13 @@ func (a *app) terminalSearchView(cx *el.Context) el.Element {
 		}
 		return true
 	})
-	box := el.Div().Absolute().Top(8).Right(12).Row().Items(el.Center).Gap(4).Px(6).Py(2).Rounded(7).Bg(theme.Surface).MaxW(el.Frac(1)).Child(lucide(cx, "search", 13, theme.Muted), input)
+	box := el.Div().Absolute().Top(8).Right(12).Row().Items(el.Center).Gap(4).Px(6).Py(2).Rounded(7).Bg(theme.Surface).MaxW(el.Frac(1)).Child(uiassets.Lucide(cx, "search", 13, theme.Muted), input)
 	status := el.Div().W(el.Dp(48))
 	if !s.SearchFound {
 		status.Child(el.Text("未找到").TextSize(9).TextColor(theme.RGB(0xb4473b)))
 	}
 	small := func(id, label, icon string, callback func()) el.Element {
-		return el.Div().ID(id).Name(label).Role("button").Focusable(true).Size(el.Dp(22)).Center().Rounded(4).CursorPointer().OnClick(callback).Hover(func(st *el.Style) { st.Bg(theme.Highlight) }).FocusStyle(neutralFocus).Child(lucide(cx, icon, 13, theme.Muted))
+		return el.Div().ID(id).Name(label).Role("button").Focusable(true).Size(el.Dp(22)).Center().Rounded(4).CursorPointer().OnClick(callback).Hover(func(st *el.Style) { st.Bg(theme.Highlight) }).FocusStyle(neutralFocus).Child(uiassets.Lucide(cx, icon, 13, theme.Muted))
 	}
 	return box.Child(status, small("terminal-search-prev", "上一个匹配", "chevron-left", func() { a.searchTerminal(true) }), small("terminal-search-next", "下一个匹配", "chevron-right", func() { a.searchTerminal(false) }), small("terminal-search-close", "关闭终端搜索", "x", func() { s.SearchOpen = false; a.focusTerminal(s.Focused) }))
 }
@@ -220,7 +222,7 @@ func (a *app) terminalSplitView(cx *el.Context, n *terminalSplit) el.Element {
 		if p == nil {
 			return el.Div()
 		}
-		p.Screen.setPalette(a.settings.Terminal.Theme, a.dark)
+		p.Screen.SetPalette(a.settings.Terminal.Theme, a.dark)
 		box := el.Div().WFull().HFull().Child(el.Widget(p.Screen).WFull().HFull())
 		if p.Error != "" {
 			box.Child(el.Div().Absolute().Left(10).Right(10).Bottom(8).Rounded(6).P(8).Bg(theme.Subtle).Child(el.Text(p.Error).TextSize(11).TextColor(theme.RGB(0xb4473b))))

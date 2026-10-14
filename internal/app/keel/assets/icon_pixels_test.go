@@ -1,12 +1,13 @@
-package keeldesktop
+package assets
 
 import (
 	"bytes"
-	"github.com/srwiley/oksvg"
-	"github.com/srwiley/rasterx"
 	"image"
 	"strings"
 	"testing"
+
+	"github.com/srwiley/oksvg"
+	"github.com/srwiley/rasterx"
 )
 
 func TestRuntimeMarksHaveVisiblePixels(t *testing.T) {

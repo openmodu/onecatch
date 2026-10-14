@@ -113,6 +113,7 @@ cmd/
 internal/
 ├── app/                Desktop, Worker, and helper process assembly
 ├── domain/             Domain models and business rules
+├── platform/           Process, SSH, remote filesystem, discovery, and build info
 ├── repo/               File, Git, and historical data access
 ├── usecase/            Agent adapters and workflow use cases
 └── service/            Desktop, Worker, and supporting services

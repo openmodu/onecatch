@@ -16,6 +16,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
@@ -107,7 +108,7 @@ func iconButton(label string, action func(), variant kit.ButtonVariant, name kit
 		if variant == kit.ButtonPrimary {
 			fg = theme.OnColor
 		}
-		row := el.Div().Row().Items(el.Center).Gap(6).Child(outlineIcon(cx, name, 16, fg))
+		row := el.Div().Row().Items(el.Center).Gap(6).Child(uiassets.Outline(cx, name, 16, fg))
 		if label != "" {
 			row.Child(el.Text(label).TextSize(12).MaxLines(1))
 		}
@@ -214,7 +215,7 @@ func (a *app) headerForPlatform(cx *el.Context, platform string) el.Element {
 	if a.page == "skills" {
 		title = "Skills 管理"
 	}
-	left := el.Div().Row().Items(el.Center).Gap(10).Grow().HFull().Child(outlineIcon(cx, kit.IconFolder, 18, theme.Muted))
+	left := el.Div().Row().Items(el.Center).Gap(10).Grow().HFull().Child(uiassets.Outline(cx, kit.IconFolder, 18, theme.Muted))
 	if a.task != nil && a.page == "" {
 		category := a.task.Category
 		if category == "" || category == "other" {
@@ -646,6 +647,6 @@ func (a *app) conversationScroll(cx *el.Context) el.Element {
 	}
 	jump := el.Div().ID("jump-latest").Role("button").Name("回到最新").Focusable(true).Size(el.Dp(36)).Rounded(18).Center().
 		Bg(theme.Surface).Border(1, seamColor).Shadow(theme.ElevationSm).CursorPointer().OnClick(a.scroller.ScrollToEnd).
-		Hover(func(s *el.Style) { s.Bg(theme.Subtle) }).FocusStyle(neutralFocus).Child(lucide(cx, "arrow-down", 20, theme.Text))
+		Hover(func(s *el.Style) { s.Bg(theme.Subtle) }).FocusStyle(neutralFocus).Child(uiassets.Lucide(cx, "arrow-down", 20, theme.Text))
 	return area.Child(el.Div().Absolute().Left(0).Right(0).Bottom(12).Row().Justify(el.Center).Child(jump))
 }

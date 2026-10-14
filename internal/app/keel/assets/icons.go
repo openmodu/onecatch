@@ -1,14 +1,15 @@
-package keeldesktop
+package assets
 
 import (
 	"bytes"
 	"embed"
-	"github.com/dyike/keel/ui/el"
-	"github.com/dyike/keel/ui/kit"
 	"image"
 	"image/color"
 	"image/draw"
 	"image/png"
+
+	"github.com/dyike/keel/ui/el"
+	"github.com/dyike/keel/ui/kit"
 )
 
 // The same Lucide path data and runtime marks used by the React desktop.
@@ -36,18 +37,18 @@ type iconKey struct {
 var iconCache = make(map[iconKey]*kit.IconView)
 var rasterIconCache = make(map[iconKey]*kit.ImageView)
 
-func lucide(cx *el.Context, name string, size float32, fg color.NRGBA) el.Element {
-	return assetIcon(cx, "icons/"+name+".svg", size, fg, false)
+func Lucide(cx *el.Context, name string, size float32, fg color.NRGBA) el.Element {
+	return Icon(cx, "icons/"+name+".svg", size, fg, false)
 }
-func outlineIcon(cx *el.Context, name kit.IconName, size float32, fg color.NRGBA) el.Element {
+func Outline(cx *el.Context, name kit.IconName, size float32, fg color.NRGBA) el.Element {
 	if path, ok := iconNames[name]; ok {
-		return lucide(cx, path, size, fg)
+		return Lucide(cx, path, size, fg)
 	}
 	return kit.Icon(name).Size(size).Color(fg).Render(cx)
 }
 
 // All callers run under Keel's frame lock.
-func assetIcon(cx *el.Context, path string, size float32, fg color.NRGBA, original bool) el.Element {
+func Icon(cx *el.Context, path string, size float32, fg color.NRGBA, original bool) el.Element {
 	key := iconKey{name: path, size: size, color: fg, original: original}
 	view := iconCache[key]
 	if view == nil {
@@ -69,7 +70,7 @@ func assetIcon(cx *el.Context, path string, size float32, fg color.NRGBA, origin
 	return view.Render(cx)
 }
 
-func rasterIcon(cx *el.Context, path string, size float32, tint ...color.NRGBA) el.Element {
+func Raster(cx *el.Context, path string, size float32, tint ...color.NRGBA) el.Element {
 	key := iconKey{name: path, size: size}
 	if len(tint) > 0 {
 		key.color = tint[0]
@@ -78,11 +79,11 @@ func rasterIcon(cx *el.Context, path string, size float32, tint ...color.NRGBA) 
 	if view == nil {
 		data, err := iconAssets.ReadFile(path)
 		if err != nil {
-			return lucide(cx, "bot", size, color.NRGBA{A: 255})
+			return Lucide(cx, "bot", size, color.NRGBA{A: 255})
 		}
 		img, err := png.Decode(bytes.NewReader(data))
 		if err != nil {
-			return lucide(cx, "bot", size, color.NRGBA{A: 255})
+			return Lucide(cx, "bot", size, color.NRGBA{A: 255})
 		}
 		if len(tint) > 0 {
 			monochrome := image.NewNRGBA(img.Bounds())
@@ -94,3 +95,6 @@ func rasterIcon(cx *el.Context, path string, size float32, tint ...color.NRGBA) 
 	}
 	return view.Render(cx)
 }
+
+// Name returns the embedded SVG name for a toolkit icon.
+func Name(icon kit.IconName) string { return iconNames[icon] }

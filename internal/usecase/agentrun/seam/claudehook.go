@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/openmodu/onecatch/internal/remotefs"
+	"github.com/openmodu/onecatch/internal/platform/remotefs"
 )
 
 type claudeHookEvent struct {

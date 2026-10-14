@@ -12,6 +12,7 @@ import (
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
 	"github.com/dyike/keel/ui/window"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
@@ -299,7 +300,7 @@ const menuMinWidth = 120
 
 func menuIcon(name, label string) el.View {
 	return el.ViewFunc(func(cx *el.Context) el.Element {
-		return el.Div().Row().Items(el.Center).Gap(10).Child(lucide(cx, name, 16, theme.Muted), el.Text(label).TextSize(13))
+		return el.Div().Row().Items(el.Center).Gap(10).Child(uiassets.Lucide(cx, name, 16, theme.Muted), el.Text(label).TextSize(13))
 	})
 }
 func (a *app) buildMoreMenu() {
@@ -310,7 +311,7 @@ func (a *app) buildMoreMenu() {
 		if !slices.Contains(a.ui.Preferences.Navigation, item.ID) {
 			it := item
 			hidden = true
-			menu.ContentItem(it.Label, "", menuIcon(iconNames[it.Icon], it.Label), func() { a.goPage(it.ID) })
+			menu.ContentItem(it.Label, "", menuIcon(uiassets.Name(it.Icon), it.Label), func() { a.goPage(it.ID) })
 		}
 	}
 	if hidden {
@@ -344,7 +345,7 @@ func (a *app) buildFooterMenu() {
 		if menu.Value() {
 			row.Bg(theme.Highlight)
 		}
-		return row.Child(a.logo.Render(cx), el.Text("OneCatch").Grow().TextSize(13).Bold(), lucide(cx, "chevron-down", 13, theme.Muted))
+		return row.Child(a.logo.Render(cx), el.Text("OneCatch").Grow().TextSize(13).Bold(), uiassets.Lucide(cx, "chevron-down", 13, theme.Muted))
 	}))
 	a.ui.Footer = menu
 }
@@ -367,7 +368,7 @@ func (a *app) customizeSidebar(cx *el.Context) el.Element {
 		if checked {
 			check.Bg(theme.Primary).Center().Child(kit.Icon(kit.IconDone).Size(12).Color(theme.OnColor).Render(cx))
 		}
-		root.Child(row.Child(check, outlineIcon(cx, it.Icon, 17, theme.Muted), el.Text(it.Label).TextSize(14)))
+		root.Child(row.Child(check, uiassets.Outline(cx, it.Icon, 17, theme.Muted), el.Text(it.Label).TextSize(14)))
 	}
 	return root
 }
@@ -400,7 +401,7 @@ func (a *app) setTableDividers(on bool) {
 }
 func iconAction(cx *el.Context, id, label, name string, callback func(), selected bool) el.Element {
 	return button("", callback, kit.ButtonGhost).ID(id).Name(label).Size(26).Selected(selected).
-		Content(el.ViewFunc(func(cx *el.Context) el.Element { return lucide(cx, name, 16, theme.Muted) })).
+		Content(el.ViewFunc(func(cx *el.Context) el.Element { return uiassets.Lucide(cx, name, 16, theme.Muted) })).
 		Render(cx).(*el.DivEl).Size(el.Dp(26)).P(0).Center().Rounded(6).FocusStyle(neutralFocus)
 }
 func chip(cx *el.Context, id, label, name string, callback func(), filled bool) el.Element {
@@ -409,9 +410,9 @@ func chip(cx *el.Context, id, label, name string, callback func(), filled bool) 
 		row.Bg(theme.Subtle)
 	}
 	if name != "" {
-		row.Child(lucide(cx, name, 15, theme.Muted))
+		row.Child(uiassets.Lucide(cx, name, 15, theme.Muted))
 	}
-	return row.Child(el.Text(label).TextSize(12).MaxLines(1), lucide(cx, "chevron-down", 12, theme.Muted))
+	return row.Child(el.Text(label).TextSize(12).MaxLines(1), uiassets.Lucide(cx, "chevron-down", 12, theme.Muted))
 }
 
 func (a *app) setQueueMode(queued bool) {

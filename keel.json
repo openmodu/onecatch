@@ -5,5 +5,5 @@
   "build": 1,
   "binary": "onecatch-keel",
   "icon": "build/keel/appicon.png",
-  "main": "./cmd/keel"
+  "main": "./cmd/app"
 }

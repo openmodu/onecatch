@@ -11,6 +11,7 @@ import (
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/markdown"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
 
@@ -222,7 +223,7 @@ func (a *app) skillDebugInspector(cx *el.Context) el.Element {
 	a.syncSkillDebugger()
 	d := &a.skills.Debug
 	d.PromptFocused = cx.Focused("skill-debug-prompt")
-	heading := el.Div().Row().Items(el.Center).H(el.Dp(44)).Px(12).Gap(6).Child(lucide(cx, "play", 13, theme.Muted), el.Text("/"+d.Name).Mono().TextSize(12).MaxLines(1).Grow().W(el.Dp(0)))
+	heading := el.Div().Row().Items(el.Center).H(el.Dp(44)).Px(12).Gap(6).Child(uiassets.Lucide(cx, "play", 13, theme.Muted), el.Text("/"+d.Name).Mono().TextSize(12).MaxLines(1).Grow().W(el.Dp(0)))
 	if d.Result != nil {
 		label := "失败"
 		if d.Result.Stopped {
@@ -246,7 +247,7 @@ func (a *app) skillDebugInspector(cx *el.Context) el.Element {
 		fg = theme.Text
 	}
 	run := skillDisabledButton(button(label, callback, variant).ID("run-skill-debug").Size(32).Content(el.ViewFunc(func(cx *el.Context) el.Element {
-		return el.Div().Row().Items(el.Center).Gap(6).Child(lucide(cx, icon, 13, fg), el.Text(label).TextSize(12).TextColor(fg).DisabledStyle(func(style *el.Style) { style.TextColor(theme.OnColor) }))
+		return el.Div().Row().Items(el.Center).Gap(6).Child(uiassets.Lucide(cx, icon, 13, fg), el.Text(label).TextSize(12).TextColor(fg).DisabledStyle(func(style *el.Style) { style.TextColor(theme.OnColor) }))
 	})), !d.Running && (strings.TrimSpace(d.Prompt) == "" || d.Name == ""))
 	control := run.Render(cx)
 	if div, ok := control.(*el.DivEl); ok {

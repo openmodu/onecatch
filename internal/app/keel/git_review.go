@@ -3,6 +3,7 @@ package keeldesktop
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,8 +14,8 @@ import (
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
 	"github.com/mattn/go-runewidth"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
-	"path/filepath"
 )
 
 type reviewLine struct {
@@ -404,7 +405,7 @@ func (a *app) reviewInspector(cx *el.Context) el.Element {
 		row := el.Div().Row().Items(el.Center).WFull().MinH(el.Dp(36)).Px(10).Py(6).Gap(6).Bg(theme.Subtle).
 			ID("review-file/"+file.Path).Role("button").Name(file.Path).Focusable(true).CursorPointer().FocusStyle(neutralFocus).
 			OnClick(func() { state.Collapsed[file.Path] = !state.Collapsed[file.Path] }).
-			Child(lucide(cx, arrow, 14, theme.Muted), lucide(cx, "file-diff", 13, theme.Success),
+			Child(uiassets.Lucide(cx, arrow, 14, theme.Muted), uiassets.Lucide(cx, "file-diff", 13, theme.Success),
 				el.Text(filepath.Base(file.Path)).TextSize(12).MaxLines(1),
 				el.Text(dir).TextSize(11).TextColor(theme.Muted).MaxLines(1).MaxW(el.Frac(.3)),
 				el.Text(fmt.Sprintf("+%d", file.Additions)).TextSize(11).TextColor(theme.Success),

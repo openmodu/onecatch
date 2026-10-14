@@ -10,7 +10,7 @@ const { version } = parseChangelog(readFileSync('CHANGELOG.md','utf8'));
 const configPath = 'keel.json';
 const original = readFileSync(configPath,'utf8');
 const config = JSON.parse(original);
-const generated = 'internal/buildinfo/zz_release_generated.go';
+const generated = 'internal/platform/buildinfo/zz_release_generated.go';
 const lock = 'build/keel/.package-lock';
 mkdirSync(lock); // Fail if another packaging operation owns the temporary config.
 let wroteGenerated = false;

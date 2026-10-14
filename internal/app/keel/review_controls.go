@@ -9,6 +9,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 )
 
 func (s *reviewWorkspace) collapseAll(collapsed bool) {
@@ -247,7 +248,7 @@ func (a *app) reviewFileList(cx *el.Context, s *reviewWorkspace, search bool) el
 		row := el.Div().W(el.Dp(width-10)).H(el.Dp(32)).Row().Items(el.Center).Px(6).Gap(5).Rounded(5).
 			Role("button").Name("跳转到 "+f.Path).Focusable(true).CursorPointer().FocusStyle(neutralFocus).Hover(func(st *el.Style) { st.Bg(theme.SubtleHover) }).
 			OnClick(func() { a.selectReviewFile(s, f.Path) }).
-			Child(lucide(cx, "file-diff", 12, theme.Success),
+			Child(uiassets.Lucide(cx, "file-diff", 12, theme.Success),
 				el.Div().Row().Items(el.Center).Gap(4).Grow().W(el.Dp(0)).Child(el.Text(filepath.Base(f.Path)).TextSize(11).MaxLines(1), el.Text(dir).TextSize(10).TextColor(theme.Muted).MaxLines(1).Grow().W(el.Dp(0))),
 				el.Text(fmt.Sprintf("+%d", f.Additions)).TextSize(10).TextColor(theme.Success).NoShrink(), el.Text(fmt.Sprintf("−%d", f.Deletions)).TextSize(10).TextColor(theme.DangerText).NoShrink())
 		if search && i == s.FileSearchIndex || !search && s.Selected == f.Path {

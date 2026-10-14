@@ -9,7 +9,7 @@ import (
 
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	repotasks "github.com/openmodu/onecatch/internal/repo/tasks"
 )
 
@@ -19,7 +19,7 @@ func (c *countingNotifier) MarkDirty() { c.marks++ }
 
 func notifyingFixture(t *testing.T) (repotasks.TasksRepo, *countingNotifier, domainworkspaces.Workspace) {
 	t.Helper()
-	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
+	store, err := localstore.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,7 +143,7 @@ func TestNotifyingRepoDoesNotMarkOnReads(t *testing.T) {
 // A nil notifier is the production path for anything that does not care, so the
 // decorator has to hand back a repository that still works.
 func TestWithNotifierWithoutANotifierReturnsTheRepositoryUntouched(t *testing.T) {
-	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
+	store, err := localstore.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
 	if err != nil {
 		t.Fatal(err)
 	}

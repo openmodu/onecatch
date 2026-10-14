@@ -17,9 +17,9 @@ import (
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	"github.com/openmodu/onecatch/internal/repo/git"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
-	"github.com/openmodu/onecatch/internal/sshcredentials"
+	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
 )
@@ -163,10 +163,10 @@ func (e *fifoEngine) Run(ctx context.Context, request agentrun.Request, _ agentr
 	}
 }
 
-func newLocalTestApp(t *testing.T, engine workflowuc.Engine) (*Service, *localdata.Store) {
+func newLocalTestApp(t *testing.T, engine workflowuc.Engine) (*Service, *localstore.Store) {
 	t.Helper()
 	root := t.TempDir()
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -316,7 +316,7 @@ func TestUpdateWorkspaceKeepsIdentityAndHistory(t *testing.T) {
 
 func TestDesktopApplicationServiceCreatesAndExecutesRun(t *testing.T) {
 	root := t.TempDir()
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -419,7 +419,7 @@ func TestNormalizeCommitMessageProducesOneConventionalSubject(t *testing.T) {
 
 func TestWorkspacePreferencesAndRunListStayWorkspaceScoped(t *testing.T) {
 	root := t.TempDir()
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}

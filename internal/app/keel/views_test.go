@@ -13,6 +13,7 @@ import (
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/locale"
 	"github.com/dyike/keel/ui/window"
+	"github.com/openmodu/onecatch/internal/app/keel/terminalview"
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
@@ -230,10 +231,10 @@ func TestRenderPreview(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{"terminal-left", "terminal-right"} {
-		s := newTerminalScreen(nil)
-		s.attachSession("")
-		defer s.close()
-		s.write([]byte("\x1b[32mityike@Mac-mini\x1b[0m: \x1b[33m~/Code/onecatch\x1b[0m (main)\r\n$ printf 'Hello from Go\\n'\r\nHello from Go\r\n\x1b[36m终端已就绪 · Go 原生渲染\x1b[0m\r\n$ "))
+		s := terminalview.New(nil)
+		s.AttachSession("")
+		defer s.Close()
+		s.Write([]byte("\x1b[32mityike@Mac-mini\x1b[0m: \x1b[33m~/Code/onecatch\x1b[0m (main)\r\n$ printf 'Hello from Go\\n'\r\nHello from Go\r\n\x1b[36m终端已就绪 · Go 原生渲染\x1b[0m\r\n$ "))
 		a.terminal.Panes[id] = &terminalPane{ID: id, Title: "zsh", Running: true, Screen: s}
 	}
 	tab := &terminalTab{ID: "terminal-left", Root: terminalLeaf("terminal-left")}

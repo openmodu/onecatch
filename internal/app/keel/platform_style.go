@@ -73,13 +73,6 @@ func platformWindowOptions(platform string, options window.Options) window.Optio
 	return options
 }
 
-func platformTerminalFace(platform string) font.Typeface {
-	if platform == "windows" {
-		return "Consolas, Microsoft YaHei, Microsoft YaHei UI, SimSun, Go Mono, Segoe UI Emoji"
-	}
-	return theme.MonoFace
-}
-
 // Linux and Windows share the app header; macOS uses native traffic lights.
 func usesDesktopHeader(platform string) bool {
 	return platform == "windows" || platform == "linux"

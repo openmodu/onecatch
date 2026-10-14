@@ -1,4 +1,4 @@
-package keeldesktop
+package terminalview
 
 import "github.com/dyike/keel/gio/io/key"
 

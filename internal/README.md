@@ -4,7 +4,7 @@
 
 2026-10-14 清理了未接入当前进程入口的用户、登录、订单、计费、商品 Agent 目录、订单交付物和订单执行器，以及对应的 SQL 仓库、HTTP API、SDK 和 Wire 装配。桌面的任务、对话展示、Agent runtime 和远端 Worker 是另一套能力，继续保留。此次删除只涉及仓库代码，没有清理用户数据目录或数据库。
 
-## 先看这五层
+## 先看这六个目录
 
 | 目录 | 负责什么 | 找代码时的例子 |
 | --- | --- | --- |
@@ -13,6 +13,7 @@
 | `usecase` | 业务流程与执行能力 | 工作流调度、Agent 协议适配、模板展开与保存规则 |
 | `domain` | 业务对象和不依赖 UI 的规则 | Task、Workflow、状态、校验、Harness 目录 |
 | `repo` | 持久化及外部状态访问 | 本地 JSON/JSONL、Git、工作区锁 |
+| `platform` | 与业务无关的系统能力 | 进程、SSH、SFTP、局域网发现、版本信息 |
 
 `service` 与 `usecase` 的区分是职责约定，目前还没有全部落实：`service/desktop` 仍然很宽，`usecase/agentrun` 也包含具体运行时适配。不能因为已有目录分层，就认为业务已经完全解耦。
 
@@ -46,12 +47,14 @@ usecase 定义自己需要的仓库接口，repo 实现接口，装配代码负�
 | `app/command` | 分发桌面、`worker` 和内部辅助进程角色 |
 | `app/keel` | Keel 原生桌面：页面、编辑状态、输入、滚动、选区、菜单、窗口 |
 | `app/keel/backend.go` | 桌面组合根：创建 store、runtime、工作流和 service，管理资源关闭 |
+| `app/keel/assets` | SVG、运行时图标、图标缓存与栅格化 |
+| `app/keel/terminalview` | 终端画布、键鼠输入、输入法、颜色、选区与搜索；通过回调连接会话 |
 | `app/keel/filepicker` | 原生文件选择器的系统适配 |
 | `app/worker` | Worker 参数解析、监听、配对、信号和常驻服务启动 |
 | `app/shell`、`app/askpass` | 子进程 shell 和凭据询问辅助入口 |
 | `app/updatehelper` | 独立更新进程，处理应用替换和回滚 |
 
-`app/keel` 中的阅读入口：
+`app/keel` 的组件边界见 [Keel 目录导读](app/keel/README.md)。主要阅读入口：
 
 | 想了解的功能 | 先读 |
 | --- | --- |
@@ -61,7 +64,7 @@ usecase 定义自己需要的仓库接口，repo 实现接口，装配代码负�
 | 并行工作流展示 | `conversation_timeline.go`、`conversation_lanes.go` |
 | 工作流编辑器 | `workflow_dag*.go`、`workflow_library.go` |
 | 文件浏览、差异和审查 | `files_panel.go`、`git_review*.go` |
-| 终端显示与输入 | `terminal_screen.go`、`terminal_views.go` |
+| 终端显示与输入 | `terminalview/screen.go`、`terminal_views.go` |
 | 设置与本地界面偏好 | `settings*.go`、`navigation.go` |
 | 模板库界面 | `library.go`；模板语言和文件格式已移出 UI |
 
@@ -114,7 +117,7 @@ Task 是要做的事情，Workflow 是怎么做，Run 是某次执行，StepRun 
 
 | 包 | 职责 |
 | --- | --- |
-| `store/local` | 本地数据目录和仓库初始化；默认 `~/.onecatch`，处理旧目录兼容 |
+| `localstore` | 本地数据目录和仓库初始化；默认 `~/.onecatch`，处理旧目录兼容 |
 | `tasks` | 工作区、任务等本地记录 |
 | `workflows` | 工作流定义、运行、节点、事件、指令等记录 |
 | `settings` | 设置持久化与旧格式兼容 |
@@ -122,13 +125,13 @@ Task 是要做的事情，Workflow 是怎么做，Run 是某次执行，StepRun 
 | `workspacelock` | 防止冲突执行的工作区锁 |
 | `prompttemplates` | 自定义模板 JSON、版本冲突检查和原子替换 |
 
-`store/local` 继续保留。已删除的 `repo/store/*.go` 是另一套 SQL 连接和商城仓库装配，不能连同 `local` 一起删。
+原来的 `repo/store/local` 已扁平化为 `repo/localstore`，数据目录和文件格式不变。此前删除的 SQL 连接和商城仓库装配不属于这套本地存储。
 
-### 其他顶层包：系统能力
+### platform：系统能力
 
 | 包 | 职责 |
 | --- | --- |
-| `platform/processexec` | 系统相关的子进程创建细节，例如 Windows 不弹控制台 |
+| `processexec` | 系统相关的子进程创建细节，例如 Windows 不弹控制台 |
 | `remotefs` | SSH/SFTP 远程文件系统能力 |
 | `sshendpoint` | SSH 地址解析与标准化 |
 | `sshcredentials` | SSH 凭据存取 |
@@ -136,7 +139,7 @@ Task 是要做的事情，Workflow 是怎么做，Run 是某次执行，StepRun 
 | `processmode` | 同一二进制的内部进程角色和可执行文件路径 |
 | `buildinfo` | 构建版本信息 |
 
-这些包不必套一层空的 usecase。保持职责具体即可；不要创建 `common`、`utils` 等包来收容无法归类的业务代码。
+这些包统一放在 `platform` 下，不反向依赖业务层。这些能力不必套一层空的 usecase。保持职责具体即可；不要创建 `common`、`utils` 等包来收容无法归类的业务代码。
 
 ## UI 与后端的边界怎么落地
 
@@ -164,7 +167,7 @@ app/keel/library.go                 编辑草稿、当前选项、预览、错�
 
 ## 检查与阅读顺序
 
-`architecture_test.go` 检查源代码 import，包括不同平台文件：后端不能依赖 Keel 或 app；usecase 不能依赖具体 repo；视图不能直接引用 repo（`backend.go` 装配除外）。这个测试能防止依赖方向倒置，但识别不了写在 UI 函数内部的业务规则，仍需评审调用流程。
+`architecture_test.go` 检查源代码 import，包括不同平台文件：后端不能依赖 Keel 或 app；usecase 不能依赖具体 repo；视图不能直接引用 repo（`backend.go` 装配除外）。同时检查 platform 不引用业务层、独立 UI 组件不引用应用后端。这个测试能防止依赖方向倒置，但识别不了写在 UI 函数内部的业务规则，仍需评审调用流程。
 
 ```sh
 go test ./internal                                  # 依赖边界，不启动 UI

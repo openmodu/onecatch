@@ -14,7 +14,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/openmodu/onecatch/internal/remotefs"
+	"github.com/openmodu/onecatch/internal/platform/remotefs"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 

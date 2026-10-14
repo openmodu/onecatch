@@ -9,7 +9,7 @@ import (
 	"github.com/openmodu/onecatch/internal/app/shell"
 	"github.com/openmodu/onecatch/internal/app/updatehelper"
 	"github.com/openmodu/onecatch/internal/app/worker"
-	"github.com/openmodu/onecatch/internal/processmode"
+	"github.com/openmodu/onecatch/internal/platform/processmode"
 )
 
 // Run returns false only for a normal desktop launch.

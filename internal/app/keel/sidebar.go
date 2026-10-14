@@ -16,6 +16,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 )
 
@@ -285,7 +286,7 @@ func (a *app) sidebarSearch(cx *el.Context) el.Element {
 	return el.Div().ID("task-search-box").Name("搜索任务").Role("button").Focusable(true).
 		Row().Items(el.Center).Gap(8).Grow().W(el.Dp(0)).H(el.Dp(32)).Px(10).Rounded(8).Bg(theme.Subtle).
 		CursorPointer().OnClick(a.focusTaskSearch).Hover(func(s *el.Style) { s.Bg(theme.SubtleHover) }).
-		Child(lucide(cx, "search", 16, theme.Muted), el.Text(uiText("搜索")).TextColor(theme.Muted).Grow())
+		Child(uiassets.Lucide(cx, "search", 16, theme.Muted), el.Text(uiText("搜索")).TextColor(theme.Muted).Grow())
 }
 
 func (a *app) sidebarTask(t domaintasks.Task) kit.SidebarItem {
@@ -344,16 +345,16 @@ func (a *app) nav(cx *el.Context, id, text string, icon kit.IconName, selected b
 }
 func runtimeMark(cx *el.Context, id string, size float32) el.Element {
 	if id == "modu" || id == "modu-code" {
-		return rasterIcon(cx, "runtimeicons/modu-code.png", size, theme.Text)
+		return uiassets.Raster(cx, "runtimeicons/modu-code.png", size, theme.Text)
 	}
 	if id == "trae" {
-		return rasterIcon(cx, "runtimeicons/trae.png", size)
+		return uiassets.Raster(cx, "runtimeicons/trae.png", size)
 	}
 	names := map[string]string{"codex": "codex.svg", "claude": "claude-code.svg", "pi": "pi.svg", "grok": "grok.svg", "dsh": "deepseek.svg"}
 	if name, ok := names[id]; ok {
-		return assetIcon(cx, "runtimeicons/"+name, size, theme.Text, id != "pi" && id != "grok")
+		return uiassets.Icon(cx, "runtimeicons/"+name, size, theme.Text, id != "pi" && id != "grok")
 	}
-	return lucide(cx, "bot", size, theme.Muted)
+	return uiassets.Lucide(cx, "bot", size, theme.Muted)
 }
 
 // Keep enough space for the composer without changing the user's saved sidebar width.
@@ -420,7 +421,7 @@ func (a *app) executorPicker(cx *el.Context) el.Element {
 		} else if d, ok := a.findDefinition(a.task.WorkflowID); ok {
 			name = d.Name
 		}
-		return el.Div().Row().Items(el.Center).Gap(7).H(el.Dp(32)).Px(10).Rounded(16).Bg(theme.Subtle).Child(lucide(cx, "workflow", 14, theme.Muted), el.Text(name).TextSize(12).MaxLines(1))
+		return el.Div().Row().Items(el.Center).Gap(7).H(el.Dp(32)).Px(10).Rounded(16).Bg(theme.Subtle).Child(uiassets.Lucide(cx, "workflow", 14, theme.Muted), el.Text(name).TextSize(12).MaxLines(1))
 	}
 	if a.task != nil {
 		label := a.task.Harness
@@ -463,9 +464,9 @@ func (a *app) buildExecutorMenu() {
 		if direct {
 			row.Child(runtimeMark(cx, id, 14))
 		} else {
-			row.Child(lucide(cx, "workflow", 14, theme.Muted))
+			row.Child(uiassets.Lucide(cx, "workflow", 14, theme.Muted))
 		}
-		return row.Child(el.Text(label).TextSize(12).MaxLines(1), lucide(cx, "chevron-down", 12, theme.Muted))
+		return row.Child(el.Text(label).TextSize(12).MaxLines(1), uiassets.Lucide(cx, "chevron-down", 12, theme.Muted))
 	}))
 	a.ui.Executor = menu
 }
@@ -509,7 +510,7 @@ func (a *app) executorOptions(cx *el.Context) el.Element {
 			if isProjectWorkflow(d.ID) {
 				icon = "file-code-2"
 			}
-			column.Child(listOption(cx, "executor-workflow/"+d.ID, d.Name, lucide(cx, icon, 16, theme.Muted), func() { a.selectLocalConversation(a.runtime.Value(), d.ID) }, a.workflow.Value() == d.ID, a.busy || a.loading))
+			column.Child(listOption(cx, "executor-workflow/"+d.ID, d.Name, uiassets.Lucide(cx, icon, 16, theme.Muted), func() { a.selectLocalConversation(a.runtime.Value(), d.ID) }, a.workflow.Value() == d.ID, a.busy || a.loading))
 		}
 	}
 	return column

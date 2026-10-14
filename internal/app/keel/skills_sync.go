@@ -10,6 +10,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	"github.com/openmodu/onecatch/internal/service/skillmanager"
 )
 
@@ -128,7 +129,7 @@ func (a *app) rebuildSkillTargetMenus() {
 				}
 			}
 			b := skillDisabledButton(button(fmt.Sprintf("%d / %d 个目标", count, len(s.Targets)), nil, kit.ButtonGhost).Size(28), s.Busy != "" || a.library.SkillLoading || len(s.Targets) == 0).Content(el.ViewFunc(func(cx *el.Context) el.Element {
-				return el.Div().Row().Items(el.Center).Gap(8).Child(el.Text(fmt.Sprintf("%d / %d 个目标", count, len(s.Targets))).TextSize(12).TextColor(theme.Muted), lucide(cx, "chevron-down", 13, theme.Muted))
+				return el.Div().Row().Items(el.Center).Gap(8).Child(el.Text(fmt.Sprintf("%d / %d 个目标", count, len(s.Targets))).TextSize(12).TextColor(theme.Muted), uiassets.Lucide(cx, "chevron-down", 13, theme.Muted))
 			}))
 			return b.Render(cx)
 		}))
@@ -167,7 +168,7 @@ func (a *app) skillSyncPage(cx *el.Context) el.Element {
 	targetSection.Child(targetRows)
 	root.Child(targetSection)
 	library := el.Div().Mt(22).Gap(2).Child(el.Div().Row().Items(el.Center).Child(el.Text("Skill 库").TextSize(13).Bold().Grow(), skillDisabledButton(button("全部同步", func() { a.syncManagedSkills("") }, kit.ButtonGhost).Size(28).Content(el.ViewFunc(func(cx *el.Context) el.Element {
-		return el.Div().Row().Items(el.Center).Gap(6).Child(lucide(cx, "refresh-cw", 14, theme.Muted), el.Text("全部同步").TextSize(12).TextColor(theme.Muted))
+		return el.Div().Row().Items(el.Center).Gap(6).Child(uiassets.Lucide(cx, "refresh-cw", 14, theme.Muted), el.Text("全部同步").TextSize(12).TextColor(theme.Muted))
 	})), s.Busy != "" || len(a.library.Skills) == 0).Loading(s.Busy == "sync/").Render(cx)))
 	for _, entry := range a.library.Skills {
 		skill := entry
@@ -195,7 +196,7 @@ func (a *app) skillSyncPage(cx *el.Context) el.Element {
 			row.Child(menu.Render(cx))
 		}
 		row.Child(skillDisabledButton(button("立即同步", func() { a.syncManagedSkills(skill.Name) }, kit.ButtonGhost).ID("sync-skill/"+skill.Name).Size(28).Content(el.ViewFunc(func(cx *el.Context) el.Element {
-			return el.Div().Row().Items(el.Center).Gap(6).Child(lucide(cx, "refresh-cw", 14, theme.Muted), el.Text("立即同步").TextSize(12).TextColor(theme.Muted))
+			return el.Div().Row().Items(el.Center).Gap(6).Child(uiassets.Lucide(cx, "refresh-cw", 14, theme.Muted), el.Text("立即同步").TextSize(12).TextColor(theme.Muted))
 		})), s.Busy != "" || receiving == 0 || blocked).Loading(s.Busy == "sync/"+skill.Name).Render(cx))
 		library.Child(row)
 	}

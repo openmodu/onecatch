@@ -13,7 +13,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/openmodu/onecatch/internal/processmode"
+	"github.com/openmodu/onecatch/internal/platform/processmode"
 	keyring "github.com/zalando/go-keyring"
 )
 

@@ -15,6 +15,7 @@ import (
 func TestDependencyBoundaries(t *testing.T) {
 	const module = "github.com/openmodu/onecatch/internal/"
 	forbidden := map[string][]string{
+		"platform":  {"app/", "transport/", "service/", "usecase/", "repo/", "domain/"},
 		"domain":    {"app/", "transport/", "service/", "usecase/", "repo/"},
 		"usecase":   {"app/", "transport/", "service/", "repo/"},
 		"repo":      {"app/", "transport/", "service/", "usecase/"},
@@ -45,6 +46,11 @@ func TestDependencyBoundaries(t *testing.T) {
 			for _, prefix := range forbidden[layer] {
 				if strings.HasPrefix(dependency, module+prefix) {
 					t.Errorf("%s crosses %s boundary: %s", rel, layer, dependency)
+				}
+			}
+			if strings.HasPrefix(rel, "app/keel/assets/") || strings.HasPrefix(rel, "app/keel/terminalview/") {
+				if strings.HasPrefix(dependency, module) {
+					t.Errorf("UI component %s imports application dependency %s", rel, dependency)
 				}
 			}
 			// backend.go is the desktop composition root, not a view/controller.

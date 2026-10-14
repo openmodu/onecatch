@@ -3,7 +3,6 @@ package keeldesktop
 import (
 	"context"
 	"encoding/base64"
-	"github.com/charmbracelet/x/ansi"
 	"image"
 	"runtime"
 	"strings"
@@ -12,124 +11,16 @@ import (
 
 	"github.com/dyike/keel/gio/f32"
 	"github.com/dyike/keel/gio/io/input"
-	"github.com/dyike/keel/gio/io/key"
 	"github.com/dyike/keel/gio/io/pointer"
 	"github.com/dyike/keel/gio/layout"
 	"github.com/dyike/keel/gio/op"
 	"github.com/dyike/keel/gio/unit"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"
+	"github.com/openmodu/onecatch/internal/app/keel/terminalview"
 	terminalservice "github.com/openmodu/onecatch/internal/service/terminal"
 )
 
-func expectTerminalInput(t *testing.T, ch <-chan string, want string) {
-	t.Helper()
-	var got strings.Builder
-	timeout := time.NewTimer(time.Second)
-	defer timeout.Stop()
-	for got.Len() < len(want) {
-		select {
-		case s := <-ch:
-			got.WriteString(s)
-		case <-timeout.C:
-			t.Fatalf("terminal input %q, want %q", got.String(), want)
-		}
-	}
-	if got.String() != want {
-		t.Fatalf("terminal input %q, want %q", got.String(), want)
-	}
-}
-func TestTerminalNativeInputCompositionAndControlKeys(t *testing.T) {
-	out := make(chan string, 128)
-	s := newTerminalScreen(func(_ string, b []byte) error { out <- string(b); return nil })
-	s.attachSession("test")
-	defer s.close()
-	var r input.Router
-	var ops op.Ops
-	frame := func() {
-		ops.Reset()
-		s.Layout(layout.Context{Ops: &ops, Now: time.Now(), Source: r.Source(), Constraints: layout.Exact(image.Pt(640, 240)), Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}})
-		r.Frame(&ops)
-	}
-	frame()
-	r.Source().Execute(key.FocusCmd{Tag: s})
-	frame()
-	frame()
-	// Ordinary text and Space's raw key share a frame; it must be emitted once.
-	r.Queue(key.EditEvent{Text: "hello"}, key.Event{Name: key.NameSpace, State: key.Press}, key.EditEvent{Text: " ", Range: key.Range{Start: 5, End: 5}}, key.Event{Name: key.NameReturn, State: key.Press})
-	frame()
-	expectTerminalInput(t, out, "hello \r")
-	// macOS may send the edit before its composition range in the same frame.
-	r.Queue(key.EditEvent{Text: "zhong"}, key.CompositionEvent{Start: 0, End: 5})
-	frame()
-	if string(s.IME.Text) != "zhong" || !s.IME.composing() {
-		t.Fatalf("missing preedit: %+v", s.IME)
-	}
-	select {
-	case v := <-out:
-		t.Fatalf("preedit leaked into shell: %q", v)
-	case <-time.After(20 * time.Millisecond):
-	}
-	r.Queue(key.EditEvent{Range: key.Range{End: 5}, Text: "中文"}, key.CompositionEvent{Start: -1, End: -1})
-	frame()
-	expectTerminalInput(t, out, "中文")
-	r.Queue(key.Event{Name: "C", Modifiers: key.ModCtrl, State: key.Press}, key.Event{Name: key.NameUpArrow, State: key.Press})
-	frame()
-	expectTerminalInput(t, out, "\x03\x1b[A")
-	if runtime.GOOS == "darwin" {
-		r.Queue(key.Event{Name: "E", Modifiers: key.ModAlt, State: key.Press}, key.EditEvent{Text: "é"})
-		frame()
-		expectTerminalInput(t, out, "é")
-	}
-	s.write([]byte("\x1b[?2004h"))
-	s.paste("one\ntwo")
-	expectTerminalInput(t, out, "\x1b[200~one\ntwo\x1b[201~")
-	s.Writable = false
-	r.Queue(key.EditEvent{Text: "discard"}, key.Event{Name: key.NameReturn, State: key.Press})
-	frame()
-	select {
-	case v := <-out:
-		t.Fatalf("input sent to exited session: %q", v)
-	case <-time.After(20 * time.Millisecond):
-	}
-}
-func TestTerminalANSIWideUnicodeScrollbackAndSearch(t *testing.T) {
-	s := newTerminalScreen(nil)
-	s.attachSession("")
-	defer s.close()
-	s.Emulator.Resize(30, 3)
-	s.write([]byte("\x1b[31mRED\x1b[0m \xe4\xb8"))
-	s.write([]byte("\xad文\r\nsecond\r\nthird\r\nfourth"))
-	if s.historyLen() != 1 {
-		t.Fatalf("history lines %d", s.historyLen())
-	}
-	if c := s.cellAt(4, 0); c == nil || c.Content != "中" || c.Width != 2 {
-		t.Fatalf("wide cell: %+v", c)
-	}
-	if c := s.cellAt(0, 0); c.Style.Fg == nil {
-		t.Fatal("ANSI foreground missing")
-	}
-	if !s.search("中文", false) || s.match.From.X != 4 || s.match.To.X != 8 || s.Scroll != 1 {
-		t.Fatalf("wide search: %+v, scroll %d", s.match, s.Scroll)
-	}
-	s.Anchor, s.Selection, s.HasSelection = terminalPoint{0, 0}, terminalPoint{8, 0}, true
-	if text := s.selectionText(); text != "RED 中文" {
-		t.Fatalf("selection %q", text)
-	}
-	s.write([]byte("\x1b[?1049h\x1b[2J\x1b[Halternate"))
-	if s.historyLen() != 0 || s.cellAt(0, 0).Content != "a" {
-		t.Fatal("alternate screen was not isolated")
-	}
-	s.write([]byte("\x1b[?1049l"))
-	if s.historyLen() != 1 || s.cellAt(0, 0).Content != "R" {
-		t.Fatal("primary screen not restored")
-	}
-	s.Emulator.Resize(30, 5)
-	s.write([]byte("\x1b[Hİ hello 中文"))
-	if !s.search("HELLO", false) || s.match.From.X != 2 {
-		t.Fatalf("casefold column mapping: %+v", s.match)
-	}
-}
 func TestTerminalSplitsRetainSiblingsWhenOriginalPaneCloses(t *testing.T) {
 	n := terminalLeaf("first")
 	n.split("first", "second", "vertical", "one")
@@ -160,8 +51,8 @@ func TestTerminalSessionEventsAndTabLifecycle(t *testing.T) {
 		t.Fatalf("startup events lost: %+v", pending)
 	}
 	for _, id := range []string{"original", "sibling"} {
-		s := newTerminalScreen(nil)
-		s.attachSession("")
+		s := terminalview.New(nil)
+		s.AttachSession("")
 		a.terminal.Panes[id] = &terminalPane{ID: id, Screen: s}
 	}
 	tab := &terminalTab{ID: "original", Root: terminalLeaf("original")}
@@ -170,13 +61,13 @@ func TestTerminalSessionEventsAndTabLifecycle(t *testing.T) {
 	a.terminal.Active, a.terminal.Focused = "original", "original"
 	a.terminal.Open = true
 	a.removeTerminalPane("original")
-	if len(a.terminal.Tabs) != 1 || a.terminal.Active != "original" || a.terminal.Focused != "sibling" || a.terminal.Panes["sibling"].Screen.closed {
+	if len(a.terminal.Tabs) != 1 || a.terminal.Active != "original" || a.terminal.Focused != "sibling" || a.terminal.Panes["sibling"].Screen.Closed() {
 		t.Fatal("closing original pane destroyed its tab group")
 	}
 	a.terminal.Sessions["live"] = "sibling"
 	output.SessionID = "live"
 	a.terminalEvent(terminalservice.OutputEvent, output)
-	if !a.terminal.Panes["sibling"].Screen.search("first output", false) {
+	if !a.terminal.Panes["sibling"].Screen.Search("first output", false) {
 		t.Fatal("mapped session missed output")
 	}
 	a.terminalEvent(terminalservice.ExitEvent, terminalservice.ExitFrame{SessionID: "live", ExitCode: 7})
@@ -196,38 +87,6 @@ func TestTerminalSessionEventsAndTabLifecycle(t *testing.T) {
 		t.Fatal("last tab did not close dock")
 	}
 }
-func TestTerminalLinksKeepOriginalWideColumnMapping(t *testing.T) {
-	s := newTerminalScreen(nil)
-	s.attachSession("")
-	defer s.close()
-	s.write([]byte("中文 https://example.com/path?q=one.\r\n\x1b]8;;https://example.org\x07label\x1b]8;;\x07"))
-	if got := s.linkAt(terminalPoint{7, 0}); got != "https://example.com/path?q=one" {
-		t.Fatalf("plain link %q", got)
-	}
-	if got := s.linkAt(terminalPoint{1, 1}); got != "https://example.org" {
-		t.Fatalf("OSC 8 link %q", got)
-	}
-	if terminalWebURL("javascript:alert(1)") != "" || terminalWebURL("file:///etc/passwd") != "" {
-		t.Fatal("non-web terminal link accepted")
-	}
-}
-
-func TestTerminalPaletteRetintsANSIWithoutChangingTrueColor(t *testing.T) {
-	s := newTerminalScreen(nil)
-	s.attachSession("")
-	defer s.close()
-	s.setPalette("system", false)
-	s.write([]byte("\x1b[31mR\x1b[38;2;20;40;60mT"))
-	red, exact := s.cellAt(0, 0).Style.Fg, s.cellAt(1, 0).Style.Fg
-	s.setPalette("paper", false)
-	if s.resolveColor(red, theme.Text) != s.Palette.Colors[1] || s.resolveColor(exact, theme.Text) != theme.RGB(0x14283c) {
-		t.Fatal("palette did not distinguish indexed from true color")
-	}
-	s.setPalette("midnight", true)
-	if s.resolveColor(red, theme.Text) != s.Palette.Colors[1] {
-		t.Fatal("existing ANSI cell kept stale palette")
-	}
-}
 func TestKeelTerminalRealPTYInputResizeAndExit(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shell test")
@@ -243,11 +102,11 @@ func TestKeelTerminalRealPTYInputResizeAndExit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := newTerminalScreen(func(id string, data []byte) error {
+	s := terminalview.New(func(id string, data []byte) error {
 		return b.terminal.Write(id, base64.StdEncoding.EncodeToString(data))
 	})
-	s.attachSession(session.ID)
-	defer s.close()
+	s.AttachSession(session.ID)
+	defer s.Close()
 	var output strings.Builder
 	var exit *terminalservice.ExitFrame
 	sent := false
@@ -263,7 +122,7 @@ func TestKeelTerminalRealPTYInputResizeAndExit(t *testing.T) {
 					t.Fatal(err)
 				}
 				output.Write(data)
-				s.write(data)
+				s.Write(data)
 				if !sent && strings.Contains(output.String(), "READY") {
 					if err = b.terminal.Resize(session.ID, 15, 90); err != nil {
 						t.Fatal(err)
@@ -282,7 +141,7 @@ func TestKeelTerminalRealPTYInputResizeAndExit(t *testing.T) {
 	if exit.ExitCode != 7 || !strings.Contains(output.String(), "VALUE:hello中文") || !strings.Contains(output.String(), "15 90") {
 		t.Fatalf("PTY output/exit: %q %+v", output.String(), exit)
 	}
-	if !s.search("VALUE:hello中文", false) {
+	if !s.Search("VALUE:hello中文", false) {
 		t.Fatal("PTY output absent from emulator")
 	}
 	if err = b.close(); err != nil {
@@ -300,8 +159,8 @@ func TestTerminalSplitResizeThroughNativeInput(t *testing.T) {
 	a := newApp(b)
 	defer a.close()
 	for _, id := range []string{"left", "right"} {
-		s := newTerminalScreen(nil)
-		s.attachSession("")
+		s := terminalview.New(nil)
+		s.AttachSession("")
 		a.terminal.Panes[id] = &terminalPane{ID: id, Screen: s}
 	}
 	n := terminalLeaf("left")
@@ -341,7 +200,7 @@ func TestTerminalCanvasAlwaysFollowsAppearance(t *testing.T) {
 	for _, dark := range []bool{false, true} {
 		applyPalette(dark)
 		for _, id := range []string{"system", "paper", "midnight", "contrast"} {
-			p := resolveNativeTerminalPalette(id, dark)
+			p := terminalview.ResolvePalette(id, dark)
 			if p.Background != theme.Surface || p.Foreground != theme.Text {
 				t.Fatalf("%s dark=%v overrides application canvas", id, dark)
 			}
@@ -363,23 +222,5 @@ func TestTerminalPanelCloseDisposesAllTabs(t *testing.T) {
 		if !p.Removed {
 			t.Fatal("close did not dispose pane")
 		}
-	}
-}
-
-func TestTerminalLightIndexedTextRemainsReadable(t *testing.T) {
-	applyPalette(false)
-	s := newTerminalScreen(nil)
-	defer s.close()
-	s.setPalette("system", false)
-	for _, idx := range []ansi.IndexedColor{40, 220, 229} {
-		original := s.resolveColor(idx, theme.Text)
-		adjusted := s.resolveForegroundColor(idx, theme.Text)
-		if adjusted == original {
-			t.Fatalf("bright index %d was not adapted for white background", idx)
-		}
-	}
-	exact := theme.RGB(0xffff00)
-	if s.resolveForegroundColor(exact, theme.Text) != exact {
-		t.Fatal("true color changed")
 	}
 }

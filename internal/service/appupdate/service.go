@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openmodu/onecatch/internal/buildinfo"
-	"github.com/openmodu/onecatch/internal/processmode"
+	"github.com/openmodu/onecatch/internal/platform/buildinfo"
+	"github.com/openmodu/onecatch/internal/platform/processmode"
 )
 
 const (

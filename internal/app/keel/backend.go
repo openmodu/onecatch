@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	gitrepo "github.com/openmodu/onecatch/internal/repo/git"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	repotasks "github.com/openmodu/onecatch/internal/repo/tasks"
 	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
@@ -26,7 +26,7 @@ type backend struct {
 	streams        *runstream.Hub
 	states         *runstate.Hub
 	lists          *listchange.Hub
-	store          *localdata.Store
+	store          *localstore.Store
 	runtimes       *desktopservice.RuntimeRegistry
 	terminal       *terminalservice.Service
 	terminalMu     sync.Mutex
@@ -41,7 +41,7 @@ func openBackend(ctx context.Context, root string) (*backend, error) {
 }
 
 func openBackendWithEngine(ctx context.Context, root string, engine workflowuc.Engine) (*backend, error) {
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		return nil, err
 	}

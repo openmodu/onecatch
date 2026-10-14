@@ -14,14 +14,14 @@ import (
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
 )
 
 func TestWorkflowRepoPersistsRunSnapshotAndEvents(t *testing.T) {
 	ctx := context.Background()
 	root := filepath.Join(t.TempDir(), ".onecatch")
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestWorkflowRepoPersistsRunSnapshotAndEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reopened, err := localdata.OpenStore(root)
+	reopened, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestWorkflowRepoPersistsRunSnapshotAndEvents(t *testing.T) {
 
 func TestWorkflowRepoRenamesAndDeletesDefinitions(t *testing.T) {
 	ctx := context.Background()
-	store, err := localdata.OpenStore(t.TempDir())
+	store, err := localstore.OpenStore(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestWorkflowRepoRenamesAndDeletesDefinitions(t *testing.T) {
 func TestRuntimeEventStoreRejectsUnsafeIDsAndCorruption(t *testing.T) {
 	ctx := context.Background()
 	root := filepath.Join(t.TempDir(), ".onecatch")
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -244,7 +244,7 @@ func TestRuntimeEventStoreRejectsUnsafeIDsAndCorruption(t *testing.T) {
 
 func TestRuntimeEventStoreSerializesConcurrentAppends(t *testing.T) {
 	ctx := context.Background()
-	store, err := localdata.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
+	store, err := localstore.OpenStore(filepath.Join(t.TempDir(), ".onecatch"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +280,7 @@ func TestRuntimeEventStoreSerializesConcurrentAppends(t *testing.T) {
 func TestRunListQueryFiltersSearchesAndPages(t *testing.T) {
 	ctx := context.Background()
 	root := filepath.Join(t.TempDir(), ".onecatch")
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}

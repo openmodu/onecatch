@@ -10,6 +10,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 )
 
 type conversationAttachment struct {
@@ -84,7 +85,7 @@ func (a *app) conversationAttachments(cx *el.Context, items []conversationAttach
 			row.Child(card)
 		} else {
 			row.Child(el.Div().Row().Items(el.Center).Gap(5).Px(8).Py(5).Rounded(8).Bg(theme.SubtleHover).MaxW(el.Dp(240)).Child(
-				lucide(cx, "paperclip", 14, theme.Muted), el.Text(name).TextSize(11).TextColor(theme.Muted).MaxLines(1).MaxW(el.Dp(200)),
+				uiassets.Lucide(cx, "paperclip", 14, theme.Muted), el.Text(name).TextSize(11).TextColor(theme.Muted).MaxLines(1).MaxW(el.Dp(200)),
 			))
 		}
 	}

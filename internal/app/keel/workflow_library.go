@@ -6,6 +6,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 )
 
 // workflowLibrary shares the settings content area instead of nesting another sidebar.
@@ -36,7 +37,7 @@ func (a *app) workflowLibrary(cx *el.Context) el.Element {
 			a.selectWorkflow(d.ID, true)
 		}, kit.ButtonGhost).Size(30).Compact(true)
 		row := el.Div().Row().Items(el.Center).Gap(12).Py(16).Child(
-			el.Div().Size(el.Dp(32)).Rounded(8).Bg(theme.Subtle).Center().Child(lucide(cx, icon, 16, theme.Muted)),
+			el.Div().Size(el.Dp(32)).Rounded(8).Bg(theme.Subtle).Center().Child(uiassets.Lucide(cx, icon, 16, theme.Muted)),
 			content, edit.Render(cx), a.workflowRowMenu(d).Render(cx),
 		)
 		list.Child(row, el.Div().H(el.Dp(1)).WFull().Bg(seamColor).NoShrink())

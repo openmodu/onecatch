@@ -4,10 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
-
-	"github.com/dyike/keel/ui/kit"
 )
 
 func TestNavigationHistoryBranching(t *testing.T) {
@@ -63,23 +60,5 @@ func TestUIPreferencesRoundTripAndCorruption(t *testing.T) {
 	}
 	if _, err := loadUIPreferences(root); err == nil {
 		t.Fatal("corruption must be reported")
-	}
-}
-func TestEmbeddedIconsParse(t *testing.T) {
-	for _, dir := range []string{"icons", "runtimeicons"} {
-		entries, err := iconAssets.ReadDir(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, entry := range entries {
-			if !strings.HasSuffix(entry.Name(), ".svg") {
-				continue
-			}
-			name := dir + "/" + entry.Name()
-			data, _ := iconAssets.ReadFile(name)
-			if _, err := kit.SVGIcon(data); err != nil {
-				t.Errorf("%s: %v", name, err)
-			}
-		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/dyike/keel/ui/locale"
 	"github.com/dyike/keel/ui/markdown"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 )
 
 type toolCodeContent struct {
@@ -126,7 +127,7 @@ func (a *app) toolResultSection(cx *el.Context, content toolCodeContent, id stri
 			if view.copy.Copied() {
 				icon = "check"
 			}
-			return lucide(cx, icon, 16, theme.Text)
+			return uiassets.Lucide(cx, icon, 16, theme.Text)
 		}))
 		a.conversation.toolResults[id] = view
 	}
@@ -150,7 +151,7 @@ func (a *app) toolResultSection(cx *el.Context, content toolCodeContent, id stri
 	// The native read-only editor owns selection and scrolls independently;
 	// the header and full-output copy action stay visible above its viewport.
 	header := el.Div().Row().Items(el.Center).Gap(6).Px(14).Pt(8).Pb(4).Child(
-		lucide(cx, "file-code-2", 18, theme.Text),
+		uiassets.Lucide(cx, "file-code-2", 18, theme.Text),
 		el.Text(label).TextSize(13).Grow(), view.copy.Render(cx),
 	)
 	body := el.TextArea().ID(id+"/text").Name(content.text).Document(&view.document).ReadOnly(true).

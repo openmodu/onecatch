@@ -8,6 +8,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	desktopservice "github.com/openmodu/onecatch/internal/service/desktop"
 )
@@ -82,7 +83,7 @@ func (a *app) workflowProgress(cx *el.Context) el.Element {
 			continue
 		}
 		card := el.Div().ID("run-step/" + step.ID).Bg(theme.Subtle).Rounded(8).P(10).Gap(6)
-		card.Child(el.Div().Row().Items(el.Center).Gap(8).Child(lucide(cx, icon, 14, fg), el.Text(step.Name).TextSize(12).Medium().Grow().MaxLines(1), el.Text(stepAgentLabel(step)).Mono().TextSize(10).TextColor(theme.Muted).MaxLines(1)))
+		card.Child(el.Div().Row().Items(el.Center).Gap(8).Child(uiassets.Lucide(cx, icon, 14, fg), el.Text(step.Name).TextSize(12).Medium().Grow().MaxLines(1), el.Text(stepAgentLabel(step)).Mono().TextSize(10).TextColor(theme.Muted).MaxLines(1)))
 		meta := []string{label}
 		if node.Attempt > 1 {
 			meta = append(meta, fmt.Sprintf("第 %d 次", node.Attempt))
@@ -221,7 +222,7 @@ func (a *app) workflowLoopBar(cx *el.Context) el.Element {
 	d := a.detail
 	toggle := button(map[bool]string{true: "循环运行 · 开", false: "循环运行 · 关"}[d.Run.LoopEnabled], func() { a.setRunLoop(!d.Run.LoopEnabled) }, kit.ButtonSecondary).ID("conversation-loop-toggle").Selected(d.Run.LoopEnabled).Compact(true).Size(30)
 	toggle.SetDisabled(d.Active || a.busy)
-	row := el.Div().WFull().MaxW(el.Dp(920)).Row().Wrap().Items(el.Center).Gap(10).Px(12).Py(8).Rounded(9).Bg(mixColor(theme.Info, theme.Surface, .05)).Child(lucide(cx, "rotate-ccw", 15, theme.Info), toggle.Render(cx))
+	row := el.Div().WFull().MaxW(el.Dp(920)).Row().Wrap().Items(el.Center).Gap(10).Px(12).Py(8).Rounded(9).Bg(mixColor(theme.Info, theme.Surface, .05)).Child(uiassets.Lucide(cx, "rotate-ccw", 15, theme.Info), toggle.Render(cx))
 	if d.Run.LoopEnabled {
 		state := "已暂停"
 		if d.Active {

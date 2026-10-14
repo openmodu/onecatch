@@ -200,7 +200,7 @@ Four edits, because everything else derives:
 2. **`internal/usecase/agentrun/<name>.go`** — the adapter, implementing
    `agentrun.Runner`, or an `acpLaunch` if the harness speaks ACP. Register it
    in the `descriptors` table in `registry.go`.
-3. **`internal/app/keel/runtimeicons/<id>.svg`** — the mark. Register the icon in the native runtime icon loader and record provenance in `SOURCES.md`.
+3. **`internal/app/keel/assets/runtimeicons/<id>.svg`** — the mark. Register the icon in the native runtime icon loader and record provenance in `SOURCES.md`.
 4. **`internal/app/keel/language.go`** — labels in both languages.
 
 This shape exists because the earlier one failed. The same facts used to be

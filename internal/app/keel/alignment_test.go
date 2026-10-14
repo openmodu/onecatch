@@ -14,9 +14,9 @@ import (
 	"github.com/dyike/keel/gio/layout"
 	"github.com/dyike/keel/gio/op"
 	"github.com/dyike/keel/gio/unit"
-
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/locale"
+	"github.com/openmodu/onecatch/internal/app/keel/terminalview"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	desktop "github.com/openmodu/onecatch/internal/service/desktop"
 )
@@ -44,10 +44,10 @@ func alignmentFixture(t *testing.T) *app {
 	}
 	for i, title := range []string{"ityike@Mac-mini", "zsh", "very-long-terminal-session-title"} {
 		id := []string{"main", "short", "long"}[i]
-		s := newTerminalScreen(nil)
-		s.attachSession("")
-		t.Cleanup(s.close)
-		s.write([]byte("\x1b[34mityike\x1b[0m@\x1b[32mMac-mini\x1b[0m:~ /Code/onecatch (main)\r\n$ "))
+		s := terminalview.New(nil)
+		s.AttachSession("")
+		t.Cleanup(s.Close)
+		s.Write([]byte("\x1b[34mityike\x1b[0m@\x1b[32mMac-mini\x1b[0m:~ /Code/onecatch (main)\r\n$ "))
 		a.terminal.Panes[id] = &terminalPane{ID: id, Title: title, Running: true, Screen: s}
 		a.terminal.Tabs = append(a.terminal.Tabs, &terminalTab{ID: id, Root: terminalLeaf(id)})
 	}

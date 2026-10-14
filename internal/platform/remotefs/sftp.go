@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/openmodu/onecatch/internal/platform/processexec"
-	"github.com/openmodu/onecatch/internal/sshcredentials"
-	"github.com/openmodu/onecatch/internal/sshendpoint"
+	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
+	"github.com/openmodu/onecatch/internal/platform/sshendpoint"
 	"github.com/pkg/sftp"
 )
 

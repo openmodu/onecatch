@@ -9,6 +9,7 @@ import (
 	"github.com/dyike/keel/gio/io/key"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 )
 
@@ -132,7 +133,7 @@ func (a *app) composerMentions(cx *el.Context) {
 		if i == s.active {
 			row.Bg(theme.Subtle)
 		}
-		row.Child(lucide(cx, icon, 14, theme.Muted), el.Div().Grow().W(el.Dp(0)).Gap(3).Child(el.Text("@"+option.Name).TextSize(13).Medium().MaxLines(1), el.Text(option.Detail).TextSize(11).TextColor(theme.Muted).MaxLines(1)))
+		row.Child(uiassets.Lucide(cx, icon, 14, theme.Muted), el.Div().Grow().W(el.Dp(0)).Gap(3).Child(el.Text("@"+option.Name).TextSize(13).Medium().MaxLines(1), el.Text(option.Detail).TextSize(11).TextColor(theme.Muted).MaxLines(1)))
 		menu.Child(row)
 	}
 	popup := el.Div().Row().Justify(el.Center).Child(menu)

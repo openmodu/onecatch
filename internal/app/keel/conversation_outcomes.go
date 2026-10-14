@@ -8,6 +8,7 @@ import (
 
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
@@ -56,7 +57,7 @@ func (a *app) workflowOutcomeCard(cx *el.Context, e *entry, out domainworkflows.
 	label, icon, tone := outcomeStyle(out.Verdict)
 	header := el.Div().Row().Wrap().Items(el.Center).Gap(10).Child(
 		el.Div().Row().Items(el.Center).Gap(6).Px(9).Py(5).Rounded(7).Bg(mixColor(tone, theme.Surface, .10)).
-			Child(lucide(cx, icon, 14, tone), el.Text(label).TextSize(12).Medium().TextColor(tone)),
+			Child(uiassets.Lucide(cx, icon, 14, tone), el.Text(label).TextSize(12).Medium().TextColor(tone)),
 	)
 	if out.Target != "" {
 		header.Child(el.Text("交给 " + a.workflowStepName(out.Target)).TextSize(12).Medium().TextColor(theme.Text))
@@ -90,7 +91,7 @@ func (a *app) workflowOutcomeDetails(cx *el.Context, e *entry, card *el.DivEl, o
 	card.Child(el.Div().H(el.Dp(1)).WFull().Bg(seamColor),
 		el.Div().ID(key).Role("button").Name("查看原始结果").Focusable(true).CursorPointer().Row().Items(el.Center).Gap(6).MinH(el.Dp(28)).
 			OnClick(func() { a.toggleConversation(key, false); a.invalidateConversationEntry(e.key) }).FocusStyle(neutralFocus).
-			Child(lucide(cx, caret, 12, theme.Muted), el.Text("原始结果 · JSON").TextSize(11).TextColor(theme.Muted)),
+			Child(uiassets.Lucide(cx, caret, 12, theme.Muted), el.Text("原始结果 · JSON").TextSize(11).TextColor(theme.Muted)),
 	)
 	if open {
 		var value any
@@ -118,11 +119,11 @@ func (a *app) workflowTransitionCard(cx *el.Context, e *entry) el.Element {
 		label = "返工流转"
 	}
 	header := el.Div().Row().Wrap().Items(el.Center).Gap(8).Child(
-		lucide(cx, icon, 14, tone), el.Text(label).TextSize(12).Medium().TextColor(tone),
+		uiassets.Lucide(cx, icon, 14, tone), el.Text(label).TextSize(12).Medium().TextColor(tone),
 		el.Text(t.source).TextSize(12).Medium(),
 	)
 	if t.target != "" && t.verdict == domainworkflows.VerdictRework {
-		header.Child(lucide(cx, "arrow-right", 12, theme.Muted), el.Text(t.target).TextSize(12).Medium())
+		header.Child(uiassets.Lucide(cx, "arrow-right", 12, theme.Muted), el.Text(t.target).TextSize(12).Medium())
 	}
 	header.Child(el.Div().Grow(), el.Text(e.at.Local().Format("15:04")).TextSize(11).TextColor(theme.Muted))
 	text := t.feedback
@@ -138,7 +139,7 @@ func (a *app) workflowTransitionCard(cx *el.Context, e *entry) el.Element {
 			caret = "chevron-down"
 		}
 		card.Child(el.Div().ID(key).Role("button").Name("查看流转详情").Focusable(true).CursorPointer().Row().Items(el.Center).Gap(6).MinH(el.Dp(26)).OnClick(func() { a.toggleConversation(key, false); a.invalidateConversationEntry(e.key) }).FocusStyle(neutralFocus).
-			Child(lucide(cx, caret, 12, theme.Muted), el.Text("查看流转详情").TextSize(11).TextColor(theme.Muted)))
+			Child(uiassets.Lucide(cx, caret, 12, theme.Muted), el.Text("查看流转详情").TextSize(11).TextColor(theme.Muted)))
 		if open {
 			card.Child(a.conversationDocument(cx, &entry{key: key + "/text", text: outcomeReadableText(text)}, false))
 		}

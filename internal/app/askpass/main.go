@@ -10,7 +10,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/openmodu/onecatch/internal/sshcredentials"
+	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
 )
 
 func Run() {

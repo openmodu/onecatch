@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openmodu/onecatch/internal/remotefs"
-	"github.com/openmodu/onecatch/internal/sshcredentials"
-	"github.com/openmodu/onecatch/internal/sshendpoint"
+	"github.com/openmodu/onecatch/internal/platform/remotefs"
+	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
+	"github.com/openmodu/onecatch/internal/platform/sshendpoint"
 )
 
 type RemoteDirectoryCompletionInput struct {

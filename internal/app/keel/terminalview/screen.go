@@ -1,4 +1,4 @@
-package keeldesktop
+package terminalview
 
 import (
 	"context"
@@ -39,7 +39,7 @@ import (
 type terminalPoint struct{ X, Y int }
 type terminalMatch struct{ From, To terminalPoint }
 
-type terminalScreen struct {
+type Screen struct {
 	Emulator                          *vt.Emulator
 	ctx                               context.Context
 	cancel                            context.CancelFunc
@@ -50,7 +50,7 @@ type terminalScreen struct {
 	Writable                          bool
 	scrollRemainder                   float32
 	Error                             string
-	Palette                           terminalPalette
+	Palette                           Palette
 	IndexedForeground                 [256]color.NRGBA
 	paletteID                         string
 	focused, focusNext, cursorVisible bool
@@ -80,9 +80,9 @@ type terminalScreen struct {
 // The emulator is owned by the UI queue. Its pipe reader does no UI work and
 // always drains responses, even if the PTY writer is temporarily blocked. This
 // keeps device-status replies and bracketed paste from deadlocking a frame.
-func newTerminalScreen(write func(string, []byte) error) *terminalScreen {
+func New(write func(string, []byte) error) *Screen {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &terminalScreen{Emulator: vt.NewEmulator(80, 24), ctx: ctx, cancel: cancel, readDone: make(chan struct{}), attach: make(chan string, 1), input: make(chan []byte, 256), cursorVisible: true, cursorStyle: vt.CursorBar, blink: true, mouseModes: map[ansi.Mode]bool{}}
+	s := &Screen{Emulator: vt.NewEmulator(80, 24), ctx: ctx, cancel: cancel, readDone: make(chan struct{}), attach: make(chan string, 1), input: make(chan []byte, 256), cursorVisible: true, cursorStyle: vt.CursorBar, blink: true, mouseModes: map[ansi.Mode]bool{}}
 	s.IME.reset()
 	s.Writable = true
 	s.Emulator.SetScrollbackSize(10000)
@@ -141,7 +141,7 @@ func newTerminalScreen(write func(string, []byte) error) *terminalScreen {
 	}()
 	return s
 }
-func (s *terminalScreen) reportError(err error) {
+func (s *Screen) reportError(err error) {
 	core.Update(func() {
 		if !s.closed {
 			s.Error = err.Error()
@@ -151,13 +151,13 @@ func (s *terminalScreen) reportError(err error) {
 		}
 	})
 }
-func (s *terminalScreen) attachSession(id string) {
+func (s *Screen) AttachSession(id string) {
 	select {
 	case s.attach <- id:
 	default:
 	}
 }
-func (s *terminalScreen) close() {
+func (s *Screen) Close() {
 	if s.closed {
 		return
 	}
@@ -169,7 +169,7 @@ func (s *terminalScreen) close() {
 	<-s.readDone
 	_ = s.Emulator.Close()
 }
-func (s *terminalScreen) write(data []byte) {
+func (s *Screen) Write(data []byte) {
 	if !s.closed {
 		before := s.historyLen()
 		_, _ = s.Emulator.Write(data)
@@ -179,8 +179,8 @@ func (s *terminalScreen) write(data []byte) {
 		s.Scroll = min(s.Scroll, s.Emulator.ScrollbackLen())
 	}
 }
-func (s *terminalScreen) setPalette(id string, dark bool) {
-	palette := resolveNativeTerminalPalette(id, dark)
+func (s *Screen) SetPalette(id string, dark bool) {
+	palette := ResolvePalette(id, dark)
 	if s.Palette == palette {
 		return
 	}
@@ -195,30 +195,30 @@ func (s *terminalScreen) setPalette(id string, dark bool) {
 		s.IndexedForeground[i] = terminalIndexedForeground(terminalColor(s.Emulator.IndexedColor(i), palette.Foreground), palette.Background)
 	}
 }
-func (s *terminalScreen) historyLen() int {
+func (s *Screen) historyLen() int {
 	if s.Emulator.IsAltScreen() {
 		return 0
 	}
 	return s.Emulator.ScrollbackLen()
 }
-func (s *terminalScreen) cellAt(x, y int) *uv.Cell {
+func (s *Screen) cellAt(x, y int) *uv.Cell {
 	n := s.historyLen()
 	if y < n {
 		return s.Emulator.ScrollbackCellAt(x, y)
 	}
 	return s.Emulator.CellAt(x, y-n)
 }
-func (s *terminalScreen) topLine() int          { return s.historyLen() - s.Scroll }
-func (s *terminalScreen) scrollBy(lines int)    { s.Scroll = max(0, min(s.historyLen(), s.Scroll+lines)) }
+func (s *Screen) topLine() int                  { return s.historyLen() - s.Scroll }
+func (s *Screen) scrollBy(lines int)            { s.Scroll = max(0, min(s.historyLen(), s.Scroll+lines)) }
 func terminalPointLess(a, b terminalPoint) bool { return a.Y < b.Y || a.Y == b.Y && a.X < b.X }
-func (s *terminalScreen) selectionBounds() (terminalPoint, terminalPoint) {
+func (s *Screen) selectionBounds() (terminalPoint, terminalPoint) {
 	a, b := s.Anchor, s.Selection
 	if terminalPointLess(b, a) {
 		a, b = b, a
 	}
 	return a, b
 }
-func (s *terminalScreen) selected(x, y int) bool {
+func (s *Screen) selected(x, y int) bool {
 	if !s.HasSelection {
 		return false
 	}
@@ -226,7 +226,7 @@ func (s *terminalScreen) selected(x, y int) bool {
 	p := terminalPoint{x, y}
 	return !terminalPointLess(p, a) && terminalPointLess(p, b)
 }
-func (s *terminalScreen) selectionText() string {
+func (s *Screen) selectionText() string {
 	if !s.HasSelection {
 		return ""
 	}
@@ -253,17 +253,17 @@ func (s *terminalScreen) selectionText() string {
 	}
 	return strings.Join(lines, "\n")
 }
-func (s *terminalScreen) selectAll() {
+func (s *Screen) selectAll() {
 	s.Anchor = terminalPoint{0, 0}
 	s.Selection = terminalPoint{s.Emulator.Width(), s.historyLen() + s.Emulator.Height() - 1}
 	s.HasSelection = true
 }
-func (s *terminalScreen) copy(gtx core.C) {
+func (s *Screen) copy(gtx core.C) {
 	if v := s.selectionText(); v != "" {
 		gtx.Execute(clipboard.WriteCmd{Type: "application/text", Data: io.NopCloser(strings.NewReader(v))})
 	}
 }
-func (s *terminalScreen) paste(v string) {
+func (s *Screen) Paste(v string) {
 	if len(v) > 1<<20 {
 		s.reportError(fmt.Errorf("终端单次粘贴不能超过 1 MB"))
 		return
@@ -274,7 +274,7 @@ func (s *terminalScreen) paste(v string) {
 		s.Emulator.Paste(v)
 	}
 }
-func (s *terminalScreen) search(query string, backward bool) bool {
+func (s *Screen) Search(query string, backward bool) bool {
 	if query == "" {
 		s.match = nil
 		return true
@@ -347,10 +347,10 @@ func (s *terminalScreen) search(query string, backward bool) bool {
 	s.Scroll = max(0, min(s.historyLen(), s.historyLen()-chosen.From.Y))
 	return true
 }
-func (s *terminalScreen) pointAt(p f32.Point) terminalPoint {
+func (s *Screen) pointAt(p f32.Point) terminalPoint {
 	return terminalPoint{max(0, min(s.Emulator.Width(), int((p.X-10)/s.cellWidth))), max(0, min(s.historyLen()+s.Emulator.Height()-1, s.topLine()+int((p.Y-6)/s.lineHeight)))}
 }
-func (s *terminalScreen) mouseTracking() bool {
+func (s *Screen) mouseTracking() bool {
 	for _, mode := range []ansi.Mode{ansi.ModeMouseX10, ansi.ModeMouseNormal, ansi.ModeMouseButtonEvent, ansi.ModeMouseAnyEvent} {
 		if s.mouseModes[mode] {
 			return true
@@ -358,7 +358,7 @@ func (s *terminalScreen) mouseTracking() bool {
 	}
 	return false
 }
-func (s *terminalScreen) pointer(gtx core.C, e pointer.Event) {
+func (s *Screen) pointer(gtx core.C, e pointer.Event) {
 	p := s.pointAt(e.Position)
 	if e.Kind == pointer.Press {
 		gtx.Execute(key.FocusCmd{Tag: s})
@@ -481,7 +481,7 @@ func terminalKey(e key.Event) (uv.KeyPressEvent, bool) {
 	}
 	return uv.KeyPressEvent{Code: code, Mod: terminalModifiers(e.Modifiers)}, ok
 }
-func (s *terminalScreen) key(gtx core.C, e key.Event) {
+func (s *Screen) key(gtx core.C, e key.Event) {
 	if e.State != key.Press {
 		return
 	}
@@ -529,7 +529,7 @@ func (s *terminalScreen) key(gtx core.C, e key.Event) {
 		s.cursorChanged = gtx.Now
 	}
 }
-func (s *terminalScreen) flushIME() {
+func (s *Screen) flushIME() {
 	if !s.IME.composing() {
 		if data := s.IME.commit(); data != "" {
 			if !s.Writable {
@@ -541,7 +541,7 @@ func (s *terminalScreen) flushIME() {
 		}
 	}
 }
-func (s *terminalScreen) events(gtx core.C) {
+func (s *Screen) events(gtx core.C) {
 	filters := []event.Filter{key.FocusFilter{Target: s}, key.Filter{Focus: s, Optional: key.ModCtrl | key.ModAlt | key.ModShift | key.ModSuper | key.ModCommand}, key.Filter{Focus: s, Name: key.NameTab, Optional: key.ModCtrl | key.ModAlt | key.ModShift | key.ModSuper | key.ModCommand}, pointer.Filter{Target: s, Kinds: pointer.Press | pointer.Release | pointer.Drag | pointer.Move | pointer.Cancel | pointer.Scroll, ScrollY: pointer.ScrollRange{Min: -1 << 20, Max: 1 << 20}}, transfer.TargetFilter{Target: s, Type: "application/text"}}
 	for {
 		e, ok := gtx.Event(filters...)
@@ -575,7 +575,7 @@ func (s *terminalScreen) events(gtx core.C) {
 			r.Close()
 			if err == nil {
 				s.flushIME()
-				s.paste(string(data))
+				s.Paste(string(data))
 			} else {
 				s.reportError(err)
 			}
@@ -597,12 +597,12 @@ func (s *terminalScreen) events(gtx core.C) {
 		}
 	}
 }
-func (s *terminalScreen) Layout(gtx core.C) core.D {
+func (s *Screen) Layout(gtx core.C) core.D {
 	size := gtx.Constraints.Max
 	if size.X <= 0 || size.Y <= 0 || s.closed {
 		return core.D{Size: size}
 	}
-	params := text.Parameters{Font: font.Font{Typeface: platformTerminalFace(runtime.GOOS)}, PxPerEm: fixed.I(gtx.Sp(unit.Sp(12))), MaxWidth: 1 << 24, MaxLines: 1, DisableSpaceTrim: true, Locale: gtx.Locale}
+	params := text.Parameters{Font: font.Font{Typeface: Typeface(runtime.GOOS)}, PxPerEm: fixed.I(gtx.Sp(unit.Sp(12))), MaxWidth: 1 << 24, MaxLines: 1, DisableSpaceTrim: true, Locale: gtx.Locale}
 	sh := theme.Material.Shaper
 	sh.LayoutString(params, "M")
 	advance := fixed.Int26_6(0)
@@ -753,7 +753,7 @@ func terminalWebURL(raw string) string {
 	}
 	return raw
 }
-func (s *terminalScreen) linkAt(p terminalPoint) string {
+func (s *Screen) linkAt(p terminalPoint) string {
 	if c := s.cellAt(p.X, p.Y); c != nil && c.Link.URL != "" {
 		return terminalWebURL(c.Link.URL)
 	}
@@ -789,7 +789,7 @@ func (s *terminalScreen) linkAt(p terminalPoint) string {
 	}
 	return ""
 }
-func (s *terminalScreen) drawText(gtx core.C, p text.Parameters, value string, x, y float32, c color.NRGBA) {
+func (s *Screen) drawText(gtx core.C, p text.Parameters, value string, x, y float32, c color.NRGBA) {
 	sh := theme.Material.Shaper
 	sh.LayoutString(p, value)
 	s.glyphs = s.glyphs[:0]
@@ -811,7 +811,7 @@ func terminalColor(c color.Color, fallback color.NRGBA) color.NRGBA {
 	return color.NRGBAModel.Convert(c).(color.NRGBA)
 }
 
-func (s *terminalScreen) resolveColor(c color.Color, fallback color.NRGBA) color.NRGBA {
+func (s *Screen) resolveColor(c color.Color, fallback color.NRGBA) color.NRGBA {
 	switch v := c.(type) {
 	case ansi.BasicColor:
 		c = s.Emulator.IndexedColor(int(v))
@@ -821,7 +821,7 @@ func (s *terminalScreen) resolveColor(c color.Color, fallback color.NRGBA) color
 	return terminalColor(c, fallback)
 }
 
-func (s *terminalScreen) resolveForegroundColor(c color.Color, fallback color.NRGBA) color.NRGBA {
+func (s *Screen) resolveForegroundColor(c color.Color, fallback color.NRGBA) color.NRGBA {
 	switch v := c.(type) {
 	case ansi.BasicColor:
 		return s.IndexedForeground[uint8(v)]
@@ -829,4 +829,19 @@ func (s *terminalScreen) resolveForegroundColor(c color.Color, fallback color.NR
 		return s.IndexedForeground[uint8(v)]
 	}
 	return s.resolveColor(c, fallback)
+}
+
+// RequestFocus focuses the terminal on its next layout.
+func (s *Screen) RequestFocus() { s.focusNext = true }
+func (s *Screen) Closed() bool  { return s.closed }
+func mixColor(foreground, background color.NRGBA, amount float32) color.NRGBA {
+	mix := func(a, b uint8) uint8 { return uint8(float32(a)*amount + float32(b)*(1-amount)) }
+	return color.NRGBA{R: mix(foreground.R, background.R), G: mix(foreground.G, background.G), B: mix(foreground.B, background.B), A: 255}
+}
+
+func Typeface(platform string) font.Typeface {
+	if platform == "windows" {
+		return "Consolas, Microsoft YaHei, Microsoft YaHei UI, SimSun, Go Mono, Segoe UI Emoji"
+	}
+	return theme.MonoFace
 }

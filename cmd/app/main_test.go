@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmodu/onecatch/internal/processmode"
+	"github.com/openmodu/onecatch/internal/platform/processmode"
 )
 
 func TestMain(m *testing.M) {

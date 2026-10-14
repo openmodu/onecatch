@@ -6,6 +6,7 @@ import (
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/kit"
 	"github.com/dyike/keel/ui/theme"
+	uiassets "github.com/openmodu/onecatch/internal/app/keel/assets"
 )
 
 type sidebarTaskPreview struct {
@@ -67,7 +68,7 @@ func (a *app) sidebarTaskDetails(cx *el.Context) {
 		Bg(theme.Surface).TextColor(theme.Text).Rounded(12).Shadow(theme.ElevationSm).
 		Disabled(true).DisabledStyle(func(s *el.Style) { s.TextColor(theme.Text) }).Child(el.Text(task.Title).TextSize(14).Medium())
 	if project != "" {
-		panel.Child(el.Div().Row().Items(el.Center).Gap(8).Child(lucide(cx, "folder", 16, theme.Muted), el.Text(project).TextSize(12).TextColor(theme.Muted)))
+		panel.Child(el.Div().Row().Items(el.Center).Gap(8).Child(uiassets.Lucide(cx, "folder", 16, theme.Muted), el.Text(project).TextSize(12).TextColor(theme.Muted)))
 	}
 	cx.Overlay("sidebar-task-preview", el.Anchored(rowID+"/frame", panel).Owner(rowID).Placement(el.Right, el.Center).Offset(6).OnDismiss(func() { state.muted = true }))
 }
