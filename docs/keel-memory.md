@@ -298,4 +298,4 @@ Gio 全套、依赖边界、OneCatch 界面与入口测试、GPU/Metal/headless 
 
 - 探针的尺寸变化由程序发起，不等同于用户拖动窗口边缘的实时缩放。拖动缩放、真实 OneCatch 对话的加载与滚动、选区和文字都还没有在客户端中验证。
 - 帧间隔只覆盖应用收到帧事件的时间，不是端到端显示延迟。
-- 补丁已提交到 [Keel PR #26](https://github.com/dyike/keel/pull/26)，尚未合入或发布。OneCatch 仍依赖 v0.2.7；验证时用的 `go.work` 已删除。
+- 补丁通过 [Keel PR #26](https://github.com/dyike/keel/pull/26) 合入，发布为 [v0.2.8](https://github.com/dyike/keel/releases/tag/v0.2.8)。OneCatch 的依赖升级见 [#56](https://github.com/openmodu/onecatch/pull/56)；验证时用的 `go.work` 已删除。
