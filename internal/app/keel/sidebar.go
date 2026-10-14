@@ -3,7 +3,6 @@ package keeldesktop
 import (
 	"fmt"
 	"image/color"
-	"math"
 	"runtime"
 	"slices"
 	"strings"
@@ -309,17 +308,12 @@ func (a *app) sidebarTask(t domaintasks.Task) kit.SidebarItem {
 			current = updated
 		}
 		if current.Status == domaintasks.StatusRunning {
-			alpha := float32(1)
-			if !el.ReducedMotion() {
-				phase := float64(cx.Now().UnixMilli()%2000) / 2000
-				// Stay visible on light backgrounds throughout the pulse.
-				alpha = float32(.825 + .175*math.Cos(2*math.Pi*phase))
-				cx.Animating()
-			}
+			// Status changes redraw this light; a steady status must not keep
+			// the entire window and its GPU buffers animating indefinitely.
 			// Paint the leading light outside Sidebar's clipped icon slot,
 			// preserving the original gap and the icon/title alignment.
 			icon.Child(el.Div().ID("task-running/" + t.ID).Role("image").Name("正在运行").Absolute().Left(-10).Top(5).
-				Size(el.Dp(6)).Rounded(3).Bg(color.NRGBA{R: 34, G: 179, B: 99, A: uint8(math.Round(float64(alpha) * 255))}).
+				Size(el.Dp(6)).Rounded(3).Bg(color.NRGBA{R: 34, G: 179, B: 99, A: 255}).
 				Decorate(func(gtx core.C, draw func()) {
 					macro := op.Record(gtx.Ops)
 					draw()

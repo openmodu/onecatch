@@ -47,6 +47,7 @@ type app struct {
 	cancel                                                                                  context.CancelFunc
 	closed                                                                                  bool
 	openURL                                                                                 func(string) error
+	openPath                                                                                func(string) error
 	unsubscribe                                                                             func()
 	window                                                                                  *window.Window
 	settingsPanel                                                                           *settingsPage
@@ -480,16 +481,16 @@ func (a *app) syncMessages() {
 	var selectable []*markdown.Doc
 	for _, e := range a.entries {
 		if e.kind == "message" || e.kind == agentrun.KindError || e.user {
-			doc := a.conversationSource(e.key, e.text)
+			doc := a.conversationSource(e.key, e.text, e.user)
 			doc.SetStreaming(e.streaming && a.detail != nil && a.detail.Active)
 			if out, ok := a.workflowMessageOutcome(e); ok {
 				if out.Prose != "" {
 					key := e.key + "/prose"
-					prose := a.conversationSource(key, out.Prose)
+					prose := a.conversationSource(key, out.Prose, false)
 					selectable = append(selectable, prose)
 				}
 				key := e.key + "/readable"
-				readable := a.conversationSource(key, workflowOutcomeText(out.Outcome))
+				readable := a.conversationSource(key, workflowOutcomeText(out.Outcome), false)
 				// Drag selection follows displayed prose; message copy retains
 				// the untouched raw JSON in the original document.
 				doc = readable

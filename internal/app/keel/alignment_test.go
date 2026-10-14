@@ -133,7 +133,9 @@ func TestExecutorAlignmentAndNativeSelection(t *testing.T) {
 			if left < 0 {
 				left = icon.Bounds.Min.X
 			}
-			if icon.Bounds.Min.X != left || text.Min.X != left+24*scale {
+			// Text semantics include glyph ink; Helvetica Neue has a negative
+			// side bearing for T. Allow one physical pixel per scale for ink.
+			if icon.Bounds.Min.X != left || abs(text.Min.X-(left+24*scale)) > scale {
 				t.Fatalf("%s lost shared leading columns at %dx: icon=%v text=%v", label, scale, icon.Bounds, text)
 			}
 		}

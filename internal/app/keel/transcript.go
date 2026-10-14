@@ -36,6 +36,7 @@ type entry struct {
 	recipient      string
 	// stepLabel names the workflow step that produced this row; it is set on
 	// the first row of each run of output from one step.
+	pageGroup   string
 	columns     []*entry
 	stack       []*entry
 	stepLabel   string

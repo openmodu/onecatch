@@ -1,6 +1,7 @@
 package keeldesktop
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -150,5 +151,40 @@ func TestRenderFixedParallelLanes(t *testing.T) {
 	root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element { return el.Div().WFull().HFull().P(20).Child(a.conversationScroll(cx)) }))
 	if err := window.Screenshot(screenshotRoot{core.Func(root.Layout)}, 1100, 700, filepath.Join(dir, "parallel-fixed-lanes.png")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Two steps alternate failures and retries. All six intervals are connected,
+// but no instant has more than two live attempts (the reported screenshot).
+func TestWorkflowTimelineRetriesReuseConcurrentLanes(t *testing.T) {
+	at := time.Now()
+	d := timelineDetail(at)
+	d.StepRuns = nil
+	windows := [][2]int{{0, 10}, {0, 8}, {9, 16}, {11, 20}, {17, 22}, {21, 25}}
+	stepIDs := []string{"a", "b", "b", "a", "b", "a"}
+	var entries []*entry
+	for i, w := range windows {
+		id := fmt.Sprintf("attempt-%d", i)
+		d.StepRuns = append(d.StepRuns, workflows.StepRun{ID: id, StepID: stepIDs[i], Attempt: i + 1, StartedAt: at.Add(time.Duration(w[0]) * time.Second), FinishedAt: at.Add(time.Duration(w[1]) * time.Second), Status: workflows.StepRunFailed})
+		entries = append(entries, &entry{key: id, step: id, text: id, at: at.Add(time.Duration(w[0]) * time.Second)})
+	}
+	rows := buildWorkflowTimeline(entries, d)
+	if len(rows) != 2 || len(rows[1].columns) != 2 {
+		t.Fatalf("serial retries became concurrent columns: %+v", rows)
+	}
+	count := 0
+	for _, cell := range rows[1].columns {
+		if len(cell.stack) != 3 {
+			t.Fatalf("attempts lost: %+v", cell)
+		}
+		for i, e := range cell.stack {
+			count++
+			if i > 0 && (e.stepLabel == "" || e.stepContext == "") {
+				t.Fatal("retry lost its execution heading")
+			}
+		}
+	}
+	if count != 6 {
+		t.Fatalf("got %d attempts", count)
 	}
 }

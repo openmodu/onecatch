@@ -20,13 +20,13 @@ type sessionWorkflowState struct {
 	Error, Notice string
 }
 
-func (a *app) checkSessionWorkflow(force bool) {
+func (a *app) checkSessionWorkflow(force bool) bool {
 	if a.closed || a.backend == nil || a.backend.service == nil || a.detail == nil || a.busy || a.workbench.Tab != "status" || !a.workbench.Visible && a.workbench.DetachedWindow == nil {
-		return
+		return false
 	}
 	id := a.detail.Run.ID
 	if id == "" || a.detail.Workflow.ID == "" || a.detail.Workflow.ID == "single_agent" {
-		return
+		return false
 	}
 	s := a.workbench.WorkflowCheck
 	if s == nil || s.RunID != id || s.Selection != a.selection {
@@ -34,7 +34,7 @@ func (a *app) checkSessionWorkflow(force bool) {
 		a.workbench.WorkflowCheck = s
 	}
 	if s.Checking || !force && time.Since(s.CheckedAt) < projectWorkflowPoll {
-		return
+		return false
 	}
 	s.Checking = true
 	go func() {
@@ -50,6 +50,7 @@ func (a *app) checkSessionWorkflow(force bool) {
 			}
 		})
 	}()
+	return true
 }
 
 func (a *app) sessionWorkflowConfig(cx *el.Context) el.Element {

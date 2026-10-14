@@ -28,6 +28,7 @@ import (
 
 type conversationState struct {
 	lanes         map[string]*conversationLane
+	pages         map[string]int
 	renderedRows  map[string]bool
 	selection     markdown.SelectionGroup
 	open          map[string]bool
@@ -434,13 +435,16 @@ func newConversationDocument(source string) *markdown.Doc {
 	return markdown.New(source)
 }
 
-func (a *app) conversationSource(key, text string) *markdown.Doc {
+func (a *app) conversationSource(key, text string, user bool) *markdown.Doc {
 	doc := a.docs[key]
 	if doc == nil || !strings.HasPrefix(text, doc.Source()) {
 		// SetSource clears the entire SelectionGroup, including a selection
 		// in an unrelated reply. Replacing only this document lets SetDocuments
 		// retain endpoints in the other replies by their document identity.
 		doc = newConversationDocument(text).TableDividers(!a.ui.Preferences.HideTableDividers)
+		if user {
+			doc.Plugins(userMessageMarkdownPlugin())
+		}
 		a.docs[key] = doc
 	} else if previous := doc.Source(); text != previous {
 		// Durable snapshots can append text without the streaming flag too.
@@ -466,7 +470,7 @@ func (a *app) conversationDocument(cx *el.Context, e *entry, hug bool) el.Elemen
 	if a.conversation.views == nil {
 		a.conversation.views = map[string]*conversationDocView{}
 	}
-	doc := a.conversationSource(e.key, e.text)
+	doc := a.conversationSource(e.key, e.text, e.user)
 	doc.OnLink(a.openConversationLink)
 	doc.SetStreaming(e.streaming && a.detail != nil && a.detail.Active)
 	v := a.conversation.views[e.key]
@@ -484,9 +488,8 @@ func (a *app) conversationDocument(cx *el.Context, e *entry, hug bool) el.Elemen
 			px := gtx.Sp(theme.BodySize)
 			if v.hugText != e.text || v.hugPx != px {
 				shaper := theme.Material.Shaper
-				// Markdown uses theme.Face, which differs from the app's control
-				// font. Measuring with the control font made short bubbles too narrow.
-				shaper.LayoutString(text.Parameters{Font: font.Font{Typeface: theme.Face}, PxPerEm: fixed.I(px), MaxWidth: 1 << 20}, e.text)
+				// Measure with the same configured face used by Markdown.
+				shaper.LayoutString(text.Parameters{Font: font.Font{Typeface: theme.Material.Face}, PxPerEm: fixed.I(px), MaxWidth: 1 << 20}, e.text)
 				width := 0
 				for glyph, ok := shaper.NextGlyph(); ok; glyph, ok = shaper.NextGlyph() {
 					width = max(width, (glyph.X + glyph.Advance).Ceil())

@@ -28,7 +28,7 @@ func TestParallelLanesFixedHeightAndIndependentScrolling(t *testing.T) {
 			root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element {
 				return el.Div().WFull().HFull().Child(a.conversationScroll(cx))
 			}))
-			router, frame, _ := alignmentRouter(root, 1100, 800, scale)
+			router, frame, click := alignmentRouter(root, 1100, 800, scale)
 			for range 8 {
 				frame()
 			}
@@ -40,17 +40,34 @@ func TestParallelLanesFixedHeightAndIndependentScrolling(t *testing.T) {
 				}
 				return node.Bounds
 			}
-			left, right := bounds("并行任务 1"), bounds("并行任务 2")
-			if left.Dy() != parallelLaneHeight*scale || right.Dy() != left.Dy() || left.Min.Y != right.Min.Y {
-				t.Fatalf("unequal lane viewports: %v %v", left, right)
+			selectPage := func(page int) {
+				t.Helper()
+				node, ok := alignmentNode(router.AppendSemantics(nil), fmt.Sprintf("切换任务页面 %d", page+1), true)
+				if !ok {
+					t.Fatal("missing page button")
+				}
+				click(node.Bounds)
 			}
-			leftText, rightText := bounds("左侧第 8 段"), bounds("右侧开头")
+			left := bounds("并行任务 1")
+			selectPage(1)
+			for range 8 {
+				frame()
+			}
+			right := bounds("并行任务 2")
+			if left.Dy() != parallelLaneHeight*scale || right != left.Add(image.Pt(36*scale, 0)) {
+				t.Fatalf("unequal page viewports: %v %v", left, right)
+			}
+			rightText := bounds("右侧开头")
+			selectPage(0)
+			for range 8 {
+				frame()
+			}
+
+			leftText := bounds("左侧第 8 段")
 			p := f32.Pt(float32(left.Min.X+left.Dx()/2), float32(left.Min.Y+left.Dy()/2))
 			router.Queue(pointer.Event{Kind: pointer.Scroll, Source: pointer.Mouse, Position: p, Scroll: f32.Pt(0, float32(160*scale))})
 			frame()
-			if got := bounds("右侧开头"); got != rightText {
-				t.Fatalf("left wheel moved right text: %v -> %v", rightText, got)
-			}
+
 			if got := bounds("左侧第 8 段"); got.Min.Y >= leftText.Min.Y {
 				t.Fatalf("left lane did not scroll: %v -> %v", leftText, got)
 			}
@@ -66,14 +83,28 @@ func TestParallelLanesFixedHeightAndIndependentScrolling(t *testing.T) {
 				if got := bounds("并行任务 1"); got != left {
 					t.Fatalf("frame %d: growing lane moved outer row: %v -> %v", i, left, got)
 				}
-				if got := bounds("左侧第 8 段"); got != afterScroll {
+				if got := bounds("左侧第 8 段"); got.Min != afterScroll.Min {
 					t.Fatalf("frame %d: background growth moved reader: %v -> %v", i, afterScroll, got)
 				}
+			}
+			selectPage(1)
+			for range 8 {
+				frame()
+			}
+			if got := bounds("右侧开头"); got.Min != rightText.Min {
+				t.Fatalf("hidden page scrolled: %v -> %v", rightText, got)
+			}
+			selectPage(0)
+			for range 8 {
+				frame()
+			}
+			if got := bounds("左侧第 8 段"); got.Min != afterScroll.Min {
+				t.Fatalf("switching pages lost reading position: %v -> %v", afterScroll, got)
 			}
 			// Removing messages must prune their independent scroll state.
 			a.transcript = newTranscript()
 			a.syncMessages()
-			if len(a.conversation.lanes) != 0 {
+			if len(a.conversation.lanes) != 0 || len(a.conversation.pages) != 0 {
 				t.Fatal("removed lanes retained")
 			}
 		})

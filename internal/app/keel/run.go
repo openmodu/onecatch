@@ -1,10 +1,9 @@
 package keeldesktop
 
 import (
-	"bytes"
 	"context"
 	_ "embed"
-	"image/png"
+	"os"
 	"runtime"
 
 	"github.com/dyike/keel/ui/core"
@@ -21,20 +20,29 @@ var appIcon []byte
 type Options struct{ DataRoot string }
 
 func Run(options Options) error {
+	configureMemoryBudget()
+	stopDiagnostics, err := startMemoryDiagnostics()
+	if err != nil {
+		return err
+	}
+	defer stopDiagnostics()
 	prepareCommandEnvironment()
 	loadPlatformFonts()
 	b, err := openBackend(context.Background(), options.DataRoot)
 	if err != nil {
 		return err
 	}
-	icon, err := png.Decode(bytes.NewReader(appIcon))
+	icon, err := decodeStatusIcon(appIcon)
 	if err != nil {
 		b.close()
 		return err
 	}
-	if err := window.SetIcon(appIcon); err != nil {
-		b.close()
-		return err
+	executable, _ := os.Executable()
+	if !hasPackagedIcon(runtime.GOOS, executable) {
+		if err := window.SetIcon(appIcon); err != nil {
+			b.close()
+			return err
+		}
 	}
 	locale.Apply(locale.Chinese())
 	applyPalette(window.SystemAppearance() == window.AppearanceDark)

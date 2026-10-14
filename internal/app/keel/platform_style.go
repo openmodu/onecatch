@@ -15,6 +15,11 @@ func platformUIFace(platform string) font.Typeface {
 	if platform == "windows" {
 		return "Segoe UI, Microsoft YaHei, Microsoft YaHei UI, SimSun, Go, Segoe UI Emoji"
 	}
+	if platform == "darwin" {
+		// Keep the same installed system families for controls and Markdown.
+		// SFNS still needs variable-font metric support in the shaper.
+		return "Helvetica Neue, PingFang SC, Hiragino Sans GB, Apple Color Emoji"
+	}
 	return "SF Pro Text, SF Pro, .AppleSystemUIFont, Segoe UI, " + theme.Face
 }
 

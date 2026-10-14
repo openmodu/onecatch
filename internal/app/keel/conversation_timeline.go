@@ -3,6 +3,7 @@ package keeldesktop
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	workflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	desktop "github.com/openmodu/onecatch/internal/service/desktop"
@@ -11,9 +12,9 @@ import (
 
 const kindTimelineHeader agentrun.EventKind = "timeline_header"
 
-// Overlapping execution intervals form a set of fixed lanes. Finished lanes
-// remain in the set until the other executions finish, so later output leaves
-// a blank cell rather than moving into another step's column.
+// Overlapping execution intervals form a fixed set of lanes. Serial attempts
+// reuse a free lane: transitive overlap must not turn retries into additional
+// concurrent tasks. Each new attempt keeps its own heading inside the lane.
 func buildWorkflowTimeline(entries []*entry, detail *desktop.RunDetail) []*entry {
 	if detail == nil || len(detail.Workflow.Steps) < 2 {
 		return entries
@@ -21,6 +22,7 @@ func buildWorkflowTimeline(entries []*entry, detail *desktop.RunDetail) []*entry
 	runs := append([]workflows.StepRun(nil), detail.StepRuns...)
 	sort.SliceStable(runs, func(i, j int) bool { return runs[i].StartedAt.Before(runs[j].StartedAt) })
 	groups := map[string][]string{}
+	laneIndexes := map[string]int{}
 	headers := map[string]*entry{}
 	for _, run := range runs {
 		if step, ok := workflows.FindStep(detail.Workflow, run.StepID); ok {
@@ -45,12 +47,29 @@ func buildWorkflowTimeline(entries []*entry, detail *desktop.RunDetail) []*entry
 			j++
 		}
 		if j-i > 1 {
-			lanes := make([]string, j-i)
+			var lanes []string
+			var ends []time.Time
 			for k := i; k < j; k++ {
-				lanes[k-i] = runs[k].ID
+				lane := -1
+				for slot, end := range ends {
+					if !end.IsZero() && !runs[k].StartedAt.Before(end) {
+						lane = slot
+						break
+					}
+				}
+				if lane < 0 {
+					lane = len(lanes)
+					lanes = append(lanes, runs[k].ID)
+					ends = append(ends, runs[k].FinishedAt)
+				} else {
+					ends[lane] = runs[k].FinishedAt
+				}
+				laneIndexes[runs[k].ID] = lane
 			}
-			for _, id := range lanes {
-				groups[id] = lanes
+			if len(lanes) > 1 {
+				for k := i; k < j; k++ {
+					groups[runs[k].ID] = lanes
+				}
 			}
 		}
 		i = j
@@ -58,6 +77,8 @@ func buildWorkflowTimeline(entries []*entry, detail *desktop.RunDetail) []*entry
 	out := make([]*entry, 0, len(entries))
 	var row *entry
 	var current string
+	var pageGroup string
+	var lastRuns []string
 
 	for _, e := range entries {
 		lanes := groups[e.step]
@@ -68,10 +89,7 @@ func buildWorkflowTimeline(entries []*entry, detail *desktop.RunDetail) []*entry
 
 			continue
 		}
-		lane := 0
-		for lanes[lane] != e.step {
-			lane++
-		}
+		lane := laneIndexes[e.step]
 		// Each lane keeps chronological flow within this parallel segment.
 		// A finished lane leaves blank space at its end, not between records.
 		if current != lanes[0] {
@@ -79,16 +97,27 @@ func buildWorkflowTimeline(entries []*entry, detail *desktop.RunDetail) []*entry
 			for i, id := range lanes {
 				header.columns[i] = headers[id]
 			}
+			pageGroup = header.key
+			header.pageGroup = pageGroup
 			out = append(out, header)
 		}
 		if row == nil || current != lanes[0] {
-			row = &entry{key: "timeline/" + e.key, at: e.at, columns: make([]*entry, len(lanes))}
+			row = &entry{key: "timeline/" + e.key, pageGroup: pageGroup, at: e.at, columns: make([]*entry, len(lanes))}
 			out = append(out, row)
 
 			current = lanes[0]
+			lastRuns = make([]string, len(lanes))
 		}
 		cell := *e
 		cell.stepLabel, cell.stepContext = "", ""
+		if lastRuns[lane] != e.step {
+			if e.step != lanes[lane] || lastRuns[lane] != "" {
+				if header := headers[e.step]; header != nil {
+					cell.stepLabel, cell.stepContext = header.stepLabel, header.stepContext
+				}
+			}
+			lastRuns[lane] = e.step
+		}
 		if previous := row.columns[lane]; previous == nil {
 			row.columns[lane] = &cell
 		} else if len(previous.stack) > 0 {

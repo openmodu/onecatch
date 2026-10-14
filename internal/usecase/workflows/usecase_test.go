@@ -531,6 +531,8 @@ func setupUsecase(t *testing.T, definition domainworkflows.Definition, engine En
 }
 
 type concurrentEngine struct {
+	started   chan struct{}
+	release   <-chan struct{}
 	mu        sync.Mutex
 	active    int
 	maxActive int
@@ -546,10 +548,21 @@ func (e *concurrentEngine) Run(ctx context.Context, request agentrun.Request, si
 	}
 	e.requests = append(e.requests, request)
 	e.mu.Unlock()
-	select {
-	case <-ctx.Done():
-		return agentrun.Result{}, ctx.Err()
-	case <-time.After(40 * time.Millisecond):
+	if e.started != nil {
+		e.started <- struct{}{}
+	}
+	if e.release != nil {
+		select {
+		case <-ctx.Done():
+			return agentrun.Result{}, ctx.Err()
+		case <-e.release:
+		}
+	} else {
+		select {
+		case <-ctx.Done():
+			return agentrun.Result{}, ctx.Err()
+		case <-time.After(40 * time.Millisecond):
+		}
 	}
 	e.mu.Lock()
 	e.active--
@@ -849,4 +862,48 @@ func oneStepPauseWorkflow() domainworkflows.Definition {
 
 func success(message, sessionID string) agentrun.Result {
 	return agentrun.Result{Succeeded: true, FinalMessage: message, SessionID: sessionID}
+}
+
+func TestDAGSixRootsRespectFourConcurrentSteps(t *testing.T) {
+	definition := domainworkflows.Definition{ID: "six_roots", Name: "Six roots", Policy: domainworkflows.Policy{MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10}}
+	for i := 0; i < 6; i++ {
+		id := fmt.Sprintf("root_%d", i)
+		definition.Steps = append(definition.Steps, domainworkflows.Step{ID: id, Name: id, Runtime: "codex", Sandbox: "read-only", Prompt: "Review"})
+	}
+	release := make(chan struct{})
+	engine := &concurrentEngine{started: make(chan struct{}, 6), release: release}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	usecase, _, task := setupUsecase(t, definition, engine)
+	run, err := usecase.StartTaskResolved(context.Background(), task.ID, definition, RunResolution{MaxConcurrency: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		run, err = usecase.ExecuteRun(ctx, run.ID)
+		close(done)
+	}()
+	for i := 0; i < 4; i++ {
+		select {
+		case <-engine.started:
+		case <-ctx.Done():
+			t.Fatal("four steps did not start")
+		}
+	}
+	select {
+	case <-engine.started:
+		t.Fatal("started a fifth step while four were blocked")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	<-done
+	if err != nil || run.Status != domainworkflows.RunCompleted {
+		t.Fatalf("run: %+v, %v", run, err)
+	}
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+	if engine.maxActive != 4 || len(engine.requests) != 6 {
+		t.Fatalf("peak=%d, requests=%d", engine.maxActive, len(engine.requests))
+	}
 }

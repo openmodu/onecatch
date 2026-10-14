@@ -57,6 +57,11 @@ func TestLongUserMessageDisclosureReflowAndFullCopy(t *testing.T) {
 				t.Fatal("preview lost message content")
 			}
 			click(button)
+			// This fixture has no scroll container. Give the expanded document
+			// room so its footer remains visible at both display scales.
+			height = 1800
+			frame()
+			frame()
 			button, ok = findSkillControl(router.AppendSemantics(nil), "收起")
 			if !ok || doc.IsClamped() {
 				t.Fatal("expand failed")
