@@ -100,3 +100,74 @@ func TestRejectedPasteDoesNotStealFocusOrApplyToAnotherTask(t *testing.T) {
 		t.Fatal("initial editor paint lost pending paste focus")
 	}
 }
+
+func TestPastedImageKeepsChineseComposition(t *testing.T) {
+	a := conversationFixture(t)
+	a.prompt = "说明"
+	a.attachments.FocusPrompt = true
+	root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element {
+		return el.Div().WFull().HFull().P(20).Child(a.composer(cx))
+	}))
+	router, frame, _ := alignmentRouter(root, 800, 600, 1)
+	for range 5 {
+		frame()
+	}
+	a.applyPastedAttachments(a.selection, a.attachments.Version, core.ClipboardData{}, []selectedAttachment{{Name: "image.png", Image: image.NewNRGBA(image.Rect(0, 0, 4, 4))}}, nil, nil)
+	for _, word := range []string{"ni", "nih", "nihao"} {
+		end := len([]rune(a.prompt))
+		router.Queue(key.CompositionEvent{Start: 2, End: 2 + len(word)}, key.EditEvent{Range: key.Range{Start: 2, End: end}, Text: word})
+		frame()
+		// Inspect the very first frame: later frames can hide a caret reset,
+		// but macOS already cancels composition on that transient mismatch.
+		state := router.EditorState()
+		if state.Selection.Start != 2+len(word) || state.Selection.End != 2+len(word) {
+			t.Fatalf("caret moved during composition: %+v", state.Selection)
+		}
+		if state.Selection.CompositionBounds.Empty() {
+			t.Fatalf("composition lost for %q: prompt=%q pending=%v state=%+v", word, a.prompt, a.attachments.FocusPrompt, state)
+		}
+	}
+	router.Queue(key.EditEvent{Range: key.Range{Start: 2, End: 7}, Text: "你好"}, key.CompositionEvent{Start: -1, End: -1})
+	for range 3 {
+		frame()
+	}
+	if a.prompt != "说明你好" {
+		t.Fatalf("committed text = %q", a.prompt)
+	}
+}
+
+func TestAttachmentRowsPreserveActiveComposition(t *testing.T) {
+	a := conversationFixture(t)
+	a.prompt = ""
+	a.attachments.FocusPrompt = true
+	root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element {
+		return el.Div().WFull().HFull().P(20).Child(a.composer(cx))
+	}))
+	router, frame, _ := alignmentRouter(root, 800, 600, 2)
+	for range 5 {
+		frame()
+	}
+	router.Queue(key.CompositionEvent{Start: 0, End: 2}, key.EditEvent{Range: key.Range{}, Text: "ni"})
+	frame()
+	check := func() {
+		t.Helper()
+		frame()
+		state := router.EditorState()
+		if state.Selection.CompositionBounds.Empty() || state.Selection.Start != 2 || state.Selection.End != 2 || a.prompt != "ni" {
+			t.Fatalf("attachment update interrupted composition: prompt=%q state=%+v", a.prompt, state)
+		}
+	}
+	check()
+	a.attachments.Loading = true
+	check()
+	a.applyPastedAttachments(a.selection, a.attachments.Version, core.ClipboardData{}, []selectedAttachment{{Name: "image.png", Image: image.NewNRGBA(image.Rect(0, 0, 4, 4))}}, nil, nil)
+	check()
+	a.attachments.Items = nil
+	check()
+	router.Queue(key.EditEvent{Range: key.Range{Start: 0, End: 2}, Text: "你"}, key.CompositionEvent{Start: -1, End: -1})
+	frame()
+	frame()
+	if a.prompt != "你" {
+		t.Fatalf("commit = %q", a.prompt)
+	}
+}

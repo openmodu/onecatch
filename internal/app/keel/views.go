@@ -2,7 +2,6 @@ package keeldesktop
 
 import (
 	"encoding/json"
-	"fmt"
 	"image"
 	"image/color"
 	"runtime"
@@ -303,12 +302,14 @@ func (a *app) composer(cx *el.Context) el.Element {
 		_ = a.promptDocument.SetText(a.prompt)
 	}
 	if a.attachments.FocusPrompt {
-		end := len([]rune(a.prompt))
-		cx.Focus("prompt")
-		cx.SelectInput("prompt", end, end)
-		// Keep the request until the editor has applied both focus and caret;
-		// attachment completion can arrive before an editor's first paint.
-		if edit, ok := cx.InputSelection("prompt"); ok && cx.FocusWithin("prompt") && edit.Start == end && edit.End == end && edit.Text == a.prompt {
+		// Wait only for editor creation. Repeated queued selections overwrite
+		// IME edits later in the same frame and cancel native composition.
+		if _, ok := cx.InputSelection("prompt"); ok {
+			if !cx.FocusWithin("prompt") {
+				end := len(a.promptDocument.Content().Text())
+				_ = a.promptDocument.Select(el.InputRange{Start: end, End: end})
+				cx.Focus("prompt")
+			}
 			a.attachments.FocusPrompt = false
 		}
 	}
@@ -426,7 +427,8 @@ func (a *app) composer(cx *el.Context) el.Element {
 	// Keel renders the native reference pill, including its ink bounds and
 	// baseline; OneCatch only selects the background color.
 	inputPalette.Subtle = mixColor(theme.Info, composerBg, .20)
-	box.Child(cx.Themed(inputPalette, el.ViewFunc(func(*el.Context) el.Element { return input })).WFull(), controls)
+	// Keep the editor subtree stable when attachment or loop rows appear.
+	box.Child(cx.Themed(inputPalette, el.ViewFunc(func(*el.Context) el.Element { return input })).ID("composer-editor").WFull(), controls)
 	if a.task == nil && !a.conversationWorkerReady() {
 		box.Child(el.Text(uiText("所选 Worker 不可用，或不支持当前 Agent。请选择可用的执行位置。")).TextSize(12).TextColor(theme.Danger))
 	}
@@ -451,24 +453,7 @@ func (a *app) message(cx *el.Context, index int) el.Element {
 	}
 	a.conversation.renderedRows[e.key] = true
 	if len(e.columns) > 0 {
-		row := el.Div().WFull().NoShrink().MaxW(el.Dp(920)).Row().Items(el.Stretch).Gap(16).Py(4)
-		for i, cell := range e.columns {
-			if i > 0 {
-				row.Child(el.Div().W(el.Dp(1)).NoShrink().Child(el.Div().Absolute().Top(-13).Bottom(-13).W(el.Dp(1)).Bg(seamColor)))
-			}
-			column := el.Div().Grow().W(el.Dp(0))
-			if isParallelBody(e) {
-				column.H(el.Dp(parallelLaneHeight)).NoShrink().ID(parallelLaneID(e, i)).Name(fmt.Sprintf("并行任务 %d", i+1))
-				if lane := a.conversation.lanes[parallelLaneID(e, i)]; lane != nil {
-					clear(lane.rendered)
-					column.Child(lane.scroller.Render(cx))
-				}
-			} else if cell != nil {
-				column.Child(a.messageEntry(cx, cell, -1))
-			}
-			row.Child(column)
-		}
-		return el.Div().NoShrink().Items(el.Center).Child(row)
+		return a.parallelPages(cx, e)
 	}
 	return a.messageEntry(cx, e, index)
 }

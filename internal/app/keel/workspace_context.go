@@ -2,6 +2,7 @@ package keeldesktop
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	"github.com/dyike/keel/ui/core"
@@ -39,15 +40,17 @@ func (a *app) loadContextGit() {
 		ctx, cancel := context.WithTimeout(a.ctx, 8*time.Second)
 		defer cancel()
 		snapshot, err := a.backend.service.GitStatus(ctx, id)
-		core.Update(func() {
+		core.UpdateIf(func() bool {
 			if a.closed || a.captionVersion != version || a.workspaceContext() != id {
-				return
+				return false
 			}
 			a.captionLoading = false
-			if err == nil {
+			if err == nil && !reflect.DeepEqual(a.captionGit, &snapshot) {
 				a.captionGit = &snapshot
 				a.buildWorktreeMenu()
+				return true
 			}
+			return false
 		})
 	}()
 }
@@ -83,9 +86,9 @@ func (a *app) watchWorkspace() {
 			case <-a.ctx.Done():
 				return
 			case <-ticker.C:
-				core.Update(func() {
+				core.UpdateIf(func() bool {
 					if a.closed || a.page != "" && a.workbench.DetachedWindow == nil {
-						return
+						return false
 					}
 					if !a.captionLoading {
 						a.loadContextGit()
@@ -99,6 +102,7 @@ func (a *app) watchWorkspace() {
 							a.refreshFileTree(id)
 						}
 					}
+					return a.workbench.Visible || a.workbench.DetachedWindow != nil
 				})
 			}
 		}

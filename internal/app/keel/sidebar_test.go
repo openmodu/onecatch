@@ -601,3 +601,14 @@ func TestKeelSidebarDirectPinAndConfirmedDeletePersist(t *testing.T) {
 	click(find("删除"))
 	wait(func() bool { items, e := a.backend.service.ListTasks(a.ctx, w.ID); return e == nil && len(items) == 0 })
 }
+
+func TestRunningSidebarIconDoesNotScheduleAnimation(t *testing.T) {
+	a := conversationFixture(t)
+	item := a.sidebarTask(domaintasks.Task{ID: "steady-running", Status: domaintasks.StatusRunning})
+	router, frame, _ := alignmentRouter(el.Root(item.IconView), 32, 32, 1)
+	frame()
+	frame()
+	if at, ok := router.PeekWakeup(); ok {
+		t.Fatalf("steady running icon scheduled a redraw at %v", at)
+	}
+}
