@@ -5,8 +5,8 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/openmodu/onecatch/internal/processmode"
-	"github.com/openmodu/onecatch/internal/sshcredentials"
+	"github.com/openmodu/onecatch/internal/platform/processmode"
+	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
 )
 
 func TestConsumedRoleDoesNotLeakAndAskpassReusesExecutable(t *testing.T) {

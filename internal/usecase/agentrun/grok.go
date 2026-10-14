@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 const grokBinaryDefault = "grok"
@@ -46,7 +48,7 @@ func (r *GrokRunner) Available() bool {
 // compatibility, disabled-state, plugin, and collision rules, so the returned
 // invocation names are exactly the slash commands a later run can accept.
 func (r *GrokRunner) ListSkills(ctx context.Context, cwd string, environment []string) ([]Skill, error) {
-	cmd := exec.CommandContext(ctx, r.binary, "inspect", "--json")
+	cmd := processexec.CommandContext(ctx, r.binary, "inspect", "--json")
 	if strings.TrimSpace(cwd) != "" {
 		cmd.Dir = cwd
 	}
@@ -174,7 +176,7 @@ func (r *GrokRunner) InspectConfiguration(ctx context.Context, cwd string, envir
 	if err != nil {
 		return HarnessConfiguration{}, err
 	}
-	cmd := exec.CommandContext(ctx, r.binary, command.args...)
+	cmd := processexec.CommandContext(ctx, r.binary, command.args...)
 	if cwd != "" {
 		cmd.Dir = cwd
 	}

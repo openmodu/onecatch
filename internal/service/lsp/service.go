@@ -17,6 +17,8 @@ import (
 	"unicode/utf8"
 
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 const (
@@ -304,7 +306,7 @@ func (s *Service) getSession(ctx context.Context, workspace domainworkspaces.Wor
 
 func startSession(parent context.Context, workspace domainworkspaces.Workspace, server resolvedServer) (*session, error) {
 	processCtx, cancel := context.WithCancel(context.Background())
-	command := exec.CommandContext(processCtx, server.binary, server.candidate.args...)
+	command := processexec.CommandContext(processCtx, server.binary, server.candidate.args...)
 	command.Dir = workspace.Path
 	stdin, err := command.StdinPipe()
 	if err != nil {

@@ -2,7 +2,7 @@
 
 **English | [简体中文](README.zh-CN.md)**
 
-OneCatch is a local-first desktop workbench for coding agents. It runs harnesses such as Codex and Claude Code on your machine, turning one-off agent sessions into queued, observable, interruptible, and resumable tasks, serial loops, and parallel DAGs.
+OneCatch is a local-first desktop workbench for coding agents. It runs harnesses such as Codex and Claude Code on your machine, turning one-off agent sessions into queued, observable, interruptible, and resumable tasks and multi-agent workflows.
 
 OneCatch does not broker model accounts or require uploading your repository to a OneCatch server. Your workspace stays in its original directory. OneCatch stores tasks, workflows, run events, and logs under `~/.onecatch/` by default. Whether a model request uses the network and what it sends to a provider depend on the harness and its configuration.
 
@@ -11,79 +11,49 @@ OneCatch does not broker model accounts or require uploading your repository to 
 ## What OneCatch does
 
 - **Runs agents directly:** Supports Codex, Claude Code, Modu Code, Pi, Grok Build, and DeepSeek Harness. OneCatch discovers CLIs on `PATH`; Modu Code can also use its embedded SDK. Where supported, you can select the executable, model, reasoning effort, and inherited environment variables.
-- **Orchestrates workflows:** Serial workflows route between steps using signals returned by agents, enabling loops such as implement → review → revise. DAG workflows run independent nodes concurrently and pass their results to downstream nodes.
+- **Orchestrates workflows:** A workflow is a graph of steps. Dependency edges decide order, and independent steps run concurrently. A checking step can return `rework` along a rework edge: the feedback goes back to that earlier step in its own resumed session, and only the steps in between run again. Steps can be agents (each with its own harness and model) or shell commands such as an E2E suite. You can pause a run at any time, leave a step a message, or rerun from any step.
 - **Lets you intervene:** Inspect messages, tool calls, command output, and token usage. Queue instructions for the next turn, or interrupt the current turn and insert a high-priority instruction. Harnesses that support resume reuse their original sessions.
 - **Controls access boundaries:** Each task or node can be read-only, workspace-write, or full access. Full access is disabled by default. If enabled, OneCatch still asks for confirmation before each run by default.
 - **Manages local workspaces:** Browse and edit files, use a multi-tab split terminal, inspect Git status and diffs, and ask an agent to review uncommitted changes without modifying them.
 - **Connects local agents to remote directories:** Remote FS operates on a remote workspace through SSH/SFTP while keeping the harness and model credentials local. It currently supports Codex, Claude Code, and Modu Code. This mode is not yet available from the Windows desktop app.
 
-The first launch includes three workflows: Single Agent, Implement and Review Loop, and Parallel Review DAG. The visual editor lets you change roles, instructions, dependencies, signals, sandboxes, and execution limits.
+Workflows can also live in the project as code: put YAML files in `.onecatch/workflows/` and OneCatch reads them, draws the flowchart, follows edits as you save, and points to the line when a file is invalid. `after` lists dependencies, `rework` the upstream steps a step may send work back to, `agent` is `runtime/model`, and `run` makes a command step:
 
-## Installation
-
-### Install a release
-
-Download installers from [GitHub Releases](https://github.com/openmodu/onecatch/releases):
-
-- macOS: `OneCatch-<version>-macOS-<arch>.dmg`
-- Windows: `OneCatch-<version>-Windows-<arch>-Setup.exe`
-- Linux: `OneCatch-<version>-Linux-<arch>.deb` or `.AppImage`
-
-Each installer has a matching `.sha256` checksum file. The current macOS package uses ad-hoc signing, and the Windows package is not Authenticode-signed, so the operating system may show a security warning on first launch. Public releases still need production signing and macOS notarization.
-
-### Run from source
-
-Prerequisites:
-
-- Go `1.26.1`, as declared in [`go.mod`](go.mod)
-- Node.js `24.14.0` and npm `11.9.0`, as declared in [`frontend/package.json`](frontend/package.json)
-- Git
-- The [platform dependencies required by Wails 3](https://v3.wails.io/quick-start/installation/)
-- At least one usable harness: CLI integrations require the matching command to be installed and authenticated; the embedded Modu Code SDK requires a valid provider configuration
-
-The Go `tool` directive pins the Wails CLI, so you do not need a separate `go install wails3` step. Run these commands from a terminal:
-
-```bash
-git clone https://github.com/openmodu/onecatch.git
-cd onecatch
-go tool wails3 task deps
-go tool wails3 task dev:desktop
+```yaml
+name: Design to PR
+max_rework: 3
+steps:
+  design:    { agent: claude/opus, sandbox: read-only, prompt: Propose a design; do not write code }
+  implement: { agent: codex, after: design }
+  review:    { agent: claude/sonnet, sandbox: read-only, after: implement, rework: [implement, design] }
+  e2e:       { run: npm run e2e, after: review, rework: implement }
+  pr:        { agent: modu, after: e2e, prompt: Commit and open a pull request }
 ```
 
-The `deps` task runs `go mod download` and `npm ci`. It does not use `go mod tidy` or `npm install`, so it does not rewrite either lockfile.
+Any workflow in the Settings library can be written out this way with Export to project.
 
-After OneCatch opens:
+The first launch includes Single Agent, Implement and Review, Design to PR (Opus designs, Codex implements, Sonnet reviews, Modu runs E2E and opens the PR), and Parallel Review. The canvas editor lets you add steps, draw dependency and rework edges, and set each step's harness, model, sandbox and prompt or command.
 
-1. Open **Settings → Harness** and confirm that at least one agent is available.
-2. Add a local project and choose its default file-access level.
-3. Create a task and select either one agent or a workflow.
-4. Start the task, then inspect, interrupt, or resume it from the timeline.
+## Installation and development
 
-See [`docs/harness-integrations.md`](docs/harness-integrations.md) for protocol, resume, and sandbox differences between harnesses.
+The desktop uses Keel v0.2.1 with a Go-rendered interface. Dependencies come from pinned remote modules, including the Keel Gio and typesetting forks in `go.mod`; no local Keel checkout is needed.
 
-See [local data compatibility](docs/data-compatibility.md) before changing persisted settings or planning an upgrade/downgrade.
-
-## Common development commands
-
-Run these commands from the repository root:
+Install Go 1.26.1, Git, and a configured Agent CLI or Modu provider. macOS needs Xcode Command Line Tools. Run `go tool keel doctor` to check native graphics libraries on Linux. Node.js is only needed for packaging and release metadata; desktop development does not require npm.
 
 ```bash
-go tool wails3 task deps              # Install Go and frontend dependencies
-go tool wails3 task dev:desktop       # Start the desktop development environment
-go tool wails3 task build:desktop     # Build the desktop app with development settings
-go tool wails3 task package:desktop   # Package the desktop app for the current OS
-go tool wails3 task build:headless      # Build bin/headless/onecatch
-go tool wails3 task test              # Run Go and frontend tests
+go mod download
+go tool keel run -watch=false
+go build -trimpath -ldflags='-s -w' -o bin/onecatch ./cmd/app
+go test ./...
 ```
 
-The iOS and Android clients are experimental Remote Worker consoles. They do not run local agent CLIs on the mobile device:
+Configure an Agent under Settings → Harness, add a project, then create a task or select a workflow. Data defaults to `~/.onecatch/`. Use `go tool keel run -watch=false -- -data-dir /tmp/onecatch-preview` for a separate data directory.
 
-```bash
-go tool wails3 task run:ios
-go tool wails3 task run:android
-```
+On Windows, use `go tool keel build -target windows -arch amd64 -o bin` and run `bin/onecatch-keel.exe`. Keel embeds the per-monitor DPI manifest, native control theme and icon; a bare `go build` does not. Development uses `go tool keel run -watch=false` for the same native resources. Windows uses an integrated app title bar with window controls and an application menu, and loads installed Segoe UI, Consolas and Microsoft YaHei fonts.
 
-Mobile development also requires Xcode or the Android SDK and NDK.
+With Task installed, `task dev:desktop`, `task build`, and `task test` are equivalent shortcuts. The previous Wails desktop/mobile applications and React frontend have been removed.
+
+See [harness integrations](docs/harness-integrations.md) and [data compatibility](docs/data-compatibility.md).
 
 ## Local data and security boundaries
 
@@ -118,99 +88,53 @@ A Remote Worker runs harnesses on another machine and sends `workspace-write` ch
 Build a development Worker and start it on the loopback interface:
 
 ```bash
-go tool wails3 task build:headless
+task build:headless
 ./bin/headless/onecatch worker --pair
 ```
 
 A non-loopback listener requires TLS through `--tls-cert` and `--tls-key`; add `--client-ca` for mTLS. Use `--allow-insecure-http` only when a trusted tunnel already provides transport security. Install a per-user background service with `--install-service`. Run `./bin/headless/onecatch worker --help` for the complete option list. See [`internal/app/worker/README.md`](internal/app/worker/README.md) for the Worker entry point and [`deploy/onecatch-worker/`](deploy/onecatch-worker/) for launchd and systemd templates.
 
-## Desktop and Android packaging and releases
-
-The first `## X.Y.Z` section in [`CHANGELOG.md`](CHANGELOG.md) is the single source for desktop, iOS, Android, installer, and updater versions. Its body is also published as the GitHub Release and updater notes. Build templates intentionally keep a neutral `0.0.0`; packaging injects the current release version without rewriting tracked files. Run `go tool wails3 task release:check` to validate the entry.
+## Desktop packaging and releases
 
 ```bash
-go tool wails3 task package:desktop
+node build/scripts/release-info.mjs --check
+node build/scripts/package-keel.mjs
 ```
 
-Windows packaging requires [NSIS](https://nsis.sourceforge.io/):
+Version and notes come from `CHANGELOG.md`. The script runs `go tool keel build` and writes release archives to `dist/`: a macOS application ZIP, a portable Windows EXE ZIP, and a Linux tar.gz with an install script. New builds no longer produce DMG, NSIS, AppImage or mobile packages; existing published releases remain unchanged.
 
-```powershell
-winget install NSIS.NSIS
-```
-
-Linux packaging uses GTK4 and WebKitGTK 6.0. All process roles are linked into one `onecatch`. Use `onecatch worker` for a server, or `build:headless` for a build without GUI dependencies. See [the design](docs/unified-binary.md).
-
-The desktop checks for updates every six hours and also exposes a manual check under **Settings → Appearance → Software update**. Feeds are platform/architecture-specific Sparkle AppCasts, and every downloaded artifact must pass Ed25519 verification against the public key pinned at build time. Verified updates are persisted under `~/.onecatch/updates/ready/` with an integrity manifest, so quitting before restart does not require another download; the cache is validated again on the next launch and immediately before installation. macOS swaps the complete `.app`, Windows runs the complete Setup package silently, and Linux swaps the AppImage in place. Windows and AppImage installs roll back when the new process does not become ready within 45 seconds. A `.deb` remains under the system package manager and therefore offers a manual update. This is a rollback-aware seamless restart, not in-process code replacement.
-
-[`build/update/public-key.base64`](build/update/public-key.base64) is the release trust root. Keep the private key only in release-maintainer secure storage and GitHub Actions Secrets; do not regenerate it merely because a fresh clone has no private key. Once a maintainer has the matching key, set the secret:
-
-```bash
-gh secret set ONECATCH_UPDATE_PRIVATE_KEY < /secure/path/update-ed25519-private.pem
-```
-
-For a planned rotation, generate a replacement with `node build/scripts/update-feed.mjs keygen --force`. Ship a transition release signed by the old key before changing the pinned public key; otherwise existing clients cannot trust later releases. The release workflow rejects a missing private key or a private key that does not match the committed public key.
-
-For a release, prepend a `## X.Y.Z` section with the changes to `CHANGELOG.md`, commit that one file, and push the matching tag:
-
-```bash
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-The tag must equal `v` followed by the first version in `CHANGELOG.md`. GitHub Actions builds the macOS DMG and complete `.app` update ZIP, Windows Setup package, Linux `.deb`, Linux AppImage, and an ARM64 Android APK, then generates signed AppCasts and SHA-256 files and publishes everything with the same release notes to the matching GitHub Release.
-
-Android CI uses JDK 21, SDK 35, Build Tools 34.0.0, and NDK 27.0.12077973. It uploads `OneCatch-X.Y.Z-Android-arm64.apk` and its `.sha256` file to the same release. To use a stable release signing key, configure all four GitHub Actions repository secrets:
-
-- `ANDROID_KEYSTORE_BASE64`: the Base64-encoded keystore file.
-- `ANDROID_KEYSTORE_PASSWORD`: keystore password.
-- `ANDROID_KEY_ALIAS`: signing key alias.
-- `ANDROID_KEY_PASSWORD`: signing key password.
-
-If none are configured, CI produces `OneCatch-X.Y.Z-Android-arm64-test-signed.apk` using the runner's debug key. These APKs are for testing; the key changes between runs, so they cannot reliably upgrade an existing installation. Uninstalling the old app clears its data and Worker pairing. Partially configured or invalid signing credentials fail the build. Keep the same release key for future upgrades; the decoded keystore is temporary and is never uploaded as an artifact.
-
-For a local Android package, run `go tool wails3 task package:android`. The output is `bin/onecatch-mobile.apk`. Local release signing uses `ANDROID_KEYSTORE_FILE` (an absolute file path), plus the three password/alias variables above.
-
-To sign the macOS package with a Developer ID, set `SIGN_IDENTITY`. If notarization credentials have already been saved with `notarytool store-credentials`, also set `NOTARY_PROFILE`:
-
-```bash
-SIGN_IDENTITY="Developer ID Application: Example Corp (TEAMID)" \
-NOTARY_PROFILE="onecatch-notary" \
-  go tool wails3 task package:desktop
-```
+macOS uses ad-hoc signing unless `SIGN_IDENTITY` specifies a Developer ID; notarization is a separate step. macOS updates retain pinned-key Ed25519 verification. Portable Windows and Linux packages require manual replacement. A matching version tag triggers native builds, release archives, checksums and the macOS update feed.
 
 ## Repository layout
 
 ```text
 cmd/
-└── app/                Unified desktop, worker, helper, and mobile entry point
-frontend/               React, Vite, tests, and generated Wails bindings
+└── app/                Unified native desktop, worker, and helper entry point
 internal/
-├── app/                Desktop, Mobile, and Worker assembly
+├── app/                Desktop, Worker, and helper process assembly
 ├── domain/             Domain models and business rules
+├── platform/           Process, SSH, remote filesystem, discovery, and build info
 ├── repo/               File, Git, and historical data access
 ├── usecase/            Agent adapters and workflow use cases
-├── service/            Desktop, Mobile, and Worker services
-└── transport/          Wails and HTTP adapters
-clients/onecatch/        OneCatch Go HTTP SDK
+└── service/            Desktop, Worker, and supporting services
 pkg/                    General Go packages exposed outside this repository
-build/                  Desktop, iOS, and Android build and packaging files
+build/                  Native desktop build and packaging files
 deploy/                 Worker launchd and systemd templates
 docs/                   Harness and other development documentation
-tools/                  Go tool dependency declarations
 ```
 
-The repository has one root `go.mod`. Packages under `cmd` contain process entry points only. Shared repository code belongs under `internal`; only packages that must be imported by external projects belong under `pkg` or `clients`. Desktop and mobile builds share the React source, lockfile, bindings, and build output under `frontend`. See [`internal/README.md`](internal/README.md) for layer boundaries and placement rules.
+The repository has one root `go.mod`. Packages under `cmd` contain process entry points only. Shared repository code belongs under `internal`; only packages that must be imported by external projects belong under `pkg`. The desktop UI lives in `internal/app/keel`. See [`internal/README.md`](internal/README.md) for layer boundaries and placement rules.
 
 ## Contributing
 
 Issues and pull requests are welcome. Before submitting a change, run:
 
 ```bash
-go tool wails3 task test
-go tool wails3 task build:desktop
+task test
+task build:desktop
 ```
 
-When adding a harness, treat `internal/domain/harnesses/catalog.go` as the capability catalog and update its adapter, configuration inspection, and tests. Do not maintain a second runtime catalog in the frontend.
+When adding a harness, treat `internal/domain/harnesses/catalog.go` as the capability catalog and update its adapter, configuration inspection, and tests. Do not maintain a second runtime catalog in the UI.
 
 ## License
 

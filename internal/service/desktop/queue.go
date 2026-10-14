@@ -136,9 +136,19 @@ func (a *Service) reconcileWorkspaceQueue(workspaceID string) {
 }
 
 func (a *Service) startRunAuthorized(ctx context.Context, taskID string) (domainworkflows.Run, error) {
+	return a.startRunAuthorizedMode(ctx, taskID, nil)
+}
+
+func (a *Service) startRunAuthorizedMode(ctx context.Context, taskID string, loop *bool) (domainworkflows.Run, error) {
 	definition, resolution, err := a.resolveRunSettings(ctx, taskID)
 	if err != nil {
 		return domainworkflows.Run{}, err
+	}
+	if loop != nil {
+		if definition.ID == directAgentWorkflowID || len(definition.Steps) == 0 {
+			return domainworkflows.Run{}, coded("workflow_required", "select a workflow before starting a loop")
+		}
+		definition.LoopEnabled = *loop
 	}
 	run, err := a.orchestrator.StartTaskResolved(ctx, taskID, definition, resolution)
 	if err != nil {

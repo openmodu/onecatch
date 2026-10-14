@@ -6,8 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"strings"
-	"sync/atomic"
 	"time"
 
 	codingagent "github.com/openmodu/modu/pkg/coding_agent"
@@ -145,8 +145,6 @@ func (r *ModuSDKRunner) Run(ctx context.Context, req Request, sink Sink) (result
 	return result, nil
 }
 
-var moduUserInputSequence atomic.Uint64
-
 func moduUserInputRequest(request codingagent.AskRequest) UserInputRequest {
 	questions := make([]UserInputQuestion, 0, len(request.Questions))
 	for _, question := range request.Questions {
@@ -156,7 +154,7 @@ func moduUserInputRequest(request codingagent.AskRequest) UserInputRequest {
 		}
 		questions = append(questions, UserInputQuestion{ID: question.ID, Header: question.Header, Question: question.Question, Options: options})
 	}
-	return UserInputRequest{ID: fmt.Sprintf("modu-input-%d", moduUserInputSequence.Add(1)), Questions: questions}
+	return UserInputRequest{ID: "modu-input-" + uuid.NewString(), Questions: questions}
 }
 
 func (r *ModuSDKRunner) ListSkills(_ context.Context, cwd string, environment []string) ([]Skill, error) {

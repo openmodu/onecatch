@@ -9,6 +9,8 @@ import (
 	"errors"
 	"os/exec"
 	"strings"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 const maxPatchBytes = 24 * 1024 * 1024
@@ -83,7 +85,7 @@ func buildWorkspacePatch(ctx context.Context, workspace, baseRevision string) (*
 		}
 		path := string(rawPath)
 		untrackedPaths = append(untrackedPaths, path)
-		command := exec.CommandContext(ctx, "git", "diff", "--binary", "--full-index", "--no-index", "--", "/dev/null", path)
+		command := processexec.CommandContext(ctx, "git", "diff", "--binary", "--full-index", "--no-index", "--", "/dev/null", path)
 		command.Dir = workspace
 		output, commandErr := command.Output()
 		var exitErr *exec.ExitError
@@ -131,7 +133,7 @@ func ApplyWorkspacePatch(ctx context.Context, workspace string, patch WorkspaceP
 	if baselineErr := validateWorkspaceBaseline(ctx, localGitRunner{}, workspace, patch.BaseRevision); baselineErr != nil {
 		return *baselineErr
 	}
-	command := exec.CommandContext(ctx, "git", "apply", "--binary", "--whitespace=nowarn", "-")
+	command := processexec.CommandContext(ctx, "git", "apply", "--binary", "--whitespace=nowarn", "-")
 	command.Dir = workspace
 	command.Stdin = bytes.NewReader(data)
 	if output, err := command.CombinedOutput(); err != nil {
@@ -181,7 +183,7 @@ func (localGitRunner) Output(ctx context.Context, workspace string, args ...stri
 }
 
 func gitOutput(ctx context.Context, workspace string, args ...string) ([]byte, error) {
-	command := exec.CommandContext(ctx, "git", args...)
+	command := processexec.CommandContext(ctx, "git", args...)
 	command.Dir = workspace
 	return command.Output()
 }

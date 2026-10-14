@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/openmodu/onecatch/internal/buildinfo"
+	"github.com/openmodu/onecatch/internal/platform/buildinfo"
 )
 
 func TestUpdaterCopiesSelfToUniqueExecutable(t *testing.T) {

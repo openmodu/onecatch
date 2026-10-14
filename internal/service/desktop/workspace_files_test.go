@@ -159,3 +159,34 @@ func TestWorkspaceFileEditorAcceptsOnlyBoundedUTF8Text(t *testing.T) {
 		t.Fatalf("directory error = %v", err)
 	}
 }
+
+func TestWorkspaceFileSearchPathsAndContents(t *testing.T) {
+	app, _ := newStorageTestApp(t)
+	ctx := context.Background()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "nested"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	for name, content := range map[string]string{"nested/input.go": "package nested\n// unique needle\n", "other.md": "unrelated\n"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(content), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := app.SearchWorkspaceFiles(ctx, workspace.ID, "INPUT")
+	if err != nil || len(result.Matches) != 1 || result.Matches[0].Path != "nested/input.go" {
+		t.Fatalf("path search: %+v %v", result, err)
+	}
+	result, err = app.SearchWorkspaceFiles(ctx, workspace.ID, "? unique needle")
+	if err != nil || len(result.Matches) != 1 || result.Matches[0].Line != 2 {
+		t.Fatalf("content search: %+v %v", result, err)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err = app.SearchWorkspaceFiles(cancelled, workspace.ID, "input"); err == nil {
+		t.Fatal("cancelled search completed")
+	}
+}

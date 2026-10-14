@@ -16,12 +16,17 @@ func (r *recordingNotifier) MarkDirty(runID string) { r.dirty = append(r.dirty, 
 // bodies; the rest panic if unexpectedly called.
 type stubRepo struct {
 	WorkflowsRepo
-	updateRun func(domainworkflows.Run) (domainworkflows.Run, error)
-	claim     func(string) ([]domainworkflows.Instruction, error)
+	updateRun      func(domainworkflows.Run) (domainworkflows.Run, error)
+	updateWorkflow func(domainworkflows.Run) (domainworkflows.Run, error)
+	claim          func(string) ([]domainworkflows.Instruction, error)
 }
 
 func (s stubRepo) UpdateRun(_ context.Context, run domainworkflows.Run, _ int64) (domainworkflows.Run, error) {
 	return s.updateRun(run)
+}
+
+func (s stubRepo) UpdatePausedRunWorkflow(_ context.Context, run domainworkflows.Run, _ domainworkflows.Definition, _ int64) (domainworkflows.Run, error) {
+	return s.updateWorkflow(run)
 }
 
 func (s stubRepo) SaveStepRun(context.Context, domainworkflows.StepRun) error { return nil }
@@ -59,6 +64,20 @@ func TestNotifyingRepoSkipsDirtyWhenUpdateFails(t *testing.T) {
 	}
 	if len(notifier.dirty) != 0 {
 		t.Fatalf("a failed write must not mark dirty, got %v", notifier.dirty)
+	}
+}
+
+func TestNotifyingRepoMarksRunDirtyOnPausedWorkflowUpdate(t *testing.T) {
+	notifier := &recordingNotifier{}
+	repo := WithNotifier(stubRepo{
+		updateWorkflow: func(run domainworkflows.Run) (domainworkflows.Run, error) { return run, nil },
+	}, notifier)
+
+	if _, err := repo.UpdatePausedRunWorkflow(context.Background(), domainworkflows.Run{ID: "run_1"}, domainworkflows.Definition{}, 1); err != nil {
+		t.Fatalf("UpdatePausedRunWorkflow: %v", err)
+	}
+	if len(notifier.dirty) != 1 || notifier.dirty[0] != "run_1" {
+		t.Fatalf("expected run_1 marked dirty, got %v", notifier.dirty)
 	}
 }
 

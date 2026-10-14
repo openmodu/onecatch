@@ -14,7 +14,7 @@ import (
 	domainsettings "github.com/openmodu/onecatch/internal/domain/settings"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	"github.com/openmodu/onecatch/internal/repo/git"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
 	workflowuc "github.com/openmodu/onecatch/internal/usecase/workflows"
@@ -176,7 +176,7 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	saved.Execution.MaxLocalDAGConcurrency = 7
+	saved.Execution.MaxConcurrency = 7
 	saved.Execution.InterruptGraceSeconds = 22
 	saved, err = app.UpdateExecutionSettings(ctx, saved.Execution, saved.Revision)
 	if err != nil {
@@ -198,10 +198,12 @@ func TestRunFreezesResolvedSettings(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if snapshot.Steps[0].Model != "task-model" || run.MaxLocalDAGConcurrency != 7 || run.InterruptGraceSeconds != 22 {
+	if snapshot.Steps[0].Model != "task-model" || run.MaxConcurrency != 7 || run.InterruptGraceSeconds != 22 {
 		t.Fatalf("resolved snapshot missing: run=%+v definition=%+v", run, snapshot)
 	}
-	if snapshot.Steps[1].Model != "claude-snapshot" {
+	// The built-in reviewer pins Sonnet; an explicit step model beats the
+	// harness default and must survive another harness's task override.
+	if snapshot.Steps[1].Model != "sonnet" {
 		t.Fatalf("task Codex override changed another harness: definition=%+v", snapshot)
 	}
 	if got := run.RuntimeSettings["codex"].EnvironmentAllowlist; len(got) != 1 || got[0] != "ONECATCH_TEST_ENV" {
@@ -265,7 +267,7 @@ func TestTaskSandboxCapsOrchestratedWorkflowPermissions(t *testing.T) {
 	if err := app.InitializeSettings(ctx); err != nil {
 		t.Fatal(err)
 	}
-	definition := domainworkflows.Definition{ID: "capped_flow", Name: "Capped", EntryStepID: "run", Steps: []domainworkflows.Step{{ID: "run", Name: "Run", Runtime: "codex", Sandbox: "workspace-write", WorkerID: "local", RolePrompt: "Run", Instruction: "Run", Transitions: map[string]string{"completed": domainworkflows.TargetDone}}}}
+	definition := domainworkflows.Definition{ID: "capped_flow", Name: "Capped", Steps: []domainworkflows.Step{{ID: "run", Name: "Run", Runtime: "codex", Sandbox: "workspace-write", WorkerID: "local", Prompt: "Run"}}}
 	if _, err := app.SaveDefinition(ctx, definition); err != nil {
 		t.Fatal(err)
 	}
@@ -335,7 +337,7 @@ func TestFullSandboxRequiresGrantConfirmationAndBlocksResumeAfterDowngrade(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	definition := domainworkflows.Definition{ID: "full_flow", Name: "Full", EntryStepID: "run", Steps: []domainworkflows.Step{{ID: "run", Name: "Run", Runtime: "codex", Sandbox: "full", WorkerID: "local", RolePrompt: "Run", Instruction: "Run", Transitions: map[string]string{"completed": domainworkflows.TargetDone}}}}
+	definition := domainworkflows.Definition{ID: "full_flow", Name: "Full", Steps: []domainworkflows.Step{{ID: "run", Name: "Run", Runtime: "codex", Sandbox: "full", WorkerID: "local", Prompt: "Run"}}}
 	if _, err := app.SaveDefinition(ctx, definition); err != nil {
 		t.Fatal(err)
 	}
@@ -384,7 +386,7 @@ func TestFullSandboxRequiresGrantConfirmationAndBlocksResumeAfterDowngrade(t *te
 func newStorageTestApp(t *testing.T) (*Service, *workflowuc.Usecase) {
 	t.Helper()
 	root := t.TempDir()
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -405,4 +407,43 @@ func errorCode(err error) string {
 		return codedError.Code
 	}
 	return ""
+}
+
+func TestGlobalDefaultFullSandboxRequiresConfirmation(t *testing.T) {
+	app, _ := newStorageTestApp(t)
+	ctx := context.Background()
+	if err := app.InitializeSettings(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := app.EnsureBuiltinDefinitions(ctx); err != nil {
+		t.Fatal(err)
+	}
+	settings, err := app.GetSettings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Security.AllowFullSandbox = true
+	settings, err = app.UpdateSecuritySettings(ctx, settings.Security, settings.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings.Execution.DefaultSandbox = "full"
+	if _, err := app.UpdateExecutionSettings(ctx, settings.Execution, settings.Revision); err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := app.AddWorkspace(ctx, AddWorkspaceInput{Path: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task, err := app.CreateTask(ctx, CreateTaskInput{WorkspaceID: workspace.ID, WorkflowID: "single_agent", Title: "full Agent", Prompt: "work outside the project", Harness: "codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := app.PreviewRun(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !preview.RequiresFullSandboxConfirmation || preview.ConfirmationToken == "" {
+		t.Fatalf("preview = %+v", preview)
+	}
 }

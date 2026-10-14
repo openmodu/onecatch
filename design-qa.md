@@ -99,6 +99,10 @@ final result: passed
 
 final result: blocked
 
+
+
+
+
 ---
 
 # Sidebar design QA
@@ -382,3 +386,1224 @@ final result: passed
 - All 487 frontend tests pass. The frontend production build, desktop binary build and diff whitespace check pass; existing bundle-size and SDK/deployment-target warnings remain non-fatal.
 
 final result: passed
+
+---
+
+# Keel desktop migration — 2026-10-09
+
+This section records the native Go client on `feat/keel-desktop`; the earlier
+Wails reports above remain unchanged. Migration and visual acceptance are still
+in progress.
+
+## Findings
+
+- **P1 — Incomplete feature surfaces.** The compact updater, full Skills
+  operations and template import/export remain
+  unported. Settings also lacks language and chat-font controls. Git/files/review,
+  attachments, local/SSH projects and execution-location selection are now wired
+  to the existing Go services; their presence does not establish full parity.
+- **P2 — Typography and control density.** Native inputs/labels remain lighter
+  than the source in workflow/settings views. Original CSS uses intermediate
+  600/620 weights; the pinned Keel text API exposes regular/medium/bold. Match
+  shaping, optical weights, row heights and guided-editor wrapping, then recheck
+  full/focused comparisons. Inspector diff rows now use the source's single-line
+  geometry but native font metrics and linear color mixing still differ.
+- **P2 — Remaining interaction fidelity.** The Agent popover now contains the
+  model, and project/worktree menus perform real operations. The full profile,
+  reasoning/service-tier controls, image lightbox,
+  clipboard/session actions and original titlebar actions still need migration.
+  Menu density and copy need another pass against the worktree reference.
+
+## Source truth and matching captures
+
+Source: the existing `frontend/src/app` production components served in their
+built-in, standalone demo fallback. Browser screenshots were captured through
+the Chrome extension while native application access was unavailable. No real
+task, settings or Skill was modified to prepare reference data.
+
+| State | Source in `bin/keel-qa/` | Keel rendering | Logical viewport | Source pixels | Keel pixels |
+| --- | --- | --- | --- | --- | --- |
+| Light/new task, sidebar expanded | `reference-welcome.jpg` | `welcome.png` | 1120 × 760 | 1120 × 760 | 2240 × 1520 |
+| Workflow detail | `reference-workflows.jpg` | `workflows.png` | 1040 × 760 | 1040 × 760 | 2080 × 1520 |
+| Guided Loop editor | `reference-workflow-form.jpg` | `workflow-form.png` | 1040 × 760 | 1040 × 760 | 2080 × 1520 |
+| DAG canvas and node inspector | `reference-dag.jpg` | `workflow-dag-default.png` | 1040 × 760 | 1040 × 760 | 2080 × 1520 |
+| Appearance settings | `reference-settings.jpg` | `settings.png` | 960 × 800 | 960 × 800 | 1920 × 1600 |
+| Docked Git inspector | `reference-inspector-git.jpg` | `inspector-git.png` | 1120 × 760 | 1120 × 760 | 2240 × 1520 |
+| Empty file editor and tree | `reference-inspector-files.jpg` | `inspector-files.png` | 1120 × 760 | 1120 × 760 | 2240 × 1520 |
+| Review, two-file demo patch | `reference-inspector-review.jpg` | `inspector-review.png` | 1120 × 760 | 1120 × 760 | 2240 × 1520 |
+| Worktree menu, open | `reference-worktree-menu.jpg` | `worktree-menu.png` | 1120 × 760 | 1120 × 760 | 2240 × 1520 |
+
+Source captures have 1× density; Gio's offscreen captures have 2× density. The
+comparison boards downsample the implementation to the source's logical size
+using Catmull-Rom filtering. Left is source, right is Keel, separated by a 16 px
+comparison gutter. Native window frames/traffic lights are excluded from both.
+The standalone source says “预览”; the Keel test fixture says “本地”. Task titles
+and usage values are intentionally sample data, not evidence of account activity.
+The Git branch/hash/changed path, file-tree entries and review patch match the
+source demo fixtures. Worktree entries use the same branch/path examples; project
+name, caption state, session list and remote availability are sample variations.
+These variations are excluded from pixel-level claims. The source browser console
+reported its expected missing-Wails-runtime warning and no errors.
+
+Full-view boards:
+
+- [Welcome](bin/keel-qa/comparison-welcome.png)
+- [Workflow detail](bin/keel-qa/comparison-workflows.png)
+- [Guided editor](bin/keel-qa/comparison-workflow-form.png)
+- [Settings](bin/keel-qa/comparison-settings.png)
+- [Git inspector](bin/keel-qa/comparison-inspector-git.png)
+- [File inspector](bin/keel-qa/comparison-inspector-files.png)
+- [Review](bin/keel-qa/comparison-inspector-review.png)
+- [Worktree menu](bin/keel-qa/comparison-worktree-menu.png)
+
+Focused boards:
+
+- [Sidebar and footer](bin/keel-qa/comparison-sidebar.png)
+- [Composer, heading and project caption](bin/keel-qa/comparison-composer.png)
+- [Git controls](bin/keel-qa/comparison-inspector-git-focused.png)
+- [File tree and editor](bin/keel-qa/comparison-inspector-files-focused.png)
+- [Diff line/header geometry](bin/keel-qa/comparison-inspector-review-focused.png)
+
+Additional production render checks cover conversation light/dark states,
+templates, Skills, usage, overflow/application menus, sidebar customization,
+raw/advanced workflow editing, every ported settings section, and the minimum
+main-window width with expanded/collapsed sidebar. Evidence is local and ignored
+by Git. Regenerate Keel captures with the command in `cmd/keel/README.md`.
+
+## Fidelity surfaces and iteration history
+
+- **Fonts:** system family priority is preserved for UI text with Chinese
+  fallback. Intermediate weights and input metrics remain actionable P2 work;
+  the offscreen render does not prove native antialiasing parity.
+- **Spacing:** 244 dp main sidebar, 240 dp workflow rail, 52 dp title strip,
+  original independent window dimensions and single pane seams are retained.
+  Comparison iteration 1 found the collapse button at the far right, an oversized
+  footer logo and the workflow editor inset too narrow. They were corrected to
+  the source positions, 22 dp canonical icon and 48 dp guided-content inset.
+  Subsequent boards above show the changes together with the source.
+- **Colors:** source DOM measurements were RGB 250/250/249 for sidebar,
+  252/252/251 for background and 242/242/241 for composer. Keel now uses those
+  values. Selected/hover rows use neutral 237/236/232; fields and controls have
+  transparent perimeter/focus strokes. Four existing accent themes are reused.
+- **Assets:** the actual OneCatch PNG, original runtime assets and Lucide 1.30.0
+  path data are embedded, with license/source attribution. An early SVG parser
+  failure hid the Codex mark; compact arc-flag normalization fixed it and native
+  raster tests confirm that every runtime SVG produces visible pixels. Workflow
+  direction/check marks were subsequently switched to the canonical Lucide data.
+- **Copy:** primary headings and guided-editor instructions reuse existing copy.
+  Raw runtime IDs and settings/window labels still need the full original
+  localization pass; partial features are documented, not presented as complete.
+- **Settings layout:** the first row-layout revision clipped labels and created
+  oversized blank cards. Switching appearance rows to two explicit grid tracks
+  fixed the regression. The recaptured settings board shows both controls and
+  text; a native layout test checks every appearance control at 960 × 800 and
+  the 860 × 600 minimum window size.
+- **Inspector iteration 1:** ported the 380 dp dock, tabs and backend operations.
+  Focused comparisons exposed an extra standalone model chip, excessive toolbar
+  density, a clipped send circle and wrapped diff text. Moving the model into
+  the Agent popover, reducing selector padding and explicitly sizing the send
+  circle corrected the composer. Diff headers/rows now follow the original
+  36/28/21 dp geometry with one shared horizontal canvas and semantic tints.
+- **Inspector iteration 2:** the new wide diff layout initially gave its scroll
+  child zero height and collapsed file-name columns. Explicit full-height scroll
+  sizing and a constrained tree row fixed both. The recaptured
+  `inspector-review-wide.png` shows both files and their tree labels. A native
+  layout test now checks the code region at 1120 and 860 dp window widths.
+- **Form/attachment iteration:** review of `project-dialog.png` exposed internal
+  values as field labels and an invisible off switch; the attachment card lost
+  its name. Empty select labels with explicit initial choices, filled deferred
+  checkboxes/settings switches, and intrinsic-width file chips corrected these.
+  The recaptured project and attachment views show visible choices/file names;
+  actual Gio pointer/Space tests confirm toggling once and disabled behavior.
+- **Inspector iteration 3:** matched the 44 dp inspector toolbar, neutral tab
+  strip and grouped Git repository/branch sections. The refreshed full/focused
+  boards above record the resulting density; font/profile/menu differences
+  remain P2 work.
+
+## Interaction verification and limits
+
+- Actual Gio input-router tests exercise sidebar drag/keyboard resizing and
+  persistence, workflow selection, back/forward, edit navigation and retention of
+  unsaved/invalid drafts. These are native UI layouts, not browser substitutes.
+- Backend integration exercises task/run streaming, completion, continuation and
+  reopening the store. Settings integration checks section persistence, invalid
+  numeric input and stale-revision rejection. All-source usage tests cover
+  same-day sums and streaks spanning different providers.
+- Workbench integration uses a real temporary Git repository and worktrees,
+  verifies task paths and selected execution context, retains file drafts and
+  rejects stale file hashes/path escapes. Diff parsing covers staged/worktree
+  merging, binary/untracked files, quoted UTF-8 names and content beginning with
+  `---`/`+++`. Attachment integration covers bounded file selection, pasted PNG
+  staging, cleanup that preserves original/persisted files and resume failures
+  that do not duplicate an already-persisted instruction. Native input tests
+  check inspector controls at normal/minimum sizes and maximize/restore/collapse.
+- Full repository tests, the Keel race check, vet and whitespace checks passed.
+  Offscreen render checks passed. The macOS app builds and its ad hoc signature
+  verifies; the current Keel entry point has 550 dependency packages and zero
+  Wails/WebView packages. Linked macOS frameworks include AppKit/Metal and no
+  WebKit. This check used Go 1.27.1 on darwin/arm64; the module minimum remains
+  Go 1.26.1. Local package/signature checks do not establish distribution signing
+  or notarization.
+- The Mac remains locked for native UI automation. Browser reference captures
+  and offscreen input tests do not verify AppKit chrome, OS dialogs, native menu
+  presentation, installation, or actual update delivery. No unlock workaround
+  was attempted.
+
+## Native terminal iteration
+
+- Ported TerminalDock into the main conversation column, preserving 286 dp
+  default height, the measured 36 dp toolbar, 190–560 dp resizing, square panes
+  and single dividers. Hidden tabs retain their PTY sessions. Closing the original
+  leaf of a split promotes its sibling without deleting the surviving tab group.
+- Keel uses the existing transport-neutral local/SSH PTY service and a pinned
+  Go VT emulator. The entry point does not import the Wails terminal binding.
+  Output arriving before session creation resolves is buffered with a bound;
+  process creation is serialized with shutdown to prevent orphan shells.
+- Native Gio input tests verify one Space emission, Chinese composition without
+  preedit leakage, Option text, Ctrl-C, arrows and bracketed paste. A real POSIX
+  PTY checks Unicode input, resizing (`stty size`) and a nonzero exit code.
+  Additional tests cover split pointer routing, alternate screens, split UTF-8,
+  wide-cell selection/search, indexed-versus-RGB theme updates, web-link mapping
+  and tab/event lifecycle. Actual AppKit IME presentation remains unverified.
+- Captured the production React terminal in browser preview mode at 1120 × 760.
+  It has no PTY in this mode, so the fidelity comparison uses the empty dock:
+  [full board](bin/keel-qa/comparison-terminal-empty.png) and
+  [focused board](bin/keel-qa/comparison-terminal-empty-focused.png). Source left,
+  Keel right; both normalized to 1 pixel per dp. The source dock runs from y=474
+  to 760, with a 36 px toolbar and zero outer radius. Running, split, search,
+  narrow, maximized and dark Keel states are additional production render checks
+  (`terminal*.png`), not a claim of browser PTY parity.
+- The first comparison exposed a misplaced new-tab button and a toolbar one
+  pixel short; both are corrected. Source/native font weights remain a P2 gap.
+  Remote SSH connectivity and physical macOS window/IME behavior remain pending
+  interactive verification; browser preview/offscreen evidence cannot prove them.
+
+## Remaining implementation checklist
+
+1. Complete remaining task actions and IME-safe Enter-to-send behavior.
+2. Complete Skills operations and template import/export.
+3. Complete appearance/localization and a Keel-specific compact update path.
+4. Complete Agent/profile/menu interaction fidelity and fix remaining font
+   differences; recapture normalized
+   full/focused comparisons.
+5. Verify actual native windows, menus and dialogs after the Mac is unlocked.
+
+No finished-design handoff is claimed while the P1/P2 findings remain.
+
+## Native DAG iteration
+
+- Compared the production React DAG editor at 1040 × 760 with the Go view:
+  [full board](bin/keel-qa/comparison-workflow-dag.png) and
+  [focused board](bin/keel-qa/comparison-workflow-dag-focused.png). Source left,
+  Keel right, normalized to one pixel per dp. Preview data matches the browser
+  demo; this does not change backend built-ins or existing saved coordinates.
+- Matched the 240 dp rail including its divider, 174 dp editor header, 204 × 94
+  dp nodes, 10 dp ports, 320 dp inspector, 18 dp grid and cubic dependencies.
+  The first comparison exposed the wrong inspector width, node text scale and
+  port tint; these now follow measured source values. The source keeps the edge
+  delete mark hidden until hover; the native mark also appears on keyboard focus.
+- Gio input-router tests verify continuous node dragging, both port directions,
+  duplicate connection prevention, overlapping port/edge hit priority, clicking
+  the actual Bézier path, removal, creation, automatic layout and keyboard moves.
+  Horizontal/vertical scroll exposes an initially offscreen node and still lets
+  the user select it. Positions and dependencies survive closing and reopening
+  the real temporary store. Remote Worker selection removes an incompatible
+  full-access sandbox as in the source.
+- Native text-editor events verify ID reference repair, collision/empty-field
+  feedback and disabled saving of a mismatched invalid ID. Stable transition
+  slots retain keyboard focus while renaming signals; duplicate names preserve
+  both original transitions and empty signals remain invalid drafts.
+- Source browser clicks independently confirmed the two-port connection state,
+  dependency count and dependency-layer automatic-layout coordinates. The source
+  draft was not saved or deleted. Default, connecting, laid-out, 860 × 600 and
+  dark native states were rendered from production views.
+- Deliberate responsive repair: the source's 520 px minimum canvas pushes its
+  footer below the 760 px window. The native canvas occupies available height,
+  scrolls its full graph and keeps validation visible at 1040 × 760 and 860 × 600.
+  Only interior pane/header dividers retain strokes. Neutral focus fills now
+  also suppress Keel's default keyboard stroke on existing frameless controls.
+- Source/native font weights and native scrollbar appearance remain P2 fidelity
+  gaps. Physical macOS window presentation remains unverified while locked.
+
+
+## Native Worker iteration
+
+- Captured the production React auxiliary settings window at 960 × 800 in its
+  built-in demo fallback. Unlock, add environment, sandbox/ordinary selection,
+  edit and TLS expansion were inspected without saving a configuration or
+  sending a pairing request. Browser preview has no real remote connection;
+  its connected badges are demo data. The browser reported its expected Wails
+  preview warning and no application errors.
+- Compared normalized one-pixel-per-dp captures: [settings board](bin/keel-qa/comparison-worker-settings.png),
+  [sandbox board](bin/keel-qa/comparison-worker-sandbox-modal.png),
+  [pairing board](bin/keel-qa/comparison-worker-pair-modal.png) and
+  [TLS board](bin/keel-qa/comparison-worker-edit-tls.png).
+  Source left, native right. Corresponding focused boards preserve the whole
+  form. Native previews use production views at 2×; all comparison boards are
+  normalized before review. Additional 860 × 600 and dark captures are in
+  `worker-edit-tls-narrow.png` and `worker-edit-dark.png`.
+- Implemented the original Ctrl+Alt+S reveal without changing the persisted
+  feature flag, a deferred enable switch with a save/discard bar, configured
+  environments, 15-second health checks, pairing, edit and confirmed removal.
+  Settings writes retain revision conflict checks. The 576 dp dialog has
+  36 dp filled fields, optional TLS/deployment groups and a fixed action footer.
+  Its body scrolls at the minimum viewport; outer strokes remain absent.
+- The first comparison exposed an overly pale scrim, lighter input text,
+  centered disclosure rows and an oversized TLS form. These now use the source
+  overlay luminance, medium fields, left-aligned disclosures and grouped TLS
+  spacing. The native renderer blends in linear light, so the scrim alpha is
+  adjusted to match the source's displayed CSS half-black overlay.
+- The Agent menu offers enabled remote targets, restricts sandbox targets to
+  Codex and clears local model/worktree choices when moving to a Worker. It
+  hides unsupported attachment controls, keeps the selected target when its
+  configuration becomes unavailable, and disables sending until a valid target
+  is selected. Existing tasks retain their Worker; the shared service performs
+  the final validation and persists it in the same task store.
+- A temporary TLS Worker verifies one-time pairing, stored certificate pin,
+  authenticated health after editing, rejection of a wrong pin and removal.
+  A real task-store check verifies the native Send input persists the Worker
+  and uses the project directory. Credentials stay in the existing registry;
+  public Info has no token, and URL query credentials are redacted in errors.
+  Health generations discard a stale success after configuration changes.
+- Native Gio input tests cover reveal, typed sandbox URL, sync switch,
+  TLS expansion, cancellation, minimum-viewport footer visibility and actual
+  Agent-popover clicks from local to remote and back to a local Agent/workflow.
+  Execution
+  tests cover disabled/missing Workers, sandbox Agent restrictions, local
+  attachments, Remote FS, full access, task immutability and switching back to
+  a local Agent or workflow. These use temporary data and test-only endpoints.
+  A live cloud sandbox connection and deployed remote task are not claimed.
+- Deliberate adaptation: connection failures have readable inline detail rather
+  than relying solely on the source's hover title. Deployment commands can be
+  copied explicitly. Remaining font/row metrics,
+  full Agent profile and active-step Worker inspector defaults remain migration
+  work. Physical macOS windows/menus were not rechecked in this iteration;
+  earlier native automation observed a locked desktop.
+- Verification: full-repository Go tests, Keel race tests and vet pass; the
+  executable and local App bundle rebuild successfully. Signature verification
+  passes. The 550-package Keel dependency tree contains zero Wails/WebView
+  imports, and the bundle links AppKit/Metal without WebKit. Signing is ad hoc
+  for this Mac; distribution signing and notarization are not established.
+
+final result: blocked
+
+## Native phone connection iteration
+
+- Ported the original Mobile connection settings section between Skills and
+  Terminal. The host switch applies immediately, and this independent store
+  has no Settings Save/Reset or settings-revision badge. The view preserves
+  the original hosting/pairing text, address list, copy actions, ten-minute
+  countdown, replacement code and shortened certificate fingerprint. Surfaces
+  use neutral fills without outer frames; only authored separators remain.
+- Compared React at 960 × 800 with the normalized native render:
+  [off state](bin/keel-qa/comparison-mobile-off.png),
+  [pairing full board](bin/keel-qa/comparison-mobile-pair.png) and
+  [pairing focused board](bin/keel-qa/comparison-mobile-pair-focused.png).
+  Source is left, native right. Pairing source uses a temporary public demo
+  fixture, restored immediately after capture; no user's host was enabled.
+  The source demo deliberately disables its switch, while the native fixture
+  shows the enabled production action. Countdown differences are elapsed
+  fixture time. Minimum-window and dark-theme native captures were inspected.
+- Corrected navigation rows to the source's 10 dp vertical padding and 2 dp
+  label/hint gap. Copy actions use 28 dp filled controls, and pairing glyphs
+  match the source tracking and weight more closely. Fine font metrics and
+  several vertical positions remain a P2 fidelity difference. An apparent
+  light selection in the first dark preview was Keel's 120 ms background
+  transition; a fresh dark root verifies the settled palette.
+- The Go UI calls the existing HTTPS hosting service through a backend lock
+  shared with shutdown. It serializes requests, rejects a cancelled pending
+  start, ignores late results after closing settings, and prevents late calls
+  from reopening a closed client. Host start/stop failures reread listener
+  state, so a failed preference write cannot falsely change the switch.
+  A failed refresh retains the previous state and shows an inline retry.
+- Launch restores the existing explicit opt-in. A new store remains closed;
+  shutdown stops the listener while preserving the opt-in for next launch.
+  A temporary store and ephemeral port validate real TLS pairing, replacing
+  an older code, single-use enforcement, retained certificate pin on restart,
+  persisted stop, released port on shutdown and rejected post-close requests.
+  No actual phone, mDNS discovery or OS local-network permission was tested.
+- Gio input routing verifies pointer and keyboard activation of the immediate
+  switch without optimistic state changes, scrolling to the pairing controls
+  at 860 × 600 and removing an expired code's copy action. Clipboard writes
+  use Keel's native clipboard command; physical pasteboard delivery remains
+  part of native interactive verification.
+- Verification: repository Go tests, Keel race checks, vet and offscreen
+  renders pass. The executable and local App bundle rebuild and its ad hoc
+  signature verifies. The Keel dependency tree still has no Wails/WebView,
+  and its macOS executable links AppKit/Metal without WebKit. Full migration
+  and physical native window/dialog verification remain pending; the earlier
+  locked-desktop observation was not rechecked in this iteration.
+
+final result: blocked
+
+## Native inspector defaults and pending messages iteration
+
+- Git source follows the latest step attempt, falling back to the run's current
+  step. A registered, enabled Worker is selected for read-only steps; writable
+  steps use the local result. Remote FS and task-bound Worktrees suppress the
+  Worker selector. Manual choices survive token events and periodic refreshes;
+  context, active Worker or registry changes recompute the default. Requests
+  capture their version, context and source, preventing late remote responses
+  from replacing the current pane or local project caption.
+- Remote Git lists do not offer local branch operations or open a local review
+  for a remote file. Source controls use a neutral fill and no outer stroke.
+  The original read-only copy, 36 dp selector, branch weight and file-state
+  colors were compared with the React implementation.
+- `reference-inspector-worker.jpg` and `inspector-worker.png` are 1120 × 760
+  logical captures. `comparison-inspector-worker.png` and its `-focused.png`
+  counterpart normalize both sides to one pixel per dp. The focused 380 dp pane
+  has the same snapshot and Worker label. The full native fixture intentionally
+  has no conversation history or populated task list; the full board therefore
+  does not establish conversation/sidebar fidelity. A temporary demo-only
+  Worker option exposed the source's existing selector and was fully restored.
+- Pending instructions appear above the composer with the source's 52 dp rows,
+  20 dp side inset, neutral card fill and top-only corners. Remove calls the
+  existing service; steering promotes the same durable instruction and attached
+  files. Both serialize while a request is pending. Applied/removed messages
+  are excluded, and paused tasks disable steering. Completion callbacks guard
+  the selected run and leave the current prompt and attachment draft intact.
+- Cmd/Ctrl+Shift+Enter inserts a correction into an active turn; failed inserts
+  remain retryable. Cmd/Ctrl+Enter retains queue/resume behavior. A paused task
+  can resume with no new text. Empty running composers show Stop; a draft shows
+  Send. Finished unsupported states expose no send action. Unmodified Enter
+  remains a newline until IME-safe submission can be verified.
+- `reference-pending-instructions.jpg` captures the original at 1120 × 760.
+  `pending-instructions.png` is an isolated 860 × 320 native composer; their
+  matching 788 × 105 message strips form
+  `comparison-pending-instructions-focused.png` (source left, native right).
+  Narrow 420 dp and dark captures check native layout separately. The temporary
+  public demo instructions were restored; no user run or Worker was modified.
+- A temporary TLS Worker verifies the selected Git endpoint, bearer token,
+  retained pin, local-caption isolation and writable-step fallback. Gio pointer
+  routing verifies the source menu and rejects remote branch/review controls.
+  A real temporary execution store verifies native message removal, steering
+  identity/attachments, priority ordering, failed-insert retention and native
+  empty-message resume. The existing backend combines pending instructions in
+  the resumed prompt; this migration preserves that behavior.
+- Verification: repository tests, Keel race checks, vet and whitespace checks
+  pass. The executable and macOS App bundle rebuild, and the ad hoc signature
+  verifies. There are still 550 Go dependency packages and zero Wails/WebView;
+  native linkage uses AppKit/Metal without WebKit. Physical native windows,
+  global shortcuts and system pasteboard delivery remain unverified. Full
+  migration and overall visual acceptance remain incomplete.
+
+final result: blocked
+
+## Native Skills management iteration
+
+- Ported the searchable Skills list, compact Markdown/frontmatter preview,
+  create and delete confirmations, and the original right-hand files/debug
+  inspector. The normal inspector is 438 dp wide; all panes use neutral fills
+  with one-pixel separators and no outer focus or selection strokes. Icons
+  come from the application's existing Lucide package.
+- Compared original React captures with production Go renders at 1120 × 760:
+  [library](bin/keel-qa/comparison-skills.png),
+  [create dialog](bin/keel-qa/comparison-skill-create-focused.png),
+  [files](bin/keel-qa/comparison-skill-files-focused.png),
+  [debug](bin/keel-qa/comparison-skill-debug-focused.png) and
+  [sync](bin/keel-qa/comparison-skill-sync-focused.png).
+  [Skills settings](bin/keel-qa/comparison-skill-settings.png) and
+  [add target](bin/keel-qa/comparison-skill-target-add.png) use 960 × 800.
+  Source is left, native right; captures are normalized to one pixel per dp.
+  Fixtures contain only public sample Skills. The full native fixture has an
+  empty project list and does not establish sidebar/task-history parity.
+- Inspected dark and 860 × 560 native file views. A narrow-column layout
+  initially hid the Markdown preview; adaptive header stacking and smaller
+  card insets restore it. Remaining P2 differences include font metrics,
+  English word wrapping in narrow Markdown, compact heading inline formatting,
+  modal spacing/radii and sync-row rhythm. The smallest file pane truncates
+  its filename; the tree can collapse and the inspector can maximize.
+- Resource reads/writes use the existing rooted Skills manager. Per-file drafts
+  remain separate from saved snapshots; a completion cannot replace text typed
+  during save. Dirty closes require confirmation. Selection, tree and document
+  generations reject late replies, and shutdown detaches the debug emitter.
+- Receiving-app selection and single/library sync call the existing rsync
+  service. Empty selections retain the backend's meaning of all Skills; the UI
+  rejects removing the last explicit selection instead of displaying a false
+  none state. Settings adds custom targets, commits path edits on blur/Enter,
+  and removes only target configuration while preserving files.
+- Debug uses the existing read-only Modu SDK service, with streamed events,
+  stop, history and final output. Indexed frames replace prior stream versions;
+  unrelated run frames are ignored. Cmd/Ctrl+Enter starts debug only when its
+  prompt has focus and cannot submit the conversation behind the Skills page.
+- Temporary directories validate real create/delete, root traversal rejection,
+  file writes, retained newer drafts, target configuration and rsync copies.
+  Gio pointer routing exercises the native delete confirmation. Controlled
+  debug services verify request identity, stop and partial-output retention.
+  No user's Skills, sync target, debug history or model account was mutated.
+- Repository tests, Keel race checks, vet and offscreen renders pass. The
+  macOS bundle is rebuilt and its ad hoc signature verifies for local use.
+  Its 550-package Go dependency tree contains no Wails/WebView imports, and
+  the executable links AppKit/Metal without WebKit. Physical native
+  window/dialog interaction and the remaining full-client migration are still
+  pending; these renders do not establish final visual acceptance.
+
+final result: blocked
+
+
+## Native conversation module and Select alignment iteration
+
+### Sources and scope
+
+- Conversation reference: `codex-clipboard-1f7006a1-29bc-4eba-b46c-e4f6c53e5073.png`.
+  Implement the conversation module first, following the user's request to
+  reuse Keel examples and progress one module at a time.
+- Focus/alignment defect: `codex-clipboard-638994cc-1532-4f66-960a-5cab017013d5.png`.
+  The supplied project dialog shows a brown, text-height outline on the
+  permission selector. The annotated rectangle is evidence, not product UI.
+- Reuse Keel `examples/chat` (Message, MessageScroller, Markdown, CopyButton),
+  `examples/components/select.go` and `form.go`. Icon geometry comes from the
+  installed Lucide package; no replacement application logo is generated.
+
+### Changes and cause
+
+- Conversation messages use right-aligned user bubbles, unlabelled assistant
+  replies, grouped/collapsible tool activity, timestamps and copy actions.
+  Parallel tool results pair by step and call ID, including silent failed
+  results. Explicit disclosure state survives stream refreshes. The copy
+  getter reads the latest document, retaining original Unicode content.
+- Emoji use Markdown's documented InlineObject extension and native text
+  widgets. The reference warning emoji still needs color-font refinement;
+  complex heading formatting and long-message disclosure remain pending.
+- Retain CopyButton's native ID so its enabled-owner feedback timer can finish.
+  Message wrappers use ID-based hover observation rather than an empty Hover
+  style handler, which made their input clip exclude the overflowing actions.
+  The action row keeps visibility while the pointer moves from the message to
+  the copy button.
+- Keel v0.1.8 Select stripped the outer appearance but retained the default
+  2dp keyboard focus stroke on its inner trigger. Padding belonged to the outer
+  field, so the inner hit area covered only the text line. Fix the shared
+  component: transfer padding/control height to the trigger, center the label
+  and caret, use a highlight fill for plain keyboard focus and retain the single
+  frame for styled controls. Normal height and Size scaling are preserved.
+- Apply the same component fix in the local Keel checkout and carry a portable
+  patch under `build/keel/go/select.patch`. The build launcher uses a private
+  cached copy and temporary modfile, preserving the module cache and project
+  dependency files. Direct Go commands receive a CLI flag so gopls and project
+  subprocesses do not inherit the build replacement. Keel watch launches restore
+  the user's GOFLAGS at application startup. Development packaging uses -debug
+  to preserve the inherited replacement with Keel v0.1.8.
+
+### Captures and validation
+
+- `bin/keel-qa/project-select-comparison.png`: annotated source, unpatched Keel
+  and patched Keel, with equal 440x379dp dialog crops at 2x scale. Source origin
+  is (239,153); native crop origin is (246,169). The entire captured viewport is
+  686x548dp. This compares the same open dialog and programmatic keyboard focus;
+  the background task content is fixture data.
+- `project-select-focus.png`, `project-select-focus-narrow.png` and
+  `project-select-focus-dark.png`: actual production dialog, rendered over
+  several Gio input-router frames to establish keyboard focus. The permission
+  row fills its 32dp height without a stroke. Label/caret alignment and the
+  reference input/dialog geometry are preserved. Dark focus uses the dark fill.
+- `conversation-reference.png`, `conversation-reference-narrow.png`,
+  `conversation-tools-open.png` and `conversation-reference-dark.png` remain
+  iterative conversation evidence, not acceptance of the entire migrated UI.
+- Passed patched full Go tests, race checks for the Keel application package,
+  and full Go vet. Keel-side `ui/kit` and `ui/el` suites passed. Shared-control
+  regressions cover framed/plain variants at 32/36/48dp, padding-corner clicks,
+  keyboard opening and focus restoration. The production project dialog test
+  covers padding clicks, direction-key permission changes, Space reopening and
+  Esc without closing its parent dialog.
+- The final app executable was rebuilt with the patched dependency, installed
+  into the existing Keel-produced bundle and signed ad hoc. Strict/deep signature
+  verification passed; `go version -m` identifies the private patched Keel copy.
+  A subsequent normal packager run encountered a Go proxy EOF/deprecation lookup
+  failure, so the verified existing bundle resources were retained.
+- Native copy routing verifies the latest document, Unicode preservation and
+  feedback expiry. Parallel tool pairing and disclosure retention also pass.
+- AppKit window chrome/native sheets and paid Agent calls are not inferred from
+  these sample-data captures. The scoped Select defect is resolved. Remaining
+  conversation refinements and composer/profile/updater modules prevent final
+  migration acceptance.
+
+final result: blocked
+
+## Agent picker and terminal alignment iteration — 2026-10-09
+
+Scope: the latest two user screenshots report centered picker entries and a
+terminal close button sitting above its title. These are application layout
+choices, rather than defects in Keel's general-purpose centered Button.
+
+- **P2, resolved:** local Agent, remote Worker and workflow entries now share a
+  full-width list presentation: 8dp leading inset, fixed 16dp icon slot and 8dp
+  icon-to-label gap. Short labels no longer move toward the center. Model text
+  uses the same leading inset as section headings. Selected, disabled and hover
+  states remain handled by Keel; keyboard focus uses the existing neutral fill.
+- **P2, resolved:** terminal tabs explicitly center their children within the
+  36dp header. Title controls use the header height and close controls retain
+  their 26dp hit area. The 150dp maximum tab width reserves 26dp for closing,
+  preventing a long title from pushing its close button outside the tab.
+- `bin/keel-align-before/alignment-{menu,terminal}.png` and the matching files
+  in `bin/keel-qa` use identical 1120x760dp viewports and fixture content.
+  Narrow captures use 860x600dp; light and dark production layouts were inspected.
+  `bin/keel-qa/alignment-comparison.png` compares identical 300x507dp picker
+  crops from the 2x native captures. The terminal crop below is resized equally
+  on both sides to show short/long title and close-button placement together.
+  These captures exercise actual production views over Gio input-router frames.
+- Native pointer tests verify blank-row selection and dismissal, unavailable
+  Agent rejection, workflow selection, terminal tab focus and closing a tab
+  without losing its siblings. Geometry checks verify shared icon/text columns
+  and terminal centerlines at 1x and 2x, including a visible long tab in a narrow
+  strip. Screenshots use isolated data; no Agent calls or home settings writes.
+- Full patched Go tests, application race tests and full Go vet passed. The
+  executable and existing Keel app bundle were rebuilt; strict/deep ad hoc
+  signature verification is recorded with the build output.
+
+Scoped alignment result: passed. Final migration acceptance remains pending
+the conversation/composer/profile/updater work recorded above.
+
+## Native titlebar double-click deadlock — 2026-10-09
+
+- **P1, resolved:** reproduced the user's hang through a real AppKit double-click
+  in an isolated data-directory client. Computer Use timed out after the second
+  mouse-down. A process sample and SIGQUIT dump identify the native main thread
+  in `keel_titlebar_double_click -> core.Update -> loop.Post -> InvalidateAll ->
+  Gio Invalidate -> FlushEvents -> nextEvent`, re-entering Gio's invalidation
+  mutex while `Invalidate` still holds it. The renderer waits for further events.
+- Keel's native callback now posts from a Go goroutine; the UI action still runs
+  under the frame lock and retains the closed-window check and macOS preference.
+  The local Keel fix and regression live in `ui/window/titlebar_darwin.go` and
+  `titlebar_darwin_test.go`. OneCatch carries `build/keel/go/titlebar.patch`; its
+  build launcher fingerprints both patches and validates both modified sources.
+- The regression blocks the registered invalidator, verifies that the native
+  callback already returned, then drains the frame and verifies maximize.
+- Actual native validation: the rebuilt signed bundle zoomed from 1120x760dp to
+  the screen's larger window size, restored on a second double-click, then opened
+  the More menu successfully. This is native AppKit evidence, beyond headless
+  input checks. QA used `/tmp/onecatch-keel-titlebar-qa`, with no project changes
+  or Agent calls. Original user app and other running apps were preserved.
+- The hot-reload launcher reproduced the `sandbox_extension_issue_file_to_process`
+  warning while the client continued running. It is separate from the diagnosed
+  double-click deadlock; this iteration does not claim to remove that warning.
+  The duplicate `-lobjc` linker warning also remains.
+- Full patched project tests, application race checks and full Go vet passed.
+  The signed macOS bundle and standalone binary were rebuilt against both fixes.
+  Restart `task dev:keel` to pick up the new immutable dependency copy; an already
+  running watcher retains its previous module replacement.
+
+Scoped double-click result: passed. Final migration acceptance remains pending.
+
+Keel's full `ui/window` suite and the native callback race regression also
+passed. The isolated validation process was stopped after verification.
+
+## Missing user message bubbles — 2026-10-09
+
+- **P1, resolved:** the native transcript read task prompts and queued
+  instructions, but omitted text-only continuations in `run.resumed` events.
+  The original React timeline reads all three sources. Keel now restores these
+  legacy messages by event sequence and retains them across live state snapshots.
+  Identical text sent twice remains two turns; repeated detail reads stay idempotent.
+- New text-only continuations use the existing durable instruction path before
+  resume dispatch, matching attachment submissions. The user entry is available
+  even before the asynchronous resume event exists. Empty retries do not enqueue
+  another message; failed resumes retain the persisted message for retry.
+- Complete instruction snapshots remove stale or removed queued bubbles, and
+  applied entries use their application time to preserve conversation ordering.
+- **P2, resolved:** bubble width measurement now uses Markdown's font family,
+  rather than the different control font. A short English message no longer
+  wraps its final letter onto a second line. The user bubble has an accessible
+  article label and keeps its existing right alignment and neutral rounded fill.
+- The real service regression runs an initial turn, a legacy continuation and
+  two identical new sends with a mock Agent, closes/reopens the same isolated
+  store, and verifies all four user messages. Production bubble geometry at
+  1x/2x verifies visible right placement and single-line height for these texts.
+  `bin/keel-qa/conversation-persisted-user-bubbles.png` renders that reopened
+  conversation at 1120x900dp through Gio's router. No live Agent or home data
+  was used. This turn's report contained no missing-message screenshot to pair
+  against; this capture is evidence for the scoped fix, not final visual parity.
+- Full patched Go tests, application race tests and full Go vet passed. The
+  standalone executable and macOS bundle were rebuilt and signed.
+
+Scoped user-message result: passed. Final migration acceptance remains pending.
+
+## Standard Keel Sidebar integration — 2026-10-09
+
+Acceptance changed during this iteration: the user prioritizes implementing
+functionality with Keel's existing components and permits their standard styling.
+Exact OneCatch sidebar styling is no longer a requirement for this module.
+
+- `go.mod` now replaces Keel with the requested local checkout at
+  `/Users/ityike/Code/go/src/github.com/dyike/keel`. The build launcher detects
+  a local replacement and invokes Go directly instead of installing its cached
+  v0.1.8 backport. Normal Go commands and `task dev:keel` share that dependency.
+- The sidebar now uses `kit.Sidebar`, its nested items, `Header`, `Footer`,
+  `Suffix` and `ContextMenu`, following Keel's component example. Keel owns
+  row height, icons, pointer/keyboard activation, selected styling, scrolling,
+  expansion and context-menu presentation. OneCatch supplies its data/actions.
+  Suffixes remain visible and occupy stable slots; there is no hover-dependent
+  insertion that moves the label or removes the menu under the pointer.
+- Project/task selection, nested collapse, local/remote project labels, pinned
+  tasks, title/prompt search, status filtering, show-all commands and existing
+  project/task menus are connected. New-task buttons call the existing draft
+  path. The retained component pointer preserves element identity while model
+  refreshes update renamed, added or removed destinations. Hidden destinations
+  close their obsolete menus.
+- The experimental Keel API/style extensions made earlier in this turn were
+  withdrawn. The Keel checkout is clean; this integration changes OneCatch only.
+  No new component API or application-specific styling was added to Keel.
+- Gio input-router tests at 1x/2x verify standard 36dp rows, full-height padding
+  activation, stable suffix bounds, independent plus/menu actions, right-click,
+  Escape, left/right keyboard expansion and task selection. Further checks
+  exercise prompt search, show-all and model rename refresh without changing the
+  component pointer. Captures `bin/keel-qa/sidebar-standard-{light,dark}.png`
+  show the production component over isolated fixture data at 1120x900dp.
+- Full local-dependency Go tests, application race tests and full Go vet passed.
+  The standalone executable and signed macOS bundle were rebuilt using the
+  local checkout. Restart an existing watcher after the replacement change.
+
+Scoped sidebar functionality: passed. Other migration capabilities remain
+pending; the earlier requirement to reproduce all sidebar styles is superseded.
+
+## Agent icons in the standard Sidebar — 2026-10-09
+
+- Single-Agent task rows, including pinned tasks, now use the existing embedded
+  Codex, Claude Code, Modu Code, Pi, Grok, TRAE and DeepSeek marks. The selector
+  and conversation controls reuse the same renderer. Multi-Agent workflows keep
+  their workflow icon. Task model refresh includes the Agent ID, so a changed
+  Agent refreshes its logo without changing the destination ID or title.
+- This iteration adds one optional generic `SidebarItem.IconView` field to the
+  local Keel checkout. It overrides the built-in icon inside the same 16dp slot;
+  Keel still owns row layout, hover, selection, menus and keyboard handling.
+  This supersedes the clean-checkout statement in the preceding iteration.
+- Modu's transparent monochrome PNG uses the theme text color to remain visible
+  in dark mode. Pi/Grok likewise follow the theme; colored marks preserve their
+  original colors. No brand assets were replaced.
+- Keel Sidebar tests at 1x/2x pass for custom-icon geometry, row selection,
+  collapsed display and disabled behavior. OneCatch Sidebar interaction tests
+  and SVG visible-pixel checks pass. Updated production light/dark captures
+  `bin/keel-qa/sidebar-standard-{light,dark}.png` include all seven Agent marks.
+  All OneCatch Keel application tests pass. The standalone executable and signed
+  macOS bundle were rebuilt with the local dependency.
+
+Scoped Agent-icon result: passed. Overall migration acceptance remains pending.
+
+## Project disclosure after its label — 2026-10-09
+
+- The local Keel Sidebar renderer now places a branch's disclosure arrow
+  immediately after its label, such as `modu ›` / `modu ⌄`. The label and arrow
+  share the flexible text region; the arrow keeps its 14dp size while long labels
+  can truncate. Independent plus/menu suffixes stay in their trailing slots.
+- Keel Sidebar tests and OneCatch project pointer/keyboard, suffix, search and
+  model-refresh tests pass. Updated light/dark production captures show the
+  arrow after `modu`. Both executables were rebuilt and the bundle re-signed.
+
+Scoped disclosure-position result: passed. Migration acceptance remains pending.
+
+## Header and section title alignment — 2026-10-09
+
+- The sidebar remains the production `kit.Sidebar`; project management is
+  application content in its Header slot, while projects use its Section title.
+  The Header toolbar now matches the Section's 10dp left inset, 28dp height and
+  `theme.TextSm` typography. This iteration changes only OneCatch's slot content.
+- Production light/dark captures were regenerated and the left alignment was
+  inspected. Existing Sidebar interaction tests pass. Both executables were
+  rebuilt and the macOS bundle re-signed.
+
+Scoped title-alignment result: passed. Migration acceptance remains pending.
+
+## Sidebar search and project creation placement — 2026-10-09
+
+- Search is now a labeled standard Keel ghost-button row below New. Its input
+  opens immediately beneath that row and retains the existing query state.
+  Closing search clears the query as before.
+- Project management keeps its filter control; its adjacent plus/search icons
+  were removed. A separate `+ 新建项目` row calls the existing project dialog.
+  Project task-creation suffixes keep their existing actions.
+- Existing Sidebar interaction checks pass. Updated light/dark captures show
+  the revised production Header; the executables were rebuilt and the macOS
+  bundle re-signed. This iteration changes OneCatch only.
+
+Scoped control-placement result: passed. Migration acceptance remains pending.
+
+## Standard Keel Settings window — 2026-10-10
+
+- The settings window now uses `kit.Settings`, `SettingPage`, `SettingGroup`
+  and `SettingItem` for navigation, search, groups and ordinary form rows.
+  Skills, mobile pairing and Worker management use documented custom-content
+  slots and keep their existing application actions. Keel itself is unchanged.
+- Application-owned drafts, revision checks and persistence are preserved.
+  Save/reload actions remain in a fixed footer so search cannot hide them.
+  Worker unlock shortcuts also work when the standard sidebar has focus.
+- Production input-router checks at 1x/2x pass for page selection, search,
+  Agent changes and draft retention. Existing appearance, Worker, mobile and
+  Skills checks pass, as do the complete Keel application suite, race checks
+  and Go vet. Light/dark captures of six ordinary settings pages are saved as
+  `bin/keel-qa/settings-component-{page}-{light,dark}.png`; Agent dark and
+  security light captures were visually inspected. Both executables rebuilt.
+
+Scoped Settings-component result: passed. Overall migration remains pending.
+
+## Sidebar header simplification — 2026-10-10
+
+- Removed the `+ 新建` header row; tasks start from each project's `+` suffix.
+- Search is an always-visible input with a leading search icon. ⌘K focuses it
+  (expanding a collapsed sidebar), Esc and the trailing clear button empty it.
+- `+ 新建项目` moved into the 项目 section heading as a trailing `+`. Keel's
+  Sidebar gained `SectionAction(title, action, items...)`; a section with an
+  action keeps its heading while empty (hidden during a filter query), so a
+  first project can still be added. The action sits flush with the filter icon.
+- Keel kit and OneCatch keel tests pass; light/dark sidebar captures inspected.
+
+## Icon and label vertical alignment — 2026-10-10
+
+- Cause: Keel's optical text shift was measured once per font from a `国Ag`
+  sample. With `SF Pro Text` and a PingFang fallback that sample's line box
+  mixes both faces, so pure-Latin labels (own, shorter SF line box) sat 2.5dp
+  low and pure-Chinese labels (own PingFang box) 1.25dp high beside icons.
+- Fix (local Keel `ui/el/paint.go`): the shift is measured per script class —
+  Latin (`Ag`, cap height), East Asian (`国`), mixed (`国Ag`) — and rounded
+  instead of truncated. Inputs keep the mixed measurement so typing never
+  moves the line.
+- Measured on the 2× sidebar capture, ink-center offset text vs icon: Latin
+  +5px → 0, Chinese −2.5/−3px → −0.5/−1px; composer chips and footer within
+  ±2px. Keel `./...` and OneCatch keel tests pass.
+
+## Sidebar section heading weight — 2026-10-10
+
+- Keel's Sidebar section headings were always regular weight (the components
+  gallery matches). Keel now offers `SectionTitleWeight(font.Weight)` (default
+  unchanged) and `el` gained a general `Weight(font.Weight)` text setter.
+- OneCatch sets `font.SemiBold` for 项目 and for its mirrored 项目管理 Header
+  heading through one shared constant. Keel and OneCatch keel tests pass.
+
+## Remote project marker as a Keel Tag — 2026-10-10
+
+- Remote FS projects show `H5000M` followed by a neutral `kit.Tag("远端")`
+  (20dp) instead of the ` · 远端` label suffix. Keel's `SidebarItem` gained a
+  display-only `Tag` slot right after the label (before the disclosure arrow),
+  kept at regular weight on selected rows and hidden when collapsed.
+- The sidebar model fingerprint now includes the remote flag, since the label
+  alone no longer changes. Keel and OneCatch keel tests pass.
+
+## Sidebar search state, filter placement, More menu, remote tone — 2026-10-10
+
+- The status filter now sits right of the search box on the same row; the
+  项目管理 heading stands alone above the navigation links.
+- The search box shows focus: Surface fill, 1dp Border and a Text-colored
+  search icon while `task-search` is focused (1dp transparent border at rest,
+  so focus does not move layout).
+- 更多 opens as a dropdown below its row (`el.Bottom, el.Start`) inside the
+  sidebar instead of overlapping the page. The separator appears only when
+  hidden pages precede it, and 编辑侧栏… has the square-pen icon like the other
+  entries. Keel still focuses the first item on open for keyboard use.
+- The 远端 tag uses `kit.ToneInfo`, distinct from the green 本地 caption pill.
+- Captures of the open menu and focused search were inspected; OneCatch keel
+  tests pass.
+
+## Focus ring after closing a menu with the mouse — 2026-10-10
+
+- Cause: a closing overlay returned focus to its trigger (the 更多 row) as
+  programmatic focus, which Keel always ringed, so a mouse open/pick left a
+  2dp Primary outline on the row.
+- Fix (local Keel `ui/el`): the root tracks input modality — pointer presses,
+  outside-press dismissal and drags clear it; key presses, Escape and
+  shortcuts set it. Restored focus shows its ring only after keyboard input,
+  like `:focus-visible`; Escape/Tab users still see where focus returned.
+- New Keel test `TestRestoredFocusRingFollowsInputModality`; Keel `./...` and
+  OneCatch keel tests pass.
+
+## CoreText text rendering and PingFang — 2026-10-10
+
+- Cause of "fonts look worse than Wails": (1) go-text never scanned macOS's
+  `/System/Library/AssetsV2` font assets, so `PingFang SC` never resolved and
+  Chinese used Hiragino Sans GB W3 (no Medium/Semibold); (2) Gio fills vector
+  outlines blended in linear light, without CoreText's stem darkening and
+  gamma, so all text carried ~62–70% of WKWebView's ink.
+- Fix (local Keel and its Gio/go-text copies): fontscan scans the AssetsV2
+  font directories; Gio's shaper exposes `GlyphFile` and a per-shaper
+  `SetRasterHook`; labels, editors and selectables pass their solid color.
+  Keel's theme rasterizes glyph masks with CoreText (sRGB coverage converted
+  to the linear alpha that reproduces it; dark-on-light and light-on-dark
+  variants; quarter-pixel phases), caches them in tinted 1024² pages with
+  per-frame copy-on-write, and draws labels, inputs, rich ranges, markdown,
+  the code editor, shimmer and the terminal through it. Emoji, in-memory
+  fonts and >160px text keep vector outlines. `KEEL_TEXT=vector` compares.
+- OneCatch `go.mod` now replaces `gioui.org` and go-text with Keel's
+  `third_party` copies, as Keel documents for apps.
+- Measured at 14sp/2x against a WKWebView capture of the same line: ink
+  Latin 0.70 → 1.00, Chinese 0.62 → 1.06; dark mode matches visually. Icon
+  and label ink centers stay within ±1px. Steady-state frame cost for ~2,000
+  glyphs 0.43 ms vs 0.42 ms vector. Remaining difference: WebKit's system
+  font tightens Latin tracking slightly.
+- Keel (including both third_party modules), race checks on theme/el/markdown
+  and OneCatch tests pass; Keel `ui/...` still builds against upstream Gio.
+
+## Project and task action menus — 2026-10-10
+
+- 编辑 / 置顶 / 删除 (and 重命名 / 置顶 / 删除 for tasks) are all icon + label
+  content items in one left-aligned column. The pin entry was a check item,
+  which reserved a check column that indented the others and left it iconless;
+  it is now `pin` 置顶 or `pin-off` 取消置顶, and the cached menu is rebuilt when
+  the pinned state changes. Menus use a 120dp minimum and size to content.
+- Open project and pinned-task menus were captured; OneCatch keel tests pass.
+
+## Conversation streaming, sending and typing — 2026-10-10
+
+Compared with the Wails client (runtimeStream.js batching per animation frame,
+round cache, Streamdown block memoization, silent reconcile after actions,
+Enter-to-send with an IME guard):
+
+- Run-stream frames are queued off the UI thread and applied by one scheduled
+  update per frame (`receiveFrame`/`applyLiveFrames`), instead of one
+  conversation rebuild per frame.
+- `syncMessages` re-measures only rows whose signature changed (revision,
+  text length, streaming/settled/failed, tool details, live last row), not
+  every row on each token.
+- Conversation Markdown declares its plugin `Local` (new Keel option), so a
+  streaming answer reparses only its last blank-line chunk.
+- Hugged user bubbles cache their measured width per text and scale.
+- After send, stop and pending-instruction actions the run reconciles in the
+  background (`reloadRun`): no loading banner, composer stays usable, view
+  scrolls to the end once; the banner shows only when nothing is on screen.
+- Enter sends, Shift+Enter breaks the line, and an IME composing text keeps
+  Enter (Keel `CaptureKeys` now works for text areas).
+- Benchmarks (40 finished rounds, ~600-token live answers, 2x): a single token
+  0.63 → 0.55 ms; a 30-token burst between frames 3.6 → 0.63 ms (23 ms before
+  on long answers); typing and idle frames ~0.4 ms. Keel and OneCatch tests,
+  including new batching, signature and Enter-capture tests, pass.
+
+## Blank space under a streamed table answer — 2026-10-10
+
+- Cause (Keel `el`): a content-sized column first lays out each child at its
+  natural width, then stretches it to the column width. A Markdown table's
+  cells grow from a 1dp basis, so at natural width every character wrapped
+  and the table measured ~300px taller; after stretching it was short, but
+  the column kept the first height. The answer row reserved that height,
+  showing a large blank band above its timestamp.
+- Fixes in Keel: the stretch pass updates an automatic container's main size;
+  Markdown tables take the full available width (equal columns need one); and
+  `VariableList` no longer pins a following view to last frame's measured
+  total — it lets StickToBottom keep the laid-out end, so a streaming answer
+  that grows faster than it is measured stays followed (it stopped after a
+  third of this answer before).
+- OneCatch: run activity re-measures only process groups and streaming rows,
+  not every row when a run ends.
+- New tests: Keel `TestStretchedChildUpdatesAutoHeight` and
+  `TestTableTakesTheAvailableWidth`; OneCatch
+  `TestConversationStreamsTableAnswer` streams this answer through the app and
+  fails without the Keel fixes. Keel and OneCatch suites pass.
+
+## Scrollbar, jump-to-latest and emoji alignment — 2026-10-10
+
+- Scrollbars: the Wails client styled WebKit scrollbars (thin, always shown).
+  OneCatch now sets `el.SetScrollbarDefault(el.ScrollbarAlways)`; Keel's thin
+  translucent thumb stays visible on every overflowing view, including chat.
+- Jump to latest: the built-in "回到最新" pill is off; like Wails, a 36dp round
+  button with a down arrow (Surface fill, hairline, small shadow, hover fill)
+  sits centred 12dp above the composer while the chat is scrolled up.
+- Emoji: they were inline widgets (a line-height-1.65 text box bottom-aligned
+  to the baseline), so they rode above the text. Markdown now paints glyphs
+  through `theme.PaintGlyphs`, so emoji are ordinary text again; Keel's
+  CoreText path draws color glyphs as CoreText shows them (untinted RGBA,
+  CoreText's own metrics). Against WKWebView at 2x the emoji centre is within
+  1px of WebKit's relative to the text.
+- Keel and OneCatch suites pass; captures of the scrolled-up chat inspected.
+
+## Conversation width and process disclosure — 2026-10-10
+
+- Width: Markdown tables are content-sized again (columns take their widest
+  cell, aligned across rows; wider tables fit and wrap) instead of filling
+  the message, which left a two-column table mostly empty. User bubbles get a
+  4dp inset to line up with the composer and clear the scrollbar.
+- Process disclosure matches the Wails client: one bordered card (hairline,
+  11dp radius) with dividers; tool rows 36dp with a 16dp icon, 13dp title
+  (foreground when open), time · duration, a state mark only when running,
+  failed or incomplete, and tints for running/failed/open; opened tools show
+  labelled 命令/路径 and 结果 blocks in rounded mono panels. Thoughts show an
+  italic preview with a brain icon and open into italic muted prose. Labels
+  follow Wails (处理中…, 思考过程, 运行了 N 个工具). Shell tools now get the
+  square-terminal icon (a missing "terminal" icon left them blank).
+- Keel gains `el` `Italic()`. Keel and OneCatch suites pass.
+
+## Task-row hover interactions — 2026-10-10
+
+- Task rows still use the standard Keel Sidebar. Its independent hover suffix
+  now offers pin/unpin and delete; right-click retains rename and task actions.
+  Delete opens Keel's danger confirmation and runs only after confirmation.
+- A delayed, read-only preview shows the full title and project on the right.
+  Moving to an action hides the preview without moving the task title or
+  buttons. Escape dismisses it. Numeric hints and numeric navigation shortcuts
+  are omitted per the user's correction.
+- The local Keel Sidebar received a two-line fix: hovering a row with a suffix
+  paints the entire frame, including the trailing controls. Application logic
+  remains in OneCatch; there is no OneCatch-specific framework API.
+- Gio-router checks at 1x/2x pass for stable hover geometry, action reachability,
+  preview delay/Escape, confirmation cancellation and absence of numeric task
+  switching. Real temporary repositories verify pin/unpin and confirmed delete.
+  Light/dark production captures `bin/keel-qa/sidebar-codex-{light,dark}.png`
+  were inspected; a pixel assertion verifies the suffix shares the hover fill.
+  OneCatch application/race tests, Go vet and Keel kit/dependency tests pass.
+  Executables rebuilt and macOS bundle re-signed and verified.
+
+Scoped task-row result: passed. Overall migration remains pending.
+
+## Project-row hover actions — 2026-10-10
+
+- Project rows now use Keel's `SidebarItem.SuffixOnHover` for their plus/menu
+  controls, matching task-row disclosure. The component preserves layout while
+  hiding paint and interaction, and keeps controls available for keyboard focus
+  and an open context menu. The project-section add button is unchanged.
+- Existing project interaction checks at 1x/2x now verify idle/leave hiding,
+  stable row/button geometry, movement from the label onto either button,
+  independent task creation and context-menu/keyboard expansion behavior.
+  All Sidebar interaction checks pass. This iteration changes OneCatch only.
+
+Scoped project-hover result: passed. Overall migration remains pending.
+
+## Conversation table dividers and composer surface — 2026-10-10
+
+- Conversation Markdown now scopes a neutral divider color locally while
+  retaining the frameless palette. Other controls keep their transparent border
+  color; table outlines remain hidden. The local Keel Markdown renderer adds
+  internal column dividers that span the tallest wrapped cell in each row.
+- The composer scopes only its transparent editor out of the automatic
+  frameless focus fill. Its outer surface stays uniform both idle and focused;
+  editor bindings, paste handling, auto-growth and Enter behavior are retained.
+- Actual GPU captures at 1x/2x in light/dark verify continuous vertical dividers,
+  full-width row dividers, absent table outer outlines and identical interior/
+  surrounding composer colors before and after focus. Draft text and global
+  palette isolation are checked. Full conversation captures are saved as
+  `bin/keel-qa/conversation-table-dark-{false,true}.png` and visually inspected.
+- OneCatch application tests and Go vet pass. Keel Markdown tests (including
+  sizing, selection and streaming) and dependency checks pass.
+
+Scoped table/composer result: passed. Overall migration remains pending.
+
+## Table divider preference — 2026-10-10
+
+- Settings > Appearance now includes a searchable table-divider switch, enabled
+  by default. It applies immediately to cached conversation documents and new
+  replies, and persists independently of repository execution settings in the
+  existing desktop UI preferences file. Older preferences retain visible lines.
+- Keel exposes `Doc.TableDividers(bool)` for internal row/column separators;
+  toggling invalidates cached render elements without reparsing text. Outer
+  outlines still follow the palette independently. Reserved row spacing keeps
+  table geometry stable when separators are hidden.
+- Native pointer/keyboard checks verify persistence and restoration after a
+  settings rebuild. Light/dark 1x/2x GPU checks cover cached and streaming tables,
+  divider removal/restoration, unchanged sizing and retained selection/copy.
+  Settings and divider-off screenshots were inspected. OneCatch application
+  tests and Go vet, plus Keel Markdown/dependency checks, pass.
+
+Scoped divider-preference result: passed. Overall migration remains pending.
+
+## Conversation scrolling performance — 2026-10-10
+
+- Profiled the actual conversation view through Gio's input router at 1288x804
+  logical pixels, 2x scale, with 40 finished rounds and an additional long reply
+  containing 80 repeated paragraph/list/code groups. Baseline scroll layout was
+  7.76ms/frame, allocating 8.76MB/frame; after the fixes it is 2.20ms/frame and
+  0.95MB/frame (about 72% less CPU time and 89% less allocation). Many ordinary
+  rows improve from 0.71ms/1.00MB to 0.63ms/0.73MB. These are CPU/layout
+  benchmarks, not a measurement of physical display frame rate.
+- Keel Markdown now caches completed built-in blocks even with plugins
+  registered. Actual custom views and inline objects, including those inside
+  lists, quotes and table cells, remain dynamic. Tests resize those controls
+  without reparsing text or losing rendered content.
+- Keel embedded roots accept their parent's visible rectangle through the
+  generic core.ViewportWidget contract; wrappers retain it via ViewportFunc.
+  Natural content dimensions and scroll extent stay intact, while offscreen
+  subtrees skip painting and measurement skips discarded paint operations.
+  OneCatch forwards the conversation scroll clip to its document root.
+- The viewport regression verifies 100 rows retain their complete 2500dp
+  scroll extent, paint only 1–5 visible rows, and accept clicks before and after
+  scrolling through a padded, wrapped embed. Existing cross-block selection,
+  copy/autoscroll, streaming table and follow-to-end checks pass.
+- OneCatch application tests and Go vet, plus Keel core/el/markdown/kit tests,
+  dependency checks and targeted vet pass. Production light/dark conversation
+  and table captures were regenerated and visually inspected. Executables
+  rebuilt and the macOS bundle re-signed and verified.
+
+Scoped conversation-scroll result: passed. Overall migration remains pending.
+
+## Sidebar scrolling performance — 2026-10-10
+
+- Sidebar already skips offscreen row paint, so it did not have the embedded
+  Markdown viewport issue. Profiling did uncover two quadratic paths: menu
+  cleanup searched the full model separately for every ID, and every hover
+  suffix queried hover/focus by scanning the complete state or element tree.
+- Keel Sidebar menu cleanup now walks the model once with listed-ID lookup.
+  Keel el lazily indexes hover/focus state and subtree IDs per render pass,
+  invalidating the indexes at declaration/input phases. Query results still
+  respect current disabled/modal state and pointer-versus-keyboard modality.
+  Reused Context queries across frames refresh through a root revision.
+- A 2x-scale Gio-router scroll benchmark with icons, per-item menus and hover
+  suffix buttons improves 100 rows from 1.51ms to 0.74ms/frame, 1000 rows from
+  182.49ms to 12.84ms/frame, and 100 closed projects with 20 descendants each
+  from 7.09ms to 0.89ms/frame. These are CPU/layout results, not display FPS.
+  Sidebar still constructs and lays out expanded rows each frame; this change
+  does not provide a fully virtualized list or reduce the tree's allocations.
+- New 1x/2x long-list regressions verify only visible icons paint, fixed
+  header/footer slots stay visible, and keyboard End can reveal and activate
+  the 1000th row. Additional checks cover closing descendant menus after
+  collapsing a project and fresh hover/focus results in same-frame callbacks.
+- Keel el/kit/markdown and dependency tests, el/kit race tests and targeted
+  vet pass. OneCatch application tests and final Sidebar/disclosure checks
+  pass. Sidebar production captures were regenerated; the light capture was
+  visually inspected. Both executables rebuilt, macOS bundle re-signed and
+  its signature verified.
+
+Scoped Sidebar-scroll result: passed. Overall migration remains pending.
+
+
+## Long draft scrolling and user-message preview — 2026-10-10
+
+- Keel multiline editors now reserve a 10dp gutter and draw the shared vertical
+  scrollbar for overflowing text. Both the text viewport and gutter accept
+  wheel input; the thumb can be dragged without modifying the draft or selection,
+  and typing after dragging retains focus and reveals the caret. The existing
+  scrollbar display/fade modes remain available. OneCatch chooses Always mode.
+- Gio's local Editor copy exposes an optional viewport capability (bounds,
+  offset and scroll-to). Keel detects it through an interface; a build against
+  upstream Gio and go-text, with both replaces removed in a temporary modfile,
+  passes and retains upstream native wheel scrolling.
+- Keel Markdown adds MaxHeight(dp) previews with measured overflow, whole-line
+  clipping and complete retained text. OneCatch applies the Wails rule of
+  min(440dp, 52% window height) to long user bubbles, with a 76dp bottom fade and
+  “显示更多／收起”. Expansion refreshes the conversation list's measured heights;
+  short messages need no disclosure and copying a collapsed bubble keeps its
+  complete original Markdown.
+- Gio editor and Keel el/markdown 1x/2x tests cover scrolling, clamped bounds,
+  selection, editable/read-only drafts, resumed caret scrolling, preview reflow,
+  expansion and content replacement. OneCatch tests cover the disclosure,
+  responsive height, full copy and actual conversation-scroller expansion and
+  collapse. Keel el/markdown/kit and dependency suites, targeted race tests,
+  OneCatch application suite and targeted vet pass.
+- Production light/dark GPU captures of a long draft and collapsed user message
+  were rendered and visually inspected. Both client executables rebuilt; macOS
+  bundle re-signed and codesign verification passes.
+
+Scoped long-input/message-preview result: passed. Overall migration remains pending.
+
+## Composer picker, tool corners and collapsed Sidebar preview — 2026-10-10
+
+- The composer uses regular-weight text and the Wails client's 1.6 line height.
+  Its Agent/workflow picker retains Keel Popover and now has consistent padding,
+  regular-weight option labels, a compact aligned model field and a reserved
+  scrollbar gutter. Its scroll height adapts to the window.
+- Tool cards clip their full-width status and hover fills to the group's 11dp
+  corners, including expanded details. GPU pixel checks cover running, failed,
+  expanded and hovered cards in light/dark palettes at 1x/2x scale.
+- Hovering the collapsed Sidebar toggle opens a temporary rounded pane using the
+  existing Keel SidebarView instance and model. It overlays the conversation
+  without changing its width. The pane stays open while navigating its nested
+  menus, closes after leaving for 120ms, and pins only when explicitly expanded.
+  The hover probe passes clicks through to the original title-bar toggle.
+- Real Gio-pointer regressions at 1x/2x cover collapse, leave/re-entry, project
+  menus outside the pane, delayed dismissal and explicit expansion. Production
+  light/dark preview and picker captures were inspected. Disclosure regression
+  scrolls an expanded group's header back into view before clicking to collapse.
+- OneCatch application tests and targeted vet pass. Both executables rebuilt;
+  the macOS bundle was re-signed and its signature verified. This scoped change
+  is confined to OneCatch's component composition; no Keel changes were added.
+
+Scoped picker/corners/Sidebar-preview result: passed. Overall migration remains pending.
+
+## Disabled Agents and composer model/context controls — 2026-10-10
+
+- Disabled and unavailable Agents retain their brand icons with reduced opacity
+  and explicit muted labels in the Keel picker. Actual pointer routing verifies
+  both installed-but-disabled and unavailable entries cannot change the target.
+- Model settings return to a separate compact pill at the composer's right.
+  The Agent/workflow picker no longer contains the model field. The model pill
+  retains free-text entry, offers models reported by the selected harness, and
+  disables edits during active runs. Catalog inspection runs off the UI thread
+  on opening the menu and discards responses from superseded requests.
+- Context pressure returns to a 19dp Keel ProgressCircle plus percentage next to
+  permissions. Its tooltip reports the sampled token count and window. It uses
+  the latest reported context, retains readings across empty samples and falls
+  after compaction. Codex uses the Wails 12k-adjusted remaining percentage;
+  other harnesses use occupancy. Unknown readings are hidden. Warning colors
+  follow occupied pressure at 75% and 90%, including Codex's inverse reading.
+- Tests cover catalog model selection, read-only active runs, 1x/2x
+  composer alignment, context sampling, compaction, bounds and half rounding.
+  Light/dark composer and picker GPU captures were inspected. The application
+  suite and targeted vet pass. Only OneCatch changed in this scope.
+- Both desktop executables rebuilt; the macOS bundle was re-signed and its
+  signature verified.
+
+Scoped disabled-Agent/model/context result: passed. Overall migration remains pending.
+
+## Dark surface hierarchy and traffic-light alignment — 2026-10-10
+
+- The dark canvas moves from #1c1c1c to #222222. Docked navigation uses #272727,
+  elevated panes use #2c2c2c, and controls/composer use #333333 with #3e3e3e
+  hover fills. Muted labels are brighter. The composer follows the shared
+  palette instead of its previous hardcoded #282828 surface.
+- OneCatch scopes the palette around the existing Keel SidebarView so its
+  internal fills retain the intended pane color. A GPU regression samples an
+  elevated preview and the canvas, verifying their distinction and that the
+  sidebar palette does not leak into the page or global theme.
+- Traffic lights and all three Sidebar toggle states share the same 52dp
+  titlebar geometry. Sidebar toolbar positioning accounts for Keel's outer
+  padding and the preview's 8dp inset without moving the search/project layout.
+  Gio-router bounds verify fixed, collapsed and preview toggles at 860/1120dp
+  window widths and 1x/2x scale match AppKit's configured 26dp centerline.
+- Production light/dark preview and composer captures regenerated; the dark
+  preview was inspected. Application tests, targeted vet, formatting and diff
+  checks pass. This scope changes OneCatch composition and theme only.
+- Both client executables rebuilt; the macOS bundle was re-signed and its
+  signature verified.
+
+Scoped dark-surface/titlebar alignment result: passed. Overall migration remains pending.
+
+## Sidebar search focus surface — 2026-10-10
+
+- Search focus previously changed the outer box to white while Keel's frameless
+  input painted its own focus fill, splitting the icon and editor surfaces.
+  OneCatch now scopes the native editor to a transparent, non-frameless input
+  palette and lets the containing box paint one borderless focus fill.
+- Clicking the search icon or padding focuses the same native editor. Clearing
+  keeps editor focus. Gio-router tests verify input, filtering, clear, Escape,
+  and the native search shortcut callback expanding a collapsed sidebar at
+  1x/2x scale.
+- GPU regressions sample both sides of the control in idle/focused states,
+  light/dark palettes and 1x/2x scale. Captures inspected; global palette is
+  unchanged by the local editor scope. Full application tests, targeted vet,
+  formatting and diff checks pass. Client executables rebuilt and macOS bundle
+  signature verified. No Keel source changes in this scope.
+
+Scoped search-focus result: passed. Overall migration remains pending.
+
+## Native window resize stalls — 2026-10-10
+
+- A changing-size layout benchmark covers the production draft and long
+  conversation trees at 2x scale. Initial CPU layout measured 0.35/0.53ms
+  per frame, so diagnosis continued with an isolated native OneCatch window.
+- Native sampling found the main thread blocked in CAMetalLayer.nextDrawable.
+  In the first 60 grow/shrink requests, the two-drawable configuration stalled
+  over 600ms 18 times (p95 1009.53ms, max 1035.85ms). Restoring three drawables
+  in the local Keel Gio fork removed those stalls (median 16.09ms, p95 20.65ms,
+  max 59.60ms, including initial startup). This measures request-to-observed
+  window size, not input-to-display latency.
+- The native Gio regression verifies presented frames through 60 resizing
+  requests. It rejects the old setting and passes with three drawables
+  (slowest 23.05ms). Existing idle trimming/resume tests still pass (~15–17ms
+  to resume). Active rendering can retain one additional window-sized surface;
+  idle trimming remains enabled. Native zoom/restore also completes; macOS
+  retains its normal system animation.
+- Gio app tests and module-wide vet, Keel real-window lifecycle tests,
+  OneCatch application tests, targeted vet and formatting/diff checks pass.
+  Temporary native profiling hooks removed. Both client executables rebuilt
+  and the macOS bundle signature verified. The running development process
+  must load the changed local Keel code before this fix takes effect.
+
+Scoped native-resize result: passed. Overall migration remains pending.
+
+## Keel runtime profile nested menu — 2026-10-10
+
+- Restored the Wails model-control structure with Keel Menu: model, reasoning
+  effort and speed submenus; inherited configuration, selection checks and
+  model descriptions. The compact composer summary resolves inspected defaults.
+- Model changes discard incompatible explicit effort/speed choices. New tasks
+  and continuation requests carry all three profile values. Active runs keep
+  the settings read-only; switching agents or starting a new task clears overrides.
+- Native pointer tests cover nested selection, follow-configuration, effort and
+  speed, task payloads and incompatible model transitions. GPU preview verified
+  the model submenu flipping to the left beside the root menu.
+- Full Keel application tests (including opt-in previews), targeted vet and
+  diff checks pass. Both executables rebuilt; macOS bundle signature verified.
+  No Keel framework changes made for this menu implementation.
+
+Scoped runtime-profile result: passed. Overall migration remains pending.

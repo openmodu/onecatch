@@ -23,6 +23,7 @@ func RunCodexStream(ctx context.Context, req Request, stream io.ReadWriteCloser,
 		stderr: &lineCapture{}, waitDone: make(chan struct{}),
 		stopRemote: func() { _ = stream.Close() },
 	}
+	defer p.stop()
 	r := &CodexRunner{now: time.Now}
 	return r.runCodexTurn(ctx, p, req, sink, false)
 }

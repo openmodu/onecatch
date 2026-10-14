@@ -91,9 +91,9 @@ const (
 	KindPermissionRequest EventKind = "permission_request"
 	// KindPermissionResolved records the decision returned to the runtime.
 	KindPermissionResolved EventKind = "permission_resolved"
-	// KindUserInputRequest asks the host to collect answers while the runtime
-	// remains blocked. It is distinct from permission requests: these choices
-	// shape the work rather than authorize a side effect.
+	// KindUserInputRequest asks the host to collect answers, either while the
+	// runtime waits or while independent work continues. These choices shape
+	// the work rather than authorize a side effect.
 	KindUserInputRequest EventKind = "user_input_request"
 	// KindUserInputResolved records the answers (or dismissal) returned to the
 	// runtime so the durable transcript explains why execution continued.
@@ -112,12 +112,18 @@ type UserInputQuestion struct {
 	Header   string            `json:"header,omitempty"`
 	Question string            `json:"question"`
 	Options  []UserInputOption `json:"options"`
+	IsSecret bool              `json:"isSecret,omitempty"`
 }
 
-// UserInputRequest is a runtime-neutral, blocking round of questions.
+// UserInputRequest is a runtime-neutral round of questions.
 type UserInputRequest struct {
 	ID        string              `json:"id"`
 	Questions []UserInputQuestion `json:"questions"`
+	// Async leaves the agent free to continue while the card is open.
+	Async bool `json:"async,omitempty"`
+	// WaitForDelivery asks the host to wait for the adapter to acknowledge
+	// a submitted answer through UserInputResponse.Delivered.
+	WaitForDelivery bool `json:"-"`
 }
 
 // UserInputResponse carries answers keyed by question ID. Cancelled is kept
@@ -125,6 +131,10 @@ type UserInputRequest struct {
 type UserInputResponse struct {
 	Answers   map[string]string `json:"answers,omitempty"`
 	Cancelled bool              `json:"cancelled,omitempty"`
+	// Closed distinguishes server cleanup from an explicit user dismissal.
+	Closed bool `json:"closed,omitempty"`
+	// Delivered is used by interactive hosts to wait for transport acceptance.
+	Delivered chan error `json:"-"`
 }
 
 // PermissionUpdate is a provider-authored rule update. Claude supplies these

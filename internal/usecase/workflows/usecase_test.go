@@ -15,7 +15,7 @@ import (
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
-	localdata "github.com/openmodu/onecatch/internal/repo/store/local"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
@@ -28,6 +28,7 @@ type engineScript struct {
 }
 
 type scriptedEngine struct {
+	onCall    func(index int)
 	scripts   []engineScript
 	calls     []agentrun.Request
 	available map[agentrun.Runtime]bool
@@ -39,6 +40,9 @@ func (e *scriptedEngine) Available(runtime agentrun.Runtime) bool {
 
 func (e *scriptedEngine) Run(_ context.Context, request agentrun.Request, sink agentrun.Sink) (agentrun.Result, error) {
 	e.calls = append(e.calls, request)
+	if e.onCall != nil {
+		e.onCall(len(e.calls) - 1)
+	}
 	if len(e.scripts) == 0 {
 		return agentrun.Result{}, errors.New("unexpected engine call")
 	}
@@ -84,10 +88,10 @@ func TestExecuteTaskRunsReviewLoopAndResumesEachStepSession(t *testing.T) {
 	engine := &scriptedEngine{
 		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true, agentrun.RuntimeClaude: true},
 		scripts: []engineScript{
-			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"ready_for_review","content":"implemented"}`, "impl-1")},
-			{runtime: agentrun.RuntimeClaude, result: success(`{"signal":"changes_requested","content":"add tests"}`, "review-1")},
-			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"ready_for_review","content":"tests added"}`, "impl-2")},
-			{runtime: agentrun.RuntimeClaude, result: success(`{"signal":"approved","content":"looks good"}`, "review-2")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"implemented"}`, "impl-1")},
+			{runtime: agentrun.RuntimeClaude, result: success(`{"verdict":"rework","summary":"add tests"}`, "review-1")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"tests added"}`, "impl-2")},
+			{runtime: agentrun.RuntimeClaude, result: success(`{"verdict":"pass","summary":"looks good"}`, "review-2")},
 		},
 	}
 	usecase, store, task := setupUsecase(t, definition, engine)
@@ -96,7 +100,7 @@ func TestExecuteTaskRunsReviewLoopAndResumesEachStepSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if run.Status != domainworkflows.RunCompleted || run.TransitionCount != 4 {
+	if run.Status != domainworkflows.RunCompleted || run.ReworkRounds["review>implement"] != 1 {
 		t.Fatalf("run = %+v", run)
 	}
 	if len(engine.calls) != 4 {
@@ -108,13 +112,16 @@ func TestExecuteTaskRunsReviewLoopAndResumesEachStepSession(t *testing.T) {
 			t.Fatalf("call %d runtime = %s, want %s", i, engine.calls[i].Runtime, runtime)
 		}
 	}
+	if !strings.Contains(engine.calls[2].Prompt, "Rework feedback from `review` (Review)") || !strings.Contains(engine.calls[2].Prompt, "add tests") || strings.Contains(engine.calls[2].Prompt, "## Task") {
+		t.Fatalf("rework turn must carry only the feedback into the resumed session:\n%s", engine.calls[2].Prompt)
+	}
 	if engine.calls[2].ResumeSessionID != "impl-1" || engine.calls[3].ResumeSessionID != "review-1" {
 		t.Fatalf("resume sessions = %q, %q", engine.calls[2].ResumeSessionID, engine.calls[3].ResumeSessionID)
 	}
 	if engine.calls[0].Sandbox != agentrun.SandboxWorkspaceWrite {
 		t.Fatalf("sandbox = %s, want workspace-write clamp", engine.calls[0].Sandbox)
 	}
-	if !strings.Contains(engine.calls[0].Prompt, "ready_for_review") || !strings.Contains(engine.calls[1].Prompt, "implemented") {
+	if !strings.Contains(engine.calls[1].Prompt, `"verdict":"rework"`) || !strings.Contains(engine.calls[1].Prompt, "implemented") {
 		t.Fatalf("prompts did not include outcome contract/handoff:\n%s\n---\n%s", engine.calls[0].Prompt, engine.calls[1].Prompt)
 	}
 	storedTask, err := store.Repos.Tasks.GetTask(context.Background(), task.ID)
@@ -146,11 +153,10 @@ func TestExecuteTaskRunsReviewLoopAndResumesEachStepSession(t *testing.T) {
 
 func TestDirectAgentUsesPlainPromptsAndNaturalReplies(t *testing.T) {
 	definition := domainworkflows.Definition{
-		ID: "single_agent", Name: "Single Agent", EntryStepID: "execute",
-		Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
+		ID: "single_agent", Name: "Single Agent",
+		Policy: domainworkflows.Policy{MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
 		Steps: []domainworkflows.Step{{
-			ID: "execute", Name: "Execute", Runtime: "codex", RolePrompt: "unused", Instruction: "unused",
-			Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause},
+			ID: "execute", Name: "Execute", Runtime: "codex",
 		}},
 	}
 	engine := &scriptedEngine{
@@ -173,7 +179,7 @@ func TestDirectAgentUsesPlainPromptsAndNaturalReplies(t *testing.T) {
 		t.Fatalf("direct Agent received workflow protocol: %s", engine.calls[0].Prompt)
 	}
 	stepRuns, err := store.Repos.Workflows.ListStepRuns(context.Background(), completed.ID)
-	if err != nil || len(stepRuns) != 1 || stepRuns[0].Signal != "completed" || stepRuns[0].Content != "Committed the changes." {
+	if err != nil || len(stepRuns) != 1 || stepRuns[0].Verdict != "pass" || stepRuns[0].Summary != "Committed the changes." {
 		t.Fatalf("direct Agent step runs = %+v, %v", stepRuns, err)
 	}
 
@@ -191,11 +197,10 @@ func TestDirectAgentUsesPlainPromptsAndNaturalReplies(t *testing.T) {
 
 func TestTaskCompletionPreservesTitleUpdatedDuringRun(t *testing.T) {
 	definition := domainworkflows.Definition{
-		ID: "single_agent", Name: "Single Agent", EntryStepID: "execute",
-		Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
+		ID: "single_agent", Name: "Single Agent",
+		Policy: domainworkflows.Policy{MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
 		Steps: []domainworkflows.Step{{
-			ID: "execute", Name: "Execute", Runtime: "codex", RolePrompt: "unused", Instruction: "unused",
-			Transitions: map[string]string{"completed": domainworkflows.TargetDone, "need_human": domainworkflows.TargetPause},
+			ID: "execute", Name: "Execute", Runtime: "codex",
 		}},
 	}
 	engine := &blockingEngine{started: make(chan struct{}), release: make(chan struct{})}
@@ -240,8 +245,8 @@ func TestResumeRunUsesSnapshotSessionAndHumanInstruction(t *testing.T) {
 	engine := &scriptedEngine{
 		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true},
 		scripts: []engineScript{
-			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"need_human","content":"please decide"}`, "session-1")},
-			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"done"}`, "session-2")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"ask_human","summary":"please decide"}`, "session-1")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"done"}`, "session-2")},
 		},
 	}
 	usecase, store, task := setupUsecase(t, definition, engine)
@@ -253,7 +258,7 @@ func TestResumeRunUsesSnapshotSessionAndHumanInstruction(t *testing.T) {
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := localdata.OpenStore(root)
+	reopened, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -296,8 +301,8 @@ func TestResumeCompletedRunContinuesExistingAgentSession(t *testing.T) {
 	engine := &scriptedEngine{
 		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true},
 		scripts: []engineScript{
-			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"first turn done"}`, "session-1")},
-			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"follow-up done"}`, "session-2")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"first turn done"}`, "session-1")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"follow-up done"}`, "session-2")},
 		},
 	}
 	usecase, store, task := setupUsecase(t, definition, engine)
@@ -341,8 +346,8 @@ func TestResumeCompletedRunAppliesRuntimeProfileAndStartsFreshAgentSession(t *te
 	engine := &scriptedEngine{
 		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true, agentrun.RuntimeClaude: true},
 		scripts: []engineScript{
-			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"first turn done"}`, "codex-session")},
-			{runtime: agentrun.RuntimeClaude, result: success(`{"signal":"approved","content":"follow-up done"}`, "claude-session")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"first turn done"}`, "codex-session")},
+			{runtime: agentrun.RuntimeClaude, result: success(`{"verdict":"pass","summary":"follow-up done"}`, "claude-session")},
 		},
 	}
 	usecase, store, task := setupUsecase(t, definition, engine)
@@ -386,7 +391,7 @@ func TestQueuedInstructionsAreClaimedPriorityFirstAtStepBoundary(t *testing.T) {
 	definition := oneStepPauseWorkflow()
 	engine := &scriptedEngine{
 		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true},
-		scripts:   []engineScript{{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"done"}`, "session-1")}},
+		scripts:   []engineScript{{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"done"}`, "session-1")}},
 	}
 	usecase, store, task := setupUsecase(t, definition, engine)
 	run, err := usecase.StartTask(context.Background(), task.ID)
@@ -429,7 +434,7 @@ func TestQueuedInstructionsAreClaimedPriorityFirstAtStepBoundary(t *testing.T) {
 
 func TestStepRunPersistsUsageAndDuration(t *testing.T) {
 	definition := oneStepPauseWorkflow()
-	result := success(`{"signal":"approved","content":"done"}`, "session-usage")
+	result := success(`{"verdict":"pass","summary":"done"}`, "session-usage")
 	result.Usage = agentrun.Usage{InputTokens: 1234, CachedInputTokens: 900, CacheCreationInputTokens: 40, OutputTokens: 321, ReasoningOutputTokens: 123}
 	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true}, scripts: []engineScript{{result: result}}}
 	usecase, store, task := setupUsecase(t, definition, engine)
@@ -446,13 +451,13 @@ func TestStepRunPersistsUsageAndDuration(t *testing.T) {
 	}
 }
 
-func TestUnknownSignalIsRecordedAsFailureAndRetried(t *testing.T) {
+func TestMalformedVerdictIsRecordedAsFailureAndRetried(t *testing.T) {
 	definition := oneStepPauseWorkflow()
 	engine := &scriptedEngine{
 		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true},
 		scripts: []engineScript{
-			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"invented","content":"wrong"}`, "session-1")},
-			{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"approved","content":"done"}`, "session-2")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"invented","summary":"wrong"}`, "session-1")},
+			{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"done"}`, "session-2")},
 		},
 	}
 	usecase, store, task := setupUsecase(t, definition, engine)
@@ -461,8 +466,11 @@ func TestUnknownSignalIsRecordedAsFailureAndRetried(t *testing.T) {
 		t.Fatalf("run = %+v, %v", run, err)
 	}
 	stepRuns, err := store.Repos.Workflows.ListStepRuns(context.Background(), run.ID)
-	if err != nil || len(stepRuns) != 2 || stepRuns[0].Status != domainworkflows.StepRunFailed || !strings.Contains(stepRuns[0].Error, "invented") {
+	if err != nil || len(stepRuns) != 2 || stepRuns[0].Status != domainworkflows.StepRunFailed || !strings.Contains(stepRuns[0].Error, "verdict must be") {
 		t.Fatalf("step runs = %+v, %v", stepRuns, err)
+	}
+	if engine.calls[1].ResumeSessionID != "session-1" || !strings.Contains(engine.calls[1].Prompt, "did not end with the required verdict") {
+		t.Fatalf("retry must resume the session with a reminder: %+v", engine.calls[1])
 	}
 }
 
@@ -483,10 +491,10 @@ func TestUnavailableRuntimePausesWithoutFallback(t *testing.T) {
 	}
 }
 
-func setupUsecase(t *testing.T, definition domainworkflows.Definition, engine Engine) (*Usecase, *localdata.Store, domaintasks.Task) {
+func setupUsecase(t *testing.T, definition domainworkflows.Definition, engine Engine) (*Usecase, *localstore.Store, domaintasks.Task) {
 	t.Helper()
 	root := filepath.Join(t.TempDir(), ".onecatch")
-	store, err := localdata.OpenStore(root)
+	store, err := localstore.OpenStore(root)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -546,18 +554,19 @@ func (e *concurrentEngine) Run(ctx context.Context, request agentrun.Request, si
 	e.mu.Lock()
 	e.active--
 	e.mu.Unlock()
-	return success(`{"signal":"completed","content":"node complete"}`, "session"), nil
+	return success(`{"verdict":"pass","summary":"node complete"}`, "session"), nil
 }
 
 func TestExecuteDAGRunsRootsInParallelAndJoins(t *testing.T) {
 	definition := domainworkflows.Definition{
-		ID: "parallel_review", Name: "Parallel", Mode: domainworkflows.ModeDAG, EntryStepID: "security",
-		Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
+		ID: "parallel_review", Name: "Parallel",
+		Policy: domainworkflows.Policy{MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
 		Steps: []domainworkflows.Step{
-			{ID: "security", Name: "Security", Runtime: "codex", Sandbox: "read-only", RolePrompt: "Review security", Instruction: "Review", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
-			{ID: "tests", Name: "Tests", Runtime: "claude", Sandbox: "read-only", RolePrompt: "Review tests", Instruction: "Review", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
-			{ID: "synthesis", Name: "Synthesis", Runtime: "codex", Sandbox: "workspace-write", DependsOn: []string{"security", "tests"}, RolePrompt: "Synthesize", Instruction: "Apply findings", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
+			{ID: "security", Name: "Security", Runtime: "codex", Sandbox: "read-only", Prompt: "Review"},
+			{ID: "tests", Name: "Tests", Runtime: "claude", Sandbox: "read-only", Prompt: "Review"},
+			{ID: "synthesis", Name: "Synthesis", Runtime: "codex", Sandbox: "workspace-write", Prompt: "Apply findings"},
 		},
+		Edges: []domainworkflows.Edge{{From: "security", To: "synthesis"}, {From: "tests", To: "synthesis"}},
 	}
 	engine := &concurrentEngine{}
 	usecase, _, task := setupUsecase(t, definition, engine)
@@ -570,20 +579,20 @@ func TestExecuteDAGRunsRootsInParallelAndJoins(t *testing.T) {
 	if engine.maxActive != 2 || len(engine.requests) != 3 {
 		t.Fatalf("max active = %d, requests = %d", engine.maxActive, len(engine.requests))
 	}
-	if !strings.Contains(engine.requests[2].Prompt, "security: node complete") || !strings.Contains(engine.requests[2].Prompt, "tests: node complete") {
+	if !strings.Contains(engine.requests[2].Prompt, "`security` (Security)\n"+"node complete") || !strings.Contains(engine.requests[2].Prompt, "`tests` (Tests)\n"+"node complete") {
 		t.Fatalf("join prompt missing dependency results: %s", engine.requests[2].Prompt)
 	}
 }
 
 func TestDAGRunSnapshotLimitsConcurrencyWithoutBreakingJoin(t *testing.T) {
-	definition := domainworkflows.Definition{ID: "limited_dag", Name: "Limited", Mode: domainworkflows.ModeDAG, EntryStepID: "one", Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{
-		{ID: "one", Name: "One", Runtime: "codex", Sandbox: "read-only", RolePrompt: "One", Instruction: "One", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
-		{ID: "two", Name: "Two", Runtime: "claude", Sandbox: "read-only", RolePrompt: "Two", Instruction: "Two", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
-		{ID: "join", Name: "Join", Runtime: "codex", Sandbox: "workspace-write", DependsOn: []string{"one", "two"}, RolePrompt: "Join", Instruction: "Join", Transitions: map[string]string{"completed": domainworkflows.TargetDone}},
-	}}
+	definition := domainworkflows.Definition{ID: "limited_dag", Name: "Limited", Policy: domainworkflows.Policy{MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{
+		{ID: "one", Name: "One", Runtime: "codex", Sandbox: "read-only", Prompt: "One"},
+		{ID: "two", Name: "Two", Runtime: "claude", Sandbox: "read-only", Prompt: "Two"},
+		{ID: "join", Name: "Join", Runtime: "codex", Sandbox: "workspace-write", Prompt: "Join"},
+	}, Edges: []domainworkflows.Edge{{From: "one", To: "join"}, {From: "two", To: "join"}}}
 	engine := &concurrentEngine{}
 	usecase, _, task := setupUsecase(t, definition, engine)
-	run, err := usecase.StartTaskResolved(context.Background(), task.ID, definition, RunResolution{MaxLocalDAGConcurrency: 1})
+	run, err := usecase.StartTaskResolved(context.Background(), task.ID, definition, RunResolution{MaxConcurrency: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -596,7 +605,7 @@ func TestDAGRunSnapshotLimitsConcurrencyWithoutBreakingJoin(t *testing.T) {
 	if engine.maxActive != 1 || len(engine.requests) != 3 {
 		t.Fatalf("max active = %d, requests = %d", engine.maxActive, len(engine.requests))
 	}
-	if !strings.Contains(engine.requests[2].Prompt, "one: node complete") || !strings.Contains(engine.requests[2].Prompt, "two: node complete") {
+	if !strings.Contains(engine.requests[2].Prompt, "`one` (One)\nnode complete") || !strings.Contains(engine.requests[2].Prompt, "`two` (Two)\nnode complete") {
 		t.Fatalf("join lost dependency results: %s", engine.requests[2].Prompt)
 	}
 }
@@ -611,11 +620,11 @@ func (e *fakeRemoteExecutor) RunRemote(ctx context.Context, workerID, workspaceI
 	e.workerID, e.workspaceID = workerID, workspaceID
 	_, e.hasDeadline = ctx.Deadline()
 	sink(agentrun.Event{Kind: agentrun.KindMessage, Text: "remote event"})
-	return success(`{"signal":"completed","content":"remote complete"}`, "remote-session"), nil
+	return success(`{"verdict":"pass","summary":"remote complete"}`, "remote-session"), nil
 }
 
 func TestExecuteDAGDispatchesConfiguredRemoteNode(t *testing.T) {
-	definition := domainworkflows.Definition{ID: "remote_dag", Name: "Remote", Mode: domainworkflows.ModeDAG, EntryStepID: "review", Policy: domainworkflows.Policy{MaxTransitions: 5, MaxConsecutiveFailures: 2, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{{ID: "review", Name: "Remote review", Runtime: "codex", WorkerID: "mac-mini", Sandbox: "read-only", RolePrompt: "Review", Instruction: "Review remotely", Transitions: map[string]string{"completed": domainworkflows.TargetDone}}}}
+	definition := domainworkflows.Definition{ID: "remote_dag", Name: "Remote", Policy: domainworkflows.Policy{MaxConsecutiveFailures: 2, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{{ID: "review", Name: "Remote review", Runtime: "codex", WorkerID: "mac-mini", Sandbox: "read-only", Prompt: "Review remotely"}}}
 	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{}}
 	usecase, _, task := setupUsecase(t, definition, engine)
 	remote := &fakeRemoteExecutor{}
@@ -632,7 +641,7 @@ func TestExecuteDAGDispatchesConfiguredRemoteNode(t *testing.T) {
 func TestExecuteSerialDispatchesConfiguredRemoteStep(t *testing.T) {
 	// A serial workflow step with a WorkerID must route to the worker, not pause
 	// on local runtime availability — the engine here has no local runtimes.
-	definition := domainworkflows.Definition{ID: "remote_serial", Name: "Remote Serial", Mode: domainworkflows.ModeSerial, EntryStepID: "review", Policy: domainworkflows.Policy{MaxTransitions: 5, MaxConsecutiveFailures: 2, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{{ID: "review", Name: "Remote review", Runtime: "codex", WorkerID: "mac-mini", Sandbox: "read-only", RolePrompt: "Review", Instruction: "Review remotely", Transitions: map[string]string{"completed": domainworkflows.TargetDone}}}}
+	definition := domainworkflows.Definition{ID: "remote_serial", Name: "Remote Serial", Policy: domainworkflows.Policy{MaxConsecutiveFailures: 2, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{{ID: "review", Name: "Remote review", Runtime: "codex", WorkerID: "mac-mini", Sandbox: "read-only", Prompt: "Review remotely"}}}
 	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{}}
 	usecase, _, task := setupUsecase(t, definition, engine)
 	remote := &fakeRemoteExecutor{}
@@ -647,8 +656,8 @@ func TestExecuteSerialDispatchesConfiguredRemoteStep(t *testing.T) {
 }
 
 func TestRemoteFSWorkspaceRoutesLocalAgentToTarget(t *testing.T) {
-	definition := domainworkflows.Definition{ID: "remote_fs", Name: "Remote FS", Mode: domainworkflows.ModeSerial, EntryStepID: "edit", Policy: domainworkflows.Policy{MaxTransitions: 5, MaxConsecutiveFailures: 2, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{{ID: "edit", Name: "Edit", Runtime: "codex", Sandbox: "workspace-write", RolePrompt: "Edit", Instruction: "Edit remotely", Transitions: map[string]string{"completed": domainworkflows.TargetDone}}}}
-	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true}, scripts: []engineScript{{runtime: agentrun.RuntimeCodex, result: success(`{"signal":"completed","content":"done"}`, "session")}}}
+	definition := domainworkflows.Definition{ID: "remote_fs", Name: "Remote FS", Policy: domainworkflows.Policy{MaxConsecutiveFailures: 2, StepTimeoutSeconds: 10}, Steps: []domainworkflows.Step{{ID: "edit", Name: "Edit", Runtime: "codex", Sandbox: "workspace-write", Prompt: "Edit remotely"}}}
+	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true}, scripts: []engineScript{{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"done"}`, "session")}}}
 	usecase, store, task := setupUsecase(t, definition, engine)
 	workspace, err := store.Repos.Tasks.GetWorkspace(context.Background(), task.WorkspaceID)
 	if err != nil {
@@ -672,24 +681,168 @@ func TestRemoteFSWorkspaceRoutesLocalAgentToTarget(t *testing.T) {
 	}
 }
 
+func TestCommandStepFailureSendsOutputBackToImplementer(t *testing.T) {
+	definition := domainworkflows.Definition{
+		ID: "build_check", Name: "Build check",
+		Policy: domainworkflows.Policy{MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
+		Steps: []domainworkflows.Step{
+			{ID: "implement", Name: "Implement", Runtime: "codex", Sandbox: "workspace-write"},
+			{ID: "check", Name: "Check", Kind: domainworkflows.StepCommand, Command: `test -f fixed || { echo "spec failed: missing fixed"; exit 3; }`},
+		},
+		Edges: []domainworkflows.Edge{
+			{From: "implement", To: "check"},
+			{From: "check", To: "implement", Kind: domainworkflows.EdgeRework},
+		},
+	}
+	engine := &scriptedEngine{
+		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true},
+		scripts: []engineScript{
+			{runtime: agentrun.RuntimeCodex, result: success("first try", "impl-1")},
+			{runtime: agentrun.RuntimeCodex, result: success("fixed it", "impl-2")},
+		},
+	}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	workspace, err := store.Repos.Tasks.GetWorkspace(context.Background(), task.WorkspaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine.onCall = func(index int) {
+		if index == 1 {
+			_ = os.WriteFile(filepath.Join(workspace.Path, "fixed"), nil, 0o644)
+		}
+	}
+	run, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil || run.Status != domainworkflows.RunCompleted {
+		t.Fatalf("run = %+v, %v", run, err)
+	}
+	if len(engine.calls) != 2 {
+		t.Fatalf("engine calls = %d", len(engine.calls))
+	}
+	retry := engine.calls[1]
+	if retry.ResumeSessionID != "impl-1" || !strings.Contains(retry.Prompt, "spec failed: missing fixed") || !strings.Contains(retry.Prompt, "exit code 3") {
+		t.Fatalf("command feedback did not reach the implementer's session:\n%s", retry.Prompt)
+	}
+	if !strings.Contains(run.Nodes["check"].Summary, "passed") {
+		t.Fatalf("check summary = %q", run.Nodes["check"].Summary)
+	}
+}
+
+func TestResumeFromStepRerunsItAndDownstreamOnly(t *testing.T) {
+	definition := reviewLoop()
+	definition.Steps = append([]domainworkflows.Step{{ID: "design", Name: "Design", Runtime: "claude", Sandbox: "read-only"}}, definition.Steps...)
+	definition.Edges = append(definition.Edges, domainworkflows.Edge{From: "design", To: "implement"})
+	engine := &scriptedEngine{
+		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true, agentrun.RuntimeClaude: true},
+		scripts: []engineScript{
+			{runtime: agentrun.RuntimeClaude, result: success("design done", "design-1")},
+			{runtime: agentrun.RuntimeCodex, result: success("built", "impl-1")},
+			{runtime: agentrun.RuntimeClaude, result: success(`{"verdict":"pass","summary":"ok"}`, "review-1")},
+			{runtime: agentrun.RuntimeCodex, result: success("renamed", "impl-2")},
+			{runtime: agentrun.RuntimeClaude, result: success(`{"verdict":"pass","summary":"ok again"}`, "review-2")},
+		},
+	}
+	usecase, _, task := setupUsecase(t, definition, engine)
+	completed, err := usecase.ExecuteTask(context.Background(), task.ID)
+	if err != nil || completed.Status != domainworkflows.RunCompleted {
+		t.Fatalf("run = %+v, %v", completed, err)
+	}
+	resumed, err := usecase.ResumeRunWithProfile(context.Background(), completed.ID, "把函数名改成 snake_case", ResumeProfile{FromStepID: "implement"})
+	if err != nil || resumed.Status != domainworkflows.RunCompleted {
+		t.Fatalf("resumed = %+v, %v", resumed, err)
+	}
+	if len(engine.calls) != 5 {
+		t.Fatalf("design must not rerun; calls = %d", len(engine.calls))
+	}
+	if engine.calls[3].ResumeSessionID != "impl-1" || !strings.Contains(engine.calls[3].Prompt, "把函数名改成 snake_case") {
+		t.Fatalf("resume-from request = %+v", engine.calls[3])
+	}
+	if engine.calls[4].ResumeSessionID != "review-1" || strings.Contains(engine.calls[4].Prompt, "snake_case") {
+		t.Fatalf("downstream review must rerun in its session without the targeted message: %+v", engine.calls[4])
+	}
+}
+
+func TestInstructionAddressedToStepWaitsForThatStep(t *testing.T) {
+	definition := reviewLoop()
+	engine := &scriptedEngine{
+		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true, agentrun.RuntimeClaude: true},
+		scripts: []engineScript{
+			{runtime: agentrun.RuntimeCodex, result: success("built", "impl-1")},
+			{runtime: agentrun.RuntimeClaude, result: success(`{"verdict":"pass","summary":"ok"}`, "review-1")},
+		},
+	}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	run, err := usecase.StartTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Repos.Workflows.EnqueueInstruction(context.Background(), run.ID, domainworkflows.Instruction{ID: "for_review", StepID: "review", Content: "重点看并发安全", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := usecase.ExecuteRun(context.Background(), run.ID); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(engine.calls[0].Prompt, "重点看并发安全") || !strings.Contains(engine.calls[1].Prompt, "重点看并发安全") {
+		t.Fatalf("addressed instruction went to the wrong step:\n%s\n---\n%s", engine.calls[0].Prompt, engine.calls[1].Prompt)
+	}
+}
+
+func TestMessageToPassedStepReopensItBeforeFinishing(t *testing.T) {
+	definition := reviewLoop()
+	engine := &scriptedEngine{
+		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true, agentrun.RuntimeClaude: true},
+		scripts: []engineScript{
+			{runtime: agentrun.RuntimeCodex, result: success("built", "impl-1")},
+			{runtime: agentrun.RuntimeClaude, result: success(`{"verdict":"pass","summary":"ok"}`, "review-1")},
+			{runtime: agentrun.RuntimeCodex, result: success("renamed", "impl-2")},
+			{runtime: agentrun.RuntimeClaude, result: success(`{"verdict":"pass","summary":"ok again"}`, "review-2")},
+		},
+	}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	run, err := usecase.StartTask(context.Background(), task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// While review runs, a person addresses the step that already passed.
+	engine.onCall = func(index int) {
+		if index == 1 {
+			if _, err := store.Repos.Workflows.EnqueueInstruction(context.Background(), run.ID, domainworkflows.Instruction{ID: "late", StepID: "implement", Content: "函数名改成 snake_case", CreatedAt: time.Now()}); err != nil {
+				t.Error(err)
+			}
+		}
+	}
+	completed, err := usecase.ExecuteRun(context.Background(), run.ID)
+	if err != nil || completed.Status != domainworkflows.RunCompleted {
+		t.Fatalf("run = %+v, %v", completed, err)
+	}
+	if len(engine.calls) != 4 {
+		t.Fatalf("the message must reopen implement and the review after it; calls = %d", len(engine.calls))
+	}
+	if engine.calls[2].ResumeSessionID != "impl-1" || !strings.Contains(engine.calls[2].Prompt, "snake_case") {
+		t.Fatalf("implement did not receive the message in its session: %+v", engine.calls[2])
+	}
+}
+
 func reviewLoop() domainworkflows.Definition {
 	return domainworkflows.Definition{
-		ID: "review_loop", Name: "Review Loop", EntryStepID: "implement",
-		Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
+		ID: "review_loop", Name: "Review Loop",
+		Policy: domainworkflows.Policy{MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
 		Steps: []domainworkflows.Step{
-			{ID: "implement", Name: "Implement", Runtime: "codex", Sandbox: "full", RolePrompt: "You implement.", Instruction: "Implement and test.", Transitions: map[string]string{"ready_for_review": "review", "need_human": domainworkflows.TargetPause}},
-			{ID: "review", Name: "Review", Runtime: "claude", RolePrompt: "You review.", Instruction: "Review current changes.", Transitions: map[string]string{"changes_requested": "implement", "approved": domainworkflows.TargetDone}},
+			{ID: "implement", Name: "Implement", Runtime: "codex", Sandbox: "full", Prompt: "Implement and test."},
+			{ID: "review", Name: "Review", Runtime: "claude", Sandbox: "read-only", Prompt: "Review current changes."},
+		},
+		Edges: []domainworkflows.Edge{
+			{From: "implement", To: "review"},
+			{From: "review", To: "implement", Kind: domainworkflows.EdgeRework},
 		},
 	}
 }
 
 func oneStepPauseWorkflow() domainworkflows.Definition {
 	return domainworkflows.Definition{
-		ID: "single_loop", Name: "Single", EntryStepID: "implement",
-		Policy: domainworkflows.Policy{MaxTransitions: 10, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
+		ID: "single_loop", Name: "Single",
+		Policy: domainworkflows.Policy{MaxConsecutiveFailures: 3, StepTimeoutSeconds: 10},
 		Steps: []domainworkflows.Step{{
-			ID: "implement", Name: "Implement", Runtime: "codex", RolePrompt: "You implement.", Instruction: "Work on the task.",
-			Transitions: map[string]string{"need_human": domainworkflows.TargetPause, "approved": domainworkflows.TargetDone},
+			ID: "implement", Name: "Implement", Runtime: "codex", Prompt: "Work on the task.",
 		}},
 	}
 }

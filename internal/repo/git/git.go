@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 type Inspector struct {
@@ -35,6 +37,15 @@ func NewWithRunner(runner CommandRunner) *Inspector {
 }
 
 func (i *Inspector) Inspect(ctx context.Context, workspace string) (domainworkspaces.GitSnapshot, error) {
+	return i.inspect(ctx, workspace, true)
+}
+
+// InspectFiles omits repository-wide diff statistics for paginated review.
+func (i *Inspector) InspectFiles(ctx context.Context, workspace string) (domainworkspaces.GitSnapshot, error) {
+	return i.inspect(ctx, workspace, false)
+}
+
+func (i *Inspector) inspect(ctx context.Context, workspace string, statistics bool) (domainworkspaces.GitSnapshot, error) {
 	if _, err := exec.LookPath(i.binary); err != nil {
 		return domainworkspaces.GitSnapshot{}, fmt.Errorf("git is unavailable: %w", err)
 	}
@@ -53,13 +64,16 @@ func (i *Inspector) Inspect(ctx context.Context, workspace string) (domainworksp
 		return domainworkspaces.GitSnapshot{}, err
 	}
 	files := parseStatus(status)
-	diffStat, err := i.run(ctx, workspace, "diff", "--stat", "--no-ext-diff")
-	if err != nil {
-		return domainworkspaces.GitSnapshot{}, err
-	}
-	stagedStat, err := i.run(ctx, workspace, "diff", "--cached", "--stat", "--no-ext-diff")
-	if err != nil {
-		return domainworkspaces.GitSnapshot{}, err
+	var diffStat, stagedStat string
+	if statistics {
+		diffStat, err = i.run(ctx, workspace, "diff", "--stat", "--no-ext-diff")
+		if err != nil {
+			return domainworkspaces.GitSnapshot{}, err
+		}
+		stagedStat, err = i.run(ctx, workspace, "diff", "--cached", "--stat", "--no-ext-diff")
+		if err != nil {
+			return domainworkspaces.GitSnapshot{}, err
+		}
 	}
 	branch, _ := i.run(ctx, workspace, "symbolic-ref", "--short", "HEAD")
 	ahead, behind := i.aheadBehind(ctx, workspace)
@@ -89,6 +103,32 @@ func (i *Inspector) Diff(ctx context.Context, workspace string, staged bool) (st
 	args := []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-color"}
 	if staged {
 		args = append(args, "--cached")
+	}
+	return i.run(ctx, workspace, args...)
+}
+
+// DiffContext reads additional unchanged lines for the interactive diff viewer.
+func (i *Inspector) DiffContext(ctx context.Context, workspace string, staged bool, lines int) (string, error) {
+	args := []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-color", fmt.Sprintf("--unified=%d", max(3, min(lines, 2000)))}
+	if staged {
+		args = append(args, "--cached")
+	}
+	return i.run(ctx, workspace, args...)
+}
+
+// DiffPathsContext reads only the requested batch. Empty batches must not fall
+// back to a repository-wide diff. Literal pathspecs preserve glob-like names.
+func (i *Inspector) DiffPathsContext(ctx context.Context, workspace string, staged bool, lines int, paths []string) (string, error) {
+	if len(paths) == 0 {
+		return "", nil
+	}
+	args := []string{"-c", "core.quotePath=false", "diff", "--no-ext-diff", "--no-color", fmt.Sprintf("--unified=%d", max(3, min(lines, 2000)))}
+	if staged {
+		args = append(args, "--cached")
+	}
+	args = append(args, "--")
+	for _, path := range paths {
+		args = append(args, ":(literal)"+path)
 	}
 	return i.run(ctx, workspace, args...)
 }
@@ -238,7 +278,7 @@ func (i *Inspector) run(ctx context.Context, workspace string, args ...string) (
 		return i.runner.Run(ctx, workspace, args...)
 	}
 	commandArgs := append([]string{"-C", workspace}, args...)
-	output, err := exec.CommandContext(ctx, i.binary, commandArgs...).CombinedOutput()
+	output, err := processexec.CommandContext(ctx, i.binary, commandArgs...).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
 	}
@@ -252,4 +292,21 @@ type exitCoder interface {
 func commandExited(err error) bool {
 	var exitErr exitCoder
 	return errors.As(err, &exitErr)
+}
+
+// FilePaths lists tracked and non-ignored untracked files without reading contents.
+func (i *Inspector) FilePaths(ctx context.Context, workspace string) ([]string, error) {
+	output, err := i.run(ctx, workspace, "ls-files", "--cached", "--others", "--exclude-standard", "-z")
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{}
+	var paths []string
+	for _, path := range strings.Split(output, "\x00") {
+		if path != "" && !seen[path] {
+			seen[path] = true
+			paths = append(paths, path)
+		}
+	}
+	return paths, nil
 }

@@ -19,7 +19,7 @@ import (
 const readyEnvironment = "ONECATCH_UPDATE_READY_FILE"
 
 func Run() {
-	mode := flag.String("mode", "", "installer or replace-file")
+	mode := flag.String("mode", "", "installer, replace-file or replace-bundle")
 	parentPID := flag.Int("parent-pid", 0, "desktop process to wait for")
 	payload := flag.String("payload", "", "verified update artifact")
 	target := flag.String("target", "", "installed executable or AppImage")
@@ -38,6 +38,8 @@ func Run() {
 	switch *mode {
 	case "installer":
 		err = applyInstaller(*payload, *target, *readyFile)
+	case "replace-bundle":
+		err = replaceBundle(*payload, *target, *readyFile)
 	case "replace-file":
 		err = replaceFile(*payload, *target, *readyFile)
 	default:
@@ -50,7 +52,7 @@ func Run() {
 
 func cleanupPayload(payload string) {
 	directory := filepath.Dir(payload)
-	if filepath.Clean(filepath.Dir(directory)) != filepath.Clean(os.TempDir()) || !strings.HasPrefix(filepath.Base(directory), "wails-update-") {
+	if filepath.Clean(filepath.Dir(directory)) != filepath.Clean(os.TempDir()) || !strings.HasPrefix(filepath.Base(directory), "onecatch-update-") {
 		return
 	}
 	_ = os.RemoveAll(directory)

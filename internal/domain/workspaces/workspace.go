@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/openmodu/onecatch/internal/sshendpoint"
+	"github.com/openmodu/onecatch/internal/platform/sshendpoint"
 )
 
 var (

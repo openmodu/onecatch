@@ -9,7 +9,6 @@ import (
 	"mime"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -17,6 +16,8 @@ import (
 
 	domaintasks "github.com/openmodu/onecatch/internal/domain/tasks"
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 const (
@@ -259,6 +260,16 @@ func (a *Service) enqueueInstruction(ctx context.Context, runID string, input In
 	if followUp && run.Status == domainworkflows.RunPaused {
 		return domainworkflows.Instruction{}, coded("run_invalid_state", "follow-ups can only be queued while a run is active or just completed")
 	}
+	stepID := strings.TrimSpace(input.StepID)
+	if stepID != "" {
+		definition, err := a.store.Repos.Workflows.GetRunDefinition(ctx, run.ID)
+		if err != nil {
+			return domainworkflows.Instruction{}, mapError(err)
+		}
+		if _, ok := domainworkflows.FindStep(definition, stepID); !ok {
+			return domainworkflows.Instruction{}, coded("workflow_step_not_found", "the workflow step was not found")
+		}
+	}
 	task, err := a.store.Repos.Tasks.GetTask(ctx, run.TaskID)
 	if err != nil {
 		return domainworkflows.Instruction{}, err
@@ -271,15 +282,19 @@ func (a *Service) enqueueInstruction(ctx context.Context, runID string, input In
 	for _, attachment := range attachments {
 		paths = append(paths, attachment.StoredPath)
 	}
-	instruction := domainworkflows.Instruction{ID: randomID("instruction"), Content: strings.TrimSpace(input.Content), Attachments: paths, Priority: priority, FollowUp: followUp, CreatedAt: time.Now().UTC()}
+	instruction := domainworkflows.Instruction{ID: randomID("instruction"), StepID: stepID, Content: strings.TrimSpace(input.Content), Attachments: paths, Priority: priority, FollowUp: followUp, CreatedAt: time.Now().UTC()}
 	if instruction.Content == "" && len(paths) > 0 {
 		instruction.Content = "Review the attached files."
+	}
+	eventStepID := run.CurrentStepID
+	if stepID != "" {
+		eventStepID = stepID
 	}
 	saved, err := a.store.Repos.Workflows.EnqueueInstruction(ctx, run.ID, instruction)
 	if err != nil {
 		return saved, mapError(err)
 	}
-	_, _ = a.store.Repos.Workflows.AppendEvent(ctx, domainworkflows.WorkflowEvent{RunID: run.ID, Type: "instruction.queued", StepID: run.CurrentStepID, Payload: localEventPayload(map[string]any{"instructionId": saved.ID, "priority": priority, "attachments": len(paths)}), At: time.Now().UTC()})
+	_, _ = a.store.Repos.Workflows.AppendEvent(ctx, domainworkflows.WorkflowEvent{RunID: run.ID, Type: "instruction.queued", StepID: eventStepID, Payload: localEventPayload(map[string]any{"instructionId": saved.ID, "priority": priority, "attachments": len(paths)}), At: time.Now().UTC()})
 	return saved, nil
 }
 
@@ -484,7 +499,7 @@ func copyFileAtomic(source, destination string) error {
 func excludeLocalOneCatch(workspace string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	output, err := exec.CommandContext(ctx, "git", "-C", workspace, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude").Output()
+	output, err := processexec.CommandContext(ctx, "git", "-C", workspace, "rev-parse", "--path-format=absolute", "--git-path", "info/exclude").Output()
 	if err != nil {
 		return nil
 	} // ordinary non-Git workspace

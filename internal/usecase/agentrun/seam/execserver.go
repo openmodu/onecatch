@@ -24,8 +24,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openmodu/onecatch/internal/processmode"
-	"github.com/openmodu/onecatch/internal/remotefs"
+	"github.com/openmodu/onecatch/internal/platform/processmode"
+	"github.com/openmodu/onecatch/internal/platform/remotefs"
 )
 
 const (

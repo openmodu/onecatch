@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 const (
@@ -101,7 +103,7 @@ func (r *DshRunner) Run(ctx context.Context, req Request, sink Sink) (Result, er
 	}
 
 	name, args := dshCommand(r.binary, patchPath, req.Prompt)
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := processexec.CommandContext(ctx, name, args...)
 	cmd.Dir = req.Workspace
 	cmd.Env = dshEnvironment(req.Environment, req.Sandbox)
 	cmd.Stdin = nil

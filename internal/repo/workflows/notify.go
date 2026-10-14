@@ -50,6 +50,14 @@ func (r *notifyingRepo) UpdateRun(ctx context.Context, run domainworkflows.Run, 
 	return updated, nil
 }
 
+func (r *notifyingRepo) UpdatePausedRunWorkflow(ctx context.Context, run domainworkflows.Run, definition domainworkflows.Definition, expectedRevision int64) (domainworkflows.Run, error) {
+	updated, err := r.WorkflowsRepo.UpdatePausedRunWorkflow(ctx, run, definition, expectedRevision)
+	if err == nil {
+		r.notify.MarkDirty(updated.ID)
+	}
+	return updated, err
+}
+
 func (r *notifyingRepo) SaveStepRun(ctx context.Context, stepRun domainworkflows.StepRun) error {
 	if err := r.WorkflowsRepo.SaveStepRun(ctx, stepRun); err != nil {
 		return err

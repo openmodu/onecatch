@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/openmodu/onecatch/internal/service/worker"
+	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 )
 
 type remotePermissionTarget struct {
@@ -63,5 +64,24 @@ func (r *remotePermissionRegistry) resolve(runID, requestID, decision string) (b
 		return true, err
 	}
 	r.remove(runID, requestID)
+	return true, nil
+}
+
+func (r *remotePermissionRegistry) resolveUserInput(runID, requestID string, response agentrun.UserInputResponse) (bool, error) {
+	if r == nil {
+		return false, nil
+	}
+	r.mu.Lock()
+	target, ok := r.items[remotePermissionKey(runID, "input:"+requestID)]
+	r.mu.Unlock()
+	if !ok {
+		return false, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if err := r.client.RespondUserInput(ctx, target.config, target.remoteRunID, requestID, response); err != nil {
+		return true, err
+	}
+	r.remove(runID, "input:"+requestID)
 	return true, nil
 }

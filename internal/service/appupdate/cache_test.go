@@ -9,21 +9,19 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
-func signedFileRelease(t *testing.T, version string, payload []byte) (*updater.Release, ed25519.PublicKey) {
+func signedFileRelease(t *testing.T, version string, payload []byte) (*Release, ed25519.PublicKey) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
 		t.Fatal(err)
 	}
 	digest := sha256.Sum256(payload)
-	return &updater.Release{
+	return &Release{
 		Version: version,
 		Name:    "OneCatch " + version,
-		Verification: &updater.Verification{
+		Verification: &Verification{
 			SignatureAlgo: "ed25519",
 			Signature:     ed25519.Sign(privateKey, digest[:]),
 		},
@@ -166,7 +164,7 @@ func TestUnsignedReleaseCannotEnterPersistentCache(t *testing.T) {
 	if err := os.WriteFile(staged, []byte("payload"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := persistCachedUpdate(filepath.Join(t.TempDir(), "updates"), &updater.Release{Version: "2.0.0"}, staged)
+	_, err := persistCachedUpdate(filepath.Join(t.TempDir(), "updates"), &Release{Version: "2.0.0"}, staged)
 	if err == nil {
 		t.Fatal("expected unsigned release to be rejected")
 	}

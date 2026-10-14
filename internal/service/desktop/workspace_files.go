@@ -18,7 +18,7 @@ import (
 	"unicode/utf8"
 
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
-	"github.com/openmodu/onecatch/internal/remotefs"
+	"github.com/openmodu/onecatch/internal/platform/remotefs"
 )
 
 const maxWorkspaceFileBytes = 2 << 20

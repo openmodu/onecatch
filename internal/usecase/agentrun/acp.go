@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 // The Agent Client Protocol is a JSON-RPC 2.0 conversation over stdio in which
@@ -154,7 +156,7 @@ func runACPSession(ctx context.Context, launch acpLaunch, req Request, sink Sink
 		defer remote.Close()
 	}
 
-	cmd := exec.CommandContext(ctx, launch.binary, command.args...)
+	cmd := processexec.CommandContext(ctx, launch.binary, command.args...)
 	cmd.Dir = req.Workspace
 	cmd.Env = req.Environment
 	for _, entry := range command.environment {

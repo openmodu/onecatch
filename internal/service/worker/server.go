@@ -69,6 +69,7 @@ type runState struct {
 	cancel      context.CancelFunc
 	workspaceID string
 	permissions map[string]*pendingPermission
+	questions   map[string]*pendingUserInput
 }
 
 type pendingPermission struct {
@@ -232,6 +233,7 @@ func (s *Server) Handler() http.Handler {
 	}
 	mux.HandleFunc("POST /v1/runs/{runID}/interrupt", s.authorize(s.interrupt))
 	mux.HandleFunc("POST /v1/runs/{runID}/permissions/{requestID}", s.authorize(s.respondPermission))
+	mux.HandleFunc("POST /v1/runs/{runID}/user-input/{requestID}", s.authorize(s.respondUserInput))
 	mux.HandleFunc("POST /v1/runs/{runID}/patch/ack", s.authorize(s.ackPatch))
 	mux.HandleFunc("GET /v1/usage", s.authorize(s.usage))
 	mux.HandleFunc("GET /v1/workspaces", s.authorize(s.listWorkspaces))
@@ -714,7 +716,20 @@ func (s *Server) execute(writer http.ResponseWriter, request *http.Request) {
 			return s.awaitPermission(ctx, state, permission)
 		}
 	}
+	if engine, ok := s.engine.(interface{ SupportsInteractiveUserInput(agentrun.Runtime) bool }); ok && engine.SupportsInteractiveUserInput(input.Runtime) {
+		runRequest.UserInputHandler = func(ctx context.Context, input agentrun.UserInputRequest) (agentrun.UserInputResponse, error) {
+			return s.awaitUserInput(ctx, state, input)
+		}
+	}
 	result, runErr := s.engine.Run(runCtx, runRequest, func(event agentrun.Event) {
+		if event.UserInput != nil {
+			switch event.Kind {
+			case agentrun.KindUserInputRequest:
+				s.registerUserInput(state, *event.UserInput)
+			case agentrun.KindUserInputResolved:
+				s.closeUserInput(state, event.UserInput.ID)
+			}
+		}
 		if event.Kind == agentrun.KindPermissionRequest && event.Permission != nil {
 			s.registerPermission(state, *event.Permission)
 		}
@@ -934,6 +949,9 @@ func (s *Server) untrack(runID string) {
 	s.mu.Lock()
 	state := s.running[runID]
 	if state != nil {
+		for _, p := range state.questions {
+			p.once.Do(func() { close(p.closed) })
+		}
 		delete(s.running, runID)
 	}
 	s.mu.Unlock()

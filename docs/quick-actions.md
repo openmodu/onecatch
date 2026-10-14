@@ -68,17 +68,6 @@ library. Storage failures and conflicting edits from another window are reported
 
 ## Implementation and verification
 
-`frontend/src/app/promptActions.js` owns the shared action catalog, bounded template
-expansion, library validation and selection helpers. `PromptActions.jsx` is the
-shared UI used by both composers. It does not introduce an alternate agent runner
-or modify task execution permissions.
+`internal/app/keel/template_engine.go` owns template expansion and validation. The native composers use the shared desktop service without changing agent permissions.
 
-This implementation was authored independently for OneCatch, using the product
-ideas discussed during comparison with Tinycast; it does not incorporate Tinycast
-source code.
-
-Run `npm test` and `npm run build` from `frontend/`. The template-engine tests cover
-nested arguments, literal input, recursion and size limits, invalid storage,
-bilingual built-ins and preservation of existing drafts. For UI checks, select
-text before opening an action, verify required parameters block insertion, save a
-template and reload, then insert into both a new task and an existing conversation.
+Run `go test ./internal/app/keel -run Template` for template checks. For UI checks, select text before opening an action, verify required parameters block insertion, save and reload a template, then insert into a new task and an existing conversation.

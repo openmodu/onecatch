@@ -3,14 +3,20 @@
 package app
 
 import (
+	"flag"
 	"github.com/openmodu/onecatch/internal/app/command"
-	"github.com/openmodu/onecatch/internal/app/desktop"
+	keeldesktop "github.com/openmodu/onecatch/internal/app/keel"
+	"log"
 )
 
-// Run starts the desktop workbench on desktop operating systems.
+// Run dispatches process roles before opening the native Keel desktop.
 func Run() {
 	if command.Run() {
 		return
 	}
-	desktop.Run()
+	root := flag.String("data-dir", "", "OneCatch data directory (default: ~/.onecatch)")
+	flag.Parse()
+	if err := keeldesktop.Run(keeldesktop.Options{DataRoot: *root}); err != nil {
+		log.Fatal(err)
+	}
 }

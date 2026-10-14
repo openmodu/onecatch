@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openmodu/onecatch/internal/landiscovery"
+	"github.com/openmodu/onecatch/internal/platform/landiscovery"
 	"github.com/openmodu/onecatch/internal/service/worker"
 )
 

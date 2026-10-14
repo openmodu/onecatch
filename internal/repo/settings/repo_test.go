@@ -20,7 +20,7 @@ func TestDefaultsSaveAndRevisionConflict(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	initial.Execution.MaxLocalDAGConcurrency = 8
+	initial.Execution.MaxConcurrency = 8
 	saved, err := repo.Save(ctx, initial, initial.Revision)
 	if err != nil {
 		t.Fatal(err)

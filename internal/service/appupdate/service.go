@@ -15,11 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openmodu/onecatch/internal/buildinfo"
-	"github.com/openmodu/onecatch/internal/processmode"
-	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/updater"
-	"github.com/wailsapp/wails/v3/pkg/updater/providers/appcast"
+	"github.com/openmodu/onecatch/internal/platform/buildinfo"
+	"github.com/openmodu/onecatch/internal/platform/processmode"
 )
 
 const (
@@ -44,8 +41,9 @@ type Status struct {
 }
 
 type Service struct {
-	app         *application.App
-	updater     *updater.Updater
+	emit        func(Status)
+	quit        func()
+	updater     *updateEngine
 	feedURL     string
 	cacheRoot   string
 	publicKey   []byte
@@ -53,22 +51,23 @@ type Service struct {
 	operationMu sync.Mutex
 
 	mu      sync.RWMutex
-	release *updater.Release
+	release *Release
 	cached  *cachedUpdate
 	lastErr string
 	cancel  context.CancelFunc
 	done    chan struct{}
 }
 
-func New(app *application.App, dataRoot string) (*Service, error) {
-	if app == nil {
+// New shares signed downloads and cache validation between desktop frontends.
+func New(dataRoot string, emit func(Status), quit func()) (*Service, error) {
+	if quit == nil {
 		return nil, errors.New("app update: application is nil")
 	}
 	cacheRoot, err := updateCacheRoot(dataRoot)
 	if err != nil {
 		return nil, err
 	}
-	service := &Service{app: app, updater: app.Updater, cacheRoot: cacheRoot}
+	service := &Service{updater: &updateEngine{}, cacheRoot: cacheRoot, emit: emit, quit: quit}
 	keyText := strings.TrimSpace(buildinfo.UpdatePublicKey)
 	if keyText == "" || buildinfo.Version == "dev" {
 		return service, nil
@@ -79,21 +78,9 @@ func New(app *application.App, dataRoot string) (*Service, error) {
 	}
 	base := strings.TrimRight(strings.TrimSpace(buildinfo.UpdateFeedURL), "/")
 	service.feedURL = fmt.Sprintf("%s/appcast-%s-%s.xml", base, runtime.GOOS, runtime.GOARCH)
-	provider, err := appcast.New(appcast.Config{
-		URL:        service.feedURL,
-		HTTPClient: updateHTTPClient(),
-	})
-	if err != nil {
-		return nil, err
-	}
-	if err := app.Updater.Init(updater.Config{
-		CurrentVersion: buildinfo.Version,
-		Providers:      []updater.Provider{provider},
-		PublicKey:      key,
-		Window:         updater.WindowNone,
-	}); err != nil {
-		return nil, err
-	}
+	service.updater.url = service.feedURL
+	service.updater.key = key
+	service.updater.currentVersion = buildinfo.Version
 	service.publicKey = append([]byte(nil), key...)
 	service.verified = true
 	if cached, restoreErr := restoreCachedUpdate(service.cacheRoot, buildinfo.Version, service.publicKey); restoreErr == nil {
@@ -172,7 +159,7 @@ func (s *Service) Start() {
 func (s *Service) Status() Status {
 	status := Status{
 		CurrentVersion:      buildinfo.Version,
-		State:               string(updater.StateUnconfigured),
+		State:               "unconfigured",
 		AutomaticSupported:  automaticSupported(),
 		VerificationEnabled: s != nil && s.verified,
 	}
@@ -188,10 +175,10 @@ func (s *Service) Status() Status {
 	status.Error = s.lastErr
 	release := s.release
 	if s.cached != nil {
-		status.State = string(updater.StateReady)
+		status.State = "ready"
 		status.DownloadPath = s.cached.payload
 		release = &s.cached.manifest.Release
-	} else if status.State == string(updater.StateReady) {
+	} else if status.State == "ready" {
 		status.DownloadPath = s.updater.DownloadedPath()
 	}
 	if release != nil {
@@ -228,7 +215,9 @@ func (s *Service) Check(ctx context.Context) (Status, error) {
 		_ = removeCachedUpdate(s.cacheRoot)
 	}
 	status := s.Status()
-	s.app.Event.Emit(EventStatusChanged, status)
+	if s.emit != nil {
+		s.emit(status)
+	}
 	return status, err
 }
 
@@ -259,7 +248,9 @@ func (s *Service) Download(ctx context.Context) (Status, error) {
 	}
 	s.rememberError(err)
 	status := s.Status()
-	s.app.Event.Emit(EventStatusChanged, status)
+	if s.emit != nil {
+		s.emit(status)
+	}
 	return status, err
 }
 
@@ -293,17 +284,7 @@ func (s *Service) Apply(ctx context.Context) error {
 		}
 		return s.startUpdaterHelper(restored.payload)
 	}
-	if s.updater.State() != updater.StateReady {
-		return errors.New("app update: no verified update is ready")
-	}
-	if runtime.GOOS == "darwin" {
-		return s.updater.Restart(ctx)
-	}
-	staged := s.updater.DownloadedPath()
-	if staged == "" {
-		return errors.New("app update: verified artifact is missing")
-	}
-	return s.startUpdaterHelper(staged)
+	return errors.New("app update: no verified update is ready")
 }
 
 func (s *Service) startUpdaterHelper(staged string) error {
@@ -329,34 +310,12 @@ func (s *Service) startUpdaterHelper(staged string) error {
 		_ = os.Remove(helper)
 		return fmt.Errorf("app update: start updater helper: %w", err)
 	}
-	s.app.Quit()
+	s.quit()
 	return nil
 }
 
 func (s *Service) restartCachedDarwin(staged string) error {
-	executable, err := os.Executable()
-	if err != nil {
-		return fmt.Errorf("app update: resolve executable: %w", err)
-	}
-	target := darwinBundleTarget(executable)
-	if target == executable {
-		return errors.New("app update: application is not running from a macOS bundle")
-	}
-	logPath := filepath.Join(os.TempDir(), fmt.Sprintf("wails-update-%d.log", os.Getpid()))
-	command := exec.Command(executable)
-	command.Stdin, command.Stdout, command.Stderr = nil, nil, nil
-	command.Env = append(os.Environ(),
-		"WAILS_UPDATER_HELPER=1",
-		"WAILS_UPDATER_HELPER_TARGET="+target,
-		"WAILS_UPDATER_HELPER_NEW="+staged,
-		"WAILS_UPDATER_HELPER_PID="+fmt.Sprint(os.Getpid()),
-		"WAILS_UPDATER_HELPER_LOG="+logPath,
-	)
-	if err := command.Start(); err != nil {
-		return fmt.Errorf("app update: start macOS updater helper: %w", err)
-	}
-	s.app.Quit()
-	return nil
+	return s.startUpdaterHelper(staged)
 }
 
 func darwinBundleTarget(executable string) string {
@@ -371,7 +330,7 @@ func darwinBundleTarget(executable string) string {
 
 func discardTemporaryDownload(staged string) {
 	directory := filepath.Dir(filepath.Clean(staged))
-	if filepath.Clean(filepath.Dir(directory)) != filepath.Clean(os.TempDir()) || !strings.HasPrefix(filepath.Base(directory), "wails-update-") {
+	if filepath.Clean(filepath.Dir(directory)) != filepath.Clean(os.TempDir()) || !strings.HasPrefix(filepath.Base(directory), "onecatch-update-") {
 		return
 	}
 	_ = os.RemoveAll(directory)
@@ -409,6 +368,11 @@ func automaticSupported() bool {
 }
 
 func updateTarget() (mode, target string) {
+	if runtime.GOOS == "darwin" {
+		executable, _ := os.Executable()
+		return "replace-bundle", darwinBundleTarget(executable)
+	}
+
 	if runtime.GOOS == "windows" {
 		executable, _ := os.Executable()
 		return "installer", executable
@@ -458,8 +422,7 @@ func copyUpdaterHelper() (string, error) {
 	return destination, nil
 }
 
-// SignalReadyFromEnvironment is called only after the native webview reports
-// runtime-ready. The external helper treats this as the commit point; until
+// SignalReadyFromEnvironment is called after the native window is ready. The external helper treats this as the commit point; until
 // then it retains the previous installation for rollback.
 func SignalReadyFromEnvironment() error {
 	path := strings.TrimSpace(os.Getenv(readyEnvironment))

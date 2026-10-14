@@ -322,3 +322,79 @@ func TestTraePreservesCacheReadAndCreationSeparately(t *testing.T) {
 		}
 	}
 }
+
+func TestTraeToolsRetainIdentityArgumentsAndReadableResults(t *testing.T) {
+	state := traeTurnState{result: Result{SessionID: "thread"}, streams: map[string]bool{}}
+	var events []Event
+	sink := func(e Event) { events = append(events, e) }
+	for _, params := range []struct{ method, text string }{
+		{"item/started", `{"threadId":"thread","turnId":"turn","item":{"id":"read-a","type":"dynamicToolCall","tool":"Read","arguments":{"file_path":"/repo/a.go","offset":65,"limit":10}}}`},
+		{"item/started", `{"threadId":"thread","turnId":"turn","item":{"id":"shell-b","type":"commandExecution","command":"go test ./..."}}`},
+		{"item/commandExecution/outputDelta", `{"threadId":"thread","turnId":"turn","itemId":"shell-b","delta":"ok\n"}`},
+		{"item/completed", `{"threadId":"thread","turnId":"turn","item":{"id":"read-a","type":"dynamicToolCall","status":"completed","result":{"content":[{"type":"text","text":"65 func example()"}]}}}`},
+		{"item/completed", `{"threadId":"thread","turnId":"turn","item":{"id":"shell-b","type":"commandExecution","status":"completed","aggregatedOutput":"ok\n","exitCode":0}}`},
+	} {
+		if _, err := state.update(traeFrame{Method: params.method, Params: json.RawMessage(params.text)}, "turn", sink); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if events[0].StreamID != traeToolID("read-a") || !strings.Contains(events[0].Text, `"offset":65`) || !strings.Contains(events[0].Text, "/repo/a.go") {
+		t.Fatalf("lost read identity/arguments: %+v", events[0])
+	}
+	for _, e := range events {
+		if e.Kind == KindToolResult && strings.Contains(e.StreamID, "shell-b") && e.StreamID != events[1].StreamID {
+			t.Fatal("shell call/output identities differ")
+		}
+		if e.Kind == KindToolResult && e.StreamID == events[0].StreamID && e.Text != "65 func example()" {
+			t.Fatalf("result was not decoded: %q", e.Text)
+		}
+	}
+}
+
+func TestTraeBuiltinReadUsesCommandActionsAndLateArguments(t *testing.T) {
+	state := traeTurnState{result: Result{SessionID: "thread"}, streams: map[string]bool{}}
+	var events []Event
+	sink := func(e Event) { events = append(events, e) }
+	for _, v := range []struct{ method, params string }{
+		{"item/started", `{"threadId":"thread","turnId":"turn","item":{"id":"read-call","type":"commandExecution","command":"Read","commandActions":[]}}`},
+		{"item/completed", `{"threadId":"thread","turnId":"turn","item":{"id":"read-call","type":"commandExecution","command":"Read","commandActions":[{"type":"read","command":"Read","name":"README.md","path":"/repo/README.md"}],"aggregatedOutput":"1 README","status":"completed"}}`},
+	} {
+		if _, err := state.update(traeFrame{Method: v.method, Params: json.RawMessage(v.params)}, "turn", sink); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if len(events) != 3 || events[1].Kind != KindToolUse || events[1].Text != `Read {"file_path":"/repo/README.md"}` || events[1].Revision <= events[0].Revision || events[1].StreamID != events[2].StreamID {
+		t.Fatalf("builtin Read target lost: %+v", events)
+	}
+}
+
+func TestTraeHistoryRestoresExactCallArguments(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "history.jsonl")
+	data := `{"type":"history_mutation","payload":{"items":[{"type":"function_call","name":"Read","call_id":"read-a","arguments":"{\"file_path\":\"/repo/README.md\",\"offset\":65}"},{"type":"function_call_output","call_id":"read-a","output":"content"}]}}` + "\n" + `{"type":"response_item","payload":{"type":"custom_tool_call","name":"Edit","call_id":"edit-b","input":"{\"file_path\":\"/repo/b.go\"}"}}`
+	if err := os.WriteFile(path, []byte(data), 0600); err != nil {
+		t.Fatal(err)
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer file.Close()
+	tools := map[string]string{}
+	readTraeToolHistory(file, tools)
+	if tools[traeToolID("read-a")] != `Read {"file_path":"/repo/README.md","offset":65}` || tools[traeToolID("edit-b")] != `Edit {"file_path":"/repo/b.go"}` {
+		t.Fatalf("history recovery mismatched calls: %+v", tools)
+	}
+}
+
+func TestTraeActualSessionArgumentRecovery(t *testing.T) {
+	session := os.Getenv("ONECATCH_TRAE_REPLAY_SESSION")
+	if session == "" {
+		t.Skip("optional read-only session replay")
+	}
+	tools := ReadTraeToolHistory(session)
+	id := "trae-tool-call_jlRwR3QpupjwQ9QCel5Ggfeh"
+	if !strings.Contains(tools[id], `"file_path":"/Users/bytedance/work/code/go/src/code.byted.org/agentkit/akx/README.md"`) {
+		t.Fatalf("screenshot's call arguments not recovered: %q", tools[id])
+	}
+	t.Logf("recovered %d tool calls; screenshot Read call now has its README path", len(tools))
+}

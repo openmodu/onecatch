@@ -3,7 +3,7 @@
 Enable the repository-managed hooks once after cloning:
 
 ```bash
-go tool wails3 task hooks:install
+git config core.hooksPath .githooks
 ```
 
 The hooks run the following checks:

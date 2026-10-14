@@ -61,10 +61,10 @@ type TerminalSettings struct {
 }
 
 type ExecutionSettings struct {
-	MaxTransitions         int    `json:"maxTransitions"`
+	MaxReworkRounds        int    `json:"maxReworkRounds"`
 	MaxConsecutiveFailures int    `json:"maxConsecutiveFailures"`
 	StepTimeoutSeconds     int    `json:"stepTimeoutSeconds"`
-	MaxLocalDAGConcurrency int    `json:"maxLocalDAGConcurrency"`
+	MaxConcurrency         int    `json:"maxConcurrency"`
 	InterruptGraceSeconds  int    `json:"interruptGraceSeconds"`
 	DefaultSandbox         string `json:"defaultSandbox"`
 }
@@ -118,8 +118,8 @@ func Defaults() Settings {
 		Runtimes:      defaultRuntimes(),
 		Terminal:      TerminalSettings{Theme: "system"},
 		Execution: ExecutionSettings{
-			MaxTransitions: 20, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 1800,
-			MaxLocalDAGConcurrency: 4, InterruptGraceSeconds: 10, DefaultSandbox: "workspace-write",
+			MaxReworkRounds: 3, MaxConsecutiveFailures: 3, StepTimeoutSeconds: 1800,
+			MaxConcurrency: 4, InterruptGraceSeconds: 10, DefaultSandbox: "workspace-write",
 		},
 		Security: SecuritySettings{ConfirmFullSandboxEveryRun: true},
 		Storage: StorageSettings{
@@ -163,8 +163,8 @@ func Normalize(input Settings) (Settings, error) {
 			input.Runtimes[harness.ID] = runtime
 		}
 	}
-	if input.Execution.MaxTransitions == 0 {
-		input.Execution.MaxTransitions = defaults.Execution.MaxTransitions
+	if input.Execution.MaxReworkRounds == 0 {
+		input.Execution.MaxReworkRounds = defaults.Execution.MaxReworkRounds
 	}
 	input.Terminal.Shell = strings.TrimSpace(input.Terminal.Shell)
 	input.Terminal.Theme = strings.ToLower(strings.TrimSpace(input.Terminal.Theme))
@@ -184,8 +184,8 @@ func Normalize(input Settings) (Settings, error) {
 	if input.Execution.StepTimeoutSeconds == 0 {
 		input.Execution.StepTimeoutSeconds = defaults.Execution.StepTimeoutSeconds
 	}
-	if input.Execution.MaxLocalDAGConcurrency == 0 {
-		input.Execution.MaxLocalDAGConcurrency = defaults.Execution.MaxLocalDAGConcurrency
+	if input.Execution.MaxConcurrency == 0 {
+		input.Execution.MaxConcurrency = defaults.Execution.MaxConcurrency
 	}
 	if input.Execution.InterruptGraceSeconds == 0 {
 		input.Execution.InterruptGraceSeconds = defaults.Execution.InterruptGraceSeconds
@@ -304,8 +304,8 @@ func Validate(input Settings) error {
 		return errors.New("terminal theme is invalid")
 	}
 	e := input.Execution
-	if e.MaxTransitions < 1 || e.MaxTransitions > 10000 {
-		return errors.New("maxTransitions must be between 1 and 10000")
+	if e.MaxReworkRounds < 1 || e.MaxReworkRounds > 50 {
+		return errors.New("maxReworkRounds must be between 1 and 50")
 	}
 	if e.MaxConsecutiveFailures < 1 || e.MaxConsecutiveFailures > 100 {
 		return errors.New("maxConsecutiveFailures must be between 1 and 100")
@@ -313,14 +313,14 @@ func Validate(input Settings) error {
 	if e.StepTimeoutSeconds < 30 || e.StepTimeoutSeconds > 86400 {
 		return errors.New("stepTimeoutSeconds must be between 30 and 86400")
 	}
-	if e.MaxLocalDAGConcurrency < 1 || e.MaxLocalDAGConcurrency > 16 {
-		return errors.New("maxLocalDAGConcurrency must be between 1 and 16")
+	if e.MaxConcurrency < 1 || e.MaxConcurrency > 16 {
+		return errors.New("maxConcurrency must be between 1 and 16")
 	}
 	if e.InterruptGraceSeconds < 1 || e.InterruptGraceSeconds > 60 {
 		return errors.New("interruptGraceSeconds must be between 1 and 60")
 	}
-	if e.DefaultSandbox != "read-only" && e.DefaultSandbox != "workspace-write" {
-		return errors.New("defaultSandbox must be read-only or workspace-write")
+	if e.DefaultSandbox != "read-only" && e.DefaultSandbox != "workspace-write" && e.DefaultSandbox != "full" {
+		return errors.New("defaultSandbox must be read-only, workspace-write or full")
 	}
 	if input.Storage.CompletedRunRetentionDays != 0 && input.Storage.CompletedRunRetentionDays != 30 && input.Storage.CompletedRunRetentionDays != 90 && input.Storage.CompletedRunRetentionDays != 180 {
 		return errors.New("completedRunRetentionDays must be 0, 30, 90, or 180")

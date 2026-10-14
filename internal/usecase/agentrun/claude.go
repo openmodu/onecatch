@@ -11,6 +11,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 const claudeBinaryDefault = "claude"
@@ -56,7 +58,7 @@ type ClaudeConfiguration struct {
 // Claude Code CLI. Claude Code does not expose a model-list command, so this
 // merges --help with configured model IDs without starting a model session.
 func (r *ClaudeRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (ClaudeConfiguration, error) {
-	cmd := exec.CommandContext(ctx, r.binary, "--help")
+	cmd := processexec.CommandContext(ctx, r.binary, "--help")
 	if cwd != "" {
 		cmd.Dir = cwd
 	}
@@ -203,7 +205,7 @@ func (r *ClaudeRunner) Run(ctx context.Context, req Request, sink Sink) (Result,
 		}
 	}
 
-	cmd := exec.CommandContext(ctx, r.binary, args...)
+	cmd := processexec.CommandContext(ctx, r.binary, args...)
 	// Claude Code operates on its current working directory. For a remote run
 	// this is only where the harness process lives — the agent's commands run
 	// on the target, in the session's own directory.

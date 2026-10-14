@@ -18,7 +18,7 @@ import (
 	codingtools "github.com/openmodu/modu/pkg/coding_agent/tools"
 	toolcommon "github.com/openmodu/modu/pkg/coding_agent/tools/common"
 	"github.com/openmodu/modu/pkg/types"
-	"github.com/openmodu/onecatch/internal/remotefs"
+	"github.com/openmodu/onecatch/internal/platform/remotefs"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 )
 
 const piBinaryDefault = "pi"
@@ -51,7 +53,7 @@ func (r *PiRunner) contextWindow(provider, model string) int {
 	}
 	r.contextOnce.Do(func() {
 		r.contextWindows = make(map[string]int)
-		output, err := exec.Command(r.binary, "--list-models").CombinedOutput()
+		output, err := processexec.Command(r.binary, "--list-models").CombinedOutput()
 		if err != nil {
 			return
 		}
@@ -98,7 +100,7 @@ func (r *PiRunner) Available() bool {
 // packages, project precedence, and enableSkillCommands setting without
 // starting a model turn.
 func (r *PiRunner) ListSkills(ctx context.Context, cwd string, environment []string) ([]Skill, error) {
-	cmd := exec.CommandContext(ctx, r.binary, "--mode", "rpc", "--no-session")
+	cmd := processexec.CommandContext(ctx, r.binary, "--mode", "rpc", "--no-session")
 	if strings.TrimSpace(cwd) != "" {
 		cmd.Dir = cwd
 	}
@@ -176,7 +178,7 @@ func (r *PiRunner) Run(ctx context.Context, req Request, sink Sink) (Result, err
 	if req.Remote != nil {
 		return Result{}, fmt.Errorf("Pi does not support remote FS runs")
 	}
-	cmd := exec.CommandContext(ctx, r.binary, piCommandArgs(req)...)
+	cmd := processexec.CommandContext(ctx, r.binary, piCommandArgs(req)...)
 	cmd.Dir = req.Workspace
 	cmd.Env = req.Environment
 	cmd.Stdin = nil
@@ -449,7 +451,7 @@ var piThinkingLevels = []string{"off", "minimal", "low", "medium", "high", "xhig
 // provider credentials prints guidance instead of rows, which surfaces here as
 // "no models" rather than as a hard failure of the probe.
 func (r *PiRunner) InspectConfiguration(ctx context.Context, cwd string, environment []string) (HarnessConfiguration, error) {
-	cmd := exec.CommandContext(ctx, r.binary, "--list-models")
+	cmd := processexec.CommandContext(ctx, r.binary, "--list-models")
 	if cwd != "" {
 		cmd.Dir = cwd
 	}

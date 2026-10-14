@@ -11,58 +11,116 @@ import (
 
 var ErrProtocol = errors.New("workflow outcome protocol error")
 
-// ParseOutcome accepts a JSON object, a single JSON-fenced block, or a terminal
-// JSON object after provider prose. Content after the object is rejected:
+// OutcomeMessage retains the provider's prose and original JSON alongside the
+// validated outcome, so presentation and orchestration use the same parser.
+type OutcomeMessage struct {
+	Outcome
+	Prose string
+	JSON  string
+}
+
+// ParseOutcome accepts a terminal JSON object or JSON-fenced block, optionally
+// following provider prose. Content after the object is rejected:
 // orchestration must never infer control flow from the middle of a response.
 func ParseOutcome(text string) (Outcome, error) {
-	raw, err := unwrapOutcomeJSON(strings.TrimSpace(text))
+	message, err := ParseOutcomeMessage(text)
+	return message.Outcome, err
+}
+
+// ParseOutcomeMessage parses the same protocol and retains its display content.
+func ParseOutcomeMessage(text string) (OutcomeMessage, error) {
+	prose, raw, err := splitOutcomeJSON(strings.TrimSpace(text))
 	if err != nil {
-		return Outcome{}, err
+		return OutcomeMessage{}, err
 	}
 	dec := json.NewDecoder(bytes.NewBufferString(raw))
-	dec.DisallowUnknownFields()
 	var outcome Outcome
 	if err := dec.Decode(&outcome); err != nil {
-		return Outcome{}, fmt.Errorf("%w: decode JSON: %v", ErrProtocol, err)
+		return OutcomeMessage{}, fmt.Errorf("%w: decode JSON: %v", ErrProtocol, err)
 	}
 	var extra any
 	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
 		if err == nil {
-			return Outcome{}, fmt.Errorf("%w: multiple JSON values", ErrProtocol)
+			return OutcomeMessage{}, fmt.Errorf("%w: multiple JSON values", ErrProtocol)
 		}
-		return Outcome{}, fmt.Errorf("%w: trailing content: %v", ErrProtocol, err)
+		return OutcomeMessage{}, fmt.Errorf("%w: trailing content: %v", ErrProtocol, err)
 	}
-	if !identifierPattern.MatchString(outcome.Signal) {
-		return Outcome{}, fmt.Errorf("%w: signal must be a lowercase identifier", ErrProtocol)
+	outcome.Verdict = strings.TrimSpace(outcome.Verdict)
+	outcome.Target = strings.TrimSpace(outcome.Target)
+	switch outcome.Verdict {
+	case VerdictPass, VerdictRework, VerdictAskHuman:
+	default:
+		return OutcomeMessage{}, fmt.Errorf("%w: verdict must be pass, rework or ask_human", ErrProtocol)
 	}
-	if strings.TrimSpace(outcome.Content) == "" {
-		return Outcome{}, fmt.Errorf("%w: content is required", ErrProtocol)
+	if strings.TrimSpace(outcome.Summary) == "" {
+		outcome.Summary = outcome.Feedback
 	}
-	return outcome, nil
+	if strings.TrimSpace(outcome.Summary) == "" {
+		return OutcomeMessage{}, fmt.Errorf("%w: summary is required", ErrProtocol)
+	}
+	if outcome.Verdict == VerdictRework && strings.TrimSpace(outcome.Feedback) == "" {
+		outcome.Feedback = outcome.Summary
+	}
+	return OutcomeMessage{Outcome: outcome, Prose: prose, JSON: raw}, nil
 }
 
-func unwrapOutcomeJSON(text string) (string, error) {
+func splitOutcomeJSON(text string) (prose, raw string, err error) {
 	if text == "" {
-		return "", fmt.Errorf("%w: response is empty", ErrProtocol)
+		return "", "", fmt.Errorf("%w: response is empty", ErrProtocol)
 	}
-	if !strings.HasPrefix(text, "```") {
-		if strings.HasPrefix(text, "{") {
-			return text, nil
+	if strings.HasPrefix(text, "{") {
+		return "", text, nil
+	}
+	// A terminal JSON fence may follow a report containing Markdown/code.
+	if strings.HasSuffix(text, "\n```") {
+		end := len(text) - len("\n```")
+		start := strings.LastIndex(text[:end], "\n```")
+		if start >= 0 {
+			start++
+		} else if strings.HasPrefix(text, "```") {
+			start = 0
 		}
-		if terminal := terminalJSONObject(text); terminal != "" {
-			return terminal, nil
+		if start >= 0 {
+			lines := strings.SplitN(text[start:end], "\n", 2)
+			if len(lines) == 2 && (strings.TrimSpace(lines[0]) == "```json" || strings.TrimSpace(lines[0]) == "```") {
+				body := strings.TrimSpace(lines[1])
+				if body != "" && !outcomeFenceOpen(text[:start]) {
+					return strings.TrimSpace(text[:start]), body, nil
+				}
+			}
 		}
-		return text, nil
 	}
-	lines := strings.Split(text, "\n")
-	if len(lines) < 3 || (lines[0] != "```json" && lines[0] != "```") || lines[len(lines)-1] != "```" {
-		return "", fmt.Errorf("%w: expected a single JSON fenced block", ErrProtocol)
+	if terminal := terminalJSONObject(text); terminal != "" {
+		prose := strings.TrimSpace(text[:len(text)-len(terminal)])
+		if !outcomeFenceOpen(prose) {
+			return prose, terminal, nil
+		}
 	}
-	body := strings.TrimSpace(strings.Join(lines[1:len(lines)-1], "\n"))
-	if body == "" || strings.Contains(body, "```") {
-		return "", fmt.Errorf("%w: malformed JSON fenced block", ErrProtocol)
+	return "", text, nil
+}
+
+func outcomeFenceOpen(text string) bool {
+	var fence string
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if fence != "" {
+			if line == fence {
+				fence = ""
+			}
+			continue
+		}
+		for _, marker := range []string{"```", "~~~"} {
+			if strings.HasPrefix(line, marker) {
+				length := len(marker)
+				for length < len(line) && line[length] == marker[0] {
+					length++
+				}
+				fence = line[:length]
+				break
+			}
+		}
 	}
-	return body, nil
+	return fence != ""
 }
 
 // Some runtimes preserve a short assistant handoff before the outcome despite

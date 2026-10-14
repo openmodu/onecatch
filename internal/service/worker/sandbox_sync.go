@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"sort"
@@ -23,6 +22,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	"github.com/openmodu/onecatch/pkg/localfile"
 )
@@ -215,12 +215,12 @@ func scanSyncLocal(ctx context.Context, root *os.Root, base syncManifest) (syncM
 		return nil, err
 	}
 	defer os.RemoveAll(index)
-	init := exec.CommandContext(ctx, "git", "init", "--bare", "--template=", index)
+	init := processexec.CommandContext(ctx, "git", "init", "--bare", "--template=", index)
 	init.Env = syncGitEnv()
 	if err := init.Run(); err != nil {
 		return nil, errors.New("file sync requires Git on this computer")
 	}
-	cmd := exec.CommandContext(ctx, "git", "--git-dir="+index, "--work-tree="+root.Name(), "-c", "core.bare=false", "ls-files", "--others", "--exclude-standard", "-z")
+	cmd := processexec.CommandContext(ctx, "git", "--git-dir="+index, "--work-tree="+root.Name(), "-c", "core.bare=false", "ls-files", "--others", "--exclude-standard", "-z")
 	cmd.Env = syncGitEnv()
 	output, err := cmd.Output()
 	if err != nil {
@@ -228,7 +228,7 @@ func scanSyncLocal(ctx context.Context, root *os.Root, base syncManifest) (syncM
 	}
 	// Include tracked files even when a later ignore rule matches them. Disable
 	// executable fsmonitor hooks in the user's repository explicitly.
-	tracked := exec.CommandContext(ctx, "git", "-C", root.Name(), "-c", "core.fsmonitor=false", "ls-files", "--cached", "-z", "--", ".")
+	tracked := processexec.CommandContext(ctx, "git", "-C", root.Name(), "-c", "core.fsmonitor=false", "ls-files", "--cached", "-z", "--", ".")
 	tracked.Env = syncGitEnv()
 	if trackedOutput, trackedErr := tracked.Output(); trackedErr == nil {
 		output = append(output, trackedOutput...)

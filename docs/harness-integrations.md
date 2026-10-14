@@ -200,9 +200,8 @@ Four edits, because everything else derives:
 2. **`internal/usecase/agentrun/<name>.go`** — the adapter, implementing
    `agentrun.Runner`, or an `acpLaunch` if the harness speaks ACP. Register it
    in the `descriptors` table in `registry.go`.
-3. **`frontend/public/assets/runtime/<id>.svg`** — the mark. It resolves by id,
-   so no map needs editing; record provenance in `SOURCES.md`.
-4. **`settings.<id>Description`** in `frontend/src/i18n.js`, both languages.
+3. **`internal/app/keel/assets/runtimeicons/<id>.svg`** — the mark. Register the icon in the native runtime icon loader and record provenance in `SOURCES.md`.
+4. **`internal/app/keel/language.go`** — labels in both languages.
 
 This shape exists because the earlier one failed. The same facts used to be
 restated in task validation, settings validation, the engine registry, the

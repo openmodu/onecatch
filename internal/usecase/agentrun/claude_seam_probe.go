@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/openmodu/onecatch/internal/platform/processexec"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam/seamtest"
 )
@@ -69,7 +70,7 @@ func (r *ClaudeRunner) verifyRemoteSeam(ctx context.Context, req Request, enviro
 func (r *ClaudeRunner) claudeVersion(ctx context.Context, environment []string) (string, error) {
 	versionCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(versionCtx, r.binary, "--version")
+	cmd := processexec.CommandContext(versionCtx, r.binary, "--version")
 	cmd.Env = environment
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -111,7 +112,7 @@ func (r *ClaudeRunner) probeRemoteSeam(parent context.Context, req Request, envi
 		"--dangerously-skip-permissions",
 	}
 	args = append(args, remoteArgs...)
-	cmd := exec.CommandContext(probeCtx, r.binary, args...)
+	cmd := processexec.CommandContext(probeCtx, r.binary, args...)
 	cmd.Dir = req.Workspace
 	cmd.Env = probeEnvironment
 	var output bytes.Buffer

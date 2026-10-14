@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/openmodu/onecatch/internal/processmode"
+	"github.com/openmodu/onecatch/internal/platform/processmode"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 )
 
