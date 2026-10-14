@@ -28,6 +28,7 @@ type entry struct {
 	user           bool
 	permission     *agentrun.PermissionRequest
 	question       *agentrun.UserInputRequest
+	answer         *agentrun.UserInputResponse
 	process        []*entry
 	details        []*entry
 	settled        bool
@@ -77,6 +78,17 @@ func (t *transcript) merge(e entry, delta bool) bool {
 	}
 	if e.kind == agentrun.KindUserInputResolved && e.question != nil {
 		t.resolvedQuestions[requestKey(e.step, e.question.ID)] = true
+		if e.answer != nil && !e.answer.Cancelled && !e.answer.Closed {
+			var lines []string
+			for _, q := range e.question.Questions {
+				if answer := e.answer.Answers[q.ID]; answer != "" && !q.IsSecret {
+					lines = append(lines, q.Question+"\n\n"+answer)
+				}
+			}
+			if len(lines) > 0 {
+				e.text, e.user, e.kind, e.question = strings.Join(lines, "\n\n"), true, agentrun.KindMessage, nil
+			}
+		}
 	}
 	old := t.items[e.key]
 	if old != nil && (e.revision <= old.revision) {
@@ -94,14 +106,14 @@ func (t *transcript) merge(e entry, delta bool) bool {
 }
 
 func (t *transcript) frame(f runstream.Frame) bool {
-	return t.merge(entry{key: eventKey(f.StepRunID, f.StreamID, f.Seq, f.Kind), step: f.StepRunID, stream: f.StreamID, seq: f.Seq, kind: f.Kind, text: f.Text, at: f.At, revision: f.Revision, streaming: f.Phase != "" && f.Phase != agentrun.StreamEnd, failed: f.Failed, permission: f.Permission, question: f.UserInput}, f.Phase == agentrun.StreamDelta)
+	return t.merge(entry{key: eventKey(f.StepRunID, f.StreamID, f.Seq, f.Kind), step: f.StepRunID, stream: f.StreamID, seq: f.Seq, kind: f.Kind, text: f.Text, at: f.At, revision: f.Revision, streaming: f.Phase != "" && f.Phase != agentrun.StreamEnd, failed: f.Failed, permission: f.Permission, question: f.UserInput, answer: f.UserInputResponse}, f.Phase == agentrun.StreamDelta)
 }
 
 func (t *transcript) history(events []desktopservice.RuntimeEventView) {
 	for _, v := range events {
 		at, _ := time.Parse(time.RFC3339Nano, v.At)
 		queueUpdatedAt, _ := time.Parse(time.RFC3339Nano, v.QueueUpdatedAt)
-		t.merge(entry{key: eventKey(v.StepRunID, v.StreamID, v.Seq, agentrun.EventKind(v.Kind)), step: v.StepRunID, stream: v.StreamID, seq: v.Seq, kind: agentrun.EventKind(v.Kind), text: v.Text, at: at, queueUpdatedAt: queueUpdatedAt, revision: v.Revision, streaming: v.Streaming, failed: v.Failed, permission: v.Permission, question: v.UserInput}, false)
+		t.merge(entry{key: eventKey(v.StepRunID, v.StreamID, v.Seq, agentrun.EventKind(v.Kind)), step: v.StepRunID, stream: v.StreamID, seq: v.Seq, kind: agentrun.EventKind(v.Kind), text: v.Text, at: at, queueUpdatedAt: queueUpdatedAt, revision: v.Revision, streaming: v.Streaming, failed: v.Failed, permission: v.Permission, question: v.UserInput, answer: v.UserInputResponse}, false)
 	}
 }
 

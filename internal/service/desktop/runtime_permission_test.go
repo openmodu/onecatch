@@ -91,3 +91,45 @@ func TestRuntimeRegistryResolvesPendingUserInput(t *testing.T) {
 		t.Fatal("user input response was not delivered")
 	}
 }
+
+func TestUserInputDeliveryAndClosure(t *testing.T) {
+	for _, closed := range []bool{false, true} {
+		registry := &RuntimeRegistry{}
+		ctx, cancel := context.WithCancel(context.Background())
+		request := agentrun.UserInputRequest{ID: "codex/input", WaitForDelivery: true, Questions: []agentrun.UserInputQuestion{{ID: "q", Question: "Choice?"}}}
+		sink := registry.userInputSink(ctx, agentrun.Request{RunID: "run", StepRunID: "step"}, nil)
+		sink(agentrun.Event{Kind: agentrun.KindUserInputRequest, UserInput: &request})
+		result := make(chan error, 1)
+		go func() {
+			result <- registry.ResolveUserInput("run", request.ID, agentrun.UserInputResponse{Answers: map[string]string{"q": "answer"}})
+		}()
+		response, err := registry.awaitUserInput(ctx, "run", "step", request)
+		if err != nil || response.Delivered == nil {
+			t.Fatalf("response = %+v, %v", response, err)
+		}
+		if err := registry.ResolveUserInput("run", request.ID, agentrun.UserInputResponse{Cancelled: true}); err == nil {
+			t.Fatal("duplicate answer accepted")
+		}
+		select {
+		case <-result:
+			t.Fatal("returned before delivery")
+		default:
+		}
+		if !closed {
+			response.Delivered <- nil
+		}
+		sink(agentrun.Event{Kind: agentrun.KindUserInputResolved, UserInput: &request})
+		select {
+		case err := <-result:
+			if (err != nil) != closed {
+				t.Fatalf("delivery = %v, closed = %t", err, closed)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("submission stayed blocked")
+		}
+		if len(registry.pendingUserInputs) != 0 {
+			t.Fatal("pending request leaked")
+		}
+		cancel()
+	}
+}

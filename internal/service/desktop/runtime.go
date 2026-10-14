@@ -120,6 +120,10 @@ type pendingUserInput struct {
 	stepRunID string
 	request   agentrun.UserInputRequest
 	response  chan agentrun.UserInputResponse
+	ctx       context.Context
+	answered  bool
+	closed    chan struct{}
+	closeOnce sync.Once
 }
 
 const runtimeStatusCacheTTL = 5 * time.Minute
@@ -289,7 +293,28 @@ func (r *RuntimeRegistry) Run(ctx context.Context, request agentrun.Request, sin
 			return r.awaitUserInput(ctx, runID, stepRunID, input)
 		}
 	}
-	return engine.Run(ctx, request, sink)
+	return engine.Run(ctx, request, r.userInputSink(ctx, request, sink))
+}
+
+func (r *RuntimeRegistry) userInputSink(ctx context.Context, request agentrun.Request, sink agentrun.Sink) agentrun.Sink {
+	return func(event agentrun.Event) {
+		// Install the waiter before publishing the card. A fast click must not
+		// race the runtime's handler goroutine registering the same request.
+		if event.Kind == agentrun.KindUserInputRequest && event.UserInput != nil && request.RunID != "" {
+			r.registerUserInput(ctx, request.RunID, request.StepRunID, *event.UserInput)
+		}
+		if event.Kind == agentrun.KindUserInputResolved && event.UserInput != nil {
+			r.userInputMu.Lock()
+			if pending := r.pendingUserInputs[event.UserInput.ID]; pending != nil {
+				pending.closeOnce.Do(func() { close(pending.closed) })
+			}
+			delete(r.pendingUserInputs, event.UserInput.ID)
+			r.userInputMu.Unlock()
+		}
+		if sink != nil {
+			sink(event)
+		}
+	}
 }
 
 func (r *RuntimeRegistry) Close() error {
@@ -359,17 +384,31 @@ func (r *RuntimeRegistry) ResolvePermission(runID, requestID, decision string) e
 	}
 }
 
-func (r *RuntimeRegistry) awaitUserInput(ctx context.Context, runID, stepRunID string, request agentrun.UserInputRequest) (agentrun.UserInputResponse, error) {
-	pending := &pendingUserInput{runID: runID, stepRunID: stepRunID, request: request, response: make(chan agentrun.UserInputResponse, 1)}
+func (r *RuntimeRegistry) registerUserInput(ctx context.Context, runID, stepRunID string, request agentrun.UserInputRequest) *pendingUserInput {
 	r.userInputMu.Lock()
+	defer r.userInputMu.Unlock()
 	if r.pendingUserInputs == nil {
 		r.pendingUserInputs = make(map[string]*pendingUserInput)
 	}
+	if pending := r.pendingUserInputs[request.ID]; pending != nil {
+		return pending
+	}
+	pending := &pendingUserInput{runID: runID, stepRunID: stepRunID, request: request, ctx: ctx, closed: make(chan struct{}), response: make(chan agentrun.UserInputResponse, 1)}
 	r.pendingUserInputs[request.ID] = pending
-	r.userInputMu.Unlock()
+	return pending
+}
+
+func (r *RuntimeRegistry) awaitUserInput(ctx context.Context, runID, stepRunID string, request agentrun.UserInputRequest) (agentrun.UserInputResponse, error) {
+	if err := ctx.Err(); err != nil {
+		return agentrun.UserInputResponse{}, err
+	}
+	pending := r.registerUserInput(ctx, runID, stepRunID, request)
 	defer func() {
 		r.userInputMu.Lock()
-		if r.pendingUserInputs[request.ID] == pending {
+		if ctx.Err() != nil {
+			pending.closeOnce.Do(func() { close(pending.closed) })
+		}
+		if r.pendingUserInputs[request.ID] == pending && (!request.WaitForDelivery || ctx.Err() != nil) {
 			delete(r.pendingUserInputs, request.ID)
 		}
 		r.userInputMu.Unlock()
@@ -387,7 +426,7 @@ func (r *RuntimeRegistry) awaitUserInput(ctx context.Context, runID, stepRunID s
 func (r *RuntimeRegistry) ResolveUserInput(runID, requestID string, response agentrun.UserInputResponse) error {
 	r.userInputMu.Lock()
 	pending := r.pendingUserInputs[requestID]
-	if pending == nil || pending.runID != runID {
+	if pending == nil || pending.runID != runID || pending.answered || pending.ctx.Err() != nil {
 		r.userInputMu.Unlock()
 		return coded("user_input_not_pending", "user input request is no longer pending")
 	}
@@ -405,9 +444,27 @@ func (r *RuntimeRegistry) ResolveUserInput(runID, requestID string, response age
 	} else {
 		response.Answers = nil
 	}
+	if pending.request.WaitForDelivery {
+		response.Delivered = make(chan error, 1)
+	}
 	select {
 	case pending.response <- response:
+		pending.answered = true
 		r.userInputMu.Unlock()
+		if response.Delivered != nil {
+			select {
+			case err := <-response.Delivered:
+				return err
+			case <-pending.closed:
+				// Delivery and closing the waiter can happen in the same frame.
+				select {
+				case err := <-response.Delivered:
+					return err
+				default:
+				}
+				return coded("user_input_not_pending", "user input request is no longer pending")
+			}
+		}
 		return nil
 	default:
 		r.userInputMu.Unlock()

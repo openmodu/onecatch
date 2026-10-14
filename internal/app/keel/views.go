@@ -568,19 +568,40 @@ func (a *app) requestMessage(cx *el.Context, e *entry) el.Element {
 			content.Child(el.Div().Row().Gap(8).Child(button("允许一次", func() { a.respondPermission(e, "allow_once") }, kit.ButtonPrimary).Render(cx), button("拒绝", func() { a.respondPermission(e, "deny") }, kit.ButtonSecondary).Render(cx)))
 		}
 	} else if e.question != nil {
-		content.Child(el.Text("需要你补充信息").Medium())
+		heading := "等待你的回答"
+		if e.question.Async {
+			heading = "可以补充信息，任务仍在继续"
+		}
+		content.Child(el.Text(heading).Medium())
+		busy := a.pendingResponses[e.question.ID]
+		active := a.detail != nil && a.detail.Active
+		complete := true
 		for _, q := range e.question.Questions {
 			key := requestKey(e.step, e.question.ID) + "/" + q.ID
 			content.Child(el.Text(q.Question).TextSize(14))
 			options := el.Div().Row().Wrap().Gap(6)
 			for _, option := range q.Options {
-				options.Child(button(option.Label, func() { a.answers[key] = option.Label }, kit.ButtonSecondary).Selected(a.answers[key] == option.Label).Render(cx))
+				choice := button(option.Label, func() { a.answers[key] = option.Label }, kit.ButtonSecondary).Selected(a.answers[key] == option.Label)
+				choice.SetDisabled(busy || !active)
+				options.Child(choice.Render(cx))
+				if option.Description != "" {
+					options.Child(el.Text(option.Description).TextSize(12).TextColor(theme.Muted))
+				}
 			}
 			answer := a.answers[key]
-			content.Child(options, field("answer/"+key, "你的回答", &answer).OnChange(func(value string) { a.answers[key] = value }))
+			complete = complete && strings.TrimSpace(answer) != ""
+			input := field("answer/"+key, "你的回答", &answer).ReadOnly(busy || !active).OnChange(func(value string) { a.answers[key] = value })
+			if q.IsSecret {
+				input.Password()
+			}
+			content.Child(options, input)
 		}
-		if a.detail != nil && a.detail.Active {
-			content.Child(el.Div().Row().Gap(8).Child(button("提交回答", func() { a.respondQuestion(e, false) }, kit.ButtonPrimary).Render(cx), button("跳过", func() { a.respondQuestion(e, true) }, kit.ButtonGhost).Render(cx)))
+		if active {
+			submit := button("提交回答", func() { a.respondQuestion(e, false) }, kit.ButtonPrimary)
+			submit.SetDisabled(busy || !complete)
+			skip := button("跳过", func() { a.respondQuestion(e, true) }, kit.ButtonGhost)
+			skip.SetDisabled(busy)
+			content.Child(el.Div().Row().Gap(8).Child(submit.Render(cx), skip.Render(cx)))
 		}
 	}
 	return content

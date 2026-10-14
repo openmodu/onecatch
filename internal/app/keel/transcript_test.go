@@ -137,3 +137,15 @@ func TestTranscriptRequestIDsAreScopedToStep(t *testing.T) {
 		}
 	}
 }
+
+func TestCodexQuestionAnswerSurvivesHistoryReplay(t *testing.T) {
+	tx := newTranscript()
+	q := &agentrun.UserInputRequest{ID: "codex-question", Async: true, Questions: []agentrun.UserInputQuestion{{ID: "q", Question: "Which scope?"}, {ID: "secret", Question: "Token?", IsSecret: true}}}
+	response := &agentrun.UserInputResponse{Answers: map[string]string{"q": "small", "secret": "private"}}
+	tx.frame(runstream.Frame{StepRunID: "step", Seq: 2, Event: agentrun.Event{Kind: agentrun.KindUserInputResolved, UserInput: q, UserInputResponse: response}})
+	tx.history([]desktopservice.RuntimeEventView{{StepRunID: "step", Seq: 1, Kind: "user_input_request", UserInput: q}, {StepRunID: "step", Seq: 2, Kind: "user_input_resolved", UserInput: q, UserInputResponse: response}})
+	rows := tx.visible()
+	if len(rows) != 1 || !rows[0].user || rows[0].text != "Which scope?\n\nsmall" || rows[0].question != nil {
+		t.Fatalf("answer history: %+v", rows)
+	}
+}

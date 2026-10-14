@@ -123,6 +123,7 @@ type remoteExecutor struct {
 	registry     *worker.Registry
 	client       *worker.Client
 	permissions  *remotePermissionRegistry
+	userInputs   *RuntimeRegistry
 	preparations *remotePreparationRegistry
 }
 
@@ -179,6 +180,12 @@ func (e *remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID st
 		return agentrun.Result{}, worker.RemoteError{Code: "worker_not_found", Message: "worker is missing or disabled"}
 	}
 	if config.Provider == worker.ProviderVolcengineSandbox {
+		if e.userInputs != nil && request.RunID != "" {
+			request.UserInputHandler = func(ctx context.Context, input agentrun.UserInputRequest) (agentrun.UserInputResponse, error) {
+				return e.userInputs.awaitUserInput(ctx, request.RunID, request.StepRunID, input)
+			}
+			sink = e.userInputs.userInputSink(ctx, request, sink)
+		}
 		if config.SyncLocal {
 			return e.client.RunSandboxSynced(ctx, config, request, e.registry.SyncStateRoot(), sink)
 		}
@@ -252,6 +259,14 @@ func (e *remoteExecutor) RunRemote(ctx context.Context, workerID, workspaceID st
 					e.permissions.add(request.RunID, event.Permission.ID, remotePermissionTarget{config: config, remoteRunID: runID})
 				case agentrun.KindPermissionResolved:
 					e.permissions.remove(request.RunID, event.Permission.ID)
+				}
+			}
+			if event.UserInput != nil {
+				switch event.Kind {
+				case agentrun.KindUserInputRequest:
+					e.permissions.add(request.RunID, "input:"+event.UserInput.ID, remotePermissionTarget{config: config, remoteRunID: runID})
+				case agentrun.KindUserInputResolved:
+					e.permissions.remove(request.RunID, "input:"+event.UserInput.ID)
 				}
 			}
 			if sink != nil {

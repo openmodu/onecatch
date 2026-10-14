@@ -55,6 +55,9 @@ func (p *settingsPage) languageSetting() kit.SettingItem {
 }
 
 var englishUI = map[string]string{
+	"等待你的回答":        "Waiting for your answer",
+	"可以补充信息，任务仍在继续": "You can answer while the task continues",
+
 	"显示 OneCatch":   "Show OneCatch",
 	"隐藏窗口":          "Hide window",
 	"最近活跃的 Session": "Recent sessions",

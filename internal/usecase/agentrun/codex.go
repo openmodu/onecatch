@@ -41,6 +41,9 @@ type codexAppProcess struct {
 	stdin      io.WriteCloser
 	encoder    *json.Encoder
 	scanner    *bufio.Scanner
+	readOnce   sync.Once
+	reads      chan codexRead
+	readStop   chan struct{}
 	stderr     *lineCapture
 	threadID   string
 	skills     []Skill
@@ -513,22 +516,24 @@ type codexAppTurn struct {
 }
 
 type codexAppItem struct {
-	ID               string          `json:"id"`
-	Type             string          `json:"type"`
-	Text             string          `json:"text"`
-	Command          string          `json:"command"`
-	Status           string          `json:"status"`
-	AggregatedOutput *string         `json:"aggregatedOutput"`
-	ExitCode         *int            `json:"exitCode"`
-	Arguments        json.RawMessage `json:"arguments"`
-	Result           json.RawMessage `json:"result"`
-	ContentItems     json.RawMessage `json:"contentItems"`
-	Success          *bool           `json:"success"`
-	Error            json.RawMessage `json:"error"`
-	Server           string          `json:"server"`
-	Tool             string          `json:"tool"`
-	Content          []string        `json:"content"`
-	Summary          []string        `json:"summary"`
+	ID               string               `json:"id"`
+	Type             string               `json:"type"`
+	Delivery         string               `json:"delivery"`
+	Questions        []codexAsyncQuestion `json:"questions"`
+	Text             string               `json:"text"`
+	Command          string               `json:"command"`
+	Status           string               `json:"status"`
+	AggregatedOutput *string              `json:"aggregatedOutput"`
+	ExitCode         *int                 `json:"exitCode"`
+	Arguments        json.RawMessage      `json:"arguments"`
+	Result           json.RawMessage      `json:"result"`
+	ContentItems     json.RawMessage      `json:"contentItems"`
+	Success          *bool                `json:"success"`
+	Error            json.RawMessage      `json:"error"`
+	Server           string               `json:"server"`
+	Tool             string               `json:"tool"`
+	Content          []string             `json:"content"`
+	Summary          []string             `json:"summary"`
 	Changes          []struct {
 		Path string `json:"path"`
 	} `json:"changes"`
@@ -659,6 +664,7 @@ func (r *CodexRunner) startCodexAppProcess(req Request, commandArgs, environment
 func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess, req Request, sink Sink, warm bool) (Result, error) {
 	process.mu.Lock()
 	defer process.mu.Unlock()
+	reads := process.readLines()
 
 	done := make(chan struct{})
 	go func() {
@@ -691,8 +697,30 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 		return Result{}, fmt.Errorf("initialize Codex app-server: %w", err)
 	}
 
-	for process.scanner.Scan() {
-		line := process.scanner.Text()
+	questions := newCodexQuestions(ctx, req, process.encoder, sink, r.now)
+	defer questions.close()
+	var readErr error
+readLoop:
+	for {
+		var line string
+		select {
+		case <-ctx.Done():
+			return state.result(), ctx.Err()
+		case answer := <-questions.answers:
+			if err := questions.answer(answer); err != nil {
+				return state.result(), err
+			}
+			continue
+		case read, ok := <-reads:
+			if !ok {
+				break readLoop
+			}
+			if read.err != nil {
+				readErr = read.err
+				break readLoop
+			}
+			line = read.line
+		}
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -701,7 +729,16 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 			sink(Event{Kind: KindReasoning, Text: strings.TrimSpace(line), Raw: line, At: r.now()})
 			continue
 		}
+		if questions.ack(envelope) {
+			continue
+		}
 		if envelope.Method != "" && len(envelope.ID) > 0 {
+			if envelope.Method == "item/tool/requestUserInput" {
+				if err := questions.request(envelope, state.sessionID, activeTurnID, line); err != nil {
+					return state.result(), err
+				}
+				continue
+			}
 			if err := r.handleCodexApproval(ctx, process.encoder, envelope, req, state.sessionID, activeTurnID, line, sink); err != nil {
 				return state.result(), err
 			}
@@ -777,13 +814,14 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 				continue
 			}
 			state.handleNotification(envelope.Method, envelope.Params, line, r.now(), sink)
+			questions.notification(envelope, state.sessionID, activeTurnID, line)
 			if state.completed || state.failed {
 				break
 			}
 		}
 	}
-	if err := process.scanner.Err(); err != nil && ctx.Err() == nil {
-		return state.result(), fmt.Errorf("read Codex app-server: %w", err)
+	if readErr != nil && ctx.Err() == nil {
+		return state.result(), fmt.Errorf("read Codex app-server: %w", readErr)
 	}
 	if !state.completed && !state.failed {
 		// The scanner reached EOF rather than stopping after a terminal turn
@@ -965,6 +1003,8 @@ func (p *codexAppProcess) stop() {
 
 func (p *codexAppProcess) stopWithGrace(grace time.Duration) {
 	p.stopOnce.Do(func() {
+		p.readLines()
+		close(p.readStop)
 		if p.stopRemote != nil {
 			p.stopRemote()
 			return

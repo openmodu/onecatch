@@ -274,7 +274,7 @@ func NewService(store *localdata.Store, orchestrator *workflowuc.Usecase, runtim
 	orchestrator.SetDefinitionResolver(app.taskDefinition)
 	orchestrator.SetExecutionSettingsResolver(app.resolveExecutionSettings)
 	app.remotePermissions = newRemotePermissionRegistry(app.workerClient)
-	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, preparations: newRemotePreparationRegistry()})
+	orchestrator.SetRemoteExecutor(&remoteExecutor{registry: app.workers, client: app.workerClient, permissions: app.remotePermissions, userInputs: app.runtimes, preparations: newRemotePreparationRegistry()})
 	app.accountUsageWG.Add(1)
 	go app.accountUsageSyncLoop()
 	return app
@@ -1404,7 +1404,11 @@ func (a *Service) RespondPermission(input PermissionDecisionInput) error {
 
 func (a *Service) RespondUserInput(input UserInputResponseInput) error {
 	runID, requestID := strings.TrimSpace(input.RunID), strings.TrimSpace(input.RequestID)
-	return a.runtimes.ResolveUserInput(runID, requestID, agentrun.UserInputResponse{Answers: input.Answers, Cancelled: input.Cancelled})
+	response := agentrun.UserInputResponse{Answers: input.Answers, Cancelled: input.Cancelled}
+	if found, err := a.remotePermissions.resolveUserInput(runID, requestID, response); found {
+		return err
+	}
+	return a.runtimes.ResolveUserInput(runID, requestID, response)
 }
 
 func (a *Service) GetRunDetail(ctx context.Context, runID string) (RunDetail, error) {
