@@ -55,6 +55,10 @@ type transcript struct {
 	items               map[string]*entry
 	resolvedPermissions map[string]bool
 	resolvedQuestions   map[string]bool
+	// streams holds the text of records receiving deltas. Concatenating each
+	// delta copied the whole output so far; a builder appends in place, and
+	// the strings it already returned stay valid.
+	streams map[string]*strings.Builder
 }
 
 func newTranscript() *transcript {
@@ -96,7 +100,21 @@ func (t *transcript) merge(e entry, delta bool) bool {
 		return false
 	}
 	if delta && old != nil {
-		e.text = old.text + e.text
+		if t.streams == nil {
+			t.streams = map[string]*strings.Builder{}
+		}
+		b := t.streams[e.key]
+		if b == nil || b.Len() != len(old.text) {
+			b = &strings.Builder{}
+			b.Grow(2 * (len(old.text) + len(e.text)))
+			b.WriteString(old.text)
+			t.streams[e.key] = b
+		}
+		b.WriteString(e.text)
+		e.text = b.String()
+	} else {
+		// A snapshot or the end of a stream replaces the text.
+		delete(t.streams, e.key)
 	}
 	if old != nil {
 		// Keep the logical message at its starting position as tokens arrive.

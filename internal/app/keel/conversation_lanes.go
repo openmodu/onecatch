@@ -16,7 +16,7 @@ const parallelLaneHeight = 420
 type conversationLane struct {
 	entries    []*entry
 	keys       []string
-	signatures map[string]string
+	signatures map[string]uint64
 	rendered   map[string]bool
 	scroller   *kit.MessageScrollerView
 	root       *el.RootWidget
@@ -48,7 +48,7 @@ func (a *app) syncParallelLanes() {
 			seen[id] = true
 			lane := a.conversation.lanes[id]
 			if lane == nil {
-				lane = &conversationLane{signatures: make(map[string]string), rendered: make(map[string]bool)}
+				lane = &conversationLane{signatures: make(map[string]uint64), rendered: make(map[string]bool)}
 				lane.scroller = kit.MessageScroller(nil, 140, func(cx *el.Context, index int) el.Element {
 					lane.rendered[lane.entries[index].key] = true
 					return a.messageEntry(cx, lane.entries[index], -1)
@@ -67,7 +67,7 @@ func (a *app) syncParallelLanes() {
 				}
 			}
 			keys := make([]string, len(lane.entries))
-			signatures := make(map[string]string, len(lane.entries))
+			signatures := make(map[string]uint64, len(lane.entries))
 			var changed []string
 			for j, e := range lane.entries {
 				keys[j] = e.key
