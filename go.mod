@@ -8,7 +8,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.7
 	github.com/charmbracelet/x/vt v0.0.0-20261008172826-faa4adf95555
 	github.com/creack/pty v1.1.24
-	github.com/dyike/keel v0.2.8
+	github.com/dyike/keel v0.2.9
 	github.com/google/uuid v1.6.0
 	github.com/gorilla/websocket v1.5.3
 	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51

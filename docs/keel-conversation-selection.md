@@ -150,3 +150,37 @@ Keel 的行尾裁剪现在核对源字簇，只有全为空白时才允许清零
 Keel 的 `TestDefaultInputTokenCentersInkWithLineLeading` 在补丁前后均有垂直居中失败，不能报告整个 el 包通过。当前补丁通过本地 `go.work` 接入，尚未发布；离屏验证不能代替用户正在运行的客户端验证。
 
 缺字补丁现已通过 [Keel PR #25](https://github.com/dyike/keel/pull/25) 合入，并发布为 [v0.2.6](https://github.com/dyike/keel/releases/tag/v0.2.6)。OneCatch 的 go.mod/go.sum 已升级到该版本；发布依赖验证使用 `GOWORK=off`，不把相邻 Keel 工作区的其他改动算入本次发布。
+
+## 工作流摘要右侧裁切（2026-10-15）
+
+用户截图中，摘要每行的右端像被白色区域盖住。使用截图中的长中英混排摘要，在 Keel v0.2.8 原生离屏渲染中复现：部分行末字符被文档边界裁掉，原始消息和复制文本仍完整。
+
+调用路径为 `views.go:messageEntry` → `conversation_outcomes.go:workflowOutcomeCard` → `conversation.go:conversationDocument` → Keel Markdown `shapeLine` → `typesetting/shaping.Output.advanceSpaceAware`。卡片的 16dp 内边距和正文约束正常；不是新增遮挡层，也不是摘要数据被截断。
+
+之前的缺字补丁保护了**最终行尾裁剪**，但遗漏**候选换行宽度**。`advanceSpaceAware` 仍在行末字形 `Width == 0`（纵排为 `Height == 0`）时直接扣掉它的前进宽度，没有检查源字簇是否为空白。轮廓尺寸读取失败的可见字符因此被少算，换行时多放一个字符。诊断中，限制 1000px 的一行实际排到 1017px，原生绘制也超出边界；文档按正确宽度裁切，就出现用户看到的缺字。
+
+底层修复为候选行宽度加入源字簇空白判定，与最终行尾裁剪共用 `glyphIsWhitespace`。只有真正的空白字簇才允许扣除零墨迹字形的前进宽度；非空白、含组合标记和无法确认的字簇保留宽度，字间距及反向 run 的规则保持。没有给摘要卡片硬加宽度、调整字号或修改原文。
+
+新增回归：
+
+- `TestConversationWrappedLinesRespectContentWidth`：直接使用 Markdown 的单行排版参数及不可见截断标记，逐行检查实际字形前进宽度。覆盖 4 种字号、1×/2×、340/700/860dp 内容宽度。`GOWORK=off` 的 v0.2.8 在全部 24 组中失败，接入补丁后通过。
+- `TestWorkflowOutcomeSummaryWrapsInsideCard`：长中英混排与纯中文、440/800/1200dp 视口、1×/2× 下，核对卡片内容边界和独立约束文档的尺寸。这个边界测试在修复前也通过，说明**语义边界或全文复制正常不能证明行末字形完整**。
+- `TestRenderLongWorkflowOutcomeSummary`：生成三种宽度的原生离屏截图；已检查修复前后的 800dp 截图，修复后行末文字在边界内换行。
+- Keel `TestWrapMissingOutlineMetricsRespectsWidth`：合成零墨迹非空白字形，覆盖普通换行、截断和启用/禁用空白裁剪。修复前 16px 的行保留 32px 字形，四组均失败，修复后通过。其他合成测试覆盖 LTR/RTL/纵排、字间距、真正空白、组合标记及无效字簇范围。
+
+验证命令：
+
+```sh
+go test ./internal/app/keel ./cmd/app -count=1
+go vet ./internal/app/keel ./cmd/app
+ONECATCH_KEEL_PREVIEWS=/tmp/onecatch-summary-after go test ./internal/app/keel -run '^TestRenderLongWorkflowOutcomeSummary$' -count=1
+# 在 Keel 修复源码中：
+GOWORK=off go test ./typesetting/... ./gio/text ./ui/markdown ./internal/deps -count=1
+GOWORK=off go test -race ./typesetting/shaping -count=1
+```
+
+上述完整包测试、相关 race、vet、macOS 构建与两仓 `git diff --check` 通过。没有重新运行整个 Keel el 包；上节记录的既有输入垂直居中失败不属于本次修复。
+
+**交付范围：补丁尚未提交或发布。** 底层源码保留在相邻的 `github.com/dyike/keel-summary-width` 独立工作区，基于 v0.2.8；本机忽略的 `go.work` 临时接入该目录。OneCatch 的 go.mod/go.sum 仍依赖发布版 v0.2.8，关闭工作区后新增排版回归仍会失败，不能把本地修复描述为 v0.2.8 已修好。截图证据在 `/tmp/onecatch-summary-before` 和 `/tmp/onecatch-summary-after`，候选构建为后者的 `onecatch`。发布底层补丁并升级依赖后，应删除本地 go.work，再用 `GOWORK=off` 验证。
+
+没有替换或重启用户正在运行的安装客户端，也没有在真实窗口操作该工作流、缩放或拖选验证；原生离屏截图和测试通过不等同于客户端已修复。
