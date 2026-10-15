@@ -7,6 +7,7 @@ import (
 	"github.com/dyike/keel/gio/layout"
 	"github.com/dyike/keel/gio/op"
 	"github.com/dyike/keel/gio/unit"
+	"github.com/dyike/keel/ui/core"
 	"github.com/dyike/keel/ui/el"
 	"github.com/dyike/keel/ui/locale"
 	"github.com/dyike/keel/ui/window"
@@ -281,5 +282,104 @@ func TestCodexParallelCommandOutputsShowParametersOnTheirCalls(t *testing.T) {
 	_, body, _ = toolDisplay(read)
 	if !strings.Contains(body, `"offset": 65`) || !strings.Contains(body, "/repo/a.go") {
 		t.Fatalf("read parameters missing: %s", body)
+	}
+}
+
+// Thoughts between tool calls read as their own disclosure, not as rows of
+// the tool card.
+func TestReasoningSeparatesFromToolGroups(t *testing.T) {
+	at := time.Unix(100, 0)
+	rows := buildConversationEntries([]*entry{
+		{key: "t1", step: "s", kind: agentrun.KindReasoning, text: "**Planning** read the diff first", at: at},
+		{key: "a", step: "s", kind: agentrun.KindToolUse, stream: "a", text: "git diff", at: at},
+		{key: "ra", step: "s", kind: agentrun.KindToolResult, stream: "a", text: "diff", at: at},
+		{key: "b", step: "s", kind: agentrun.KindToolUse, stream: "b", text: "sed -n 1,20p a.go", at: at},
+		{key: "t2", step: "s", kind: agentrun.KindReasoning, text: "**Identifying issues** nil input", at: at},
+		{key: "t3", step: "s", kind: agentrun.KindReasoning, text: "**Checking** the provider", at: at},
+		{key: "c", step: "s", kind: agentrun.KindToolUse, stream: "c", text: "rg -n foo", at: at},
+	})
+	var shape []string
+	for _, row := range rows {
+		var kinds []string
+		for _, p := range row.process {
+			kinds = append(kinds, string(p.kind))
+		}
+		shape = append(shape, strings.Join(kinds, ","))
+	}
+	if got := strings.Join(shape, " | "); got != "reasoning | tool_use,tool_use | reasoning,reasoning | tool_use" {
+		t.Fatalf("process grouping: %s", got)
+	}
+
+	a := conversationFixture(t)
+	a.entries = rows
+	a.detail.Active = false
+	root := el.Root(el.ViewFunc(func(cx *el.Context) el.Element {
+		column := el.Div().WFull().P(20)
+		for _, row := range rows {
+			column.Child(a.processGroup(cx, row))
+		}
+		return column
+	}))
+	var router input.Router
+	var ops op.Ops
+	frame := func() {
+		ops.Reset()
+		root.Layout(layout.Context{Ops: &ops, Now: time.Now(), Source: router.Source(), Constraints: layout.Exact(image.Pt(900, 700)), Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}})
+		router.Frame(&ops)
+	}
+	frame()
+	frame()
+	nodes := router.AppendSemantics(nil)
+	for _, label := range []string{"思考过程", "运行了 2 个工具", "运行了 1 个工具"} {
+		if _, ok := findSkillControl(nodes, label); !ok {
+			t.Fatalf("missing %q header", label)
+		}
+	}
+	if _, ok := findSkillControl(nodes, "运行了 3 个工具"); ok {
+		t.Fatal("tools across a thought were merged into one card")
+	}
+
+	// Opening a thought group shows its prose directly, without tool rows.
+	a.toggleConversation(rows[2].key, false)
+	a.toggleConversation(rows[1].key, false)
+	frame()
+	frame()
+	nodes = router.AppendSemantics(nil)
+	if _, ok := findSkillControl(nodes, "执行命令 · git diff"); !ok {
+		t.Fatal("tool card did not open")
+	}
+	var labels []string
+	var walk func([]input.SemanticNode)
+	walk = func(nodes []input.SemanticNode) {
+		for _, n := range nodes {
+			labels = append(labels, n.Desc.Label)
+			walk(n.Children)
+		}
+	}
+	walk(nodes)
+	for _, label := range labels {
+		if strings.HasPrefix(label, "思考过程：") {
+			t.Fatalf("thought drawn as a tool card row: %q", label)
+		}
+	}
+	if dir := os.Getenv("ONECATCH_KEEL_PREVIEWS"); dir != "" {
+		widget := core.Func(func(gtx core.C) core.D { return root.Layout(gtx) })
+		if err := window.ScreenshotAtScale(screenshotRoot{widget}, 900, 700, 2, filepath.Join(dir, "reasoning-groups.png")); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestLiveReasoningGroupLabel(t *testing.T) {
+	a := conversationFixture(t)
+	a.detail.Active = true
+	tool := &entry{key: "process/a", step: "s", process: []*entry{{key: "a", step: "s", kind: agentrun.KindToolUse, text: "ls", settled: true}}}
+	thought := &entry{key: "process/t", step: "s", process: []*entry{{key: "t", step: "s", kind: agentrun.KindReasoning, text: "next", streaming: true}}}
+	a.entries = []*entry{tool, thought}
+	if active, _, _ := a.processState(thought); !active {
+		t.Fatal("latest thought group should be live")
+	}
+	if active, _, _ := a.processState(tool); active {
+		t.Fatal("earlier tool group stays live after a thought follows")
 	}
 }

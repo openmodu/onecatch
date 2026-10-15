@@ -184,3 +184,11 @@ GOWORK=off go test -race ./typesetting/shaping -count=1
 **交付范围：补丁尚未提交或发布。** 底层源码保留在相邻的 `github.com/dyike/keel-summary-width` 独立工作区，基于 v0.2.8；本机忽略的 `go.work` 临时接入该目录。OneCatch 的 go.mod/go.sum 仍依赖发布版 v0.2.8，关闭工作区后新增排版回归仍会失败，不能把本地修复描述为 v0.2.8 已修好。截图证据在 `/tmp/onecatch-summary-before` 和 `/tmp/onecatch-summary-after`，候选构建为后者的 `onecatch`。发布底层补丁并升级依赖后，应删除本地 go.work，再用 `GOWORK=off` 验证。
 
 没有替换或重启用户正在运行的安装客户端，也没有在真实窗口操作该工作流、缩放或拖选验证；原生离屏截图和测试通过不等同于客户端已修复。
+
+## 思考与工具调用分组（2026-10-15）
+
+用户截图中，“运行了 25 个工具”的卡片里混入多行思考预览，思考与命令交替出现。原因是 `buildConversationEntriesWith` 把同一步骤内相邻的所有过程记录合并为一组，思考记录也作为工具卡片的一行绘制。
+
+现在同一步骤内，思考与工具分别成组：一个组只包含思考，或只包含工具调用、文件变更等记录；两者交替时按原顺序切分。工具组仍用带边框的卡片，计数只统计其中的工具；思考组标题为“思考过程”（运行中的最新组为“思考中…”），展开后直接显示正文，不再嵌套第二层展开。`processItem` 不再绘制思考行。
+
+`TestReasoningSeparatesFromToolGroups` 检查分组形状、标题、展开后的工具卡片中不含思考行，并可通过 `ONECATCH_KEEL_PREVIEWS` 生成 `reasoning-groups.png`；`TestLiveReasoningGroupLabel` 检查思考组出现后，前面的工具组不再标为运行中。界面包完整测试通过，测试使用当前本机 `go.work`。离屏截图已检查；尚未在实际运行的客户端中操作验证。思考正文仍按纯文本显示，`**标题**` 标记原样保留，与修改前一致。

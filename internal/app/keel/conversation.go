@@ -185,7 +185,10 @@ func buildConversationEntriesWith(raw []*entry, copies *entryCopies) []*entry {
 		}
 		if len(out) > 0 {
 			previous := out[len(out)-1]
-			if len(previous.process) > 0 && previous.step == e.step {
+			// Thoughts read as prose between tool runs, not as rows of the
+			// tool card: a group holds either reasoning or tools, never both.
+			thinking := e.kind == agentrun.KindReasoning
+			if len(previous.process) > 0 && previous.step == e.step && (previous.process[0].kind == agentrun.KindReasoning) == thinking {
 				previous.process = append(previous.process, e)
 				continue
 			}
@@ -287,13 +290,17 @@ func (a *app) processState(e *entry) (active bool, count, thoughts int) {
 
 func (a *app) processGroup(cx *el.Context, e *entry) el.Element {
 	active, count, thoughts := a.processState(e)
+	thinking := thoughts == len(e.process)
 	label := "已处理"
-	if active {
-		label = "处理中…"
-	} else if count > 0 {
-		label = fmt.Sprintf("运行了 %d 个工具", count)
-	} else if thoughts > 0 {
+	switch {
+	case thinking && active:
+		label = "思考中…"
+	case thinking:
 		label = "思考过程"
+	case active:
+		label = "处理中…"
+	case count > 0:
+		label = fmt.Sprintf("运行了 %d 个工具", count)
 	}
 	open := a.conversationOpen(e.key, active)
 	caret := "chevron-right"
@@ -302,7 +309,16 @@ func (a *app) processGroup(cx *el.Context, e *entry) el.Element {
 	}
 	row := el.Div().ID(e.key).Name(label).Role("button").Focusable(true).CursorPointer().Row().Items(el.Center).Gap(6).MinH(el.Dp(32)).Pt(2).Pb(6).Px(2).OnClick(func() { a.toggleConversation(e.key, active) }).FocusStyle(neutralFocus).Child(el.Text(label).TextSize(13).TextColor(theme.Muted), uiassets.Lucide(cx, caret, 14, mixColor(theme.Muted, theme.Bg, .72)))
 	group := el.Div().WFull().Child(row)
-	if open {
+	if open && thinking {
+		// A thought group opens straight into its prose, one click deep.
+		body := el.Div().WFull().Gap(10).Px(2).Pb(6)
+		for _, item := range e.process {
+			if text := strings.TrimSpace(item.text); text != "" {
+				body.Child(el.Text(text).TextSize(13).Italic().LineHeight(1.6).TextColor(theme.Muted))
+			}
+		}
+		group.Child(body)
+	} else if open {
 		// As in the Wails client: one bordered card, rows divided by hairlines.
 		body := el.Div().WFull().Bg(theme.Surface).Border(1, seamColor).Rounded(11).
 			Decorate(func(gtx core.C, draw func()) {
@@ -397,10 +413,10 @@ func toolDuration(e *entry) string {
 	return fmt.Sprintf("%dm %ds", s/60, s%60)
 }
 
-// processItem draws one row of a process card the way the Wails client does:
-// thoughts as an italic preview that opens into prose; tools as a quiet row
-// (icon, title, time and duration, a state mark only when not plainly done)
-// that opens into labelled command and result blocks.
+// processItem draws one tool row of a process card the way the Wails client
+// does: a quiet row (icon, title, time and duration, a state mark only when
+// not plainly done) that opens into labelled command and result blocks.
+// Thoughts never reach the card; processGroup draws them as prose.
 func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.Element {
 	if e.permission != nil || e.question != nil {
 		return a.requestMessage(cx, e)
@@ -418,22 +434,6 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 	}
 	iconBox := func(name string, size float32, c color.NRGBA) el.Element {
 		return el.Div().Size(el.Dp(20)).Center().NoShrink().Child(uiassets.Lucide(cx, name, size, c))
-	}
-	if e.kind == agentrun.KindReasoning {
-		preview := strings.Join(strings.Fields(e.text), " ")
-		if e.streaming {
-			preview = "思考中…"
-		}
-		summary := row("思考过程："+preview).Child(
-			iconBox("brain-circuit", 15, mixColor(muted, theme.Surface, .7)),
-			el.Text(preview).TextSize(13).Italic().TextColor(muted).MaxLines(1).Grow().W(el.Dp(0)),
-			el.Div().Opacity(.55).Child(uiassets.Lucide(cx, caret, 15, muted)))
-		item := el.Div().WFull().Child(summary)
-		if open {
-			item.Bg(mixColor(theme.Subtle, theme.Surface, .2))
-			item.Child(el.Div().H(el.Dp(1)).WFull().Bg(seamColor), el.Div().Pt(2).Pr(12).Pb(12).Pl(40).Child(el.Text(e.text).TextSize(13).Italic().LineHeight(1.6).TextColor(muted)))
-		}
-		return item
 	}
 	memo := a.toolMemo(e)
 	title, icon := memo.title, memo.icon
