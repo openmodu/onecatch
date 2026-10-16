@@ -40,6 +40,7 @@ type conversationState struct {
 	tools          map[string]*toolMemo
 	copies         entryCopies
 	toolResults    map[string]*toolResultView
+	fileChanges    map[string]*fileChangeView
 	images         map[string]*kit.ImageView
 	imagePreviews  map[string]*attachmentImagePreview
 	copyButtons    map[string]*kit.CopyButtonView
@@ -178,7 +179,7 @@ func buildConversationEntriesWith(raw []*entry, copies *entryCopies) []*entry {
 	}
 	out := make([]*entry, 0, len(items))
 	for _, e := range items {
-		process := !e.user && e.kind != agentrun.KindMessage && e.kind != agentrun.KindError && e.kind != kindTransition && e.kind != agentrun.KindQueueStatus
+		process := !e.user && e.kind != agentrun.KindMessage && e.kind != agentrun.KindError && e.kind != kindTransition && e.kind != agentrun.KindQueueStatus && e.kind != agentrun.KindFileChange
 		if !process {
 			out = append(out, e)
 			continue
@@ -418,6 +419,9 @@ func toolDuration(e *entry) string {
 // not plainly done) that opens into labelled command and result blocks.
 // Thoughts never reach the card; processGroup draws them as prose.
 func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.Element {
+	if e.kind == agentrun.KindFileChange {
+		return a.fileChangeCards(cx, e)
+	}
 	if e.permission != nil || e.question != nil {
 		return a.requestMessage(cx, e)
 	}
@@ -483,9 +487,6 @@ func (a *app) processItem(cx *el.Context, e *entry, running, stalled bool) el.El
 		}
 		if e.kind == agentrun.KindToolResult {
 			label = "结果"
-		}
-		if e.kind == agentrun.KindFileChange {
-			label = "路径"
 		}
 		content := el.Div().Gap(12).Pt(11).Pr(12).Pb(13).Pl(40)
 		if e.kind == agentrun.KindToolUse && strings.HasSuffix(title, "参数未保存") {

@@ -549,8 +549,8 @@ func (p *dshParser) handleToolCall(raw json.RawMessage, line string, at time.Tim
 	if _, ok := dshMutationTools[data.Name]; !ok {
 		return
 	}
-	if path := toolInputPath(input); path != "" {
-		sink(Event{Kind: KindFileChange, Text: path, Raw: line, At: at})
+	if change, ok := toolInputFileChange(input); ok {
+		sink(Event{Kind: KindFileChange, Text: change.Path, FileChanges: []FileChange{change}, Raw: line, At: at})
 	}
 }
 

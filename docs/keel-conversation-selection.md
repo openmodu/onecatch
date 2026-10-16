@@ -192,3 +192,43 @@ GOWORK=off go test -race ./typesetting/shaping -count=1
 现在同一步骤内，思考与工具分别成组：一个组只包含思考，或只包含工具调用、文件变更等记录；两者交替时按原顺序切分。工具组仍用带边框的卡片，计数只统计其中的工具；思考组标题为“思考过程”（运行中的最新组为“思考中…”），展开后直接显示正文，不再嵌套第二层展开。`processItem` 不再绘制思考行。
 
 `TestReasoningSeparatesFromToolGroups` 检查分组形状、标题、展开后的工具卡片中不含思考行，并可通过 `ONECATCH_KEEL_PREVIEWS` 生成 `reasoning-groups.png`；`TestLiveReasoningGroupLabel` 检查思考组出现后，前面的工具组不再标为运行中。界面包完整测试通过，测试使用当前本机 `go.work`。离屏截图已检查；尚未在实际运行的客户端中操作验证。思考正文仍按纯文本显示，`**标题**` 标记原样保留，与修改前一致。
+
+## 独立文件编辑卡片（2026-10-16）
+
+用户截图中，文件修改混在工具组里，展开后只有路径代码块。文件变更现在在 `buildConversationEntriesWith` 中独立成行，由 `conversation_files.go` 渲染；普通工具与思考仍按原顺序分组。首版每个文件默认展示最多 8 行手工绘制的差异预览、旧新行号和增删数量，删除为红色，新增为绿色；展开切换到只读 `CodeEditor`，最大高度 300dp。复制按钮读取保存的完整差异，显示不改原文。预览和展开的样式随后统一，见下节。
+
+`agentrun.FileChange` 在运行事件、历史视图和 transcript 间传递统一差异。Codex/TRAE 使用运行时提供的差异；Pi/DSH 和 ACP 可从编辑参数或前后内容生成片段，未知位置不编造行号。整文件写入只展示写入内容，并提示原内容未记录。ACP 后续更新复用文件事件身份，失败仍标为失败。单文件保存上限为 256 KiB，截断有提示并保持 UTF-8 完整。
+
+旧记录优先从保存的原始运行事件恢复差异，只有路径的记录显示“未保存代码差异”。不得用当前工作区文件或当前 Git diff 推断历史编辑。预览解析及展开编辑器按内容缓存，内容不变不重建；编辑器不加入正文 `SelectionGroup`。
+
+`TestFileChangeSeparateFromToolsAndRestored`、`TestFileChangeCardPreviewExpandCopy`、`TestFileChangeLegacyPaths` 以及服务和运行时测试覆盖分组、历史合并、1×/2× 展开收起、只读输入、包含屏外内容的选择复制、旧事件恢复和协议差异。界面、desktop、agentrun、cmd/app 完整包测试通过（本机 go.work）；新增专项、原有跨消息选区复制回归、相关包 vet 和 macOS 构建另在 `GOWORK=off` 的发布依赖 v0.2.10 下通过。`TestRenderFileChangeCards` 生成 840dp 和 360dp 离屏截图，已检查。尚未替换或重启用户正在运行的客户端，也未在真实窗口中操作验证。
+
+## 文件编辑代码块样式统一（2026-10-16）
+
+用户反馈文件卡片展开后样式不统一。首版收起时手工绘制旧新行号和差异行，展开时换成代码编辑器，并插入第二条完整路径；两套组件的字号、行号列和间距不同。
+
+根据后续反馈，文件卡片的“收起”不是只剩标题，而是默认展示部分内容：每张卡片都保留文件图标、“编辑文件 · 路径”、增删数、复制和右箭头，并在下面露出最多约 8 行 diff。删除行使用淡红背景与红字，新增行使用淡绿背景与绿字。点击后仍使用同一个只读 `CodeEditor` 展示更多内容，最大 300dp，内容多时在内部纵向滚动；再次收起恢复部分预览。长行始终自动折行，不能用横向裁切隐藏行尾。两种状态共享完整差异文档、选区和滚动状态。行号是差异文档的行号；源文件坐标保留在原始 `@@` 段头中，不能把文档行号当成源文件行号。
+
+差异标记解析按内容缓存，以 `CodeDecorationText` 立即为新增、删除及段头设置绿色、红色及弱化色，不依赖异步语法高亮完成。主题颜色变化时更新装饰，不替换文档或清空选区；未变的内容和主题不逐帧重建装饰。完整复制、只读和旧记录的缺失差异提示仍保留，编辑器不加入正文 `SelectionGroup`。
+
+`TestFileChangeCodeStyleSurvivesCollapse` 覆盖浅色/深色、1×/2× 和 360/840dp：原生离屏像素检查代码块背景、首帧红绿文字和淡色行背景，以及从部分预览展开后段头、上下文、增删行和行号的像素一致。`TestFileChangeCardPreviewExpandCopy` 另检查每张卡片默认展示部分内容和增删元数据、展开视口有界、复制读取完整差异、编辑器只读，以及收起再展开保留文档和完整选区。
+
+首版验证使用 `GOWORK=off`，当时的发布依赖为 `github.com/dyike/keel v0.3.1`，没有把本地 `go.work` 中的底层改动算入结果：
+
+```sh
+GOWORK=off go test ./internal/app/keel ./internal/service/desktop ./internal/usecase/agentrun ./cmd/app -count=1
+GOWORK=off go vet ./internal/app/keel ./internal/service/desktop ./internal/usecase/agentrun ./cmd/app
+ONECATCH_KEEL_PREVIEWS=/tmp/onecatch-file-code-style GOWORK=off go test ./internal/app/keel -run 'TestFile(Change|Diff)|TestRenderFileChangeCards' -count=1
+GOWORK=off go build -o /tmp/onecatch-file-code-style/onecatch ./cmd/app
+git diff --check
+```
+
+初版的完整包测试、专项像素与交互回归、vet 和 macOS 构建通过。恢复默认部分预览后，文件变更专项测试通过；重新检查了 840dp 与 360dp 离屏截图，两张卡片都默认露出 diff，增删背景可见，窄窗口标题路径会截断而代码长行会折行。当前工作区 `go.mod` 已并行改为 Keel v0.3.2，但 `go.sum` 仍只有 v0.3.1，故本轮使用本地 `go.work` 中的 Keel 源码验证，不能把结果描述为发布依赖 v0.3.2 已验证。没有替换、重启正在运行的安装客户端，也未在真实窗口操作验证；测试和截图不能代替客户端验证。
+
+## 文件编辑卡片对齐参考图（2026-10-16）
+
+后续对照参考图发现，通用 `CodeEditor` 虽然已经能显示 diff，但仍带有折叠箭头、差异文档自身的连续行号、内嵌圆角和常驻滚动条，与参考图不是同一种组件。文件头也把“编辑文件 · 完整路径”全部加粗，缺少参考图中“文件名加粗、动作和目录弱化”的层次。
+
+文件卡片现在使用专用的 unified diff 表格：标题依次显示文件图标、文件名、动作、父目录、增删数量、复制按钮和展开箭头；不再显示工具调用时间。正文紧贴标题分隔线，hunk 段头保留原文，内容行分别显示旧文件行号、新文件行号和增删标记；新增、删除背景铺满整行。默认最多展示 8 行，长行在小卡片内省略，展开后仍使用同一套表格并在 300dp 内纵向滚动。底部展开按钮回到独立白色栏，不再嵌在第二层圆角代码块内。完整 diff 仍保存在 `fileChangeView` 中，复制按钮不受预览截断影响；这套专用表格不冒充可编辑器。
+
+`TestFileDiffCountsIgnoreHeaders` 同时检查 hunk 坐标到双行号的映射；`TestFileChangeCardPreviewExpandCopy` 检查标题拆分、8 行预览、有界展开和完整复制；`TestFileChangeCodeStyleSurvivesCollapse` 继续在浅色/深色、1×/2×、360/840dp 下比较预览与展开的相同行像素，并检查红绿文字和整行背景。离屏结果已与参考图逐项对照；实际安装客户端仍需另行验证。

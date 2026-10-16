@@ -221,6 +221,9 @@ type Event struct {
 	// UserInputResponse is populated only after the host answers or dismisses.
 	UserInput         *UserInputRequest  `json:"userInput,omitempty"`
 	UserInputResponse *UserInputResponse `json:"userInputResponse,omitempty"`
+	// FileChanges details a file_change event when the runtime reports what
+	// changed; Text still lists the paths for older readers.
+	FileChanges []FileChange `json:"fileChanges,omitempty"`
 	// At is when the engine observed the event.
 	At time.Time `json:"at"`
 }

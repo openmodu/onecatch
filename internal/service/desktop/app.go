@@ -25,18 +25,18 @@ import (
 	domainworkflows "github.com/openmodu/onecatch/internal/domain/workflows"
 	domainworkspaces "github.com/openmodu/onecatch/internal/domain/workspaces"
 	"github.com/openmodu/onecatch/internal/platform/remotefs"
+	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
+	"github.com/openmodu/onecatch/internal/platform/sshendpoint"
 	"github.com/openmodu/onecatch/internal/repo/git"
+	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	templatesrepo "github.com/openmodu/onecatch/internal/repo/prompttemplates"
 	settingsrepo "github.com/openmodu/onecatch/internal/repo/settings"
-	localstore "github.com/openmodu/onecatch/internal/repo/localstore"
 	repoworkflows "github.com/openmodu/onecatch/internal/repo/workflows"
 	"github.com/openmodu/onecatch/internal/repo/workspacelock"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstate"
 	"github.com/openmodu/onecatch/internal/service/desktop/runstream"
 	"github.com/openmodu/onecatch/internal/service/skillmanager"
 	"github.com/openmodu/onecatch/internal/service/worker"
-	"github.com/openmodu/onecatch/internal/platform/sshcredentials"
-	"github.com/openmodu/onecatch/internal/platform/sshendpoint"
 	"github.com/openmodu/onecatch/internal/usecase/agentrun"
 	agentrunseam "github.com/openmodu/onecatch/internal/usecase/agentrun/seam"
 	templatesuc "github.com/openmodu/onecatch/internal/usecase/prompttemplates"
@@ -186,6 +186,7 @@ type RuntimeEventView struct {
 	PermissionDecision string                      `json:"permissionDecision,omitempty"`
 	UserInput          *agentrun.UserInputRequest  `json:"userInput,omitempty"`
 	UserInputResponse  *agentrun.UserInputResponse `json:"userInputResponse,omitempty"`
+	FileChanges        []agentrun.FileChange       `json:"fileChanges,omitempty"`
 	At                 string                      `json:"at"`
 	QueueUpdatedAt     string                      `json:"queueUpdatedAt,omitempty"`
 }
@@ -1614,6 +1615,7 @@ func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEven
 		if json.Unmarshal(item.Payload, &event) != nil {
 			continue
 		}
+		event.FileChanges = agentrun.FileChangesFromEvent(event)
 		if withUsage {
 			if event.Usage != nil {
 				usage = *event.Usage
@@ -1627,7 +1629,7 @@ func foldRuntimeEventViews(stepRunID string, items []domainworkflows.RuntimeEven
 		if !event.At.IsZero() {
 			at = event.At
 		}
-		view := RuntimeEventView{StepRunID: stepRunID, Seq: item.Seq, Kind: string(event.Kind), StreamID: event.StreamID, Revision: event.Revision, Text: event.Text, Failed: event.Failed, Permission: event.Permission, PermissionDecision: event.PermissionDecision, UserInput: event.UserInput, UserInputResponse: event.UserInputResponse, At: at.Format(time.RFC3339Nano)}
+		view := RuntimeEventView{StepRunID: stepRunID, Seq: item.Seq, Kind: string(event.Kind), StreamID: event.StreamID, Revision: event.Revision, Text: event.Text, Failed: event.Failed, Permission: event.Permission, PermissionDecision: event.PermissionDecision, UserInput: event.UserInput, UserInputResponse: event.UserInputResponse, FileChanges: event.FileChanges, At: at.Format(time.RFC3339Nano)}
 		if event.Kind == agentrun.KindQueueStatus {
 			view.QueueUpdatedAt = view.At
 			if queueIndex >= 0 {

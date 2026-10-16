@@ -534,9 +534,28 @@ type codexAppItem struct {
 	Tool             string               `json:"tool"`
 	Content          []string             `json:"content"`
 	Summary          []string             `json:"summary"`
-	Changes          []struct {
-		Path string `json:"path"`
-	} `json:"changes"`
+	Changes          []appServerFileChange `json:"changes"`
+}
+
+// appServerFileChange is one entry of a Codex or TRAE app-server fileChange
+// item. Both protocols send the same shape.
+type appServerFileChange struct {
+	Path string `json:"path"`
+	Kind struct {
+		Type     string `json:"type"`
+		MovePath string `json:"move_path"`
+	} `json:"kind"`
+	Diff string `json:"diff"`
+}
+
+func appServerFileChanges(changes []appServerFileChange) []FileChange {
+	out := make([]FileChange, 0, len(changes))
+	for _, change := range changes {
+		if change.Path != "" {
+			out = append(out, NewFileChange(change.Path, change.Kind.Type, change.Kind.MovePath, change.Diff))
+		}
+	}
+	return out
 }
 
 type codexAppState struct {
@@ -1205,13 +1224,8 @@ func (s *codexAppState) handleItemCompleted(item codexAppItem, line string, at t
 			sink(Event{Kind: KindToolResult, StreamID: codexToolID(item.ID), Text: output, Failed: failed, Raw: line, At: at})
 		}
 	case "fileChange":
-		paths := make([]string, 0, len(item.Changes))
-		for _, change := range item.Changes {
-			if change.Path != "" {
-				paths = append(paths, change.Path)
-			}
-		}
-		sink(Event{Kind: KindFileChange, Text: strings.Join(paths, "\n"), Failed: item.Status == "failed", Raw: line, At: at})
+		changes := appServerFileChanges(item.Changes)
+		sink(Event{Kind: KindFileChange, Text: FileChangePaths(changes), FileChanges: changes, Failed: item.Status == "failed", Raw: line, At: at})
 	case "contextCompaction":
 		sink(Event{Kind: KindContextCompaction, Raw: line, At: at})
 	case "mcpToolCall", "dynamicToolCall":

@@ -37,24 +37,22 @@ func (s *traeTurnState) update(f traeFrame, turnID string, sink Sink) (bool, err
 			Error  json.RawMessage `json:"error"`
 		} `json:"turn"`
 		Item struct {
-			ID               string              `json:"id"`
-			Type             string              `json:"type"`
-			Text             string              `json:"text"`
-			Command          string              `json:"command"`
-			CommandActions   []traeCommandAction `json:"commandActions"`
-			Tool             string              `json:"tool"`
-			Arguments        json.RawMessage     `json:"arguments"`
-			Input            json.RawMessage     `json:"input"`
-			Status           string              `json:"status"`
-			AggregatedOutput string              `json:"aggregatedOutput"`
-			ExitCode         *int                `json:"exitCode"`
-			Summary          []string            `json:"summary"`
-			Content          json.RawMessage     `json:"content"`
-			Result           json.RawMessage     `json:"result"`
-			Error            json.RawMessage     `json:"error"`
-			Changes          []struct {
-				Path string `json:"path"`
-			} `json:"changes"`
+			ID               string                `json:"id"`
+			Type             string                `json:"type"`
+			Text             string                `json:"text"`
+			Command          string                `json:"command"`
+			CommandActions   []traeCommandAction   `json:"commandActions"`
+			Tool             string                `json:"tool"`
+			Arguments        json.RawMessage       `json:"arguments"`
+			Input            json.RawMessage       `json:"input"`
+			Status           string                `json:"status"`
+			AggregatedOutput string                `json:"aggregatedOutput"`
+			ExitCode         *int                  `json:"exitCode"`
+			Summary          []string              `json:"summary"`
+			Content          json.RawMessage       `json:"content"`
+			Result           json.RawMessage       `json:"result"`
+			Error            json.RawMessage       `json:"error"`
+			Changes          []appServerFileChange `json:"changes"`
 		} `json:"item"`
 		TokenUsage struct {
 			Total  traeTokens `json:"total"`
@@ -170,11 +168,8 @@ func (s *traeTurnState) update(f traeFrame, turnID string, sink Sink) (bool, err
 			emit(KindToolResult, n.Item.AggregatedOutput, StreamEnd, id, failed)
 			delete(s.streams, id)
 		case "fileChange":
-			var paths []string
-			for _, change := range n.Item.Changes {
-				paths = append(paths, change.Path)
-			}
-			emit(KindFileChange, strings.Join(paths, "\n"), "", "", failed)
+			changes := appServerFileChanges(n.Item.Changes)
+			sink(Event{Kind: KindFileChange, Text: FileChangePaths(changes), FileChanges: changes, Failed: failed, Raw: string(raw), At: time.Now()})
 		case "mcpToolCall", "dynamicToolCall":
 			text := string(n.Item.Result)
 			if text == "" || text == "null" {

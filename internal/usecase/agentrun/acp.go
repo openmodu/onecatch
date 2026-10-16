@@ -87,7 +87,8 @@ type acpClient struct {
 
 	// toolTitles remembers each tool call's human label so a later
 	// tool_call_update, which carries only the id, can still be described.
-	toolTitles map[string]string
+	toolTitles  map[string]string
+	toolChanges map[string][]FileChange
 }
 
 // acpEnvelope is one JSON-RPC frame in either direction.
@@ -381,12 +382,9 @@ func (c *acpClient) handleNotification(envelope acpEnvelope, line string, sink S
 			c.toolTitles[update.ToolCallID] = title
 		}
 		sink(Event{Kind: KindToolUse, Text: acpToolText(title, update.RawInput), StreamID: c.streamID("tool-" + update.ToolCallID), Raw: line, At: at})
-		for _, location := range update.Locations {
-			if location.Path != "" {
-				sink(Event{Kind: KindFileChange, Text: location.Path, Raw: line, At: at})
-			}
-		}
+		c.emitFileChanges(update, line, at, sink)
 	case "tool_call_update":
+		c.emitFileChanges(update, line, at, sink)
 		// Only a settled tool call is a result; in-progress updates are just
 		// the same call moving along and would double every entry.
 		if update.Status != "completed" && update.Status != "failed" {

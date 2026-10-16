@@ -124,7 +124,7 @@ func (h *hostedRuns) Get(ctx context.Context, id string, window worker.Transcrip
 	for _, item := range transcript {
 		at, _ := time.Parse(time.RFC3339Nano, item.At)
 		event := agentrun.Event{Kind: agentrun.EventKind(item.Kind), Text: item.Text, Failed: item.Failed, At: at, Revision: item.Revision,
-			Permission: item.Permission, PermissionDecision: item.PermissionDecision, UserInput: item.UserInput, UserInputResponse: item.UserInputResponse}
+			Permission: item.Permission, PermissionDecision: item.PermissionDecision, UserInput: item.UserInput, UserInputResponse: item.UserInputResponse, FileChanges: item.FileChanges}
 		if item.StreamID != "" {
 			event.StreamID = item.StepRunID + ":" + item.StreamID
 			event.Phase = agentrun.StreamEnd

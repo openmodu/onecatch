@@ -29,6 +29,7 @@ type entry struct {
 	permission     *agentrun.PermissionRequest
 	question       *agentrun.UserInputRequest
 	answer         *agentrun.UserInputResponse
+	changes        []agentrun.FileChange
 	process        []*entry
 	details        []*entry
 	settled        bool
@@ -125,14 +126,14 @@ func (t *transcript) merge(e entry, delta bool) bool {
 }
 
 func (t *transcript) frame(f runstream.Frame) bool {
-	return t.merge(entry{key: eventKey(f.StepRunID, f.StreamID, f.Seq, f.Kind), step: f.StepRunID, stream: f.StreamID, seq: f.Seq, kind: f.Kind, text: f.Text, at: f.At, revision: f.Revision, streaming: f.Phase != "" && f.Phase != agentrun.StreamEnd, failed: f.Failed, permission: f.Permission, question: f.UserInput, answer: f.UserInputResponse}, f.Phase == agentrun.StreamDelta)
+	return t.merge(entry{key: eventKey(f.StepRunID, f.StreamID, f.Seq, f.Kind), step: f.StepRunID, stream: f.StreamID, seq: f.Seq, kind: f.Kind, text: f.Text, at: f.At, revision: f.Revision, streaming: f.Phase != "" && f.Phase != agentrun.StreamEnd, failed: f.Failed, permission: f.Permission, question: f.UserInput, answer: f.UserInputResponse, changes: f.FileChanges}, f.Phase == agentrun.StreamDelta)
 }
 
 func (t *transcript) history(events []desktopservice.RuntimeEventView) {
 	for _, v := range events {
 		at, _ := time.Parse(time.RFC3339Nano, v.At)
 		queueUpdatedAt, _ := time.Parse(time.RFC3339Nano, v.QueueUpdatedAt)
-		t.merge(entry{key: eventKey(v.StepRunID, v.StreamID, v.Seq, agentrun.EventKind(v.Kind)), step: v.StepRunID, stream: v.StreamID, seq: v.Seq, kind: agentrun.EventKind(v.Kind), text: v.Text, at: at, queueUpdatedAt: queueUpdatedAt, revision: v.Revision, streaming: v.Streaming, failed: v.Failed, permission: v.Permission, question: v.UserInput, answer: v.UserInputResponse}, false)
+		t.merge(entry{key: eventKey(v.StepRunID, v.StreamID, v.Seq, agentrun.EventKind(v.Kind)), step: v.StepRunID, stream: v.StreamID, seq: v.Seq, kind: agentrun.EventKind(v.Kind), text: v.Text, at: at, queueUpdatedAt: queueUpdatedAt, revision: v.Revision, streaming: v.Streaming, failed: v.Failed, permission: v.Permission, question: v.UserInput, answer: v.UserInputResponse, changes: v.FileChanges}, false)
 	}
 }
 

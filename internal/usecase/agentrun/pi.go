@@ -293,8 +293,8 @@ func (p *piParser) parse(line string, at time.Time, sink Sink) {
 			Kind: KindToolUse, Text: piToolText(envelope.ToolName, envelope.Args),
 			StreamID: p.toolStreamID(envelope.ToolCallID), Raw: line, At: at,
 		})
-		if path := piToolPath(envelope.ToolName, envelope.Args); path != "" {
-			sink(Event{Kind: KindFileChange, Text: path, Raw: line, At: at})
+		if change, ok := piToolFileChange(envelope.ToolName, envelope.Args); ok {
+			sink(Event{Kind: KindFileChange, Text: change.Path, FileChanges: []FileChange{change}, Raw: line, At: at})
 		}
 	case "tool_execution_end":
 		sink(Event{
@@ -427,17 +427,17 @@ func piToolText(name string, args json.RawMessage) string {
 	return name
 }
 
-// piToolPath returns the file a tool call modifies, or empty for tools that
-// only read. Only mutations are worth a file_change event.
-func piToolPath(name string, args json.RawMessage) string {
+// piToolFileChange describes the file a tool call modifies. Tools that only
+// read report none: only mutations are worth a file_change event.
+func piToolFileChange(name string, args json.RawMessage) (FileChange, bool) {
 	if name != "write" && name != "edit" {
-		return ""
+		return FileChange{}, false
 	}
 	var input map[string]any
 	if err := json.Unmarshal(args, &input); err != nil {
-		return ""
+		return FileChange{}, false
 	}
-	return toolInputPath(input)
+	return toolInputFileChange(input)
 }
 
 // piThinkingLevels are the values pi accepts for --thinking. They are fixed by

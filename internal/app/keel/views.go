@@ -485,6 +485,8 @@ func (a *app) messageEntry(cx *el.Context, e *entry, index int) el.Element {
 		content.Px(14).Child(a.workflowTransitionCard(cx, e))
 	} else if e.kind == agentrun.KindQueueStatus {
 		content.Px(14).Child(a.queueStatus(cx, e))
+	} else if e.kind == agentrun.KindFileChange {
+		content.Px(14).Child(a.fileChangeCards(cx, e))
 	} else if len(e.process) > 0 {
 		content.Px(14)
 		if index > 0 && rows[index-1].user {
