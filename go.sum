@@ -46,8 +46,8 @@ github.com/dop251/goja v0.0.0-20260618133527-c9b2ea77db59 h1:DjKLmvKK9u15djHZ88N
 github.com/dop251/goja v0.0.0-20260618133527-c9b2ea77db59/go.mod h1:Sc+QOu1WruvaaeT/cxFez/pXHpI9ZDjg/E8QNfSVveI=
 github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14 h1:3U8dTgyNBhEQ/GVw0jZW5q+93Zw2gAZPRWhJ9TwV3rM=
 github.com/dop251/goja_nodejs v0.0.0-20260212111938-1f56ff5bcf14/go.mod h1:Tb7Xxye4LX7cT3i8YLvmPMGCV92IOi4CDZvm/V8ylc0=
-github.com/dyike/keel v0.3.2 h1:95ZqgUAJ9BD7wF6TYd8JhvqiMGYlqJuGUpyvZEJv2UI=
-github.com/dyike/keel v0.3.2/go.mod h1:B1Tan5QRC9spUWHIOBAdKGLRp53EWX1OFO28vqu7mxM=
+github.com/dyike/keel v0.3.3 h1:bz7dTvcBGvLpdZsjAYEngnNhASAhqR+cU++D7H0kgrw=
+github.com/dyike/keel v0.3.3/go.mod h1:B1Tan5QRC9spUWHIOBAdKGLRp53EWX1OFO28vqu7mxM=
 github.com/ebitengine/purego v0.11.1 h1:2zpWRSQNVKN4eKsKO9eM1ILDgWfYMY9GwqRmK6XeQ/0=
 github.com/ebitengine/purego v0.11.1/go.mod h1:DCHPP08djqhNSoTfImcnHYQRZmd0qhakvrozqaEYhGQ=
 github.com/go-sourcemap/sourcemap v2.1.4+incompatible h1:a+iTbH5auLKxaNwQFg0B+TCYl6lbukKPc7b5x0n1s6Q=

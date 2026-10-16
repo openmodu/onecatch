@@ -232,3 +232,36 @@ git diff --check
 文件卡片现在使用专用的 unified diff 表格：标题依次显示文件图标、文件名、动作、父目录、增删数量、复制按钮和展开箭头；不再显示工具调用时间。正文紧贴标题分隔线，hunk 段头保留原文，内容行分别显示旧文件行号、新文件行号和增删标记；新增、删除背景铺满整行。默认最多展示 8 行，长行在小卡片内省略，展开后仍使用同一套表格并在 300dp 内纵向滚动。底部展开按钮回到独立白色栏，不再嵌在第二层圆角代码块内。完整 diff 仍保存在 `fileChangeView` 中，复制按钮不受预览截断影响；这套专用表格不冒充可编辑器。
 
 `TestFileDiffCountsIgnoreHeaders` 同时检查 hunk 坐标到双行号的映射；`TestFileChangeCardPreviewExpandCopy` 检查标题拆分、8 行预览、有界展开和完整复制；`TestFileChangeCodeStyleSurvivesCollapse` 继续在浅色/深色、1×/2×、360/840dp 下比较预览与展开的相同行像素，并检查红绿文字和整行背景。离屏结果已与参考图逐项对照；实际安装客户端仍需另行验证。
+
+## 滚动后的反向回跳（2026-10-16）
+
+用户 GIF 显示文件卡片滚上去后又向下回落。录屏本身约为 12fps，不能据此测客户端帧率；本次定位的是内容位置反向移动。
+
+在发布依赖 Keel v0.3.2 上，以文件差异预览和折叠思考组交错组成历史列表，注入滚轮事件后逐帧检查同一卡片的坐标。`TestConversationScrollDoesNotBounceWhileMeasuringHistory` 在向上滚动的第 13 次输入后复现：没有新输入的下一帧，卡片从 y=78 移到 y=196，回落 118dp；2× 下从 157px 移到 393px。回归还检查实际经过至少 10 张卡片，避免空列表或未滚动时误通过。
+
+调用路径为 `views.go:conversationScroll` → Keel `kit.MessageScroller` → `kit.VariableListView.Render`。列表用估计高度构建屏外占位，绘制后才读取新挂载行的实际高度，再把锚点恢复留到下一帧。新进入预渲染区域的短思考组和长 diff 卡片高度相差较大：当前帧内容先偏移，下一帧恢复位置，于是出现回落。消息数据不变也会触发，不能把这个故障归因于后台快照覆盖滚动状态。
+
+底层补丁在布局完成、绘制开始前读取已挂载行的高度，用当前锚点计算本帧位置补偿；滚轮事件随后照常参与绘制，绘制后再记录新的阅读锚点和高度缓存。补偿按物理像素比较，避免小数 dp 的求和误差持续请求重绘。虚拟化、自动跟随底部和显式消息跳转仍保留。
+
+回归与验证：
+
+- OneCatch 新增测试覆盖 1×/2×、连续双向滚动、停止输入后的前三帧，以及期间内容不变的后台快照；原版失败，补丁版通过。
+- Keel `TestVariableListHeightChangesPreserveAnchorBeforePaint` 覆盖横向/纵向、1×/1.5×/2×、前一行增长和缩短，以及高度变化同帧收到滚轮事件。检查第一帧及后续两帧，不能只等待位置稳定后断言。临时撤销底层补丁后六组均在第一帧失败，恢复后通过。
+- OneCatch 界面包和入口包，Keel 的 kit、el、markdown、依赖边界完整测试，以及相关 vet、滚动和选区复制 race 测试通过。macOS 候选客户端构建通过。
+- 另开原生候选客户端，使用“继续迁移工作”的已完成会话副本，在 2240×1520 像素窗口中操作短距离连续上滚、下滚和停止，检查文件预览及文字。该检查确认真实窗口加载与输入可用，未采集高帧率录屏或端到端帧率；逐帧回跳的定量证据来自上述测试。没有发送消息、执行会话工具或修改原会话数据，也未替换用户正在运行的安装客户端。
+
+复验命令：
+
+```sh
+# 在 OneCatch，直接使用 go.mod 中的远端依赖：
+GOWORK=off go test ./internal/app/keel ./cmd/app -count=1
+GOWORK=off go vet ./internal/app/keel ./cmd/app
+GOWORK=off go test -race ./internal/app/keel -run 'TestConversation(ScrollDoesNotBounce|GrowingVisible|CopySurvives|RepeatedDrag|SelectionAcrossVirtual)|TestParallelLane' -count=1
+# 在 Keel 补丁源码中：
+GOWORK=off go test ./ui/kit ./ui/el ./ui/markdown ./internal/deps -count=1
+GOWORK=off go test -race ./ui/kit -run 'Test(VariableList|MessageScroller|VirtualLists)' -count=1
+```
+
+交付状态：底层修复已直接提交并推送到 Keel 的 `codex/scroll-anchor` 分支，提交为 `2024cc41edd76b6a6ad2a912f84476ae70b2bfcd`，见 [Keel PR #40](https://github.com/dyike/keel/pull/40)。OneCatch 的 go.mod/go.sum 已锁定远端版本 `v0.3.3-0.20261016113346-2024cc41edd7`。这是可下载的提交版本，尚未合入主分支或发布正式标签；不能归入原来的 v0.3.2。
+
+本机 go.work/go.work.sum 已删除，不使用本地 replace 或手工修改模块缓存；临时补丁副本也已移除。关闭工作区后，已再次通过 OneCatch 界面包和入口包完整测试、相关 race、vet、macOS 构建和 go mod verify；确认下载的模块源码与 Keel 提交逐字节一致。后续构建直接读取 go.mod 中的远端版本。测试日志、隔离会话副本和候选客户端位于 `/tmp/onecatch-scroll-anchor`；临时目录不保证长期保留。
