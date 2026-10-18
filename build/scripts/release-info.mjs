@@ -58,28 +58,10 @@ export function parseChangelog(markdown) {
   };
 }
 
-function validateVersionTemplates(repoRoot) {
-  const config = fs.readFileSync(path.join(repoRoot, "build/desktop/config.yml"), "utf8");
-  const configVersions = [...config.matchAll(/^  version:\s*["']([^"']+)["']/gm)]
-    .map((match) => match[1]);
-  if (configVersions.length !== 2 || configVersions.some((version) => version !== "0.0.0")) {
-    throw new Error("build/desktop/config.yml version templates must remain at 0.0.0");
-  }
-
-  const plistFiles = [
-    "build/desktop/darwin/Info.plist",
-    "build/desktop/darwin/Info.dev.plist",
-    "build/ios/Info.plist",
-    "build/ios/Info.dev.plist",
-  ];
-  for (const filename of plistFiles) {
-    const content = fs.readFileSync(path.join(repoRoot, filename), "utf8");
-    const versions = [...content.matchAll(
-      /<key>CFBundle(?:ShortVersionString|Version)<\/key>\s*<string>([^<]+)<\/string>/g,
-    )].map((match) => match[1]);
-    if (versions.length !== 2 || versions.some((version) => version !== "0.0.0")) {
-      throw new Error(`${filename} version templates must remain at 0.0.0`);
-    }
+export function validateVersionTemplates(repoRoot) {
+  const config = JSON.parse(fs.readFileSync(path.join(repoRoot, "keel.json"), "utf8"));
+  if (config.version !== "0.0.0") {
+    throw new Error("keel.json version template must remain at 0.0.0");
   }
 }
 
@@ -106,7 +88,7 @@ if (isMain) {
     case "--check":
       validateVersionTemplates(repoRoot);
       process.stdout.write(
-        `Release ${release.version} is valid (Android versionCode ${release.androidVersionCode}).\n`,
+        `Release ${release.version} is valid (Keel desktop).\n`,
       );
       break;
     default:
