@@ -3,6 +3,15 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.0
+
+- Replace the Wails/React desktop with a native Go interface powered by Keel v0.3.3, including the workbench, conversation timeline, file editor, split terminal, Git review, settings and system tray. Closing the main window keeps the app running when the tray is available; use Quit to exit.
+- Define project workflows in `.onecatch/workflows/` YAML files with dependency and rework edges, parallel agent steps and shell commands. Edit workflows on the canvas, export library workflows to the project, and pause or resume execution with per-step instructions.
+- Keep parallel conversation columns independently scrollable, separate reasoning from tool calls, and normalize file-change events for consistent diffs. Fix conversation scroll bounce, workflow result layout, long-message wrapping, file links and Chinese input after pasting images.
+- Preserve selections in unchanged replies during background message updates, and avoid redraws for unchanged background checks and folded tool output. Reduce repeated layout work and use Keel's updated font, image and GPU resource handling.
+- Publish a macOS application ZIP, a portable Windows EXE ZIP and a Linux tar.gz with an install script. macOS retains signed automatic-update feeds; Windows and Linux require manual replacement. This release does not include DMG, NSIS, AppImage, Android or iOS packages. The Remote Worker desktop configuration remains preview-only.
+- Update release metadata validation to check the Keel configuration instead of removed Wails templates.
+
 ## 0.4.1
 
 - Read Codex models and context windows from the Codex model catalog instead of a bundled table, so new and renamed models appear in the picker and each model reports its own maximum context window.
