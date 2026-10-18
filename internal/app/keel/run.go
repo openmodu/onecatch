@@ -87,7 +87,7 @@ func (a *app) showMainWindow() {
 		a.tray.root = el.Root(a)
 	}
 	w := window.Open(platformWindowOptions(runtime.GOOS, window.Options{
-		Title: "OneCatch · Keel", Width: 1120, Height: 760, MinWidth: 640, MinHeight: 480,
+		Title: "OneCatch", Width: 1120, Height: 760, MinWidth: 640, MinHeight: 480,
 		Frameless: runtime.GOOS == "darwin", NativeTrafficLights: runtime.GOOS == "darwin",
 		TrafficLightLayout: &window.TrafficLightLayout{Height: mainTitleBarHeight, Left: 20},
 		Content:            a.tray.root, OnClose: a.mainWindowClosed,
