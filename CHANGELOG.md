@@ -3,6 +3,10 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.1
+
+- Rename the desktop application from OneCatch Keel to OneCatch. Use OneCatch for the packaged application name, native application menu and main window title.
+
 ## 0.5.0
 
 - Replace the Wails/React desktop with a native Go interface powered by Keel v0.3.3, including the workbench, conversation timeline, file editor, split terminal, Git review, settings and system tray. Closing the main window keeps the app running when the tray is available; use Quit to exit.
