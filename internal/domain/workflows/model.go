@@ -49,15 +49,16 @@ type Definition struct {
 // that step's own context. A command step runs a shell command in the
 // workspace; exit status zero passes, anything else is treated as rework.
 type Step struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	Kind     string `json:"kind,omitempty"`
-	Runtime  string `json:"runtime,omitempty"`
-	Model    string `json:"model,omitempty"`
-	Sandbox  string `json:"sandbox,omitempty"`
-	WorkerID string `json:"workerId,omitempty"`
-	Prompt   string `json:"prompt,omitempty"`
-	Command  string `json:"command,omitempty"`
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Kind            string `json:"kind,omitempty"`
+	Runtime         string `json:"runtime,omitempty"`
+	Model           string `json:"model,omitempty"`
+	ReasoningEffort string `json:"reasoningEffort,omitempty"`
+	Sandbox         string `json:"sandbox,omitempty"`
+	WorkerID        string `json:"workerId,omitempty"`
+	Prompt          string `json:"prompt,omitempty"`
+	Command         string `json:"command,omitempty"`
 }
 
 // Edge connects two steps. MaxRounds bounds a rework edge; zero uses the

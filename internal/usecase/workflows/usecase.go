@@ -452,9 +452,10 @@ func (s *Usecase) applyResumeProfile(ctx context.Context, definition domainworkf
 	settings := profile.RuntimeSettings
 	settings.EnvironmentAllowlist = append([]string(nil), settings.EnvironmentAllowlist...)
 	currentSettings := run.RuntimeSettings[harness]
-	changed := step.Runtime != harness || step.Model != profile.Model || !resolvedRuntimeSettingsEqual(currentSettings, settings)
+	changed := step.Runtime != harness || step.Model != profile.Model || step.ReasoningEffort != settings.ReasoningEffort || !resolvedRuntimeSettingsEqual(currentSettings, settings)
 	step.Runtime = harness
 	step.Model = strings.TrimSpace(profile.Model)
+	step.ReasoningEffort = strings.TrimSpace(settings.ReasoningEffort)
 	if err := domainworkflows.Validate(definition); err != nil {
 		return definition, run, err
 	}

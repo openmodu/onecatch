@@ -398,31 +398,7 @@ func (a *app) loadRuntimeProfile() {
 	a.profile.codex = agentrun.CodexConfiguration{}
 	service, ctx := a.backend.service, a.ctx
 	go func() {
-		var configuration agentrun.HarnessConfiguration
-		var codex agentrun.CodexConfiguration
-		var err error
-		switch runtime {
-		case "codex":
-			var source agentrun.CodexConfiguration
-			source, err = service.InspectCodexConfiguration(ctx, settings, path)
-			codex = source
-			configuration.Model = source.Model
-			for _, model := range source.Models {
-				if configuration.Model == "" && model.IsDefault {
-					configuration.Model = model.Model
-				}
-				configuration.Models = append(configuration.Models, agentrun.HarnessModel{Model: model.Model, DisplayName: model.DisplayName, Description: model.Description, DefaultEffort: model.DefaultReasoningEffort, Efforts: model.ReasoningEfforts})
-			}
-		case "claude":
-			var source agentrun.ClaudeConfiguration
-			source, err = service.InspectClaudeConfiguration(ctx, settings, path)
-			configuration.Model, configuration.Efforts = source.Model, source.Efforts
-			for _, model := range source.Models {
-				configuration.Models = append(configuration.Models, agentrun.HarnessModel{Model: model.Model, DisplayName: model.DisplayName})
-			}
-		default:
-			configuration, err = service.InspectHarnessConfiguration(ctx, runtime, settings)
-		}
+		configuration, codex, err := inspectRuntimeConfiguration(ctx, service, runtime, settings, path)
 		core.Update(func() {
 			if a.closed || a.profile.key != key || a.profile.version != version {
 				return

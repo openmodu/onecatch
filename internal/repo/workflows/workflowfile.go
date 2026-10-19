@@ -28,6 +28,7 @@ import (
 //
 // Steps keep their file order. "after" lists dependencies, "rework" the
 // upstream steps a step may send work back to, "agent" is runtime[/model],
+// "reasoning_effort" optionally overrides that step's reasoning level,
 // and "run" makes a command step.
 
 const (
@@ -223,6 +224,8 @@ func parseStep(key, value *yaml.Node) (domainworkflows.Step, []domainworkflows.E
 			}
 		case "model":
 			step.Model, err = scalar(v)
+		case "reasoning_effort":
+			step.ReasoningEffort, err = scalar(v)
 		case "run":
 			step.Kind = domainworkflows.StepCommand
 			step.Command, err = scalar(v)
@@ -239,7 +242,7 @@ func parseStep(key, value *yaml.Node) (domainworkflows.Step, []domainworkflows.E
 		case "rework_rounds":
 			rounds, err = integer(v)
 		default:
-			err = &FileError{Line: k.Line, Message: fmt.Sprintf("unknown step key %q; use name, agent, model, run, prompt, sandbox, worker, after, rework or rework_rounds", k.Value)}
+			err = &FileError{Line: k.Line, Message: fmt.Sprintf("unknown step key %q; use name, agent, model, reasoning_effort, run, prompt, sandbox, worker, after, rework or rework_rounds", k.Value)}
 		}
 		if err != nil {
 			return step, nil, err
@@ -403,6 +406,9 @@ func MarshalWorkflowFile(def domainworkflows.Definition) ([]byte, error) {
 				agent += "/" + s.Model
 			}
 			add(node, "agent", str(agent))
+			if s.ReasoningEffort != "" {
+				add(node, "reasoning_effort", str(s.ReasoningEffort))
+			}
 		}
 		if s.Sandbox != "" && s.Kind != domainworkflows.StepCommand {
 			add(node, "sandbox", str(s.Sandbox))

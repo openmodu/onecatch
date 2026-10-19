@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/openmodu/onecatch/internal/domain/harnesses"
 )
 
 const (
@@ -44,6 +46,7 @@ func Normalize(def Definition) Definition {
 	}
 	out.Steps = append([]Step(nil), def.Steps...)
 	for i := range out.Steps {
+		out.Steps[i].ReasoningEffort = strings.ToLower(strings.TrimSpace(out.Steps[i].ReasoningEffort))
 		if out.Steps[i].Kind == "" {
 			out.Steps[i].Kind = StepAgent
 		}
@@ -105,6 +108,12 @@ func Validate(input Definition) error {
 		}
 		switch step.Kind {
 		case StepAgent:
+			if step.ReasoningEffort != "" {
+				harness, ok := harnesses.Find(step.Runtime)
+				if !ok || !harness.SupportsEffort(step.ReasoningEffort) {
+					add(path+".reasoningEffort", "invalid_value", "is not supported by this runtime")
+				}
+			}
 			if strings.TrimSpace(step.Runtime) == "" {
 				add(path+".runtime", "required", "is required")
 			}

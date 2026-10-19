@@ -45,6 +45,7 @@ func (s *Usecase) refreshStartingSettings(ctx context.Context, task domaintasks.
 			// A profile explicitly selected for this resume wins over defaults.
 			old := definition.Steps[i]
 			candidate.Steps[i].Runtime, candidate.Steps[i].Model = old.Runtime, old.Model
+			candidate.Steps[i].ReasoningEffort = old.ReasoningEffort
 		}
 	}
 	var resolution RunResolution

@@ -343,6 +343,7 @@ func TestResumeCompletedRunContinuesExistingAgentSession(t *testing.T) {
 
 func TestResumeCompletedRunAppliesRuntimeProfileAndStartsFreshAgentSession(t *testing.T) {
 	definition := oneStepPauseWorkflow()
+	definition.Steps[0].ReasoningEffort = "low"
 	engine := &scriptedEngine{
 		available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true, agentrun.RuntimeClaude: true},
 		scripts: []engineScript{
@@ -378,7 +379,7 @@ func TestResumeCompletedRunAppliesRuntimeProfileAndStartsFreshAgentSession(t *te
 		t.Fatalf("changed runtime must not reuse the Codex session, got %q", request.ResumeSessionID)
 	}
 	storedDefinition, err := store.Repos.Workflows.GetRunDefinition(context.Background(), continued.ID)
-	if err != nil || storedDefinition.Steps[0].Runtime != "claude" || storedDefinition.Steps[0].Model != "opus" {
+	if err != nil || storedDefinition.Steps[0].Runtime != "claude" || storedDefinition.Steps[0].Model != "opus" || storedDefinition.Steps[0].ReasoningEffort != "high" {
 		t.Fatalf("stored run profile = %+v, %v", storedDefinition.Steps[0], err)
 	}
 	storedRun, err := store.Repos.Workflows.GetRun(context.Background(), continued.ID)

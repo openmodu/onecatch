@@ -89,6 +89,7 @@ func TestWorkflowFileRoundTrip(t *testing.T) {
 	if fileErr != nil {
 		t.Fatal(fileErr)
 	}
+	def.Steps[0].ReasoningEffort = "high"
 	data, err := MarshalWorkflowFile(def)
 	if err != nil {
 		t.Fatal(err)

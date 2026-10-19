@@ -102,6 +102,7 @@ func TestNextNodeRefreshesPromptCommandAndRuntimeSettings(t *testing.T) {
 		latest.Steps[1].Name = "Renamed"
 		latest.Steps[1].Runtime = "claude"
 		latest.Steps[1].Model = "new-model"
+		latest.Steps[1].ReasoningEffort = "low"
 		latest.Steps[1].Sandbox = "read-only"
 		latest.Steps[2].Command = "printf refreshed > result.txt"
 		grace = 25
@@ -114,7 +115,7 @@ func TestNextNodeRefreshesPromptCommandAndRuntimeSettings(t *testing.T) {
 		t.Fatalf("run: %+v, %v", run, err)
 	}
 	request := engine.calls[1]
-	if !strings.Contains(request.Prompt, "refreshed second prompt") || request.Runtime != agentrun.RuntimeClaude || request.Model != "new-model" || request.Sandbox != "read-only" || request.InterruptGrace != 25*time.Second || request.Provider != "test-provider" || request.ReasoningEffort != "high" || request.ServiceTier != "fast" || !request.MaxContextWindow || len(request.EnvironmentAllowlist) != 1 {
+	if !strings.Contains(request.Prompt, "refreshed second prompt") || request.Runtime != agentrun.RuntimeClaude || request.Model != "new-model" || request.Sandbox != "read-only" || request.InterruptGrace != 25*time.Second || request.Provider != "test-provider" || request.ReasoningEffort != "low" || request.ServiceTier != "fast" || !request.MaxContextWindow || len(request.EnvironmentAllowlist) != 1 {
 		t.Fatalf("stale request: %+v", request)
 	}
 	workspace, err := store.Repos.Tasks.GetWorkspace(ctx, task.WorkspaceID)

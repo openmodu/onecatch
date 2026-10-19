@@ -70,6 +70,23 @@ func TestValidatePipeline(t *testing.T) {
 	}
 }
 
+func TestWorkflowStepReasoningEffortValidation(t *testing.T) {
+	d := pipeline()
+	d.Steps[0].ReasoningEffort = " HIGH "
+	normalized := Normalize(d)
+	if normalized.Steps[0].ReasoningEffort != "high" || Validate(normalized) != nil {
+		t.Fatal("valid effort was not normalized")
+	}
+	d.Steps[0].ReasoningEffort = "unsupported"
+	if Validate(d) == nil {
+		t.Fatal("unsupported effort accepted")
+	}
+	d.Steps[0].Runtime, d.Steps[0].ReasoningEffort = "modu", "high"
+	if Validate(d) == nil {
+		t.Fatal("effort accepted for a runtime without reasoning controls")
+	}
+}
+
 func TestValidateRejectsBadGraphs(t *testing.T) {
 	cases := map[string]func(*Definition){
 		"cycle": func(d *Definition) {

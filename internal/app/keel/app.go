@@ -980,6 +980,10 @@ func (a *app) saveWorkflow() {
 		a.fail(fmt.Errorf("内置单 Agent 工作流不可修改"))
 		return
 	}
+	if err := a.validateWorkflowModels(definition); err != nil {
+		a.fail(err)
+		return
+	}
 	id := a.editingWorkflow
 	if a.busy {
 		return

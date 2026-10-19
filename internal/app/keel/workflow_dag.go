@@ -23,6 +23,7 @@ type dagState struct {
 	IDError      string
 	Validation   domainworkflows.ValidationErrors
 	Edges        dagEdgeInput
+	Models       map[workflowModelKey]*workflowModelCatalog
 }
 
 func (s dagState) connectKind() string {
@@ -182,9 +183,20 @@ func (a *app) validateDAG() {
 
 func (a *app) setDAGWorker(index int, id string) {
 	step := &a.ui.WorkflowDraft.Steps[index]
+	if step.WorkerID != id {
+		step.Model, step.ReasoningEffort = "", ""
+	}
 	step.WorkerID = id
 	if id != "" && id != "local" && step.Sandbox == "full" {
 		step.Sandbox = "workspace-write"
+	}
+}
+
+func (a *app) setDAGRuntime(index int, runtime string) {
+	step := &a.ui.WorkflowDraft.Steps[index]
+	if step.Runtime != runtime {
+		step.Runtime, step.Model = runtime, ""
+		step.ReasoningEffort = ""
 	}
 }
 
@@ -193,6 +205,7 @@ func (a *app) setDAGKind(index int, kind string) {
 	step.Kind = kind
 	if kind == domainworkflows.StepCommand {
 		step.WorkerID = "local"
+		step.ReasoningEffort = ""
 	}
 	a.resetWorkflowSelects()
 }

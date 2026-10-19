@@ -53,6 +53,9 @@ func (a *app) dagConnectToggle(cx *el.Context) el.Element {
 
 func (a *app) dagEditor(cx *el.Context) el.Element {
 	d := &a.ui.WorkflowDraft
+	if a.window != nil {
+		a.prepareWorkflowModels(*d)
+	}
 	a.workflowEditor.SoftWrap(true).OnChange(a.applyWorkflowSource)
 	top := el.Div().Row().Wrap().Items(el.Center).MinH(el.Dp(32)).Gap(8).Child(
 		dagAction(cx, "workflow-loop-toggle", map[bool]string{true: "循环运行 · 开", false: "循环运行 · 关"}[d.LoopEnabled], "rotate-ccw", false, false, func() { d.LoopEnabled = !d.LoopEnabled; a.syncWorkflowDocument() }, d.LoopEnabled), el.Div().Grow(),
@@ -332,8 +335,9 @@ func (a *app) dagAgentFields(cx *el.Context, fields *el.DivEl, i int) {
 	if !slices.ContainsFunc(workers, func(o kit.SelectOption) bool { return o.Value == s.WorkerID }) {
 		workers = append(workers, kit.SelectOption{Value: s.WorkerID, Label: s.WorkerID + " · 未配置"})
 	}
-	fields.Child(dagField("运行环境", a.workflowSelect(cx, "dag-runtime/"+s.ID, "运行环境", s.Runtime, runtimes, func(value string) { s.Runtime = value })),
-		dagField("模型", field("dag-model/"+s.ID, "留空使用运行环境默认模型", &s.Model).Mono().TextSize(13).H(el.Dp(36)).WFull().OnChange(func(string) { a.syncWorkflowDocument() })),
+	fields.Child(dagField("运行环境", a.workflowSelect(cx, "dag-runtime/"+s.ID, "运行环境", s.Runtime, runtimes, func(value string) { a.setDAGRuntime(i, value) })),
+		dagField("模型", a.workflowModelPicker(cx, i)),
+		dagField("推理强度", a.workflowEffortPicker(cx, i)),
 		dagField("沙箱", a.workflowSelect(cx, "dag-sandbox/"+s.ID, "沙箱", s.Sandbox, []kit.SelectOption{{Value: "read-only", Label: "只读"}, {Value: "workspace-write", Label: "工作区访问"}, {Value: "full", Label: "完全访问", Disabled: s.WorkerID != "local" || !a.settings.Security.AllowFullSandbox && s.Sandbox != "full"}}, func(value string) { s.Sandbox = value })),
 		dagField("Worker", a.workflowSelect(cx, "dag-worker/"+s.ID, "Worker", s.WorkerID, workers, func(value string) { a.setDAGWorker(i, value) })),
 		dagField("这一步要做什么", el.TextArea().ID("dag-prompt/"+s.ID).Name("步骤说明").Placeholder("留空则直接按任务目标执行").Bind(&s.Prompt).AutoGrow(5, 12).WFull().Border(0, theme.Border).Bg(theme.Subtle).Rounded(8).P(10).TextSize(13).OnChange(func(string) { a.syncWorkflowDocument() })))

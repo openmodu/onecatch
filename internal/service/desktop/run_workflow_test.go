@@ -94,6 +94,7 @@ func TestRunWorkflowCheckAndPausedUpdate(t *testing.T) {
 			}
 			latest := workflows.Normalize(snapshot)
 			latest.Steps[0].Prompt, latest.Steps[0].Model = "Updated instructions", "new-model"
+			latest.Steps[0].ReasoningEffort = "high"
 			latest.Steps[1].Runtime = "claude"
 			latest.Steps = append(latest.Steps, workflows.Step{ID: "ship", Name: "Ship", Kind: workflows.StepCommand, Command: "true"})
 			latest.Edges = append(latest.Edges, workflows.Edge{From: "review", To: "ship"})
@@ -104,7 +105,7 @@ func TestRunWorkflowCheckAndPausedUpdate(t *testing.T) {
 				t.Fatal(err)
 			}
 			check, err = a.CheckRunWorkflow(ctx, run.ID)
-			if err != nil || !check.Changed || !strings.Contains(strings.Join(check.Changes, ","), "提示词") {
+			if err != nil || !check.Changed || !strings.Contains(strings.Join(check.Changes, ","), "提示词") || !strings.Contains(strings.Join(check.Changes, ","), "推理强度") {
 				t.Fatalf("changed check: %+v, %v", check, err)
 			}
 			before, err := a.store.Repos.Workflows.GetRunDefinition(ctx, run.ID)
@@ -122,7 +123,7 @@ func TestRunWorkflowCheckAndPausedUpdate(t *testing.T) {
 				t.Fatalf("incorrect migrated state: %+v", updated)
 			}
 			detail, err := a.GetRunDetail(ctx, run.ID)
-			if err != nil || len(detail.StepRuns) != 1 || detail.StepRuns[0].Summary != "History" || detail.Workflow.Steps[0].Prompt != latest.Steps[0].Prompt || len(detail.Events) != 1 || detail.Events[0].Type != "run.workflow_updated" {
+			if err != nil || len(detail.StepRuns) != 1 || detail.StepRuns[0].Summary != "History" || detail.Workflow.Steps[0].Prompt != latest.Steps[0].Prompt || detail.Workflow.Steps[0].ReasoningEffort != "high" || len(detail.Events) != 1 || detail.Events[0].Type != "run.workflow_updated" {
 				t.Fatalf("missing persisted data: %+v, %v", detail, err)
 			}
 			check, err = a.CheckRunWorkflow(ctx, run.ID)

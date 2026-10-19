@@ -124,6 +124,7 @@ func runWorkflowChanges(snapshot, latest workflows.Definition, run workflows.Run
 		for _, field := range []struct{ label, old, next string }{
 			{"名称", old.Name, step.Name}, {"类型", old.Kind, step.Kind}, {"Agent", old.Runtime, step.Runtime},
 			{"模型", old.Model, step.Model}, {"权限", old.Sandbox, step.Sandbox}, {"Worker", old.WorkerID, step.WorkerID},
+			{"推理强度", old.ReasoningEffort, step.ReasoningEffort},
 			{"提示词", old.Prompt, step.Prompt}, {"命令", old.Command, step.Command},
 		} {
 			if field.old != field.next {

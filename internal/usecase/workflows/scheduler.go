@@ -406,7 +406,11 @@ func (s *Usecase) executeStep(ctx context.Context, task domaintasks.Task, worksp
 	if step.Kind == domainworkflows.StepCommand {
 		result, err = s.runCommand(ctx, definition, step, workspace, run, collector.Sink())
 	} else {
-		request := agentrun.Request{RunID: run.ID, StepRunID: stepRun.ID, Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeStepPrompt(task, definition, step, run), Model: step.Model, ReasoningEffort: resolvedReasoningEffort(run, step.Runtime), ServiceTier: resolvedServiceTier(run, step.Runtime), MaxContextWindow: resolvedMaxContextWindow(run, step.Runtime), Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: resumeSessionID, EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second, RuntimeDefaultsResolved: true, Remote: workspaceRemoteTarget(workspace)}
+		effort := step.ReasoningEffort
+		if effort == "" {
+			effort = resolvedReasoningEffort(run, step.Runtime)
+		}
+		request := agentrun.Request{RunID: run.ID, StepRunID: stepRun.ID, Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeStepPrompt(task, definition, step, run), Model: step.Model, ReasoningEffort: effort, ServiceTier: resolvedServiceTier(run, step.Runtime), MaxContextWindow: resolvedMaxContextWindow(run, step.Runtime), Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: resumeSessionID, EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second, RuntimeDefaultsResolved: true, Remote: workspaceRemoteTarget(workspace)}
 		result, err = s.dispatchStep(ctx, definition, step, workspace.ID, request, collector.Sink())
 	}
 	if streamErr := collector.Close(); streamErr != nil && err == nil {

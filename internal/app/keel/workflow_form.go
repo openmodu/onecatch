@@ -63,6 +63,9 @@ func (a *app) workflowSelect(cx *el.Context, id, label, value string, options []
 		if strings.HasPrefix(id, "dag-") {
 			view.Size(36)
 		}
+		if strings.HasPrefix(id, "dag-model/") {
+			view.Searchable().MenuWidth(320)
+		}
 		a.ui.WorkflowSelects[id] = view
 	}
 	options = uniqueSelectOptions(options)

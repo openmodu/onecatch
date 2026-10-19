@@ -32,7 +32,9 @@ steps:
 
 Any workflow in the Settings library can be written out this way with Export to project.
 
-The first launch includes Single Agent, Implement and Review, Design to PR (Opus designs, Codex implements, Sonnet reviews, Modu runs E2E and opens the PR), and Parallel Review. The canvas editor lets you add steps, draw dependency and rework edges, and set each step's harness, model, sandbox and prompt or command.
+Agent steps can also set `reasoning_effort: high`. Omit it to inherit the runtime's default. The canvas editor offers the levels advertised for the selected model and clears an incompatible level when you change models.
+
+The first launch includes Single Agent, Implement and Review, Design to PR (Opus designs, Codex implements, Sonnet reviews, Modu runs E2E and opens the PR), and Parallel Review. The canvas editor lets you add steps, draw dependency and rework edges, and set each step's harness, model, reasoning effort, sandbox and prompt or command.
 
 ## Installation and development
 
