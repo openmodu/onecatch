@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.3
+
+- Set the reasoning effort for each workflow agent step. Editing a step offers the levels advertised by the selected model, a step left empty inherits the runtime default, and changing the runtime, model or worker clears a level that no longer applies.
+- Add a Software Update settings page with check, download and install actions, plus entries in the application menu and the task menu. The sidebar shows a notice when a new version is available, and it can be dismissed until the next launch.
+- Open images that appear in an agent reply in the same preview popup as attachments. Explicitly linked images keep their original destination.
+
 ## 0.5.2
 
 - Show the caret in the empty task input again. The input reserves enough horizontal padding for the hint's leading caret, which Keel drew outside the clip.
