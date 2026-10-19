@@ -159,15 +159,15 @@ func (t *transcript) detail(d desktopservice.RunDetail) {
 		key := fmt.Sprintf("resume/%d", event.Seq)
 		t.items[key] = &entry{key: key, text: payload.Instruction, user: true, at: at}
 	}
-	// Instructions are a complete snapshot. Rebuild applied turns only;
-	// pending guidance belongs to the composer's queue until it is consumed.
+	// Instructions are a complete snapshot. Direct sends belong in the
+	// conversation immediately; pending guidance stays in the waiting queue.
 	for key := range t.items {
 		if strings.HasPrefix(key, "instruction/") {
 			delete(t.items, key)
 		}
 	}
 	for _, i := range d.Instructions {
-		if i.Status != domainworkflows.InstructionApplied {
+		if i.Status != domainworkflows.InstructionApplied && i.Status != domainworkflows.InstructionReady {
 			continue
 		}
 		key := "instruction/" + i.ID

@@ -25,7 +25,7 @@ func (a *Service) SubmitRunMessage(ctx context.Context, runID string, input RunM
 	}
 	active := a.isActive(runID)
 	if len(input.StepIDs) == 0 {
-		return a.submitContinuation(ctx, runID, input.Resume, input.AttachmentPaths, active, input.Steer)
+		return a.submitContinuation(ctx, runID, input.Resume, input.AttachmentPaths, input.Steer)
 	}
 	definition, err := a.store.Repos.Workflows.GetRunDefinition(ctx, runID)
 	if err != nil {
@@ -34,8 +34,12 @@ func (a *Service) SubmitRunMessage(ctx context.Context, runID string, input RunM
 	return a.submitStepMessages(ctx, runID, definition, input.StepIDs, input.Resume.Instruction, input.AttachmentPaths, active, input.Steer)
 }
 
-func (a *Service) submitContinuation(ctx context.Context, runID string, input ResumeRunInput, paths []string, active, steer bool) (persisted bool, err error) {
-	if active {
+func (a *Service) submitContinuation(ctx context.Context, runID string, input ResumeRunInput, paths []string, steer bool) (persisted bool, err error) {
+	// Serialize stopped-run submission with automatic follow-up dispatch. The
+	// next sender must observe the dispatch started by the previous sender.
+	a.followUpMu.Lock()
+	if a.isActive(runID) {
+		a.followUpMu.Unlock()
 		if steer {
 			_, err := a.InterruptAndInsert(ctx, runID, InstructionInput{Content: input.Instruction, AttachmentPaths: paths})
 			// Failed inserts roll back the instruction. Keep the draft available.
@@ -44,8 +48,9 @@ func (a *Service) submitContinuation(ctx context.Context, runID string, input Re
 		instruction, err := a.QueueFollowUp(ctx, runID, InstructionInput{Content: input.Instruction, AttachmentPaths: paths})
 		return instruction.ID != "", err
 	}
+	defer a.followUpMu.Unlock()
 	if strings.TrimSpace(input.Instruction) != "" || len(paths) > 0 {
-		instruction, enqueueErr := a.EnqueueInstruction(ctx, runID, InstructionInput{Content: input.Instruction, AttachmentPaths: paths})
+		instruction, enqueueErr := a.enqueueInstruction(ctx, runID, InstructionInput{Content: input.Instruction, AttachmentPaths: paths}, false, false, domainworkflows.InstructionReady)
 		if enqueueErr != nil {
 			return instruction.ID != "", enqueueErr
 		}

@@ -230,7 +230,7 @@ func (a *Service) DeleteTask(ctx context.Context, taskID string) error {
 }
 
 func (a *Service) EnqueueInstruction(ctx context.Context, runID string, input InstructionInput) (domainworkflows.Instruction, error) {
-	return a.enqueueInstruction(ctx, runID, input, false, false)
+	return a.enqueueInstruction(ctx, runID, input, false, false, domainworkflows.InstructionPending)
 }
 
 // QueueFollowUp persists a message for the next Agent turn. If the active turn
@@ -239,7 +239,7 @@ func (a *Service) EnqueueInstruction(ctx context.Context, runID string, input In
 func (a *Service) QueueFollowUp(ctx context.Context, runID string, input InstructionInput) (domainworkflows.Instruction, error) {
 	a.followUpMu.Lock()
 	defer a.followUpMu.Unlock()
-	instruction, err := a.enqueueInstruction(ctx, runID, input, false, true)
+	instruction, err := a.enqueueInstruction(ctx, runID, input, false, true, domainworkflows.InstructionPending)
 	if err != nil {
 		return instruction, err
 	}
@@ -249,7 +249,7 @@ func (a *Service) QueueFollowUp(ctx context.Context, runID string, input Instruc
 	return instruction, nil
 }
 
-func (a *Service) enqueueInstruction(ctx context.Context, runID string, input InstructionInput, priority, followUp bool) (domainworkflows.Instruction, error) {
+func (a *Service) enqueueInstruction(ctx context.Context, runID string, input InstructionInput, priority, followUp bool, status domainworkflows.InstructionStatus) (domainworkflows.Instruction, error) {
 	run, err := a.store.Repos.Workflows.GetRun(ctx, strings.TrimSpace(runID))
 	if err != nil {
 		return domainworkflows.Instruction{}, coded("run_not_found", "run was not found")
@@ -282,7 +282,7 @@ func (a *Service) enqueueInstruction(ctx context.Context, runID string, input In
 	for _, attachment := range attachments {
 		paths = append(paths, attachment.StoredPath)
 	}
-	instruction := domainworkflows.Instruction{ID: randomID("instruction"), StepID: stepID, Content: strings.TrimSpace(input.Content), Attachments: paths, Priority: priority, FollowUp: followUp, CreatedAt: time.Now().UTC()}
+	instruction := domainworkflows.Instruction{ID: randomID("instruction"), StepID: stepID, Content: strings.TrimSpace(input.Content), Attachments: paths, Priority: priority, FollowUp: followUp, Status: status, CreatedAt: time.Now().UTC()}
 	if instruction.Content == "" && len(paths) > 0 {
 		instruction.Content = "Review the attached files."
 	}
@@ -298,6 +298,15 @@ func (a *Service) enqueueInstruction(ctx context.Context, runID string, input In
 	return saved, nil
 }
 
+func (a *Service) EditInstruction(ctx context.Context, runID, instructionID, content string) (domainworkflows.Instruction, error) {
+	item, err := a.store.Repos.Workflows.UpdateInstructionContent(ctx, runID, instructionID, content)
+	if err != nil {
+		return item, mapError(err)
+	}
+	_, _ = a.store.Repos.Workflows.AppendEvent(ctx, domainworkflows.WorkflowEvent{RunID: runID, Type: "instruction.edited", Payload: localEventPayload(map[string]any{"instructionId": instructionID}), At: time.Now().UTC()})
+	return item, nil
+}
+
 func (a *Service) RemoveInstruction(ctx context.Context, runID, instructionID string) error {
 	if err := a.store.Repos.Workflows.RemoveInstruction(ctx, runID, instructionID); err != nil {
 		return mapError(err)
@@ -307,7 +316,7 @@ func (a *Service) RemoveInstruction(ctx context.Context, runID, instructionID st
 }
 
 func (a *Service) InterruptAndInsert(ctx context.Context, runID string, input InstructionInput) (domainworkflows.Instruction, error) {
-	instruction, err := a.enqueueInstruction(ctx, runID, input, true, false)
+	instruction, err := a.enqueueInstruction(ctx, runID, input, true, false, domainworkflows.InstructionPending)
 	if err != nil {
 		return instruction, err
 	}

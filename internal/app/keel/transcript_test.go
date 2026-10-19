@@ -149,3 +149,15 @@ func TestCodexQuestionAnswerSurvivesHistoryReplay(t *testing.T) {
 		t.Fatalf("answer history: %+v", rows)
 	}
 }
+
+func TestDirectInstructionIsVisibleBeforeDispatchClaimsIt(t *testing.T) {
+	tx := newTranscript()
+	at := time.Now()
+	detail := desktopservice.RunDetail{Task: domaintasks.Task{Prompt: "initial", CreatedAt: at}, Instructions: []domainworkflows.Instruction{{ID: "direct", Content: "send now", Status: domainworkflows.InstructionReady, CreatedAt: at.Add(time.Second)}}}
+	tx.detail(detail)
+	assertUserMessages(t, tx, "initial", "send now")
+	detail.Instructions[0].Status = domainworkflows.InstructionApplied
+	detail.Instructions[0].AppliedAt = at.Add(2 * time.Second)
+	tx.detail(detail)
+	assertUserMessages(t, tx, "initial", "send now")
+}

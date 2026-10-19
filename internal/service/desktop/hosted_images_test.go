@@ -76,7 +76,7 @@ func TestPhoneReadsConversationImagesWithPairedCredentials(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Repos.Workflows.ClaimInstructions(ctx, run.ID); err != nil {
+	if _, err := store.Repos.Workflows.ClaimInstructions(ctx, run.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	detail, err := phone.GetRun(run.ID)

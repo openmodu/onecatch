@@ -64,7 +64,7 @@ type WorkflowRepository interface {
 	ListStepRuns(context.Context, string) ([]domainworkflows.StepRun, error)
 	AppendEvent(context.Context, domainworkflows.WorkflowEvent) (domainworkflows.WorkflowEvent, error)
 	AppendRuntimeEvent(context.Context, string, string, json.RawMessage) (domainworkflows.RuntimeEvent, error)
-	ClaimInstructions(context.Context, string) ([]domainworkflows.Instruction, error)
+	ClaimInstructions(context.Context, string, bool) ([]domainworkflows.Instruction, error)
 	WriteRunSummary(context.Context, string, string) error
 }
 
@@ -275,7 +275,7 @@ func (s *Usecase) ExecuteRun(ctx context.Context, runID string) (domainworkflows
 	if err != nil {
 		return run, err
 	}
-	return s.drive(ctx, task, workspace, definition, run)
+	return s.drive(ctx, task, workspace, definition, run, false)
 }
 
 // RecoverRun turns a durable running Run with no live workspace owner into a
@@ -424,7 +424,7 @@ func (s *Usecase) ResumeRunWithProfile(ctx context.Context, runID, instruction s
 			preserveStep = resumed.CurrentStepID
 		}
 	}
-	return s.drive(ctx, task, workspace, definition, resumed, preserveStep)
+	return s.drive(ctx, task, workspace, definition, resumed, run.Status == domainworkflows.RunCompleted && trimmedInstruction == "", preserveStep)
 }
 
 func (s *Usecase) applyResumeProfile(ctx context.Context, definition domainworkflows.Definition, run domainworkflows.Run, profile ResumeProfile) (domainworkflows.Definition, domainworkflows.Run, error) {

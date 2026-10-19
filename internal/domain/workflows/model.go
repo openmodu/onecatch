@@ -242,6 +242,9 @@ type StepRun struct {
 type InstructionStatus string
 
 const (
+	// InstructionReady is a direct send persisted before its stopped run resumes.
+	// It belongs in the conversation immediately, never in the waiting queue.
+	InstructionReady   InstructionStatus = "ready"
 	InstructionPending InstructionStatus = "pending"
 	InstructionApplied InstructionStatus = "applied"
 	InstructionRemoved InstructionStatus = "removed"

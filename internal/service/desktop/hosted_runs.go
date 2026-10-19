@@ -172,7 +172,7 @@ func (h *hostedRuns) Get(ctx context.Context, id string, window worker.Transcrip
 		}
 	}
 	for _, item := range detail.Instructions {
-		if item.Status != domainworkflows.InstructionApplied {
+		if item.Status != domainworkflows.InstructionApplied && item.Status != domainworkflows.InstructionReady {
 			continue
 		}
 		at := item.CreatedAt
