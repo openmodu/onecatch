@@ -101,6 +101,18 @@ ONECATCH_KEEL_PREVIEWS=/tmp/onecatch-parallel-preview go test ./internal/app/kee
 
 2026-10-14 升级至 Keel 主分支固定提交 `74ea9c5` 后，界面包完整测试再次通过。分配量对比及真实客户端内存采样见 [Keel 内存排查](keel-memory.md)。
 
+## 空输入框光标不可见与首次聚焦（2026-10-19）
+
+用户反馈输入框再次没有光标，首次找不到焦点。在发布依赖 Keel v0.3.3 上，测试分别复现了两个问题：启动后直接输入没有接收者；点击空输入框后，焦点已在 `prompt`，但像素中没有光标，不能把后者认定为失焦。
+
+调用路径是 `views.go:composer` → Keel `el` 输入绘制 → `editorstyle.Caret.LayoutDecorated`。空编辑器把光标放在提示文字前 2dp，光标宽 1.5dp；输入框原来只有 2dp 左内边距，光标完全落在控件裁剪范围外。现在左右内边距为 4dp，容纳提示文字前的光标。启动和显式新建对话各请求一次焦点，在首次绘制后生效；后续重绘不重复抢焦点。编辑器创建前已有粘贴请求时，优先走粘贴的选区恢复路径，避免提前聚焦使草稿末尾定位被跳过。
+
+`TestComposerInitiallyAcceptsTyping` 检查启动直接输入、新建对话恢复输入，以及切换到其他输入框后重绘不抢焦点。`TestEmptyComposerFirstClickPaintsCaret` 在浅色/深色、1×/2× 下检查第一次点击后的实际光标像素和文字输入；修复前四组均已聚焦但像素变化为零，修复后通过。原有粘贴恢复、中文组合输入和主题表面测试也通过；主题表面测试显式关闭启动聚焦，以继续比较失焦与聚焦两种外观。
+
+`go test ./internal/app/keel ./cmd/app -count=1`、这两个包的 `go vet`、macOS 构建和 `git diff --check` 均通过。
+
+原生候选客户端使用 `/tmp/onecatch-composer-focus/data` 独立目录，已检查首次打开后无需点击即可输入，以及清空文字后提示文字前的光标可见。未发送消息或执行工具；没有替换用户正在运行的安装客户端。该窗口检查不等同于真实中文输入法验证，组合输入的证据仍来自事件注入测试。文档记录与本轮构建使用 go.mod 中的 v0.3.3，没有本地 go.work 或 replace。
+
 ## macOS 系统字体统一（2026-10-14）
 
 界面与 Markdown 正文统一使用 `theme.Material.Face`；代码保留等宽字体。此前正文直接使用 `theme.Face`，没有跟随 OneCatch 的界面字体设置。底层 Markdown 的块缓存同时纳入正文和代码字体，避免字体切换后仍使用旧的换行与测量结果；不重写文档内容。

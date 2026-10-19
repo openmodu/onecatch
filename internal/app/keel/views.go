@@ -301,6 +301,12 @@ func (a *app) composer(cx *el.Context) el.Element {
 	if a.promptDocument.Content().Text() != a.prompt {
 		_ = a.promptDocument.SetText(a.prompt)
 	}
+	if a.composerFocusPending && !a.attachments.FocusPrompt {
+		// Focus is applied after paint, including the editor's first frame.
+		// Consume once so later redraws preserve other fields and IME input.
+		cx.Focus("prompt")
+		a.composerFocusPending = false
+	}
 	if a.attachments.FocusPrompt {
 		// Wait only for editor creation. Repeated queued selections overwrite
 		// IME edits later in the same frame and cancel native composition.
@@ -311,6 +317,7 @@ func (a *app) composer(cx *el.Context) el.Element {
 				cx.Focus("prompt")
 			}
 			a.attachments.FocusPrompt = false
+			a.composerFocusPending = false
 		}
 	}
 	a.composerSkills(cx)
@@ -325,7 +332,9 @@ func (a *app) composer(cx *el.Context) el.Element {
 			hint = strings.TrimSuffix(hint, "…") + "，@ 某个步骤只发给它…"
 		}
 	}
-	input := el.TextArea().PasteReader(readClipboard).OnPaste(a.pasteTaskAttachments).OnPasteError(a.fail).ID("prompt").Name("任务指令").Document(&a.promptDocument).OnChange(func(text string) { a.prompt = text }).Placeholder(hint).AutoGrow(4, 10).Scrollbars(el.ScrollbarAlways).Border(0, color.NRGBA{}).Bg(color.NRGBA{}).Px(2).Py(2).TextSize(14).Weight(font.Normal).LineHeight(1.6).WFull()
+	// Keel places the empty caret 2dp before the hint, with a 1.5dp width.
+	// Reserve at least 4dp inside the input's clip or it disappears entirely.
+	input := el.TextArea().PasteReader(readClipboard).OnPaste(a.pasteTaskAttachments).OnPasteError(a.fail).ID("prompt").Name("任务指令").Document(&a.promptDocument).OnChange(func(text string) { a.prompt = text }).Placeholder(hint).AutoGrow(4, 10).Scrollbars(el.ScrollbarAlways).Border(0, color.NRGBA{}).Bg(color.NRGBA{}).Px(4).Py(2).TextSize(14).Weight(font.Normal).LineHeight(1.6).WFull()
 	// As in the Wails client: Enter sends, Shift+Enter breaks the line, and
 	// an input method composing text keeps Enter to confirm its candidate.
 	input.CaptureKeys(string(key.NameReturn), string(key.NameEnter)).OnKey(func(e el.KeyEvent) bool {

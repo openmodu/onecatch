@@ -31,6 +31,7 @@ type app struct {
 	windowsMenu                                                                             *kit.MenuView
 	promptTokenNext                                                                         uint64
 	promptDocument                                                                          el.InputDocument
+	composerFocusPending                                                                    bool
 	skillPicker                                                                             composerSkillState
 	projectWorkflows                                                                        projectWorkflowState
 	mentionPicker                                                                           composerMentionState
@@ -109,6 +110,7 @@ type liveFrames struct {
 func newApp(b *backend) *app {
 	ctx, cancel := context.WithCancel(context.Background())
 	a := &app{backend: b, ctx: ctx, cancel: cancel, tasks: make(map[string][]domaintasks.Task), transcript: newTranscript(), docs: make(map[string]*markdown.Doc), answers: make(map[string]string), pendingResponses: make(map[string]bool)}
+	a.composerFocusPending = true
 	a.runtime = kit.Select("").Hint("选择 Agent").Appearance(false).MenuWidth(220).OnChange(func(id string) {
 		a.resetProfileSelection()
 	})
@@ -297,6 +299,7 @@ func (a *app) syncWorkflowEntries() {
 func (a *app) newTask(workspaceID string) {
 	before := a.currentLocation()
 	a.resetTask(workspaceID)
+	a.composerFocusPending = true
 	a.recordNavigation(before)
 }
 

@@ -28,6 +28,8 @@ func TestConversationTableDividersAndComposerSurface(t *testing.T) {
 			t.Run(fmt.Sprintf("dark=%v/scale=%d", dark, scale), func(t *testing.T) {
 				applyPalette(dark)
 				a := conversationFixture(t)
+				// Compare unfocused and focused surfaces independently of startup focus.
+				a.composerFocusPending = false
 				a.dark, a.prompt = dark, "继续提交代码"
 				e := &entry{key: "table-style", text: source}
 				focus, requested, focused := false, false, false
