@@ -11,6 +11,7 @@ import (
 
 	"github.com/dyike/keel/gio/f32"
 	"github.com/dyike/keel/gio/io/input"
+	"github.com/dyike/keel/gio/io/key"
 	"github.com/dyike/keel/gio/io/pointer"
 	"github.com/dyike/keel/gio/layout"
 	"github.com/dyike/keel/gio/op"
@@ -86,7 +87,7 @@ func TestPendingInstructionSteeringPreservesIdentityAndAttachments(t *testing.T)
 	select {
 	case request := <-engine.started:
 		urgentAt, ordinaryAt := strings.Index(request.Prompt, "urgent correction"), strings.Index(request.Prompt, "later work")
-		if urgentAt < 0 || ordinaryAt < urgentAt {
+		if urgentAt < 0 || ordinaryAt >= 0 {
 			t.Fatalf("wrong resumed instruction: %s", request.Prompt)
 		}
 	case <-time.After(3 * time.Second):
@@ -107,7 +108,7 @@ func TestPendingInstructionSteeringPreservesIdentityAndAttachments(t *testing.T)
 				t.Fatalf("identity/attachment promotion: %+v", item)
 			}
 		}
-		if item.ID == later.ID && (item.Priority || !item.FollowUp) {
+		if item.ID == later.ID && (item.Priority || !item.FollowUp || item.Status != domainworkflows.InstructionPending) {
 			t.Fatal("steering changed an unrelated instruction's mode")
 		}
 	}
@@ -322,5 +323,125 @@ func TestRenderPendingInstructionsPreview(t *testing.T) {
 	applyPalette(true)
 	if err := window.Screenshot(el.Root(view), 860, 320, filepath.Join(dir, "pending-instructions-dark.png")); err != nil {
 		t.Fatal(err)
+	}
+	applyPalette(false)
+	a.beginInstructionEdit("preview-1")
+	if err := window.Screenshot(el.Root(view), 860, 360, filepath.Join(dir, "pending-instructions-edit.png")); err != nil {
+		t.Fatal(err)
+	}
+	if err := window.Screenshot(el.Root(view), 420, 360, filepath.Join(dir, "pending-instructions-edit-narrow.png")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPendingInstructionEditThroughNativeControlPreservesQueueAndDraft(t *testing.T) {
+	b, task, run, _ := instructionTestRun(t)
+	ctx := context.Background()
+	file := filepath.Join(t.TempDir(), "attached.txt")
+	if err := os.WriteFile(file, []byte("keep attachment"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	first, err := b.service.QueueFollowUp(ctx, run.ID, desktopservice.InstructionInput{Content: "first", AttachmentPaths: []string{file}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := b.service.QueueFollowUp(ctx, run.ID, desktopservice.InstructionInput{Content: "second"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := newApp(b)
+	t.Cleanup(a.close)
+	a.task, a.taskID, a.runID = &task, task.ID, run.ID
+	detail, err := b.service.GetRunDetail(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.detail, a.prompt = &detail, "unrelated composer draft"
+	a.attachments.Items = []selectedAttachment{{Path: file}}
+	updates := make(chan func(), 8)
+	a.postUpdate = func(fn func()) { updates <- fn }
+	root := el.Root(el.ViewFunc(a.pendingInstructionList))
+	var router input.Router
+	var ops op.Ops
+	frame := func() {
+		ops.Reset()
+		root.Layout(layout.Context{Ops: &ops, Now: time.Now(), Source: router.Source(), Constraints: layout.Exact(image.Pt(700, 300)), Metric: unit.Metric{PxPerDp: 1, PxPerSp: 1}})
+		router.Frame(&ops)
+	}
+	var find func([]input.SemanticNode, string) (image.Rectangle, bool)
+	find = func(nodes []input.SemanticNode, label string) (image.Rectangle, bool) {
+		for _, node := range nodes {
+			if node.Desc.Label == label && !node.Desc.Disabled && node.Desc.Gestures&input.ClickGesture != 0 {
+				return node.Desc.Bounds, true
+			}
+			if box, ok := find(node.Children, label); ok {
+				return box, true
+			}
+		}
+		return image.Rectangle{}, false
+	}
+	click := func(label string) {
+		t.Helper()
+		frame()
+		box, ok := find(router.AppendSemantics(nil), label)
+		if !ok {
+			t.Fatalf("missing enabled control %q", label)
+		}
+		pos := f32.Pt(float32(box.Min.X+box.Dx()/2), float32(box.Min.Y+box.Dy()/2))
+		router.Queue(pointer.Event{Kind: pointer.Press, Source: pointer.Mouse, Buttons: pointer.ButtonPrimary, Position: pos})
+		frame()
+		router.Queue(pointer.Event{Kind: pointer.Release, Source: pointer.Mouse, Position: pos})
+		frame()
+	}
+	complete := func() {
+		t.Helper()
+		select {
+		case fn := <-updates:
+			fn()
+		case <-time.After(3 * time.Second):
+			t.Fatal("edit did not complete")
+		}
+	}
+	click("编辑后续消息")
+	if a.instructionEdit.InstructionID != first.ID {
+		t.Fatal("edit opened wrong queue item")
+	}
+	frame() // Apply the editor's one-time focus request.
+	router.Queue(key.Event{Name: "A", Modifiers: key.ModShortcut, State: key.Press})
+	frame()
+	router.Queue(key.EditEvent{Range: key.Range{Start: 0, End: 5}, Text: "edited first"})
+	frame()
+	if a.instructionEdit.Content != "edited first" {
+		t.Fatalf("native edit not accepted: %q", a.instructionEdit.Content)
+	}
+	click("保存修改")
+	complete()
+	updated, err := b.service.GetRunDetail(ctx, run.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Instructions) != 2 || updated.Instructions[0].ID != first.ID || updated.Instructions[0].Content != "edited first" || !updated.Instructions[0].CreatedAt.Equal(first.CreatedAt) || len(updated.Instructions[0].Attachments) != 1 || updated.Instructions[0].Attachments[0] != first.Attachments[0] || updated.Instructions[1].ID != second.ID {
+		t.Fatalf("edit replaced or reordered queue: %+v", updated.Instructions)
+	}
+	if a.instructionEdit.InstructionID != "" || a.prompt != "unrelated composer draft" || len(a.attachments.Items) != 1 {
+		t.Fatal("save lost editor or composer state")
+	}
+	a.detail = &updated
+	a.beginInstructionEdit(second.ID)
+	a.instructionEdit.Content = "unsaved cancellation"
+	click("取消编辑")
+	if a.instructionEdit.InstructionID != "" {
+		t.Fatal("cancel retained editing state")
+	}
+	a.beginInstructionEdit(second.ID)
+	a.instructionEdit.Content = "keep this if delivery wins"
+	// Model deletion/delivery winning the repository lock before Save arrives.
+	if err := b.service.RemoveInstruction(ctx, run.ID, second.ID); err != nil {
+		t.Fatal(err)
+	}
+	click("保存修改")
+	complete()
+	if a.errorText == "" || a.instructionEdit.Content != "keep this if delivery wins" {
+		t.Fatal("stale edit silently succeeded or lost draft")
 	}
 }

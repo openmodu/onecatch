@@ -908,3 +908,37 @@ func TestDAGSixRootsRespectFourConcurrentSteps(t *testing.T) {
 		t.Fatalf("peak=%d, requests=%d", engine.maxActive, len(engine.requests))
 	}
 }
+
+func TestFollowUpWaitsForNextDispatchWhenQueuedBeforeFirstStep(t *testing.T) {
+	definition := oneStepPauseWorkflow()
+	engine := &scriptedEngine{available: map[agentrun.Runtime]bool{agentrun.RuntimeCodex: true}, scripts: []engineScript{
+		{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"initial done"}`, "session-1")},
+		{runtime: agentrun.RuntimeCodex, result: success(`{"verdict":"pass","summary":"follow-up done"}`, "session-1")},
+	}}
+	usecase, store, task := setupUsecase(t, definition, engine)
+	ctx := context.Background()
+	run, err := usecase.StartTask(ctx, task.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Repos.Workflows.EnqueueInstruction(ctx, run.ID, domainworkflows.Instruction{ID: "early_follow_up", Content: "wait until the next turn", FollowUp: true}); err != nil {
+		t.Fatal(err)
+	}
+	completed, err := usecase.ExecuteRun(ctx, run.ID)
+	if err != nil || completed.Status != domainworkflows.RunCompleted {
+		t.Fatalf("initial execution: %+v %v", completed, err)
+	}
+	if len(engine.calls) != 1 || strings.Contains(engine.calls[0].Prompt, "wait until the next turn") {
+		t.Fatalf("initial turn consumed follow-up: %+v", engine.calls)
+	}
+	items, _ := store.Repos.Workflows.ListInstructions(ctx, run.ID)
+	if len(items) != 1 || items[0].Status != domainworkflows.InstructionPending {
+		t.Fatalf("initial turn drained queue: %+v", items)
+	}
+	if _, err := usecase.ResumeRun(ctx, run.ID, ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(engine.calls) != 2 || !strings.Contains(engine.calls[1].Prompt, "wait until the next turn") {
+		t.Fatalf("follow-up did not reach next dispatch: %+v", engine.calls)
+	}
+}

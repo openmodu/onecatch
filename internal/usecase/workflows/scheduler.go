@@ -35,7 +35,7 @@ type stepResult struct {
 // drive schedules a running Run until it completes, pauses or ctx ends. Steps
 // start as soon as their dependencies pass, up to the concurrency limit, and
 // every verdict is persisted before the next scheduling decision.
-func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, definition domainworkflows.Definition, run domainworkflows.Run, preserveSteps ...string) (domainworkflows.Run, error) {
+func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, definition domainworkflows.Definition, run domainworkflows.Run, includeFollowUp bool, preserveSteps ...string) (domainworkflows.Run, error) {
 	run = domainworkflows.CloneRun(run)
 	if run.Sessions == nil {
 		run.Sessions = make(map[string]string)
@@ -56,6 +56,13 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 	results := make(chan stepResult)
 	inflight := map[string]bool{}
 	var pauseReason, pauseMessage string
+	// A new dispatch may take one follow-up. Inbox input (including an
+	// interrupted turn) must finish before another queued message is consumed.
+	for _, node := range run.Nodes {
+		if len(node.Inbox) > 0 {
+			includeFollowUp = false
+		}
+	}
 
 	for {
 		if run.Status == domainworkflows.RunRunning && pauseReason == "" && ctx.Err() == nil {
@@ -66,7 +73,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 				stepCtx, cancel = context.WithCancel(ctx)
 				cancelSteps = cancel
 			}
-			if err := s.startReadySteps(ctx, stepCtx, task, workspace, &definition, &run, inflight, results, preserveSteps); err != nil {
+			if err := s.startReadySteps(ctx, stepCtx, task, workspace, &definition, &run, inflight, results, preserveSteps, &includeFollowUp); err != nil {
 				cancelSteps()
 				s.drain(results, inflight)
 				if errors.Is(err, errExecutionSettings) {
@@ -93,6 +100,7 @@ func (s *Usecase) drive(ctx context.Context, task domaintasks.Task, workspace do
 					return run, err
 				}
 				run = updated
+				includeFollowUp = true
 				if err := s.appendEvent(context.Background(), run.ID, "loop.round.started", "", map[string]any{"round": run.LoopRound}); err != nil {
 					return run, err
 				}
@@ -169,7 +177,7 @@ func (s *Usecase) drain(results chan stepResult, inflight map[string]bool) {
 
 // startReadySteps claims queued human instructions, delivers them, and starts
 // every ready step that fits under the concurrency limit.
-func (s *Usecase) startReadySteps(ctx, stepCtx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, currentDefinition *domainworkflows.Definition, run *domainworkflows.Run, inflight map[string]bool, results chan<- stepResult, preserveSteps []string) error {
+func (s *Usecase) startReadySteps(ctx, stepCtx context.Context, task domaintasks.Task, workspace domainworkspaces.Workspace, currentDefinition *domainworkflows.Definition, run *domainworkflows.Run, inflight map[string]bool, results chan<- stepResult, preserveSteps []string, includeFollowUp *bool) error {
 	definition := *currentDefinition
 	var ready []domainworkflows.Step
 	for _, step := range domainworkflows.ReadySteps(definition, *run) {
@@ -199,9 +207,10 @@ func (s *Usecase) startReadySteps(ctx, stepCtx context.Context, task domaintasks
 	for i, step := range ready {
 		ready[i], _ = domainworkflows.FindStep(refreshed, step.ID)
 	}
-	if err := s.deliverInstructions(ctx, definition, run, ready); err != nil {
+	if err := s.deliverInstructions(ctx, definition, run, ready, *includeFollowUp); err != nil {
 		return err
 	}
+	*includeFollowUp = false
 	for _, step := range ready {
 		node := run.Nodes[step.ID]
 		node.Status = domainworkflows.NodeRunning
@@ -231,8 +240,8 @@ func (s *Usecase) startReadySteps(ctx, stepCtx context.Context, task domaintasks
 // deliverInstructions moves queued human guidance into step inboxes. Guidance
 // addressed to a step waits in that step's inbox; the rest goes to the steps
 // starting now.
-func (s *Usecase) deliverInstructions(ctx context.Context, definition domainworkflows.Definition, run *domainworkflows.Run, starting []domainworkflows.Step) error {
-	items, err := s.workflows.ClaimInstructions(ctx, run.ID)
+func (s *Usecase) deliverInstructions(ctx context.Context, definition domainworkflows.Definition, run *domainworkflows.Run, starting []domainworkflows.Step, includeFollowUp bool) error {
+	items, err := s.workflows.ClaimInstructions(ctx, run.ID, includeFollowUp)
 	if err != nil || len(items) == 0 {
 		return err
 	}
@@ -265,7 +274,7 @@ func (s *Usecase) reopenForMessages(ctx context.Context, definition domainworkfl
 		step, _ := domainworkflows.FindStep(definition, id)
 		sinks = append(sinks, step)
 	}
-	if err := s.deliverInstructions(ctx, definition, run, sinks); err != nil {
+	if err := s.deliverInstructions(ctx, definition, run, sinks, false); err != nil {
 		return false, err
 	}
 	next, reopened := domainworkflows.ReopenForInbox(definition, *run)

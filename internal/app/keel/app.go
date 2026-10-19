@@ -88,6 +88,7 @@ type app struct {
 	captionLoading                                                                          bool
 	answers                                                                                 map[string]string
 	pendingResponses                                                                        map[string]bool
+	instructionEdit                                                                         instructionEdit
 	instructionAction                                                                       instructionAction
 	// live holds run-stream frames until the next UI frame applies them.
 	live liveFrames

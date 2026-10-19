@@ -31,7 +31,7 @@ func (s stubRepo) UpdatePausedRunWorkflow(_ context.Context, run domainworkflows
 
 func (s stubRepo) SaveStepRun(context.Context, domainworkflows.StepRun) error { return nil }
 
-func (s stubRepo) ClaimInstructions(_ context.Context, runID string) ([]domainworkflows.Instruction, error) {
+func (s stubRepo) ClaimInstructions(_ context.Context, runID string, _ bool) ([]domainworkflows.Instruction, error) {
 	return s.claim(runID)
 }
 
@@ -87,7 +87,7 @@ func TestNotifyingRepoSkipsDirtyOnEmptyClaim(t *testing.T) {
 		claim: func(string) ([]domainworkflows.Instruction, error) { return nil, nil },
 	}, notifier)
 
-	if _, err := repo.ClaimInstructions(context.Background(), "run_1"); err != nil {
+	if _, err := repo.ClaimInstructions(context.Background(), "run_1", false); err != nil {
 		t.Fatalf("ClaimInstructions: %v", err)
 	}
 	if len(notifier.dirty) != 0 {

@@ -28,7 +28,9 @@ func (r *workflowsImpl) EnqueueInstruction(ctx context.Context, runID string, in
 		input.CreatedAt = r.now().UTC()
 	}
 	input.Content = strings.TrimSpace(input.Content)
-	input.Status = domainworkflows.InstructionPending
+	if input.Status != domainworkflows.InstructionReady {
+		input.Status = domainworkflows.InstructionPending
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, err := r.getRunLocked(runID); err != nil {
@@ -107,6 +109,35 @@ func (r *workflowsImpl) UpdateInstructionMode(ctx context.Context, runID, instru
 	return domainworkflows.Instruction{}, errors.New("pending instruction was not found")
 }
 
+// UpdateInstructionContent edits only pending text under the same lock as
+// claiming, so a message can never be rewritten after it has been delivered.
+func (r *workflowsImpl) UpdateInstructionContent(ctx context.Context, runID, instructionID, content string) (domainworkflows.Instruction, error) {
+	if err := ctx.Err(); err != nil {
+		return domainworkflows.Instruction{}, err
+	}
+	if !localfile.ValidID(runID) || !localfile.ValidID(instructionID) || strings.TrimSpace(content) == "" {
+		return domainworkflows.Instruction{}, errors.New("workflow instruction is invalid")
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	queue, err := r.readInstructionQueueLocked(runID)
+	if err != nil {
+		return domainworkflows.Instruction{}, err
+	}
+	for index := range queue.Items {
+		item := &queue.Items[index]
+		if item.ID != instructionID || item.Status != domainworkflows.InstructionPending {
+			continue
+		}
+		item.Content = strings.TrimSpace(content)
+		if err := localfile.WriteJSONAtomic(r.instructionsPath(runID), queue); err != nil {
+			return domainworkflows.Instruction{}, fmt.Errorf("edit workflow instruction: %w", err)
+		}
+		return *item, nil
+	}
+	return domainworkflows.Instruction{}, errors.New("消息已发送或已删除，无法保存编辑")
+}
+
 func (r *workflowsImpl) RemoveInstruction(ctx context.Context, runID, instructionID string) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -134,9 +165,9 @@ func (r *workflowsImpl) RemoveInstruction(ctx context.Context, runID, instructio
 	return localfile.WriteJSONAtomic(r.instructionsPath(runID), queue)
 }
 
-// ClaimInstructions atomically marks every pending instruction as applied.
-// Priority items are returned first, preserving FIFO order within each class.
-func (r *workflowsImpl) ClaimInstructions(ctx context.Context, runID string) ([]domainworkflows.Instruction, error) {
+// ClaimInstructions claims boundary guidance, or one FIFO follow-up when a
+// fresh turn has no other input. Follow-ups never join a turn already in flight.
+func (r *workflowsImpl) ClaimInstructions(ctx context.Context, runID string, includeFollowUp bool) ([]domainworkflows.Instruction, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -149,15 +180,26 @@ func (r *workflowsImpl) ClaimInstructions(ctx context.Context, runID string) ([]
 	if err != nil {
 		return nil, err
 	}
+	sortInstructions(queue.Items)
 	now := r.now().UTC()
 	var claimed []domainworkflows.Instruction
 	for index := range queue.Items {
-		if queue.Items[index].Status != domainworkflows.InstructionPending {
+		item := &queue.Items[index]
+		if item.Status != domainworkflows.InstructionReady && (item.Status != domainworkflows.InstructionPending || item.FollowUp) {
 			continue
 		}
-		queue.Items[index].Status = domainworkflows.InstructionApplied
-		queue.Items[index].AppliedAt = now
-		claimed = append(claimed, queue.Items[index])
+		item.Status, item.AppliedAt = domainworkflows.InstructionApplied, now
+		claimed = append(claimed, *item)
+	}
+	if len(claimed) == 0 && includeFollowUp {
+		for index := range queue.Items {
+			item := &queue.Items[index]
+			if item.Status == domainworkflows.InstructionPending && item.FollowUp {
+				item.Status, item.AppliedAt = domainworkflows.InstructionApplied, now
+				claimed = append(claimed, *item)
+				break
+			}
+		}
 	}
 	if len(claimed) == 0 {
 		return []domainworkflows.Instruction{}, nil
@@ -175,7 +217,7 @@ func sortInstructions(items []domainworkflows.Instruction) {
 			return items[i].Priority
 		}
 		if items[i].CreatedAt.Equal(items[j].CreatedAt) {
-			return items[i].ID < items[j].ID
+			return false // Equal timestamps retain durable insertion order.
 		}
 		return items[i].CreatedAt.Before(items[j].CreatedAt)
 	})

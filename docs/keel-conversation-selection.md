@@ -299,3 +299,23 @@ go test ./internal/app/keel ./cmd/app -count=1
 go test -race ./internal/app/keel -run 'TestConversationMarkdownImage|TestConversationLinkedImages|TestConversationCopySurvivesUnrelatedMessageSnapshot' -count=1
 go vet ./internal/app/keel ./cmd/app
 ```
+
+## 后续消息逐条发送与队列编辑（2026-10-19）
+
+用户反馈单 Agent 空闲发送时待发区闪现、多条排队消息一起消失，以及队列消息无法编辑。代码中有两条对应路径：`SubmitRunMessage` 在空闲时也先写入 `pending`；调度器的 `ClaimInstructions` 则在步骤边界一次领取所有待执行消息。旧排序还在创建时间相同时按随机 ID 排序，不能保证入队顺序。
+
+空闲发送现在先持久化为 `ready`，立即进入对话，随后恢复原运行；只有 `pending` 出现在待发区。`ready` 仍可在恢复校验失败后通过空指令恢复，保留已有的附件持久化和防重复机制。正文仍经 `conversationSource` 同步，没有修改选区组的文档更新规则。
+
+普通后续消息只在上一轮完成、下一次恢复开始时领取一条，依次沿用原会话；初始任务、暂停恢复、步骤重试和中间步骤不顺带领取后续消息。循环工作流在新一轮开始时可领取一条。步骤定向指令仍按步骤边界投递。“调整方向”提升原消息，其他后续消息继续排队。相同创建时间保留持久化的插入顺序。
+
+待发区增加编辑、保存和取消。编辑只改原记录的正文，保留 ID、创建时间、附件和执行方式；保存与领取共用仓库锁，消息已经领取或删除时拒绝保存，并在界面保留编辑内容。输入框里的另一份草稿及附件不受影响。
+
+回归测试覆盖三条消息各自进入一轮且其余仍为待执行、首次步骤开始前入队仍等待下一轮、调整方向不取走其他消息、相同时间的 FIFO、重新读取存储后的编辑内容，以及领取后拒绝改写。原生指针和键盘路由测试检查点击编辑、修改、保存、取消及过期保存；附件恢复被拒绝的测试同时检查直接发送记录为 `ready`。`TestDirectInstructionIsVisibleBeforeDispatchClaimsIt` 检查该状态立即进入正文且领取后不重复。
+
+```sh
+go test ./internal/repo/workflows ./internal/usecase/workflows ./internal/service/desktop ./internal/app/keel ./cmd/app -count=1
+go test -race ./internal/repo/workflows ./internal/usecase/workflows ./internal/service/desktop ./internal/app/keel -run 'Test(InstructionFollowUp|InstructionSteering|FollowUpWaits|FollowUpsRun|PendingInstruction|QueueFollowUp|SubmitRunMessage|AttachmentContinuation|DirectInstruction|ConversationCopySurvivesUnrelatedMessageSnapshot)' -count=1
+go vet ./internal/repo/workflows ./internal/usecase/workflows ./internal/service/desktop ./internal/app/keel ./cmd/app
+```
+
+相关包完整测试、相关 race、vet 和 macOS 发布打包通过。本轮修复纳入 v0.5.4 发布。已检查 860dp、420dp 的队列与编辑状态离屏截图，位于 `/tmp/onecatch-message-queue`。使用 go.mod 中的 Keel v0.3.3，无本地 go.work 或 replace；未在用户正在运行的安装客户端中验证。测试和离屏截图不能代替真实窗口中的发送、编辑与队列切换验证。

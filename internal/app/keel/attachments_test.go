@@ -130,7 +130,7 @@ func TestAttachmentContinuationPersistsOnceWhenResumeIsRejected(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(detail.Instructions) != 1 || detail.Instructions[0].Content != "Read this" || len(detail.Instructions[0].Attachments) != 1 {
+	if len(detail.Instructions) != 1 || detail.Instructions[0].Status != domainworkflows.InstructionReady || detail.Instructions[0].Content != "Read this" || len(detail.Instructions[0].Attachments) != 1 {
 		t.Fatalf("attachment instruction not persisted: %+v", detail.Instructions)
 	}
 	path := detail.Instructions[0].Attachments[0]

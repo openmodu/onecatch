@@ -3,6 +3,12 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.4
+
+- Send messages directly into the conversation when the agent is idle, without briefly displaying them in the waiting queue.
+- Deliver queued follow-up messages one per turn in FIFO order, preserving the remaining queue and the existing agent session. Steering with one message leaves the other follow-ups queued.
+- Edit queued messages in place with save and cancel actions. Keep their order and attachments, and preserve the edited text if delivery or deletion happens before saving.
+
 ## 0.5.3
 
 - Set the reasoning effort for each workflow agent step. Editing a step offers the levels advertised by the selected model, a step left empty inherits the runtime default, and changing the runtime, model or worker clears a level that no longer applies.
