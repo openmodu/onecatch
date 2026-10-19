@@ -3,6 +3,11 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.2
+
+- Show the caret in the empty task input again. The input reserves enough horizontal padding for the hint's leading caret, which Keel drew outside the clip.
+- Focus the task input after startup and when a new conversation opens, so typing works without clicking first. Later redraws no longer steal focus from other fields or interrupt input method composition.
+
 ## 0.5.1
 
 - Rename the desktop application from OneCatch Keel to OneCatch. Use OneCatch for the packaged application name, native application menu and main window title.
