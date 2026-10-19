@@ -339,6 +339,7 @@ func (a *app) buildFooterMenu() {
 	}
 	menu := kit.Menu().Width(208).Placement(el.Top, el.Start).Offset(6)
 	menu.ContentItem("设置", "mod+,", menuIcon("settings", "设置"), a.openSettings).Sub("显示模式", mode).Separator().ContentItem("工作流", "", menuIcon("git-branch", "工作流"), func() { a.goPage("workflows") })
+	menu.ContentItem("检查更新", "", menuIcon("download", "检查更新"), func() { a.openUpdates(); a.updateAction("check") })
 	menu.SetItemContent("显示模式", menuIcon("monitor", "显示模式"))
 	menu.Trigger(el.ViewFunc(func(cx *el.Context) el.Element {
 		row := el.Div().WFull().ID("app-menu").Role("button").Name("OneCatch 菜单").Focusable(true).Row().Items(el.Center).Gap(8).H(el.Dp(40)).Px(8).Rounded(8).CursorPointer().OnClick(menu.Toggle).Hover(func(s *el.Style) { s.Bg(theme.Highlight) }).FocusStyle(neutralFocus)

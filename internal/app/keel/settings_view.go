@@ -61,7 +61,7 @@ func (p *settingsPage) ensureSettingsView() {
 		query = p.view.Query()
 	}
 	next := kit.Settings().Size(kit.SettingsSizeMedium).GroupVariant(kit.GroupBoxNormal).SearchInSidebar(true).PageHeading(false)
-	icons := []kit.IconName{kit.IconSettings, kit.IconUser, kit.IconInbox, kit.IconLock, kit.IconFolder, kit.IconPhone, kit.IconComputer, kit.IconArchive, kit.IconArchive}
+	icons := []kit.IconName{kit.IconSettings, kit.IconUser, kit.IconInbox, kit.IconLock, kit.IconFolder, kit.IconPhone, kit.IconComputer, kit.IconArchive, kit.IconArchive, kit.IconInfo}
 	for i, section := range settingsSections {
 		groups := p.settingsGroups(section.ID)
 		for gi := range groups {
@@ -101,7 +101,7 @@ func (p *settingsPage) settingsFooter(cx *el.Context, id string) el.Element {
 	} else {
 		info.Grow().W(el.Dp(0))
 	}
-	if id != "" && id != "skills" && id != "experimental" && id != "mobile" {
+	if id != "" && id != "skills" && id != "experimental" && id != "mobile" && id != "updates" {
 		save := button("保存", p.saveSection, kit.ButtonPrimary).Loading(p.saving)
 		save.SetDisabled(!p.initialized)
 		reload := button("重新加载", p.reload, kit.ButtonGhost)
@@ -161,6 +161,8 @@ func (p *settingsPage) settingsToggle(id, label string, initial func() bool) kit
 
 func (p *settingsPage) settingsGroups(id string) []kit.SettingGroup {
 	switch id {
+	case "updates":
+		return []kit.SettingGroup{{Items: []kit.SettingItem{{Label: "软件更新", Keywords: []string{"版本", "检查更新", "安装", "release", "version", "update"}, Content: el.ViewFunc(p.updateSettings)}}}}
 	case "workflows":
 		return []kit.SettingGroup{{Title: "工作流管理", Items: []kit.SettingItem{{Label: "工作流管理", Content: el.ViewFunc(func(cx *el.Context) el.Element {
 			if !p.app.ui.WorkflowSource {

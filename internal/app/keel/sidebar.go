@@ -220,7 +220,7 @@ func (a *app) sidebarPanel(cx *el.Context, height float32, peek bool) el.Element
 		nav.SetExpanded(id, on)
 		a.ui.SidebarExpanded[id] = nav.Expanded(id)
 	}
-	nav.Width(a.sidebarWidth(cx)).Height(height).Header(el.ViewFunc(func(cx *el.Context) el.Element { return a.sidebarPanelHeader(cx, peek) })).Footer(el.ViewFunc(func(cx *el.Context) el.Element { return fullMenu(cx, a.ui.Footer) }))
+	nav.Width(a.sidebarWidth(cx)).Height(height).Header(el.ViewFunc(func(cx *el.Context) el.Element { return a.sidebarPanelHeader(cx, peek) })).Footer(el.ViewFunc(a.sidebarFooter))
 	palette := theme.Current()
 	palette.Bg = sidebarPanelColor(peek)
 	content := cx.Themed(palette, nav)

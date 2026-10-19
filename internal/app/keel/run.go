@@ -119,6 +119,7 @@ func (a *app) installApplicationMenu() error {
 	menu, err := window.NewMenuBar(
 		window.MenuItem{Title: "OneCatch", Role: window.MenuApplication, Children: []window.MenuItem{
 			{Title: uiText("设置…"), Shortcut: "mod+,", OnSelect: func() { a.showMainWindow(); a.openSettings() }},
+			{Title: uiText("检查更新…"), OnSelect: func() { a.showMainWindow(); a.openUpdates(); a.updateAction("check") }},
 			{Separator: true},
 			{Title: uiText("退出 OneCatch"), Shortcut: "mod+q", OnSelect: window.Quit},
 		}},

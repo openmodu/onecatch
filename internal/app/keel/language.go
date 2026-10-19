@@ -55,6 +55,20 @@ func (p *settingsPage) languageSetting() kit.SettingItem {
 }
 
 var englishUI = map[string]string{
+	"版本、更新说明与安装": "Version, release notes and installation",
+	"检查更新…":      "Check for updates…",
+	"发现新版本 %s":   "Version %s is available",
+	"查看更新":       "View update",
+	"暂不更新":       "Dismiss update",
+	"当前版本：%s":    "Current version: %s",
+	"启动后自动检查更新，也可以手动检查。": "Updates are checked after startup. You can also check manually.",
+	"已是最新版本": "You're up to date",
+	"此构建未启用自动更新，请从发布页下载正式版本。": "Automatic updates are disabled in this build. Download a release from the releases page.",
+	"安装会退出应用，请先结束正在运行的任务。":    "Installation quits the app. Finish any running tasks first.",
+	"打开发布页":   "Open releases page",
+	"正在处理更新…": "Processing update…",
+	"更新说明":    "Release notes",
+
 	"等待你的回答":        "Waiting for your answer",
 	"可以补充信息，任务仍在继续": "You can answer while the task continues",
 

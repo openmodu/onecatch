@@ -197,7 +197,7 @@ func (p *settingsPage) Render(cx *el.Context) el.Element {
 	if p.section == "experimental" && p.workerSettingsDirty() {
 		root.Child(p.workerSettingsSaveBar(cx))
 	}
-	if p.section != "experimental" && p.section != "mobile" && p.section != "skills" && p.section != "workflows" || p.status != "" {
+	if p.section != "experimental" && p.section != "mobile" && p.section != "skills" && p.section != "workflows" && p.section != "updates" || p.status != "" {
 		root.Child(p.settingsFooter(cx, p.section).(*el.DivEl).Px(24).Py(12).NoShrink())
 	}
 	root.Child(el.Div().Absolute().Top(16).Right(16).Child(iconAction(cx, "close-settings", "关闭设置", "x", func() {
@@ -218,6 +218,7 @@ var settingsSections = []struct{ ID, Label, Description, Category string }{
 	{"experimental", "远端 Worker", "敬请期待", "远程连接"},
 	{"execution", "执行", "新流程默认值", "工作流"},
 	{"workflows", "工作流管理", "创建、编辑与预览工作流", "工作流"},
+	{"updates", "软件更新", "版本、更新说明与安装", "OneCatch"},
 }
 
 func (p *settingsPage) text(id, hint, initial string) el.Element {
