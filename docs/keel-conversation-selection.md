@@ -113,6 +113,8 @@ ONECATCH_KEEL_PREVIEWS=/tmp/onecatch-parallel-preview go test ./internal/app/kee
 
 原生候选客户端使用 `/tmp/onecatch-composer-focus/data` 独立目录，已检查首次打开后无需点击即可输入，以及清空文字后提示文字前的光标可见。未发送消息或执行工具；没有替换用户正在运行的安装客户端。该窗口检查不等同于真实中文输入法验证，组合输入的证据仍来自事件注入测试。文档记录与本轮构建使用 go.mod 中的 v0.3.3，没有本地 go.work 或 replace。
 
+本轮追加检查见 [桌面更新与官网下载](desktop-updates.md)：独立候选客户端再次确认无需点击即可输入、清空后光标可见。发布 v0.5.2 的下载包与签名均可验证；官网链接和客户端更新提示的缺失是另外两条路径，不能据此认定光标修复未进入发布包。用户正在运行的安装客户端没有被替换或重启。
+
 ## macOS 系统字体统一（2026-10-14）
 
 界面与 Markdown 正文统一使用 `theme.Material.Face`；代码保留等宽字体。此前正文直接使用 `theme.Face`，没有跟随 OneCatch 的界面字体设置。底层 Markdown 的块缓存同时纳入正文和代码字体，避免字体切换后仍使用旧的换行与测量结果；不重写文档内容。
@@ -277,3 +279,23 @@ GOWORK=off go test -race ./ui/kit -run 'Test(VariableList|MessageScroller|Virtua
 交付状态：底层修复已直接提交并推送到 Keel 的 `codex/scroll-anchor` 分支，提交为 `2024cc41edd76b6a6ad2a912f84476ae70b2bfcd`，见 [Keel PR #40](https://github.com/dyike/keel/pull/40)。OneCatch 的 go.mod/go.sum 已锁定远端版本 `v0.3.3-0.20261016113346-2024cc41edd7`。这是可下载的提交版本，尚未合入主分支或发布正式标签；不能归入原来的 v0.3.2。
 
 本机 go.work/go.work.sum 已删除，不使用本地 replace 或手工修改模块缓存；临时补丁副本也已移除。关闭工作区后，已再次通过 OneCatch 界面包和入口包完整测试、相关 race、vet、macOS 构建和 go mod verify；确认下载的模块源码与 Keel 提交逐字节一致。后续构建直接读取 go.mod 中的远端版本。测试日志、隔离会话副本和候选客户端位于 `/tmp/onecatch-scroll-anchor`；临时目录不保证长期保留。
+
+## 模型回复中的图片点击预览（2026-10-19）
+
+用户反馈模型返回的图片不能点击放大。附件图片走 `conversationAttachments`，已有预览；模型回复中的 Markdown 图片走 `conversationDocument` → Keel Markdown，默认只有图片绘制，未链接的图片没有点击动作。这是两条不同的路径，不能用附件预览测试代表回复图片可用。另确认 HTTP(S) 图片需要显式链接 Keel 的 `ui/netimage`，本仓原先没有启用。
+
+`conversation_images.go` 在创建文档时安装局部 AST 转换器，为未链接的 Markdown 图片添加内部预览动作。原始正文和图片排版不变；已有显式外链的图片保留原链接。插件只在新文档创建时安装，后续流式追加继续用 `Append`，不逐帧重设插件或正文。内部动作仅接受该文档登记过的图片，并使用固定长度摘要作为标识，避免把完整 data URL 复制进链接和语义树。
+
+图片仍由 Markdown 异步加载，解码后在后台统一成原生绘图可直接使用的 RGBA，预览共享同一份像素，不再次读取文件或请求网络，也不在点击时重复转换解码器的像素格式。异步加载器与 UI 之间通过互斥锁交换像素引用，图片状态随文档生命周期释放；不是进程级图片缓存。预览挂在窗口根节点，不能放在 `el.Embed` 的文档根内，否则会被消息的裁剪和视口限制。弹窗沿用附件预览的等比尺寸与 Esc/关闭按钮行为。
+
+新增 `TestConversationMarkdownImageClickPreviewsLoadedPixels`：1×、2× 下覆盖本地文件、HTTP、data URL 和空 alt，实际点击图片链接、检查预览绘制、按 Esc 关闭、流式追加后重新点击；HTTP 场景还检查始终只有一次请求。`TestConversationLinkedImagesKeepTheirDestination` 验证显式图片外链没有被改为预览。在隔离工作区临时撤销图片动作插件后，指针用例因图片不可点击而失败，恢复插件后通过。路由测试不启动原生事件循环，因此不声称其缩略图的异步完成已在窗口中显示。
+
+界面包和入口包完整测试、相关 race、vet 与 `git diff --check` 通过。独立原生窗口使用一张真实界面截图作为 Markdown 图片，已看到加载后的缩略图，并通过鼠标点击打开未被消息区域裁剪的大图。没有操作用户正在运行的安装客户端，也没有发送消息或执行 Agent 工具。原生关闭检查因自动化连接超时未完成，Esc 关闭的验证来自指针/键盘路由回归。网络图片的证据来自本地 HTTP 测试，未额外访问第三方图片服务。
+
+本轮仍使用 go.mod 中的 Keel v0.3.3，无本地 go.work、replace 或模块缓存改动。补丁尚未发布。复验：
+
+```sh
+go test ./internal/app/keel ./cmd/app -count=1
+go test -race ./internal/app/keel -run 'TestConversationMarkdownImage|TestConversationLinkedImages|TestConversationCopySurvivesUnrelatedMessageSnapshot' -count=1
+go vet ./internal/app/keel ./cmd/app
+```

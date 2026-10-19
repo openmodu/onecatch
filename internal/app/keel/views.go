@@ -158,7 +158,7 @@ func (a *app) Render(cx *el.Context) el.Element {
 	if a.ui.SearchPalette != nil {
 		root.Child(a.renderSearchPalette(cx))
 	}
-	root.Child(a.projectDialog.Render(cx), a.ui.Customize.Render(cx), a.confirmation.Render(cx), a.ui.TaskDialog.Render(cx))
+	root.Child(a.conversationImagePreview(cx), a.projectDialog.Render(cx), a.ui.Customize.Render(cx), a.confirmation.Render(cx), a.ui.TaskDialog.Render(cx))
 	if a.page == "skills" {
 		root.Child(a.skills.Create.Render(cx), a.skills.Confirm.Render(cx))
 	}

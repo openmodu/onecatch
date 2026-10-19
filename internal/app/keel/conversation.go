@@ -36,15 +36,17 @@ type conversationState struct {
 	views        map[string]*conversationDocView
 	toolDocs     map[string]*markdown.Doc
 	// toolDocContent is the content each tool document was last synced to.
-	toolDocContent map[string]toolCodeContent
-	tools          map[string]*toolMemo
-	copies         entryCopies
-	toolResults    map[string]*toolResultView
-	fileChanges    map[string]*fileChangeView
-	images         map[string]*kit.ImageView
-	imagePreviews  map[string]*attachmentImagePreview
-	copyButtons    map[string]*kit.CopyButtonView
-	messages       map[string]*kit.MessageView
+	toolDocContent  map[string]toolCodeContent
+	tools           map[string]*toolMemo
+	copies          entryCopies
+	toolResults     map[string]*toolResultView
+	fileChanges     map[string]*fileChangeView
+	images          map[string]*kit.ImageView
+	imagePreviews   map[string]*attachmentImagePreview
+	markdownImages  map[string]*conversationMarkdownImages
+	markdownPreview *attachmentImagePreview
+	copyButtons     map[string]*kit.CopyButtonView
+	messages        map[string]*kit.MessageView
 }
 
 // entryCopies reuses the conversation's copies of transcript records between
@@ -518,9 +520,16 @@ func (a *app) conversationSource(key, text string, user bool) *markdown.Doc {
 		// in an unrelated reply. Replacing only this document lets SetDocuments
 		// retain endpoints in the other replies by their document identity.
 		doc = newConversationDocument(text).TableDividers(!a.ui.Preferences.HideTableDividers)
+		images := newConversationMarkdownImages(doc, a.openConversationLink, func(preview *attachmentImagePreview) { a.conversation.markdownPreview = preview })
+		plugins := []markdown.Plugin{images.plugin()}
 		if user {
-			doc.Plugins(userMessageMarkdownPlugin())
+			plugins = append(plugins, userMessageMarkdownPlugin())
 		}
+		doc.ImageLoader(images.load).Plugins(plugins...)
+		if a.conversation.markdownImages == nil {
+			a.conversation.markdownImages = map[string]*conversationMarkdownImages{}
+		}
+		a.conversation.markdownImages[key] = images
 		a.docs[key] = doc
 	} else if previous := doc.Source(); text != previous {
 		// Durable snapshots can append text without the streaming flag too.
@@ -548,6 +557,10 @@ func (a *app) conversationDocument(cx *el.Context, e *entry, hug bool) el.Elemen
 	}
 	doc := a.conversationSource(e.key, e.text, e.user)
 	doc.OnLink(a.openConversationLink)
+	images := a.conversation.markdownImages[e.key]
+	if images != nil && images.doc == doc {
+		doc.OnLink(images.open)
+	}
 	doc.SetStreaming(e.streaming && a.detail != nil && a.detail.Active)
 	v := a.conversation.views[e.key]
 	if v == nil || v.doc != doc {
