@@ -1,7 +1,6 @@
 package agentrun
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"io"
@@ -16,8 +15,7 @@ func RunCodexStream(ctx context.Context, req Request, stream io.ReadWriteCloser,
 	if sink == nil {
 		sink = func(Event) {}
 	}
-	scanner := bufio.NewScanner(stream)
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	scanner := newCodexLineReader(stream)
 	p := &codexAppProcess{
 		stdin: stream, encoder: json.NewEncoder(stream), scanner: scanner,
 		stderr: &lineCapture{}, waitDone: make(chan struct{}),

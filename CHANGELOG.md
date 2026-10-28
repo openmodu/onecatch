@@ -3,6 +3,10 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.6
+
+- Fix resuming long Codex conversations failing with "bufio.Scanner: token too long". Read complete app-server responses for local and remote sessions without the previous 8 MB line limit.
+
 ## 0.5.5
 
 - Fix Codex conversation follow-ups failing with "thread already has an active writer" after environment or permission changes. Stop the previous cached app-server before resuming the thread with the new configuration.
