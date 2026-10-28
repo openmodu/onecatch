@@ -136,13 +136,24 @@ func TestCodexRunnerReusesAppServerForConversationFollowUp(t *testing.T) {
 	requests := filepath.Join(dir, "requests.jsonl")
 	script := `#!/bin/sh
 printf '%s\n' started >> "$ONECATCH_CODEX_PROCESSES"
+writer_lock="$ONECATCH_CODEX_PROCESSES.writer"
+owns_writer=0
+trap 'if [ "$owns_writer" = 1 ]; then rmdir "$writer_lock"; fi' EXIT
+trap 'exit 0' INT TERM
 turn=0
 while IFS= read -r line; do
   printf '%s\n' "$line" >> "$ONECATCH_CODEX_REQUESTS"
   case "$line" in
     *'"id":1'*) printf '%s\n' '{"id":1,"result":{}}' ;;
     *'"method":"skills/list"'*) printf '%s\n' '{"id":2,"result":{"data":[{"cwd":"REPLACE_CWD","skills":[],"errors":[]}]}}' ;;
-    *'"id":3'*) printf '%s\n' '{"id":3,"result":{"thread":{"id":"thread-warm"}}}' ;;
+    *'"id":3'*)
+      if mkdir "$writer_lock" 2>/dev/null; then
+        owns_writer=1
+        printf '%s\n' '{"id":3,"result":{"thread":{"id":"thread-warm"}}}'
+      else
+        printf '%s\n' '{"id":3,"error":{"code":-32600,"message":"thread already has an active writer"}}'
+      fi
+      ;;
     *'"id":4'*)
       turn=$((turn + 1))
       printf '{"id":4,"result":{"turn":{"id":"turn-%s","status":"inProgress"}}}\n' "$turn"
