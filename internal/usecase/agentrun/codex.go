@@ -942,7 +942,7 @@ func (r *CodexRunner) takeSession(sessionID, key string) *codexAppProcess {
 	r.sessionsMu.Lock()
 	defer r.sessionsMu.Unlock()
 	process := r.sessions[sessionID]
-	if process == nil || process.key != key {
+	if process == nil {
 		return nil
 	}
 	if process.idleTimer != nil {
@@ -952,6 +952,12 @@ func (r *CodexRunner) takeSession(sessionID, key string) *codexAppProcess {
 	// While a turn is using the process it is not idle and must not remain
 	// reachable by the timer callback or a second resume call.
 	delete(r.sessions, sessionID)
+	if process.key != key {
+		// A changed configuration needs a fresh process, but the old one still
+		// owns the thread's writer lease. Wait for it to exit before resuming.
+		process.stop()
+		return nil
+	}
 	return process
 }
 
