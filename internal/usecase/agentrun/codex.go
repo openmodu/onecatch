@@ -1,7 +1,6 @@
 package agentrun
 
 import (
-	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -40,7 +39,7 @@ type codexAppProcess struct {
 	cmd        *exec.Cmd
 	stdin      io.WriteCloser
 	encoder    *json.Encoder
-	scanner    *bufio.Scanner
+	scanner    *codexLineReader
 	readOnce   sync.Once
 	reads      chan codexRead
 	readStop   chan struct{}
@@ -151,8 +150,7 @@ func (r *CodexRunner) callAppServer(ctx context.Context, cwd string, environment
 		return nil, fmt.Errorf("initialize Codex app-server: %w", err)
 	}
 
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	scanner := newCodexLineReader(stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.TrimSpace(line) == "" {
@@ -353,8 +351,7 @@ func (r *CodexRunner) InspectConfiguration(ctx context.Context, cwd string, envi
 	var modelProvider, catalogPath string
 	seenCursors := make(map[string]bool)
 	gotConfig, gotModels := false, false
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	scanner := newCodexLineReader(stdout)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if strings.TrimSpace(line) == "" {
@@ -516,24 +513,24 @@ type codexAppTurn struct {
 }
 
 type codexAppItem struct {
-	ID               string               `json:"id"`
-	Type             string               `json:"type"`
-	Delivery         string               `json:"delivery"`
-	Questions        []codexAsyncQuestion `json:"questions"`
-	Text             string               `json:"text"`
-	Command          string               `json:"command"`
-	Status           string               `json:"status"`
-	AggregatedOutput *string              `json:"aggregatedOutput"`
-	ExitCode         *int                 `json:"exitCode"`
-	Arguments        json.RawMessage      `json:"arguments"`
-	Result           json.RawMessage      `json:"result"`
-	ContentItems     json.RawMessage      `json:"contentItems"`
-	Success          *bool                `json:"success"`
-	Error            json.RawMessage      `json:"error"`
-	Server           string               `json:"server"`
-	Tool             string               `json:"tool"`
-	Content          []string             `json:"content"`
-	Summary          []string             `json:"summary"`
+	ID               string                `json:"id"`
+	Type             string                `json:"type"`
+	Delivery         string                `json:"delivery"`
+	Questions        []codexAsyncQuestion  `json:"questions"`
+	Text             string                `json:"text"`
+	Command          string                `json:"command"`
+	Status           string                `json:"status"`
+	AggregatedOutput *string               `json:"aggregatedOutput"`
+	ExitCode         *int                  `json:"exitCode"`
+	Arguments        json.RawMessage       `json:"arguments"`
+	Result           json.RawMessage       `json:"result"`
+	ContentItems     json.RawMessage       `json:"contentItems"`
+	Success          *bool                 `json:"success"`
+	Error            json.RawMessage       `json:"error"`
+	Server           string                `json:"server"`
+	Tool             string                `json:"tool"`
+	Content          []string              `json:"content"`
+	Summary          []string              `json:"summary"`
 	Changes          []appServerFileChange `json:"changes"`
 }
 
@@ -672,8 +669,7 @@ func (r *CodexRunner) startCodexAppProcess(req Request, commandArgs, environment
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("start Codex app-server: %w", err)
 	}
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 64*1024), 8*1024*1024)
+	scanner := newCodexLineReader(stdout)
 	return &codexAppProcess{
 		cmd: cmd, stdin: stdin, encoder: json.NewEncoder(stdin), scanner: scanner,
 		stderr: stderr, key: processKey, waitDone: make(chan struct{}),
