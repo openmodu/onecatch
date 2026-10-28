@@ -3,6 +3,10 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.5
+
+- Fix Codex conversation follow-ups failing with "thread already has an active writer" after environment or permission changes. Stop the previous cached app-server before resuming the thread with the new configuration.
+
 ## 0.5.4
 
 - Send messages directly into the conversation when the agent is idle, without briefly displaying them in the waiting queue.
