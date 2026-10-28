@@ -133,6 +133,12 @@ func TestCodexApprovalPolicyRequiresAHost(t *testing.T) {
 					if call.Params["approvalPolicy"] != want || call.Params["sandbox"] != codexSandbox(sandbox) {
 						t.Fatalf("thread permissions: %s", output.String())
 					}
+					if resume != "" && (call.Params["excludeTurns"] != true || call.Params["threadId"] != resume) {
+						t.Fatal("resume must preserve thread identity without returning history")
+					}
+					if resume == "" && call.Params["excludeTurns"] != nil {
+						t.Fatal("excludeTurns belongs only to resume requests")
+					}
 					if resume != "" && call.Method != "thread/resume" {
 						t.Fatal("existing threads must receive the updated policy on resume")
 					}

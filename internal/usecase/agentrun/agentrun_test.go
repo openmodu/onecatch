@@ -247,6 +247,9 @@ done
 	if err != nil {
 		t.Fatal(err)
 	}
+	if strings.Count(string(payload), `"excludeTurns":true`) != 4 {
+		t.Fatalf("resumes must omit historical turns: %s", payload)
+	}
 	if strings.Count(string(payload), `"method":"thread/resume"`) != 4 || !strings.Contains(string(payload), `"approvalPolicy":"on-request"`) {
 		t.Fatalf("permission changes did not reach resumed thread: %s", payload)
 	}
