@@ -3,6 +3,10 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.7
+
+- Avoid transferring conversation history when resuming Codex sessions. Request only thread metadata and live state; Codex retains the conversation context, and follow-up messages continue reusing the loaded app-server.
+
 ## 0.5.6
 
 - Fix resuming long Codex conversations failing with "bufio.Scanner: token too long". Read complete app-server responses for local and remote sessions without the previous 8 MB line limit.

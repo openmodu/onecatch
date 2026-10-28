@@ -867,6 +867,9 @@ func sendCodexThreadStart(encoder *json.Encoder, req Request) error {
 	if req.ResumeSessionID != "" {
 		method = "thread/resume"
 		params["threadId"] = req.ResumeSessionID
+		// Codex restores its context internally; OneCatch already stores the
+		// conversation events and only needs the thread identity here.
+		params["excludeTurns"] = true
 	}
 	if req.Model != "" {
 		params["model"] = req.Model
