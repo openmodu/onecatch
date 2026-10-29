@@ -16,6 +16,38 @@ an `agentrun.Result`, so workflows do not depend on the transport.
 | `grok` | ACP over stdio (`grok agent … stdio`) | `session/load` | `GROK_SANDBOX` profile |
 | `dsh` | headless profile + its own JSONL session log | none | `DSH_PERMISSION_MODE` |
 
+## Codex session ownership
+
+Codex app-server retains a thread's writer lease between turns. `CodexRunner`
+caches completed processes for five minutes; a warm follow-up starts a new turn
+on the loaded thread, while a cold follow-up uses `thread/resume` with
+`excludeTurns: true`. The conversation context stays with Codex.
+
+Saving desktop settings previously replaced `RuntimeRegistry.engine` even when
+only preferences changed. The old runner still held its cached process, so the
+new runner could fail with `thread already has an active writer`. The v0.5.5
+fix covered changed process configuration within one runner, but did not cover
+replacement of the runner itself.
+
+`RuntimeRegistry.replace` now preserves the engine when its construction
+configuration is unchanged, and closes the old engine before publishing a
+replacement. `CodexRunner.Close` retires its cache: active turns finish normally
+but stop their processes before returning instead of caching them again.
+Both `ApplySettings` and the binary-path `Update` entry point use this path.
+
+`TestRuntimeSettingsPreserveCodexConversation` reproduces the writer conflict
+using an exclusive process-owned lock, covering preference saves, binary
+changes, direct runtime updates and settings saved during a turn.
+`TestCodexSettingsResumeConformance` exercises the installed CLI against a
+local scripted model, including cold resumption after engine replacement.
+It passed with Codex CLI 0.165.0 through the npm wrapper. This is CLI protocol
+validation, not a test of the installed desktop client's existing conversation.
+
+```sh
+go test ./internal/service/desktop -run '^TestRuntimeSettingsPreserveCodexConversation$' -count=1
+go test -tags conformance ./internal/service/desktop -run '^TestCodexSettingsResumeConformance$' -count=1
+```
+
 ## Modu native SDK
 
 Open **Settings → Harness**, expand **Modu Code**, and select **Native Go SDK**. The configuration
