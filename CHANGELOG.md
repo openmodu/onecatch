@@ -3,6 +3,10 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.8
+
+- Fix Codex follow-ups failing with "thread already has an active writer" after saving settings. Keep the warm engine for preference-only changes, release cached processes before replacing it, and let active turns finish without retaining the old writer.
+
 ## 0.5.7
 
 - Avoid transferring conversation history when resuming Codex sessions. Request only thread metadata and live state; Codex retains the conversation context, and follow-up messages continue reusing the loaded app-server.

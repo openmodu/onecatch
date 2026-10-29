@@ -26,6 +26,7 @@ type CodexRunner struct {
 	now        nowFunc
 	sessionsMu sync.Mutex
 	sessions   map[string]*codexAppProcess
+	closed     bool
 }
 
 const codexAppServerIdleTimeout = 5 * time.Minute
@@ -965,6 +966,13 @@ func (r *CodexRunner) keepSession(sessionID string, process *codexAppProcess) {
 		return
 	}
 	r.sessionsMu.Lock()
+	if r.closed {
+		r.sessionsMu.Unlock()
+		// A settings change can retire this runner during an active turn.
+		// Join its process before returning so the next turn can resume safely.
+		process.stop()
+		return
+	}
 	if previous := r.sessions[sessionID]; previous != nil && previous != process {
 		go previous.stop()
 	}
@@ -1001,11 +1009,12 @@ func (r *CodexRunner) discardProcess(process *codexAppProcess) {
 	r.sessionsMu.Unlock()
 }
 
-// Close stops warm app-server processes. CodexRunner also closes each process
-// after an idle timeout, so callers that do not own runner lifecycle remain
-// bounded.
+// Close retires the runner and stops warm app-server processes. Active turns
+// finish normally but release their processes instead of caching them again.
+// The idle timeout also bounds callers that do not own the runner lifecycle.
 func (r *CodexRunner) Close() error {
 	r.sessionsMu.Lock()
+	r.closed = true
 	processes := make([]*codexAppProcess, 0, len(r.sessions))
 	for _, process := range r.sessions {
 		if process.idleTimer != nil {

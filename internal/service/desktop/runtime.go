@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -650,8 +651,7 @@ func (r *RuntimeRegistry) Update(input RuntimeConfigInput) (RuntimeInfo, error) 
 	}
 	binaries[input.Runtime] = input.Binary
 	config.Binaries = binaries
-	r.config = config
-	r.engine = newRuntimeEngine(config)
+	r.replace(config)
 	r.mu.Unlock()
 	r.invalidateRuntimeStatus(input.Runtime)
 	return r.Check(input.Runtime)
@@ -754,6 +754,18 @@ func (r *RuntimeRegistry) CheckDraft(runtime string, input domainsettings.Runtim
 }
 
 func (r *RuntimeRegistry) replace(config RuntimeConfig) {
+	if r.engine != nil && maps.Equal(r.config.Binaries, config.Binaries) &&
+		r.config.ModuIntegration == config.ModuIntegration &&
+		r.config.ModuConfigPath == config.ModuConfigPath &&
+		r.config.ModuAgentDir == config.ModuAgentDir &&
+		r.config.DshSessionRoot == config.DshSessionRoot {
+		return
+	}
+	// Cached Codex processes retain the thread writer between turns. Release
+	// them before publishing a new engine that could resume the same thread.
+	if r.engine != nil {
+		_ = r.engine.Close()
+	}
 	r.config = config
 	r.engine = newRuntimeEngine(config)
 }
