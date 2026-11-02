@@ -209,26 +209,28 @@ const (
 
 // StepRun is one attempt to execute one workflow step.
 type StepRun struct {
-	ID                       string        `json:"id"`
-	RunID                    string        `json:"runId"`
-	StepID                   string        `json:"stepId"`
-	Attempt                  int           `json:"attempt"`
-	LoopRound                int           `json:"loopRound,omitempty"`
-	Runtime                  string        `json:"runtime,omitempty"`
-	Model                    string        `json:"model,omitempty"`
-	Sandbox                  string        `json:"sandbox,omitempty"`
-	Status                   StepRunStatus `json:"status"`
-	Verdict                  string        `json:"verdict,omitempty"`
-	Summary                  string        `json:"summary,omitempty"`
-	SessionIDBefore          string        `json:"sessionIdBefore,omitempty"`
-	SessionIDAfter           string        `json:"sessionIdAfter,omitempty"`
-	StartedAt                time.Time     `json:"startedAt"`
-	FinishedAt               time.Time     `json:"finishedAt,omitempty"`
-	InputTokens              int           `json:"inputTokens,omitempty"`
-	CachedInputTokens        int           `json:"cachedInputTokens,omitempty"`
-	CacheCreationInputTokens int           `json:"cacheCreationInputTokens,omitempty"`
-	OutputTokens             int           `json:"outputTokens,omitempty"`
-	ReasoningOutputTokens    int           `json:"reasoningOutputTokens,omitempty"`
+	// UpstreamDigests records workflow inputs delivered to this harness session.
+	UpstreamDigests          map[string]string `json:"upstreamDigests,omitempty"`
+	ID                       string            `json:"id"`
+	RunID                    string            `json:"runId"`
+	StepID                   string            `json:"stepId"`
+	Attempt                  int               `json:"attempt"`
+	LoopRound                int               `json:"loopRound,omitempty"`
+	Runtime                  string            `json:"runtime,omitempty"`
+	Model                    string            `json:"model,omitempty"`
+	Sandbox                  string            `json:"sandbox,omitempty"`
+	Status                   StepRunStatus     `json:"status"`
+	Verdict                  string            `json:"verdict,omitempty"`
+	Summary                  string            `json:"summary,omitempty"`
+	SessionIDBefore          string            `json:"sessionIdBefore,omitempty"`
+	SessionIDAfter           string            `json:"sessionIdAfter,omitempty"`
+	StartedAt                time.Time         `json:"startedAt"`
+	FinishedAt               time.Time         `json:"finishedAt,omitempty"`
+	InputTokens              int               `json:"inputTokens,omitempty"`
+	CachedInputTokens        int               `json:"cachedInputTokens,omitempty"`
+	CacheCreationInputTokens int               `json:"cacheCreationInputTokens,omitempty"`
+	OutputTokens             int               `json:"outputTokens,omitempty"`
+	ReasoningOutputTokens    int               `json:"reasoningOutputTokens,omitempty"`
 	// ContextWindow and ContextTokens describe how full the model's context
 	// was, which the token counters above cannot express: those accumulate
 	// across every model call in the step, while the window only held the latest

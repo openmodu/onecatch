@@ -1,6 +1,7 @@
 package workflows
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"strings"
 
@@ -12,7 +13,7 @@ import (
 // step carries the whole brief. Later turns resume the step's own session,
 // which already holds the brief and the step's earlier work, so they carry only
 // what changed: inbox messages and the latest upstream results.
-func composeStepPrompt(task domaintasks.Task, definition domainworkflows.Definition, step domainworkflows.Step, run domainworkflows.Run) string {
+func composeStepPrompt(task domaintasks.Task, definition domainworkflows.Definition, step domainworkflows.Step, run domainworkflows.Run, delivered map[string]string) string {
 	inbox := run.Nodes[step.ID].Inbox
 	if directAgentDefinition(definition) {
 		return composeDirectAgentPrompt(task, step, run, messageTexts(inbox))
@@ -20,7 +21,6 @@ func composeStepPrompt(task domaintasks.Task, definition domainworkflows.Definit
 	resumed := run.Sessions[step.ID] != ""
 	var parts []string
 	if resumed {
-		parts = append(parts, fmt.Sprintf("# Continue workflow step `%s` (%s)", step.ID, step.Name))
 		if len(inbox) == 0 {
 			parts = append(parts, "", "Continue this step where you left off.")
 		}
@@ -41,7 +41,17 @@ func composeStepPrompt(task domaintasks.Task, definition domainworkflows.Definit
 			parts = append(parts, "", "### "+messageHeading(definition, message), message.Text)
 		}
 	}
-	if upstream := domainworkflows.Upstream(definition, step.ID); len(upstream) > 0 {
+	upstream := domainworkflows.Upstream(definition, step.ID)
+	if resumed && delivered != nil {
+		filtered := make([]string, 0, len(upstream))
+		for _, id := range upstream {
+			if old, ok := delivered[id]; !ok || old != upstreamDigest(run.Nodes[id].Summary) {
+				filtered = append(filtered, id)
+			}
+		}
+		upstream = filtered
+	}
+	if len(upstream) > 0 {
 		heading := "## Results from the steps before you"
 		if resumed {
 			heading = "## Latest results from the steps before you"
@@ -51,7 +61,9 @@ func composeStepPrompt(task domaintasks.Task, definition domainworkflows.Definit
 			parts = append(parts, "", "### "+stepLabel(definition, id), run.Nodes[id].Summary)
 		}
 	}
-	parts = append(parts, "", "## Response contract", responseContract(definition, step))
+	if !resumed {
+		parts = append(parts, "", "## Response contract", responseContract(definition, step))
+	}
 	return strings.Join(parts, "\n") + "\n"
 }
 
@@ -181,3 +193,5 @@ func appendTaskAttachments(parts []string, task domaintasks.Task) []string {
 	parts = append(parts, "Read these files when they are relevant to the task.")
 	return parts
 }
+
+func upstreamDigest(summary string) string { return fmt.Sprintf("%x", sha256.Sum256([]byte(summary))) }
