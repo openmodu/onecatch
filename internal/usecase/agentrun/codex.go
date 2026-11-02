@@ -696,6 +696,7 @@ func (r *CodexRunner) runCodexTurn(ctx context.Context, process *codexAppProcess
 	initialized := warm
 	threadStarted := warm
 	turnStarted := false
+	forked := false
 	activeTurnID := ""
 	if warm {
 		state.sessionID = process.threadID
@@ -789,6 +790,20 @@ readLoop:
 		}
 		if responseID(envelope.ID) == 3 {
 			if len(envelope.Error) > 0 {
+				// Another client can keep the writer lease even between turns.
+				// Branch its stored history instead of stealing the lease or
+				// discarding the conversation. Only retry this specific failure.
+				if !forked && req.ResumeSessionID != "" && codexActiveWriterError(envelope.Error) {
+					forked = true
+					sink(Event{Kind: KindReasoning, Text: "Codex 会话被其他客户端占用，正在从已有历史创建分支继续对话。", At: r.now()})
+					if err := sendCodexThreadRequest(process.encoder, req, "thread/fork"); err != nil {
+						return Result{}, err
+					}
+					continue
+				}
+				if forked {
+					return Result{}, fmt.Errorf("fork occupied Codex thread: %s", envelope.Error)
+				}
 				return Result{}, fmt.Errorf("start Codex thread: %s", envelope.Error)
 			}
 			var response struct {
@@ -861,12 +876,27 @@ readLoop:
 
 func sendCodexThreadStart(encoder *json.Encoder, req Request) error {
 	method := "thread/start"
+	if req.ResumeSessionID != "" {
+		method = "thread/resume"
+	}
+	return sendCodexThreadRequest(encoder, req, method)
+}
+
+func codexActiveWriterError(raw json.RawMessage) bool {
+	var rpcError struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	}
+	return json.Unmarshal(raw, &rpcError) == nil && rpcError.Code == -32600 &&
+		strings.Contains(rpcError.Message, "already has an active writer")
+}
+
+func sendCodexThreadRequest(encoder *json.Encoder, req Request, method string) error {
 	params := map[string]any{"cwd": req.Workspace, "approvalPolicy": codexApprovalPolicy(req), "sandbox": codexSandbox(req.Sandbox)}
 	if req.Remote != nil {
 		params["developerInstructions"] = remoteCodexGuidance
 	}
 	if req.ResumeSessionID != "" {
-		method = "thread/resume"
 		params["threadId"] = req.ResumeSessionID
 		// Codex restores its context internally; OneCatch already stores the
 		// conversation events and only needs the thread identity here.
