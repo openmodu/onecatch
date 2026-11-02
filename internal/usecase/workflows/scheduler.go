@@ -392,7 +392,24 @@ func (s *Usecase) executeStep(ctx context.Context, task domaintasks.Task, worksp
 			return stepResult{step: step, err: err, pause: "storage_error"}
 		}
 	}
+	var delivered map[string]string
+	if resumeSessionID != "" {
+		previous, err := s.workflows.ListStepRuns(ctx, run.ID)
+		if err != nil {
+			return stepResult{step: step, err: err, pause: "storage_error"}
+		}
+		var latest time.Time
+		for _, item := range previous {
+			if item.StepID == step.ID && item.SessionIDAfter == resumeSessionID && item.Status == domainworkflows.StepRunSucceeded && !item.StartedAt.Before(latest) {
+				delivered, latest = item.UpstreamDigests, item.StartedAt
+			}
+		}
+	}
 	stepRun := domainworkflows.StepRun{ID: s.newID("step"), RunID: run.ID, StepID: step.ID, Attempt: attempt, LoopRound: run.LoopRound, Runtime: step.Runtime, Model: step.Model, Sandbox: step.Sandbox, Status: domainworkflows.StepRunRunning, SessionIDBefore: resumeSessionID, StartedAt: s.now()}
+	stepRun.UpstreamDigests = make(map[string]string)
+	for _, id := range domainworkflows.Upstream(definition, step.ID) {
+		stepRun.UpstreamDigests[id] = upstreamDigest(run.Nodes[id].Summary)
+	}
 	if err := s.workflows.SaveStepRun(ctx, stepRun); err != nil {
 		return stepResult{step: step, err: err, pause: "storage_error"}
 	}
@@ -419,7 +436,7 @@ func (s *Usecase) executeStep(ctx context.Context, task domaintasks.Task, worksp
 		if effort == "" {
 			effort = resolvedReasoningEffort(run, step.Runtime)
 		}
-		request := agentrun.Request{RunID: run.ID, StepRunID: stepRun.ID, Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeStepPrompt(task, definition, step, run), Model: step.Model, ReasoningEffort: effort, ServiceTier: resolvedServiceTier(run, step.Runtime), MaxContextWindow: resolvedMaxContextWindow(run, step.Runtime), Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: resumeSessionID, EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second, RuntimeDefaultsResolved: true, Remote: workspaceRemoteTarget(workspace)}
+		request := agentrun.Request{RunID: run.ID, StepRunID: stepRun.ID, Runtime: agentrun.Runtime(step.Runtime), Workspace: workspace.Path, Prompt: composeStepPrompt(task, definition, step, run, delivered), Model: step.Model, ReasoningEffort: effort, ServiceTier: resolvedServiceTier(run, step.Runtime), MaxContextWindow: resolvedMaxContextWindow(run, step.Runtime), Provider: resolvedRuntimeProvider(run, step.Runtime), Sandbox: allowedSandbox(step.Sandbox, workspace.DefaultSandbox), ResumeSessionID: resumeSessionID, EnvironmentAllowlist: resolvedEnvironmentAllowlist(run, step.Runtime), InterruptGrace: time.Duration(run.InterruptGraceSeconds) * time.Second, RuntimeDefaultsResolved: true, Remote: workspaceRemoteTarget(workspace)}
 		result, err = s.dispatchStep(ctx, definition, step, workspace.ID, request, collector.Sink())
 	}
 	if streamErr := collector.Close(); streamErr != nil && err == nil {
