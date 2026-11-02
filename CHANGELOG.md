@@ -3,6 +3,11 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.9
+
+- Fix Codex follow-ups blocked by another client's active writer. Fork the stored conversation history into a new thread and continue there, preserving the original thread and reusing the new thread for later messages.
+- Reduce repeated context in workflow continuations. Send changed upstream results and new messages without replaying unchanged results, the initial brief, or the response contract.
+
 ## 0.5.8
 
 - Fix Codex follow-ups failing with "thread already has an active writer" after saving settings. Keep the warm engine for preference-only changes, release cached processes before replacing it, and let active turns finish without retaining the old writer.
