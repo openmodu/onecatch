@@ -372,7 +372,7 @@ func (p *settingsPage) workerSettings(cx *el.Context) el.Element {
 		check.SetDisabled(h.checking)
 		remove := workerActionButton("删除", func() { p.deleteWorker(w) }).Name("删除 " + workerLabel(w)).Appearance(func(ap kit.ButtonAppearance) kit.ButtonAppearance {
 			ap.Foreground = theme.Danger
-			ap.Border, ap.Focus = theme.Border, theme.Border
+			ap.Focus = theme.Border
 			ap.Background = mixColor(theme.Danger, theme.Surface, .04)
 			return ap
 		})

@@ -74,7 +74,7 @@ func applyAppPalette(dark bool, accent string) {
 
 func button(label string, action func(), variant kit.ButtonVariant) *kit.ButtonView {
 	return kit.Button(uiText(label), action).Variant(variant).Appearance(func(p kit.ButtonAppearance) kit.ButtonAppearance {
-		p.Border, p.Focus = color.NRGBA{}, color.NRGBA{}
+		p.Focus = color.NRGBA{}
 		return p
 	})
 }
