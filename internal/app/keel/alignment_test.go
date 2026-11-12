@@ -91,12 +91,21 @@ func alignmentButton(nodes []input.SemanticNode, label string) (input.SemanticDe
 	return input.SemanticDesc{}, false
 }
 
+// alignmentRouter drives a headless layout loop. Keel samples element
+// presence (dialog and overlay entry/exit) from the frame clock, so every
+// frame advances a controlled clock instead of using wall time. A single
+// time.Now() per frame would leave a 160ms transition almost unmoved, and any
+// assertion taken before the transition settles would observe an
+// entry animation mid-flight or an exit that never finishes.
 func alignmentRouter(root *el.RootWidget, width, height, scale int) (*input.Router, func(), func(image.Rectangle)) {
 	var router input.Router
 	var ops op.Ops
+	// Step past the longest floating transition so one frame settles it.
+	clock := time.Now()
 	frame := func() {
+		clock = clock.Add(alignmentFrameStep)
 		ops.Reset()
-		root.Layout(layout.Context{Ops: &ops, Now: time.Now(), Source: router.Source(), Constraints: layout.Exact(image.Pt(width*scale, height*scale)), Metric: unit.Metric{PxPerDp: float32(scale), PxPerSp: float32(scale)}})
+		root.Layout(layout.Context{Ops: &ops, Now: clock, Source: router.Source(), Constraints: layout.Exact(image.Pt(width*scale, height*scale)), Metric: unit.Metric{PxPerDp: float32(scale), PxPerSp: float32(scale)}})
 		router.Frame(&ops)
 	}
 	click := func(box image.Rectangle) {
@@ -111,6 +120,10 @@ func alignmentRouter(root *el.RootWidget, width, height, scale int) (*input.Rout
 	frame()
 	return &router, frame, click
 }
+
+// alignmentFrameStep exceeds every transition OneCatch opens, so one frame
+// reaches the resting pose and finished exits release their layer.
+const alignmentFrameStep = 250 * time.Millisecond
 
 func TestExecutorAlignmentAndNativeSelection(t *testing.T) {
 	applyPalette(false)

@@ -319,3 +319,20 @@ go vet ./internal/repo/workflows ./internal/usecase/workflows ./internal/service
 ```
 
 相关包完整测试、相关 race、vet 和 macOS 发布打包通过。本轮修复纳入 v0.5.4 发布。已检查 860dp、420dp 的队列与编辑状态离屏截图，位于 `/tmp/onecatch-message-queue`。使用 go.mod 中的 Keel v0.3.3，无本地 go.work 或 replace；未在用户正在运行的安装客户端中验证。测试和离屏截图不能代替真实窗口中的发送、编辑与队列切换验证。
+
+## 弹窗淡入淡出与测试帧时钟（2026-11-12）
+
+升级 Keel 到 v0.4.5（`6661a65 feat(motion): integrate element animations and transitions`）后，`TestConversationAttachmentImagesAndPendingMessages` 与 `TestAttachmentImagePreviewFitsContent` 的三个子用例失败。对照实验把变量锁定在这次升级上：在同一工作树把 Keel 单独降回 v0.4.3，四个用例全部通过；升回 v0.4.5 再次失败。TRAE 读取改动与图片预览无关，不是原因。
+
+根因是 Keel v0.4.5 给 floating 层引入 160ms 的 presence 淡入淡出，`ui/kit/presence.go` 的 `floatingPresence` 由 `kit.Dialog` 自动采用，退场期间层保持挂载并置为 `Inert`，等动画结束才释放。存在两个失败面：
+
+- 退场：Esc 后组件不会立即从语义树消失，需要真实时钟推进到动画结束。测试的 `frame()` 原先每帧传 `Now: time.Now()`，两次连续调用间隔只有微秒，160ms 的补间几乎不动，`Visible` 恒为 true，于是报 `Escape did not close the image preview`。
+- 入场：点击后只渲染一帧就截图，入场动画的 pose 仍接近起始值，元素被缩放淡出，报 `preview viewport contains blank space`。
+
+这是测试帧时钟的问题，不是 OneCatch 组件或 Keel 的缺陷：`ui/el/presence.go` 按帧时钟采样，`gtx.Enabled()` 在测试路由下为 true（`Source.r != nil`），状态会正常持久化并推进，只是没人推动时钟。
+
+修复让布局帧使用受控递增时钟。`alignmentRouter` 的 `frame()` 每次 `clock = clock.Add(alignmentFrameStep)`，`alignmentFrameStep` 取 250ms，超过 OneCatch 打开的所有过渡，一帧即可到达静止姿态；`interactionPixelsScaled` 单独构造的截图帧同样加一个步长，保证截到的是静止姿态而不是入场首帧。这样 101 个调用点无需逐个修改，保留用户可见的淡入淡出，也不再依赖墙钟。
+
+验证：`go test ./internal/app/keel -count=1` 整个界面包通过，`go test ./... -count=1` 全仓通过，`go vet ./internal/app/keel ./internal/usecase/agentrun ./cmd/app` 与 `git diff --check` 通过。改动仅限测试辅助与两个弹窗回归测试，未改生产代码。
+
+由于无法在真实窗口观察，本次没有录制淡入淡出动画的实际观感，也未在用户正在运行的安装客户端中验证；测试通过只证明静止姿态下的语义、尺寸和像素正确，不能据此认定动画时长与缓动符合预期。

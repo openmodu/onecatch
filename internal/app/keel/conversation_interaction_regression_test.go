@@ -32,7 +32,9 @@ func interactionPixelsScaled(t *testing.T, root *el.RootWidget, router *input.Ro
 	}
 	defer gpu.Release()
 	var ops op.Ops
-	root.Layout(layout.Context{Ops: &ops, Source: router.Source(), Now: time.Now(), Constraints: layout.Exact(image.Pt(width, height)), Metric: unit.Metric{PxPerDp: scale, PxPerSp: scale}})
+	// Advance past any in-flight presence transition so the screenshot captures
+	// the resting pose rather than an entry animation's first frame.
+	root.Layout(layout.Context{Ops: &ops, Source: router.Source(), Now: time.Now().Add(alignmentFrameStep), Constraints: layout.Exact(image.Pt(width, height)), Metric: unit.Metric{PxPerDp: scale, PxPerSp: scale}})
 	router.Frame(&ops)
 	if err := gpu.Frame(&ops); err != nil {
 		t.Fatal(err)
