@@ -1,7 +1,7 @@
 {
   "name": "OneCatch",
   "appid": "com.openmodu.onecatch.keel",
-  "version": "0.5.9",
+  "version": "0.0.0",
   "build": 1,
   "binary": "onecatch-keel",
   "icon": "build/keel/appicon.png",

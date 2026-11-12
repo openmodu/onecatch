@@ -3,6 +3,11 @@
 The first version section is the source of truth for all OneCatch builds and
 release artifacts. Add a new section here before creating a release tag.
 
+## 0.5.10
+
+- Fix TRAE conversations failing to resume when the stored history is large. Read app-server frames without the 64KB line limit that rejected a full history returned in a single JSONL frame.
+- Update Keel to v0.4.5, which adds element entry and exit transitions to dialogs and other floating surfaces.
+
 ## 0.5.9
 
 - Fix Codex follow-ups blocked by another client's active writer. Fork the stored conversation history into a new thread and continue there, preserving the original thread and reusing the new thread for later messages.
