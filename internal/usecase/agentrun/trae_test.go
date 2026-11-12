@@ -1,6 +1,7 @@
 package agentrun
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -136,7 +137,9 @@ while IFS= read -r line; do
   *'"method":"model/internalUsage/read"'*) printf '%s\n' "$ONECATCH_TRAE_USAGE" ;;
   *'"method":"model/list"'*) printf '%s\n' "$ONECATCH_TRAE_MODELS" ;;
   *'"method":"skills/list"'*) printf '%s\n' '{"id":2,"result":{"data":[]}}' ;;
-  *'"method":"thread/start"'*|*'"method":"thread/resume"'*) printf '%s\n' '{"id":3,"result":{"thread":{"id":"thread-live"}}}' ;;
+  *'"method":"thread/start"'*|*'"method":"thread/resume"'*)
+   if [ -n "$ONECATCH_TRAE_THREAD_RESPONSE" ]; then cat "$ONECATCH_TRAE_THREAD_RESPONSE";
+   else printf '%s\n' '{"id":3,"result":{"thread":{"id":"thread-live"}}}'; fi ;;
   *'"method":"turn/start"'*)
    printf '%s\n' '{"id":4,"result":{"turn":{"id":"turn-live","status":"inProgress"}}}'
    printf '%s\n' '{"method":"item/agentMessage/delta","params":{"threadId":"thread-live","turnId":"turn-live","itemId":"message-1","delta":"Hello"}}'
@@ -285,7 +288,7 @@ func TestTraeQueueStatus(t *testing.T) {
 
 func TestTraeQueuesNotificationsBeforeTurnResponse(t *testing.T) {
 	var output bytes.Buffer
-	p := &traeProcess{ctx: context.Background(), encoder: json.NewEncoder(&output), scanner: newJSONLineScanner(strings.NewReader(
+	p := &traeProcess{ctx: context.Background(), encoder: json.NewEncoder(&output), reader: bufio.NewReader(strings.NewReader(
 		"{\"method\":\"queue/status\",\"params\":{\"state\":\"queued\"}}\n{\"id\":1,\"result\":{\"turn\":{\"id\":\"turn\"}}}\n{\"method\":\"queue/status\",\"params\":{\"state\":\"ready\"}}\n"))}
 	if _, err := p.call("turn/start", nil); err != nil {
 		t.Fatal(err)

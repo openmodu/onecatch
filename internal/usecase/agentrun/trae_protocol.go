@@ -2,12 +2,12 @@ package agentrun
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
 	"time"
 )
 
@@ -27,7 +27,7 @@ type traeProcess struct {
 	cmd     *exec.Cmd
 	stdin   io.WriteCloser
 	encoder *json.Encoder
-	scanner *bufio.Scanner
+	reader  *bufio.Reader
 	stderr  lineCapture
 	nextID  int
 	pending []traeFrame
@@ -61,7 +61,7 @@ func (r *TraeRunner) connect(ctx context.Context, cwd string, env []string) (*tr
 		return nil, fmt.Errorf("start TRAE app-server: %w", err)
 	}
 	p.encoder = json.NewEncoder(p.stdin)
-	p.scanner = newJSONLineScanner(stdout)
+	p.reader = bufio.NewReader(stdout)
 	_, err = p.call("initialize", map[string]any{"clientInfo": map[string]string{"name": "onecatch", "version": "0.1.0"}, "capabilities": map[string]bool{"experimentalApi": true}})
 	if err == nil {
 		err = p.encoder.Encode(map[string]any{"method": "initialized", "params": map[string]any{}})
@@ -82,23 +82,29 @@ func (p *traeProcess) read() (traeFrame, error) {
 	return p.readWire()
 }
 func (p *traeProcess) readWire() (traeFrame, error) {
-	for p.scanner.Scan() {
-		if strings.TrimSpace(p.scanner.Text()) == "" {
+	for {
+		// Resume responses include the full history in one JSONL frame.
+		// Read a complete frame without Scanner's size limit; keep only the
+		// small reader buffer between frames.
+		line, err := p.reader.ReadBytes('\n')
+		if err != nil && (err != io.EOF || len(line) == 0) {
+			if p.ctx.Err() != nil {
+				return traeFrame{}, p.ctx.Err()
+			}
+			if err != io.EOF {
+				return traeFrame{}, fmt.Errorf("read TRAE app-server: %w", err)
+			}
+			return traeFrame{}, fmt.Errorf("TRAE app-server closed before response%s", p.stderr.tail())
+		}
+		if len(bytes.TrimSpace(line)) == 0 {
 			continue
 		}
 		var f traeFrame
-		if err := json.Unmarshal(p.scanner.Bytes(), &f); err != nil {
+		if err := json.Unmarshal(line, &f); err != nil {
 			return f, fmt.Errorf("invalid TRAE app-server frame: %w", err)
 		}
 		return f, nil
 	}
-	if p.ctx.Err() != nil {
-		return traeFrame{}, p.ctx.Err()
-	}
-	if err := p.scanner.Err(); err != nil {
-		return traeFrame{}, fmt.Errorf("read TRAE app-server: %w", err)
-	}
-	return traeFrame{}, fmt.Errorf("TRAE app-server closed before response%s", p.stderr.tail())
 }
 func (p *traeProcess) unsupported(f traeFrame) error {
 	return p.encoder.Encode(map[string]any{"id": f.ID, "error": map[string]any{"code": -32601, "message": "Unsupported TRAE request: " + f.Method}})
